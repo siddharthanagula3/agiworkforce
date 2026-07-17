@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`. Grounded in real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/integrations/providerStreamClient.ts`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts`, `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts`, `apps/extension-vscode/src/core/{chatSetup,providerSetup}.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`. Grounded in real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/integrations/providerStreamClient.ts`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts`, `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts`, `apps/extension-vscode/src/core/{chatSetup,providerSetup}.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 This volume specifies the four API planes the VS Code extension consumes or exposes: the **AGI gateway/subscription APIs** (Managed Cloud), the **provider APIs** used by BYOK, the extension's **own contributed surface** (commands, webviews, bridge protocol), and the **VS Code host APIs** it registers against (chat participant, Language Model, inline completion).
 
-Three trust rules shape every boundary. First, the surface is workspace-scoped: no API call auto-syncs IDE context into Web/Mobile/Desktop app chat — Neon delta-sync is off here, and any handoff is explicit and redacted (`chatParticipant.ts` SYNC-RULE header; `packages/types` surface guard). Second, all three trust modes coexist (Local + BYOK + Managed) with visible labels; Local is never silently routed to BYOK or Cloud. Third, secrets stay in `SecretStorage` and localhost bridge frames are allowlisted and authenticated. Model IDs are read only from `packages/types/src/models.json`.
+Three trust rules shape every boundary. First, the surface is workspace-scoped: no API call auto-syncs IDE context into Web/Mobile/Desktop app chat — Neon delta-sync is off here, and any handoff is explicit and redacted (`chatParticipant.ts` SYNC-RULE header; `packages/contracts/types` surface guard). Second, all three trust modes coexist (Local + BYOK + Managed) with visible labels; Local is never silently routed to BYOK or Cloud. Third, secrets stay in `SecretStorage` and localhost bridge frames are allowlisted and authenticated. Model IDs are read only from `packages/contracts/types/src/models.json`.
 
 ## AGI APIs — gateway/subscription
 
@@ -30,7 +30,7 @@ BYOK routes a user's own key directly at a provider through the gateway adapter,
 - **Transport.** `streamFromProvider` issues `POST ${gatewayUrl}/api/v1/providers/${providerId}/stream` and consumes an SSE body 🟡 (`apps/extension-vscode/src/integrations/providerStreamClient.ts`). Adapters wired today cover `anthropic | openai | google | ollama`; the full account-gated path via `streamChatCompletionViaProvider` still throws "not available in the VS Code extension yet" 🔭 (`apps/extension-vscode/src/utils/api.ts`).
 - **Provider selection.** `agiWorkforce.providerStreamProvider` enumerates `auto, anthropic, openai, google, ollama, ollama-cloud, xai, deepseek, perplexity, qwen, moonshot, zhipu, lmstudio, custom`; `auto` infers from the model-id prefix ✅ (`package.json`).
 - **Keys.** Stored in `SecretStorage` via `setApiKey`/`getApiKey`/`clearApiKey` under `agiWorkforce.apiKey` ✅ (`apps/extension-vscode/src/utils/api.ts`, commands `agi-workforce.setApiKey`/`clearApiKey`). Per-provider labeled key vaulting is 🔭.
-- **Models.** All model IDs come from `packages/types/src/models.json`; the client must not hardcode or invent an LLM ID. Any Local→BYOK transition is an explicit fork (context selection, secret scan, payload preview, consent, visible provider label) — never automatic.
+- **Models.** All model IDs come from `packages/contracts/types/src/models.json`; the client must not hardcode or invent an LLM ID. Any Local→BYOK transition is an explicit fork (context selection, secret scan, payload preview, consent, visible provider label) — never automatic.
 
 ## Extension APIs — commands/webviews
 
@@ -58,7 +58,7 @@ The manifest contributes **71 commands, 14 keybindings, 26 configuration propert
 - `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts` — inline completion API.
 - `apps/extension-vscode/src/core/{chatSetup,providerSetup}.ts` — participant, webview, tree, hover, code-lens registration.
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — localhost bridge protocol + token.
-- `packages/types/src/models.json` — model catalog SSOT.
+- `packages/contracts/types/src/models.json` — model catalog SSOT.
 
 ## Competitor notes
 
@@ -76,7 +76,7 @@ Production-ready when every documented API has a stable contract, a visible trus
 
 - Inventing routes, gateway paths, env vars, or command IDs not in `package.json`/source.
 - Claiming provider-stream, LM tool registration, or the socket transport as shipped without a wired path.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Storing tokens/keys anywhere but `SecretStorage`; logging secrets; forwarding bridge-supplied args.
 - Silently routing Local to BYOK/Cloud, or auto-syncing IDE context into Web/Mobile/Desktop app chat.
 - Referencing removed tiers (`Plus`, `pro_plus`, `Hobby`) or inventing INR for Pro/Max; adding credit top-ups.

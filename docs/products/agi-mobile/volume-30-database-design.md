@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and the real repo paths cited per section — `apps/mobile/storage/{db,migrations,conversations,messages,memory,docChunks,telemetry,types}.ts`, `apps/mobile/services/{cloudSyncEngine,remoteChatGate,companion}.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/stores/**`, `apps/web/db/neon/00{02,06,10,13,29,36,37,38,39,40}*.sql`, and `packages/types/src/models.json` (model-ID SSOT).
+Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and the real repo paths cited per section — `apps/mobile/storage/{db,migrations,conversations,messages,memory,docChunks,telemetry,types}.ts`, `apps/mobile/services/{cloudSyncEngine,remoteChatGate,companion}.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/stores/**`, `apps/web/db/neon/00{02,06,10,13,29,36,37,38,39,40}*.sql`, and `packages/contracts/types/src/models.json` (model-ID SSOT).
 
 ## Overview & stance
 
@@ -13,7 +13,7 @@ Mobile keeps **two physically separate datastores**, one per trust mode, and nev
 - **Local (on-device)** lives in a single **SQLCipher-encrypted SQLite file** (`agi_mobile.db`) plus MMKV for flags/preferences. It holds Local-mode chats, messages, on-device memory, doc-chunk RAG, installed-model records, and an opt-in telemetry queue. Nothing here is networked unless the user runs an explicit, reviewed transfer.
 - **Managed Cloud** lives in **Neon Postgres**, user-scoped, addressed by Clerk identity, and delta-synced through `services/cloudSyncEngine.ts`. On the device, cloud-mode data is held in MMKV-backed Zustand stores (`stores/chat`, `stores/memory`, `stores/projects`, `stores/settings`) — _not_ in the SQLite file — which is what structurally guarantees Local rows are never synced.
 
-The **no-BYOK rule** shapes the schema directly: there is no `api_keys` / provider-credential table on mobile and there must never be one. The `default_provider` / `default_model` columns store identifiers drawn **only** from `packages/types/src/models.json` (Local on-device runtime entries, or Managed-Cloud model IDs) — never a user-entered key. "Provider configuration" on mobile means on-device model management, full stop. `remoteChatGate.ts` fails closed when Cloud is off, so the cloud datastore is simply unreachable in a local-only build.
+The **no-BYOK rule** shapes the schema directly: there is no `api_keys` / provider-credential table on mobile and there must never be one. The `default_provider` / `default_model` columns store identifiers drawn **only** from `packages/contracts/types/src/models.json` (Local on-device runtime entries, or Managed-Cloud model IDs) — never a user-entered key. "Provider configuration" on mobile means on-device model management, full stop. `remoteChatGate.ts` fails closed when Cloud is off, so the cloud datastore is simply unreachable in a local-only build.
 
 ## Users
 
@@ -59,7 +59,7 @@ Remote Control is a secure **window**, not a trust mode: compute stays on the ho
 - `apps/mobile/services/{cloudSyncEngine,remoteChatGate,companion,authSession}.ts`, `apps/mobile/lib/{v1FeatureFlags,mmkv,dispatchHmac}.ts` — cloud sync, gates, remote-window plumbing.
 - `apps/mobile/stores/{chat,memory,projects,settings}/**`, `apps/mobile/stores/connectionStore.ts` — MMKV-backed cloud + session state.
 - `apps/web/db/neon/00{02,06,10,13,29,36,37,38,39,40}*.sql` — canonical Neon schema (profiles, projects, memory, devices, media, RLS, cloud-sync versioning, artifacts).
-- `packages/types/src/models.json` — model-ID SSOT for `default_model`/`model` columns.
+- `packages/contracts/types/src/models.json` — model-ID SSOT for `default_model`/`model` columns.
 
 ## Competitor notes
 
@@ -67,7 +67,7 @@ ChatGPT and Claude mobile keep all conversation/memory state server-side under o
 
 ## Acceptance / Definition of Done
 
-Production-ready when: every cloud table is RLS-protected with the GUC wired through `withUser()` on the live path; Local and Cloud datastores share no table and no `cloud_id` bridge; the SQLite file is always SQLCipher-encrypted with the key only in SecureStore; sync is single-flight and fails closed in Local mode; and all model identifiers resolve against `packages/types/src/models.json`.
+Production-ready when: every cloud table is RLS-protected with the GUC wired through `withUser()` on the live path; Local and Cloud datastores share no table and no `cloud_id` bridge; the SQLite file is always SQLCipher-encrypted with the key only in SecureStore; sync is single-flight and fails closed in Local mode; and all model identifiers resolve against `packages/contracts/types/src/models.json`.
 
 - [ ] Build: migrations are transactional + idempotent; `pnpm --filter @agiworkforce/mobile typecheck` and `test` green.
 - [ ] Trust: a Local-mode session performs zero network I/O (verified via `cloudSyncEngine.isManagedSyncEnabled()` + `guardedFetch` backstop); no Local row reaches Neon.
@@ -77,7 +77,7 @@ Production-ready when: every cloud table is RLS-protected with the GUC wired thr
 
 - Adding any BYOK/provider-key table, column, or settings field to mobile.
 - Giving Local tables a `cloud_id` or auto-promoting Local rows into the cloud store without an explicit, reviewed, consented transfer.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Storing chat content in the telemetry queue, or enqueuing telemetry in Local mode / without opt-in.
 - Writing the SQLite file unencrypted, or persisting the SQLCipher key outside SecureStore.
 - Referencing Supabase, or claiming the companion/runtime-session path is live while it is flag-gated off.

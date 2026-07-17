@@ -1,7 +1,7 @@
 # Volume 07 — Providers & Abstraction
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 7)
-Authority: `docs/current/byok-open-model-provider-strategy.md`, `packages/types/src/models.json`, `packages/types/src/provider-adapter.ts`
+Authority: `docs/current/byok-open-model-provider-strategy.md`, `packages/contracts/types/src/models.json`, `packages/contracts/types/src/provider-adapter.ts`
 
 ## Philosophy & Cloud/Local stance
 
@@ -11,7 +11,7 @@ Cloud/Local stance: providers fall into three classes (`byok-open-model-provider
 
 ## Binding rules
 
-1. **Add providers through the provider abstraction; never scatter provider literals.** The adapter contract is `packages/types/src/provider-adapter.ts`.
+1. **Add providers through the provider abstraction; never scatter provider literals.** The adapter contract is `packages/contracts/types/src/provider-adapter.ts`.
 2. **Auth shapes are per-provider.** Anthropic uses the official `@anthropic-ai/sdk` with `anthropic-beta` headers (and `X-API-Key` semantics) — **not** a Bearer token. Encode each provider's `AuthMethod` (`api-key`/`oauth`/`oauth-device-code`/`aws-signature`).
 3. **BYOK base URLs pass an SSRF guard** before any request (block private/loopback/link-local/metadata addresses).
 4. **Capability normalization is required per provider** (tools, parallel tools, JSON/schema, reasoning/thinking format, vision, image, audio, file upload, caching, server-side state, streaming format, usage reporting, pricing units, retention) — `byok-open-model-provider-strategy.md` Adapter Requirements.
@@ -22,11 +22,11 @@ Cloud/Local stance: providers fall into three classes (`byok-open-model-provider
 
 ## Repository map
 
-- `packages/types/src/models.json` — the 15-provider catalog (managed_cloud, openai, anthropic, google, xai, deepseek, qwen, moonshot, perplexity, zhipu, mistral, groq, nvidia_nim, open_router, runway) plus catalog-only definitions (together, fireworks, cerebras, deepinfra, cohere, ai21, sambanova, azure, bedrock, ollama) and per-provider `aliases`, `modelPrefixes`, `tokenMultiplier`, `defaultModel`, `taskRouting`.
-- `packages/types/src/provider-adapter.ts` — the single `ProviderAdapter` interface: `AuthMethod`, `ChatRequest`, `StreamChunk`, and the optional cross-vendor hooks (`buildReplayPolicy`, `normalizeToolSchemas`, `wrapStreamFn`).
-- `packages/types/src/customModel.ts` — `CustomModelConfig` (baseUrl, modelId, apiKeyRef, declared capabilities, connection status).
-- `packages/providers/<vendor>/` — implementations: `anthropic` (official SDK + `anthropic-beta`), `openai`, `google` (REST for API-key Gemini), `deepseek`, `xai`, `perplexity`, `lmstudio`, `ollama`.
-- `packages/llm-normalize/` — production-tested cross-vendor normalization feeding the adapter hooks.
+- `packages/contracts/types/src/models.json` — the 15-provider catalog (managed_cloud, openai, anthropic, google, xai, deepseek, qwen, moonshot, perplexity, zhipu, mistral, groq, nvidia_nim, open_router, runway) plus catalog-only definitions (together, fireworks, cerebras, deepinfra, cohere, ai21, sambanova, azure, bedrock, ollama) and per-provider `aliases`, `modelPrefixes`, `tokenMultiplier`, `defaultModel`, `taskRouting`.
+- `packages/contracts/types/src/provider-adapter.ts` — the single `ProviderAdapter` interface: `AuthMethod`, `ChatRequest`, `StreamChunk`, and the optional cross-vendor hooks (`buildReplayPolicy`, `normalizeToolSchemas`, `wrapStreamFn`).
+- `packages/contracts/types/src/customModel.ts` — `CustomModelConfig` (baseUrl, modelId, apiKeyRef, declared capabilities, connection status).
+- `packages/ai/providers/<vendor>/` — implementations: `anthropic` (official SDK + `anthropic-beta`), `openai`, `google` (REST for API-key Gemini), `deepseek`, `xai`, `perplexity`, `lmstudio`, `ollama`.
+- `packages/ai/provider-protocol/` — production-tested cross-vendor normalization feeding the adapter hooks.
 - `services/api-gateway/src/mcp/mcpConfig.ts`, `services/signaling-server/src/index.ts` — server-side outbound guards (SSRF-relevant).
 
 ## Competitor notes

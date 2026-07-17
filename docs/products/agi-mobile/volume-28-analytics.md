@@ -18,7 +18,7 @@ Product events are funneled through the local telemetry queue, not a third-party
 
 - ✅ Built — opt-in, fail-closed, content-free queue and table (`apps/mobile/storage/telemetry.ts`, `telemetry_queue` in `apps/mobile/storage/migrations.ts`; enforced by `apps/mobile/__tests__/telemetry-consent-gate.test.ts`).
 - 🟡 Partial — the queue exists but has **no production emitters yet**: `enqueueTelemetryEvent` has no callers outside tests. A named, versioned event taxonomy (e.g. `chat_started`, `model_switched`, `cloud_upgrade_viewed`) and a consented flush path are not wired (`apps/mobile/storage/telemetry.ts`). Gap: define the schema and call sites.
-- 🔭 Planned — server-side ingestion, dashboards, and a documented event dictionary. Events must carry a trust-mode tag and never a model ID invented client-side; model identifiers, where logged, come only from `packages/types/src/models.json`.
+- 🔭 Planned — server-side ingestion, dashboards, and a documented event dictionary. Events must carry a trust-mode tag and never a model ID invented client-side; model identifiers, where logged, come only from `packages/contracts/types/src/models.json`.
 
 ## Funnels
 

@@ -79,4 +79,4 @@ A remote window is production-ready only when a paired phone can attach to a run
 - Reading presence from `surface_heartbeats` before the table exists, or faking online status.
 - Auto-approving remote tool calls, or delivering approvals to an unverified device.
 - Adding BYOK as a mobile trust mode; exposing pairing without HMAC token enforcement.
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups, inventing INR prices, referencing Supabase, or renaming `proxy.ts` to `middleware.ts`.
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups, inventing INR prices, referencing Supabase, or renaming `proxy.ts` to `middleware.ts`.

@@ -24,7 +24,7 @@ We charge for the software, never for the tokens. Compute passes through at cost
 - Stream→meter path: `services/api-gateway/src/routes/providerStream.ts` (token accounting at stream completion).
 - Schema (canonical, `apps/web/db/neon`): `0003_subscriptions.sql`, `0004_token_credits.sql`, `0012_stripe.sql`, `0030_allow_enterprise_subscription_tier.sql`, `0033_auto_economy_trial_usage.sql`, `0044_fix_increment_usage_unit_bug.sql` (usage-unit bug fix).
 - Web billing UI/hooks: `apps/web/features/billing/hooks/` (note R10: history hooks returning `[]` pending endpoints — build, don't fake).
-- Pricing source of truth: `packages/types/src/models.json` (per-provider `defaultPricing`, per-model `inputCost`/`outputCost`).
+- Pricing source of truth: `packages/contracts/types/src/models.json` (per-provider `defaultPricing`, per-model `inputCost`/`outputCost`).
 - Cost-control routing tiers: `auto-economy`/`auto-balanced`/`auto-premium` (Vol 8) — the margin lever (`04` §4).
 
 ## Competitor notes (`docs/strategy/01`, `02`)

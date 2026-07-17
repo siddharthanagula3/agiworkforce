@@ -2,7 +2,7 @@
 
 Status: Active
 Owner: Founder + platform lead
-Last updated: 2026-07-08
+Last updated: 2026-07-15
 Supersedes: extends `docs/plans/pre-release-repo-organization-2026-05-20.md` (package/crate consolidation scope)
 Superseded by: -
 
@@ -14,22 +14,22 @@ The headline: **the macro shape of the monorepo is already correct** (`apps/` = 
 
 Grades from code inspection: A = production-solid, F = stub.
 
-| Area                                              | Grade | Evidence anchor                                                                                                                                                                                |
-| ------------------------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CLI (`apps/cli`, Rust)                            | A     | ~95k LOC; real agentic loop w/ runaway detection (`src/agent/chat.rs`), MCP client+server, sessions/fork/resume, cross-OS sandbox, full TUI. Only stub: `cloud` subcommand (`src/lib.rs:589`). |
-| Web chat + settings + billing (`apps/web`)        | A-    | 211-file chat feature, factored OpenAI-compatible v1 endpoint, full settings/billing/Stripe. Sprawl debt (below).                                                                              |
-| Desktop Local mode (`apps/desktop` + `src-tauri`) | A-    | 398k LOC hand-written Rust host; runtime-strategy mode split; rich artifact workbench.                                                                                                         |
-| Desktop Cloud mode                                | B+    | `src/runtime/CloudRuntime.ts` + `src/api/cloudApi.ts` calls web REST with Bearer JWT (founder-locked design); contract/egress tests; thin cloud UI remains.                                    |
-| Mobile (`apps/mobile`)                            | B+    | 3-tier local inference, 4-layer Local/Cloud enforcement (reference implementation, §5), contract-validated cloud sync. Shipping local models are text-only (§8).                               |
-| VS Code extension                                 | B     | Deep IDE integration, ~80 commands, workspace-trust; `preview: true`; reimplements LLM/chat stack.                                                                                             |
-| Chrome extension                                  | B-    | Strong security engineering (CDP driver, threat model, fail-closed gates); monolithic entry files (3.3k-line background), unfinished internal migration.                                       |
-| Sandbox (`apps/sandbox`)                          | B+    | Real cross-origin artifact renderer used by web; cross-origin isolation is provisioning-gated: `NEXT_PUBLIC_SANDBOX_ORIGIN` unset -> silent same-origin `srcDoc` fallback.                     |
-| Services (`services/api-gateway`)                 | C+    | Works, but two near-duplicate LLM proxy routes and a no-op RLS client (`src/lib/neonClients.ts` `getUserScopedClient`) — tracked flaw.                                                         |
-| Root `ios/`                                       | C     | Tracked canonical Xcode project (`agiworkforce`) diverges from what `expo prebuild` generates into gitignored `apps/mobile/ios/` (`AGIWorkforce`). Drift hazard (§9).                          |
+| Area                                              | Grade | Evidence anchor                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLI (`apps/cli`, Rust)                            | A     | ~95k LOC; real agentic loop w/ runaway detection (`src/agent/chat.rs`), MCP client+server, sessions/fork/resume, cross-OS sandbox, full TUI. The obsolete separate `cloud` stub was removed; managed execution uses the normal model/session path after explicit privacy handoff. |
+| Web chat + settings + billing (`apps/web`)        | A-    | 211-file chat feature, factored OpenAI-compatible v1 endpoint, full settings/billing/Stripe. Sprawl debt (below).                                                                                                                                                                 |
+| Desktop Local mode (`apps/desktop` + `src-tauri`) | A-    | 398k LOC hand-written Rust host; runtime-strategy mode split; rich artifact workbench.                                                                                                                                                                                            |
+| Desktop Cloud mode                                | B+    | `src/runtime/CloudRuntime.ts` + `src/api/cloudApi.ts` calls web REST with Bearer JWT (founder-locked design); contract/egress tests; thin cloud UI remains.                                                                                                                       |
+| Mobile (`apps/mobile`)                            | B+    | 3-tier local inference, 4-layer Local/Cloud enforcement (reference implementation, §5), contract-validated cloud sync. Shipping local models are text-only (§8).                                                                                                                  |
+| VS Code extension                                 | B     | Deep IDE integration, ~80 commands, workspace-trust; `preview: true`; reimplements LLM/chat stack.                                                                                                                                                                                |
+| Chrome extension                                  | B-    | Strong security engineering (CDP driver, threat model, fail-closed gates); monolithic entry files (3.3k-line background), unfinished internal migration.                                                                                                                          |
+| Sandbox (`apps/sandbox`)                          | B+    | Real cross-origin artifact renderer used by web; cross-origin isolation is provisioning-gated: `NEXT_PUBLIC_SANDBOX_ORIGIN` unset -> silent same-origin `srcDoc` fallback.                                                                                                        |
+| Services (`services/api-gateway`)                 | C+    | Works, but two near-duplicate LLM proxy routes and a no-op RLS client (`src/lib/neonClients.ts` `getUserScopedClient`) — tracked flaw.                                                                                                                                            |
+| Root `ios/`                                       | C     | Tracked canonical Xcode project (`agiworkforce`) diverges from what `expo prebuild` generates into gitignored `apps/mobile/ios/` (`AGIWorkforce`). Drift hazard (§9).                                                                                                             |
 
-Load-bearing packages (keep, invest): `types` (model SSOT + suite contracts, 341 imports), `utils`, `runtime` (app/OS dispatch + central state), `services` (shared logic + `cloud-contracts` Zod anchor), `unified-chat` + `ui` (web/desktop UI), `local-llm` (mobile engine), `data-layer` (web DB boundary), `api` (Tauri RPC bridge), `design-tokens` (the only truly six-surface package), `llm-normalize` (canonical cross-provider contract, locked decision #12), `skills`, `mcp`, `compliance`, `apply-patch`, `routing`, `browser-tool`.
+Load-bearing packages (keep, invest): `types` (model SSOT + suite contracts, 341 imports), `utils`, `client-runtime` (app/OS dispatch + central state), `cloud-contracts` (managed-cloud Zod wire truth), `trust-boundaries` (Managed Cloud host classification), `search` (registry-derived harness queries), `unified-chat` + `ui` (web/desktop UI), `local-llm` (mobile engine), `data-layer` (web DB boundary), `desktop-command-client` (Tauri RPC bridge), `design-tokens` (the only truly six-surface package), `llm-normalize` (canonical cross-provider contract, locked decision #12), `skills`, `mcp`, `compliance`, `apply-patch`, `routing`, `browser-tool`. `services` is now a compatibility-only facade pending M8 removal proof, not an investment target.
 
-Dead or dormant (delete or wire — §7): `providers-{deepseek,lmstudio,perplexity,xai}` (zero importers), `packages/stores` chat store (zero runtime callers; only `createArtifactStore` is live), Rust crates `agiworkforce-apply-patch`, `agiworkforce-plugin-runtime`, `agiworkforce-task-runtime` (zero dependents), dormant ts-rs codegen in `agiworkforce-protocol`.
+Current consolidation debt (authoritative detail in Appendix B): `packages/services` and `packages/stores` are compatibility-only facades pending M8 release proof; `agiworkforce-licensing` is verified but still unadopted by a production Rust host; six single-consumer Rust microcrates are approved merge candidates; and `services/skill-vetting` is a vendored CLI awaiting reclassification under a guarded `tools/` root. Provider leaves remain live behind `@agiworkforce/providers-factory`; protocol code generation is wired and guarded.
 
 ## 2. The Five Structural Findings
 
@@ -60,7 +60,7 @@ Counted concretely: Anthropic SSE conversion exists 5x, OpenAI->Anthropic transl
 
 ### F4 — Data/state: shared Zod contracts exist, but CRUD and apply-logic are duplicated
 
-- `packages/services/src/cloud-contracts/` (me/sync Zod schemas) is the healthy anchor: enforced by web route contract tests and consumed at runtime by mobile's `cloudSyncEngine`.
+- `packages/cloud-contracts/src/` (me/sync Zod schemas and typed clients) is the healthy anchor: enforced by web route contract tests and consumed directly by Web, Desktop, and Mobile.
 - But wire shapes are still hand-duplicated (`apps/web/lib/server/neon-chat.ts` row types vs `cloud-contracts/sync.ts` schemas), there are **three** DB access layers (`packages/data-layer` with real Neon RLS — web only; `services/api-gateway/src/lib/neonClients.ts` 494-LOC query builder whose `getUserScopedClient` is a no-op RLS; `services/signaling-server/src/db.ts` raw Pool), and sync delta-apply is reimplemented per surface (mobile TS engine, desktop Rust `data/cloud_sync.rs`).
 - `packages/stores` is dormant scaffolding superseded by unified-chat stores.
 
@@ -85,7 +85,10 @@ agiworkforce/
 │   └── sandbox/                   # static cross-origin artifact renderer (web's isolation boundary)
 ├── packages/                      # shared TypeScript
 │   ├── types/                     # CONTRACTS: models.json SSOT, suite-contracts (PrivacyMode etc.), enterprise types. No runtime IO.
-│   ├── services/                  # cloud-contracts (Zod wire truth) + pure cross-surface business logic
+│   ├── cloud-contracts/           # managed-cloud Zod wire truth + typed clients
+│   ├── services/                  # temporary re-export-only compatibility facade (remove after M8 release proof)
+│   ├── trust-boundaries/          # platform-neutral Managed Cloud destination classification; no IO
+│   ├── search/                    # registry-derived search-harness availability; no execution or credentials
 │   ├── providers/*                # AI-CLIENT: per-provider adapters (openai, anthropic, google, ollama, ...)
 │   ├── llm-runtime/               # AI-CLIENT: retry, stream watchdog, error classes, fallback chains
 │   ├── llm-normalize/             # AI-CLIENT: canonical cross-provider payload normalization (locked decision #12)
@@ -124,7 +127,7 @@ Mapping the conceptual packages from the product vision onto real packages — *
 
 | Concept                                                                                                                             | Real owner(s)                                                                                                                                                                               | Consumed by                                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| "core/shared cloud state" (settings sync, connectors, plugins, skills, prefs)                                                       | `packages/services` (`cloud-contracts` = wire truth; business logic), `packages/types` (entities), web REST routes (server truth)                                                           | Web (server+client), Desktop CloudRuntime, Mobile cloud services                                  |
+| "core/shared cloud state" (settings sync, connectors, plugins, skills, prefs)                                                       | `packages/cloud-contracts` (wire truth and typed clients), focused domain packages, `packages/types` (entities), web REST routes (server truth); `packages/services` is compatibility-only  | Web (server+client), Desktop CloudRuntime, Mobile cloud services                                  |
 | "ai-client" (cloud API calls, streaming, auto-routing, fallback)                                                                    | `packages/providers/*` + `llm-runtime` + `llm-normalize` + `routing` — after P2 the ONLY TS provider path                                                                                   | api-gateway, web API routes, mobile, both extensions (via a shared browser-safe stream client)    |
 | "ui component library" (all cloud-mode UI tools: markdown, code, tool timeline, artifacts, email view, image gen, streaming states) | `design-tokens` -> `ui` -> `unified-chat` (layering enforced by imports, P3)                                                                                                                | Web, Desktop; Mobile consumes `design-tokens` + shared state/contracts only (RN renders natively) |
 | "local-mode"                                                                                                                        | Desktop: `src-tauri` host (engine moving into crates, P4). Mobile: `packages/local-llm` + `apps/mobile/storage`. Trust kernel: `packages/types` suite-contracts + per-surface egress guards | Desktop, Mobile, CLI                                                                              |
@@ -156,12 +159,15 @@ TS (after P2/P3; arrows = imports):
 ```
 types ◄── everything
 design-tokens ◄── ui ◄── unified-chat ◄── web, desktop
-services (cloud-contracts) ◄── web(routes+tests), desktop(CloudRuntime), mobile(sync), api-gateway
+cloud-contracts ◄── web(routes+tests), desktop(CloudRuntime), mobile(sync), services(facade)
+trust-boundaries ◄── desktop, mobile, services(facade)
+search ◄── web, services(facade)
+services (re-export-only compatibility) ◄── downstream callers only; no first-party app
 llm-normalize ◄── providers/* ◄── llm-runtime consumers: api-gateway, web api routes, mobile, extensions
-routing ◄── web, desktop
-runtime ◄── desktop, extensions, mobile, web, unified-chat
+routing ◄── web, desktop, mobile, VS Code, unified-chat, services(facade)
+client-runtime ◄── desktop, extensions, mobile, web, unified-chat
 local-llm ◄── mobile          data-layer ◄── web, api-gateway (P5)
-api (tauri bridge) ◄── desktop          utils ◄── all
+desktop-command-client (tauri bridge) ◄── desktop          utils ◄── all
 skills/mcp/apply-patch/browser-tool/compliance ◄── current consumers (unchanged)
 ```
 
@@ -169,7 +175,7 @@ Rust: `CLI ─► app-server, protocol, sandbox-policy, execpolicy, command-regi
 
 **Rust <-> TS boundary (all of them, today):**
 
-1. **Tauri IPC** — ~366 `#[tauri::command]` functions registered in one `generate_handler![]` (`apps/desktop/src-tauri/src/lib.rs:1175`); typed TS wrappers live in `packages/api`. This is the only desktop frontend<->Rust channel.
+1. **Tauri IPC** — ~366 `#[tauri::command]` functions registered in one `generate_handler![]` (`apps/desktop/src-tauri/src/lib.rs:1175`); typed TS wrappers live in `packages/desktop-command-client`. This is the only desktop frontend<->Rust channel.
 2. **`agiworkforce-app-server`** — JSON-RPC over stdio/WebSocket + MCP-stdio mode; programmatic access to the CLI engine (auth: bearer/origin allowlist). Not an HTTP chat backend.
 3. **Native-messaging sidecar** — `src-tauri/src/bin/native_messaging_host.rs` (Tauri externalBin) bridges Chrome extension <-> Desktop. The committed prebuilt binary `binaries/native_messaging_host-aarch64-apple-darwin` should become a CI artifact.
 4. **ts-rs codegen (to wire in P4)** — `agiworkforce-protocol` -> generated TS consumed by `packages/types`, ending hand-mirroring. No NAPI/WASM exists or is needed.
@@ -272,11 +278,11 @@ Apps: exact match — mobile, web, desktop, cli, vscode (`extension-vscode`), ch
 | ui, design-system                                                                                                   | `ui`, `design-tokens`                                                                                   | Exist; P3 makes the layering real.                                                                                                   |
 | markdown                                                                                                            | forked per app                                                                                          | P3 promotes one renderer set into `unified-chat`.                                                                                    |
 | ai-sdk, streaming, models                                                                                           | `providers/*` + `llm-runtime` + `llm-normalize` + `routing`; catalogs `types/models.json` + `local-llm` | Exist; P2 makes them the only path. Do not merge the two catalogs (different trust axes).                                            |
-| conversation                                                                                                        | `unified-chat` stores + `services/cloud-contracts`                                                      | Exists split; P3/P5 consolidate adoption.                                                                                            |
+| conversation                                                                                                        | `unified-chat` stores + `cloud-contracts`                                                               | Exists split; P3/P5 consolidate adoption.                                                                                            |
 | runtime                                                                                                             | `runtime`                                                                                               | Exists.                                                                                                                              |
 | tools                                                                                                               | `mcp`, `skills`, `apply-patch`, `browser-tool`                                                          | Exist as focused packages; keep split (better than one grab-bag).                                                                    |
 | prompts                                                                                                             | inline per surface                                                                                      | Gap — extract only when a second consumer needs the same prompt assets.                                                              |
-| settings, sync                                                                                                      | `services/cloud-contracts` + per-surface stores                                                         | P5; decision log rejected a monolith settings package (screens dominate).                                                            |
+| settings, sync                                                                                                      | `cloud-contracts` + per-surface stores                                                                  | P5; decision log rejected a monolith settings package (screens dominate).                                                            |
 | storage                                                                                                             | `data-layer` (web/Neon RLS) + per-device stores                                                         | P5 for gateway adoption; device stores stay per-platform by design.                                                                  |
 | api-client                                                                                                          | `api` (Tauri RPC); cloud REST clients hand-rolled per surface                                           | P2 item: one shared cloud REST client typed by cloud-contracts.                                                                      |
 | auth                                                                                                                | Clerk (web) + per-surface session glue                                                                  | Deferred (R9): extract token/session core after P2-P5.                                                                               |
@@ -294,3 +300,105 @@ Apps: exact match — mobile, web, desktop, cli, vscode (`extension-vscode`), ch
 | notification/analytics/worker/admin | web cron + admin routes                                      | Same rule: extract on demonstrated need, never speculatively.                              |
 
 Anti-goal recorded: creating 30 packages/14 services now would multiply CI, versioning, and ownership overhead across a pre-launch codebase — the failure mode the decision log calls the abstraction tax. The reference layout is the map of _responsibilities_; this plan is the sequenced route.
+
+## Appendix B — Current Workspace-Unit Classification And Mechanical Manifest (2026-07-15)
+
+This appendix is the current source of truth for package/crate/service disposition. It refreshes the point-in-time claims above after the July consolidation work; where an earlier statement conflicts with this appendix or `docs/agent-context/repo-map.json#workspaceUnits`, this appendix and the machine-readable map win.
+
+### B1. Evidence and inventory
+
+The classification is source/manifests-first, not README-first:
+
+- pnpm workspace manifests plus static imports across `apps/`, `packages/`, and `services/`, excluding build output;
+- `cargo metadata --format-version 1 --no-deps` for the Rust workspace graph;
+- `pnpm exec turbo run lint typecheck test build --dry=json` for the task graph;
+- package/crate entry points for deployability and trust-boundary classification.
+
+The machine-readable result is `docs/agent-context/repo-map.json#workspaceUnits`: **64 current units** — 41 TypeScript packages, one provider grouping directory, 19 Rust crates, and three service entries. Dispositions are 54 `keep`, six `merge`, three `compatibility`, and one `move`.
+
+Current graph facts:
+
+- Turbo discovers 49 pnpm workspaces and 245 `lint`/`typecheck`/`test`/`build`/`transit` tasks with 489 task-dependency edges.
+- The declared pnpm production graph and the graph including workspace dev dependencies have no cycle (166 production edges; 171 complete edges across 50 projects including the root).
+- The Cargo workspace graph has no cycle (21 members and 31 workspace dependency edges).
+- M0 repaired the known missing edges: Web depends directly on the provider composition package, Desktop declares its registry test dependency, and Turbo dependent filters select the affected consumers.
+
+### B2. Graph defects and M0 resolution
+
+| Status                      | Blocker                                                                              | Exact evidence                                                                                                                                                                                                                                             | Owner                                        | Required prerequisite                                                                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolved in M0 (2026-07-15) | Web provider imports were absent from `apps/web/package.json`                        | Web production code imports `@agiworkforce/providers-factory`; the factory declares every leaf adapter it composes; Web declares the factory as a production dependency and Anthropic/Google/OpenAI as dev dependencies for direct translator parity tests | Web lead + provider/platform owner           | Frozen-lockfile validation passes; Turbo records the factory edge plus the three test-only leaf edges; a dependent filter from the factory selects Web and API Gateway. |
+| Resolved in M0 (2026-07-15) | Desktop test imported an undeclared registry package                                 | `apps/desktop/src/api/googleBatch.test.ts` imports `@agiworkforce/model-registry`, now declared as a direct Desktop dev dependency                                                                                                                         | Desktop lead + model-platform owner          | Frozen-lockfile validation passes; Turbo records `desktop#build -> model-registry#build`; a dependent filter from the registry selects Desktop.                         |
+| Resolved in M5 (2026-07-15) | `packages/services` owned three unrelated mechanical domains behind one generic name | Managed-cloud classification moved byte-for-byte to `packages/trust-boundaries`; model-switch cache policy moved to `packages/routing`; search harness queries moved to `packages/search`; all first-party consumers import canonical owners               | Platform integrator + affected domain owners | Keep Services as a re-export-only downstream compatibility facade until M8 release proof, then delete it.                                                               |
+| Resolved in M3 (2026-07-15) | Licensing fixtures crossed package/language boundaries by relative path              | `packages/licensing/scripts/generate-fixtures.ts` now writes the org-policy corpus under `packages/licensing/src/__fixtures__`; TypeScript and Rust replay it from the licensing owner                                                                     | Enterprise/platform owner + Rust platform    | The generator, both verifier implementations, and all fixture replay paths moved atomically and pass parity checks.                                                     |
+| Open                        | Skill vetting is not a service                                                       | `services/skill-vetting/pyproject.toml` exposes a Typer CLI; no HTTP/server entry point and no first-party caller exist                                                                                                                                    | Tooling/security + repo-operability          | Approve `tools/` as a canonical root, update organization guards/maps/CODEOWNERS/commands, then move the vendored fork without changing it.                             |
+
+Unused manifest declarations are also debt, but are not safe to remove from search alone. Before each wave, run `pnpm why`, inspect dynamic imports/config aliases, and delete only declarations proven unused by the relevant build and tests.
+
+### B3. Approved structural dispositions
+
+The exact per-unit owners, consumers, trust boundaries, status, evidence, and action are in the machine-readable map. The non-`keep` actions are:
+
+| Current unit                                                    | Action        | Canonical target                    | Why                                                                                                                                                                                           |
+| --------------------------------------------------------------- | ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/services`                                             | compatibility | domain packages below               | M5 moved every implementation to a canonical owner; keep only as a temporary re-export facade until M8 release proof.                                                                         |
+| `packages/stores`                                               | compatibility | `packages/artifacts`                | The store implementation and all direct first-party consumers moved in M4; this package is now a re-export-only facade until M8.                                                              |
+| `crates/agiworkforce-{async-utils,utils-string,utils-template}` | merge         | `crates/agiworkforce-protocol`      | Each has one consumer and no independent deployability or trust boundary.                                                                                                                     |
+| `crates/agiworkforce-utils-cache`                               | merge         | `crates/agiworkforce-utils-image`   | The cache has one consumer and is image-specific in the current graph.                                                                                                                        |
+| `crates/agiworkforce-utils-{home-dir,rustls-provider}`          | merge         | `crates/agiworkforce-network-proxy` | Each has one consumer and exists only to support the proxy.                                                                                                                                   |
+| `crates/agiworkforce-licensing`                                 | compatibility | CLI and Desktop native hosts        | The cross-language verifier and fixtures are real, but no production crate consumes it. It must be adopted before enterprise-local capability is claimed; otherwise delete it before release. |
+| `services/skill-vetting`                                        | move          | `tools/skill-vetting`               | It is a vendored developer/supply-chain scanner, not a deployable service.                                                                                                                    |
+
+Provider leaf packages remain independently owned adapters behind `@agiworkforce/providers-factory`. Web and API Gateway depend only on that composition package; the factory owns direct leaf dependencies, including LM Studio and Ollama, without taking ownership of credentials, endpoint policy, or routing.
+
+The `packages/services` compatibility facade is extracted into these focused owners, without inventing empty packages:
+
+1. `packages/cloud-contracts` — Zod wire schemas and typed managed-cloud clients.
+2. `packages/licensing` — signed org-policy schema, verifier, and its golden fixtures.
+3. `packages/artifacts` — derivation, publish boundary, cloud merge/apply, and the current artifact store.
+4. `packages/sync` — cross-surface delta-apply mechanics.
+5. `packages/trust-boundaries` — shared managed-cloud host/egress classification only.
+6. `packages/routing` — model-switch cache consequences alongside existing selection/cost policy.
+7. `packages/search` — registry-derived web-search harness availability.
+
+Each target already has at least two consumers or consolidates code with an existing package. No empty scaffold is approved.
+
+### B4. Deterministic mechanical waves
+
+Every wave is a separate PR. Move/rename PRs contain no behavior changes, new features, provider upgrades, or API changes.
+
+**M0 — Freeze and repair the graph (completed 2026-07-15).** The post-factory M0 baseline was 44 Turbo workspaces, 220 tasks, and 446 task-dependency edges. Web declares its production provider-factory import and three direct test-only translator dependencies, Desktop declares its registry test dependency, the lockfile is frozen-clean, dependent filters select Web/API Gateway and Desktop respectively, and neither the pnpm nor Cargo workspace graph contains a cycle. M2 later removed two proven-unused manifest edges, producing its 442-edge closure graph.
+
+**M1 — Client runtime rename (completed 2026-07-15).** `@agiworkforce/client-runtime` now owns client detection, command dispatch, state, queue, and offline-sync primitives at `packages/client-runtime`. All imports, mocks, aliases, manifests, lock links, CODEOWNERS entries, generated-ledger prefixes, and docs use the canonical name. The six public subpaths are preserved; a structure guard rejects partial moves, case variants, stale identifiers, stale relative lock links, and missing exports. At M1 closure Turbo retained the 44-workspace/220-task/446-edge graph and its dependent filter selected every direct/transitive consumer.
+
+**M2 — Desktop command client rename (completed 2026-07-15).** `@agiworkforce/desktop-command-client` at `packages/desktop-command-client` is the single typed renderer-to-Tauri command client. All Desktop imports, mocks, manifests, lock links, config, docs, and ownership references use the canonical name; all 59 source/config files are byte-identical after canonical-name normalization, preserving command names and wire types. Web and `packages/stores` had no source imports, so their stale declarations were removed instead of renamed. Turbo now reports 44 workspaces, 220 tasks, and 442 edges; the package's dependent filter selects only Desktop.
+
+**M3 — Contract and policy ownership (completed 2026-07-15).** `@agiworkforce/cloud-contracts` now owns the 29 managed-cloud wire-contract/client files at `packages/cloud-contracts`; `@agiworkforce/licensing` owns signed org policy and its ten golden fixtures; `@agiworkforce/services` retains compatibility re-exports while direct Web/Desktop/Mobile consumers import the canonical contract owner. Rust fixture replay paths moved atomically. A permanent ownership guard rejects the retired path, indirect cloud-symbol imports, broken exports/dependencies/lock links, and boundary reversal. Closure proof: cloud contracts 12 files/133 tests, licensing 2 files/40 tests, Services 13 files/172 tests; 43/43 workspace typechecks; all 21 Cargo members check; frozen offline installation passes; pnpm production/complete graphs (157/161 edges), Turbo (45 workspaces, 225 tasks, 457 edges), and Cargo (31 workspace edges) are acyclic.
+
+**M4 — Artifact and sync ownership (completed 2026-07-15).** `@agiworkforce/artifacts` now owns deterministic derivation, publish-boundary enforcement, artifact cloud merge/apply, and the vanilla Zustand artifact store; `@agiworkforce/sync` owns the six cross-surface delta-apply modules, bigint cursor rules, and the TypeScript/Rust golden fixture corpus. Web/Desktop/Mobile import canonical owners directly while Services and Stores remain re-export-only compatibility paths for downstream callers. A permanent guard rejects retired owner paths, indirect first-party imports, boundary reversals, undeclared app edges, stale lock links, and Rust fixture drift. Closure proof: Artifacts 4 files/54 tests, Sync 8 files/107 tests, Services 2 files/19 tests (the unchanged 180-test owner corpus); Web 4 files/21 tests, Desktop 1 file/10 tests, and Mobile 5 files/92 tests pass at the consuming seams; all 45 available workspace typecheck tasks and all 21 Cargo members check; frozen installation and the full LLM-operability guard pass. The pnpm graphs (163 production/168 complete edges), Turbo graph (47 workspaces, 235 tasks, 477 edges), and Cargo graph (31 workspace edges) are acyclic.
+
+**M5 — Remaining service-facade extraction (completed 2026-07-15).** Managed-cloud host classification moved byte-for-byte to zero-production-dependency `@agiworkforce/trust-boundaries`; model-switch cache consequences moved byte-for-byte into existing `@agiworkforce/routing`; registry-derived web-search harness availability and its tests moved byte-for-byte to `@agiworkforce/search`. Web imports Search and Routing directly; Desktop and Mobile import Trust Boundaries directly; no first-party app depends on or imports Services. Services is now a tested re-export-only downstream compatibility facade. A permanent guard rejects retired owner files and paths, facade reversals, indirect app imports, stale Vite/Jest aliases, undeclared manifest edges, and stale lock links. Closure proof: Trust Boundaries 1 file/6 tests, Search 1 file/13 tests, Routing 4 files/250 tests (including the unchanged 6-test cache corpus), Services 1 file/3 facade-identity tests; Web 3 files/37 tests, Desktop 1 file/23 tests, and Mobile 1 file/19 tests pass at the consuming seams. All 49 workspace typecheck tasks and all 21 Cargo members check; frozen installation and the full LLM-operability guard pass. The pnpm graphs (166 production/171 complete edges), Turbo graph (49 workspaces, 245 tasks, 489 edges), and Cargo graph (31 workspace edges) are acyclic.
+
+**M6 — Rust microcrate consolidation.** One merge per PR in dependency order: cache into image; home-dir and rustls-provider into network-proxy; async-utils, string, and template into protocol. Preserve module APIs internally, update Cargo manifests/lockfile, and retain any third-party attribution. The large security-isolated `network-proxy` stays a crate despite one current consumer.
+
+**M7 — Tool classification.** Add the canonical `tools/` root and its scoped agent/ownership rules, then move `services/skill-vetting` to `tools/skill-vetting`. Update `repo-map.json`, `services/AGENTS.md`, organization guards, command maps, CI references, and third-party notices atomically. Do not modify the vendored scanner in this PR.
+
+**M8 — Compatibility removal and dormant-package review.** After all direct consumers have migrated and at least one full CI/release cycle is green, delete the empty `packages/stores` and `packages/services` facades. Do not delete provider leaf packages while `@agiworkforce/providers-factory` composes them; a leaf becomes an orphan candidate only after removal from the factory and proof of zero remaining consumers. `agiworkforce-licensing` leaves compatibility status only when CLI/Desktop actually consume it; otherwise remove it instead of shipping an unowned claim.
+
+### B5. Per-wave gates
+
+Minimum gates for every wave:
+
+```bash
+pnpm check:repo-organization
+pnpm check:boundaries
+pnpm check:structure-conventions
+pnpm check:agent-context
+pnpm exec turbo run lint typecheck test build --dry=json
+pnpm typecheck:all
+git diff --check
+cargo metadata --format-version 1 --no-deps
+cargo check --workspace
+```
+
+Add the owner-surface tests from `docs/agent-context/commands.json`. A green build is not sufficient: inspect all changed imports/manifests, prove the old path has zero source/config references, inspect `git status`, and record unresolved risks. No broad moves were executed while producing this classification.

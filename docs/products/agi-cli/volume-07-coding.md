@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/cli.md`, `docs/cli/COMMAND_SURFACE.md`. Grounded in real repo code: `apps/cli/src/agent/mod.rs`, `apps/cli/src/agent/executor.rs`, `apps/cli/src/platform/runtime/tool_catalog.rs`, `apps/cli/src/features/exec/tools/file_ops/mod.rs`, `apps/cli/src/apply_patch.rs`, `apps/cli/src/review.rs`, `apps/cli/src/plan_mode.rs`, `apps/cli/src/subagent.rs`, `apps/cli/src/platform/lsp/{client.rs,mod.rs}`, `apps/cli/src/init.rs`, `apps/cli/src/notebook_edit.rs`, `crates/agiworkforce-app-server/src/lib.rs`, and the model SSOT `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/cli.md`, `docs/cli/COMMAND_SURFACE.md`. Grounded in real repo code: `apps/cli/src/agent/mod.rs`, `apps/cli/src/agent/executor.rs`, `apps/cli/src/platform/runtime/tool_catalog.rs`, `apps/cli/src/features/exec/tools/file_ops/mod.rs`, `apps/cli/src/apply_patch.rs`, `apps/cli/src/review.rs`, `apps/cli/src/plan_mode.rs`, `apps/cli/src/subagent.rs`, `apps/cli/src/platform/lsp/{client.rs,mod.rs}`, `apps/cli/src/init.rs`, `apps/cli/src/notebook_edit.rs`, `crates/agiworkforce-app-server/src/lib.rs`, and the model SSOT `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 This volume covers how AGI CLI writes, edits, and reasons about code inside a terminal workspace. AGI CLI is the pure-Rust (Ratatui TUI) developer surface and exposes all three trust modes — **Local**, **BYOK**, **Managed Cloud**. Every coding capability here is a composition of the agent loop (`apps/cli/src/agent/executor.rs`) over a fixed built-in tool catalog: `built_in_tool_definitions()` in `apps/cli/src/platform/runtime/tool_catalog.rs` defines the coding primitives (`read_file`, `write_file`, `edit_file`, `multiedit`, `apply_patch`, `search_files`, `grep_files`, `glob`, `read_many_files`, `run_command`, `lsp_*`, `notebook_edit`, `task`, `update_plan`). Do not restate a fixed tool count in specs; verify it from source (the catalog is asserted in that module's tests).
 
-Two rules from canon shape every subsection below. First, **trust boundaries are load-bearing**: a Local session must never silently ship code, files, or context to a BYOK or Managed provider — `AgentSession::validate_privacy_boundary` (`apps/cli/src/agent/mod.rs`) fails closed, and Local→BYOK requires an explicit, consent-gated handoff (`arm_byok_handoff` / `consume_byok_handoff`). Second, **sessions are workspace/session-scoped**: coding output stays in the workspace and never auto-syncs to app chat; any handoff to app chat is explicit and redacted. Model IDs shown to the user come only from `packages/types/src/models.json`.
+Two rules from canon shape every subsection below. First, **trust boundaries are load-bearing**: a Local session must never silently ship code, files, or context to a BYOK or Managed provider — `AgentSession::validate_privacy_boundary` (`apps/cli/src/agent/mod.rs`) fails closed, and Local→BYOK requires an explicit, consent-gated handoff (`arm_byok_handoff` / `consume_byok_handoff`). Second, **sessions are workspace/session-scoped**: coding output stays in the workspace and never auto-syncs to app chat; any handoff to app chat is explicit and redacted. Model IDs shown to the user come only from `packages/contracts/types/src/models.json`.
 
 ## Code Generation
 
@@ -69,7 +69,7 @@ Two rules from canon shape every subsection below. First, **trust boundaries are
 
 ## Competitor notes
 
-Claude Code and Codex CLI ship comparable edit/patch/plan/subagent loops bound to one vendor's models. AGI CLI's deliberate divergence: (1) **multi-provider** — coding runs against Anthropic, OpenAI, Google, local Ollama/LM Studio, and more, resolved from the `packages/types/src/models.json` SSOT, never hardcoded; (2) **BYOK where allowed** — the CLI is one of only three surfaces (Desktop, CLI, VS Code) permitted to use user keys, with Local→BYOK as an explicit consented fork; (3) **per-surface trust + local-first** — a Local coding session provably stays on-device (`validate_privacy_boundary`), which vendor CLIs cannot offer; (4) **workspace-scoped by default** — coding output does not auto-sync to any cloud chat. Remote control of a running CLI coding session from phone/web is 🔭 Planned, mirroring Claude Code Remote Control and Codex remote connections (session keeps running locally, outbound-only, QR + HMAC paired, approval-gated) — not a fourth trust mode.
+Claude Code and Codex CLI ship comparable edit/patch/plan/subagent loops bound to one vendor's models. AGI CLI's deliberate divergence: (1) **multi-provider** — coding runs against Anthropic, OpenAI, Google, local Ollama/LM Studio, and more, resolved from the `packages/contracts/types/src/models.json` SSOT, never hardcoded; (2) **BYOK where allowed** — the CLI is one of only three surfaces (Desktop, CLI, VS Code) permitted to use user keys, with Local→BYOK as an explicit consented fork; (3) **per-surface trust + local-first** — a Local coding session provably stays on-device (`validate_privacy_boundary`), which vendor CLIs cannot offer; (4) **workspace-scoped by default** — coding output does not auto-sync to any cloud chat. Remote control of a running CLI coding session from phone/web is 🔭 Planned, mirroring Claude Code Remote Control and Codex remote connections (session keeps running locally, outbound-only, QR + HMAC paired, approval-gated) — not a fourth trust mode.
 
 ## Acceptance / Definition of Done
 
@@ -82,7 +82,7 @@ A coding capability is production-ready only when its tool path is wired in `app
 ## Anti-patterns
 
 - Silently routing a Local coding session to BYOK/Managed, or drafting a BYOK handoff and treating drafting as consent.
-- Hardcoding or inventing model IDs, provider names, routes, env vars, or command names; bypassing `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs, provider names, routes, env vars, or command names; bypassing `packages/contracts/types/src/models.json`.
 - Claiming a fix/optimization "done" from a successful compile with no test/benchmark evidence.
 - Generating empty or always-passing tests, or documentation that fabricates APIs the agent never read.
 - Writing outside validated workspace roots, or auto-syncing coding artifacts to app chat.

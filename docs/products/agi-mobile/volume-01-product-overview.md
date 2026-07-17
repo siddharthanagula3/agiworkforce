@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/app.config.js`, `lib/v1FeatureFlags.ts`, `services/remoteChatGate.ts`, `services/cloudSyncEngine.ts`, `services/companion.ts`, `services/modelDownload.ts`, `lib/egressGuard.ts`, `storage/installedModels.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/app.config.js`, `lib/v1FeatureFlags.ts`, `services/remoteChatGate.ts`, `services/cloudSyncEngine.ts`, `services/companion.ts`, `services/modelDownload.ts`, `lib/egressGuard.ts`, `storage/installedModels.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -46,7 +46,7 @@ This volume is the product charter for AGI Mobile — the Expo / React Native su
 
 ## Competitive Analysis
 
-🔭 Planned (positioning). ChatGPT and Claude mobile are single-vendor cloud clients with mandatory accounts and no on-device model. AGI Mobile diverges: **multi-provider** managed cloud (IDs from `packages/types/src/models.json`), a **free on-device Local mode**, **per-surface trust** with no BYOK on mobile, and a **remote window** onto local sessions modeled on Claude Code Remote Control and the Claude mobile companion (compute on host, outbound-only, QR + HMAC, approval-gated). We compete on "your models, no markup, private, everywhere," not on owning a frontier model.
+🔭 Planned (positioning). ChatGPT and Claude mobile are single-vendor cloud clients with mandatory accounts and no on-device model. AGI Mobile diverges: **multi-provider** managed cloud (IDs from `packages/contracts/types/src/models.json`), a **free on-device Local mode**, **per-surface trust** with no BYOK on mobile, and a **remote window** onto local sessions modeled on Claude Code Remote Control and the Claude mobile companion (compute on host, outbound-only, QR + HMAC, approval-gated). We compete on "your models, no markup, private, everywhere," not on owning a frontier model.
 
 ## Product Principles
 
@@ -70,7 +70,7 @@ This volume is the product charter for AGI Mobile — the Expo / React Native su
 
 ## Constraints
 
-🔭 Planned/observed. Mobile must not be the first heavy local PDF/PPTX/DOCX/image-gen surface (`apps/mobile/AGENTS.md`); image gen is cloud-backed. Device limits (RAM, battery, thermal, 1–10 GB+ model files) constrain on-device models. Lane contract limits edits to `ios/**`, native modules, shared contracts. Model IDs come only from `packages/types/src/models.json`. Stack is Clerk + Neon + Stripe — never Supabase.
+🔭 Planned/observed. Mobile must not be the first heavy local PDF/PPTX/DOCX/image-gen surface (`apps/mobile/AGENTS.md`); image gen is cloud-backed. Device limits (RAM, battery, thermal, 1–10 GB+ model files) constrain on-device models. Lane contract limits edits to `ios/**`, native modules, shared contracts. Model IDs come only from `packages/contracts/types/src/models.json`. Stack is Clerk + Neon + Stripe — never Supabase.
 
 ## Risks
 
@@ -88,7 +88,7 @@ This volume is the product charter for AGI Mobile — the Expo / React Native su
 - `apps/mobile/lib/` — `v1FeatureFlags.ts`, `egressGuard.ts`, `mmkv.ts`, `secureStorage.ts`.
 - `apps/mobile/stores/`, `apps/mobile/storage/` — Zustand stores; SQLCipher/MMKV (`installedModels.ts`, `types.ts`).
 - `apps/mobile/app.config.js`, `apps/mobile/ios/` — Expo config + root iOS project.
-- Shared/backend: `packages/types/src/models.json`, `apps/web/app/api/{chat,memory,projects,settings}/sync`.
+- Shared/backend: `packages/contracts/types/src/models.json`, `apps/web/app/api/{chat,memory,projects,settings}/sync`.
 
 ## Competitor notes
 
@@ -104,4 +104,4 @@ Production-ready when: Local and Cloud are visibly separated with no silent rout
 
 ## Anti-patterns
 
-No BYOK / provider-key UI on mobile. No auto-send or silent routing of Local chats to Managed Cloud. Don't claim on-device inference is shipped while it is 🟡. Don't make mobile the first heavy local PDF/PPTX/DOCX/image-gen surface. Don't hardcode or invent model IDs — read `packages/types/src/models.json`. Never reference Supabase. Never reintroduce "Plus", `pro_plus`, or "Hobby", or invent Pro/Max INR prices. Don't treat Remote Control as a fourth trust mode.
+No BYOK / provider-key UI on mobile. No auto-send or silent routing of Local chats to Managed Cloud. Don't claim on-device inference is shipped while it is 🟡. Don't make mobile the first heavy local PDF/PPTX/DOCX/image-gen surface. Don't hardcode or invent model IDs — read `packages/contracts/types/src/models.json`. Never reference Supabase. Never reintroduce "Plus", `pro_plus`, or "Hobby", or invent Pro/Max INR prices. Don't treat Remote Control as a fourth trust mode.

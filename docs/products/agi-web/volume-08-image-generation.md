@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`; grounded in real repo paths: `apps/web/app/api/media/image/generate/route.ts`, `apps/web/app/api/media/route.ts`, `apps/web/lib/hooks/useMediaGeneration.ts`, `apps/web/features/chat/components/ImageGenerationCard.tsx`, `apps/web/features/chat/components/ImageLightbox.tsx`, `apps/web/lib/server/media-assets.ts`, `apps/web/lib/server/media-storage.ts`, `apps/web/db/neon/0036_media_assets.sql`, `apps/web/lib/rate-limit.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`; grounded in real repo paths: `apps/web/app/api/media/image/generate/route.ts`, `apps/web/app/api/media/route.ts`, `apps/web/lib/hooks/useMediaGeneration.ts`, `apps/web/features/chat/components/ImageGenerationCard.tsx`, `apps/web/features/chat/components/ImageLightbox.tsx`, `apps/web/lib/server/media-assets.ts`, `apps/web/lib/server/media-storage.ts`, `apps/web/db/neon/0036_media_assets.sql`, `apps/web/lib/rate-limit.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies AI image generation on **AGI Web** — the cloud-only surface. Web has **no Local mode and no BYOK** (canon); every image request is authenticated with Clerk, gated on a Managed-Cloud subscription, and executed server-side against AGI-managed provider keys. There is no env-key free chat path and no user-supplied provider key affordance — never add one. Image model IDs are resolved from the catalog (`packages/types/src/models.json`) via `getModelsForProvider`/`getRoutingSlotModel`/`getModelMetadataById`, never hardcoded. Generated assets are user-scoped rows in Neon plus durable object storage, so the same Library appears across Web/Desktop/Mobile cloud. The whole domain lives inside the Managed-Cloud trust boundary; Local/BYOK data is never fed into it.
+This volume specifies AI image generation on **AGI Web** — the cloud-only surface. Web has **no Local mode and no BYOK** (canon); every image request is authenticated with Clerk, gated on a Managed-Cloud subscription, and executed server-side against AGI-managed provider keys. There is no env-key free chat path and no user-supplied provider key affordance — never add one. Image model IDs are resolved from the catalog (`packages/contracts/types/src/models.json`) via `getModelsForProvider`/`getRoutingSlotModel`/`getModelMetadataById`, never hardcoded. Generated assets are user-scoped rows in Neon plus durable object storage, so the same Library appears across Web/Desktop/Mobile cloud. The whole domain lives inside the Managed-Cloud trust boundary; Local/BYOK data is never fed into it.
 
 ## Prompting
 
@@ -32,7 +32,7 @@ Prompt/content moderation currently relies on **upstream provider safety filters
 
 ## Safety
 
-Layered, server-side guards (**✅ Built** — `route.ts`): Clerk auth (`getClerkAuthUser`); CSRF enforcement (`requireCsrfToken`); fail-closed rate limiting `image-generation` = 10 req/min (**✅ Built** — `apps/web/lib/rate-limit.ts`); the managed-compute gate (`buildManagedComputeGateResponse`, the incident kill-switch, off by default per public-alpha canon); active-subscription check; and tier gating. Credits are reserved before the provider call and reconciled/refunded after, with idempotency keys, to prevent double-spend and abuse (**✅ Built** — `CreditService` usage in `route.ts`). Neon rows are user-scoped/RLS-aligned. **Reconciliation gaps (🟡):** the route's `allowedTiers` set includes `'team'`, and gating language predates the 2026-06-30 ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) — "Team" is served by Enterprise, so `'team'` must be dropped; and the credit "top-up" vocabulary must stay metering-only, since top-ups are removed forever by policy. These are tracked billing-catalog reconciliation items, not new work authorized here.
+Layered, server-side guards (**✅ Built** — `route.ts`): Clerk auth (`getClerkAuthUser`); CSRF enforcement (`requireCsrfToken`); fail-closed rate limiting `image-generation` = 10 req/min (**✅ Built** — `apps/web/lib/rate-limit.ts`); the managed-compute gate (`buildManagedComputeGateResponse`, the incident kill-switch, off by default per public-alpha canon); active-subscription check; and tier gating. Credits are reserved before the provider call and reconciled/refunded after, with idempotency keys, to prevent double-spend and abuse (**✅ Built** — `CreditService` usage in `route.ts`). Neon rows are user-scoped/RLS-aligned. **Reconciliation gaps (🟡, updated 2026-07-11):** the route's `allowedTiers` set including `'team'` is now correct — "Team" was reinstated as a real per-seat tier (2026-07-11, supersedes the 2026-06-30 "served by Enterprise" framing) and gating language should target the current ladder (Free / Basic $7·₹399 / Pro $20 / Max $100 & $200 / Team $30-seat / Enterprise); and top-up handling should be reconciled to the now-enabled, capped top-up policy rather than kept metering-only. These are tracked billing-catalog reconciliation items, not new work authorized here.
 
 ## Download
 
@@ -47,7 +47,7 @@ Users can download any generated image as PNG. The inline card provides Download
 - `apps/web/features/chat/components/ImageLightbox.tsx` — full-screen viewer + download.
 - `apps/web/lib/server/media-assets.ts` / `media-storage.ts` — provenance repo + object storage.
 - `apps/web/db/neon/0036_media_assets.sql` — `media_assets` table + index.
-- `packages/types/src/models.json` — catalog source for image model IDs and `imageApi` metadata.
+- `packages/contracts/types/src/models.json` — catalog source for image model IDs and `imageApi` metadata.
 
 ## Competitor notes
 
@@ -57,7 +57,7 @@ ChatGPT (GPT Image) and Gemini couple generation tightly to one first-party mode
 
 Production-ready when generation, persistence, Library, and download all function under the Managed-Cloud trust boundary with catalog-driven models, and moderation is first-party (not provider-only).
 
-- [ ] **Build:** generate → persist → list/download round-trips green; model IDs resolved only from `packages/types/src/models.json`; `aspectRatio` wired end-to-end or documented as `size`-mapped.
+- [ ] **Build:** generate → persist → list/download round-trips green; model IDs resolved only from `packages/contracts/types/src/models.json`; `aspectRatio` wired end-to-end or documented as `size`-mapped.
 - [ ] **Trust:** no BYOK/Local affordance on Web; assets user-scoped; managed kill-switch honored; Local/BYOK rows never enter `media_assets`.
 - [ ] **Security:** Clerk + CSRF + fail-closed rate limit verified; credit reserve/refund idempotent; `allowedTiers` reconciled to Free/Basic/Pro/Max/Enterprise (drop `'team'`); first-party moderation added; provider errors mapped without leaking keys.
 

@@ -24,7 +24,7 @@ AGI CLI is the pure-Rust (Ratatui TUI) developer surface, and security here mean
 
 ## API Keys
 
-✅ Built — BYOK provider keys are read from environment (`apps/cli/src/cloud.rs`: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `XAI_API_KEY`) or stored as `AuthEntry::ApiKey`. The `BYOK config` `Debug` impl in `cloud.rs` redacts key values. Requirement: BYOK is available only on Desktop/CLI/VS Code — never Web/Mobile — and a Local session must fork explicitly (context selection, secret scan, payload preview, visible provider label, consent) before any key is used; `validate_privacy_boundary` blocks the Local→provider leak until consent fires. Never invent model IDs — resolve from `packages/types/src/models.json`.
+✅ Built — BYOK provider keys are read from environment (`apps/cli/src/cloud.rs`: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `XAI_API_KEY`) or stored as `AuthEntry::ApiKey`. The `BYOK config` `Debug` impl in `cloud.rs` redacts key values. Requirement: BYOK is available only on Desktop/CLI/VS Code — never Web/Mobile — and a Local session must fork explicitly (context selection, secret scan, payload preview, visible provider label, consent) before any key is used; `validate_privacy_boundary` blocks the Local→provider leak until consent fires. Never invent model IDs — resolve from `packages/contracts/types/src/models.json`.
 
 ## Tool Permissions
 
@@ -80,4 +80,4 @@ Production-ready when a Local session provably cannot leak to a non-local provid
 - Skipping OAuth `state`/PKCE validation, or accepting a code without the required echoed state.
 - Weakening Deny-precedence, widening filesystem/network scope, or shipping `--dangerously-skip-permissions` as a default.
 - Reintroducing the stale "cloud execution is private beta" gate as a hard block (`apps/cli/src/cloud.rs`) — Managed Cloud is public alpha, open by default (🟡 reconcile).
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`), referencing removed tiers ("Plus"/`pro_plus`/"Hobby"), inventing INR prices, or referencing Supabase.
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`), referencing removed tiers ("Plus"/`pro_plus`/"Hobby"), inventing INR prices, or referencing Supabase.

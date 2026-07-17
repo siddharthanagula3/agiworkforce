@@ -148,7 +148,7 @@ tied to a single first-party cloud account. AGI's divergence: native integration
 Local is the default for opened files and deep links, BYOK is Desktop-only with explicit fork
 consent, and the desktop is the _host_ for the Chrome and VS Code extensions via the
 native-messaging bridge — competitors expose no such local-host fabric. Model choice is
-multi-provider (IDs sourced only from `packages/types/src/models.json`), never a single vendor.
+multi-provider (IDs sourced only from `packages/contracts/types/src/models.json`), never a single vendor.
 
 ## Acceptance / Definition of Done
 
@@ -163,7 +163,7 @@ platforms, respects the trust boundary, and cites a real path — no faked capab
 
 - Routing a Local chat/file/session into BYOK or Cloud from a deep link, opened file, tray item, or notification without the explicit fork + consent.
 - Claiming Dock badge, Auto Start, or cross-platform file associations as shipped (they are 🟡/🔭); describing placeholders (`tray_set_unread_badge`) as working.
-- Hardcoding or inventing model IDs; they come only from `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs; they come only from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or inventing INR prices; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise; no top-ups.
 - Any Supabase reference; auth/DB/billing is Clerk + Neon + Stripe.
 - Widening the fs allow-list or ATS exceptions beyond loopback, or writing native-host manifests outside the per-OS paths in `manifest.rs`; renaming Next.js `proxy.ts` back to `middleware.ts`.

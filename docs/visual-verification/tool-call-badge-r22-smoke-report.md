@@ -100,7 +100,7 @@ classes to the `--chat-*` token namespace already shipped by `@agiworkforce/desi
 ### 1. Badge backgrounds render transparent — Tailwind `var()` fallback not honored
 
 The badge bg class is `bg-[color:var(--surface-elevated,rgba(0,0,0,0.06))]` (InlineToolCall.tsx:240, 251).
-`--surface-elevated` is **not defined** in `apps/web/app/globals.css` or `packages/design-tokens/src/chat.css`
+`--surface-elevated` is **not defined** in `apps/web/app/globals.css` or `packages/ui/design-tokens/src/chat.css`
 (only `--chat-surface-elevated: #ffffff` exists there). The expected behavior is for the rgba fallback to apply,
 producing a faint gray badge background like Claude's reference. The measured computed style shows
 `background-color: rgba(0, 0, 0, 0)` (transparent) — the Tailwind v4 arbitrary-value parser appears not to
@@ -129,7 +129,7 @@ is a real miss.
 Repository-wide grep confirms `--text-muted`, `--surface-elevated`, `--bg-code`, `--bg-hover`, `--border-subtle`,
 `--state-success`, `--text-secondary` are **not** defined in any CSS file under `apps/` or `packages/`. The
 component code uses them with inline-rgba fallbacks. This is brittle — see issue #1. Recommend a follow-up
-ticket to wire the `--chat-*` tokens (which ARE defined and theme-aware in `packages/design-tokens/src/chat.css`)
+ticket to wire the `--chat-*` tokens (which ARE defined and theme-aware in `packages/ui/design-tokens/src/chat.css`)
 to the bare `--*` token namespace, or vice versa.
 
 ### 4. "Loading tools" row uses letter `M` not search-glass glyph

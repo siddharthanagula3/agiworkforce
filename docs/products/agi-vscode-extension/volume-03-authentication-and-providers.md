@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`. Grounded in real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/data/usageMeter.ts`, `apps/extension-vscode/src/integrations/providerStreamClient.ts`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`. Grounded in real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/data/usageMeter.ts`, `apps/extension-vscode/src/integrations/providerStreamClient.ts`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -24,7 +24,7 @@ Sign-in uses a secretless RFC-8628-style device flow ✅ (`apps/extension-vscode
 
 ### Subscription Verification
 
-After sign-in the extension resolves the plan from the account/server: `fetchTierInfo(secrets)` calls the tier endpoint with the bearer token and caches the result 🟡 (`apps/extension-vscode/src/utils/api.ts`; `tierStatus.cachedTier` in `globalState` at `apps/extension-vscode/src/extension.ts`). Commands `agi-workforce.showTierStatus` and `agi-workforce.showAccountUsage` render it. **Gap:** the `agiWorkforce.tier` override enum and `usageMeter.ts` still encode the removed `hobby`/`pro_plus` tiers, which contradict the canon ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise). Reconciling `packages/types/src/billing-catalog.ts` and these enums to the founder pricing model is a separate tracked task (🟡). Plans and model-by-plan gating are always verified server-side; there is no checkout inside the extension.
+After sign-in the extension resolves the plan from the account/server: `fetchTierInfo(secrets)` calls the tier endpoint with the bearer token and caches the result 🟡 (`apps/extension-vscode/src/utils/api.ts`; `tierStatus.cachedTier` in `globalState` at `apps/extension-vscode/src/extension.ts`). Commands `agi-workforce.showTierStatus` and `agi-workforce.showAccountUsage` render it. **Gap:** the `agiWorkforce.tier` override enum and `usageMeter.ts` still encode the removed `hobby`/`pro_plus` tiers, which contradict the canon ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise). Reconciling `packages/contracts/types/src/billing-catalog.ts` and these enums to the founder pricing model is a separate tracked task (🟡). Plans and model-by-plan gating are always verified server-side; there is no checkout inside the extension.
 
 ### Usage Limits
 
@@ -38,7 +38,7 @@ BYOK keys are stored in `SecretStorage` via `setApiKey`/`getApiKey`/`clearApiKey
 
 ### Provider Configuration
 
-Provider routing is configured by `agiWorkforce.providerStreamProvider` (enum includes `auto`, `anthropic`, `openai`, `google`, `ollama`, `ollama-cloud`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`, `lmstudio`, `custom`) plus `agiWorkforce.gatewayUrl` 🟡 (`apps/extension-vscode/package.json`). The provider-stream client currently wires only `anthropic | openai | ollama | google` (`apps/extension-vscode/src/integrations/providerStreamClient.ts`), and `streamChatCompletionViaProvider` throws "not available in the VS Code extension yet" — account-gated provider streaming is 🔭. Model IDs come only from `packages/types/src/models.json`; the extension must not hardcode or invent them.
+Provider routing is configured by `agiWorkforce.providerStreamProvider` (enum includes `auto`, `anthropic`, `openai`, `google`, `ollama`, `ollama-cloud`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`, `lmstudio`, `custom`) plus `agiWorkforce.gatewayUrl` 🟡 (`apps/extension-vscode/package.json`). The provider-stream client currently wires only `anthropic | openai | ollama | google` (`apps/extension-vscode/src/integrations/providerStreamClient.ts`), and `streamChatCompletionViaProvider` throws "not available in the VS Code extension yet" — account-gated provider streaming is 🔭. Model IDs come only from `packages/contracts/types/src/models.json`; the extension must not hardcode or invent them.
 
 ### Multiple Providers
 
@@ -64,7 +64,7 @@ LM Studio (`lmstudio`) is likewise a recognized provider with local classificati
 
 ### Model Discovery
 
-Static catalog discovery ✅: the model picker enumerates models from `packages/types/src/models.json` and lets the user pick per session. **Live** local-endpoint discovery (querying a running Ollama/LM Studio server for installed models, e.g. `/api/tags`, and merging them into the picker) is 🔭. Requirement: discovered local models must be tagged Local and never counted against Managed quota.
+Static catalog discovery ✅: the model picker enumerates models from `packages/contracts/types/src/models.json` and lets the user pick per session. **Live** local-endpoint discovery (querying a running Ollama/LM Studio server for installed models, e.g. `/api/tags`, and merging them into the picker) is 🔭. Requirement: discovered local models must be tagged Local and never counted against Managed quota.
 
 ## Repository map
 
@@ -76,7 +76,7 @@ Static catalog discovery ✅: the model picker enumerates models from `packages/
 - `apps/extension-vscode/src/features/model-picker/` — model picker & local detection.
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — localhost bridge + token.
 - `apps/extension-vscode/package.json` — commands, settings, untrusted-workspace restrictions.
-- `packages/types/src/models.json` — model catalog SSOT.
+- `packages/contracts/types/src/models.json` — model catalog SSOT.
 
 ## Competitor notes
 
@@ -94,7 +94,7 @@ Production-ready when sign-in/out, tier verification, BYOK key storage, and at l
 
 - Storing tokens or API keys in `settings.json` or `globalState` instead of `SecretStorage`.
 - Silently routing a Local chat/file to BYOK or Managed Cloud, or hiding the active provider label.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (`Plus`, `pro_plus`, `Hobby`) or inventing INR prices for Pro/Max; adding credit top-ups.
 - Referencing Supabase or renaming `proxy.ts` to `middleware.ts` on the web side.
 - Claiming Ollama/LM Studio/llama.cpp or account-gated provider streaming as shipped without a wired local/gateway client.

@@ -1,7 +1,7 @@
 # Volume 20 — Connectors
 
 Status: Canonical (depth expansion of `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 20)
-Authority: this manual · `docs/current/source-of-truth.md` (Settings → Connectors, P0 Gap 7) · `docs/strategy/01-competitive-teardown.md`, `02-gap-analysis.md` · `packages/unified-chat/src/lib/connectorPermissionStore.ts` · `packages/types/src/design-system/connector-permission.ts`
+Authority: this manual · `docs/current/source-of-truth.md` (Settings → Connectors, P0 Gap 7) · `docs/strategy/01-competitive-teardown.md`, `02-gap-analysis.md` · `packages/ui/unified-chat/src/lib/connectorPermissionStore.ts` · `packages/contracts/types/src/design-system/connector-permission.ts`
 
 ## Philosophy & Cloud/Local stance
 
@@ -22,11 +22,11 @@ Cloud/Local/Hybrid determines where the connector's data flows, never whether co
 
 ## Repository map
 
-- Connector permission state + UI contract: `packages/unified-chat/src/lib/connectorPermissionStore.ts` (+ `__tests__/connectorPermissionStore.test.ts`), `packages/types/src/design-system/connector-permission.ts`.
-- Capability gating + settings IA: `packages/types/src/capabilities.ts`, `packages/types/src/design-system/settings-ia.ts`, `packages/ui/src/settings-nav.ts`, `packages/ui/src/settings-modal/`.
-- Per-source connector APIs (tool layer): `packages/api/src/{email,calendar,messaging,database,cloudStorage,knowledge}.ts`.
-- Transport: connectors ride the MCP layer (Vol 19, `packages/api/src/mcp.ts`) or a direct OAuth client; gateway config in `services/api-gateway/src/mcp/mcpConfig.ts`.
-- Admin/enterprise controls: `packages/types/src/enterprise/index.ts`, `docs/enterprise/` (admin policy, allowlists).
+- Connector permission state + UI contract: `packages/ui/unified-chat/src/lib/connectorPermissionStore.ts` (+ `__tests__/connectorPermissionStore.test.ts`), `packages/contracts/types/src/design-system/connector-permission.ts`.
+- Capability gating + settings IA: `packages/contracts/types/src/capabilities.ts`, `packages/contracts/types/src/design-system/settings-ia.ts`, `packages/ui/ui/src/settings-nav.ts`, `packages/ui/ui/src/settings-modal/`.
+- Per-source connector APIs (tool layer): `packages/client/desktop-command-client/src/{email,calendar,messaging,database,cloudStorage,knowledge}.ts`.
+- Transport: connectors ride the MCP layer (Vol 19, `packages/client/desktop-command-client/src/mcp.ts`) or a direct OAuth client; gateway config in `services/api-gateway/src/mcp/mcpConfig.ts`.
+- Admin/enterprise controls: `packages/contracts/types/src/enterprise/index.ts`, `docs/enterprise/` (admin policy, allowlists).
 - Secrets: OS keystore via `crates/agiworkforce-protocol/src/auth.rs` (CLI) / Desktop stronghold / Mobile SecureStore (Vol 25).
 
 ## Competitor notes

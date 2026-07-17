@@ -1,7 +1,7 @@
 # Volume 26 — Synchronization
 
 Status: Canonical depth for Master Spec Vol 26
-Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 26, `docs/strategy/04-scaling-to-1M-architecture.md` (sync engine), `docs/current/source-of-truth.md` (Surface Roles), `packages/types/src/suite-contracts.ts` (`assertSurfaceCanSyncChats`).
+Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 26, `docs/strategy/04-scaling-to-1M-architecture.md` (sync engine), `docs/current/source-of-truth.md` (Surface Roles), `packages/contracts/types/src/suite-contracts.ts` (`assertSurfaceCanSyncChats`).
 
 ## Philosophy & Cloud/Local stance
 
@@ -12,7 +12,7 @@ The Cloud/Local stance is the hard line: sync moves _synced-account app-chat dat
 ## Binding rules
 
 1. One conflict model: server-side LWW / version vectors, scoped to the app-chat boundary. No CRDT, no per-surface ad-hoc merge.
-2. Sync eligibility is decided by `assertSurfaceCanSyncChats` (`packages/types/src/suite-contracts.ts`); a client must call it, not reimplement the rule.
+2. Sync eligibility is decided by `assertSurfaceCanSyncChats` (`packages/contracts/types/src/suite-contracts.ts`); a client must call it, not reimplement the rule.
 3. Web/Desktop/Mobile sync app chats only. Local-mode chats, memory, projects, files, profile, and personalization stay local unless the user runs a reviewed transfer.
 4. CLI/VS Code/Chrome stay local/workspace-scoped; handoff to app chat is explicit and redacted, never automatic.
 5. Local and BYOK never sync into Managed; a boundary-crossing continuation is a new reviewed branch with provenance (source + selected context + redaction hash).
@@ -23,10 +23,10 @@ The Cloud/Local stance is the hard line: sync moves _synced-account app-chat dat
 ## Repository map
 
 - **Sync transport:** `services/signaling-server/src/` — `index.ts`, `connection-manager.ts`, `db.ts`, `metrics.ts`, `middleware/` (fan-out + presence).
-- **Sync authority:** `packages/types/src/suite-contracts.ts` (`assertSurfaceCanSyncChats`, `PrivacyMode`, synced/developer surface separation, generated-file trust-boundary validation) + `__tests__/suite-contracts.test.ts`.
+- **Sync authority:** `packages/contracts/types/src/suite-contracts.ts` (`assertSurfaceCanSyncChats`, `PrivacyMode`, synced/developer surface separation, generated-file trust-boundary validation) + `__tests__/suite-contracts.test.ts`.
 - **Persistence (canonical):** `apps/web/db/neon` (conversation/message tables that sync); gateway writes via `services/api-gateway`.
 - **Per-surface gates:** Web `apps/web` (sync allowed), Desktop `apps/desktop` (app chats sync; local files stay local), Mobile `apps/mobile/services/remoteChatGate.ts` (cloud sync only when entitled, fail-closed), CLI `apps/cli/src/agent/mod.rs` (no auto app-chat sync), Chrome `apps/extension` (sync-boundary comments + tests), VS Code `apps/extension-vscode` (explicit redacted handoff).
-- **Local state:** `apps/mobile/lib/mmkv.ts`, desktop SQLite (`src-tauri`), `packages/stores`/`packages/data-layer`.
+- **Shared apply + local state:** `packages/client/sync` for validated delta application; `apps/mobile/lib/mmkv.ts`, desktop SQLite (`src-tauri`), `packages/platform/artifacts`/`packages/platform/data-layer` for domain persistence.
 
 ## Competitor notes
 

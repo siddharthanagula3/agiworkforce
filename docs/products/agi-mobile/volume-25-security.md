@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real implementation: `apps/mobile/lib/{secureStorage.ts,mmkv.ts,pinning.ts,biometricFlagStore.ts,deviceId.ts,v1FeatureFlags.ts}`, `apps/mobile/storage/db.ts`, `apps/mobile/services/{secureFetch.ts,authSession.ts,remoteChatGate.ts,dsarExport.ts}`, `apps/mobile/src/integrations/clerk.ts`, `apps/mobile/src/features/auth/hooks/useBiometricGate.ts`, `apps/mobile/src/features/settings/{cloud-privacy,data-controls,safety-security}/`, `apps/mobile/app.config.js`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real implementation: `apps/mobile/lib/{secureStorage.ts,mmkv.ts,pinning.ts,biometricFlagStore.ts,deviceId.ts,v1FeatureFlags.ts}`, `apps/mobile/storage/db.ts`, `apps/mobile/services/{secureFetch.ts,authSession.ts,remoteChatGate.ts,dsarExport.ts}`, `apps/mobile/src/integrations/clerk.ts`, `apps/mobile/src/features/auth/hooks/useBiometricGate.ts`, `apps/mobile/src/features/settings/{cloud-privacy,data-controls,safety-security}/`, `apps/mobile/app.config.js`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -69,4 +69,4 @@ Production-ready when: all secrets live only in SecureStore; SQLCipher and MMKV 
 - Storing tokens or encryption keys in MMKV/SQLite/AsyncStorage/logs instead of SecureStore.
 - Flipping `PINNING_ENFORCED` true while placeholder pins remain, or making the biometric gate fail-open.
 - Faking a "trusted devices" / Remote-Control manager that does not exist (label 🟡/🔭).
-- Hardcoding or inventing model IDs (read `packages/types/src/models.json`), inventing INR prices, or referencing Supabase, "Plus", `pro_plus`, or "Hobby".
+- Hardcoding or inventing model IDs (read `packages/contracts/types/src/models.json`), inventing INR prices, or referencing Supabase, "Plus", `pro_plus`, or "Hobby".

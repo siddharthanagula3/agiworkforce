@@ -65,4 +65,4 @@ Production-ready when: secrets exist only in SecretStorage; sign-out fully clear
 - Silently routing a Local chat/file/session to BYOK or Managed Cloud, or auto-syncing IDE context into app chat history.
 - Accepting bridge frames before `auth_ok`, widening `ALLOWED_BRIDGE_COMMANDS` without rate limits, or forwarding attacker-controlled command args.
 - Loading a group/world-readable bridge token; defaulting `agent.mode` to `bypass`; bypassing the untrusted-workspace auto-apply block.
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`), inventing routes/env vars/INR prices, referencing removed tiers (Plus/Hobby/pro_plus) or credit top-ups, or referencing Supabase.
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`), inventing routes/env vars/INR prices, referencing removed tiers (Plus/Hobby/pro_plus) or credit top-ups, or referencing Supabase.

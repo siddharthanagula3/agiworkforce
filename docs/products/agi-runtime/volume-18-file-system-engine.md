@@ -7,7 +7,7 @@ Last updated: 2026-07-01
 Authority: `AGENTS.md`; `apps/cli/AGENTS.md` (nearest surface owner of the FS tool
 catalog); `docs/current/source-of-truth.md`; `docs/products/README.md` (binding canon).
 Grounded in real repo paths: `crates/agiworkforce-apply-patch/src/{lib.rs,parser.rs}`,
-`packages/apply-patch/src/`, `apps/cli/src/apply_patch.rs`, `apps/cli/src/file_state.rs`,
+`packages/tools/apply-patch/src/`, `apps/cli/src/apply_patch.rs`, `apps/cli/src/file_state.rs`,
 `apps/cli/src/features/exec/tools/file_ops/mod.rs`,
 `apps/cli/src/features/exec/tools/dir_ops/mod.rs`,
 `apps/cli/src/features/exec/tools/common/mod.rs`,
@@ -49,7 +49,7 @@ truncation, and read-state tracking so subsequent writes can detect staleness.
 `truncate_output_with_save`, and calls `crate::file_state::record_file_read` to snapshot
 content + mtime. The `read_file` (plus `read_many_files`) tool is registered read-only
 in `apps/cli/src/platform/runtime/tool_catalog.rs`. Cross-surface extraction into a
-shared `packages/runtime` FS module for Desktop/VS Code reuse is **🔭 Planned**.
+shared `packages/client/client-runtime` FS module for Desktop/VS Code reuse is **🔭 Planned**.
 
 ## Write Operations
 
@@ -92,7 +92,7 @@ containment; reject absolute paths and `..` traversal; never write outside the r
 absolute, `ParentDir`, `RootDir`, and `Prefix` components, canonicalizes the candidate,
 and asserts `starts_with(canonical_root)` — including for not-yet-existing paths via the
 nearest existing ancestor. A parallel TypeScript engine, `@agiworkforce/apply-patch`
-(`packages/apply-patch/src/{apply-update.ts,parse.ts,node-fs-bridge.ts}`), carries a
+(`packages/tools/apply-patch/src/{apply-update.ts,parse.ts,node-fs-bridge.ts}`), carries a
 `workspaceOnly` flag with `__tests__/path-traversal.test.ts` coverage. The CLI's
 `git apply` bridge (`apps/cli/src/apply_patch.rs` `validate_patch_targets`) **fails
 closed** — workspace-only, no `--unsafe-paths` opt-out. Known gap: on first hunk failure
@@ -126,7 +126,7 @@ tracked core-render refactor). No diff artifact is ever auto-synced to Cloud.
 ## Repository map
 
 - `crates/agiworkforce-apply-patch/src/{lib.rs,parser.rs}` — Rust patch parse/apply + containment.
-- `packages/apply-patch/src/{apply-update.ts,parse.ts,node-fs-bridge.ts,types.ts}` — TS `@agiworkforce/apply-patch`.
+- `packages/tools/apply-patch/src/{apply-update.ts,parse.ts,node-fs-bridge.ts,types.ts}` — TS `@agiworkforce/apply-patch`.
 - `apps/cli/src/apply_patch.rs` — fail-closed `git apply` target validator.
 - `apps/cli/src/file_state.rs` — read-before-write / staleness cache.
 - `apps/cli/src/features/exec/tools/file_ops/mod.rs` — read/write/edit/multiedit handlers.
@@ -159,7 +159,7 @@ route file bytes to BYOK/Cloud without an explicit consented fork.
 - [ ] **Build:** `read_file`, `write_file`, `edit_file`, `multiedit`, `apply_patch`,
       `grep_files`/`search_files`, `glob`, `list_directory` pass unit + scenario tests
       (`crates/agiworkforce-apply-patch/tests/scenarios.rs`,
-      `packages/apply-patch/src/__tests__/`, `apps/cli/src/file_state.rs` tests).
+      `packages/tools/apply-patch/src/__tests__/`, `apps/cli/src/file_state.rs` tests).
 - [ ] **Trust:** no FS operation crosses Local→BYOK without secret scan, payload preview,
       provider label, and consent; no file bytes enter Neon delta-sync.
 - [ ] **Security:** patch/edit/write paths reject absolute + `..` traversal and stay
@@ -175,7 +175,7 @@ route file bytes to BYOK/Cloud without an explicit consented fork.
   multi-edit partially and reporting success.
 - Treating a Remote Control window as a fourth trust mode or letting it write to disk
   without host approval.
-- Hardcoding or inventing model IDs (read only from `packages/types/src/models.json`),
+- Hardcoding or inventing model IDs (read only from `packages/contracts/types/src/models.json`),
   referencing removed tiers (`Plus`/`pro_plus`/`Hobby`) or credit top-ups, or naming
   Supabase — the stack is Clerk + Neon + Stripe.
 - Claiming shipped state without a repo path, or inventing a monolithic runtime daemon.

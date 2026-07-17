@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/manifest.json`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/background/memory-bridge.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/src/features/computer-use/{agentLoop,escalationEngine,cloudAgentClient}.ts`, `apps/extension/src/features/content/in-page-panel/setup.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/manifest.json`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/background/memory-bridge.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/src/features/computer-use/{agentLoop,escalationEngine,cloudAgentClient}.ts`, `apps/extension/src/features/content/in-page-panel/setup.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -58,7 +58,7 @@ Service-worker and content-script crash/unhandled-rejection capture. 🔭 Planne
 
 ## Competitor notes
 
-Claude for Chrome, ChatGPT, and Codex ship product telemetry through their own first-party pipelines and gate models by plan. AGI's deliberate divergence: **per-surface trust and local-first**. Because Chrome runs no inference and holds no keys, its analytics can only describe agent actions and health, never page content — a stronger stance than a general assistant that logs conversations. AGI is **multi-provider** (model IDs from `packages/types/src/models.json`, e.g. the computer-use route), honors **BYOK only where allowed** (never in Chrome), and keeps history/memory device-local instead of syncing them. No cross-site behavioral profiling, ever.
+Claude for Chrome, ChatGPT, and Codex ship product telemetry through their own first-party pipelines and gate models by plan. AGI's deliberate divergence: **per-surface trust and local-first**. Because Chrome runs no inference and holds no keys, its analytics can only describe agent actions and health, never page content — a stronger stance than a general assistant that logs conversations. AGI is **multi-provider** (model IDs from `packages/contracts/types/src/models.json`, e.g. the computer-use route), honors **BYOK only where allowed** (never in Chrome), and keeps history/memory device-local instead of syncing them. No cross-site behavioral profiling, ever.
 
 ## Acceptance / Definition of Done
 
@@ -74,6 +74,6 @@ Production-ready when analytics is first-party, allowlist-filtered, content-free
 - Adding PostHog/Amplitude/Segment/Sentry or any third-party host without a CSP + threat-model change.
 - Stable device/user fingerprints or cross-task correlation that reconstruct browsing history.
 - Routing Local/BYOK data into Chrome analytics, or treating a remote-control window as a Cloud session.
-- Hardcoding model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Referencing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups in usage/paywall events; referencing Supabase; using `middleware.ts` naming for the Next.js gateway (it is `proxy.ts`).
 - Trusting client flags for model-by-plan gating instead of server-side entitlement (429 paywall).

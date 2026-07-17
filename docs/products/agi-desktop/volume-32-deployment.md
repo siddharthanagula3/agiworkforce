@@ -89,4 +89,4 @@ Production-ready when all three platforms build signed, notarized/Authenticode a
 - A feature flag or env that flips a trust boundary (Local→Cloud/BYOK) outside the explicit consented fork.
 - Logging BYOK keys, provider tokens, or Local chat/file contents; sending them in crash payloads.
 - Reintroducing removed hardened-runtime entitlements (`disable-library-validation`, unsigned executable memory).
-- Referencing removed tiers (Plus/Hobby/pro_plus), inventing INR for Pro/Max, adding credit top-ups, hardcoding model IDs (use `packages/types/src/models.json`), or naming Supabase (stack is Clerk + Neon + Stripe).
+- Referencing removed tiers (Plus/Hobby/pro_plus), inventing INR for Pro/Max, adding credit top-ups, hardcoding model IDs (use `packages/contracts/types/src/models.json`), or naming Supabase (stack is Clerk + Neon + Stripe).

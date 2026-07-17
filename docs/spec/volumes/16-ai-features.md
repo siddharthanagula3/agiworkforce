@@ -1,7 +1,7 @@
 # Volume 16 — AI Features
 
 Status: Canonical (depth expansion of `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 16)
-Authority: this manual · `docs/current/source-of-truth.md` (UX Lock, Competitive Baseline) · `packages/types/src/models.json` (capability metadata) · `packages/types/src/capabilities.ts` (tool/feature access modes) · `docs/strategy/01-competitive-teardown.md`, `02-gap-analysis.md`
+Authority: this manual · `docs/current/source-of-truth.md` (UX Lock, Competitive Baseline) · `packages/contracts/types/src/models.json` (capability metadata) · `packages/contracts/types/src/capabilities.ts` (tool/feature access modes) · `docs/strategy/01-competitive-teardown.md`, `02-gap-analysis.md`
 
 ## Philosophy & Cloud/Local stance
 
@@ -22,10 +22,10 @@ Cloud/Local/Hybrid changes _which_ features light up, not their contract. Local 
 
 ## Repository map
 
-- Feature contracts & capability gates: `packages/types/src/capabilities.ts`, `packages/types/src/suite-contracts.ts` (trust/provider/privacy modes), `packages/types/src/models.json` (per-model capability metadata).
-- Reasoning/thinking: `packages/api/src/thinking.ts`; research/deep-research: `packages/api/src/research.ts`, `packages/types/src/research.ts`.
-- Voice: `packages/api/src/voice.ts`, `packages/types/src/voice.ts`, `packages/unified-chat/src/hooks/useVoiceInput.ts`.
-- Media gen surfaces: `packages/unified-chat/src/components/{ImageGenCard,VideoGenCard}.tsx`, `packages/api/src/media.ts`.
+- Feature contracts & capability gates: `packages/contracts/types/src/capabilities.ts`, `packages/contracts/types/src/suite-contracts.ts` (trust/provider/privacy modes), `packages/contracts/types/src/models.json` (per-model capability metadata).
+- Reasoning/thinking: `packages/client/desktop-command-client/src/thinking.ts`; research/deep-research: `packages/client/desktop-command-client/src/research.ts`, `packages/contracts/types/src/research.ts`.
+- Voice: `packages/client/desktop-command-client/src/voice.ts`, `packages/contracts/types/src/voice.ts`, `packages/ui/unified-chat/src/hooks/useVoiceInput.ts`.
+- Media gen surfaces: `packages/ui/unified-chat/src/components/{ImageGenCard,VideoGenCard}.tsx`, `packages/client/desktop-command-client/src/media.ts`.
 - Web search handler (verified path): `apps/web/.../core/integrations/web-search-handler.ts` (cited in source-of-truth verification list).
 - CLI feature equivalents: `apps/cli/src/features/exec/tools/web.rs` (fetch/search), `apps/cli/src/features/plan/plan_mode.rs` (planning), provider dispatch in `apps/cli/src/features/providers/`.
 - Coding/debugging/refactoring run through the tool + agent layers (Vol 17, Vol 18); summarization/translation are completion features over the same chat pipeline.

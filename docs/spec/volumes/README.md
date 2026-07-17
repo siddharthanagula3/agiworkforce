@@ -17,7 +17,7 @@ The master spec (`../AGI_CODE_MASTER_SPEC.md`) is the terse constitution. These 
 7. **Definition of Done** — the gate before the domain is "production-ready."
 8. **Anti-patterns** — what not to do.
 
-Rules: adapt, never copy proprietary code (study `claude-code` only). Model IDs from `packages/types/src/models.json`. Trust boundaries are absolute. Keep each volume 600–1,200 words.
+Rules: adapt, never copy proprietary code (study `claude-code` only). Model IDs from `packages/contracts/types/src/models.json`. Trust boundaries are absolute. Keep each volume 600–1,200 words.
 
 ## Index
 

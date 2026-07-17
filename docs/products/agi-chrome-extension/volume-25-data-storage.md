@@ -16,7 +16,7 @@ Trust modes shape the boundary directly. The extension has no BYOK path (BYOK is
 
 **Built** — `apps/extension/src/options.ts` reads/writes durable `agi_*` preference keys in `chrome.storage.local`: model/provider defaults (`agi_default_model`, `agi_default_provider`, `agi_model`), agent behavior (`agi_action_mode`, `agi_quick_mode`, `agi_thinking_enabled`, `agi_cu_ask_before_acting`), endpoints (`agi_gateway_url`, `agi_bridge_url`), notification/onboarding flags (`agi_task_notifications`, `agi_onboarding_completed`, `agi_panel_disclosure_shown`), and account credentials removed on logout (`agi_api_key`, `agi_user_id`, `agi_user_tier`, `agi_session`).
 
-Requirements: every setting is device-scoped and never enters delta-sync; settings sync is out of scope for this surface (per canon, cross-device settings sync is allowlist-gated and lands last on the app surfaces, not Chrome). Model IDs written to `agi_default_model`/`agi_model` MUST originate from the gateway model list derived from `packages/types/src/models.json` — never hardcoded. `agi_api_key` is an AGI account/gateway credential, not a provider key. 🟡 Gap: the key name `agi_api_key` is ambiguous and should be renamed to signal "account credential" (`apps/extension/src/options.ts:15`).
+Requirements: every setting is device-scoped and never enters delta-sync; settings sync is out of scope for this surface (per canon, cross-device settings sync is allowlist-gated and lands last on the app surfaces, not Chrome). Model IDs written to `agi_default_model`/`agi_model` MUST originate from the gateway model list derived from `packages/contracts/types/src/models.json` — never hardcoded. `agi_api_key` is an AGI account/gateway credential, not a provider key. 🟡 Gap: the key name `agi_api_key` is ambiguous and should be renamed to signal "account credential" (`apps/extension/src/options.ts:15`).
 
 ## Conversation History — local, 100 / 30-day TTL ✅
 
@@ -83,6 +83,6 @@ Production-ready when all durable state is confined to the documented `chrome.st
 - Storing a raw provider API key in `agi_api_key` or any key — the extension holds no provider keys.
 - Persisting the bridge token in `chrome.storage.local` so pairing silently survives restarts (must be `session`).
 - Weakening the 100/30-day history cap or the 200/2000-char memory cap "for convenience."
-- Hardcoding a model ID into `agi_default_model` instead of reading the gateway list backed by `packages/types/src/models.json`.
+- Hardcoding a model ID into `agi_default_model` instead of reading the gateway list backed by `packages/contracts/types/src/models.json`.
 - Referencing Supabase, or reintroducing removed tiers (Plus / pro_plus / Hobby) or credit top-ups in any value.
 - Treating an in-memory cache as the authorization source instead of `agi_site_allowlist`; honoring automation for a non-allowlisted origin.

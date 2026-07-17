@@ -95,4 +95,4 @@ Security
 - Claiming OAuth providers, magic link, or CAPTCHA are live from component presence alone (they are dashboard-config — mark 🟡 until verified).
 - Open redirects: trusting `redirectTo`/`next` without `getSafeRedirectUrl`.
 - Waitlist-gating account creation, or citing removed tiers (Plus/pro_plus/Hobby) or credit top-ups.
-- Hardcoding model IDs in auth code — model IDs come only from `packages/types/src/models.json`.
+- Hardcoding model IDs in auth code — model IDs come only from `packages/contracts/types/src/models.json`.

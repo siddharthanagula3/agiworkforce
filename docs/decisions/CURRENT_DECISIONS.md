@@ -2,8 +2,8 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last reviewed: 2026-05-28
-Last updated: 2026-05-28
+Last reviewed: 2026-07-11
+Last updated: 2026-07-11
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -55,7 +55,7 @@ Archived source material:
    Evidence: `docs/current/technical-architecture.md`, `docs/current/commercial-and-launch.md`.
 
 9. Do not hardcode model IDs or provider capabilities. Use the shared model catalogs and provider metadata.
-   Evidence: `packages/types/src/models.json`, `AGI_WORKFORCE.md`, `memory/locks/rule-models-json-canonical.md`.
+   Evidence: `packages/contracts/types/src/models.json`, `AGI_WORKFORCE.md`, `memory/locks/rule-models-json-canonical.md`.
 
 10. Auto-routing must be explicit and explainable; silent model substitution is a rejected anti-pattern.
     Evidence: `docs/current/product-suite.md`, `memory/locks/auto-routing-decision-2026-05-16.md`.
@@ -63,11 +63,11 @@ Archived source material:
 11. One chat layout across six surfaces remains a non-regression rule.
     Evidence: `docs/current/product-suite.md`, `docs/design/design-spec-2026-05-15.md`, `docs/surfaces/*.md`.
 
-12. `@agiworkforce/llm-normalize` is the canonical app-level cross-provider contract.
-    Evidence: `AGI_WORKFORCE.md`, `packages/llm-normalize/`, `docs/current/technical-architecture.md`.
+12. `@agiworkforce/provider-protocol` is the canonical app-level cross-provider contract.
+    Evidence: `AGI_WORKFORCE.md`, `packages/ai/provider-protocol/`, `docs/current/technical-architecture.md`.
 
 13. Enterprise managed compute requires organization policy, audit logs, support workflow, usage ledger, provider cost snapshots, managed-credit controls, and release-fix traceability before public claims.
-    Evidence: `docs/current/commercial-and-launch.md`, `docs/enterprise/control-plane.md`, `packages/types/src/enterprise/`, `apps/web/db/neon/`.
+    Evidence: `docs/current/commercial-and-launch.md`, `docs/enterprise/control-plane.md`, `packages/contracts/types/src/enterprise/`, `apps/web/db/neon/`.
 
 14. Current docs live in `docs/current/`; historical docs live in `docs/archive`. If they conflict, current docs win.
     Evidence: `docs/current/README.md`, `docs/current/agent-and-repo-operability.md`.
@@ -79,19 +79,22 @@ Archived source material:
     Evidence: `docs/engineering/naming-conventions.md`, `docs/current/agent-and-repo-operability.md`, `scripts/check-structure-conventions.mjs`.
 
 17. The cloud foundation is Clerk for managed identity and Neon for Postgres. The migration off Supabase is complete: no `@supabase`/Supabase client usage remains in app/package/service code, there is no root `supabase/` directory, and the canonical migrations live in `apps/web/db/neon`. Do not reintroduce Supabase or switch providers by docs-only claims. (Updated 2026-06-27: superseded the prior "production stays on Supabase until verified" wording, which was stale.)
-    Evidence: `packages/data-layer/src/adapters/clerk.ts`, `packages/data-layer/src/adapters/neon.ts`, `apps/web/db/neon/`, `packages/data-layer/README.md`, `apps/web/.env.example`.
+    Evidence: `packages/platform/data-layer/src/adapters/clerk.ts`, `packages/platform/data-layer/src/adapters/neon.ts`, `apps/web/db/neon/`, `packages/platform/data-layer/README.md`, `apps/web/.env.example`.
 
 18. `docs/current/source-of-truth.md` is the first product read for agents and humans, and `docs/current/parity-implementation-matrix.md` is the first implementation read for feature/component parity. Older PRDs, generated parity reports, `tasks/**`, `reports/**`, `docs/archive/**`, and local screenshot/reference corpora are evidence or working notes unless current docs explicitly promote a conclusion.
     Evidence: `docs/current/source-of-truth.md`, `docs/current/parity-implementation-matrix.md`, `docs/current/README.md`, `docs/agent-context/doc-status.json`.
 
 19. BYOK provider/model work must use provider-plus-model-plus-capability metadata, not model names alone. `docs/current/byok-open-model-provider-strategy.md` is the current priority map for direct provider keys, hosted open-model APIs, local runtimes, model families, and Desktop model-selector grouping.
-    Evidence: `docs/current/byok-open-model-provider-strategy.md`, `packages/types/src/models.json`, `docs/current/provider-capability-matrix.md`.
+    Evidence: `docs/current/byok-open-model-provider-strategy.md`, `packages/contracts/types/src/models.json`, `docs/current/provider-capability-matrix.md`.
 
 20. Development is serial by surface: Mobile, Website, Desktop, CLI, Chrome Extension, then VS Code Extension. The active surface is Mobile, and normal Website work does not begin until Mobile v1 is publicly released on the App Store. During QA, testing, App Store review, or other manual waiting periods, next-surface work can start only when the founder explicitly asks for it.
     Evidence: `docs/current/agi-product-requirements.md`, `docs/current/source-of-truth.md`.
 
 21. BYOK tool orchestration defaults to Native First when BYOK is active and the selected provider/model supports native tools, but only with visible provider/model/tool labels, retention/cost disclosure, and consent for risky payloads. Native First never applies to Local mode.
     Evidence: `docs/current/agi-product-requirements.md`, `docs/current/byok-open-model-provider-strategy.md`.
+
+22. Managed-Cloud pricing/metering reconciliation (founder decision, 2026-07-11 — supersedes the 2026-06-30 ladder wherever it was cited as Free/Basic $8/Pro/Max/Enterprise with no Team and no top-ups). The subscription ladder is Free / Basic ($7/mo US, ₹399/mo India, IAP-first — purchasable only via App Store/Play Store, with Stripe USD/INR test prices kept as a dormant fallback) / Pro ($20/mo, $200/yr) / Max ($100/mo and $200/mo, monthly-only) / Team ($30/seat/mo, $299/seat/yr — reinstated as a real, separate per-seat tier between Max and Enterprise, not "served by Enterprise") / Enterprise (custom). Metering is token/value-based (a micro-dollar ledger, never flat prompt counts), displayed to users as credits everywhere except at actual Stripe checkout; internal ledgering stays cents/micro-dollars. Credit top-ups are enabled for paid tiers: opt-in, off by default, capped (~5x plan price or $100, user-raisable), 12-month expiry, with per-tier payout parity (a tier's top-up credits-per-$ matches its subscription credits-per-$) — this supersedes the prior no-top-ups policy. No discount anchors of any kind (no strikethroughs, no "% off," no "was $X"); flat prices, with real annual options on Pro/Team framed honestly. Web search is a server-side tool offered wherever a model supports tool-calling and a deployment has search available; the `capabilities.search` flag in `models.json` denotes provider-native grounding only, a narrower and separate concept from server-offered search. E2B code-execution is enabled-by-decision for production (staged behind `AGI_E2B_EXECUTION` plus a key; activates when the branch ships; unsetting the flag is the kill-switch).
+    Evidence: `docs/plans/tier-metering-reconciliation-wave2-2026-07-11.md`, `docs/current/unit-economics-and-pricing-model.md`, `docs/products/README.md`.
 
 ## Outdated Or Historical
 

@@ -1,6 +1,6 @@
 # AGENTS.md — AI Agent Entry Point
 
-**Version:** 1.0 · **Owner:** Platform lead · **Last updated:** 2026-06-24 · **Status:** Canonical
+**Version:** 1.0 · **Owner:** Platform lead · **Last updated:** 2026-07-11 · **Status:** Canonical
 
 This is THE entry point for every AI coding agent (Claude, Codex, Cursor, Gemini, etc.) working on AGI. Read this before touching any code, before reading deeper docs, and before making changes.
 
@@ -11,7 +11,7 @@ This is THE entry point for every AI coding agent (Claude, Codex, Cursor, Gemini
 These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-context`.
 
 - Verify current facts from repo files, official docs, web search, or configured plugins/MCP before changing fast-moving APIs, model IDs, pricing, App Store rules, provider terms, framework behavior, or release claims.
-- Read model IDs from `packages/types/src/models.json` and provider capability metadata. Never invent, guess, or hardcode a model ID from training data.
+- Read model IDs from `packages/contracts/types/src/models.json` and provider capability metadata. Never invent, guess, or hardcode a model ID from training data.
 - Next.js 16 uses `proxy.ts` and an exported `proxy` function. Do not rename it back to `middleware.ts`.
 - Local, BYOK, and Managed Cloud are separate trust boundaries.
 - Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.
@@ -57,22 +57,22 @@ Managed cloud is in public alpha and open by default (founder decision, 2026-06-
 
 ## Repo Map
 
-| Area          | Path                           | Role                                                                                       |
-| ------------- | ------------------------------ | ------------------------------------------------------------------------------------------ |
-| CLI           | `apps/cli`                     | Developer engine and terminal surface.                                                     |
-| Desktop       | `apps/desktop`                 | Local-private compute host and rich app shell.                                             |
-| Web           | `apps/web`                     | Account, projects, synced app chats, artifacts, billing/waitlist.                          |
-| Mobile        | `apps/mobile` plus root `ios/` | Local on-device chat + public-alpha Cloud (no BYOK), continuity, approvals, preview/share. |
-| Chrome        | `apps/extension`               | Browser context, capture, native messaging.                                                |
-| VS Code       | `apps/extension-vscode`        | IDE-native developer surface.                                                              |
-| Sandbox       | `apps/sandbox`                 | Cross-origin artifact renderer.                                                            |
-| Shared TS     | `packages`                     | Contracts, providers, runtime, UI, tools.                                                  |
-| Shared Rust   | `crates`                       | Protocol, command registry, sandbox, runtime utilities.                                    |
-| Services      | `services`                     | API gateway, signaling, future managed compute.                                            |
-| Database      | `apps/web/db/neon`             | Canonical Neon migrations.                                                                 |
-| Evidence      | `audit`                        | Source-backed parity and audit ledgers.                                                    |
-| Durable docs  | `docs`                         | Current product, architecture, decisions, launch, security.                                |
-| Working notes | `tasks`                        | Execution notes and temporary research.                                                    |
+| Area           | Path                                | Role                                                                                       |
+| -------------- | ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| CLI            | `apps/cli`                          | Developer engine and terminal surface.                                                     |
+| Desktop        | `apps/desktop`                      | Local-private compute host and rich app shell.                                             |
+| Web            | `apps/web`                          | Account, projects, synced app chats, artifacts, billing/waitlist.                          |
+| Mobile         | `apps/mobile` plus root `ios/`      | Local on-device chat + public-alpha Cloud (no BYOK), continuity, approvals, preview/share. |
+| Chrome         | `apps/extension`                    | Browser context, capture, native messaging.                                                |
+| VS Code        | `apps/extension-vscode`             | IDE-native developer surface.                                                              |
+| Sandbox        | `apps/sandbox`                      | Cross-origin artifact renderer.                                                            |
+| Shared TS      | `packages`                          | Contracts, providers, runtime, UI, tools.                                                  |
+| Shared Rust    | `crates`                            | Protocol, command registry, sandbox, runtime utilities.                                    |
+| Services       | `services`                          | API gateway, signaling, future managed compute.                                            |
+| Database       | `apps/web/db/neon`                  | Canonical Neon migrations.                                                                 |
+| Durable docs   | `docs`                              | Current product, architecture, decisions, launch, security.                                |
+| Tracked flaws  | `docs/agent-context/known-flaws.md` | Durable, source-backed bug/gap ledger.                                                     |
+| Dated research | `docs/research`                     | Point-in-time research summaries, `<topic>-YYYY-MM-DD.md`.                                 |
 
 Machine-readable version: `docs/agent-context/repo-map.json`.
 
@@ -89,7 +89,7 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 - Do not combine file moves with behavior changes.
 - Tool config folders were classified on 2026-07-08 (monorepo restructure P0): `.cursor`, `.minimax`, `.opencode`, and `.superpowers` were removed; `.claude`, `.codex`, `.agents`, and `.mcp.json` remain loader-owned — do not move or delete them without reclassifying.
 - Check `docs/agent-context/known-flaws.md` before reporting a bug as new.
-- Do not add new root control docs. Use `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, `audit`, `reports`, and `docs/archive` as defined in `docs/engineering/naming-conventions.md`.
+- Do not add new root control docs. Use `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/current`, `docs/plans`, and `docs/agent-context/known-flaws.md` as defined in `docs/engineering/naming-conventions.md`. (The former `audit/`, `reports/`, and `docs/archive/` directories were removed repo-wide on 2026-06-28 — do not recreate them without a current decision doc.)
 - Keep root context lean. Put durable local rules in path-scoped `AGENTS.md` files, surface READMEs, and `docs/agent-context` maps instead of expanding this file.
 - Keep orchestration and mechanics separate: actions, routes, and command handlers own product policy and state transitions; reusable provider, sandbox, database, generated-file, browser/computer-use, and transport mechanics belong in explicit service functions.
 

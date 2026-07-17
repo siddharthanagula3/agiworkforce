@@ -93,5 +93,5 @@ Production-ready when a workspace user can discover, register, and use an MCP se
 - Adding MCP on Web or Mobile BYOK paths (BYOK is Desktop/CLI/VS Code only; never Web/Mobile).
 - Storing MCP OAuth tokens or API keys in settings JSON instead of `SecretStorage`; letting untrusted workspaces override MCP endpoint config.
 - Auto-syncing MCP registrations or resource content into Web/Mobile/Desktop app chat.
-- Hardcoding model IDs for MCP-driven flows — read from `packages/types/src/models.json`.
+- Hardcoding model IDs for MCP-driven flows — read from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (Plus/Hobby/`pro_plus`), inventing INR prices, adding credit top-ups, or referencing Supabase; auth/DB/billing is Clerk + Neon + Stripe.

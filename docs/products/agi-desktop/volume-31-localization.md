@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and real repo paths: `apps/desktop/src/i18n/index.ts`, `apps/desktop/src/providers/I18nProvider.tsx`, `apps/desktop/src/i18n/locales/*`, `apps/desktop/src/App.tsx`, `apps/desktop/src/features/settings/{GeneralSettings,SettingsPanel,DesktopCloudSettingsModal,FontSelector}.tsx`, `apps/desktop/src/stores/settingsStore.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and real repo paths: `apps/desktop/src/i18n/index.ts`, `apps/desktop/src/providers/I18nProvider.tsx`, `apps/desktop/src/i18n/locales/*`, `apps/desktop/src/App.tsx`, `apps/desktop/src/features/settings/{GeneralSettings,SettingsPanel,DesktopCloudSettingsModal,FontSelector}.tsx`, `apps/desktop/src/stores/settingsStore.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -32,7 +32,7 @@ Numeric formatting uses `Number.prototype.toLocaleString()` and `Intl.NumberForm
 
 ## Currency
 
-Currency is USD-only today and diverges from the canon ladder. **🟡 Partial** (`apps/desktop/src/features/roi-dashboard/components/{RealtimeROIDashboard,ComparisonSection,RecentActivityFeed}.tsx` hardcode `Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })`; `apps/desktop/src/stores/authOrchestrator.ts` uses Stripe `currency: 'usd'`). Requirement: localized currency for the billing surface must present the canon tiers — Free $0; Basic $8 / ₹399; Pro $20; Max $100 and $200; Enterprise custom — with **no invented INR** for Pro/Max and **no credit top-ups**. The known gap: `packages/types/src/billing-catalog.ts` and pricing UIs still encode retired tiers; reconciliation is a separately tracked task. **🔭 Planned**: locale/region → currency mapping (₹ for India, $ elsewhere) driven by the account region, not the UI language, so display currency never contradicts what Stripe charges.
+Currency is USD-only today and diverges from the canon ladder. **🟡 Partial** (`apps/desktop/src/features/roi-dashboard/components/{RealtimeROIDashboard,ComparisonSection,RecentActivityFeed}.tsx` hardcode `Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })`; `apps/desktop/src/stores/authOrchestrator.ts` uses Stripe `currency: 'usd'`). Requirement: localized currency for the billing surface must present the canon tiers — Free $0; Basic $8 / ₹399; Pro $20; Max $100 and $200; Enterprise custom — with **no invented INR** for Pro/Max and **no credit top-ups**. The known gap: `packages/contracts/types/src/billing-catalog.ts` and pricing UIs still encode retired tiers; reconciliation is a separately tracked task. **🔭 Planned**: locale/region → currency mapping (₹ for India, $ elsewhere) driven by the account region, not the UI language, so display currency never contradicts what Stripe charges.
 
 ## Unicode
 
@@ -44,7 +44,7 @@ Font selection is user-facing but not script-complete. **✅ Built** (`apps/desk
 
 ## Translation
 
-UI translation is real and reasonably broad; content translation is out of scope. **✅ Built** (`apps/desktop/src/i18n/index.ts`, `apps/desktop/src/providers/I18nProvider.tsx`, `apps/desktop/src/i18n/locales/*`): 12 languages × 8 namespaces (`common, errors, auth, chat, settings, pricing, models, v3`) via react-i18next with browser language detection persisted to `localStorage` (`agiworkforce-language`) and mirrored in `settingsStore`; the selector lives in `GeneralSettings.tsx`, `SettingsPanel.tsx`, and `DesktopCloudSettingsModal.tsx`. **🟡 Partial**: `missingKeyHandler` is a no-op, so missing keys fall back silently to English with no telemetry; per-namespace coverage across the 12 locales is unverified. Model IDs and provider names in the `models` namespace must come from `packages/types/src/models.json` and never be translated or invented. **🔭 Planned**: coverage CI, a pseudo-locale for expansion testing, and explicit fallback logging.
+UI translation is real and reasonably broad; content translation is out of scope. **✅ Built** (`apps/desktop/src/i18n/index.ts`, `apps/desktop/src/providers/I18nProvider.tsx`, `apps/desktop/src/i18n/locales/*`): 12 languages × 8 namespaces (`common, errors, auth, chat, settings, pricing, models, v3`) via react-i18next with browser language detection persisted to `localStorage` (`agiworkforce-language`) and mirrored in `settingsStore`; the selector lives in `GeneralSettings.tsx`, `SettingsPanel.tsx`, and `DesktopCloudSettingsModal.tsx`. **🟡 Partial**: `missingKeyHandler` is a no-op, so missing keys fall back silently to English with no telemetry; per-namespace coverage across the 12 locales is unverified. Model IDs and provider names in the `models` namespace must come from `packages/contracts/types/src/models.json` and never be translated or invented. **🔭 Planned**: coverage CI, a pseudo-locale for expansion testing, and explicit fallback logging.
 
 ## Repository map
 
@@ -58,7 +58,7 @@ UI translation is real and reasonably broad; content translation is out of scope
 
 ## Competitor notes
 
-Claude, ChatGPT, and Codex ship broad UI translations and follow OS locale for dates/numbers; ChatGPT localizes billing currency by region. AGI's deliberate divergence: localization is **local-first and trust-mode-neutral** — the locale preference stays on-device and is never used to route Local/BYOK data to Cloud. AGI is **multi-provider**, so model output language is left to the chosen provider and never machine-rewritten, and model IDs are read from `packages/types/src/models.json` rather than a single vendor catalog. Currency localization is tied to the Managed-Cloud account region, honoring the canon tiers (Basic ₹399 for India) instead of a one-currency store.
+Claude, ChatGPT, and Codex ship broad UI translations and follow OS locale for dates/numbers; ChatGPT localizes billing currency by region. AGI's deliberate divergence: localization is **local-first and trust-mode-neutral** — the locale preference stays on-device and is never used to route Local/BYOK data to Cloud. AGI is **multi-provider**, so model output language is left to the chosen provider and never machine-rewritten, and model IDs are read from `packages/contracts/types/src/models.json` rather than a single vendor catalog. Currency localization is tied to the Managed-Cloud account region, honoring the canon tiers (Basic ₹399 for India) instead of a one-currency store.
 
 ## Acceptance / Definition of Done
 
@@ -73,7 +73,7 @@ Production-ready when: every shipped locale renders correct direction and full g
 - Hardcoding `dir="rtl"` to a single locale or omitting logical properties so RTL breaks silently.
 - Formatting dates/numbers with the host locale while the UI is in another language (the current inconsistency).
 - Inventing INR prices for Pro/Max, showing removed tiers ("Plus", `pro_plus`, "Hobby"), or adding credit top-ups.
-- Translating or hardcoding model IDs instead of reading `packages/types/src/models.json`.
+- Translating or hardcoding model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Machine-translating model output or routing locale metadata across the Local/BYOK/Cloud boundary.
 - Referencing Supabase or renaming Next.js `proxy.ts` — neither belongs in this surface.
 - Claiming full multi-script font or 100% translation coverage without a cited path; mark unverified coverage 🟡/🔭.

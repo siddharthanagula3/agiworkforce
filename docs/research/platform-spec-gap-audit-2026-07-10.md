@@ -51,7 +51,7 @@ AGI Work desktop core (folder selection, 693-line planner, 2,901-line git execut
 
 ## Monorepo vs spec sections 40–64 (structural)
 
-No top-level `sdk/`. Runtime fragmented across `packages/runtime` + `llm-runtime` + `local-llm` + Rust `crates/agiworkforce-llm` (not one runtime layer). Providers are one package, not per-provider packages. 18 `crates/*` mirror TS concerns (known split-brain). No eval or telemetry packages. `apps/` 7-surface layout matches the spec; `services/` are stubs.
+No top-level `sdk/`. Runtime fragmented across `packages/client-runtime` + `llm-runtime` + `local-llm` + Rust `crates/agiworkforce-llm` (not one runtime layer). Providers are one package, not per-provider packages. 18 `crates/*` mirror TS concerns (known split-brain). No eval or telemetry packages. `apps/` 7-surface layout matches the spec; `services/` are stubs.
 
 ## Detailed evidence — Part-2/3 addendum (file paths per item)
 
@@ -76,7 +76,7 @@ No top-level `sdk/`. Runtime fragmented across `packages/runtime` + `llm-runtime
 
 ### Memory
 
-- Project memory desktop-only (`apps/desktop/src-tauri/src/core/agi/project_memory.rs`); web/mobile `0010_memory.sql` flat schema. Cloud retrieval is ILIKE (`apps/web/app/api/memory/search/route.ts`, comment "upgrade to vector later"). Import from ChatGPT/Claude exports exists (`packages/api/src/memoryImport.ts`). Org/team memory, connector-sourced memory: missing.
+- Project memory desktop-only (`apps/desktop/src-tauri/src/core/agi/project_memory.rs`); web/mobile `0010_memory.sql` flat schema. Cloud retrieval is ILIKE (`apps/web/app/api/memory/search/route.ts`, comment "upgrade to vector later"). Import from ChatGPT/Claude exports exists (`packages/desktop-command-client/src/memoryImport.ts`). Org/team memory, connector-sourced memory: missing.
 
 ### Auth
 

@@ -18,10 +18,10 @@ Purpose: durable enterprise-readiness plans, commercial guardrails, admin-contro
 ## Rules
 
 - Local and direct BYOK can be public because AGI does not carry model COGS.
-- Managed compute is private beta only until usage ledger, hard limits, fraud controls, refund/dispute reserves, provider terms, retention, and deletion evidence are tested.
-- Enterprise commitments need tenant isolation, policy enforcement, auditability, support workflow, and incident/release evidence before public claims.
+- Managed compute is in public alpha and open by default (founder decision, 2026-06-27); the private-beta/waitlist launch gate has been removed. Usage ledger, hard limits, fraud controls, refund/dispute reserves, provider terms, retention, and deletion controls must keep pace with public usage, but they no longer gate access.
+- Enterprise-specific commitments (org policy, SSO/SCIM, seats, contracts) still need tenant isolation, policy enforcement, auditability, support workflow, and incident/release evidence before public claims — this is an Enterprise-tier requirement, not a managed-cloud-wide gate.
 - Public pricing must never imply unlimited AGI-paid model usage.
 
 ## Ownership
 
-Enterprise work crosses product, data, billing, security, support, and release. Treat changes in `packages/types/src/enterprise`, `supabase/migrations`, `services/api-gateway/src/routes/enterprise.ts`, and `apps/web/app/admin` as shared control-plane changes requiring founder/platform review until teams exist.
+Enterprise work crosses product, data, billing, security, support, and release. Treat changes in `packages/contracts/types/src/enterprise`, `apps/web/db/neon` (the canonical migrations root — note the enterprise foundation tables have no migration yet, a tracked gap), `services/api-gateway/src/routes/enterprise.ts`, and `apps/web/app/admin` as shared control-plane changes requiring founder/platform review until teams exist.

@@ -3,7 +3,7 @@
 Status: Recommendations awaiting founder decision
 Owner: Founder (decisions) + Platform lead (implementation)
 Last updated: 2026-07-09
-Purpose: `docs/enterprise/enterprise-local-design.md` §4 lists four founder-owned decisions that gate P7 implementation. The verify primitive is built (`packages/licensing` + `crates/agiworkforce-licensing` + org-policy contract, cross-language fixtures). This file proposes a **recommended answer for each** so the calls can be made quickly. These are recommendations, not decisions — override freely; the code adapts to whatever you pick because `features[]`/`edition` are open values, not hardcoded.
+Purpose: `docs/enterprise/enterprise-local-design.md` §4 lists four founder-owned decisions that gate P7 implementation. The verify primitive is built (`packages/contracts/licensing` + `crates/agiworkforce-licensing` + org-policy contract, cross-language fixtures). This file proposes a **recommended answer for each** so the calls can be made quickly. These are recommendations, not decisions — override freely; the code adapts to whatever you pick because `features[]`/`edition` are open values, not hardcoded.
 
 Grounding: existing GTM is the freemium wedge — free Local + BYOK (no markup) everywhere, convert to paid managed cloud; consumer tiers Free / Basic ($8) / Pro ($20) / Max ($100–$200) / Enterprise. Enterprise-Local is the _sell-private-usage-to-orgs_ motion, distinct from managed-cloud conversion.
 

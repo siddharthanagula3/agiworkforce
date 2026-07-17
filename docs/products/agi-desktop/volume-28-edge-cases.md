@@ -32,7 +32,7 @@ Token and tool-call streams must fail visibly, not hang. Tool progress arrives a
 
 ## Provider Failure
 
-An upstream provider error (invalid key, quota, 5xx, content filter) must surface `LLM_API_ERROR`/`API_RATE_LIMIT`/`LLM_CONTENT_FILTER` with the failing provider named. Routing lives in `apps/desktop/src-tauri/src/core/llm/{llm_router.rs,provider_adapter.rs}`. Failover, where offered, stays inside the same trust mode and shows the substitute provider/model label — never a silent BYOK↔Cloud switch. Model IDs come only from `packages/types/src/models.json`. 🟡 Partial — router/adapter normalize provider errors; same-mode failover UX with visible relabeling is 🔭 Planned.
+An upstream provider error (invalid key, quota, 5xx, content filter) must surface `LLM_API_ERROR`/`API_RATE_LIMIT`/`LLM_CONTENT_FILTER` with the failing provider named. Routing lives in `apps/desktop/src-tauri/src/core/llm/{llm_router.rs,provider_adapter.rs}`. Failover, where offered, stays inside the same trust mode and shows the substitute provider/model label — never a silent BYOK↔Cloud switch. Model IDs come only from `packages/contracts/types/src/models.json`. 🟡 Partial — router/adapter normalize provider errors; same-mode failover UX with visible relabeling is 🔭 Planned.
 
 ## Local Model Failure
 
@@ -87,4 +87,4 @@ Edge-case handling is production-ready when every failure maps to a typed error,
 - Do not mistake a truncated download or half-written DB/artifact for complete; verify integrity.
 - Do not apply an unsigned/unverified update, or leave the app without a working previous version.
 - Do not log secrets on keychain/permission failure; degrade BYOK gracefully.
-- Do not hardcode/invent model IDs (use `packages/types/src/models.json`), reference Supabase (Clerk + Neon + Stripe only), or cite removed tiers (Plus/pro_plus/Hobby) or top-ups; pricing is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
+- Do not hardcode/invent model IDs (use `packages/contracts/types/src/models.json`), reference Supabase (Clerk + Neon + Stripe only), or cite removed tiers (Plus/pro_plus/Hobby) or top-ups; pricing is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.

@@ -6,7 +6,7 @@ Accepted — 2026-05-09.
 
 ## Context
 
-`createStore` (`packages/runtime/src/state/createStore.ts:1-62`) supports both:
+`createStore` (`packages/client-runtime/src/state/createStore.ts:1-62`) supports both:
 
 - `subscribe(listener)` — for React via `useSyncExternalStore` and other listeners.
 - `onChange(prev, next)` — a single hook the store wires to `onChangeAppState` for the four-channel fan-out (cache invalidation, telemetry, persistence, model-switch broadcast).
@@ -15,7 +15,7 @@ The order in which these fire on a `setState` call is significant under React 19
 
 ## Decision
 
-`onChange(prev, next)` fires **before** `subscribe` listeners on every `setState` that produces a new reference. Implemented at `packages/runtime/src/state/createStore.ts:53`. The order is:
+`onChange(prev, next)` fires **before** `subscribe` listeners on every `setState` that produces a new reference. Implemented at `packages/client-runtime/src/state/createStore.ts:53`. The order is:
 
 1. Compute `next = updater(prev)`.
 2. If `Object.is(next, prev)`, return without notification.
@@ -42,4 +42,4 @@ Step 3 runs all four `onChangeAppState` channels (cache invalidation, telemetry,
 
 - `docs/architecture/foundation-2026.md` §2.2.
 - `tasks/research/exec/1.3-report.md` §"Architectural Decisions" item 3.
-- `packages/runtime/src/state/createStore.ts:53`.
+- `packages/client-runtime/src/state/createStore.ts:53`.

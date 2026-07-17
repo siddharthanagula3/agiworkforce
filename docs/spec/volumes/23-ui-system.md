@@ -1,11 +1,11 @@
 # Volume 23 — UI System
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 23)
-Authority: `docs/current/source-of-truth.md` (UX Lock), `packages/types/src/suite-contracts.ts`, Vol 24 (Streaming), Vol 32 (Testing/a11y)
+Authority: `docs/current/source-of-truth.md` (UX Lock), `packages/contracts/types/src/suite-contracts.ts`, Vol 24 (Streaming), Vol 32 (Testing/a11y)
 
 ## Philosophy & Cloud/Local stance
 
-The UI is a thin skin over one shared chat shell. We build the headless chat logic once (`packages/unified-chat`) and theme it per surface — never re-implement composer, model selection, or trust labelling per app. The user must always be able to see, at a glance, _where their words are going_: Local, BYOK, or Managed. That visibility is not decoration; it is the product. Trust mode changes the UI in exactly one direction — it surfaces more provenance, never hides it. Local chats render a Local label and never silently show a Managed badge; a BYOK continuation renders its provider label from `suite-contracts.ts`. The empty-chat state is identical in structure across surfaces so muscle memory transfers; only spacing, gestures, and platform chrome differ (web pointer + keyboard, mobile touch + bottom bar, desktop window + menu bar).
+The UI is a thin skin over one shared chat shell. We build the headless chat logic once (`packages/ui/unified-chat`) and theme it per surface — never re-implement composer, model selection, or trust labelling per app. The user must always be able to see, at a glance, _where their words are going_: Local, BYOK, or Managed. That visibility is not decoration; it is the product. Trust mode changes the UI in exactly one direction — it surfaces more provenance, never hides it. Local chats render a Local label and never silently show a Managed badge; a BYOK continuation renders its provider label from `suite-contracts.ts`. The empty-chat state is identical in structure across surfaces so muscle memory transfers; only spacing, gestures, and platform chrome differ (web pointer + keyboard, mobile touch + bottom bar, desktop window + menu bar).
 
 ## Binding rules
 
@@ -20,13 +20,13 @@ The UI is a thin skin over one shared chat shell. We build the headless chat log
 
 ## Repository map (real paths)
 
-- Shared shell: `packages/unified-chat/src/components/` — `ActionBar.tsx`, `ConversationHeader.tsx`, `SettingsModal.tsx`, `Disclaimer.tsx`, `CitationPill.tsx`, `ImageGenCard.tsx`, `DownloadCard.tsx`; `ui/` (`Button.tsx`, `Badge.tsx`, `Tooltip.tsx`, `ScrollArea.tsx`).
-- Shared hooks/stores: `packages/unified-chat/src/hooks/` (`useTheme.ts`, `useKeyboard.ts`, `useVoiceInput.ts`, `useSidebar.ts`); `src/stores/` (`uiStore.ts`, `settingsStore.ts`).
+- Shared shell: `packages/ui/unified-chat/src/components/` — `ActionBar.tsx`, `ConversationHeader.tsx`, `SettingsModal.tsx`, `Disclaimer.tsx`, `CitationPill.tsx`, `ImageGenCard.tsx`, `DownloadCard.tsx`; `ui/` (`Button.tsx`, `Badge.tsx`, `Tooltip.tsx`, `ScrollArea.tsx`).
+- Shared hooks/stores: `packages/ui/unified-chat/src/hooks/` (`useTheme.ts`, `useKeyboard.ts`, `useVoiceInput.ts`, `useSidebar.ts`); `src/stores/` (`uiStore.ts`, `settingsStore.ts`).
 - Web composer/dialogs: `apps/web/features/chat/components/Composer/` (`VoiceInputButton.tsx`, `GhostTextOverlay.tsx`, `DragDropOverlay.tsx`, `StyleSelector.tsx`), `components/dialogs/KeyboardShortcutsDialog.tsx`, `components/messages/ChatInput.tsx`, `components/Sidebar/`; theme via `apps/web/providers/ThemeProvider.tsx`.
 - Web shell + sidebar: `apps/web/features/chat/v3/WebSidebar.tsx`.
 - Desktop shell: `apps/desktop/src/features/v3/DesktopShellV3.tsx` (chat + Projects/Artifacts/Scheduled/Dispatch subpanels), model popover, artifact workbench.
 - Mobile: `apps/mobile/app/(app)/(tabs)/index.tsx` (chat tab), `app/(app)/settings/`, NativeWind theme in `apps/mobile/tailwind.config.js` + `global.css`.
-- Trust labels (source of truth): `packages/types/src/suite-contracts.ts`.
+- Trust labels (source of truth): `packages/contracts/types/src/suite-contracts.ts`.
 
 ## Competitor notes (`docs/strategy/01`, `02`)
 

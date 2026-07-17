@@ -27,7 +27,7 @@ The trust boundary decides which tools exist and how hard the gate is, never whe
 - Policy + sandbox (wire into permissions): `crates/agiworkforce-execpolicy/` (`decision.rs`, `rule.rs`, `parser.rs`, `execpolicycheck.rs`), `crates/sandbox-policy/src/lib.rs`, `apps/cli/src/platform/policy/`.
 - Network/SSRF guard: `crates/agiworkforce-network-proxy/` (`network_policy.rs`, `upstream.rs`, `proxy.rs`).
 - Permission/dynamic-tool protocol: `crates/agiworkforce-protocol/src/{request_permissions,dynamic_tools,plan_tool,parse_command}.rs`.
-- TS tool/permission surfaces: `packages/api/src/toolConfirmation.ts`, `packages/types/src/tool-display.ts`, `packages/api/src/{fileOps,database,email,calendar,messaging,codeEditing,lsp}.ts`; connectors (Vol 20) sit on top of this layer.
+- TS tool/permission surfaces: `packages/client/desktop-command-client/src/toolConfirmation.ts`, `packages/contracts/types/src/tool-display.ts`, `packages/client/desktop-command-client/src/{fileOps,database,email,calendar,messaging,codeEditing,lsp}.ts`; connectors (Vol 20) sit on top of this layer.
 
 ## Competitor notes
 

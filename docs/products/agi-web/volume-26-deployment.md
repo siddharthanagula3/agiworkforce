@@ -76,6 +76,6 @@ Production-ready gate: CI green (audit/lint/model-id gates), a Preview deploymen
 - Adding a BYOK or Local affordance, or routing Local/BYOK data into Web (Web has neither trust mode).
 - Enabling Sentry with PII, or logging prompts/messages/tokens/cookies.
 - Destructive migrations shipped with the code that still reads the column (blocks rollback).
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`), routes, env vars, or INR prices; referencing removed tiers (Plus/pro_plus/Hobby) or credit top-ups.
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`), routes, env vars, or INR prices; referencing removed tiers (Plus/pro_plus/Hobby) or credit top-ups.
 - Referencing Supabase — the stack is Clerk + Neon + Stripe.
 - Claiming canary/auto-rollback as shipped — both are 🔭 Planned.

@@ -3,7 +3,7 @@
 Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
-Authority: `AGENTS.md` (repo root), `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon); grounded in `apps/extension/{manifest.json,THREAT_MODEL.md}` and real code under `apps/extension/src/features/computer-use/`, `.../native-bridge/`, `.../background/`, `.../cloud-bridge/`, `apps/extension/src/pairing.ts`, and `apps/extension/src/background/`. Model-by-plan gating draws model facts only from `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon); grounded in `apps/extension/{manifest.json,THREAT_MODEL.md}` and real code under `apps/extension/src/features/computer-use/`, `.../native-bridge/`, `.../background/`, `.../cloud-bridge/`, `apps/extension/src/pairing.ts`, and `apps/extension/src/background/`. Model-by-plan gating draws model facts only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -78,4 +78,4 @@ Every edge case has a deterministic, user-visible outcome; no failure produces a
 - Auto-approving a pending action when the approval UI is evicted (must fail closed/DENY); re-attaching the debugger after the user pulled the CDP banner.
 - Fabricating a completed answer from a truncated stream, or reporting success on a stale/failed selector.
 - Presenting removed tiers (`Plus`, `pro_plus`, `Hobby`), inventing INR prices for Pro/Max, or adding an in-extension checkout.
-- Hardcoding a model ID instead of reading `packages/types/src/models.json`; referencing Supabase; renaming `proxy.ts` to `middleware.ts`; syncing history/memory off-device.
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json`; referencing Supabase; renaming `proxy.ts` to `middleware.ts`; syncing history/memory off-device.

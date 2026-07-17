@@ -67,7 +67,7 @@ The extension is versioned in `manifest.json` (currently 1.2.0) and distributed 
 
 ## Competitor notes
 
-Claude for Chrome and ChatGPT's browser agents keep provider keys and inference behind the vendor's own cloud and pair to a single first-party model. OpenAI Codex remote connections QR-pair a phone to a host. AGI's deliberate divergence: the extension is a **keyless, inference-free companion** that routes to a **multi-provider** gateway (models resolved only from `packages/types/src/models.json`), and additionally bridges to a **local-first** Desktop host over localhost so a user's own Local/BYOK Desktop session can drive the browser without any data leaving the device. Per-surface trust holds: BYOK is never exposed in Chrome; cross-device chat sync is intentionally absent.
+Claude for Chrome and ChatGPT's browser agents keep provider keys and inference behind the vendor's own cloud and pair to a single first-party model. OpenAI Codex remote connections QR-pair a phone to a host. AGI's deliberate divergence: the extension is a **keyless, inference-free companion** that routes to a **multi-provider** gateway (models resolved only from `packages/contracts/types/src/models.json`), and additionally bridges to a **local-first** Desktop host over localhost so a user's own Local/BYOK Desktop session can drive the browser without any data leaving the device. Per-surface trust holds: BYOK is never exposed in Chrome; cross-device chat sync is intentionally absent.
 
 ## Acceptance / Definition of Done
 
@@ -81,7 +81,7 @@ The MV3 shell is production-ready when every surface loads under the hardened CS
 
 - Adding `default_popup` or a second inference surface that holds provider keys — the extension is keyless by design.
 - Introducing a delta-sync client or writing to Neon consumer chat/memory tables from the extension.
-- Hardcoding a model ID instead of reading `packages/types/src/models.json` (`managed_cloud.taskRouting.computer_use`).
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json` (`managed_cloud.taskRouting.computer_use`).
 - Referencing removed tiers (Plus, pro_plus, Hobby) or in-extension checkout; paywalls render from server `429` only.
 - Any reference to Supabase, or renaming `proxy.ts` back to `middleware.ts` in shared web code.
 - Restating security policy in `background.ts`/tests instead of importing from `src/background/policy.ts`; leaving the debugger or native port attached on error.

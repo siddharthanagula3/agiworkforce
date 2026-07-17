@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the surface's authoritative security artifacts: `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`, `apps/extension/manifest.json`, and `apps/extension/src/{background/policy.ts,background.ts,pairing.ts}` plus the feature files cited inline. Model facts referenced from `packages/types/src/models.json` (never re-listed).
+Authority: `AGENTS.md`, `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the surface's authoritative security artifacts: `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`, `apps/extension/manifest.json`, and `apps/extension/src/{background/policy.ts,background.ts,pairing.ts}` plus the feature files cited inline. Model facts referenced from `packages/contracts/types/src/models.json` (never re-listed).
 
 ## Overview & stance
 

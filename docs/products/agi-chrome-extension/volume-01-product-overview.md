@@ -3,7 +3,7 @@
 Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/manifest.json`, `apps/extension/MANIFEST_NOTES.md`, and real paths under `apps/extension/src/**` and `apps/extension/native-host/`. Model facts reference `packages/types/src/models.json` only.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/manifest.json`, `apps/extension/MANIFEST_NOTES.md`, and real paths under `apps/extension/src/**` and `apps/extension/native-host/`. Model facts reference `packages/contracts/types/src/models.json` only.
 
 ## Overview & stance
 
@@ -19,7 +19,7 @@ Let people delegate real browser work — research, form-filling, multi-step flo
 
 ## Product Goals
 
-- Read page context/DOM/console/network and capture screenshots/regions on allowlisted origins. **🟡 Partial** — content capture and sanitization exist (`apps/extension/src/features/content/browserTool.ts`, `page-metadata.ts`); full console/network read surfacing is **🔭**.
+- Read page context/DOM/console/network and capture screenshots/regions on allowlisted origins. **🟡 Partial** — content capture and sanitization exist (`apps/extension/src/features/content/browserTool.ts`, `apps/extension/src/page-metadata.ts`); full console/network read surfacing is **🔭**.
 - Drive the browser: navigate/click/type/fill, tabs and tab groups. **✅** manifest grants `tabs`, `tabGroups`, `scripting`, `debugger` (`apps/extension/manifest.json`); CDP actions in `apps/extension/src/features/computer-use/cdpDriver.ts`.
 - Job autofill for LinkedIn/Lever/Greenhouse/Ashby. **✅** `apps/extension/src/features/content/autofill/`.
 - Record-and-replay demonstrated workflows and scheduled recurring tasks. **🟡 Partial** — storage + validation shipped (`apps/extension/src/features/background/shortcuts.ts`, `tasks.ts`, max 50 each); rich authoring UI is **🔭**.
@@ -49,11 +49,11 @@ Let people delegate real browser work — research, form-filling, multi-step flo
 
 ## Business Goals
 
-Chrome is a **freemium wedge and retention surface**, not a revenue product of its own: it converts browser value into signed-in Managed-Cloud usage. Entitlements are verified server-side; the paywall renders from server 429 responses; there is **no checkout inside the extension** (canon). Pricing is the shared ladder: **Free $0 / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise** — no Plus, no Hobby, no top-ups. **🟡** `packages/types/src/billing-catalog.ts` still encodes older tiers (tracked reconciliation gap).
+Chrome is a **freemium wedge and retention surface**, not a revenue product of its own: it converts browser value into signed-in Managed-Cloud usage. Entitlements are verified server-side; the paywall renders from server 429 responses; there is **no checkout inside the extension** (canon). Pricing is the shared ladder: **Free $0 / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise** — no Plus, no Hobby, no top-ups. **🟡** `packages/contracts/types/src/billing-catalog.ts` still encodes older tiers (tracked reconciliation gap).
 
 ## Competitive Analysis — vs Claude for Chrome and Codex Chrome extension
 
-**Claude for Chrome** (browser agent, cited ~9M installs, plan-gated models) is the primary parity reference: it captures page context, takes actions, and gates models by plan. AGI matches the agent posture and plan-gated models but diverges on trust: multi-provider via one cloud gateway (routing read from `packages/types/src/models.json`), no provider keys in the extension, and a desktop-local path via native messaging so compute can stay on the host. **Codex Chrome extension** (OpenAI) is a developer-oriented browser connector; AGI's divergence is the same egress/allowlist discipline plus job-autofill and record-and-replay as first-class flows. All three are **parity references only** — no proprietary code or branding is copied.
+**Claude for Chrome** (browser agent, cited ~9M installs, plan-gated models) is the primary parity reference: it captures page context, takes actions, and gates models by plan. AGI matches the agent posture and plan-gated models but diverges on trust: multi-provider via one cloud gateway (routing read from `packages/contracts/types/src/models.json`), no provider keys in the extension, and a desktop-local path via native messaging so compute can stay on the host. **Codex Chrome extension** (OpenAI) is a developer-oriented browser connector; AGI's divergence is the same egress/allowlist discipline plus job-autofill and record-and-replay as first-class flows. All three are **parity references only** — no proprietary code or branding is copied.
 
 ## Product Principles
 
@@ -85,7 +85,7 @@ MV3 (`manifest_version: 3`) with a module service worker (`src/background.js`), 
 
 - A signed-in AGI account exists; entitlements resolve server-side. **✅**.
 - For local page context, AGI Desktop is installed and paired (native host + `localhost:8787` `X-Bridge-Token`). **✅** (`native-host/`, `pairing.ts`).
-- Model IDs resolve from `packages/types/src/models.json` at build time, never hardcoded. **✅** (`COMPUTER_USE_MODEL`).
+- Model IDs resolve from `packages/contracts/types/src/models.json` at build time, never hardcoded. **✅** (`COMPUTER_USE_MODEL`).
 
 ## Risks
 
@@ -98,7 +98,7 @@ MV3 (`manifest_version: 3`) with a module service worker (`src/background.js`), 
 
 - `apps/extension/manifest.json`, `MANIFEST_NOTES.md`, `THREAT_MODEL.md`, `native-host/`
 - `apps/extension/src/features/computer-use/{agentLoop,cdpDriver,escalationEngine,cloudAgentClient}.ts`
-- `apps/extension/src/features/content/{browserTool.ts,autofill/,in-page-panel/,page-metadata.ts}`
+- `apps/extension/src/features/content/{browserTool.ts,autofill/,in-page-panel/}`, `apps/extension/src/page-metadata.ts` (top-level, not `features/content/`)
 - `apps/extension/src/features/native-bridge/{pairing,providerStreamClient,sendQueue}.ts`
 - `apps/extension/src/features/cloud-bridge/{desktopBridge,freeTrialClient}.ts`
 - `apps/extension/src/background/{policy.ts,memory-bridge.ts}`, `src/features/background/{conversation-history,tasks,shortcuts}.ts`
@@ -119,7 +119,7 @@ Production-ready when the browser agent runs allowlist-gated flows with server-v
 
 - Contacting a provider host directly or embedding a provider key in the extension.
 - Adding consumer conversation sync, global memory sync, Projects, image generation, or in-extension checkout (removed scope).
-- Hardcoding a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Naming retired tiers (Plus, pro_plus, Hobby), inventing INR for Pro/Max, or adding credit top-ups.
 - Referencing Supabase, or renaming `proxy.ts` to `middleware.ts`.
 - Auto-routing Local/desktop page data to Cloud without allowlist + consent, or claiming shipped state without a repo path.

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-07-14
 Purpose: define how AGI Workforce should be built in a future where humans direct and review work while coding agents perform most exploration, implementation, refactoring, verification, and PR preparation.
 
 ## Operating Assumption
@@ -88,6 +88,18 @@ Rules:
 2. Shared contract checks if packages, schemas, crates, or provider adapters changed.
 3. `pnpm check:llm-operability` when docs, repo structure, agent context, generated artifacts, or boundaries changed.
 4. Full app/surface tests only when the blast radius justifies the cost.
+
+## Workspace Task Graph
+
+`turbo.json` is the canonical Node workspace task graph. Packages and apps own
+their concrete `lint`, `typecheck`, `test`, and `build` commands; root commands
+delegate through Turbo. CI uses `--affected` for change selection and verifies
+the static graph with a dry run before relying on it.
+
+Use `pnpm exec turbo run <task> --filter=<owner>` for a bounded owner path and
+`pnpm exec turbo run lint typecheck test --affected --dry=json` to inspect CI
+selection. Rust remains in the Cargo workspace graph. A Turbo dry run proves
+task selection only; it is not evidence that the selected tasks pass.
 
 ## High-Risk Merge Gates
 

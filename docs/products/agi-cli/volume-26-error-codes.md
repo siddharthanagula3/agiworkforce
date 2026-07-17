@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/cli/AGENTS.md`, and the real CLI paths this volume documents: `apps/cli/src/errors.rs`, `apps/cli/src/doctor.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/approval_audit.rs`, `apps/cli/src/lib.rs`, and `crates/agiworkforce-app-server/src/lib.rs`. Model IDs are governed by `packages/types/src/models.json` and are never restated here.
+Authority: grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/cli/AGENTS.md`, and the real CLI paths this volume documents: `apps/cli/src/errors.rs`, `apps/cli/src/doctor.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/approval_audit.rs`, `apps/cli/src/lib.rs`, and `crates/agiworkforce-app-server/src/lib.rs`. Model IDs are governed by `packages/contracts/types/src/models.json` and are never restated here.
 
 ## Overview & stance
 
@@ -16,7 +16,7 @@ This volume specifies how AGI CLI classifies, presents, and recovers from errors
 
 ## Provider Errors
 
-Provider-side failures are typed in `apps/cli/src/errors.rs`: `Api { provider, status, message }` (kinds `api_http_error`, or `api_server_error` for 5xx), `RateLimited { provider, retry_after }` (kind `api_rate_limit`), `ContextOverflow { model, token_count, limit }` (kind `context_overflow`), `StreamError { provider, message, is_retryable }` (kind `stream_disconnect`), and `Paywall { feature, required_tier, reason }` (kind `paywall`). ✅ Built. Overflow is detected across providers by `detect_context_overflow()` — 17 case-insensitive regex patterns (`OVERFLOW_PATTERNS`) covering Anthropic, OpenAI, Gemini, Bedrock, Groq, OpenRouter, and more. The `Paywall` variant maps a Managed-Cloud tier cap (HTTP 429 with a `kind:"paywall"` body) to exit code `78` (EX_CONFIG) and points at `agiworkforce.com/pricing`; `required_tier` must be a real ladder tier (Free / Basic / Pro / Max / Enterprise) and must never render `Plus`/`Hobby`/`pro_plus`. 🟡 Gap: `hint()` embeds literal model-ID example strings for fallback (`--model …`); these are hardcoded in source and must be reconciled to read from `packages/types/src/models.json` rather than drift — do not treat those strings as canonical IDs.
+Provider-side failures are typed in `apps/cli/src/errors.rs`: `Api { provider, status, message }` (kinds `api_http_error`, or `api_server_error` for 5xx), `RateLimited { provider, retry_after }` (kind `api_rate_limit`), `ContextOverflow { model, token_count, limit }` (kind `context_overflow`), `StreamError { provider, message, is_retryable }` (kind `stream_disconnect`), and `Paywall { feature, required_tier, reason }` (kind `paywall`). ✅ Built. Overflow is detected across providers by `detect_context_overflow()` — 17 case-insensitive regex patterns (`OVERFLOW_PATTERNS`) covering Anthropic, OpenAI, Gemini, Bedrock, Groq, OpenRouter, and more. The `Paywall` variant maps a Managed-Cloud tier cap (HTTP 429 with a `kind:"paywall"` body) to exit code `78` (EX_CONFIG) and points at `agiworkforce.com/pricing`; `required_tier` must be a real ladder tier (Free / Basic / Pro / Max / Enterprise) and must never render `Plus`/`Hobby`/`pro_plus`. 🟡 Gap: `hint()` embeds literal model-ID example strings for fallback (`--model …`); these are hardcoded in source and must be reconciled to read from `packages/contracts/types/src/models.json` rather than drift — do not treat those strings as canonical IDs.
 
 ## CLI Errors
 
@@ -71,7 +71,7 @@ Production-ready when every user-facing failure resolves to a typed `CliError` (
 
 - Rerouting a Local session to BYOK/Managed on error, or emitting an auth error that demands a cloud key in Local mode.
 - `panic!`/`unwrap()` on production error paths instead of typed `CliError`.
-- Hardcoding or inventing model IDs in error strings — read from `packages/types/src/models.json`; the existing `hint()` example strings are a tracked drift risk, not canon.
+- Hardcoding or inventing model IDs in error strings — read from `packages/contracts/types/src/models.json`; the existing `hint()` example strings are a tracked drift risk, not canon.
 - Rendering removed tiers (`Plus`, `Hobby`, `pro_plus`) or inventing INR prices in paywall messages; offering credit top-ups.
 - Referencing Supabase, renaming `proxy.ts` to `middleware.ts`, or using `agiworkforce <cmd>` in examples instead of `agi`.
 - Swallowing tool/config/validation errors, or logging unredacted secrets or Local file bodies.

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and the real surface paths `apps/extension-vscode/src/data/contextBuilder.ts`, `.../data/contextBudget.ts`, `.../data/tokenCounter.ts`, `.../data/conversationStore.ts`, `.../data/projectInstructions.ts`, `.../features/trees/contextPanelProvider.ts`, `.../providers/diagnosticsProvider.ts`, `.../features/model-picker/modelConstants.ts`, `.../features/desktop-bridge/desktopBridge.ts`, `.../core/telemetry.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and the real surface paths `apps/extension-vscode/src/data/contextBuilder.ts`, `.../data/contextBudget.ts`, `.../data/tokenCounter.ts`, `.../data/conversationStore.ts`, `.../data/projectInstructions.ts`, `.../features/trees/contextPanelProvider.ts`, `.../providers/diagnosticsProvider.ts`, `.../features/model-picker/modelConstants.ts`, `.../features/desktop-bridge/desktopBridge.ts`, `.../core/telemetry.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -40,7 +40,7 @@ Conversation history is stored in `src/data/conversationStore.ts` using VS Code 
 
 ## Token Budget
 
-`src/data/contextBudget.ts` computes a model-aware budget: it reads the selected model's window from `MODEL_CONTEXT_LIMITS` (`src/features/model-picker/modelConstants.ts`, `DEFAULT_CONTEXT_LIMIT` fallback), allocates **3% (chat) / 5% (agent)** by default, honors an `agiWorkforce.contextBudgetPercent` override clamped to 1–20%, and reserves ~40% of the char budget for the indexer section. `src/data/tokenCounter.ts` tracks session prompt/completion tokens and an estimated cost in the status bar (`agi-workforce.showTokenBreakdown`, `agi-workforce.resetTokenCounter`). **🟡 Partial:** budgeting uses a `CHARS_PER_TOKEN` (4-chars/token) heuristic, not per-provider tokenizers, and `agiWorkforce.contextBudgetPercent` is read in code but **not declared** in `package.json` `contributes.configuration` — users cannot set it from Settings UI yet. Model-window figures MUST stay sourced from `packages/types/src/models.json` (via `modelConstants.ts`); do not hardcode new model IDs.
+`src/data/contextBudget.ts` computes a model-aware budget: it reads the selected model's window from `MODEL_CONTEXT_LIMITS` (`src/features/model-picker/modelConstants.ts`, `DEFAULT_CONTEXT_LIMIT` fallback), allocates **3% (chat) / 5% (agent)** by default, honors an `agiWorkforce.contextBudgetPercent` override clamped to 1–20%, and reserves ~40% of the char budget for the indexer section. `src/data/tokenCounter.ts` tracks session prompt/completion tokens and an estimated cost in the status bar (`agi-workforce.showTokenBreakdown`, `agi-workforce.resetTokenCounter`). **🟡 Partial:** budgeting uses a `CHARS_PER_TOKEN` (4-chars/token) heuristic, not per-provider tokenizers, and `agiWorkforce.contextBudgetPercent` is read in code but **not declared** in `package.json` `contributes.configuration` — users cannot set it from Settings UI yet. Model-window figures MUST stay sourced from `packages/contracts/types/src/models.json` (via `modelConstants.ts`); do not hardcode new model IDs.
 
 - Requirement: the budget MUST recompute when the active model changes.
 - Requirement: over-budget assembly MUST drop lowest-priority sections (workspace tree first, pinned selection last), not the user's prompt.
@@ -59,7 +59,7 @@ Today "compression" is bounded truncation and pruning, not semantic summarizatio
 - `apps/extension-vscode/src/data/projectInstructions.ts` — CLAUDE.md/AGENTS.md/.cursorrules ingestion.
 - `apps/extension-vscode/src/features/trees/contextPanelProvider.ts`, `.../conversationTreeProvider.ts` — Context Files + History trees.
 - `apps/extension-vscode/src/providers/diagnosticsProvider.ts` — AI review → diagnostics.
-- `apps/extension-vscode/src/features/model-picker/modelConstants.ts` — context limits/cost (sync target: `packages/types/src/models.json`).
+- `apps/extension-vscode/src/features/model-picker/modelConstants.ts` — context limits/cost (sync target: `packages/contracts/types/src/models.json`).
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — workspace-boundary + redacted bridge handoff.
 
 ## Competitor notes
@@ -89,6 +89,6 @@ Security:
 - Auto-syncing IDE conversation/context into Web/Mobile/Desktop app chat (trust-boundary violation).
 - Silently routing Local context to BYOK/Cloud without fork consent, secret scan, or provider label.
 - Claiming a semantic repo index, tokenizer-exact budgets, or conversation summarization as shipped — they are 🔭/🟡.
-- Hardcoding model IDs or context-window numbers instead of sourcing from `packages/types/src/models.json`.
+- Hardcoding model IDs or context-window numbers instead of sourcing from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (`hobby`, `pro_plus`, "Plus", "Hobby") or credit top-ups; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise. Note: `package.json` `agiWorkforce.tier` still enumerates `hobby`/`pro_plus` (🟡 catalog-reconciliation gap).
 - Reintroducing Supabase or `middleware.ts`; the stack is Clerk + Neon + Stripe with Next.js `proxy.ts`.

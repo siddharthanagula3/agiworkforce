@@ -26,14 +26,14 @@ Native Mac / Windows / Linux app for the same chat layer that runs on web and mo
 
 ## Stack + locked versions
 
-| Layer              | Choice                                       | Version                                                         |
-| ------------------ | -------------------------------------------- | --------------------------------------------------------------- |
-| Shell              | Tauri v2                                     | 2.11.1                                                          |
-| Frontend framework | React                                        | 19.x via Vite                                                   |
-| Bundler            | Vite                                         | latest (per `package.json`)                                     |
-| Rust toolchain     | rustc                                        | 1.94.0 (pinned in `apps/desktop/src-tauri/rust-toolchain.toml`) |
-| Native deps        | macOS Seatbelt entitlements XML; Linux bwrap | per `src-tauri/Cargo.toml`                                      |
-| Distribution       | DMG (signed `D2PR62RLT4`) · MSI · AppImage   | `target/release/bundle/`                                        |
+| Layer              | Choice                                                                 | Version                                                         |
+| ------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Shell              | Tauri v2                                                               | 2.11.1                                                          |
+| Frontend framework | React                                                                  | 19.x via Vite                                                   |
+| Bundler            | Vite                                                                   | latest (per `package.json`)                                     |
+| Rust toolchain     | rustc                                                                  | 1.94.0 (pinned in `apps/desktop/src-tauri/rust-toolchain.toml`) |
+| Native deps        | macOS Seatbelt entitlements XML; Linux bwrap                           | per `src-tauri/Cargo.toml`                                      |
+| Distribution       | Linux AppImage automated; Windows gated on Authenticode; macOS blocked | root `target/release/bundle/`                                   |
 
 ## File layout
 
@@ -48,7 +48,7 @@ apps/desktop/
 │   ├── stores/                     118 Zustand stores
 │   ├── hooks/                      40+ custom hooks
 │   ├── constants/
-│   │   └── models.json             ⚠ mirror of packages/types/models.json; SSOT is packages/types
+│   │   └── models.json             ⚠ mirror of packages/contracts/types/models.json; SSOT is packages/contracts/types
 │   └── i18n/                       English + Spanish locales wired
 ├── src-tauri/                      Rust backend
 │   ├── src/
@@ -57,7 +57,7 @@ apps/desktop/
 │   ├── Cargo.toml                  workspace member; depends only on sandbox-policy crate
 │   ├── tauri.conf.json             app metadata; bundle identifier com.agiworkforce.desktop
 │   ├── rust-toolchain.toml         Rust 1.94.0 pin
-│   └── target/release/bundle/      DMG / MSI / AppImage outputs
+│   └── Cargo/Tauri sources         build outputs live at root target/ because this is a Cargo workspace member
 ├── public/                         static assets
 ├── package.json                    @agiworkforce/desktop
 └── tsconfig.json
@@ -70,8 +70,9 @@ apps/desktop/
 | `apps/desktop/src/App.tsx`                                  | Entry. Loads `ChatInterface` from `@agiworkforce/unified-chat` and Desktop chat overlays from `apps/desktop/src/features/chat/`. The retired `apps/desktop/src/components/UnifiedAgenticChat/` directory is removed and guarded. |
 | `apps/desktop/src/features/onboarding/OnboardingWizard.tsx` | Mode picker. **`ModeSelectionDialog` was removed and must not be reintroduced** (PRD V5 §10 lock #2).                                                                                                                            |
 | `apps/desktop/src-tauri/Cargo.toml`                         | Workspace lint rules: `unsafe_code = "deny"`, `await_holding_lock = "warn"`.                                                                                                                                                     |
-| `apps/desktop/src/constants/models.json`                    | Mirror file — DO NOT edit; SSOT is `packages/types/src/models.json`.                                                                                                                                                             |
-| `.github/workflows/release-desktop.yml`                     | Tag-triggered build + sign + notarize. Needs `APPLE_*` + `WINDOWS_CERTIFICATE*` GitHub secrets.                                                                                                                                  |
+| `apps/desktop/src/constants/models.json`                    | Mirror file — DO NOT edit; SSOT is `packages/contracts/types/src/models.json`.                                                                                                                                                   |
+| `.github/workflows/release-desktop.yml`                     | Canonical `v-desktop-*` workflow. Validates versions, builds Linux x86_64, attaches the Tauri updater signature, publishes, then ingests updater metadata.                                                                       |
+| `.github/workflows/build-windows-release.yml`               | Manual recovery workflow for a selected published desktop tag. Checks out that tag, requires Azure Artifact Signing identity/config, verifies Authenticode before upload, then ingests Windows updater metadata.                 |
 
 ## Build + test commands
 
@@ -81,7 +82,7 @@ pnpm dev:desktop
 
 # Production bundle
 pnpm build:desktop
-# Outputs: apps/desktop/src-tauri/target/release/bundle/
+# Outputs: target/release/bundle/ (the Cargo workspace target directory)
 
 # Typecheck just desktop
 pnpm typecheck
@@ -104,19 +105,29 @@ pnpm lint                    # excludes apps/extension
 
 ## Release process
 
-1. Bump version in `apps/desktop/src-tauri/tauri.conf.json` + `apps/desktop/package.json`
-2. Update `CHANGELOG.md` with the release notes
-3. Tag: `git tag v-desktop-X.Y.Z && git push --tags`
-4. GitHub Actions workflow `release-desktop.yml` runs on tag push:
-   - macOS: builds + signs with `APPLE_CERTIFICATE` + notarizes via `APPLE_*` secrets
-   - Windows: builds + signs with `WINDOWS_CERTIFICATE` (currently missing → unsigned builds ship)
-   - Linux: builds AppImage unsigned
-   - Uploads to GitHub Releases
-   - Signed Ed25519 update endpoint at Supabase (per `memory/reference/patterns/release-pipeline.md`)
+1. Bump the same version in `apps/desktop/package.json`,
+   `apps/desktop/src-tauri/tauri.conf.json`, and `apps/desktop/src-tauri/Cargo.toml`.
+2. Run `bash scripts/release.sh X.Y.Z` to validate the tag plan.
+3. From a clean tree, run `bash scripts/release.sh X.Y.Z --yes`; it creates and pushes only
+   `v-desktop-X.Y.Z`.
+4. `release-desktop.yml` validates, builds Linux x86_64, uploads the AppImage plus Tauri updater
+   signature to a draft, publishes the GitHub release, and only then writes the Neon updater row.
+5. Windows is not part of that atomic workflow. If Windows is intentionally added to an existing
+   desktop release, invoke `build-windows-release.yml` for the exact tag. It refuses to publish
+   without a valid Authenticode certificate and checks out the selected tag rather than `main`.
+6. There is no production macOS workflow. Do not claim a signed/notarized DMG until that job and
+   its Apple credentials exist.
+
+Windows publication requires a verified Azure Artifact Signing account and certificate profile.
+Configure GitHub secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID`, plus
+repository variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, and
+`AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE`. The workflow installs the pinned
+`artifact-signing-cli` version, feeds it to Tauri through a release-only `signCommand` overlay,
+and refuses upload unless Windows reports every shipping executable as Authenticode-valid.
 
 ## Provider integrations on desktop
 
-All 10+ providers route through `@agiworkforce/llm-normalize` via `packages/api`. Desktop is the first surface that wires every provider end-to-end. See [docs/surfaces/cli.md](cli.md) for the canonical list (CLI registers all 12 named + Custom).
+All 10+ providers route through `@agiworkforce/provider-protocol` via `packages/client/desktop-command-client`. Desktop is the first surface that wires every provider end-to-end. See [docs/surfaces/cli.md](cli.md) for the canonical list (CLI registers all 12 named + Custom).
 
 ## Current open work (Wave 6, in flight)
 
@@ -128,7 +139,7 @@ All 10+ providers route through `@agiworkforce/llm-normalize` via `packages/api`
 
 - **Two stale claims in older docs.** Older MEMORY.md said "84 stores" and "97 component subdirs" — actual today is **118 stores** and **74 component subdirs**. Audit verified.
 - **Retired chat folder:** `apps/desktop/src/components/UnifiedAgenticChat/` is removed. Do not recreate it. Desktop-owned chat code now lives in `apps/desktop/src/features/chat/`; the component name `UnifiedAgenticChat` can still appear inside that feature folder and tests.
-- **`apps/desktop/src/constants/models.json` is a mirror.** Never edit this file directly. SSOT is `packages/types/src/models.json`. There's a build-time sync (or should be — verify).
+- **`apps/desktop/src/constants/models.json` is a mirror.** Never edit this file directly. SSOT is `packages/contracts/types/src/models.json`. There's a build-time sync (or should be — verify).
 - **macOS code-signing identity:** `D2PR62RLT4`. Don't change without owner approval.
 - **Bundle identifier:** `com.agiworkforce.desktop`. Don't change — would break update channel.
 

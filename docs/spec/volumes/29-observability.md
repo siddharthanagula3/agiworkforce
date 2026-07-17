@@ -22,9 +22,9 @@ We measure to keep the system honest and to catch the failures that cost money o
 
 - Gateway logging/metrics: `services/api-gateway/src/lib/logger.ts`; provider health `src/services/providerHealth.ts`; signaling metrics `services/signaling-server/src/metrics.ts`, `src/logger.ts`.
 - Web monitoring: `apps/web/core/monitoring/` — `analytics-tracker.ts`, `performance-monitor.ts`, `system-monitor.ts`; perf script `apps/web/scripts/perf-profile.js`.
-- Shared telemetry helpers: `packages/api/src/analytics.ts`, `packages/api/src/errorReporting.ts`.
-- Feature flags / A-B: gate via entitlement (Vol 4) + flag config; route through `packages/api/src/settings.ts` and gateway middleware.
-- Trust-boundary signals to alert on: `services/api-gateway/src/middleware/managedComputeGate.ts`, `routes/providerStream.ts`; CLI guards `apps/cli/src/agent/mod.rs`; contracts `packages/types/src/suite-contracts.ts`.
+- Shared telemetry helpers: `packages/client/desktop-command-client/src/analytics.ts`, `packages/client/desktop-command-client/src/errorReporting.ts`.
+- Feature flags / A-B: gate via entitlement (Vol 4) + flag config; route through `packages/client/desktop-command-client/src/settings.ts` and gateway middleware.
+- Trust-boundary signals to alert on: `services/api-gateway/src/middleware/managedComputeGate.ts`, `routes/providerStream.ts`; CLI guards `apps/cli/src/agent/mod.rs`; contracts `packages/contracts/types/src/suite-contracts.ts`.
 - Metering drift source: `services/api-gateway/src/routes/{credits,usage}.ts` (Vol 28).
 
 ## Competitor notes (`docs/strategy/01`, `02`)

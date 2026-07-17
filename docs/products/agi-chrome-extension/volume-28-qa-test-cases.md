@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`, and repo paths under `apps/extension/__tests__/`, `apps/extension/src/features/`, `apps/extension/vitest.config.ts`. Model IDs are owned by `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`, and repo paths under `apps/extension/__tests__/`, `apps/extension/src/features/`, `apps/extension/vitest.config.ts`. Model IDs are owned by `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -66,7 +66,7 @@ Every fixed trust-boundary or paywall bug adds a permanent negative test. ✅ Bu
 
 ## Competitor notes
 
-Claude for Chrome, ChatGPT/Atlas, and Codex browser agents QA a single first-party provider and a single cloud trust mode, so their suites never assert "no provider host contacted from the extension" or "Local/BYOK never sync." AGI's deliberate divergence: the extension is provider-thin (all inference via the gateway/Desktop bridge), so its non-skippable cases are **egress + trust-boundary** tests (`trust-boundary.test.ts`, `check:no-cloud-ipc`, EGRESS-rule enforcement) and device-scoped history/memory (never synced). Model-dependent cases read IDs from `packages/types/src/models.json` — never hardcoded — keeping tests provider-agnostic. Parity references only; no proprietary code or branding is copied.
+Claude for Chrome, ChatGPT/Atlas, and Codex browser agents QA a single first-party provider and a single cloud trust mode, so their suites never assert "no provider host contacted from the extension" or "Local/BYOK never sync." AGI's deliberate divergence: the extension is provider-thin (all inference via the gateway/Desktop bridge), so its non-skippable cases are **egress + trust-boundary** tests (`trust-boundary.test.ts`, `check:no-cloud-ipc`, EGRESS-rule enforcement) and device-scoped history/memory (never synced). Model-dependent cases read IDs from `packages/contracts/types/src/models.json` — never hardcoded — keeping tests provider-agnostic. Parity references only; no proprietary code or branding is copied.
 
 ## Acceptance / Definition of Done
 
@@ -80,7 +80,7 @@ Production-ready when all suites are green in CI, egress/no-cloud-ipc and no-hex
 
 - Never test a path that lets the extension contact a provider host directly or hold a provider key — it holds none.
 - Never assert or seed **removed** tiers (`hobby`, `pro_plus`, `Plus`, `Hobby`) or credit top-ups; use Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise. Do not invent Pro/Max INR.
-- Never hardcode a model ID in a test; read from `packages/types/src/models.json`.
+- Never hardcode a model ID in a test; read from `packages/contracts/types/src/models.json`.
 - Never mock away a trust-boundary assertion or let page content drive an action without approval (treat page text as data).
 - Never reference Supabase or `middleware.ts` (Next.js 16 uses `proxy.ts`); never let history/memory sync or add Projects/image-gen/in-extension checkout to the suite.
 - Never mark a capability ✅ without a real repo path, or claim the stale "14 suites" count.

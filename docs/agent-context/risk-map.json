@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-06-24",
+  "lastUpdated": "2026-07-15",
   "risks": [
     {
       "id": "privacy-boundary",
@@ -8,16 +8,19 @@
       "owner": "Security/privacy lead",
       "paths": [
         "apps/*",
-        "packages/types",
-        "packages/providers",
+        "packages/contracts/types",
+        "packages/ai/providers",
+        "packages/contracts/trust-boundaries",
         "crates/*",
         "apps/desktop/src/lib/egressGuard.ts",
+        "apps/mobile/lib/egressGuard.ts",
         "apps/desktop/src-tauri/src/sys/account"
       ],
       "reviewFocus": "Local/BYOK/Managed labels, explicit forks, no silent routing across trust boundaries. Desktop egress guard (egressGuard.ts) is FETCH-ONLY: JS our-cloud fetches must use guardedFetch (eslint-enforced for WEB_APP_URL/API_BASE_URL templates). KNOWN GAP (2026-06-24): Rust-transport egress is NOT covered by the JS guard — sys/account device/profile/credit Tauri commands reqwest www.agiworkforce.com with the Bearer token and no privacy-mode gate, and fire in BYOK (signed-in cloud session). Open decision: is BYOK account-management intended to reach AGI cloud (then correct the egressGuard 'never account data' docstring) or must it be gated Rust-side (then mirror the guard). Do not route chat/file/session payloads on any ungated transport.",
       "checks": [
         "rg \"PrivacyMode|privacy_mode|BYOK|Managed|Local\" apps packages crates services",
-        "rg \"reqwest|get_api_base_url|api/me|api/device\" apps/desktop/src-tauri/src/sys/account"
+        "rg \"reqwest|get_api_base_url|api/me|api/device\" apps/desktop/src-tauri/src/sys/account",
+        "pnpm check:service-domain-ownership"
       ]
     },
     {
@@ -25,13 +28,20 @@
       "severity": "high",
       "owner": "Platform lead",
       "paths": [
-        "packages/providers",
-        "packages/llm-normalize",
-        "packages/types/src/models.json",
+        "packages/ai/providers",
+        "packages/ai/provider-protocol",
+        "packages/ai/model-registry",
+        "packages/ai/routing",
+        "packages/ai/search",
+        "packages/contracts/types/src/models.json",
         "apps/cli/src/models"
       ],
       "reviewFocus": "No hardcoded model IDs; provider capability metadata owns routing decisions",
-      "checks": ["scripts/check-no-hardcoded-models.sh", "pnpm check:boundaries"]
+      "checks": [
+        "scripts/check-no-hardcoded-models.sh",
+        "pnpm check:service-domain-ownership",
+        "pnpm check:boundaries"
+      ]
     },
     {
       "id": "tool-execution",
@@ -40,8 +50,8 @@
       "paths": [
         "apps/cli/src/features/exec/tools",
         "apps/desktop/src-tauri",
-        "packages/apply-patch",
-        "packages/browser-tool"
+        "packages/tools/apply-patch",
+        "packages/tools/browser-tool"
       ],
       "reviewFocus": "Path traversal, shell execution, approvals, provenance, workspace roots",
       "checks": [
@@ -65,7 +75,7 @@
         "apps/web/app/api/stripe-webhook",
         "services",
         "apps/web/db/neon",
-        "packages/types/src/billing-catalog.ts"
+        "packages/contracts/types/src/billing-catalog.ts"
       ],
       "reviewFocus": "Idempotency, ledgering, fraud/refund/chargeback handling, managed compute gating",
       "checks": [
@@ -78,7 +88,7 @@
       "severity": "high",
       "owner": "Enterprise/platform lead",
       "paths": [
-        "packages/types/src/enterprise",
+        "packages/contracts/types/src/enterprise",
         "services/api-gateway/src/routes/enterprise.ts",
         "apps/web/db/neon",
         "apps/web/app/admin",
@@ -116,7 +126,7 @@
         "apps/sandbox",
         "apps/web/features/chat",
         "apps/desktop/src",
-        "packages/unified-chat"
+        "packages/ui/unified-chat"
       ],
       "reviewFocus": "Iframe sandboxing, srcDoc fallback, generated file previews, download safety",
       "checks": [

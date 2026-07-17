@@ -2,9 +2,9 @@
 
 Status: Draft spec
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-11
 
-Authority: `AGENTS.md` (repo root); `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/computer-use/{cloudAgentClient,agentLoop,escalationEngine,cdpDriver}.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/src/features/content/page-metadata.ts`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/background/memory-bridge.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/computer-use/{cloudAgentClient,agentLoop,escalationEngine,cdpDriver}.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/src/page-metadata.ts`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/background/memory-bridge.ts`, and `packages/contracts/types/src/models.json`. (Corrected 2026-07-11: `page-metadata.ts`/`nlweb.ts`/`webmcp.ts` live at the top level of `apps/extension/src/`, not under `features/content/` — that path held a duplicate fork deleted by commit `59c8f4650` for missing security fixes.)
 
 ## Overview & stance
 
@@ -16,11 +16,11 @@ Chat history is **device-scoped `chrome.storage.local` only** — capped at 100 
 
 ## Page Context Injection
 
-Page context is captured and passed to the model as **untrusted data, never instructions**. The computer-use loop injects a DOM summary via `cdp.getPageContent()` plus a first-turn screenshot into the initial user message (`agentLoop.ts` `runAgentLoop`) ✅. Structured metadata (title, description, OpenGraph, JSON-LD, schema types) is extracted by `extractPageMetadata()` in `apps/extension/src/features/content/page-metadata.ts` ✅, with recursion depth capped (`MAX_JSONLD_RECURSION_DEPTH = 10`). Prompt-injection defense is mandatory: the system prompt marks `read_dom` output UNTRUSTED, and `scanForInjection()` hard-stops the loop with `InjectionDetectedError` when a `SECURITY WARNING` sentinel appears (`agentLoop.ts` `executeTool` → `read_dom`) ✅. Requirement: no page content is ever elevated to system-role or executed as an instruction.
+Page context is captured and passed to the model as **untrusted data, never instructions**. The computer-use loop injects a DOM summary via `cdp.getPageContent()` plus a first-turn screenshot into the initial user message (`agentLoop.ts` `runAgentLoop`) ✅. Structured metadata (title, description, OpenGraph, JSON-LD, schema types) is extracted by `extractPageMetadata()` in `apps/extension/src/page-metadata.ts` ✅, with recursion depth capped (`MAX_JSONLD_RECURSION_DEPTH = 10`). Prompt-injection defense is mandatory: the system prompt marks `read_dom` output UNTRUSTED, and `scanForInjection()` hard-stops the loop with `InjectionDetectedError` when a `SECURITY WARNING` sentinel appears (`agentLoop.ts` `executeTool` → `read_dom`) ✅. Requirement: no page content is ever elevated to system-role or executed as an instruction.
 
 ## Model Routing — server-side
 
-Model selection is **server-side by design**; the extension only names a slot. `COMPUTER_USE_MODEL` is read from `packages/types/src/models.json` `providers.managed_cloud.taskRouting.computer_use` (`cloudAgentClient.ts`) ✅ — never invented or hardcoded per SSOT rules. 🟡 **Gap:** `managed_cloud.taskRouting` is currently `{}` (cleared, "superseded by SLOT_REGISTRY" — `models.json`), so the constant falls back to the literal `'gpt-5.4-mini'` in code; this must be reconciled so the extension resolves a live slot rather than a stale fallback. Model-by-plan gating mirrors Claude-in-Chrome plan gating and is enforced by the gateway, not the client. Thin bridged chat routes provider-tagged requests (`'anthropic' | 'openai' | 'ollama' | 'google'`) to `/api/v1/providers/<id>/stream` (`providerStreamClient.ts`) ✅, but the actual model IDs still resolve from `models.json` server-side.
+Model selection is **server-side by design**; the extension only names a slot. `COMPUTER_USE_MODEL` is read from `packages/contracts/types/src/models.json` `providers.managed_cloud.taskRouting.computer_use` (`cloudAgentClient.ts`) ✅ — never invented or hardcoded per SSOT rules. 🟡 **Gap:** `managed_cloud.taskRouting` is currently `{}` (cleared, "superseded by SLOT_REGISTRY" — `models.json`), so the constant falls back to the literal `'gpt-5.4-mini'` in code; this must be reconciled so the extension resolves a live slot rather than a stale fallback. Model-by-plan gating mirrors Claude-in-Chrome plan gating and is enforced by the gateway, not the client. Thin bridged chat routes provider-tagged requests (`'anthropic' | 'openai' | 'ollama' | 'google'`) to `/api/v1/providers/<id>/stream` (`providerStreamClient.ts`) ✅, but the actual model IDs still resolve from `models.json` server-side.
 
 ## Tool Calling
 
@@ -28,7 +28,7 @@ Tools are declared as OpenAI-style function definitions in `BROWSER_TOOL_DEFINIT
 
 ## Web Search
 
-🔭 **Planned.** There is **no `web_search` taskRouting slot** in `models.json` and no model-driven web-search tool wired into the extension's tool set (`BROWSER_TOOL_DEFINITIONS` has none). NLWeb/WebMCP discovery primitives exist (`apps/extension/src/features/content/{nlweb,webmcp}.ts`) but are page-interaction helpers, not a server-side search tool. When built, web search must run server-side (gateway tool), obey the EGRESS rule, and never let the extension call a search provider directly.
+🔭 **Planned.** There is **no `web_search` taskRouting slot** in `models.json` and no model-driven web-search tool wired into the extension's tool set (`BROWSER_TOOL_DEFINITIONS` has none). NLWeb/WebMCP discovery primitives exist (`apps/extension/src/{nlweb,webmcp}.ts`) but are page-interaction helpers, not a server-side search tool. When built, web search must run server-side (gateway tool), obey the EGRESS rule, and never let the extension call a search provider directly.
 
 ## Vision
 
@@ -51,9 +51,9 @@ Levers in place: single first-turn screenshot + text-first `read_dom` observatio
 - `apps/extension/src/features/native-bridge/providerStreamClient.ts` — thin-chat SSE client → `/api/v1/providers/<id>/stream`.
 - `apps/extension/src/features/computer-use/{cloudAgentClient,agentLoop,cdpDriver,escalationEngine}.ts` — cloud gateway client, agent loop, CDP driver, autofill→computer-use escalation.
 - `apps/extension/src/background/policy.ts` — `GATEWAY_URL_ALLOWLIST_EXACT`, `validateGatewayUrl`, message policy.
-- `apps/extension/src/features/content/{page-metadata,nlweb,webmcp}.ts` — page context extraction / discovery.
+- `apps/extension/src/{page-metadata,nlweb,webmcp}.ts` — page context extraction / discovery.
 - `apps/extension/src/features/background/conversation-history.ts`; `apps/extension/src/background/memory-bridge.ts` — local history + device-scoped memory.
-- `packages/types/src/models.json` — model-ID + taskRouting SSOT.
+- `packages/contracts/types/src/models.json` — model-ID + taskRouting SSOT.
 
 ## Competitor notes
 
@@ -71,5 +71,5 @@ Claude for Chrome and ChatGPT's browsing/operator features run a single first-pa
 - Hardcoding or inventing a model ID instead of resolving `models.json` slots (the `gpt-5.4-mini` literal fallback is a bug to fix, not a pattern to copy).
 - Treating page/DOM content as instructions; skipping the injection sentinel or the ask-before-acting gate.
 - Syncing extension history/memory to Neon, adding Projects, or image generation — all removed scope.
-- Encoding removed tiers. `providerStreamClient.ts` still lists `PaywallRequiredTier` `'hobby' | 'pro' | 'pro_plus' | 'max'` 🟡 — reconcile to Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise; never "Plus", `pro_plus`, or "Hobby", and no credit top-ups.
+- Encoding removed tiers. `providerStreamClient.ts` still lists `PaywallRequiredTier` `'hobby' | 'pro' | 'pro_plus' | 'max'` 🟡 — reconcile to Free / Basic ($7·₹399) / Pro ($20) / Max ($100 & $200) / Team ($30/seat) / Enterprise; never "Plus", `pro_plus`, or "Hobby". Top-ups are enabled for paid tiers (capped, opt-in) — do not encode them as banned.
 - Referencing Supabase, or renaming Next.js `proxy.ts` back to `middleware.ts`.

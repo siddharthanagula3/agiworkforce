@@ -1,8 +1,8 @@
 # Shared-Packages Consolidation Plan: One Website, Reused for Desktop + Mobile
 
-Status: PLAN (for surface engineers) — awaiting founder go-ahead to execute Step 1.
+Status: PARTIALLY EXECUTED — Step 1 logic ownership landed in M4; later UI steps remain governed by the 2026-07-08 restructure plan.
 Owner: this session (synthesized via the `shared-packages-consolidation-plan` ultracode
-workflow, 7 agents). Last updated: 2026-06-21.
+workflow, 7 agents). Last updated: 2026-07-15.
 
 Mandate ([[feedback-shared-packages-mandate]]): build the website in shared packages, reuse
 for desktop + mobile; web == desktop minus desktop-only extras; one subscription → one
@@ -21,10 +21,10 @@ A rich shared foundation **exists** and is actively consumed by web + desktop:
   `ArtifactPanel`, `ArtifactRenderer`, `ArtifactsSidebar`, `InlineToolCall`, `ToolCallCard`,
   `SettingsShell`, `SettingsModal`, ~93 components total.
 - `packages/unified-chat/src/stores/` — 17 zustand stores (`artifactStore`, `chatStore`, …).
-- `packages/stores/src/` — platform-agnostic `createChatStore` factory (transport injected
-  via `ChatStorePort`) — **the proven cross-surface pattern**.
-- `packages/types`, `packages/services` (has `artifacts.ts`), `packages/data-layer`,
-  `packages/design-tokens`, `packages/runtime` (has the shared `createOfflineSyncManager`).
+- `packages/artifacts/src/artifact-store.ts` — platform-agnostic vanilla Zustand artifact store;
+  each surface wraps it with platform persistence — **the proven cross-surface pattern**.
+- `packages/types`, `packages/artifacts`, `packages/sync`, `packages/data-layer`,
+  `packages/design-tokens`, `packages/client-runtime` (has the shared `createOfflineSyncManager`).
 
 **But every surface also forked:**
 
@@ -74,16 +74,16 @@ So the shared artifact _model/store/derivation/sync_ that ALL THREE consume **ca
 `unified-chat`** (DOM-only). Today `artifactStore.ts` lives in `unified-chat/src/stores/` —
 **that is the bug.** Target layout:
 
-| Layer      | Package                      | Consumers     | Holds                                                                                                                                                                                                                                   |
-| ---------- | ---------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Components | `@agiworkforce/unified-chat` | web + desktop | DOM views: `ArtifactPanel`, `ChatStream`, `MessageBubble`, `ToolCallCard`, `SettingsShell`, …                                                                                                                                           |
-| Types      | `@agiworkforce/types`        | all 3         | `SharedArtifact`, `ArtifactType`, `ArtifactDelta` (new, P5 §3)                                                                                                                                                                          |
-| Store      | `@agiworkforce/stores`       | all 3         | **NEW** `createArtifactStore` factory (move+merge from unified-chat, absorbing web's 479-line persistence/versioning), mirroring `createChatStore`                                                                                      |
-| Derivation | `@agiworkforce/services`     | all 3         | `extractCodeBlocks`, `titleFromCodeBlock`, `accentColorForKind`, `formatAgeLabel`, `derived_id` — extract the triple fork into `packages/services/src/artifacts.ts` (already holds publish/trust `PublishableArtifact`/`PublishResult`) |
-| Sync       | `@agiworkforce/runtime`      | all 3         | artifact sync via the existing `createOfflineSyncManager` (same machinery web+desktop share for P2 chat sync)                                                                                                                           |
+| Layer      | Package                                          | Consumers     | Holds                                                                                                                                                |
+| ---------- | ------------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Components | `@agiworkforce/unified-chat`                     | web + desktop | DOM views: `ArtifactPanel`, `ChatStream`, `MessageBubble`, `ToolCallCard`, `SettingsShell`, …                                                        |
+| Types      | `@agiworkforce/types`                            | all 3         | `SharedArtifact`, `ArtifactType`, `ArtifactDelta` (new, P5 §3)                                                                                       |
+| Store      | `@agiworkforce/artifacts`                        | all 3         | `createArtifactStore` factory with injected persistence, now co-located with the artifact domain                                                     |
+| Derivation | `@agiworkforce/artifacts`                        | all 3         | `extractCodeBlocks`, `titleFromCodeBlock`, `accentColorForKind`, `formatAgeLabel`, `derived_id`, publish/trust `PublishableArtifact`/`PublishResult` |
+| Sync       | `@agiworkforce/artifacts` + `@agiworkforce/sync` | all 3         | artifact merge/apply in the artifact owner; general cross-surface delta apply and golden fixtures in the sync owner                                  |
 
 **Rule:** unified-chat keeps DOM views ONLY. Everything mobile must also consume goes into
-stores/services/types/runtime. Web+desktop import the DOM component AND the logic; mobile
+artifacts/sync/types/client-runtime. Web+desktop import the DOM component AND the logic; mobile
 imports only the logic and renders its own RN view from the same store/derivation.
 
 ---
@@ -95,11 +95,11 @@ MessageBubble` is re-pointed to a shared component **one at a time**, never a wh
 
 ### Step 1 — Single shared artifact model (the divergence cause; do FIRST)
 
-- **1a. Derivation → `@agiworkforce/services`.** Collapse web `artifact-detector.ts` +
-  mobile `store.ts` derivation fns into `packages/services/src/artifacts.ts` + the P5
+- **1a. Derivation → `@agiworkforce/artifacts` (complete in M4).** Collapse web `artifact-detector.ts` +
+  mobile `store.ts` derivation fns into `packages/artifacts/src/artifacts.ts` + the P5
   `derived_id` computation. Mobile's derivation is most complete → promote it, parameterize
   theme colors. Re-export from services; delete the local copies. (No DB, no UI change.)
-- **1b. Store → `@agiworkforce/stores`.** New `createArtifactStore(options)` factory
+- **1b. Store → `@agiworkforce/artifacts` (complete in M4).** `createArtifactStore(options)` factory
   (storage adapter injected), absorbing web's richer 479-line store (web wins, don't lose
   features). Desktop's Tauri-SQLite becomes an adapter; mobile uses an MMKV/SQLite adapter.
 - **1c. Panel → shared `ArtifactPanel`.** Collapse web `ArtifactsPanel` + desktop
@@ -120,7 +120,9 @@ MessageBubble` is re-pointed to a shared component **one at a time**, never a wh
 
 Collapse web's 7 `features/settings/sections/` onto `unified-chat/SettingsShell` +
 `packages/ui` `SETTINGS_NAV`. `MemorySection` already uses shared `MemoryEditor` (proof).
-Settings store → `@agiworkforce/stores`. Mobile renders RN settings off the same nav + store.
+Settings state stays in `@agiworkforce/unified-chat`; the generic
+`@agiworkforce/stores` facade is artifact-only and scheduled for removal.
+Mobile renders RN settings off the same nav + state contract.
 Inventory (from reference matrix): Profile/Account, Billing, Usage, Capabilities,
 Privacy/Permissions, Memory, Appearance, Connectors, Notifications.
 

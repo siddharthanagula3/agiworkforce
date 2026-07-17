@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `apps/web/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `apps/web/proxy.ts`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/db/neon/*.sql`, `apps/web/lib/pricing.ts`, `packages/types/src/{billing-catalog,models}` (`.ts`/`.json`).
+Authority: `AGENTS.md`; `apps/web/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `apps/web/proxy.ts`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/db/neon/*.sql`, `apps/web/lib/pricing.ts`, `packages/contracts/types/src/{billing-catalog,models}` (`.ts`/`.json`).
 
 ## Overview & stance
 
@@ -25,7 +25,7 @@ Deliver subscription-backed, multi-provider cloud chat and workspace tooling in 
 - **Zero-install cloud chat** backed by account entitlements, not an ambient key. 🟡 — chat routes exist (`apps/web/app/{chat,chat-multi}`); plan-gated model access is not fully wired.
 - **Cross-device continuity**: chats, memory, projects sync Web ↔ Mobile ↔ Desktop for Managed-Cloud rows only. ✅: `apps/web/app/api/{chat,memory,projects}/sync/route.ts` (cursor + tombstones + server-side idempotent upsert; RLS backstop).
 - **Account + billing home**: sign-in, subscriptions, admin on Web. 🟡 — `apps/web/app/{billing,admin}`, `apps/web/db/neon/0012_stripe.sql` exist; catalog reconciliation outstanding.
-- **Multi-provider model access** from the shared catalog, never hardcoded. ✅ SSOT: `packages/types/src/models.json`.
+- **Multi-provider model access** from the shared catalog, never hardcoded. ✅ SSOT: `packages/contracts/types/src/models.json`.
 
 ## User Personas
 
@@ -51,7 +51,7 @@ Deliver subscription-backed, multi-provider cloud chat and workspace tooling in 
 
 ## Business Goals
 
-Convert free cloud users into paying subscribers and anchor the suite's account/billing home. Pricing (founder decision 2026-06-30), used **everywhere**: **Free $0**; **Basic $8/mo (₹399/mo)**; **Pro $20/mo**; **Max $100/mo and $200/mo** (two tiers); **Enterprise custom**. Local and BYOK are free access modes, not plans. INR is fixed only for Basic (₹399); Pro/Max INR are TBD — do not invent them. No credit top-ups. 🟡 — code still encodes older tiers: `packages/types/src/billing-catalog.ts` lists `free/pro/max/team/enterprise` (no `basic`, still `team`), and `apps/web/lib/pricing.ts` wires `pro/max/team` Stripe prices. Reconciliation is a separate tracked task.
+Convert free cloud users into paying subscribers and anchor the suite's account/billing home. Pricing (founder decision 2026-06-30), used **everywhere**: **Free $0**; **Basic $8/mo (₹399/mo)**; **Pro $20/mo**; **Max $100/mo and $200/mo** (two tiers); **Enterprise custom**. Local and BYOK are free access modes, not plans. INR is fixed only for Basic (₹399); Pro/Max INR are TBD — do not invent them. No credit top-ups. 🟡 — code still encodes older tiers: `packages/contracts/types/src/billing-catalog.ts` lists `free/pro/max/team/enterprise` (no `basic`, still `team`), and `apps/web/lib/pricing.ts` wires `pro/max/team` Stripe prices. Reconciliation is a separate tracked task.
 
 ## Market Position
 
@@ -59,7 +59,7 @@ AGI Web sits alongside claude.ai and chatgpt.com as a browser AI home, but diffe
 
 ## Competitive Analysis — vs claude.ai and chatgpt.com
 
-- **Model choice**: claude.ai serves Anthropic models, chatgpt.com serves OpenAI models; AGI Web presents **multiple providers** from the shared catalog. ✅ SSOT (`packages/types/src/models.json`); model-picker wiring 🟡.
+- **Model choice**: claude.ai serves Anthropic models, chatgpt.com serves OpenAI models; AGI Web presents **multiple providers** from the shared catalog. ✅ SSOT (`packages/contracts/types/src/models.json`); model-picker wiring 🟡.
 - **Trust clarity**: neither competitor exposes BYOK in-browser; AGI matches that on Web (cloud-only) **by design**, offering BYOK only on Desktop/CLI/VS Code. ✅ by stance.
 - **Pricing**: competitors run ~$20 primary tiers plus power tiers; AGI adds an $8 Basic below the $20 anchor (Free / Basic / Pro / Max $100 & $200 / Enterprise). 🟡 (catalog gap above).
 - **Continuity**: both sync within their own web/app; AGI syncs Web ↔ Mobile ↔ Desktop for Managed-Cloud rows. ✅ (`.../sync/route.ts`).
@@ -68,7 +68,7 @@ AGI Web sits alongside claude.ai and chatgpt.com as a browser AI home, but diffe
 
 - Cloud-only on Web: no BYOK, no Local affordance — ever. ✅ stance.
 - Managed Cloud is open by default; never render a waitlist gate for signed-in users. ✅ (`AGENTS.md` managed-cloud rule).
-- Model IDs come only from `packages/types/src/models.json`; never hardcode. ✅.
+- Model IDs come only from `packages/contracts/types/src/models.json`; never hardcode. ✅.
 - Isolation is enforced in the DB, not just the app layer. ✅ (`0037_rls_user_isolation.sql`).
 - Only Managed-Cloud rows sync; Local/BYOK rows never reach `.../sync`. ✅ (trust-boundary comment, `chat/sync/route.ts`).
 
@@ -77,7 +77,7 @@ AGI Web sits alongside claude.ai and chatgpt.com as a browser AI home, but diffe
 - Next.js 16 requires `proxy.ts` exporting `proxy` — renaming to `middleware.ts` is prohibited. ✅ (`apps/web/proxy.ts:114`).
 - Stack is Clerk + Neon + Stripe only; **never** reference Supabase (fully migrated away). ✅.
 - Canonical migrations live in `apps/web/db/neon`; RLS/user-scoping is mandatory. ✅.
-- Pricing ladder is fixed; removed forever: "Plus", `pro_plus`, "Hobby"; "Team" served by Enterprise. Code predates this (🟡, tracked).
+- Pricing ladder is fixed; removed forever: "Plus", `pro_plus`, "Hobby". "Team" is a real, separate per-seat tier (reinstated 2026-07-11, supersedes the 2026-06-30 "served by Enterprise" framing). Code predates this (🟡, tracked).
 - `apps/web/AGENTS.md` lane contract: shared schemas/adapters/desktop-CLI behavior must not live in Web.
 
 ## Assumptions
@@ -100,8 +100,8 @@ AGI Web sits alongside claude.ai and chatgpt.com as a browser AI home, but diffe
 - `apps/web/app/api/{chat,memory,projects}/sync/route.ts` — Neon delta-sync (Managed-Cloud only).
 - `apps/web/db/neon/*.sql` — canonical migrations (`0003_subscriptions`, `0012_stripe`, `0015_organizations`, `0037_rls_user_isolation`, `0038`–`0041` cloud-sync).
 - `apps/web/app/{chat,chat-multi,projects,billing,admin,connectors,enterprise}` — product surfaces.
-- `apps/web/lib/pricing.ts`, `packages/types/src/billing-catalog.ts` — pricing (🟡 drift).
-- `packages/types/src/models.json` — model-ID SSOT; `apps/web/AGENTS.md` — lane/trust rules.
+- `apps/web/lib/pricing.ts`, `packages/contracts/types/src/billing-catalog.ts` — pricing (🟡 drift).
+- `packages/contracts/types/src/models.json` — model-ID SSOT; `apps/web/AGENTS.md` — lane/trust rules.
 
 ## Competitor notes
 
@@ -113,13 +113,13 @@ Web is production-ready when the stance, sync, isolation, and billing contracts 
 
 - [ ] **Build**: `pnpm --filter @agiworkforce/web typecheck`, `test`, `build` pass; `proxy.ts` exports `proxy` (no `middleware.ts`).
 - [ ] **Trust**: no BYOK or Local affordance renders on Web; `.../sync` sets `user_id` server-side and rejects Local/BYOK rows; Managed Cloud shows as open (no waitlist gate).
-- [ ] **Security**: RLS on user-scoped tables (`0037_rls_user_isolation.sql`) with a passing cross-tenant probe; no Supabase references; model IDs only from `packages/types/src/models.json`; pricing renders the canonical ladder (Basic $8/₹399 present; `team`/`pro_plus`/`Plus`/`Hobby` absent).
+- [ ] **Security**: RLS on user-scoped tables (`0037_rls_user_isolation.sql`) with a passing cross-tenant probe; no Supabase references; model IDs only from `packages/contracts/types/src/models.json`; pricing renders the canonical ladder (Basic $8/₹399 present; `team`/`pro_plus`/`Plus`/`Hobby` absent).
 
 ## Anti-patterns
 
 - Adding a BYOK key field or Local-mode toggle to Web (forbidden — cloud-only surface).
 - Silently routing Local/BYOK chats into `.../sync` or presenting them as cloud rows.
 - Renaming `proxy.ts` to `middleware.ts`, or removing the exported `proxy` function.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Shipping removed tiers (`Plus`, `pro_plus`, `Hobby`) or a consumer `Team` plan; inventing Pro/Max INR prices; adding credit top-ups.
 - Referencing Supabase; claiming a capability "shipped" without a real repo path; re-adding a waitlist gate for signed-in Managed-Cloud access.

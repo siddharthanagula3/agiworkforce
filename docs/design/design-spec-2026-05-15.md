@@ -3,7 +3,7 @@
 **Date:** 2026-05-15
 **Status:** LOCKED for launch wave. Source of truth for visual treatment across Desktop, Web, Mobile, CLI/TUI, Chrome extension, VS Code extension.
 **Authored from:** strategic sample of `~/Desktop/reference/ui/` (Claude desktop, Claude chat/artifacts, ChatGPT desktop, Codex desktop, Gemini chat, Perplexity, Codex CLI, Gemini CLI, Claude Code).
-**Already-shipped tokens:** `packages/design-tokens/src/index.ts` (`agiPalette`, `agiRadii`, `agiChatCssVars`, `agiNativeColors`, `agiExtensionCssVars`, `agiVsCodeCssVars`).
+**Already-shipped tokens:** `packages/ui/design-tokens/src/index.ts` (`agiPalette`, `agiRadii`, `agiChatCssVars`, `agiNativeColors`, `agiExtensionCssVars`, `agiVsCodeCssVars`).
 **User mandates (verbatim):**
 
 - "No onboarding suggestions; users dig directly into work."
@@ -29,7 +29,7 @@ The five patterns above are the launch baseline. If a surface diverges, justify 
 
 ## 1. Palette
 
-The shipped `agiPalette` in `packages/design-tokens/src/index.ts` is the canonical source. This spec **converges with it** and adds nothing new — what follows is the working palette restated in CSS-var form so engineers don't need to look up the TS export.
+The shipped `agiPalette` in `packages/ui/design-tokens/src/index.ts` is the canonical source. This spec **converges with it** and adds nothing new — what follows is the working palette restated in CSS-var form so engineers don't need to look up the TS export.
 
 ### Light mode (6 named vars per surface band)
 
@@ -746,4 +746,4 @@ Per the cross-competitor pattern (item #5 in §0), the model picker lives **insi
 
 ---
 
-**End of spec.** Engineers: §4 (inline tool call) and §5 (icons) are mandatory for the launch wave. Everything else converges naturally from §1–§3 tokens, which are already shipped in `packages/design-tokens`.
+**End of spec.** Engineers: §4 (inline tool call) and §5 (icons) are mandatory for the launch wave. Everything else converges naturally from §1–§3 tokens, which are already shipped in `packages/ui/design-tokens`.

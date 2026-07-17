@@ -20,14 +20,14 @@ Cloud vs Local is not a deployment detail here — it is the product's center of
 3. **Harden the one runtime before widening surfaces.** One hardened runtime beats six half-built ones (`docs/strategy/02` §5). Depth in the active surface before breadth.
 4. **Trust boundaries are absolute** (Operating Law 1). Local never silently routes to BYOK or Managed. A violation is a P0.
 5. **No claim exceeds shipped scope.** Marketing and UI may only assert what the parity matrix marks `Present` (Operating Law 5).
-6. **Model IDs are catalog-owned.** Read every ID/capability from `packages/types/src/models.json` (Operating Law 2).
+6. **Model IDs are catalog-owned.** Read every ID/capability from `packages/contracts/types/src/models.json` (Operating Law 2).
 
 ## Repository map
 
 This volume owns the top-level shape, detailed in Vol 2:
 
 - `apps/{web,desktop,mobile,cli,extension,extension-vscode,sandbox}` — the seven surfaces (thin clients).
-- `packages/*` — shared TS: `types` (contracts + `models.json`), `providers`, `routing`, `runtime`, `llm-runtime`, `unified-chat`, `mcp`, `skills`, `ui`, `stores`, `local-llm`, `data-layer`, `utils`.
+- `packages/*` — shared TS: `types` (contracts + `models.json`), `providers`, `routing`, `runtime`, `provider-runtime`, `unified-chat`, `mcp`, `skills`, `ui`, `stores`, `local-llm`, `data-layer`, `utils`.
 - `crates/*` — shared Rust: `agiworkforce-protocol`, `agiworkforce-command-registry`, `agiworkforce-task-runtime`, `agiworkforce-execpolicy`, `sandbox-policy`, `agiworkforce-network-proxy`, `agiworkforce-plugin-runtime`, and `agiworkforce-utils-*`.
 - `services/{api-gateway,signaling-server}` — backend; managed-compute scaffolding.
 - `apps/web/db/neon` — canonical migrations.
@@ -46,7 +46,7 @@ This volume owns the top-level shape, detailed in Vol 2:
 - [ ] New capability lives in `packages/*` or `crates/*`, not duplicated per surface.
 - [ ] Reusable Rust moved to `crates/` only when a second consumer exists.
 - [ ] No surface re-implements trust, sync, or provider logic locally.
-- [ ] Shared contract changes land in `packages/types` first, then surfaces adapt at the boundary.
+- [ ] Shared contract changes land in `packages/contracts/types` first, then surfaces adapt at the boundary.
 - [ ] The change strengthens (or is neutral to) one of the three moat assets; if it weakens one, it is rejected or escalated.
 
 ### Mission/scope guard (every feature)

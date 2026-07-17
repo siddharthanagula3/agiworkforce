@@ -90,7 +90,7 @@ Production-ready gate: every control has an accessible name/role/state; keyboard
 - Do not convey trust mode (Local / BYOK / Cloud) or status by color alone — it fails colorblind users and hides the trust boundary.
 - Do not ship animations ungated by `prefers-reduced-motion`, or focus traps without focus return.
 - Do not make the Local→BYOK fork consent reachable only by pointer.
-- Do not translate model IDs or provider names; source model IDs only from `packages/types/src/models.json` — never hardcode or invent one.
+- Do not translate model IDs or provider names; source model IDs only from `packages/contracts/types/src/models.json` — never hardcode or invent one.
 - Do not reference removed tiers ("Plus", `pro_plus`, "Hobby"), invent INR prices for Pro/Max, or add credit top-ups; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
 - Do not reference Supabase (fully migrated to Clerk + Neon + Stripe) or rename `proxy.ts` to `middleware.ts`.
 - Do not claim shipped a11y state without a real repo path; mark unverified capabilities 🔭.

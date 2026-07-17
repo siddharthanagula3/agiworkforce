@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/extension-vscode/AGENTS.md`, `docs/surfaces/vscode-extension.md`, and real repo paths — `apps/extension-vscode/package.json`, `apps/extension-vscode/src/core/runInlineCommand.ts`, `apps/extension-vscode/src/platform/applyEdit.ts`, `apps/extension-vscode/src/integrations/patchEngine.ts`, `apps/extension-vscode/src/providers/agentMode/agentLoop.ts`, `apps/extension-vscode/src/providers/agentMode/agentUI.ts`, `apps/extension-vscode/src/providers/diffDecorationProvider.ts`, `apps/extension-vscode/src/providers/codeActionProvider.ts`, `apps/extension-vscode/src/data/checkpointManager.ts`, `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`. Model IDs derive only from `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/extension-vscode/AGENTS.md`, `docs/surfaces/vscode-extension.md`, and real repo paths — `apps/extension-vscode/package.json`, `apps/extension-vscode/src/core/runInlineCommand.ts`, `apps/extension-vscode/src/platform/applyEdit.ts`, `apps/extension-vscode/src/integrations/patchEngine.ts`, `apps/extension-vscode/src/providers/agentMode/agentLoop.ts`, `apps/extension-vscode/src/providers/agentMode/agentUI.ts`, `apps/extension-vscode/src/providers/diffDecorationProvider.ts`, `apps/extension-vscode/src/providers/codeActionProvider.ts`, `apps/extension-vscode/src/data/checkpointManager.ts`, `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`. Model IDs derive only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 This volume specifies how the AGI VS Code Extension turns intent into code inside the editor: generating new code, editing and refactoring existing code, coordinated multi-file changes, and generating tests, documentation, and scaffolding. It is the IDE-native developer surface and is **workspace-scoped**.
 
-All three trust modes apply — **Local**, **BYOK** (permitted here; Desktop/CLI/VS Code only), and **Managed Cloud** — chosen explicitly with a visible provider/model label; the extension never silently promotes a Local edit to BYOK or Cloud. Generation never sends editor context into Web/Mobile/Desktop app-chat history: any handoff to app chat is explicit and redacted (per `apps/extension-vscode/AGENTS.md`). Two workspace-trust rails bound every write: `restrictedConfigurations` in `package.json` (agent auto-apply, endpoints, system prompt cannot be overridden by an untrusted workspace) and forced diff-preview when the workspace is untrusted (`runInlineCommand.ts`). Model selection resolves through the shared catalog adapter (`modelConstants.ts` → `packages/types/src/models.json`); the `auto-economy` default in `package.json` is a routing alias, not a model ID, and no model ID is hardcoded in this volume.
+All three trust modes apply — **Local**, **BYOK** (permitted here; Desktop/CLI/VS Code only), and **Managed Cloud** — chosen explicitly with a visible provider/model label; the extension never silently promotes a Local edit to BYOK or Cloud. Generation never sends editor context into Web/Mobile/Desktop app-chat history: any handoff to app chat is explicit and redacted (per `apps/extension-vscode/AGENTS.md`). Two workspace-trust rails bound every write: `restrictedConfigurations` in `package.json` (agent auto-apply, endpoints, system prompt cannot be overridden by an untrusted workspace) and forced diff-preview when the workspace is untrusted (`runInlineCommand.ts`). Model selection resolves through the shared catalog adapter (`modelConstants.ts` → `packages/contracts/types/src/models.json`); the `auto-economy` default in `package.json` is a routing alias, not a model ID, and no model ID is hardcoded in this volume.
 
 ## Generate
 
@@ -54,7 +54,7 @@ Agent Mode can create new files during a multi-file change (`wsEdit.createFile` 
 - `apps/extension-vscode/src/providers/{diffDecorationProvider.ts,codeActionProvider.ts}` — diff accept/reject overlay and lightbulb actions.
 - `apps/extension-vscode/src/data/checkpointManager.ts` — snapshot/restore/rewind.
 - `apps/extension-vscode/src/features/inline-completions/inlineCompletionProvider.ts` — ghost-text completions.
-- `apps/extension-vscode/src/features/model-picker/modelConstants.ts` — catalog adapter over `packages/types/src/models.json`.
+- `apps/extension-vscode/src/features/model-picker/modelConstants.ts` — catalog adapter over `packages/contracts/types/src/models.json`.
 - `apps/extension-vscode/src/utils/pathSafety.ts` — sensitive-file / containment guards.
 
 ## Competitor notes
@@ -67,13 +67,13 @@ Production-ready when generation and editing across all seven required domains r
 
 - [ ] **Build:** `pnpm --filter agi-workforce typecheck` and `pnpm --filter agi-workforce test` pass; new generation code has tests (extend `patchEngine.test.ts`, `applyEdit.test.ts`, `codeActionProvider.test.ts`).
 - [ ] **Trust:** no path promotes a Local edit to BYOK/Cloud without an explicit fork; untrusted workspaces force diff preview; no editor context reaches app chat except via explicit redacted handoff.
-- [ ] **Security:** every write/create is workspace-contained and passes `isSensitiveFile`; rejected batches leave the tree unchanged; model IDs resolve only from `packages/types/src/models.json`.
+- [ ] **Security:** every write/create is workspace-contained and passes `isSensitiveFile`; rejected batches leave the tree unchanged; model IDs resolve only from `packages/contracts/types/src/models.json`.
 
 ## Anti-patterns
 
 - Auto-applying generated code with no diff in an untrusted workspace, or bypassing `restrictedConfigurations`.
 - Silently routing a Local generation to BYOK or Managed Cloud, or hiding the resolved provider/model label.
 - Auto-syncing generated code or editor context into Web/Mobile/Desktop app chat.
-- Hardcoding or inventing a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups in generation gating — the `agiWorkforce.tier` enum in `package.json` still lists `hobby`/`pro_plus`; treat that as a 🟡 reconciliation gap (separate tracked task), not the pricing model. Use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
 - Referencing Supabase (fully migrated to Clerk + Neon + Stripe) or claiming a scaffolding/test-repair loop as shipped without a repo path.

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, and the verified repo paths `apps/extension/manifest.json`, `apps/extension/src/content.ts`, `apps/extension/src/background.ts`, `apps/extension/src/features/content/page-metadata.ts`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/computer-use/cloudAgentClient.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/THREAT_MODEL.md`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, and the verified repo paths `apps/extension/manifest.json`, `apps/extension/src/content.ts`, `apps/extension/src/background.ts`, `apps/extension/src/page-metadata.ts`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/computer-use/cloudAgentClient.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/THREAT_MODEL.md`. (Corrected 2026-07-11: `page-metadata.ts` lives at the top level of `apps/extension/src/`, not under `features/content/` — that path held a duplicate fork deleted by commit `59c8f4650` for missing security fixes.)
 
 ## Overview & stance
 
@@ -30,7 +30,7 @@ Web search must be brokered entirely by the backend and surfaced through the thi
 Finding text and structure within the page the user is viewing, using data the content script already extracts.
 
 - **Requirements:** search the current tab's rendered text, DOM, and metadata; return matches with enough context to act (jump-to, highlight, or feed to chat). Page content is treated as **data, never instructions** (prompt-injection defense). No new host permissions beyond the existing content-script match.
-- **Status:** 🟡 Partial. The retrieval primitives are built — full page context capture (`apps/extension/src/content.ts` `buildCurrentPageContext`), structured metadata/JSON-LD/OpenGraph extraction (`apps/extension/src/features/content/page-metadata.ts`), and DOM helpers (`apps/extension/src/features/content/dom-helpers.ts`). Gap: there is no in-page find/query UI (no `window.find`, no match highlighting or ranked in-page results) yet; captured text is currently forwarded to chat rather than searched interactively.
+- **Status:** 🟡 Partial. The retrieval primitives are built — full page context capture (`apps/extension/src/content.ts` `buildCurrentPageContext`), structured metadata/JSON-LD/OpenGraph extraction (`apps/extension/src/page-metadata.ts`), and DOM helpers (`apps/extension/src/dom-helpers.ts`). Gap: there is no in-page find/query UI (no `window.find`, no match highlighting or ranked in-page results) yet; captured text is currently forwarded to chat rather than searched interactively.
 
 ## Selected Text Search
 
@@ -58,7 +58,7 @@ Searching the browser's own visited-history, gated behind an explicit permission
 - `apps/extension/manifest.json` — permissions surface; `history` is not yet declared.
 - `apps/extension/src/content.ts` — page context + selection capture (`buildCurrentPageContext`, `analyze_selection`).
 - `apps/extension/src/background.ts` — selection context menus, side-panel handoff.
-- `apps/extension/src/features/content/page-metadata.ts`, `.../dom-helpers.ts` — page metadata/DOM extraction.
+- `apps/extension/src/page-metadata.ts`, `apps/extension/src/dom-helpers.ts` — page metadata/DOM extraction.
 - `apps/extension/src/features/background/conversation-history.ts` — device-scoped conversation store.
 - `apps/extension/src/features/native-bridge/providerStreamClient.ts` — bridged-chat SSE + `web_search` paywall enum.
 - `apps/extension/src/features/computer-use/cloudAgentClient.ts`, `apps/extension/src/background/policy.ts` — gateway egress allowlist.
@@ -81,6 +81,6 @@ Search is production-ready when every plane obeys its trust boundary, no plane s
 - Routing local page/selection/conversation/history data into Managed Cloud without an explicit, labeled request — a trust-boundary violation.
 - Syncing any search corpus (page, selection, conversation, history) to Neon, or adding Project search — out of scope for Chrome.
 - Claiming web/page/history search is shipped without a real repo path (all three are 🔭/🟡 today).
-- Hardcoding a model ID for a search tool — read from `packages/types/src/models.json`.
+- Hardcoding a model ID for a search tool — read from `packages/contracts/types/src/models.json`.
 - Surfacing removed tiers (`hobby`, `pro_plus`, "Plus", "Hobby") in paywall copy, or referencing Supabase, or offering credit top-ups.
 - Adding the `history` permission without a threat-model update and revocable runtime consent.

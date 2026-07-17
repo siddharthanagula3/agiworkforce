@@ -5,7 +5,7 @@ Owner: Lead architect
 Last updated: 2026-06-21
 Scope: Shared components + request layer for a Claude-like multi-model app (web/desktop/mobile). Providers in scope: anthropic, openai, google, deepseek, qwen, mistral, moonshot, zhipu, xai, groq, perplexity, open_router, nvidia_nim.
 
-How to read this doc: every load-bearing number is traced to a primary source URL inline. Where the fact-check could not confirm a number from a live primary page, it is labeled **UNVERIFIED** and must not be hardcoded without re-checking. Model IDs are illustrative of the source pricing tables; per repo policy, read actual model IDs from `packages/types/src/models.json`, never from this doc.
+How to read this doc: every load-bearing number is traced to a primary source URL inline. Where the fact-check could not confirm a number from a live primary page, it is labeled **UNVERIFIED** and must not be hardcoded without re-checking. Model IDs are illustrative of the source pricing tables; per repo policy, read actual model IDs from `packages/contracts/types/src/models.json`, never from this doc.
 
 ---
 
@@ -248,7 +248,7 @@ Required UX:
 ### P3 — Hardening
 
 16. Cache-state UX (warm indicator, cached-discount line, model-switch warning) per Section 6.3.
-17. Re-verify all pricing/min-token/TTL numbers against primary sources on a schedule; gate hardcoded numbers behind the UNVERIFIED list above; read model IDs from `packages/types/src/models.json` only.
+17. Re-verify all pricing/min-token/TTL numbers against primary sources on a schedule; gate hardcoded numbers behind the UNVERIFIED list above; read model IDs from `packages/contracts/types/src/models.json` only.
 18. Provider quirks: OpenAI ~15 req/min overflow per (prefix + cache_key); Anthropic 1h TTL needs no beta header on current Claude API (may need `extended-cache-ttl-2025-04-11` on older SDKs/partner platforms — verify per platform); OpenRouter top-level `cache_control` routes Anthropic-direct only (excludes Bedrock/Vertex).
 
 ---
@@ -275,7 +275,7 @@ WE HAVE (verified):
 
 - Anthropic `cache_control` on system + last-user block, ephemeral, with a stable-prefix
   split via a `<!-- AGIWORKFORCE_CACHE_BOUNDARY -->` marker
-  (`packages/llm-normalize/src/anthropic-payload-policy.ts`, `system-prompt-cache-boundary.ts`).
+  (`packages/ai/provider-protocol/src/anthropic-payload-policy.ts`, `system-prompt-cache-boundary.ts`).
 - Cache-read extraction for all 6 provider response shapes + a provider-aware cost calculator
   with correct disjoint-vs-subset token accounting and 0.1× read / 1.25× write
   (`apps/web/.../stream-transform.ts:278-334`, `apps/web/lib/services/llm-cost-calculator.ts`),
@@ -291,7 +291,7 @@ GAPS (prioritized) — the web-cache-enable "gap" was a false alarm (see correct
 - **P1 — tool list can change per turn.** Tools appended conditionally on per-turn flags
   (`request-processor.ts:1042-1076`); flipping web_search/code_execution mid-chat busts the
   Anthropic cache (§5). Fix: make the tool set a conversation-level decision.
-- **P2 — OpenAI `prompt_cache_key` is dead code** (`packages/providers/openai/src/types.ts:89`);
+- **P2 — OpenAI `prompt_cache_key` is dead code** (`packages/ai/providers/openai/src/types.ts:89`);
   Mistral REQUIRES it (§4). Fix: send a stable per-conversation `prompt_cache_key` for
   OpenAI/Mistral/xAI.
 - **P3 — verify hardcoded multipliers/min-tokens against §4** (Anthropic minimums differ per
@@ -322,12 +322,12 @@ prefix) → automatic RAG above the context threshold → managed sync.
 
 ### 8.4 Artifacts — extraction-only; missing the inline/persistent split + tool
 
-WE HAVE (Step 1a done): one shared derivation (`@agiworkforce/services`) with deterministic
+WE HAVE (Step 1a done): one shared derivation (`@agiworkforce/artifacts`) with deterministic
 ids; web/mobile consume it; the shared split-view viewer matches §1.3 layout.
 GAPS vs §1: (a) artifacts are created ONLY by markdown extraction — **no artifact tool the
 model calls** (§1.1); (b) the **ephemeral-inline vs persistent-panel split (§1.5)** isn't
 modeled, nor "convert to artifact"; (c) versioning partial; (d) publish/share/remix (§1.3)
-gated/unwired despite `packages/services` having the publish primitive; (e) verify our
+gated/unwired despite `packages/platform/artifacts` having the publish primitive; (e) verify our
 `SandboxedIframe` uses a cross-origin sandbox (§1.3 requires `*.claudeusercontent.com`-style
 isolation, never same-origin).
 

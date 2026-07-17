@@ -14,7 +14,7 @@ canon). Grounded in real repo paths:
 `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`,
 `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`,
 `apps/web/app/api/{chat,memory,projects}/sync/route.ts`,
-`apps/web/app/api/control-plane/status`, `packages/types/src/models.json`,
+`apps/web/app/api/control-plane/status`, `packages/contracts/types/src/models.json`,
 `apps/web/db/neon/{0021,0022,0037,0038,0039}_*.sql`.
 
 ## Overview & stance
@@ -40,7 +40,7 @@ target assembled from real parts, labeling every gap.
 Requirement: durable per-session records (id, kind, status, timing, output location) held
 **local-only**; sessions never leave the host.
 
-**✅ Built.** `crates/agiworkforce-task-runtime/src/lib.rs` defines `Task { id: TaskId (Uuid),
+**✅ Built.** `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` defines `Task { id: TaskId (Uuid),
 kind: TaskKind, status: TaskStatus, command, output_path, started_at, ended_at, exit_code,
 error }` in a `TaskRegistry` with validated status transitions (`TaskError::
 InvalidTransition`; `Pending→Running→{Completed,Failed,Stopped}`). The local tool host bounds
@@ -105,7 +105,7 @@ Requirement: one source of truth for provider/model metadata; BYOK secrets encry
 on the dev surfaces only; Web and Mobile hold no provider keys; Managed-Cloud is
 server-brokered.
 
-**✅ Built (registry SSOT).** `packages/types/src/models.json` is the canonical provider /
+**✅ Built (registry SSOT).** `packages/contracts/types/src/models.json` is the canonical provider /
 model catalog (providers include `anthropic`, `openai`, `google`, `managed_cloud`, plus BYOK
 providers such as `deepseek`, `groq`, `mistral`, `open_router`, `nvidia_nim`). It is a
 **static, versioned SSOT file** consumed by every surface — **not** a mutable per-user
@@ -137,7 +137,7 @@ any Cloud-side grant record is Neon+RLS and Managed-Cloud only.
 
 ## Repository map
 
-- `crates/agiworkforce-task-runtime/src/lib.rs` — `Task`/`TaskRegistry`/`TaskStatus` session records.
+- `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `Task`/`TaskRegistry`/`TaskStatus` session records.
 - `crates/agiworkforce-app-server/src/lib.rs` — `max_sessions`/`session_timeout_secs` bounds.
 - `crates/agiworkforce-protocol/src/{permissions.rs,request_permissions.rs,models.rs}` — sandbox/permission model + provider reads.
 - `crates/agiworkforce-{execpolicy,plugin-runtime}` — exec gating, plugin manifests.
@@ -147,7 +147,7 @@ any Cloud-side grant record is Neon+RLS and Managed-Cloud only.
 - `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs` — loopback WS host, IPC token, IP lockout.
 - `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts` — client runtime state (off).
 - `apps/web/app/api/{chat,memory,projects}/sync/route.ts` — Neon delta-sync (cursor + tombstones + upsert).
-- `packages/types/src/models.json` — provider/model registry SSOT.
+- `packages/contracts/types/src/models.json` — provider/model registry SSOT.
 - `apps/web/db/neon/{0021,0022,0037,0038,0039}_*.sql` — cloud schema, RLS, versioning.
 
 ## Competitor notes
@@ -185,7 +185,7 @@ consented fork.
 - Treating a cache or Remote-Control window as authoritative storage, or syncing an in-memory
   cache across the trust boundary.
 - Persisting any secret in plaintext, or logging an unredacted key.
-- Hardcoding or inventing model IDs (read only from `packages/types/src/models.json`); claiming
+- Hardcoding or inventing model IDs (read only from `packages/contracts/types/src/models.json`); claiming
   presence (`surface_heartbeats`) or a persisted grant DB as shipped when they are 🔭.
 - Referencing removed tiers (`Plus`/`pro_plus`/`Hobby`), credit top-ups, or Supabase — the
   stack is Clerk + Neon + Stripe.

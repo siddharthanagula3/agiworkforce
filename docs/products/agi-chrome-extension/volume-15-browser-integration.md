@@ -93,7 +93,7 @@ Security:
 ## Anti-patterns
 
 - Adding a provider SDK, API key field, or direct model call to any browser-integration handler — the extension runs no inference.
-- Hardcoding or inventing a model ID; catalog IDs come only from `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID; catalog IDs come only from `packages/contracts/types/src/models.json`.
 - Silently syncing `chrome.storage.local` history/memory to Neon, or handing page data to app chat without an explicit, redacted step.
 - Shipping omnibox/downloads without the permission, `THREAT_MODEL.md` update, and allowlist gate.
 - Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or top-ups; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise. Never invent Pro/Max INR.

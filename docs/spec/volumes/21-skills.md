@@ -1,7 +1,7 @@
 # Volume 21 — Skills
 
 Status: Canonical (depth expansion of `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 21)
-Authority: this manual · `docs/strategy/10-oss-corpus-port-plan.md` §5 (SkillSpector, packaging conventions, `.skillignore`) · `docs/strategy/09-reference-codebases.md` (progressive disclosure, paths-conditional activation) · `packages/api/src/skills.ts` · `services/api-gateway/src/services/skillsCatalog.ts`
+Authority: this manual · `docs/strategy/10-oss-corpus-port-plan.md` §5 (SkillSpector, packaging conventions, `.skillignore`) · `docs/strategy/09-reference-codebases.md` (progressive disclosure, paths-conditional activation) · `packages/client/desktop-command-client/src/skills.ts` · `services/api-gateway/src/services/skillsCatalog.ts`
 
 ## Philosophy & Cloud/Local stance
 
@@ -22,12 +22,12 @@ The trust posture is the product: a third-party skill is **untrusted code/instru
 
 ## Repository map
 
-- Skill API + lifecycle: `packages/api/src/skills.ts`; catalog service: `services/api-gateway/src/services/skillsCatalog.ts`.
-- Skill capability gating + settings surface: `packages/types/src/capabilities.ts` (skills toggle), settings IA in `packages/types/src/design-system/settings-ia.ts` (Capabilities → skills).
-- Execution under the tool/permission layer: `crates/agiworkforce-execpolicy/`, `apps/cli/src/features/exec/` (CLI), `packages/api/src/toolConfirmation.ts` (consent UI).
+- Skill API + lifecycle: `packages/client/desktop-command-client/src/skills.ts`; catalog service: `services/api-gateway/src/services/skillsCatalog.ts`.
+- Skill capability gating + settings surface: `packages/contracts/types/src/capabilities.ts` (skills toggle), settings IA in `packages/contracts/types/src/design-system/settings-ia.ts` (Capabilities → skills).
+- Execution under the tool/permission layer: `crates/agiworkforce-execpolicy/`, `apps/cli/src/features/exec/` (CLI), `packages/client/desktop-command-client/src/toolConfirmation.ts` (consent UI).
 - Skills delivered inside plugins: `crates/agiworkforce-plugin-runtime/` (manifest declares bundled skills) — Vol 22.
 - Packaging conventions to standardize on (`docs/strategy/10` §5): `SKILL.md` frontmatter, `allowed-tools:` per skill, `.skillignore`, `.claude-plugin/marketplace.json`-style catalog (AGI uses `.agiworkforce-plugin/` — Vol 22).
-- Vetting scanner integration (adopt SkillSpector wholesale, Apache-2.0): wire its model IDs to `packages/types/src/models.json` (do not hardcode).
+- Vetting scanner integration (adopt SkillSpector wholesale, Apache-2.0): wire its model IDs to `packages/contracts/types/src/models.json` (do not hardcode).
 
 ## Competitor notes
 

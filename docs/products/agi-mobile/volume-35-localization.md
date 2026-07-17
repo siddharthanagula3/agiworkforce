@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/services/translateService.ts`, `apps/mobile/services/languageQA.ts`, `apps/mobile/src/features/voice/services/voiceInput.ts`, `apps/mobile/src/features/notifications/time.ts`, `apps/mobile/src/features/auth/services/ageGate.ts`, `apps/mobile/package.json` (`expo-localization`), and `packages/types/src/models.json`.
+Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/services/translateService.ts`, `apps/mobile/services/languageQA.ts`, `apps/mobile/src/features/voice/services/voiceInput.ts`, `apps/mobile/src/features/notifications/time.ts`, `apps/mobile/src/features/auth/services/ageGate.ts`, `apps/mobile/package.json` (`expo-localization`), and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -68,5 +68,5 @@ A locale is "done" only when UI chrome, content, dates, numbers, and currency al
 - Faking RTL by claiming layout mirroring that `I18nManager`/`app.config.js` does not implement.
 - Hard-pinning `'en-US'` for dates/numbers, or splitting Unicode by byte.
 - **Inventing INR prices** for Pro/Max, hardcoding `₹` in device constants, or adding in-app checkout.
-- Hardcoding model IDs (read from `packages/types/src/models.json`) or referencing Supabase (removed — stack is Clerk + Neon + Stripe).
+- Hardcoding model IDs (read from `packages/contracts/types/src/models.json`) or referencing Supabase (removed — stack is Clerk + Neon + Stripe).
 - Re-introducing removed tiers ("Plus", `pro_plus`, "Hobby") in any localized price table.

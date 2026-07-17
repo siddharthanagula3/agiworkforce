@@ -1,13 +1,13 @@
 # Volume 31 — Performance
 
 Status: Canonical depth for Master Spec Vol 31
-Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 31, `docs/strategy/04-scaling-to-1M-architecture.md` §7 (reliability targets) + §4 (cost model), `packages/types/src/models.json` (caching capability), per-surface plans `docs/strategy/12–14`.
+Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 31, `docs/strategy/04-scaling-to-1M-architecture.md` §7 (reliability targets) + §4 (cost model), `packages/contracts/types/src/models.json` (caching capability), per-surface plans `docs/strategy/12–14`.
 
 ## Philosophy & Cloud/Local stance
 
 Performance is two linked disciplines: **latency** (how fast the product feels) and **cost** (how much each request burns). For an inference-renting business they are the same lever pulled from two ends — routing, caching, and batching cut both the wait and the bill. Budgets are per-surface and enforced, not aspirational: a target without a measured gate is decoration.
 
-The Cloud/Local stance splits the budgets. Cloud performance is gateway latency, provider failover, prompt caching, and batch economics (`docs/strategy/04` §4–7); the cost model spans ~75× ($0.03–$2.30 per Managed MAU/month) driven by engagement and model tier, so routing defaults are a margin control, not just UX. Local performance is device-bound: startup, memory, battery, thermal, and on-device first-token — the user's hardware is the budget, so the tier ladder must pick the heaviest model that still fits (`packages/local-llm/src/selector.ts`). Caching is free money on Cloud and irrelevant cost-wise on Local; both still owe a fast first token.
+The Cloud/Local stance splits the budgets. Cloud performance is gateway latency, provider failover, prompt caching, and batch economics (`docs/strategy/04` §4–7); the cost model spans ~75× ($0.03–$2.30 per Managed MAU/month) driven by engagement and model tier, so routing defaults are a margin control, not just UX. Local performance is device-bound: startup, memory, battery, thermal, and on-device first-token — the user's hardware is the budget, so the tier ladder must pick the heaviest model that still fits (`packages/platform/local-llm/src/selector.ts`). Caching is free money on Cloud and irrelevant cost-wise on Local; both still owe a fast first token.
 
 ## Binding rules
 
@@ -22,9 +22,9 @@ The Cloud/Local stance splits the budgets. Cloud performance is gateway latency,
 
 ## Repository map
 
-- **Cloud latency/cost path:** `services/api-gateway/src/routes/providerStream.ts` (SSE), `packages/llm-runtime/src/{gateway,retry,fallback,watchdog}.ts`; routing/pricing in `packages/routing/src/{classify,pricing}.ts`; tier logic per `models.json` (`tierAllowedModels`, `auto-economy`/`-balanced`/`-premium`).
-- **Caching/batch metadata:** `packages/types/src/models.json` `capabilities.caching`, `cached_input`, `tokenMultiplier`, `tokenizer_drift_warning`.
-- **Local performance:** `packages/local-llm/src/{selector,capabilities,catalog}.ts`; mobile `apps/mobile/services/{llmGate,modelDownload}.ts` (thermal, resumable downloads).
+- **Cloud latency/cost path:** `services/api-gateway/src/routes/providerStream.ts` (SSE), `packages/ai/provider-runtime/src/{gateway,retry,fallback,watchdog}.ts`; routing/pricing in `packages/ai/routing/src/{classify,pricing}.ts`; tier logic per `models.json` (`tierAllowedModels`, `auto-economy`/`-balanced`/`-premium`).
+- **Caching/batch metadata:** `packages/contracts/types/src/models.json` `capabilities.caching`, `cached_input`, `tokenMultiplier`, `tokenizer_drift_warning`.
+- **Local performance:** `packages/platform/local-llm/src/{selector,capabilities,catalog}.ts`; mobile `apps/mobile/services/{llmGate,modelDownload}.ts` (thermal, resumable downloads).
 - **Web perf gates:** `apps/web` (`playwright.config.ts`, `e2e/`, Lighthouse/axe in `docs/strategy/12` Stage E, WEB-13).
 - **Mobile perf gates:** `apps/mobile` (Detox, `screenshots:*`, crash-free instrumentation, `docs/strategy/13` MOB-8).
 - **Desktop perf gates:** `apps/desktop` (`test:smoke`, cargo, computer-use MCP, `docs/strategy/14` DESK-10).

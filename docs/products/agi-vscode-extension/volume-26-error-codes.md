@@ -24,7 +24,7 @@ Requirements: every auth error maps to exactly one typed code; `403`/`410` never
 
 Provider/inference errors flow through the streaming client as a `StreamChunk` of `{ type: 'error'; code?; message; retryable? }`, followed by a `{ type: 'stop'; reason: 'error' }` frame; non-OK HTTP yields `Upstream error <status>` with `retryable: true` when `status >= 500` ✅ (`src/integrations/providerStreamClient.ts`). The provider-stream path itself is gated: the `agiWorkforce.useProviderStream` setting notes it "Requires AGI account web auth, which is not wired in the VS Code extension yet" — so its full error surface is 🟡 Partial (`apps/extension-vscode/package.json`).
 
-Requirements: `401`/`403` (auth/entitlement) are non-retryable and route to a sign-in or plan-status action, never a silent provider swap; `429` (rate/quota) is retryable with backoff and surfaces the tier; `5xx` is retryable; provider-side model-unavailable maps to a "select model" recovery. Model IDs in any error copy come only from `packages/types/src/models.json` — never hardcode one. The stable `AGI-VSC-PROV-*` numbering is 🔭 Planned.
+Requirements: `401`/`403` (auth/entitlement) are non-retryable and route to a sign-in or plan-status action, never a silent provider swap; `429` (rate/quota) is retryable with backoff and surfaces the tier; `5xx` is retryable; provider-side model-unavailable maps to a "select model" recovery. Model IDs in any error copy come only from `packages/contracts/types/src/models.json` — never hardcode one. The stable `AGI-VSC-PROV-*` numbering is 🔭 Planned.
 
 ## Extension
 
@@ -80,6 +80,6 @@ Production-ready when every user-visible failure maps to exactly one typed code,
 - Pattern-matching error prose instead of switching on typed codes.
 - Recovering an auth/provider error by silently switching trust mode, provider, or key.
 - Auto-syncing workspace/session context into app chat on any error path.
-- Hardcoding a model ID in error copy (use `packages/types/src/models.json`).
+- Hardcoding a model ID in error copy (use `packages/contracts/types/src/models.json`).
 - Referencing Supabase, `middleware.ts`, or removed tiers (`Plus`, `Hobby`, `pro_plus`) or credit top-ups.
 - Treating a bridge disconnect as fatal instead of degrading to local-only.

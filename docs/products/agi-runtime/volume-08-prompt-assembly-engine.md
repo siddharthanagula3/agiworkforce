@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `services/AGENTS.md` (nearest scoped runtime AGENTS.md), and grounded in real repo paths: `crates/agiworkforce-protocol/src/prompts/base_instructions/default.md`, `crates/agiworkforce-protocol/src/custom_prompts.rs`, `crates/agiworkforce-protocol/src/config_types.rs`, `crates/agiworkforce-protocol/src/dynamic_tools.rs`, `crates/agiworkforce-protocol/src/tool_name.rs`, `crates/agiworkforce-protocol/src/plan_tool.rs`, `crates/agiworkforce-protocol/src/memory_citation.rs`, `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-utils-string/src/truncate.rs`, `packages/runtime/src/context/agentContext.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `services/AGENTS.md` (nearest scoped runtime AGENTS.md), and grounded in real repo paths: `crates/agiworkforce-protocol/src/prompts/base_instructions/default.md`, `crates/agiworkforce-protocol/src/custom_prompts.rs`, `crates/agiworkforce-protocol/src/config_types.rs`, `crates/agiworkforce-protocol/src/dynamic_tools.rs`, `crates/agiworkforce-protocol/src/tool_name.rs`, `crates/agiworkforce-protocol/src/plan_tool.rs`, `crates/agiworkforce-protocol/src/memory_citation.rs`, `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-utils-string/src/truncate.rs`, `packages/client/client-runtime/src/context/agentContext.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 The Prompt Assembly Engine is the internal runtime service that turns a turn request into the exact instruction + tool + context payload sent to a provider. It lives in AGI Runtime — not a user surface, not a seventh app — and is compiled into the surfaces that host a session (Desktop, CLI, VS Code today) or invoked through the Managed-Cloud gateway (Web/Mobile Cloud chats).
 
-Trust mode is the dominant constraint. Assembly is **per-trust-mode and never blended.** A Local session assembles instructions and tools on-device and sends them only to the local runtime; a BYOK session (Desktop/CLI/VS Code only) assembles for the user's direct provider call; a Managed-Cloud session assembles for the AGI gateway. The engine must never fold Local project instructions, file excerpts, or tool outputs into a BYOK or Cloud payload without the explicit Local→BYOK fork (context selection, secret scan, payload preview, visible provider label, consent). Cross-surface handoffs (CLI/VS Code/Chrome → app chat) are explicit and redacted, never automatic. Model IDs used to size or route the assembled prompt come **only** from `packages/types/src/models.json` — never invented, never hardcoded — resolved through `AgentContext.activeModelId` (`packages/runtime/src/context/agentContext.ts`, which documents the field as "resolved from models.json").
+Trust mode is the dominant constraint. Assembly is **per-trust-mode and never blended.** A Local session assembles instructions and tools on-device and sends them only to the local runtime; a BYOK session (Desktop/CLI/VS Code only) assembles for the user's direct provider call; a Managed-Cloud session assembles for the AGI gateway. The engine must never fold Local project instructions, file excerpts, or tool outputs into a BYOK or Cloud payload without the explicit Local→BYOK fork (context selection, secret scan, payload preview, visible provider label, consent). Cross-surface handoffs (CLI/VS Code/Chrome → app chat) are explicit and redacted, never automatic. Model IDs used to size or route the assembled prompt come **only** from `packages/contracts/types/src/models.json` — never invented, never hardcoded — resolved through `AgentContext.activeModelId` (`packages/client/client-runtime/src/context/agentContext.ts`, which documents the field as "resolved from models.json").
 
 Today, real assembly is CLI/Rust-first (the app-server tool host is "consumed ONLY by the CLI"). A unified cross-surface engine is the TARGET; every gap below is labeled.
 
@@ -58,7 +58,7 @@ Requirements: the engine sizes the assembled prompt to the active model's real c
 - `crates/agiworkforce-protocol/src/memory_citation.rs` — attributable memory carrier.
 - `crates/agiworkforce-app-server/src/lib.rs` — `ToolDispatch` host, `tools/list`/`tools/call` (CLI-only).
 - `crates/agiworkforce-utils-string/src/truncate.rs` — token-budget truncation.
-- `packages/runtime/src/context/agentContext.ts` — per-command context; `activeModelId` from `models.json`.
+- `packages/client/client-runtime/src/context/agentContext.ts` — per-command context; `activeModelId` from `models.json`.
 
 ## Competitor notes
 

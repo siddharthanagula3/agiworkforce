@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/eas.json`, `apps/mobile/app.config.js`, `apps/mobile/package.json`, `apps/mobile/scripts/release/`, `apps/mobile/scripts/wave0-smoke/`, `apps/mobile/store-listing/`, `apps/mobile/EAS_SIGNING_RUNBOOK.md`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/eas.json`, `apps/mobile/app.config.js`, `apps/mobile/package.json`, `apps/mobile/scripts/release/`, `apps/mobile/scripts/wave0-smoke/`, `apps/mobile/store-listing/`, `apps/mobile/EAS_SIGNING_RUNBOOK.md`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume defines how AGI Mobile ships from source to a public store binary. Mobile is an Expo / React Native app (`apps/mobile`) with a checked-in root `ios/` project. Its trust exposure is **Local** (small on-device LLM, free) + **Managed Cloud** only — **there is no BYOK on mobile**, so deployment never provisions, embeds, or rotates user provider keys. The binary ships with on-device model runtime wiring (`llama.rn`, ML Kit native modules) and a Clerk-gated Cloud path; both must survive store review and run offline for Local. Model IDs are read from `packages/types/src/models.json` — the build never bakes in invented IDs. The governing rule for this volume: **Mobile v1 is not done until it is publicly released on the App Store** (and Play). Internal builds, TestFlight, and simulator smoke runs are milestones, not the finish line.
+This volume defines how AGI Mobile ships from source to a public store binary. Mobile is an Expo / React Native app (`apps/mobile`) with a checked-in root `ios/` project. Its trust exposure is **Local** (small on-device LLM, free) + **Managed Cloud** only — **there is no BYOK on mobile**, so deployment never provisions, embeds, or rotates user provider keys. The binary ships with on-device model runtime wiring (`llama.rn`, ML Kit native modules) and a Clerk-gated Cloud path; both must survive store review and run offline for Local. Model IDs are read from `packages/contracts/types/src/models.json` — the build never bakes in invented IDs. The governing rule for this volume: **Mobile v1 is not done until it is publicly released on the App Store** (and Play). Internal builds, TestFlight, and simulator smoke runs are milestones, not the finish line.
 
 ## Expo EAS Build
 
@@ -52,7 +52,7 @@ This volume defines how AGI Mobile ships from source to a public store binary. M
 - `apps/mobile/store-listing/` — metadata, reviewer notes, readiness/submission checklists, KILL-SWITCH.
 - `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/services/remoteChatGate.ts` — flag/kill-switch + Cloud gate.
 - `apps/mobile/ios/`, `apps/mobile/secrets/` — native project; credential mounts (git-ignored).
-- `packages/types/src/models.json` — canonical model IDs the build references.
+- `packages/contracts/types/src/models.json` — canonical model IDs the build references.
 
 ## Competitor notes
 
@@ -71,7 +71,7 @@ Production gate: a publicly downloadable App Store build (and Play release) of t
 - Adding a BYOK / provider-API-key screen to mobile, or any "Provider Configuration" that means API keys rather than on-device model management.
 - Shipping an OTA that flips the trust boundary, auto-enables Cloud, or silently sends Local chats to Cloud.
 - Claiming a public release from a green simulator/TestFlight/internal build — those are milestones, not the DoD.
-- Hardcoding or inventing a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Committing `secrets/` (ASC `.p8`, Play service account) or hand-editing build/version codes that EAS owns remotely.
 - Referencing Supabase, or reintroducing removed tiers ("Plus", `pro_plus`, "Hobby") or invented INR prices in store/billing copy.
 - OTA-pushing native changes (new pod/gradle dep, permission, entitlement) that legally require a full store binary.

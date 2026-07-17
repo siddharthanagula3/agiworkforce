@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root) and `apps/desktop/AGENTS.md` (nearest surface for the local context host); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `packages/runtime/src/context/agentContext.ts`, `crates/agiworkforce-protocol/src/{message_history.rs,items.rs,memory_citation.rs}`, `apps/desktop/src-tauri/src/sys/commands/project_context.rs`, `apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs`, `apps/desktop/src-tauri/src/core/agent/code_generator.rs`, `packages/types/src/memory.ts`, `apps/web/app/api/memory/search/route.ts`, `apps/web/app/api/{chat,memory,projects}/sync`.
+Authority: `AGENTS.md` (repo root) and `apps/desktop/AGENTS.md` (nearest surface for the local context host); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `packages/client/client-runtime/src/context/agentContext.ts`, `crates/agiworkforce-protocol/src/{message_history.rs,items.rs,memory_citation.rs}`, `apps/desktop/src-tauri/src/sys/commands/project_context.rs`, `apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs`, `apps/desktop/src-tauri/src/core/agent/code_generator.rs`, `packages/contracts/types/src/memory.ts`, `apps/web/app/api/memory/search/route.ts`, `apps/web/app/api/{chat,memory,projects}/sync`.
 
 ## Overview & stance
 
@@ -22,7 +22,7 @@ Requirements: represent the active workspace as a validated root that scopes fil
 
 ### Conversation Context — conversational history
 
-Requirements: preserve ordered prior turns per conversation, propagate the active conversation identity through the async execution chain, and (for Managed-Cloud only) delta-sync history across devices. **🟡 Partial** — `crates/agiworkforce-protocol/src/message_history.rs` defines `HistoryEntry { conversation_id, ts, text }`; `packages/runtime/src/context/agentContext.ts` carries `conversationId`/`activeModelId`/`planTier` through `AsyncLocalStorage` so concurrent sessions never bleed; Managed-Cloud chats delta-sync via `apps/web/app/api/chat/sync` (cursor + tombstones + idempotent upsert). Gap: a single centralized turn-window assembler with per-model token budgeting is not yet one component; Local/BYOK conversations must never enter the sync path.
+Requirements: preserve ordered prior turns per conversation, propagate the active conversation identity through the async execution chain, and (for Managed-Cloud only) delta-sync history across devices. **🟡 Partial** — `crates/agiworkforce-protocol/src/message_history.rs` defines `HistoryEntry { conversation_id, ts, text }`; `packages/client/client-runtime/src/context/agentContext.ts` carries `conversationId`/`activeModelId`/`planTier` through `AsyncLocalStorage` so concurrent sessions never bleed; Managed-Cloud chats delta-sync via `apps/web/app/api/chat/sync` (cursor + tombstones + idempotent upsert). Gap: a single centralized turn-window assembler with per-model token budgeting is not yet one component; Local/BYOK conversations must never enter the sync path.
 
 ### File Context — inject relevant files
 
@@ -34,7 +34,7 @@ Requirements: parse source into a symbol table (classes, functions, signatures) 
 
 ### Memory Context — inject persistent memories
 
-Requirements: retrieve durable user/project memories relevant to the turn, inject them, and attach verifiable citations. **🟡 Partial** — `packages/types/src/memory.ts` models a memory with an optional `embedding?: number[]` field; `apps/web/app/api/memory/search/route.ts` performs an escaped `ILIKE` text search (its own comment: "can be upgraded to vector similarity later"); `crates/agiworkforce-protocol/src/memory_citation.rs` (`MemoryCitation` / `MemoryCitationEntry { path, line_start, line_end, note }`) carries source citations; Managed-Cloud memory delta-syncs via `apps/web/app/api/memory/sync`. Gap: semantic/vector retrieval and automatic injection ranking are 🔭; the `embedding` field is transport-only and unused for search. Local memory stays on-host.
+Requirements: retrieve durable user/project memories relevant to the turn, inject them, and attach verifiable citations. **🟡 Partial** — `packages/contracts/types/src/memory.ts` models a memory with an optional `embedding?: number[]` field; `apps/web/app/api/memory/search/route.ts` performs an escaped `ILIKE` text search (its own comment: "can be upgraded to vector similarity later"); `crates/agiworkforce-protocol/src/memory_citation.rs` (`MemoryCitation` / `MemoryCitationEntry { path, line_start, line_end, note }`) carries source citations; Managed-Cloud memory delta-syncs via `apps/web/app/api/memory/sync`. Gap: semantic/vector retrieval and automatic injection ranking are 🔭; the `embedding` field is transport-only and unused for search. Local memory stays on-host.
 
 ### Context Compression — reduce token usage
 
@@ -46,19 +46,19 @@ Requirements: when candidate context (files, symbols, memories, prior turns) exc
 
 ## Repository map
 
-- `packages/runtime/src/context/agentContext.ts` — per-command `AgentContext` propagation (conversation/model/tier isolation).
+- `packages/client/client-runtime/src/context/agentContext.ts` — per-command `AgentContext` propagation (conversation/model/tier isolation).
 - `crates/agiworkforce-protocol/src/message_history.rs` — conversation `HistoryEntry` shape.
 - `crates/agiworkforce-protocol/src/items.rs` — `ContextCompactionItem` / `ContextCompactedEvent`.
 - `crates/agiworkforce-protocol/src/memory_citation.rs` — memory citation entries.
 - `apps/desktop/src-tauri/src/sys/commands/project_context.rs` — workspace root state + scoping.
 - `apps/desktop/src-tauri/src/sys/commands/chat/prompt_context.rs` — repository/OS/file context builders + sanitizers.
 - `apps/desktop/src-tauri/src/core/agent/code_generator.rs` — file-content ingestion for generation.
-- `packages/types/src/memory.ts` — memory record + embedding field.
+- `packages/contracts/types/src/memory.ts` — memory record + embedding field.
 - `apps/web/app/api/memory/search/route.ts`, `apps/web/app/api/{chat,memory,projects}/sync` — cloud memory search + delta-sync.
 
 ## Competitor notes
 
-Claude Code, ChatGPT, and Codex assemble context around a single first-party provider and (Claude/Codex) a local repo map with implicit uploads to that vendor. AGI diverges deliberately: (1) **multi-provider** — context assembly is provider-neutral, so the same fragments feed the Model Router's chosen backend (IDs only from `packages/types/src/models.json`); (2) **per-surface trust** — filesystem/symbol context exists only where the surface allows it (Desktop/CLI/VS Code), and Mobile/Web have none; (3) **local-first** — under Local trust, repository, workspace, file, and symbol context are gathered and retained on the host, and crossing to BYOK/cloud is an explicit, previewed, consented fork, not a silent upload; (4) **BYOK where allowed only** — never on Web or Mobile.
+Claude Code, ChatGPT, and Codex assemble context around a single first-party provider and (Claude/Codex) a local repo map with implicit uploads to that vendor. AGI diverges deliberately: (1) **multi-provider** — context assembly is provider-neutral, so the same fragments feed the Model Router's chosen backend (IDs only from `packages/contracts/types/src/models.json`); (2) **per-surface trust** — filesystem/symbol context exists only where the surface allows it (Desktop/CLI/VS Code), and Mobile/Web have none; (3) **local-first** — under Local trust, repository, workspace, file, and symbol context are gathered and retained on the host, and crossing to BYOK/cloud is an explicit, previewed, consented fork, not a silent upload; (4) **BYOK where allowed only** — never on Web or Mobile.
 
 ## Acceptance / Definition of Done
 
@@ -73,6 +73,6 @@ Production-ready when: repository/workspace/file/conversation context assemble d
 - Silently embedding or uploading Local repository/file/symbol context to any BYOK or managed-cloud provider — a trust-boundary violation.
 - Syncing Local or BYOK conversation/memory rows through the Neon delta-sync APIs (cloud-only).
 - Claiming semantic memory retrieval, a symbol index, a compression summarizer, or a relevance ranker as shipped — these are 🟡/🔭; never assert shipped state without a real repo path.
-- Hardcoding or inventing model IDs / token-window numbers; resolve models from `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs / token-window numbers; resolve models from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (Plus, `pro_plus`, Hobby, a consumer Team tier), inventing INR prices beyond Basic ₹399, or adding credit top-ups.
 - Referencing Supabase, `middleware.ts`, or the `agiworkforce <cmd>` invocation — use Clerk/Neon/Stripe, `proxy.ts`, and the `agi` binary.

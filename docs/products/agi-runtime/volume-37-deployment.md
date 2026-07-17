@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md` (nearest high-risk surface AGENTS for the local host). Grounded in: `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/app/api/releases/[target]/[version]/route.ts`, `.github/workflows/{release-desktop,release-cli,deploy-signaling-server,ci}.yml`, `apps/mobile/{eas.json,app.config.js,EAS_SIGNING_RUNBOOK.md}`, `crates/agiworkforce-{protocol,task-runtime,plugin-runtime,command-registry,app-server}`, `packages/runtime/package.json`, `services/signaling-server`, and `Cargo.toml`/`pnpm-workspace.yaml` at the repo root.
+Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md` (nearest high-risk surface AGENTS for the local host). Grounded in: `apps/desktop/src-tauri/tauri.conf.json`, `apps/web/app/api/releases/[target]/[version]/route.ts`, `.github/workflows/{release-desktop,release-cli,deploy-signaling-server,ci}.yml`, `apps/mobile/{eas.json,app.config.js,EAS_SIGNING_RUNBOOK.md}`, `crates/agiworkforce-{protocol,task-runtime,plugin-runtime,command-registry,app-server}`, `packages/client/client-runtime/package.json`, `services/signaling-server`, and `Cargo.toml`/`pnpm-workspace.yaml` at the repo root.
 
 ## Overview & stance
 
@@ -17,7 +17,7 @@ The three trust modes shape this directly. **Local** and **BYOK** compute runs i
 The Runtime has **no independent build target**; each surface embeds it.
 
 - ✅ **Rust crates compile into the host binary.** `crates/agiworkforce-{protocol,task-runtime,plugin-runtime,command-registry,app-server}` are members of the root Cargo workspace (`Cargo.toml`, `Cargo.lock`) and link into the Desktop Tauri binary and the CLI `agi` binary. `agiworkforce-app-server` is consumed **only** by the CLI (`crates/agiworkforce-app-server/README.md`).
-- ✅ **TS runtime compiles into JS bundles.** `packages/runtime` builds via `tsc` (`packages/runtime/package.json` `build` script) and is imported by Web, Mobile, and the Desktop webview through the pnpm workspace (`pnpm-workspace.yaml`).
+- ✅ **TS runtime compiles into JS bundles.** `packages/client/client-runtime` builds via `tsc` (`packages/client/client-runtime/package.json` `build` script) and is imported by Web, Mobile, and the Desktop webview through the pnpm workspace (`pnpm-workspace.yaml`).
 - ✅ **Desktop bundle config** is `apps/desktop/src-tauri/tauri.conf.json`; the Chrome native-messaging host and 127.0.0.1 WS host build as Rust bins under `apps/desktop/src-tauri/src/bin/native_messaging_host.rs` and `.../integrations/realtime/websocket_server.rs`.
 - ✅ **Signaling server** packages as a Docker image (`services/signaling-server`, built in `.github/workflows/deploy-signaling-server.yml`).
 - 🔭 A **unified runtime SBOM / version stamp** shared across surfaces (so a phone can assert host-runtime compatibility before pairing) is design intent only; no cross-surface runtime version field exists today.
@@ -57,7 +57,7 @@ Runtime reaches users only through each surface's existing channel.
 ## Repository map
 
 - `crates/agiworkforce-{protocol,task-runtime,plugin-runtime,command-registry,app-server}` — embedded Rust runtime.
-- `packages/runtime/` — embedded TS runtime (`package.json`, `src/`).
+- `packages/client/client-runtime/` — embedded TS runtime (`package.json`, `src/`).
 - `apps/desktop/src-tauri/tauri.conf.json`, `.../src/bin/native_messaging_host.rs`, `.../src/integrations/realtime/websocket_server.rs` — Desktop host bundle + updater.
 - `apps/web/app/api/releases/**`, `apps/web/app/api/download/**` — updater/download endpoints.
 - `apps/mobile/{eas.json,app.config.js,EAS_SIGNING_RUNBOOK.md}` — mobile build/OTA.

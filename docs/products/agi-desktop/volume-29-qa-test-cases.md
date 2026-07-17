@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `apps/desktop/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; and real repo paths exercised here — `apps/desktop/playwright.config.ts`, `apps/desktop/e2e/*.spec.ts` (`smoke`, `chat`, `settings`, `gdpr`, `accessibility-audit`, `v3-locks`, `v3-reachability`, `v3-smoke`, `agi-safety`, `comprehensive-flows`, `advanced-integration-flows`, `browser-automation`, `visual-regression`, `test-stability-runner`), `apps/desktop/e2e/{fixtures,page-objects,mocks,global-setup.ts}`, `apps/desktop/playwright/{provider-switching,browser-automation,file-operations,goal-to-completion,multi-tool-workflow}.spec.ts`, `apps/desktop/src-tauri/tests/{integration_tests,mcp_integration_test,automation_db_tests,automation_integration}.rs`, `apps/desktop/src-tauri/src/tests/{byok_vault_tests,security_tests,llm_tests,windows_compat_tests}.rs`, `apps/desktop/src-tauri/src/automation/{safety_patterns,vision_planner,screen_watcher,integration_tests}.rs`, `apps/desktop/src-tauri/src/data/{settings_sync,projects_sync,config_hierarchy}.rs`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs`, `apps/desktop/package.json`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `apps/desktop/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; and real repo paths exercised here — `apps/desktop/playwright.config.ts`, `apps/desktop/e2e/*.spec.ts` (`smoke`, `chat`, `settings`, `gdpr`, `accessibility-audit`, `v3-locks`, `v3-reachability`, `v3-smoke`, `agi-safety`, `comprehensive-flows`, `advanced-integration-flows`, `browser-automation`, `visual-regression`, `test-stability-runner`), `apps/desktop/e2e/{fixtures,page-objects,mocks,global-setup.ts}`, `apps/desktop/playwright/{provider-switching,browser-automation,file-operations,goal-to-completion,multi-tool-workflow}.spec.ts`, `apps/desktop/src-tauri/tests/{integration_tests,mcp_integration_test,automation_db_tests,automation_integration}.rs`, `apps/desktop/src-tauri/src/tests/{byok_vault_tests,security_tests,llm_tests,windows_compat_tests}.rs`, `apps/desktop/src-tauri/src/automation/{safety_patterns,vision_planner,screen_watcher,integration_tests}.rs`, `apps/desktop/src-tauri/src/data/{settings_sync,projects_sync,config_hierarchy}.rs`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs`, `apps/desktop/package.json`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -28,7 +28,7 @@ Local is the default trust mode and must load with **no** cloud/BYOK call. The P
 
 ## Multi-provider
 
-BYOK is Desktop/CLI/VS Code only. Provider selection and fallback are covered (`apps/desktop/playwright/provider-switching.spec.ts` — switch provider, verify active provider matches `/openai|anthropic|ollama|google/i`, configure multiple, fallback on failure). Keys must live in OS keychains; the encrypted vault has round-trip, wrong-password, and delete tests (`apps/desktop/src-tauri/src/tests/byok_vault_tests.rs`). LLM adapter behavior is covered by `llm_tests.rs`. Requirement: model pickers read IDs **only** from `packages/types/src/models.json`; a test must fail if any hardcoded/unknown model ID appears in the picker. The **Local→BYOK fork** needs a contract test proving context selection + secret scan + payload preview + provider label + consent all gate the crossing. ✅ Built (provider switch, vault); 🟡 the fork-consent E2E and the models.json-only lint test are not yet present.
+BYOK is Desktop/CLI/VS Code only. Provider selection and fallback are covered (`apps/desktop/playwright/provider-switching.spec.ts` — switch provider, verify active provider matches `/openai|anthropic|ollama|google/i`, configure multiple, fallback on failure). Keys must live in OS keychains; the encrypted vault has round-trip, wrong-password, and delete tests (`apps/desktop/src-tauri/src/tests/byok_vault_tests.rs`). LLM adapter behavior is covered by `llm_tests.rs`. Requirement: model pickers read IDs **only** from `packages/contracts/types/src/models.json`; a test must fail if any hardcoded/unknown model ID appears in the picker. The **Local→BYOK fork** needs a contract test proving context selection + secret scan + payload preview + provider label + consent all gate the crossing. ✅ Built (provider switch, vault); 🟡 the fork-consent E2E and the models.json-only lint test are not yet present.
 
 ## Performance
 
@@ -56,7 +56,7 @@ Regression is enforced by the locks + visual suites: `v3-locks.spec.ts` (anti-pa
 - `apps/desktop/src-tauri/tests/**`, `apps/desktop/src-tauri/src/tests/**` — cargo integration + unit tests (vault, security, LLM, MCP, Windows compat).
 - `apps/desktop/src-tauri/src/automation/**` — computer-use host + safety-pattern tests.
 - `apps/desktop/src-tauri/src/{integrations/realtime,integrations/native_messaging,data}/**` — bridge, native-messaging, sync under test.
-- `apps/desktop/package.json` — `test`, `test:e2e`, `test:smoke`; `packages/types/src/models.json` — model-ID SSOT.
+- `apps/desktop/package.json` — `test`, `test:e2e`, `test:smoke`; `packages/contracts/types/src/models.json` — model-ID SSOT.
 
 ## Competitor notes
 
@@ -73,7 +73,7 @@ Production-ready when all three engines are green in CI and the trust-boundary s
 ## Anti-patterns
 
 - Do not assert network absence with a passing test that never actually intercepts traffic (fake green).
-- Do not hardcode model IDs in fixtures; read `packages/types/src/models.json`.
+- Do not hardcode model IDs in fixtures; read `packages/contracts/types/src/models.json`.
 - Do not weaken a trust-boundary test to make a flow pass — fix the flow.
 - Never reference Supabase or `middleware.ts`; Next.js 16 uses `proxy.ts`.
 - Do not encode removed tiers ("Plus", `pro_plus`, "Hobby") or invent Pro/Max INR prices or credit top-ups in entitlement tests.

@@ -15,7 +15,7 @@ This is the build plan to run end-to-end as a loop. Surfaces in priority order, 
 1. **IP rule — non-negotiable.** `claude-code/` is Anthropic's proprietary source (no license). It is **study-only**: read it to understand _decisions_, then implement from a **license-clean twin**. Never copy its code, even renamed. The runtime twin is **`codex-rs` (Apache-2.0)** — already the parent of our `execpolicy` fork. Other clean donors: `continue` (Apache-2.0, IDE), `opencode` (MIT), `odysseus` (MIT), `SkillSpector` (Apache-2.0), `gemini-cli`/`qwen-code`/`goose`/`aider`/`agentscope`/`codebuff` (Apache/MIT).
 2. **License gate before any port.** Every ported file records source repo + license + commit in `PORTING-TRACKER.md`, preserves upstream `LICENSE`/`NOTICE` headers, and adds an entry to `THIRD_PARTY_NOTICES.md`. **Never port from:** `crush` (FSL — competing-use ban), `auto-code-rover` (SONAR — competing-use ban), `Devon` (AGPL), `plandex` pre-2.0 (AGPL), `OpenHands/enterprise/` (PolyForm), `CopilotKit/showcase/` (proprietary), Ultralytics YOLO (AGPL), `init`/`chat-template` (no license). These are pattern-study-only.
 3. **Brand rename is fine; attribution stays.** Renaming ported symbols/paths to AGI is allowed. Stripping the upstream copyright/NOTICE is not.
-4. **Model IDs come from `packages/types/src/models.json`.** Never hardcode an ID from a ported file (several donors hardcode example IDs — rewrite to read the catalog).
+4. **Model IDs come from `packages/contracts/types/src/models.json`.** Never hardcode an ID from a ported file (several donors hardcode example IDs — rewrite to read the catalog).
 5. **Trust boundaries are never weakened by a port.** Local never silently routes to BYOK/Managed. Any ported networking code passes the trust-boundary contract tests (INC-0.3) before merge.
 
 ---
@@ -57,7 +57,7 @@ for each increment in backlog:
 | **INC-0.1** | License-gate CI: fail the build on AGPL/GPL/SONAR/FSL/no-license deps                                   | `codebase-memory-mcp/scripts/license-gate-check.py` (MIT, study)          | `scripts/check-licenses.*`, CI job, `THIRD_PARTY_NOTICES.md` | CI fails on a planted AGPL dep; passes clean tree                                 |
 | **INC-0.2** | Pin reference SHAs; record odysseus @ `dd055ee`; create `PORTING-TRACKER.md`                            | —                                                                         | `docs/strategy/PORTING-TRACKER.md`                           | tracker lists every donor repo + license + SHA                                    |
 | **INC-0.3** | Trust-boundary contract tests: a Local thread can NEVER emit a non-local network call, on every surface | pattern: `odysseus app.py:_is_trusted_loopback`; AGI `suite-contracts.ts` | `packages/*/__tests__/trust-boundary.*`, Rust egress test    | tests fail if a Local path hits a non-local host                                  |
-| **INC-0.4** | Provider-contract test harness (recorded fixtures, all 15 providers)                                    | RLLM `sse.rs`/`error.rs`, Portkey auth-shapes, Bifrost SSRF (Apache/MIT)  | `packages/providers/__tests__/contracts/*`                   | a provider SSE-shape change fails CI, not prod                                    |
+| **INC-0.4** | Provider-contract test harness (recorded fixtures, all 15 providers)                                    | RLLM `sse.rs`/`error.rs`, Portkey auth-shapes, Bifrost SSRF (Apache/MIT)  | `packages/ai/providers/__tests__/contracts/*`                | a provider SSE-shape change fails CI, not prod                                    |
 | **INC-0.5** | SkillSpector vetting service stand-up (the trust differentiator)                                        | `SkillSpector` (Apache-2.0)                                               | `services/skill-vetting/`                                    | scanning a malicious sample → `DO_NOT_INSTALL`; model IDs read from `models.json` |
 
 Phase-0 gate: all five green in CI on the integration branch.
@@ -79,10 +79,10 @@ Goal: a safe, coherent public alpha on the three priority surfaces. "Alpha" = re
 
 ### 3b. Privacy & trust (the moat — original work + licensed rules)
 
-| ID          | Goal                                                                     | Source                                                          | Target                                  | Verify                                                                 |
-| ----------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------- |
-| **INC-1.5** | Secret-scan, fail-closed, at the Local→BYOK fork                         | `llm-guard` rules (your scout) ported to Rust/TS                | `packages/compliance/`, fork UI         | planted AWS/Stripe/OpenAI keys block + force user choice; audit-logged |
-| **INC-1.6** | SkillSpector gate wired into skill/plugin/MCP install + rug-pull re-scan | `SkillSpector` (Apache) + `pm-skills/validate_plugins.py` (MIT) | install flow + `services/skill-vetting` | install of a poisoned/updated skill is blocked; findings shown to user |
+| ID          | Goal                                                                     | Source                                                          | Target                                    | Verify                                                                 |
+| ----------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------- |
+| **INC-1.5** | Secret-scan, fail-closed, at the Local→BYOK fork                         | `llm-guard` rules (your scout) ported to Rust/TS                | `packages/contracts/compliance/`, fork UI | planted AWS/Stripe/OpenAI keys block + force user choice; audit-logged |
+| **INC-1.6** | SkillSpector gate wired into skill/plugin/MCP install + rug-pull re-scan | `SkillSpector` (Apache) + `pm-skills/validate_plugins.py` (MIT) | install flow + `services/skill-vetting`   | install of a poisoned/updated skill is blocked; findings shown to user |
 
 ### 3c. Launch blockers (from `03`)
 

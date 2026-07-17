@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; the nearest surface `AGENTS.md` files (`apps/desktop/AGENTS.md`, `services/AGENTS.md`); and the real repo paths this volume grounds in — `crates/agiworkforce-app-server/src/lib.rs`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/integrations/realtime/events.rs`, `apps/desktop/src-tauri/src/bin/native_messaging_host.rs`, `apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`, `apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs`, `services/signaling-server/src/index.ts`, `services/api-gateway/src/routes/mobile.ts`, `packages/runtime/src/http.ts`, `apps/web/app/api/control-plane/status/route.ts`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; the nearest surface `AGENTS.md` files (`apps/desktop/AGENTS.md`, `services/AGENTS.md`); and the real repo paths this volume grounds in — `crates/agiworkforce-app-server/src/lib.rs`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/integrations/realtime/events.rs`, `apps/desktop/src-tauri/src/bin/native_messaging_host.rs`, `apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`, `apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs`, `services/signaling-server/src/index.ts`, `services/api-gateway/src/routes/mobile.ts`, `packages/client/client-runtime/src/http.ts`, `apps/web/app/api/control-plane/status/route.ts`.
 
 ## Overview & stance
 
@@ -30,11 +30,11 @@ Three real WebSocket servers exist. (1) **app-server `/ws`** — JSON-RPC over W
 
 ## Event APIs — publish runtime events
 
-Runtime events are modeled as the `RealtimeEvent` tagged enum (`apps/desktop/src-tauri/src/integrations/realtime/events.rs`): `Authenticate/Authenticated/AuthenticationFailed`, presence and collaboration events, `ApprovalRequested`, and `NativeMessage/NativeResponse`. These are emitted over the `127.0.0.1` host and the native-messaging bridge. **✅ Built**. The signaling `control` verbs (`sync`, `dispatch`, `cancel`, approvals, heartbeat) are the cross-device event vocabulary. **✅ Built**. `packages/runtime/src/events.ts` provides a TS event helper for surfaces that embed the runtime package. **🟡 Partial** (present; not a public subscribe API). A published, versioned event bus with typed `subscribe`/filter semantics for third parties is **🔭 Planned**.
+Runtime events are modeled as the `RealtimeEvent` tagged enum (`apps/desktop/src-tauri/src/integrations/realtime/events.rs`): `Authenticate/Authenticated/AuthenticationFailed`, presence and collaboration events, `ApprovalRequested`, and `NativeMessage/NativeResponse`. These are emitted over the `127.0.0.1` host and the native-messaging bridge. **✅ Built**. The signaling `control` verbs (`sync`, `dispatch`, `cancel`, approvals, heartbeat) are the cross-device event vocabulary. **✅ Built**. `packages/client/client-runtime/src/events.ts` provides a TS event helper for surfaces that embed the runtime package. **🟡 Partial** (present; not a public subscribe API). A published, versioned event bus with typed `subscribe`/filter semantics for third parties is **🔭 Planned**.
 
 ## SDK APIs — public integration surface
 
-The de-facto SDK today is `packages/runtime` (command registry, `http.ts` `routeToCloud` with `X-AGI-Runtime` / `X-AGI-Command` headers, `events.ts`, offline-queue/sync). It is an **internal** shared package, TS-only, unversioned as a public product. **🟡 Partial** (`packages/runtime/src/http.ts`). The Rust `ToolDispatch` trait is the internal tool-injection SDK for hosts embedding the app-server. **✅ Built** (`crates/agiworkforce-app-server/src/lib.rs`). A public, semver'd, multi-language SDK with authentication, capability discovery, and per-plan quota surfacing (Free / Basic $8 · ₹399 / Pro $20 / Max $100 and $200 / Enterprise) is **🔭 Planned**. Any future SDK must read model IDs only from `packages/types/src/models.json` and must refuse to expose BYOK on Web/Mobile.
+The de-facto SDK today is `packages/client/client-runtime` (command registry, `http.ts` `routeToCloud` with `X-AGI-Runtime` / `X-AGI-Command` headers, `events.ts`, offline-queue/sync). It is an **internal** shared package, TS-only, unversioned as a public product. **🟡 Partial** (`packages/client/client-runtime/src/http.ts`). The Rust `ToolDispatch` trait is the internal tool-injection SDK for hosts embedding the app-server. **✅ Built** (`crates/agiworkforce-app-server/src/lib.rs`). A public, semver'd, multi-language SDK with authentication, capability discovery, and per-plan quota surfacing (Free / Basic $8 · ₹399 / Pro $20 / Max $100 and $200 / Enterprise) is **🔭 Planned**. Any future SDK must read model IDs only from `packages/contracts/types/src/models.json` and must refuse to expose BYOK on Web/Mobile.
 
 ## Repository map
 
@@ -45,7 +45,7 @@ The de-facto SDK today is `packages/runtime` (command registry, `http.ts` `route
 - `apps/desktop/src-tauri/src/automation/browser/extension_bridge.rs` — `ws://127.0.0.1:8787` bridge.
 - `services/signaling-server/src/index.ts` — WebRTC pairing/relay, pair tokens, control allowlist.
 - `services/api-gateway/src/routes/{mobile,pair}.ts` — pairing-code + device endpoints.
-- `packages/runtime/src/{http,events}.ts` — TS runtime/SDK primitives.
+- `packages/client/client-runtime/src/{http,events}.ts` — TS runtime/SDK primitives.
 - `apps/web/app/api/control-plane/status/route.ts` — cross-surface presence (heartbeat tables 🔭).
 
 ## Competitor notes
@@ -64,7 +64,7 @@ Claude Code Remote Control (research preview) and OpenAI Codex remote connection
 - Inventing a unified "runtime daemon" or public SDK as shipped — they are 🔭.
 - Any transport that silently moves Local data to BYOK or Cloud, or exposes BYOK on Web/Mobile.
 - Treating remote control as a fourth trust mode, or letting a paired phone move compute off the host.
-- Hardcoding or inventing model IDs — read `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs — read `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (Plus, `pro_plus`, Hobby) or inventing INR prices for Pro/Max; adding credit top-ups.
 - Referencing Supabase; renaming Next.js `proxy.ts` back to `middleware.ts`.
 - Disabling the pair-token requirement, origin allowlist, or IP lockout in production, or logging pair/IPC tokens.

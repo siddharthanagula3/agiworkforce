@@ -1,7 +1,7 @@
 # Volume 12 — Memory
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 12)
-Authority: this manual, `docs/strategy/10-oss-corpus-port-plan.md` §4 (supermemory schema, build-your-own engine), `docs/strategy/09-reference-codebases.md` §2.1 (O8/O9 extraction+consolidation), `docs/current/source-of-truth.md` (Privacy settings, P0 #6), `packages/types/src/suite-contracts.ts`.
+Authority: this manual, `docs/strategy/10-oss-corpus-port-plan.md` §4 (supermemory schema, build-your-own engine), `docs/strategy/09-reference-codebases.md` §2.1 (O8/O9 extraction+consolidation), `docs/current/source-of-truth.md` (Privacy settings, P0 #6), `packages/contracts/types/src/suite-contracts.ts`.
 
 ## Philosophy & Cloud/Local stance
 
@@ -27,9 +27,9 @@ Cloud/Local is the deepest constraint here. Memory is namespaced by trust bounda
 - Desktop memory UI (view/manage/search/import): `apps/desktop/src/features/memory/` — `MemoryManager.tsx`, `MemoryBrowserModal.tsx`, `MemorySearch.tsx`, `MemoryViewer.tsx`, `MemoryImport.tsx`, `CreateMemoryDialog.tsx`, `MemoryImportanceIndicator.tsx`.
 - Memory panel surface: `apps/desktop/src/features/memory-panel/`.
 - Privacy settings (toggles, import, view/manage/reset): `apps/desktop/src/features/*` settings + `apps/web/features/settings/` (per source-of-truth Privacy IA).
-- Shared memory contracts/types: `packages/types/src/` (Vol 38; adopt supermemory schema shape).
-- Trust scoping: `packages/types/src/suite-contracts.ts` (`PrivacyMode`, `ChatExecutionMode`).
-- Embeddings/retrieval runtime: `packages/runtime/`, `packages/routing/`; on-device embeddings via fastembed/ONNX (`docs/strategy/09` §2.2).
+- Shared memory contracts/types: `packages/contracts/types/src/` (Vol 38; adopt supermemory schema shape).
+- Trust scoping: `packages/contracts/types/src/suite-contracts.ts` (`PrivacyMode`, `ChatExecutionMode`).
+- Embeddings/retrieval runtime: `packages/client/client-runtime/`, `packages/ai/routing/`; on-device embeddings via fastembed/ONNX (`docs/strategy/09` §2.2).
 - Mobile compliance/export (for managed deletion/DSAR): `apps/mobile/services/dsarExport.ts`, `apps/mobile/services/complianceLedger.ts`.
 
 ## Competitor notes

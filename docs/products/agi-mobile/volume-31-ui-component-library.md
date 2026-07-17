@@ -4,29 +4,29 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/mobile/components/ui/`, `apps/mobile/src/features/chat/components/`, `apps/mobile/src/ui/theme/tokens.ts`, `packages/ui/src/`, `packages/unified-chat/src/components/`, `packages/design-tokens/src/`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/mobile/components/ui/`, `apps/mobile/src/features/chat/components/`, `apps/mobile/src/ui/theme/tokens.ts`, `packages/ui/ui/src/`, `packages/ui/unified-chat/src/components/`, `packages/ui/design-tokens/src/`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies the reusable UI component layer for AGI Mobile: the navigation chrome, composer, chat surface, cards, dialogs, bottom sheets, toasts, typography, icons, and motion that every mobile screen composes from. The mandate (per memory `feedback-shared-packages-mandate`) is **reuse, do not fork the shell**: the shared chat shell lives in `packages/unified-chat/src/components/` and shared primitives/tokens in `packages/ui/src/` and `packages/design-tokens/src/`. Mobile themes and wraps those for React Native — it does not reimplement a parallel design system.
+This volume specifies the reusable UI component layer for AGI Mobile: the navigation chrome, composer, chat surface, cards, dialogs, bottom sheets, toasts, typography, icons, and motion that every mobile screen composes from. The mandate (per memory `feedback-shared-packages-mandate`) is **reuse, do not fork the shell**: the shared chat shell lives in `packages/ui/unified-chat/src/components/` and shared primitives/tokens in `packages/ui/ui/src/` and `packages/ui/design-tokens/src/`. Mobile themes and wraps those for React Native — it does not reimplement a parallel design system.
 
-Trust mode shapes the component layer in two binding ways. First, **Mobile has no BYOK** — there is no API-key field, no "add provider key" affordance anywhere in this library. "Provider Configuration" on mobile means on-device model management (downloads, tier guard), surfaced through the model picker, not key entry. Second, components must render the **Local vs Managed Cloud** boundary honestly: a visible mode/provider label, a real auth gate before Cloud, and `remoteChatGate` failing closed when Cloud is disabled (`apps/mobile/services/remoteChatGate.ts`, `apps/mobile/lib/v1FeatureFlags.ts`). The new-chat home stays simple — no suggestion/starter cards (memory `feedback-mobile-home-simple`). Model labels come only from `packages/types/src/models.json`; components never hardcode IDs.
+Trust mode shapes the component layer in two binding ways. First, **Mobile has no BYOK** — there is no API-key field, no "add provider key" affordance anywhere in this library. "Provider Configuration" on mobile means on-device model management (downloads, tier guard), surfaced through the model picker, not key entry. Second, components must render the **Local vs Managed Cloud** boundary honestly: a visible mode/provider label, a real auth gate before Cloud, and `remoteChatGate` failing closed when Cloud is disabled (`apps/mobile/services/remoteChatGate.ts`, `apps/mobile/lib/v1FeatureFlags.ts`). The new-chat home stays simple — no suggestion/starter cards (memory `feedback-mobile-home-simple`). Model labels come only from `packages/contracts/types/src/models.json`; components never hardcode IDs.
 
 ## Navigation Components
 
-Routing uses Expo Router. The tab navigator (`apps/mobile/app/(app)/(tabs)/_layout.tsx`) registers `chat`, `projects`, `agents`, `settings` but renders `tabBar={() => null}` — primary navigation is the **drawer/sidebar**, not a bottom tab bar. The shared sidebar shell lives in `packages/ui/src/sidebar/` (`Sidebar.tsx`, `Menu.tsx`, `SessionItem.tsx`, `SearchOverlay.tsx`); mobile-specific drawer/sidebar wrappers live in `apps/mobile/src/features/drawer/` and `apps/mobile/src/features/sidebar/`. ✅ Built (`apps/mobile/app/(app)/(tabs)/_layout.tsx`, `apps/mobile/src/features/drawer/`). Requirements: header back affordance honors gesture-handler swipe-back; the drawer lists conversations grouped temporally (`packages/ui/src/sidebar/temporal.ts`); search overlay is a single shared component; no Cloud-only destination is reachable when `FEATURES.cloudChat` is off or auth is absent.
+Routing uses Expo Router. The tab navigator (`apps/mobile/app/(app)/(tabs)/_layout.tsx`) registers `chat`, `projects`, `agents`, `settings` but renders `tabBar={() => null}` — primary navigation is the **drawer/sidebar**, not a bottom tab bar. The shared sidebar shell lives in `packages/ui/ui/src/sidebar/` (`Sidebar.tsx`, `Menu.tsx`, `SessionItem.tsx`, `SearchOverlay.tsx`); mobile-specific drawer/sidebar wrappers live in `apps/mobile/src/features/drawer/` and `apps/mobile/src/features/sidebar/`. ✅ Built (`apps/mobile/app/(app)/(tabs)/_layout.tsx`, `apps/mobile/src/features/drawer/`). Requirements: header back affordance honors gesture-handler swipe-back; the drawer lists conversations grouped temporally (`packages/ui/ui/src/sidebar/temporal.ts`); search overlay is a single shared component; no Cloud-only destination is reachable when `FEATURES.cloudChat` is off or auth is absent.
 
 ## Composer Components
 
-The composer is the mobile message input: `apps/mobile/src/features/chat/components/Composer/Composer.tsx` plus `ChatInput.tsx`, `SendButton.tsx`, `AttachmentPreview.tsx`, `QuotedReplyBar.tsx`, `ModeToggle.tsx`, `ModelSelectorButton.tsx`, `SendPreview.tsx`. ✅ Built. Requirements: a single multiline input that grows to a capped height then scrolls; an explicit send control (never auto-send a Local draft — see Anti-patterns); a visible mode toggle (Local / Cloud) and model label sourced from `models.json`; attachment menu mirrors the shared `AttachmentMenu`/`ChatInputToolbar` from `packages/unified-chat/`. `SendPreview.tsx` is shown for the Local→Cloud transition with a payload preview and consent. Keyboard avoidance via `react-native-safe-area-context`. Image generation surfaced here is cloud-backed only — mobile is not the first heavy local image-gen surface.
+The composer is the mobile message input: `apps/mobile/src/features/chat/components/Composer/Composer.tsx` plus `ChatInput.tsx`, `SendButton.tsx`, `AttachmentPreview.tsx`, `QuotedReplyBar.tsx`, `ModeToggle.tsx`, `ModelSelectorButton.tsx`, `SendPreview.tsx`. ✅ Built. Requirements: a single multiline input that grows to a capped height then scrolls; an explicit send control (never auto-send a Local draft — see Anti-patterns); a visible mode toggle (Local / Cloud) and model label sourced from `models.json`; attachment menu mirrors the shared `AttachmentMenu`/`ChatInputToolbar` from `packages/ui/unified-chat/`. `SendPreview.tsx` is shown for the Local→Cloud transition with a payload preview and consent. Keyboard avoidance via `react-native-safe-area-context`. Image generation surfaced here is cloud-backed only — mobile is not the first heavy local image-gen surface.
 
 ## Chat Components
 
-The transcript layer reuses shared components themed for RN. Shared: `packages/unified-chat/src/components/` (`MessageBubble`, `MessageList`, `InlineToolCall`, `ToolCallCard`, `ProvenanceFooter`, `ThinkingBlock`). Mobile: `apps/mobile/src/features/chat/components/` (`MessageBubble.tsx`, `MessageList.tsx`, `MessageContentRenderer.tsx`, `InlineToolCall.tsx`, `StreamingIndicator.tsx`, `TypingIndicator.tsx`, `ThinkingChip.tsx`, `CitationChip.tsx`, `CodeBlockCopyButton.tsx`, `MathBlock.tsx`). ✅ Built. Requirements: markdown + code + math render without layout thrash during streaming; tool calls render inline with collapsible detail; every assistant turn carries a provenance/mode label; long lists virtualize. The inline tool-call UI is verified by fixture tests (recent commit `f56a56868`).
+The transcript layer reuses shared components themed for RN. Shared: `packages/ui/unified-chat/src/components/` (`MessageBubble`, `MessageList`, `InlineToolCall`, `ToolCallCard`, `ProvenanceFooter`, `ThinkingBlock`). Mobile: `apps/mobile/src/features/chat/components/` (`MessageBubble.tsx`, `MessageList.tsx`, `MessageContentRenderer.tsx`, `InlineToolCall.tsx`, `StreamingIndicator.tsx`, `TypingIndicator.tsx`, `ThinkingChip.tsx`, `CitationChip.tsx`, `CodeBlockCopyButton.tsx`, `MathBlock.tsx`). ✅ Built. Requirements: markdown + code + math render without layout thrash during streaming; tool calls render inline with collapsible detail; every assistant turn carries a provenance/mode label; long lists virtualize. The inline tool-call UI is verified by fixture tests (recent commit `f56a56868`).
 
 ## Cards
 
-Primitive card in `apps/mobile/components/ui/card.tsx`. Domain cards: `ApprovalCard.tsx`, `GeneratedFileCard.tsx`, `InlineArtifactCard.tsx`, `PerformanceChip.tsx` (`apps/mobile/src/features/chat/components/`), plus shared `ProjectCard`/`DownloadCard` in `packages/unified-chat/`. ✅ Built. Requirements: cards use token surfaces (`surfaceElevated`, `border`) from `apps/mobile/src/ui/theme/tokens.ts`, never raw hex; `ApprovalCard` is the human-in-the-loop gate for risky/remote actions and must require explicit confirmation; generated-file/long-compute cards delegate to Desktop/host or managed compute rather than running heavy work on-device (`apps/mobile/AGENTS.md`).
+Primitive card in `apps/mobile/components/ui/card.tsx`. Domain cards: `ApprovalCard.tsx`, `GeneratedFileCard.tsx`, `InlineArtifactCard.tsx`, `PerformanceChip.tsx` (`apps/mobile/src/features/chat/components/`), plus shared `ProjectCard`/`DownloadCard` in `packages/ui/unified-chat/`. ✅ Built. Requirements: cards use token surfaces (`surfaceElevated`, `border`) from `apps/mobile/src/ui/theme/tokens.ts`, never raw hex; `ApprovalCard` is the human-in-the-loop gate for risky/remote actions and must require explicit confirmation; generated-file/long-compute cards delegate to Desktop/host or managed compute rather than running heavy work on-device (`apps/mobile/AGENTS.md`).
 
 ## Dialogs
 
@@ -46,7 +46,7 @@ Shared scale in `apps/mobile/components/ui/text.tsx` with `variant` values `defa
 
 ## Icons
 
-Icons use `lucide-react-native` (^0.577) and `react-native-svg`; tool-call glyph mapping in `apps/mobile/src/features/chat/components/toolIconRN.ts` (shared resolver `packages/ui/src/toolIcon.ts`); brand marks `AgiMark.tsx` and `ProviderMark.tsx` (`packages/ui/src/`). ✅ Built. Requirements: one icon set (no mixing libraries per screen); icon size/stroke pulled from tokens; provider marks reflect the real active provider — never show a provider badge for a model that is not actually serving the turn.
+Icons use `lucide-react-native` (^0.577) and `react-native-svg`; tool-call glyph mapping in `apps/mobile/src/features/chat/components/toolIconRN.ts` (shared resolver `packages/ui/ui/src/toolIcon.ts`); brand marks `AgiMark.tsx` and `ProviderMark.tsx` (`packages/ui/ui/src/`). ✅ Built. Requirements: one icon set (no mixing libraries per screen); icon size/stroke pulled from tokens; provider marks reflect the real active provider — never show a provider badge for a model that is not actually serving the turn.
 
 ## Animations
 
@@ -59,9 +59,9 @@ Motion uses `react-native-reanimated` (4.3.1) with `expo-haptics`. Animated comp
 - `apps/mobile/src/features/{drawer,sidebar,model-picker,edge-cases}/` — navigation + feedback surfaces.
 - `apps/mobile/src/ui/theme/` — `tokens.ts`, `useTheme.ts`.
 - `apps/mobile/app/(app)/(tabs)/_layout.tsx` — navigator.
-- `packages/ui/src/` — shared sidebar, settings-modal, marks, icon resolver.
-- `packages/unified-chat/src/components/` — shared chat shell (reuse target).
-- `packages/design-tokens/src/` — `chat.css`, token index.
+- `packages/ui/ui/src/` — shared sidebar, settings-modal, marks, icon resolver.
+- `packages/ui/unified-chat/src/components/` — shared chat shell (reuse target).
+- `packages/ui/design-tokens/src/` — `chat.css`, token index.
 
 ## Competitor notes
 
@@ -80,7 +80,7 @@ Production-ready when every screen composes from this library (no one-off duplic
 - Adding a BYOK/API-key field or "Provider Configuration = keys" anywhere in mobile UI.
 - Auto-sending a Local draft, or silently routing Local content into Cloud without preview + consent.
 - Faking unsupported capability: decorative toasts/spinners/availability badges with no backing state.
-- Hardcoding model IDs/labels instead of reading `packages/types/src/models.json`.
-- Forking the shared chat/sidebar shell instead of theming `packages/unified-chat` / `packages/ui`.
+- Hardcoding model IDs/labels instead of reading `packages/contracts/types/src/models.json`.
+- Forking the shared chat/sidebar shell instead of theming `packages/ui/unified-chat` / `packages/ui/ui`.
 - Hardcoding colors/sizes instead of theme tokens; mixing multiple icon libraries on one screen.
 - Referencing Supabase, or surfacing removed tiers (Plus / pro_plus / Hobby) in any pricing component.

@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`. Grounded in real repo paths: `apps/web/features/chat/components/messages/MarkdownContent.tsx`, `apps/web/features/chat/components/messages/EnhancedMarkdownRenderer.tsx`, `apps/web/features/chat/components/messages/preprocessMath.ts`, `apps/web/features/chat/components/messages/markdownSanitizeSchema.ts`, `apps/web/features/chat/components/messages/InlineCitation.tsx`, `apps/web/features/chat/components/MermaidRenderer.tsx`, `apps/web/features/chat/components/ArtifactBlock.tsx`, `apps/web/features/chat/components/ToolCallCard.tsx`, `apps/web/lib/hooks/useChatStream.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`. Grounded in real repo paths: `apps/web/features/chat/components/messages/MarkdownContent.tsx`, `apps/web/features/chat/components/messages/EnhancedMarkdownRenderer.tsx`, `apps/web/features/chat/components/messages/preprocessMath.ts`, `apps/web/features/chat/components/messages/markdownSanitizeSchema.ts`, `apps/web/features/chat/components/messages/InlineCitation.tsx`, `apps/web/features/chat/components/MermaidRenderer.tsx`, `apps/web/features/chat/components/ArtifactBlock.tsx`, `apps/web/features/chat/components/ToolCallCard.tsx`, `apps/web/lib/hooks/useChatStream.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies how AGI Web turns model output — Markdown, code, tables, images, citations, math, diagrams — into safe, styled, streaming DOM. AGI Web is the **cloud-only** surface: no Local runtime, no BYOK. Every token rendered here arrives over `/api/llm/v1/chat/completions` from a Managed-Cloud session tied to Neon/account state. There is no on-device model and no user-key provider path to render from, so the renderer never has to branch on trust mode — but it MUST treat all model/tool output as **untrusted input** and sanitize before it reaches the DOM. Model IDs referenced anywhere in rendering (e.g. per-model capability hints) come only from `packages/types/src/models.json`; the renderer itself is model-agnostic and never hardcodes an ID. Rendering is plan-agnostic: Free through Enterprise see the same renderer; entitlement gating lives upstream, not in the render layer.
+This volume specifies how AGI Web turns model output — Markdown, code, tables, images, citations, math, diagrams — into safe, styled, streaming DOM. AGI Web is the **cloud-only** surface: no Local runtime, no BYOK. Every token rendered here arrives over `/api/llm/v1/chat/completions` from a Managed-Cloud session tied to Neon/account state. There is no on-device model and no user-key provider path to render from, so the renderer never has to branch on trust mode — but it MUST treat all model/tool output as **untrusted input** and sanitize before it reaches the DOM. Model IDs referenced anywhere in rendering (e.g. per-model capability hints) come only from `packages/contracts/types/src/models.json`; the renderer itself is model-agnostic and never hardcodes an ID. Rendering is plan-agnostic: Free through Enterprise see the same renderer; entitlement gating lives upstream, not in the render layer.
 
 ## Markdown
 
@@ -74,7 +74,7 @@ The domain is production-ready when a streamed response containing headings, lis
 - Running `rehype-raw` without the sanitize schema, or injecting model/tool HTML/SVG via `dangerouslySetInnerHTML` without DOMPurify — a live XSS path on the chat surface.
 - Rendering images or links from non-`http(s)` (`javascript:`, untrusted `data:`) URLs, or from unvalidated `src`.
 - Adding any Local or BYOK rendering branch, provider-key affordance, or "run locally" control to AGI Web — Web is cloud-only.
-- Hardcoding or inventing a model ID in rendering logic instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID in rendering logic instead of reading `packages/contracts/types/src/models.json`.
 - Fabricating citations, source counts, or availability badges not backed by message metadata.
 - Blocking rendering on eager `mermaid`/KaTeX imports instead of lazy-loading; re-parsing the full transcript per token once block-incremental rendering exists.
 - Referencing removed tiers ("Plus"/`pro_plus`/"Hobby"), credit top-ups, or Supabase; using `middleware.ts` instead of `proxy.ts`.

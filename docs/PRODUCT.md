@@ -14,7 +14,7 @@ The primary surface. Like Claude Desktop + Ollama: a local compute host with a r
 
 **Chat**: The main screen is a chat interface. Users type messages, select a model from the picker, and get streaming responses rendered with markdown, code blocks, and syntax highlighting. The chat supports conversation history, branching (fork a conversation at any message), and folders for organization. Messages are persisted to Neon PostgreSQL and survive page reloads.
 
-**Model Picker**: A dropdown showing all available models from the catalog (`packages/types/src/models.json`). Models are grouped by provider (Anthropic, OpenAI, Google, DeepSeek, Perplexity, xAI, Ollama, LM Studio). Users can switch models mid-conversation. Local models (via Ollama/LM Studio) run entirely on the user's hardware — no data leaves the device.
+**Model Picker**: A dropdown showing all available models from the catalog (`packages/contracts/types/src/models.json`). Models are grouped by provider (Anthropic, OpenAI, Google, DeepSeek, Perplexity, xAI, Ollama, LM Studio). Users can switch models mid-conversation. Local models (via Ollama/LM Studio) run entirely on the user's hardware — no data leaves the device.
 
 **BYOK (Bring Your Own Key)**: In Settings, users enter their own API keys for cloud providers. The app uses these keys directly — AGI never sees the plaintext keys. This is the explicit trust boundary: local mode uses no keys, BYOK mode uses the user's keys with full consent.
 
@@ -93,7 +93,7 @@ On-device AI with local inference. Like Ollama mobile + Claude's chat interface.
 
 **Chat**: Full chat interface with streaming responses. Supports both local models (via `llama.rn` / ExecutorTorch for on-device inference) and cloud models (via BYOK keys). Same message types and rendering as desktop/web.
 
-**Model Picker**: Switch between local and cloud models. Catalog-driven from `packages/types/src/models.json`.
+**Model Picker**: Switch between local and cloud models. Catalog-driven from `packages/contracts/types/src/models.json`.
 
 **Biometric Lock**: Face ID / Touch ID / fingerprint unlock. MMKV encrypted storage with biometric key derivation. The app gates all data access behind biometric verification — no data is readable until unlock succeeds.
 
@@ -201,13 +201,13 @@ IDE integration with chat participant and commands.
 
 ## Shared Infrastructure
 
-**packages/types**: Canonical TypeScript types and model catalog (`models.json`). All surfaces import model IDs from here — never hardcoded.
+**packages/contracts/types**: Canonical TypeScript types and model catalog (`models.json`). All surfaces import model IDs from here — never hardcoded.
 
-**packages/unified-chat**: Shared chat UI components used by Desktop and Web. ArtifactPanel, ProjectHeader, message rendering.
+**packages/ui/unified-chat**: Shared chat UI components used by Desktop and Web. ArtifactPanel, ProjectHeader, message rendering.
 
-**packages/providers**: 8 provider adapters (Anthropic, OpenAI, Google, DeepSeek, Perplexity, xAI, Ollama, LM Studio). SDK-based, implementing the `@agiworkforce/llm-normalize` contract.
+**packages/ai/providers**: 8 provider adapters (Anthropic, OpenAI, Google, DeepSeek, Perplexity, xAI, Ollama, LM Studio). SDK-based, implementing the `@agiworkforce/provider-protocol` contract.
 
-**packages/data-layer**: Database adapter factory. Default provider: Neon. Postgres adapter support exists for direct managed SQL use cases.
+**packages/platform/data-layer**: Database adapter factory. Default provider: Neon. Postgres adapter support exists for direct managed SQL use cases.
 
 **Sandbox** (`apps/sandbox`): Cross-origin artifact renderer at `sandbox.agiworkforce.com`. Single `index.html` (303 lines) with strict CSP (`connect-src 'none'`, `form-action 'none'`). Receives artifacts via `postMessage` from parent. Provides security isolation so generated code cannot access user tokens.
 

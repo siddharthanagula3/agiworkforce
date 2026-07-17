@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: Grounds in `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified mobile paths: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx`, `MathBlock.tsx`, `CodeBlockCopyButton.tsx`, `MessageBubble.tsx`, `StreamingIndicator.tsx`, `GeneratedImage.tsx`, `ImageFullScreen.tsx`, `ArtifactFullScreen.tsx`, `apps/mobile/services/streaming.ts`, and `packages/types/src/models.json`.
+Authority: Grounds in `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified mobile paths: `apps/mobile/src/features/chat/components/MessageContentRenderer.tsx`, `MathBlock.tsx`, `CodeBlockCopyButton.tsx`, `MessageBubble.tsx`, `StreamingIndicator.tsx`, `GeneratedImage.tsx`, `ImageFullScreen.tsx`, `ArtifactFullScreen.tsx`, `apps/mobile/services/streaming.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 This volume specifies how AGI Mobile turns an assistant response — a stream of model tokens — into legible, interactive UI: markdown, code, tables, images, citations, math, diagrams, incremental streaming, and copy affordances.
 
-Rendering is **trust-agnostic by design**. The same renderer draws a Local (small on-device LLM) response and a Managed-Cloud response; the bytes are formatted on-device regardless of where the tokens came from. **Mobile has no BYOK** — there is no provider-key surface anywhere in this pipeline, and nothing here may add one. The only trust-sensitive seams are network-backed render helpers (KaTeX from a CDN; cloud-hosted image URLs): these must degrade gracefully so a Local/offline response still renders text correctly. Model IDs that decorate a response (provenance label) come only from `packages/types/src/models.json` — the renderer never invents one. Heavy rendering (live HTML/diagram execution, document/image generation) is **not** mobile's job first; mobile shows source or a cloud-backed result and defers execution to Desktop/host per `apps/mobile/AGENTS.md`.
+Rendering is **trust-agnostic by design**. The same renderer draws a Local (small on-device LLM) response and a Managed-Cloud response; the bytes are formatted on-device regardless of where the tokens came from. **Mobile has no BYOK** — there is no provider-key surface anywhere in this pipeline, and nothing here may add one. The only trust-sensitive seams are network-backed render helpers (KaTeX from a CDN; cloud-hosted image URLs): these must degrade gracefully so a Local/offline response still renders text correctly. Model IDs that decorate a response (provenance label) come only from `packages/contracts/types/src/models.json` — the renderer never invents one. Heavy rendering (live HTML/diagram execution, document/image generation) is **not** mobile's job first; mobile shows source or a cloud-backed result and defers execution to Desktop/host per `apps/mobile/AGENTS.md`.
 
 ## Markdown
 
@@ -56,7 +56,7 @@ Rendering is **trust-agnostic by design**. The same renderer draws a Local (smal
 - `apps/mobile/src/features/chat/components/StreamingIndicator.tsx`, `services/streaming.ts` — streaming pipeline.
 - `apps/mobile/src/features/chat/components/GeneratedImage.tsx`, `ImageFullScreen.tsx` — image rendering.
 - `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx` — artifact/mermaid (preview-gated).
-- `packages/types/src/models.json` — model IDs for provenance labels.
+- `packages/contracts/types/src/models.json` — model IDs for provenance labels.
 
 ## Competitor notes
 
@@ -83,5 +83,5 @@ Trust / security
 - Auto-sending or silently routing a Local response through the cloud render/stream path.
 - Claiming syntax highlighting, rendered mermaid, or offline math as shipped without a real path.
 - Executing untrusted HTML/SVG/mermaid in the MathBlock WebView (bridge-exposing, `originWhitelist=['*']`).
-- Hardcoding or inventing a model ID for the provenance label instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID for the provenance label instead of reading `packages/contracts/types/src/models.json`.
 - Referencing Supabase, or any removed tier ("Plus", `pro_plus`, "Hobby"), anywhere in this surface.

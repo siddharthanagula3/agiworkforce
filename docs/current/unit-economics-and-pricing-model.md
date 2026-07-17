@@ -2,14 +2,16 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
 This is the definitive unit-economics + pricing + profitability model for AGI Workforce. It exists so every billable capability in Managed Cloud is priced to be gross-margin-positive from the first paid user. It supersets the per-token cost fix tracked separately (task #55): tokens are one line item among many.
+
+> **STALE-MODEL FLAG (2026-07-11):** the founder locked a new pricing/metering decision the same day this file's numbers were last touched (`docs/plans/tier-metering-reconciliation-wave2-2026-07-11.md`): Basic cut from $8 to $7/mo, **Team reinstated** as a real per-seat tier ($30/seat/mo, $15/seat/mo COGS budget) between Max and Enterprise, and **top-ups enabled** for paid tiers (capped, opt-in, per-tier payout parity) — superseding this doc's "no top-ups" framing. The headline tier list (§3.4) and the P1 task list (§5) below are corrected for this. The downstream COGS-ceiling/retail-value/credit/margin/break-even tables in §3.4–§4.6 and the Executive Summary were computed against the **old** $8/no-Team/no-top-up inputs and have **not** been recomputed here — the exact credit-conversion rate they'd need is itself pending "pricing-research round 3" sign-off per the wave-2 plan. Treat every number in those tables as needing a fresh pass once round 3 lands; do not treat them as current fact in the meantime.
 
 ## How to read this doc
 
 - **Provider prices are cited inline** to an official pricing page, or tagged `UNVERIFIED` where no public price exists. Do not propagate an `UNVERIFIED` number into billing code without confirming it.
-- **Token prices come from `packages/types/src/models.json`** (the token-pricing SSOT), cross-checked against provider pages. All non-token capability prices (search tools, sandbox, image/video, infra) are researched here and are new to the repo.
+- **Token prices come from `packages/contracts/types/src/models.json`** (the token-pricing SSOT), cross-checked against provider pages. All non-token capability prices (search tools, sandbox, image/video, infra) are researched here and are new to the repo.
 - Prices were captured 2026-07-09/10. Provider pricing moves; re-verify before a pricing change ships.
 
 ## 0. The one idea that makes this tractable: resale vs pass-through
@@ -70,13 +72,12 @@ Every unit below is a cost we incur _only in Managed Cloud_. In BYOK these are t
 
 ### 2.1 LLM chat tokens (per 1M tokens, USD) — from `models.json`, cross-checked to provider pages
 
-Representative routing models (full list in `packages/types/src/models.json`). `input / output / cache-read`:
+Representative routing models (full list in `packages/contracts/types/src/models.json`). `input / output / cache-read`:
 
 | Model (route)                         | Input | Output | Cache read | Source                                                                                                |
 | ------------------------------------- | ----- | ------ | ---------- | ----------------------------------------------------------------------------------------------------- |
 | gemini-3.1-flash-lite (cheapest chat) | 0.25  | 1.50   | 0.025      | models.json; [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)   |
-| gpt-4.1-nano                          | 0.10  | 0.40   | 0.03       | models.json; [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing) |
-| gpt-5-nano                            | 0.05  | 0.40   | 0.01       | models.json                                                                                           |
+| gpt-5.4-nano                          | 0.20  | 1.25   | 0.02       | models.json; [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing) |
 | claude-haiku-4.5                      | 1.00  | 5.00   | 0.10       | [platform.claude.com pricing](https://platform.claude.com/docs/en/about-claude/pricing)               |
 | deepseek-v4-flash                     | 0.14  | 0.28   | 0.0028     | models.json                                                                                           |
 | gemini-3.5-flash                      | 1.50  | 9.00   | 0.15       | ai.google.dev pricing                                                                                 |
@@ -210,7 +211,7 @@ Internally we also track **raw COGS per user** against the tier's **COGS ceiling
 
 ### 3.4 Tier mapping (usage budgets)
 
-Tiers per `project-pricing` (2026-06-30): Free $0 / Basic $8 (₹399) / Pro $20 / Max $100 & $200 / Enterprise custom. INR only fixed for Basic.
+Tiers per `docs/plans/tier-metering-reconciliation-wave2-2026-07-11.md` (2026-07-11, supersedes the 2026-06-30 ladder cited in the tables below): Free $0 / Basic $7 (₹399) / Pro $20 / Max $100 & $200 / Team $30 per seat / Enterprise custom. INR only fixed for Basic. The $ figures in the tables below still reflect the pre-2026-07-11 ladder — see the stale-model flag above.
 
 | Tier           | Price/mo | Managed COGS ceiling                     | Retail usage value (×2.5) | Included credits | Positioning                                        |
 | -------------- | -------- | ---------------------------------------- | ------------------------- | ---------------- | -------------------------------------------------- |
@@ -314,10 +315,10 @@ Priority-ordered; cross-referenced to repo. This turns the model into billable r
 
 1. **Usage ledger + raw-COGS meter (P0).** A per-user ledger that records raw provider/fallback COGS per call _and_ the credit debit, and enforces the tier COGS ceiling as a hard stop. `docs/current/commercial-and-launch.md` lists "usage ledger / provider price table / quota reservation and settlement" as required-but-unbuilt. This is the spine — nothing else meters without it.
 2. **Provider price table wired to `models.json` (P0).** Token prices exist in `models.json`; the **non-token unit prices in §2 (search, sandbox, image, video, infra) have no home in the repo yet.** Add a `capabilityPricing` block (or sibling file) so billing reads sourced prices, not hardcoded constants. Pairs with task #55 (token calc fix).
-3. **E2B metering line item (P0).** Sandbox seconds must surface in the user's usage whenever a non-sandbox provider triggers code/file work (`packages/providers` tool-loop → E2B integration). Confirm the E2B integration actually meters seconds, not just runs.
-4. **Web-search fallback router (P1).** Route non-native-search providers to Brave/Tavily/Exa and meter per call. Check whether `packages/providers` already has a search-tool abstraction or only per-provider native search.
+3. **E2B metering line item (P0).** Sandbox seconds must surface in the user's usage whenever a non-sandbox provider triggers code/file work (`packages/ai/providers` tool-loop → E2B integration). Confirm the E2B integration actually meters seconds, not just runs.
+4. **Web-search fallback router (P1).** Route non-native-search providers to Brave/Tavily/Exa and meter per call. Check whether `packages/ai/providers` already has a search-tool abstraction or only per-provider native search.
 5. **Media routes billing (P1).** Image (Imagen/gpt-image) and video (Veo) routes exist in `models.json` but are **token-encoded**, not per-image/per-second. Wire real per-unit metering; gate video to Max+.
-6. **Tier catalog reconciliation (P1).** `packages/types/src/billing-catalog.ts` still carries legacy tiers (`team`, no `basic`, single $100 Max — per `project-pricing`). Reconcile to Free/Basic/Pro/Max/Max+/Enterprise and attach each tier's COGS ceiling + credit grant.
+6. **Tier catalog reconciliation (P1).** `packages/contracts/types/src/billing-catalog.ts` still carries a legacy shape (no `basic`, single $100 Max, and a `team` entry that predates the 2026-07-11 reinstatement so its price/seat model needs re-deriving, not deleting). Reconcile to Free/Basic/Pro/Max/Max+/Team/Enterprise and attach each tier's COGS ceiling + credit grant, including Team's $15/seat/mo COGS budget per the 2026-07-11 wave-2 plan.
 7. **Deep-research + video hard caps + kill-switches (P1).** Per-tier caps and the per-capability kill-switch from §4.6.
 8. **BYOK conversion instrumentation (P2).** Track BYOK/Local→Managed conversion events (the funnel metric that the whole P&L rests on).
 
@@ -327,7 +328,7 @@ Priority-ordered; cross-referenced to repo. This turns the model into billable r
 
 1. **BYOK platform fee — keep at $0?** GTM says yes (no markup). If a thin hosting fee is ever wanted (e.g., managed connectors on a BYOK key), it is a new revenue line, not a units change. Default: **$0, unchanged.**
 2. **Free managed ceiling ($0.30) — needs a rule check, not just a number.** `commercial-and-launch.md` states Managed Cloud is "subscription/entitlement-gated." A free $0.30 _managed_ taste arguably crosses that locked gate, so this is a **rule change to ratify, not a dial to turn**. Safe default if the founder does not want to touch the rule: set the free managed ceiling to **$0** (Free = strictly Local+BYOK), which makes the portfolio worst-case positive immediately at the cost of a weaker managed hook.
-3. **Overage/top-ups stay off?** Current model assumes no top-ups (COGS ceiling = hard cap). If enabled later, bill at the same 2.5× multiplier; but top-ups reintroduce fraud/chargeback exposure (`commercial-and-launch.md` payment guidance) — prefer tier upgrade over top-up.
+3. **RESOLVED 2026-07-11: top-ups are enabled** for paid tiers (capped, opt-in, off by default, 12-month expiry, per-tier payout parity) — see the stale-model flag at the top of this doc. This model's COGS-ceiling/margin tables still assume no top-ups and need a recompute pass; the fraud/chargeback exposure this item originally flagged (`commercial-and-launch.md` payment guidance) is still a live risk to manage under the new policy, not a reason it was rejected.
 4. **Confirm Perplexity per-request search fees and gpt-image-2 / SDXL / Ideogram per-image prices** (tagged `UNVERIFIED` in §2) before those routes go billable.
 
 ---

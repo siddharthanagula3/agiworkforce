@@ -7,13 +7,13 @@ Purpose: document the first shared enterprise implementation wave across contrac
 
 ## Implemented Foundation
 
-| Layer              | Path                                                                         | Role                                                                                                                   |
-| ------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Shared contracts   | `packages/types/src/enterprise/index.ts`                                     | Organization, policy, identity, audit, support, feedback, usage-ledger, and managed-credit types.                      |
-| Canonical database | `supabase/migrations/20260521100000_enterprise_control_plane_foundation.sql` | Root migration for organization, SSO, SCIM, policy, audit, usage-ledger, support, feedback, and managed-credit tables. |
-| API gateway        | `services/api-gateway/src/routes/enterprise.ts`                              | Authenticated organization list, policy, audit-event, usage-ledger, and support-case endpoints.                        |
-| Web admin          | `apps/web/app/admin` and `apps/web/features/admin`                           | First operational admin readiness surface.                                                                             |
-| Ownership          | `.github/CODEOWNERS`                                                         | Provisional path ownership until GitHub teams exist.                                                                   |
+| Layer              | Path                                                                             | Role                                                                                                                                                                                                                                                                                                              |
+| ------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared contracts   | `packages/contracts/types/src/enterprise/index.ts`                               | Organization, policy, identity, audit, support, feedback, usage-ledger, and managed-credit types.                                                                                                                                                                                                                 |
+| Canonical database | `apps/web/db/neon` (TRACKED GAP — no enterprise foundation migration exists yet) | The previously cited `supabase/migrations/...` root migration never survived the Supabase→Neon migration and exists nowhere in the repo; the SSO, SCIM, policy, audit, usage-ledger, support, feedback, and managed-credit tables the enterprise routes reference are NOT yet created by any canonical migration. |
+| API gateway        | `services/api-gateway/src/routes/enterprise.ts`                                  | Authenticated organization list, policy, audit-event, usage-ledger, and support-case endpoints.                                                                                                                                                                                                                   |
+| Web admin          | `apps/web/app/admin` and `apps/web/features/admin`                               | First operational admin readiness surface.                                                                                                                                                                                                                                                                        |
+| Ownership          | `.github/CODEOWNERS`                                                             | Provisional path ownership until GitHub teams exist.                                                                                                                                                                                                                                                              |
 
 ## Privacy Defaults
 
@@ -32,7 +32,7 @@ Future enterprise implementation should split into these lanes:
 
 | Lane            | Owns                                                                                   |
 | --------------- | -------------------------------------------------------------------------------------- |
-| Contracts       | `packages/types/src/enterprise/**` and tests.                                          |
+| Contracts       | `packages/contracts/types/src/enterprise/**` and tests.                                |
 | Database        | New root Supabase migrations and RLS tests.                                            |
 | API             | `services/api-gateway/src/routes/enterprise.ts` and route tests.                       |
 | Web Admin       | `apps/web/app/admin/**`, `apps/web/features/admin/**`, and admin UI tests.             |

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/web/AGENTS.md`, and real repo paths: `apps/web/playwright.config.ts`, `apps/web/e2e/*.spec.ts`, `apps/web/vitest.config.ts`, `apps/web/proxy.ts`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/db/neon/0037_rls_user_isolation.sql`, `apps/web/db/neon/0038_cloud_sync_versioning.sql`, `apps/web/lib/pricing.ts`, `packages/types/src/models.json`.
+Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/web/AGENTS.md`, and real repo paths: `apps/web/playwright.config.ts`, `apps/web/e2e/*.spec.ts`, `apps/web/vitest.config.ts`, `apps/web/proxy.ts`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/db/neon/0037_rls_user_isolation.sql`, `apps/web/db/neon/0038_cloud_sync_versioning.sql`, `apps/web/lib/pricing.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -17,7 +17,7 @@ AGI Web is the cloud-only surface — no Local mode, no BYOK, ever. Every QA cas
 - ✅ Unit/integration coverage exists via Vitest (`apps/web/vitest.config.ts`) across many `apps/web/**/__tests__/` suites (chat, api, sync, providers).
 - 🟡 Delta-sync functional cases (push/pull cursor, tombstones, idempotent upsert, LWW vs append-only messages) — logic and caps exist in `apps/web/app/api/chat/sync/route.ts`, but no dedicated e2e sync spec is wired; add one asserting server-side `user_id` and that no-`cloud_id` rows are rejected.
 - 🔭 Launch-critical journey suite (sign-in → new cloud chat → stream → artifact → billing upgrade) as one gated e2e path — most journeys are covered piecemeal in unit tests, not end-to-end.
-- Model-dependent cases must read IDs from `packages/types/src/models.json`; never assert a hardcoded model ID string.
+- Model-dependent cases must read IDs from `packages/contracts/types/src/models.json`; never assert a hardcoded model ID string.
 
 ## UI
 
@@ -79,7 +79,7 @@ AGI Web is the cloud-only surface — no Local mode, no BYOK, ever. Every QA cas
 
 ## Competitor notes
 
-Claude, ChatGPT, and Codex web QA target a single first-party provider and one cloud trust mode; their suites never assert "Local rows must not sync" because those products have no local trust boundary. AGI's deliberate divergence: Web is intentionally cloud-only (no BYOK, no Local), so its distinctive, must-not-skip cases are trust-boundary tests — proving no-`cloud_id` rows never sync and that per-surface trust holds even though other AGI surfaces (Desktop/CLI/VS Code) do offer BYOK/Local. Where competitors ship one model family, AGI's model-dependent cases read from `packages/types/src/models.json`, keeping tests provider-agnostic. Parity references only — no proprietary code or branding is copied.
+Claude, ChatGPT, and Codex web QA target a single first-party provider and one cloud trust mode; their suites never assert "Local rows must not sync" because those products have no local trust boundary. AGI's deliberate divergence: Web is intentionally cloud-only (no BYOK, no Local), so its distinctive, must-not-skip cases are trust-boundary tests — proving no-`cloud_id` rows never sync and that per-surface trust holds even though other AGI surfaces (Desktop/CLI/VS Code) do offer BYOK/Local. Where competitors ship one model family, AGI's model-dependent cases read from `packages/contracts/types/src/models.json`, keeping tests provider-agnostic. Parity references only — no proprietary code or branding is copied.
 
 ## Acceptance / Definition of Done
 
@@ -92,7 +92,7 @@ Production-ready gate: launch-critical flows are covered by e2e with screenshots
 ## Anti-patterns
 
 - Do not add a Local-mode, BYOK, or provider-key test path to Web — those affordances must not exist on this surface.
-- Do not assert a hardcoded model ID; read from `packages/types/src/models.json`.
+- Do not assert a hardcoded model ID; read from `packages/contracts/types/src/models.json`.
 - Do not invent INR numbers for Pro/Max, or reference removed tiers (Plus, `pro_plus`, Hobby) or credit top-ups; Basic INR is ₹399 only.
 - Do not reference Supabase; the stack is Clerk + Neon + Stripe.
 - Do not rename `proxy.ts` to `middleware.ts` or test for a `middleware` export.

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon). Grounded in real repo paths: `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, `apps/web/app/api/projects/[id]/knowledge-files/[fileId]/route.ts`, `packages/types/src/chat.ts`, `packages/types/src/suite-contracts.ts`, `apps/web/lib/server/media-storage.ts`, `apps/web/lib/projects.ts`, `apps/web/lib/server/neon-types.ts`, `apps/web/db/neon/{0006_projects,0035_project_knowledge_file_lifecycle,0037_rls_user_isolation}.sql`, `apps/web/features/chat/components/{artifacts/ImageAttachmentPreview,Composer/DragDropOverlay}.tsx`.
+Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon). Grounded in real repo paths: `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, `apps/web/app/api/projects/[id]/knowledge-files/[fileId]/route.ts`, `packages/contracts/types/src/chat.ts`, `packages/contracts/types/src/suite-contracts.ts`, `apps/web/lib/server/media-storage.ts`, `apps/web/lib/projects.ts`, `apps/web/lib/server/neon-types.ts`, `apps/web/db/neon/{0006_projects,0035_project_knowledge_file_lifecycle,0037_rls_user_isolation}.sql`, `apps/web/features/chat/components/{artifacts/ImageAttachmentPreview,Composer/DragDropOverlay}.tsx`.
 
 ## Overview & stance
 
@@ -12,7 +12,7 @@ AGI Web is the **cloud-only** surface: no BYOK, no Local mode. Every uploaded fi
 
 ## Supported File Types
 
-✅ Built — the accepted set is a single source of truth in `packages/types/src/chat.ts`: `ALLOWED_ATTACHMENT_MIME_PREFIXES` (`image/`, `application/pdf`, `text/`, `application/json`, `application/xml`), an extension fallback `ALLOWED_ATTACHMENT_EXTENSIONS` (png/jpg/jpeg/gif/webp/heic/pdf/txt/md/csv/json/xml plus common source extensions), and `ALLOWED_ATTACHMENT_ACCEPT` that feeds every `<input accept>`, drag-drop, and paste path. `validateAttachmentFile()` enforces order empty → too-large → unsupported and returns a structured `AttachmentValidation` reason the composer surfaces. The knowledge-file POST (`.../knowledge-files/route.ts`) additionally requires a non-empty `mimeType`. Requirement: picker, drag-drop, and paste MUST all validate against the same constant — no per-component allowlists.
+✅ Built — the accepted set is a single source of truth in `packages/contracts/types/src/chat.ts`: `ALLOWED_ATTACHMENT_MIME_PREFIXES` (`image/`, `application/pdf`, `text/`, `application/json`, `application/xml`), an extension fallback `ALLOWED_ATTACHMENT_EXTENSIONS` (png/jpg/jpeg/gif/webp/heic/pdf/txt/md/csv/json/xml plus common source extensions), and `ALLOWED_ATTACHMENT_ACCEPT` that feeds every `<input accept>`, drag-drop, and paste path. `validateAttachmentFile()` enforces order empty → too-large → unsupported and returns a structured `AttachmentValidation` reason the composer surfaces. The knowledge-file POST (`.../knowledge-files/route.ts`) additionally requires a non-empty `mimeType`. Requirement: picker, drag-drop, and paste MUST all validate against the same constant — no per-component allowlists.
 
 ## OCR
 
@@ -28,7 +28,7 @@ AGI Web is the **cloud-only** surface: no BYOK, no Local mode. Every uploaded fi
 
 ## Embeddings
 
-🔭 Planned — no embedding call, `pgvector` column, or vector index exists in `apps/web` (grep for `embed(`/`text-embedding`/`vector(` returns nothing in web lib/app). Design intent: chunk text is embedded and stored for semantic retrieval feeding `app/api/memory/search`. The embedding model, when chosen, is an on-device/engine identifier that MUST be grounded in repo code (LLM catalog IDs still come only from `packages/types/src/models.json` — never invent one here). Embeddings are Managed-Cloud data, user-scoped, and MUST be deleted with their source file.
+🔭 Planned — no embedding call, `pgvector` column, or vector index exists in `apps/web` (grep for `embed(`/`text-embedding`/`vector(` returns nothing in web lib/app). Design intent: chunk text is embedded and stored for semantic retrieval feeding `app/api/memory/search`. The embedding model, when chosen, is an on-device/engine identifier that MUST be grounded in repo code (LLM catalog IDs still come only from `packages/contracts/types/src/models.json` — never invent one here). Embeddings are Managed-Cloud data, user-scoped, and MUST be deleted with their source file.
 
 ## Preview
 
@@ -36,7 +36,7 @@ AGI Web is the **cloud-only** surface: no BYOK, no Local mode. Every uploaded fi
 
 ## Limits
 
-✅ Built — hard per-file cap `MAX_ATTACHMENT_BYTES = 25 MiB` (`packages/types/src/chat.ts`), enforced both client-side in `validateAttachmentFile()` and server-side in the knowledge-file POST (rejects `byteCount > MAX_ATTACHMENT_BYTES` with a MiB-accurate message). Additional enforced limits: MIME/extension allowlist (above), positive `byteCount`, required `checksum_sha256`, project-ownership check against `user_projects`, CSRF token (`requireCsrfToken`), and rate limiting (`withRateLimit(..., 'chat-conversation')`). 🔭 Planned: **per-tier** quotas (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) for total storage and monthly upload volume — do not invent per-tier byte numbers until they are set; no credit top-ups apply.
+✅ Built — hard per-file cap `MAX_ATTACHMENT_BYTES = 25 MiB` (`packages/contracts/types/src/chat.ts`), enforced both client-side in `validateAttachmentFile()` and server-side in the knowledge-file POST (rejects `byteCount > MAX_ATTACHMENT_BYTES` with a MiB-accurate message). Additional enforced limits: MIME/extension allowlist (above), positive `byteCount`, required `checksum_sha256`, project-ownership check against `user_projects`, CSRF token (`requireCsrfToken`), and rate limiting (`withRateLimit(..., 'chat-conversation')`). 🔭 Planned: **per-tier** quotas (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) for total storage and monthly upload volume — do not invent per-tier byte numbers until they are set; no credit top-ups apply.
 
 ## Deletion
 
@@ -48,8 +48,8 @@ AGI Web is the **cloud-only** surface: no BYOK, no Local mode. Every uploaded fi
 - `apps/web/app/api/projects/[id]/knowledge-files/[fileId]/route.ts` — soft-delete a knowledge file (DELETE).
 - `apps/web/lib/projects.ts` — `mapKnowledgeFileRow`; `apps/web/lib/server/neon-types.ts` — `ProjectKnowledgeFileRow`.
 - `apps/web/lib/server/media-storage.ts` — Vercel Blob object storage (`put`/`del`).
-- `packages/types/src/chat.ts` — attachment allowlist, `MAX_ATTACHMENT_BYTES`, `validateAttachmentFile`, signed-upload contracts.
-- `packages/types/src/suite-contracts.ts` — `ProjectKnowledgeFile`, source-surface sets.
+- `packages/contracts/types/src/chat.ts` — attachment allowlist, `MAX_ATTACHMENT_BYTES`, `validateAttachmentFile`, signed-upload contracts.
+- `packages/contracts/types/src/suite-contracts.ts` — `ProjectKnowledgeFile`, source-surface sets.
 - `apps/web/db/neon/{0006_projects,0035_project_knowledge_file_lifecycle,0037_rls_user_isolation}.sql` — table, lifecycle columns, RLS.
 - `apps/web/features/chat/components/{artifacts/ImageAttachmentPreview,Composer/DragDropOverlay}.tsx` — preview + drop UI.
 

@@ -57,7 +57,7 @@ CLI does too.
   OpenAI Chat Completions API, but with quirks (num_ctx injection,
   model show metadata, etc.). We have a pure-functional replay
   helper that knows the differences. ~150 LOC, MIT-licensed in our
-  `@agiworkforce/llm-normalize` package.
+  `@agiworkforce/provider-protocol` package.
 - **Dynamic catalog discovery** — we hit `/api/tags` and surface
   all your installed models, with per-family context-window
   estimates (Llama 3.3 → 128k, Qwen 3 → 32k, Mistral → 32k, etc.)

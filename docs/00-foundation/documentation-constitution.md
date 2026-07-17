@@ -17,7 +17,7 @@ These are the non-negotiable rules governing all AGI documentation. They mirror 
 
 1. The running code, schemas, configuration, and tests are the **only** authoritative description of current behavior. Documentation describes the system; it does not define it.
 2. When prose disagrees with implementation, **the implementation wins**. The prose is corrected and its status set to `Needs Update` (see Article VI), never the reverse.
-3. Every claim about _current_ behavior must cite a source path (e.g., `packages/types/src/models.json`, `apps/web/proxy.ts`). Claims that cannot be grounded in the repo are marked **UNKNOWN**, never invented. (Mirrors `AGENTS.md` "Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status.")
+3. Every claim about _current_ behavior must cite a source path (e.g., `packages/contracts/types/src/models.json`, `apps/web/proxy.ts`). Claims that cannot be grounded in the repo are marked **UNKNOWN**, never invented. (Mirrors `AGENTS.md` "Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status.")
 
 ## Article II — Current vs Target must always be separable
 

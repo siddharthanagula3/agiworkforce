@@ -4,17 +4,17 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root), `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and the real repo paths grounded below: `crates/agiworkforce-plugin-runtime/{src/lib.rs,README.md,tests/manifest_matrix.rs}`, `apps/cli/src/features/plugins/plugins.rs`, `apps/cli/src/marketplace.rs`, `apps/cli/src/command_registry.rs`.
+Authority: `AGENTS.md` (repo root), `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and the real repo paths grounded below: `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/{src/lib.rs,README.md,tests/manifest_matrix.rs}`, `apps/cli/src/features/plugins/plugins.rs`, `apps/cli/src/marketplace.rs`, `apps/cli/src/command_registry.rs`.
 
 ## Overview & stance
 
 A plugin contributes slash commands, sub-agents, skills, hooks, and MCP-server declarations to a session. In the AGI suite this is a **local, workspace-scoped capability**, not a cloud feature: plugins are discovered and executed on the host that runs the session — Desktop, CLI, or VS Code — never Web or Mobile. Discovery and installation exist today in the CLI; the surrounding execution, isolation, and cross-surface lifecycle are the target this volume defines.
 
-Trust modes shape every rule. Discovery does **not** imply execution permission (`crates/agiworkforce-plugin-runtime/README.md`, "Known Caveats"): a plugin may _declare_ an MCP server or hook, but running one is a separate, consented step. A plugin must never silently move a Local session's context into BYOK or Managed Cloud — if a plugin declares an MCP server reaching a BYOK provider or the cloud gateway, that crossing is the same explicit Local→BYOK fork the canon mandates (context selection, secret scan, payload preview, provider label, consent). Plugins ride the surface's existing trust boundary; they do not create a new one. Installing a plugin has no plan gate — the Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise ladder governs cloud usage, not local plugin authorship.
+Trust modes shape every rule. Discovery does **not** imply execution permission (`crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/README.md`, "Known Caveats"): a plugin may _declare_ an MCP server or hook, but running one is a separate, consented step. A plugin must never silently move a Local session's context into BYOK or Managed Cloud — if a plugin declares an MCP server reaching a BYOK provider or the cloud gateway, that crossing is the same explicit Local→BYOK fork the canon mandates (context selection, secret scan, payload preview, provider label, consent). Plugins ride the surface's existing trust boundary; they do not create a new one. Installing a plugin has no plan gate — the Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise ladder governs cloud usage, not local plugin authorship.
 
 ## Plugin Discovery
 
-**✅ Built** — `crates/agiworkforce-plugin-runtime/src/lib.rs` (`load_manifest_for`, `MANIFEST_PATHS`, `ManifestFormat`); CLI consumer mirror in `apps/cli/src/features/plugins/plugins.rs` (`PluginRegistry::load_all`).
+**✅ Built** — `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` (`load_manifest_for`, `MANIFEST_PATHS`, `ManifestFormat`); CLI consumer mirror in `apps/cli/src/features/plugins/plugins.rs` (`PluginRegistry::load_all`).
 
 Requirements, all verifiable from source:
 
@@ -48,7 +48,7 @@ Requirements, all verifiable from source:
 
 ## Isolation — sandbox plugins
 
-**🟡 Partial guards / 🔭 process sandbox** — path and supply-chain guards exist; an OS-level execution sandbox does not. `crates/agiworkforce-plugin-runtime/README.md` states plainly that the plugin **execution sandbox** does not belong to the discovery crate.
+**🟡 Partial guards / 🔭 process sandbox** — path and supply-chain guards exist; an OS-level execution sandbox does not. `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/README.md` states plainly that the plugin **execution sandbox** does not belong to the discovery crate.
 
 Guards that exist today (✅ within their scope):
 
@@ -69,7 +69,7 @@ Guards that exist today (✅ within their scope):
 
 ## Repository map
 
-- `crates/agiworkforce-plugin-runtime/` — manifest schema + discovery (`src/lib.rs`), fixtures + matrix tests (`tests/`), crate README.
+- `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/` — manifest schema + discovery (`src/lib.rs`), fixtures + matrix tests (`tests/`), crate README.
 - `apps/cli/src/features/plugins/plugins.rs` — CLI registry, load, contribution accessors, hook-trust gating, path containment, install with integrity + rollback.
 - `apps/cli/src/marketplace.rs` — install (path/git), uninstall, `update_all`, git-URL allowlist, symlink-safe copy, `installed.json`.
 - `apps/cli/src/command_registry.rs` — `plugin`/`plugins`/`marketplace` routing; `apps/cli/tests/coverage_wave2_plugins.rs` — coverage tests.
@@ -82,13 +82,13 @@ Claude Code, Codex, and ChatGPT plugin/MCP ecosystems assume a single-vendor tru
 
 Production-ready when discovery, install, lifecycle, isolation, and update hold their guarantees on every host surface (Desktop, CLI, VS Code), with a permission prompt before any plugin-declared tool first executes.
 
-- [ ] **Build:** `cargo test -p agiworkforce-plugin-runtime` green; the five-format matrix and CLI plugin coverage pass; `agi plugin install/list/update/uninstall` verified against a local path and a git source.
+- [ ] **Build:** `cargo test -p agiworkforce-plugin-runtime (crate REMOVED 2026-07-08, zero dependents — this check is stale until a replacement crate exists)` green; the five-format matrix and CLI plugin coverage pass; `agi plugin install/list/update/uninstall` verified against a local path and a git source.
 - [ ] **Trust:** no plugin can route a Local session's context to BYOK or Cloud without the explicit fork (context selection, secret scan, payload preview, provider label, consent); Web and Mobile expose no plugin install path.
 - [ ] **Security:** git-transport allowlist, install-target containment, symlink skip, path canonicalization, and the SHA-256 integrity gate are all enforced; project-local hooks stay consent-gated; the process/OS execution sandbox (🔭) has a tracked design before any auto-run of declared tools ships.
 
 ## Anti-patterns
 
-- Do **not** claim a plugin execution sandbox exists — it does not (`crates/agiworkforce-plugin-runtime/README.md`); label it 🔭. Do not auto-run declared MCP servers or hooks without consent, and never let a plugin silently cross Local→BYOK/Cloud.
+- Do **not** claim a plugin execution sandbox exists — it does not (`crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/README.md`); label it 🔭. Do not auto-run declared MCP servers or hooks without consent, and never let a plugin silently cross Local→BYOK/Cloud.
 - Do **not** widen the git-transport allowlist to `file://`/`ext::`/`fd::` or follow symlinks during copy; do not skip the integrity gate outside the explicit `--unsafe-no-integrity` acknowledgement.
-- Do **not** hardcode model IDs in a plugin path — LLM/provider IDs come only from `packages/types/src/models.json`. Do not invent a monolithic runtime daemon, a remote registry catalog, or Desktop/VS Code plugin UIs as shipped; mark them 🔭.
+- Do **not** hardcode model IDs in a plugin path — LLM/provider IDs come only from `packages/contracts/types/src/models.json`. Do not invent a monolithic runtime daemon, a remote registry catalog, or Desktop/VS Code plugin UIs as shipped; mark them 🔭.
 - Do **not** reference Supabase, `middleware.ts`, removed tiers ("Plus", `pro_plus`, "Hobby"), credit top-ups, or unverified INR prices anywhere in this domain.

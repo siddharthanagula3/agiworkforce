@@ -1,7 +1,7 @@
 # Volume 06 — Runtime (Cloud / Local / Hybrid)
 
 Status: Canonical depth for Master Spec Vol 6
-Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 6, `docs/strategy/04-scaling-to-1M-architecture.md`, `docs/strategy/10-oss-corpus-port-plan.md`, `packages/types/src/models.json`.
+Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 6, `docs/strategy/04-scaling-to-1M-architecture.md`, `docs/strategy/10-oss-corpus-port-plan.md`, `packages/contracts/types/src/models.json`.
 
 ## Philosophy & Cloud/Local stance
 
@@ -14,7 +14,7 @@ The Cloud/Local stance is the company's structural cost advantage (`docs/strateg
 1. Cloud inference flows through exactly one hardened streaming gateway with exactly-once metering; no surface talks to a Managed provider directly.
 2. Local runtime never requires an AGI account and never emits a non-local network call in `local_only` mode (egress contract tests gate this).
 3. Hybrid routing is capability-, cost-, health-, and trust-aware; it must explain its choice and never silently cross Local→BYOK→Managed.
-4. All model IDs, capabilities, and tier membership come from `packages/types/src/models.json`; routing reads `capabilities.{tools,vision,thinking,...}` and never assumes a feature a model lacks.
+4. All model IDs, capabilities, and tier membership come from `packages/contracts/types/src/models.json`; routing reads `capabilities.{tools,vision,thinking,...}` and never assumes a feature a model lacks.
 5. Default casual Managed traffic to the economy tier; routing tiers (`auto-economy`/`auto-balanced`/`auto-premium`) are a margin lever, not just UX (`04` §4).
 6. Failover across providers is transparent (< 1 request, per `04` §7) with a per-provider circuit breaker; provider outages are routine, not exceptional.
 7. On context-window overflow, recover (drain → compact → escalate) instead of erroring (Vol 24); long-running/background work checkpoints so it can resume.
@@ -23,9 +23,9 @@ The Cloud/Local stance is the company's structural cost advantage (`docs/strateg
 ## Repository map
 
 - **Cloud runtime:** `services/api-gateway/src/routes/providerStream.ts` (real SSE streaming proxy), credits/metering, worker assignment, MCP, enterprise routes; `services/signaling-server` for sync/realtime fan-out.
-- **Shared LLM runtime (TS):** `packages/llm-runtime/src/` — `gateway.ts`, `fallback.ts`, `retry.ts`, `retry-after-internal.ts`, `watchdog.ts`, `history.ts`, `errors.ts`, `headers.ts`.
-- **Routing:** `packages/routing/src/` — `classify.ts`, `pricing.ts`, `indic.ts`, `types.ts`; tier logic referenced as `three-tier-router` (see `models.json` `tokenizer_drift_warning`).
-- **Local runtime:** `packages/local-llm/src/` — `tier1.ts` (system models), `tier2.ts` (ExecuTorch), `tier3.ts` (llama.cpp/llama.rn), `selector.ts`, `capabilities.ts`, `catalog.ts`.
+- **Shared LLM runtime (TS):** `packages/ai/provider-runtime/src/` — `gateway.ts`, `fallback.ts`, `retry.ts`, `retry-after-internal.ts`, `watchdog.ts`, `history.ts`, `errors.ts`, `headers.ts`.
+- **Routing:** `packages/ai/routing/src/` — `classify.ts`, `pricing.ts`, `indic.ts`, `types.ts`; tier logic referenced as `three-tier-router` (see `models.json` `tokenizer_drift_warning`).
+- **Local runtime:** `packages/platform/local-llm/src/` — `tier1.ts` (system models), `tier2.ts` (ExecuTorch), `tier3.ts` (llama.cpp/llama.rn), `selector.ts`, `capabilities.ts`, `catalog.ts`.
 - **Mobile native ladder:** `apps/mobile/services/{llmGate.ts,modelDownload.ts,remoteChatGate.ts}`; iOS Foundation Models stub `apps/mobile/ios/.../AGIFoundationModels.swift`.
 - **Rust loop/sandbox:** `crates/agiworkforce-{task-runtime,command-registry,execpolicy,sandbox-policy,network-proxy}`; CLI loop `apps/cli/src/agent/mod.rs`.
 
@@ -46,7 +46,7 @@ Anthropic's "thinnest possible shell over the model" harness — tool loop, suba
 
 ### Local runtime
 
-- [ ] Tier ladder selects highest viable tier for the device (`packages/local-llm/src/selector.ts`): system → ExecuTorch → llama.cpp/llama.rn.
+- [ ] Tier ladder selects highest viable tier for the device (`packages/platform/local-llm/src/selector.ts`): system → ExecuTorch → llama.cpp/llama.rn.
 - [ ] GPU/CPU/NPU paths chosen by capability detection; ONNX/MLX/Ollama/LM Studio honored where present; never assume an accelerator.
 - [ ] No AGI account required; `local_only` emits zero non-local calls (egress test).
 - [ ] Model downloads are checksum-verified and resumable (`apps/mobile/services/modelDownload.ts`).
@@ -57,7 +57,7 @@ Anthropic's "thinnest possible shell over the model" harness — tool loop, suba
 
 - [ ] Routing decision is capability-, cost-, health-, and trust-scoped and is explained to the user.
 - [ ] No silent boundary crossing; Local→BYOK requires the explicit fork (Vol 3).
-- [ ] Failover/fallback across providers is transparent and order is deterministic (`packages/llm-runtime/src/fallback.ts`).
+- [ ] Failover/fallback across providers is transparent and order is deterministic (`packages/ai/provider-runtime/src/fallback.ts`).
 - [ ] Offline mode degrades to Local cleanly; no hung requests when the network drops.
 - [ ] Tokenizer drift (e.g. Claude Opus 4.8, +0–35% tokens) is budgeted in estimates so cached prompts don't overshoot the window.
 
@@ -66,7 +66,7 @@ Anthropic's "thinnest possible shell over the model" harness — tool loop, suba
 - [ ] Chat send → first token (Managed) p95 < 2.5 s; stream completion success > 99.5% (`04` §7).
 - [ ] Provider failover < 1 request, transparent to the user.
 - [ ] Trust-boundary violations = 0 (any is a P0 incident).
-- [ ] Watchdog (`packages/llm-runtime/src/watchdog.ts`) detects stalled streams and recovers.
+- [ ] Watchdog (`packages/ai/provider-runtime/src/watchdog.ts`) detects stalled streams and recovers.
 
 ## Definition of Done
 

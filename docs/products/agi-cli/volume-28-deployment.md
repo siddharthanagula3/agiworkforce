@@ -95,7 +95,7 @@ A channel is production-ready when the artifact installs the `agi` binary (plus 
 - Claiming a package channel is shipped without a manifest in the repo — winget/Scoop/APT/DNF/Pacman/Docker are 🔭 until a real file exists.
 - Baking provider keys, BYOK config, or Managed-Cloud defaults into any artifact, or letting an installer route Local data off-device.
 - Using `agiworkforce <cmd>` in examples — `agiworkforce` is a compatibility alias only; examples use `agi`.
-- Hardcoding model IDs in release/install tooling; model IDs come only from `packages/types/src/models.json`.
+- Hardcoding model IDs in release/install tooling; model IDs come only from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (Plus, `pro_plus`, Hobby) or inventing INR prices for Pro/Max, or adding credit top-ups.
 - Referencing Supabase anywhere in deployment (stack is Clerk + Neon + Stripe).
 - Letting the Homebrew formula, `docs/surfaces/cli.md` version, or npm version drift from the `Cargo.toml`/tag source of truth.

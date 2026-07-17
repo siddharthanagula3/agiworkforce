@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (root) and `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/manifest.json`; `apps/extension/src/features/computer-use/cloudAgentClient.ts`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/native-bridge/pairing.ts` (→ `apps/extension/src/pairing.ts`); `apps/extension/src/background.ts`; `apps/extension/src/features/background/{conversation-history,tasks}.ts`; `apps/extension/src/background/memory-bridge.ts`; `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`. Model IDs are read from `packages/types/src/models.json` only.
+Authority: `AGENTS.md` (root) and `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/manifest.json`; `apps/extension/src/features/computer-use/cloudAgentClient.ts`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/native-bridge/pairing.ts` (→ `apps/extension/src/pairing.ts`); `apps/extension/src/background.ts`; `apps/extension/src/features/background/{conversation-history,tasks}.ts`; `apps/extension/src/background/memory-bridge.ts`; `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`. Model IDs are read from `packages/contracts/types/src/models.json` only.
 
 ## Overview & stance
 
@@ -84,7 +84,7 @@ Internal messaging uses `chrome.runtime.sendMessage` with typed `ExtensionMessag
 - `apps/extension/src/features/background/` — `conversation-history.ts`, `tasks.ts`, `shortcuts.ts`.
 - `apps/extension/src/background/` — `memory-bridge.ts`, `policy.ts`; `apps/extension/src/background.ts` (worker).
 - `apps/extension/native-host/` — Desktop native-messaging host; `apps/extension/THREAT_MODEL.md`, `MANIFEST_NOTES.md`.
-- `packages/types/src/models.json` — model catalog SSOT.
+- `packages/contracts/types/src/models.json` — model catalog SSOT.
 
 ## Competitor notes
 

@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/mobile/AGENTS.md` (active surface). Grounded in `apps/web/app/api/chat/sync/route.ts`, `apps/web/app/api/memory/sync/route.ts`, `apps/web/app/api/projects/sync/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `services/signaling-server/src/index.ts`, `services/signaling-server/src/constants.ts`, `services/api-gateway/src/routes/{mobile,pair}.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/desktop/src-tauri/src/integrations/realtime/{websocket_server.rs,presence.rs}`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/mobile/AGENTS.md` (active surface). Grounded in `apps/web/app/api/chat/sync/route.ts`, `apps/web/app/api/memory/sync/route.ts`, `apps/web/app/api/projects/sync/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `services/signaling-server/src/index.ts`, `services/signaling-server/src/constants.ts`, `services/api-gateway/src/routes/{mobile,pair}.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/desktop/src-tauri/src/integrations/realtime/{websocket_server.rs,presence.rs}`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 The Synchronization Engine keeps state consistent across AGI's six surfaces. It is not a surface, not a daemon, and not a fourth trust mode. There are two distinct fabrics: durable **data sync** (Neon delta-sync — the shipped path) and live **runtime/control sync** (the Desktop↔Mobile companion relay — partial and flag-gated).
 
-Trust boundaries govern what may sync. Only **Managed-Cloud** chats, projects, memory, and artifacts get cloud rows and cross-device sync (Web ↔ Mobile ↔ Desktop). **Local** and **BYOK** (Desktop/CLI/VS Code only) rows have no `cloud_id` and are never pushed or pulled — enforced client-side per the matrix and by RLS server-side (✅ `apps/web/app/api/chat/sync/route.ts`). CLI, VS Code, and Chrome stay workspace/task-scoped; any handoff to app chat is explicit and redacted, never automatic. Remote control never changes this: a phone window steers a locally-running session, and its live events ride the outbound-only companion relay, not the Neon store. Model labels resolve only from `packages/types/src/models.json`.
+Trust boundaries govern what may sync. Only **Managed-Cloud** chats, projects, memory, and artifacts get cloud rows and cross-device sync (Web ↔ Mobile ↔ Desktop). **Local** and **BYOK** (Desktop/CLI/VS Code only) rows have no `cloud_id` and are never pushed or pulled — enforced client-side per the matrix and by RLS server-side (✅ `apps/web/app/api/chat/sync/route.ts`). CLI, VS Code, and Chrome stay workspace/task-scoped; any handoff to app chat is explicit and redacted, never automatic. Remote control never changes this: a phone window steers a locally-running session, and its live events ride the outbound-only companion relay, not the Neon store. Model labels resolve only from `packages/contracts/types/src/models.json`.
 
 ## Runtime Events — synchronize runtime state
 
@@ -22,7 +22,7 @@ Requirement: control verbs are an explicit allowlist, approval-gated, and never 
 
 Managed-Cloud conversation metadata syncs as last-writer-wins by `updated_at`: `title`, `model`, `project_id`, `pinned`, plus `created_at`/`deleted_at` (✅ `apps/web/app/api/chat/sync/route.ts`, `ConversationDelta` + the conversations UPSERT). Project and memory metadata sync the same way through their own delta routes (✅ `apps/web/app/api/projects/sync/route.ts`, `apps/web/app/api/memory/sync/route.ts`). After a companion reconnect, `sync_request`/`sync_response` resnapshots the live session so the phone window catches up on agent status (🟡 `apps/mobile/services/companion.ts` `requestAgentRefresh`).
 
-Requirement: session metadata is LWW-merged, tombstone-deleted (never hard-deleted), and strictly user-scoped; a null field from a client that does not track it must not clobber a value another device set (see the `model = coalesce(excluded.model, …)` guard, ✅ `apps/web/app/api/chat/sync/route.ts`). Runtime session state below the conversation row — `agiworkforce-task-runtime`/`app-server` session config, token accounting, in-flight turn cursors — has no cross-device sync store today and is 🔭.
+Requirement: session metadata is LWW-merged, tombstone-deleted (never hard-deleted), and strictly user-scoped; a null field from a client that does not track it must not clobber a value another device set (see the `model = coalesce(excluded.model, …)` guard, ✅ `apps/web/app/api/chat/sync/route.ts`). Runtime session state below the conversation row — `agiworkforce-app-server` session config, token accounting, in-flight turn cursors (the `agiworkforce-task-runtime` crate this used to also cite was removed 2026-07-08, zero dependents, no replacement crate exists yet) — has no cross-device sync store today and is 🔭.
 
 ## Streaming Events — synchronize response streams
 
@@ -61,7 +61,7 @@ Requirement: conflict resolution is convergent, monotone, and lossless-by-tombst
 
 ## Competitor notes
 
-Claude, ChatGPT, and Codex sync history and settings across their apps by default, single-provider and cloud-anchored, with live remote-control windows (Claude Code Remote Control, Codex remote connections) that keep the session on the host. AGI matches the remote-window model but diverges on trust: sync is boundary-scoped — only Managed-Cloud rows sync Web ↔ Mobile ↔ Desktop, while Local and BYOK state never touches the cloud store, presence panel, or relay; models are provider-neutral (`packages/types/src/models.json`); CLI/VS Code/Chrome stay workspace-scoped. Unbuilt parity (live cross-device streaming, real presence) is 🔭, not faked.
+Claude, ChatGPT, and Codex sync history and settings across their apps by default, single-provider and cloud-anchored, with live remote-control windows (Claude Code Remote Control, Codex remote connections) that keep the session on the host. AGI matches the remote-window model but diverges on trust: sync is boundary-scoped — only Managed-Cloud rows sync Web ↔ Mobile ↔ Desktop, while Local and BYOK state never touches the cloud store, presence panel, or relay; models are provider-neutral (`packages/contracts/types/src/models.json`); CLI/VS Code/Chrome stay workspace-scoped. Unbuilt parity (live cross-device streaming, real presence) is 🔭, not faked.
 
 ## Acceptance / Definition of Done
 

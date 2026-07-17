@@ -15,7 +15,7 @@ Two designs were considered:
 
 ## Decision
 
-We use the per-call depth counter. `onChangeAppState({ prev, next, depth = 0 })` accepts an optional depth, propagates `depth + 1` to nested invocations, and rejects when `depth > MAX_FANOUT_DEPTH`. Implementation at `packages/runtime/src/state/onChangeAppState.ts:220-228`.
+We use the per-call depth counter. `onChangeAppState({ prev, next, depth = 0 })` accepts an optional depth, propagates `depth + 1` to nested invocations, and rejects when `depth > MAX_FANOUT_DEPTH`. Implementation at `packages/client-runtime/src/state/onChangeAppState.ts:220-228`.
 
 ## Consequences
 
@@ -34,4 +34,4 @@ We use the per-call depth counter. `onChangeAppState({ prev, next, depth = 0 })`
 
 - `docs/architecture/foundation-2026.md` §2.4.
 - `tasks/research/exec/1.3-report.md` §"Architectural Decisions" item 2.
-- `packages/runtime/src/state/onChangeAppState.ts:220-228`.
+- `packages/client-runtime/src/state/onChangeAppState.ts:220-228`.

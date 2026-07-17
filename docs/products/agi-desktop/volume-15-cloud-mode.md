@@ -48,7 +48,7 @@ Desktop defaults to **local** history and must not silently sync local chats to 
 
 ## Shared Backend Services
 
-Cloud Mode reuses the AGI Web backend: **Clerk** (auth), **Neon Postgres** with RLS (`getUserScopedDb`), and **Stripe** (billing). Desktop talks to it via `@agiworkforce/unified-chat` and the API gateway (`API_BASE_URL` / `WEB_APP_URL` in `apps/desktop/src/api/config.ts`). Egress is confined to `OUR_CLOUD_HOSTS` — `agiworkforce.com`, `vercel.app`, `neon.tech`, `clerk.com`, `clerk.accounts.dev` — in `egressGuard.ts`; BYOK provider hosts are deliberately absent so client-direct BYOK streaming is never blocked. ✅ Built (infra). Model IDs come only from `packages/types/src/models.json`.
+Cloud Mode reuses the AGI Web backend: **Clerk** (auth), **Neon Postgres** with RLS (`getUserScopedDb`), and **Stripe** (billing). Desktop talks to it via `@agiworkforce/unified-chat` and the API gateway (`API_BASE_URL` / `WEB_APP_URL` in `apps/desktop/src/api/config.ts`). Egress is confined to `OUR_CLOUD_HOSTS` — `agiworkforce.com`, `vercel.app`, `neon.tech`, `clerk.com`, `clerk.accounts.dev` — in `egressGuard.ts`; BYOK provider hosts are deliberately absent so client-direct BYOK streaming is never blocked. ✅ Built (infra). Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Usage Tracking
 
@@ -56,7 +56,7 @@ Cloud usage (period, counts) is modeled by `CloudUsage` in `apps/desktop/src/api
 
 ## Billing
 
-Billing renders through the lazily loaded `BillingSettings` (`apps/desktop/src/features/settings/tabs/Billing/index.tsx`), backed by Stripe; checkout is server-driven. 🟡 gap: `packages/types/src/billing-catalog.ts` still encodes older tiers (a `team` plan and no `basic`) and must be reconciled to the canon ladder (separate tracked task). Present tiers exactly as: Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise — never "Plus", `pro_plus`, "Hobby", or a consumer "Team".
+Billing renders through the lazily loaded `BillingSettings` (`apps/desktop/src/features/settings/tabs/Billing/index.tsx`), backed by Stripe; checkout is server-driven. 🟡 gap: `packages/contracts/types/src/billing-catalog.ts` still encodes older tiers (a `team` plan and no `basic`) and must be reconciled to the canon ladder (separate tracked task). Present tiers exactly as: Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise — never "Plus", `pro_plus`, "Hobby", or a consumer "Team".
 
 ## Desktop Enhancements
 
@@ -70,7 +70,7 @@ Beyond mirroring Web, Cloud Mode gains desktop-native capabilities. Desktop is t
 - `apps/desktop/src/{utils/subscriptionGate.ts,lib/cloudAccountTypes.ts}` — entitlements.
 - `apps/web/app/api/{chat,memory,projects}/sync/route.ts` — Neon delta-sync endpoints.
 - `apps/desktop/src-tauri/src/integrations/{realtime,sync,native_messaging}` — native host + dormant sync.
-- `packages/types/src/{billing-catalog.ts,models.json}` — tiers (reconcile) + model SSOT.
+- `packages/contracts/types/src/{billing-catalog.ts,models.json}` — tiers (reconcile) + model SSOT.
 
 ## Competitor notes
 
@@ -89,7 +89,7 @@ Cloud Mode is production-ready when Cloud is user-reachable on a signed build (D
 - Routing Local or BYOK chats/files through the cloud persistence client or `guardedFetch` allowlist.
 - Adding a Rust path for cloud chat persistence (cloud goes through the web API boundary only).
 - Re-adding the Privacy "Sync chat history to cloud" toggle before entitlement ungating.
-- Hardcoding model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Showing "Plus", `pro_plus`, "Hobby", top-ups, or a consumer "Team" tier; inventing Pro/Max INR prices.
 - Referencing Supabase, or renaming `proxy.ts` back to `middleware.ts`.
 - Claiming Cloud Mode is shipped while the PA-3 gate holds — it is 🟡 until DCL-4.

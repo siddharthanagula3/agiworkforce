@@ -5,7 +5,7 @@ Authority: `docs/agent-context/repo-map.json`, `docs/strategy/15-structure-and-g
 
 ## Philosophy & Cloud/Local stance
 
-The repo is a `pnpm` + `cargo` monorepo. Its shape is the architecture: thin clients (`apps/`) over a shared runtime (`packages/`, `crates/`), backed by `services/` and a canonical Neon database. The structure encodes the trust boundary too — secret-holding and local-execution code lives in surfaces and crates that can hold keys (Desktop stronghold, CLI keyring, Mobile SecureStore), while Web/Chrome surfaces are structured so they _cannot_ hold BYOK keys (Vol 25, Vol 30). Cloud-only logic concentrates in `services/` and `apps/web/db/neon`; local-only logic concentrates in `packages/local-llm`, `crates/`, and per-surface native code. Where a module must behave differently in Local vs Managed, that difference is gated at the contract boundary in `packages/types`, not scattered.
+The repo is a `pnpm` + `cargo` monorepo. Its shape is the architecture: thin clients (`apps/`) over a shared runtime (`packages/`, `crates/`), backed by `services/` and a canonical Neon database. The structure encodes the trust boundary too — secret-holding and local-execution code lives in surfaces and crates that can hold keys (Desktop stronghold, CLI keyring, Mobile SecureStore), while Web/Chrome surfaces are structured so they _cannot_ hold BYOK keys (Vol 25, Vol 30). Cloud-only logic concentrates in `services/` and `apps/web/db/neon`; local-only logic concentrates in `packages/platform/local-llm`, `crates/`, and per-surface native code. Where a module must behave differently in Local vs Managed, that difference is gated at the contract boundary in `packages/contracts/types`, not scattered.
 
 The target tree is the clean, deeply-modular shape of the best agent codebases: folder-per-tool, one concern per file, co-located prompt + UI + logic, barrel exports, domain-grouped `utils/`, isolated generated code (`docs/strategy/15` §1). We adopt the _patterns_ in AGI's own names; we apply them to new code and refactor toward them as each surface's production plan touches a subsystem.
 
@@ -32,7 +32,7 @@ Surfaces (`apps/`), each with a path-scoped `AGENTS.md` at high-risk surfaces:
 - `apps/extension-vscode` — VS Code IDE surface.
 - `apps/sandbox` — static single `index.html`, no build step; cross-origin artifact renderer, isolated (`postMessage` only).
 
-Shared TS (`packages/`): `types`, `providers`, `routing`, `runtime`, `llm-runtime`, `llm-normalize`, `unified-chat`, `mcp`, `skills`, `local-llm`, `browser-tool`, `apply-patch`, `stores`, `ui`, `design-tokens`, `data-layer`, `compliance`, `api`, `services`, `utils`, `react-native-worklets`.
+Shared TS (`packages/`): `types`, `providers`, `routing`, `runtime`, `provider-runtime`, `provider-protocol`, `unified-chat`, `mcp`, `skills`, `local-llm`, `browser-tool`, `apply-patch`, `stores`, `ui`, `design-tokens`, `data-layer`, `compliance`, `api`, `services`, `utils`, `react-native-worklets`.
 
 Shared Rust (`crates/`): `agiworkforce-protocol`, `agiworkforce-command-registry`, `agiworkforce-task-runtime`, `agiworkforce-execpolicy`, `sandbox-policy`, `agiworkforce-network-proxy`, `agiworkforce-plugin-runtime`, `agiworkforce-app-server`, `agiworkforce-apply-patch`, `agiworkforce-async-utils`, `agiworkforce-utils-*`.
 
@@ -67,7 +67,7 @@ Backend: `services/api-gateway`, `services/signaling-server` (path-scoped `servi
 
 - [ ] Codegen output lives under `*/generated/` and is not hand-edited.
 - [ ] Ported third-party code sits under an attributed path and is recorded in `PORTING-TRACKER.md`.
-- [ ] Shared contracts changed in `packages/types`, not duplicated in a surface.
+- [ ] Shared contracts changed in `packages/contracts/types`, not duplicated in a surface.
 
 ### Database & migrations
 

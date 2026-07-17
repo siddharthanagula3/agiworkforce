@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/desktop/AGENTS.md`, and verified repo paths: `apps/desktop/src/features/v3/DesktopShellV3.tsx`, `apps/desktop/src/features/v3/CodeModeHome.tsx`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`, `apps/desktop/src/features/mobile-companion/`, `apps/desktop/src/features/settings/tabs/`, `apps/desktop/src-tauri/src/core/llm/providers/`, `packages/types/src/models.json`.
+Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/desktop/AGENTS.md`, and verified repo paths: `apps/desktop/src/features/v3/DesktopShellV3.tsx`, `apps/desktop/src/features/v3/CodeModeHome.tsx`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`, `apps/desktop/src/features/mobile-companion/`, `apps/desktop/src/features/settings/tabs/`, `apps/desktop/src-tauri/src/core/llm/providers/`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -46,7 +46,7 @@ Trust-label accuracy = 100% of sessions show the correct mode; zero silent Local
 
 ## Business Goals
 
-Convert free Local/BYOK users into Managed-Cloud subscribers on the pricing ladder — **Free $0; Basic $8 (₹399); Pro $20; Max $100 and $200; Enterprise custom** — with no top-ups. Local and BYOK stay free access modes, not plans. 🟡 Partial — Desktop encodes older tiers pending reconciliation (`packages/types/src/billing-catalog.ts`; tracked gap).
+Convert free Local/BYOK users into Managed-Cloud subscribers on the pricing ladder — **Free $0; Basic $8 (₹399); Pro $20; Max $100 and $200; Enterprise custom** — with no top-ups. Local and BYOK stay free access modes, not plans. 🟡 Partial — Desktop encodes older tiers pending reconciliation (`packages/contracts/types/src/billing-catalog.ts`; tracked gap).
 
 ## Market Position
 
@@ -62,7 +62,7 @@ Claude Desktop centers one vendor with MCP connectors and Remote Control (resear
 - Local→BYOK is always an explicit, consented fork. 🔭 Planned.
 - Remote Control is a window, not a fourth trust mode. 🟡 (`apps/desktop/src/features/mobile-companion/`).
 - Keys in OS keychains, never plaintext. 🟡 (`managed_cloud_provider.rs` keyring).
-- Model IDs only from `packages/types/src/models.json`. ✅.
+- Model IDs only from `packages/contracts/types/src/models.json`. ✅.
 
 ## Desktop Architecture — Tauri v2 + React
 
@@ -96,7 +96,7 @@ Silent trust-boundary crossing (highest severity); companion control events re-e
 - `apps/desktop/src-tauri/src/integrations/realtime/` — `127.0.0.1` WS/IPC bridge host.
 - `apps/desktop/src-tauri/src/integrations/native_messaging/` — Chrome host `com.agiworkforce.browser`.
 - `apps/desktop/src-tauri/src/core/llm/providers/` — Local / BYOK / managed-cloud providers.
-- `packages/types/src/models.json` — model catalog SSOT.
+- `packages/contracts/types/src/models.json` — model catalog SSOT.
 
 ## Competitor notes
 
@@ -112,4 +112,4 @@ Production-ready when all three modes are selectable with correct visible labels
 
 ## Anti-patterns
 
-Do not silently route Local chats/files to BYOK or Cloud; do not invent model IDs (read `packages/types/src/models.json`); do not enable BYOK on Web/Mobile; do not reference Supabase or `middleware.ts`; do not use removed tiers (Plus/Hobby/`pro_plus`) or add top-ups or invent Pro/Max INR prices; do not claim shipped state without a real repo path; do not present the unmounted AGI Code or commented-out companion panel as live.
+Do not silently route Local chats/files to BYOK or Cloud; do not invent model IDs (read `packages/contracts/types/src/models.json`); do not enable BYOK on Web/Mobile; do not reference Supabase or `middleware.ts`; do not use removed tiers (Plus/Hobby/`pro_plus`) or add top-ups or invent Pro/Max INR prices; do not claim shipped state without a real repo path; do not present the unmounted AGI Code or commented-out companion panel as live.

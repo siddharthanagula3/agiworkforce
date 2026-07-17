@@ -130,7 +130,7 @@
       "volume": 11,
       "domain": "Context System",
       "paths": [
-        "packages/runtime",
+        "packages/client-runtime",
         "packages/llm-runtime",
         "packages/routing",
         "packages/mcp/src",
@@ -147,7 +147,7 @@
         "apps/desktop/src/features/memory",
         "apps/desktop/src/features/memory-panel",
         "apps/web/features/settings",
-        "packages/runtime",
+        "packages/client-runtime",
         "packages/validation/schemas.ts"
       ],
       "owner": "Platform lead"
@@ -193,10 +193,10 @@
       "volume": 16,
       "domain": "AI Features",
       "paths": [
-        "packages/api/src/research.ts",
-        "packages/api/src/thinking.ts",
-        "packages/api/src/voice.ts",
-        "packages/api/src/media.ts",
+        "packages/desktop-command-client/src/research.ts",
+        "packages/desktop-command-client/src/thinking.ts",
+        "packages/desktop-command-client/src/voice.ts",
+        "packages/desktop-command-client/src/media.ts",
         "apps/cli/src/features/exec/tools/web.rs",
         "packages/unified-chat/src/hooks/useVoiceInput.ts"
       ],
@@ -212,8 +212,8 @@
         "apps/cli/src/platform/policy",
         "crates/agiworkforce-execpolicy",
         "crates/sandbox-policy",
-        "packages/api/src/agent.ts",
-        "packages/api/src/scheduler.ts"
+        "packages/desktop-command-client/src/agent.ts",
+        "packages/desktop-command-client/src/scheduler.ts"
       ],
       "owner": "CLI lead"
     },
@@ -226,7 +226,7 @@
         "crates/agiworkforce-execpolicy",
         "crates/agiworkforce-network-proxy",
         "crates/sandbox-policy",
-        "packages/api/src/toolConfirmation.ts",
+        "packages/desktop-command-client/src/toolConfirmation.ts",
         "packages/types/src/tool-display.ts"
       ],
       "owner": "CLI lead"
@@ -238,7 +238,7 @@
         "apps/cli/src/features/mcp",
         "crates/agiworkforce-protocol/src/mcp.rs",
         "crates/agiworkforce-protocol/src/dynamic_tools.rs",
-        "packages/api/src/mcp.ts",
+        "packages/desktop-command-client/src/mcp.ts",
         "packages/types/src/mcp-apps.ts",
         "services/api-gateway/src/mcp/mcpConfig.ts"
       ],
@@ -248,7 +248,7 @@
       "volume": 20,
       "domain": "Connectors",
       "paths": [
-        "packages/api/src/mcp.ts",
+        "packages/desktop-command-client/src/mcp.ts",
         "packages/types/src/design-system/connector-permission.ts",
         "packages/types/src/design-system/settings-ia.ts",
         "packages/ui/src/settings-modal",
@@ -261,7 +261,7 @@
       "volume": 21,
       "domain": "Skills",
       "paths": [
-        "packages/api/src/skills.ts",
+        "packages/desktop-command-client/src/skills.ts",
         "packages/skills/src",
         "crates/agiworkforce-plugin-runtime",
         "services/api-gateway/src/services/skillsCatalog.ts",
@@ -277,7 +277,7 @@
         "apps/cli/src/features/plugins",
         "apps/cli/src/features/hooks",
         "apps/cli/src/features/mcp",
-        "packages/api/src/marketplace.ts"
+        "packages/desktop-command-client/src/marketplace.ts"
       ],
       "owner": "CLI lead"
     },
@@ -314,7 +314,7 @@
       "paths": [
         "apps/web/db/neon",
         "packages/data-layer",
-        "packages/stores",
+        "packages/artifacts",
         "apps/desktop/src-tauri",
         "apps/mobile/lib/mmkv.ts",
         "apps/mobile/lib/secureStorage.ts",
@@ -327,7 +327,8 @@
       "domain": "Synchronization",
       "paths": [
         "packages/data-layer",
-        "packages/stores",
+        "packages/artifacts",
+        "packages/sync",
         "services/signaling-server/src",
         "apps/mobile/services/remoteChatGate.ts",
         "apps/web/db/neon",
@@ -343,7 +344,7 @@
         "apps/web/db/neon/0015_organizations.sql",
         "apps/web/db/neon/0025_two_factor.sql",
         "crates/agiworkforce-protocol/src/auth.rs",
-        "packages/api/src/auth.ts",
+        "packages/desktop-command-client/src/auth.ts",
         "services/api-gateway/src/middleware/auth.ts"
       ],
       "owner": "Backend/data lead"
@@ -365,8 +366,8 @@
       "domain": "Observability",
       "paths": [
         "apps/web/core/monitoring",
-        "packages/api/src/analytics.ts",
-        "packages/api/src/errorReporting.ts",
+        "packages/desktop-command-client/src/analytics.ts",
+        "packages/desktop-command-client/src/errorReporting.ts",
         "services/api-gateway/src/lib/logger.ts",
         "services/api-gateway/src/middleware/managedComputeGate.ts",
         "services/signaling-server/src/metrics.ts"
@@ -377,7 +378,7 @@
       "volume": 30,
       "domain": "Security",
       "paths": [
-        "packages/api/src/security.ts",
+        "packages/desktop-command-client/src/security.ts",
         "packages/utils/src/crypto.ts",
         "apps/web/core/security/prompt-injection-detector.test.ts",
         "apps/web/db/neon/0014_security.sql",
@@ -421,8 +422,8 @@
       "paths": [
         "apps/cli",
         "apps/extension-vscode",
-        "packages/api/src",
-        "packages/runtime/src",
+        "packages/desktop-command-client/src",
+        "packages/client-runtime/src",
         "packages/types",
         "crates/agiworkforce-protocol/src/parse_command.rs",
         "docs/engineering/naming-conventions.md"

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root), `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon). Grounded in the repo paths cited per section and listed in the Repository map below; model IDs are read only from `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon). Grounded in the repo paths cited per section and listed in the Repository map below; model IDs are read only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -80,7 +80,7 @@ The approval spine is multi-layered. ✅ Built (`package.json`, `desktopBridge.t
 
 ## Competitor notes
 
-Claude Code and the Codex IDE extension expose a broad tool belt (file, terminal, git, MCP, web fetch) inside chat/edit/agent modes with inline diff review and approvals. AGI's deliberate divergence: (1) **multi-provider** — tools are provider-agnostic and the active model comes only from `packages/types/src/models.json`; (2) **per-surface trust** — BYOK is allowed here (unlike Web/Mobile), but tool execution is always local and workspace-scoped; (3) **local-first** — writes/terminal/git require workspace trust, and external tools (HTTP, web search, network MCP) are gated behind approval and, where relevant, Managed Cloud; (4) **no silent handoff** — nothing the agent touches is auto-synced to app chat.
+Claude Code and the Codex IDE extension expose a broad tool belt (file, terminal, git, MCP, web fetch) inside chat/edit/agent modes with inline diff review and approvals. AGI's deliberate divergence: (1) **multi-provider** — tools are provider-agnostic and the active model comes only from `packages/contracts/types/src/models.json`; (2) **per-surface trust** — BYOK is allowed here (unlike Web/Mobile), but tool execution is always local and workspace-scoped; (3) **local-first** — writes/terminal/git require workspace trust, and external tools (HTTP, web search, network MCP) are gated behind approval and, where relevant, Managed Cloud; (4) **no silent handoff** — nothing the agent touches is auto-synced to app chat.
 
 ## Acceptance / Definition of Done
 

@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/desktop/AGENTS.md`; grounded in `apps/desktop/src-tauri/src/sys/commands/media.rs`, `apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs`, `apps/desktop/src/api/media.ts`, `apps/desktop/src/stores/mediaGenerationStore.ts`, `apps/desktop/src/types/media.ts`, `apps/desktop/src/features/images/ImagesGallery.tsx`, `apps/web/app/api/media/image/generate/route.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/desktop/AGENTS.md`; grounded in `apps/desktop/src-tauri/src/sys/commands/media.rs`, `apps/desktop/src-tauri/src/core/agi/executors/media_executor.rs`, `apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs`, `apps/desktop/src/api/media.ts`, `apps/desktop/src/stores/mediaGenerationStore.ts`, `apps/desktop/src/types/media.ts`, `apps/desktop/src/features/images/ImagesGallery.tsx`, `apps/web/app/api/media/image/generate/route.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies AGI Desktop's image-generation surface: prompting, editing, inpainting, outpainting, aspect ratios, history, safety, download, and export. Desktop is the full-trust surface (Local + BYOK + Managed Cloud), but image generation today follows a **Managed-Cloud-first** shape. The wired path is the Tauri command `media_generate_image`, which posts to the web route `/api/media/image/generate` with a Clerk access token (`apps/desktop/src-tauri/src/sys/commands/media.rs`); the same route resolves catalog model IDs and `imageApi` server-side (`apps/web/app/api/media/image/generate/route.ts`). Provider selection is driven by capability metadata in the catalog (`packages/types/src/models.json`, entries with `"modelType": "image"` and an `imageApi` of `gemini` / `imagen` / `stability` / `openai`); this volume references that catalog rather than re-listing engine IDs, which drift.
+This volume specifies AGI Desktop's image-generation surface: prompting, editing, inpainting, outpainting, aspect ratios, history, safety, download, and export. Desktop is the full-trust surface (Local + BYOK + Managed Cloud), but image generation today follows a **Managed-Cloud-first** shape. The wired path is the Tauri command `media_generate_image`, which posts to the web route `/api/media/image/generate` with a Clerk access token (`apps/desktop/src-tauri/src/sys/commands/media.rs`); the same route resolves catalog model IDs and `imageApi` server-side (`apps/web/app/api/media/image/generate/route.ts`). Provider selection is driven by capability metadata in the catalog (`packages/contracts/types/src/models.json`, entries with `"modelType": "image"` and an `imageApi` of `gemini` / `imagen` / `stability` / `openai`); this volume references that catalog rather than re-listing engine IDs, which drift.
 
 A direct BYOK image client exists (`ImageGenerationClient` in `image_gen.rs`, covering OpenAI GPT Image, Stability, and Google Imagen with a user key) but has **no callers** — it is not yet routed from any command or executor. When wired, BYOK image generation must obey the Local→BYOK fork contract (context selection, secret scan, payload preview, visible provider label, consent) and stay Desktop/CLI/VS Code-only. On-device (Local) image generation is not present. Model IDs are never hardcoded: the Rust path resolves `apiModelId` from the catalog via `resolve_image_model` before calling a provider.
 
@@ -18,7 +18,7 @@ Text-to-image prompting is the primary flow. A prompt (plus optional `negative_p
 
 ## Editing
 
-Image-to-image editing (upload or select a source image, describe a change, regenerate) is **not implemented**. The catalog marks GPT Image 2 as capable of image editing (`bestFor` in `packages/types/src/models.json`), but no Desktop command, executor, or web route accepts a source image for edit: 🔭 Planned. Requirement when built: an explicit edit request must carry the source image plus prompt, route through the same trust-mode gate as generation, and never silently upload a Local file to Cloud without the transfer consent step.
+Image-to-image editing (upload or select a source image, describe a change, regenerate) is **not implemented**. The catalog marks GPT Image 2 as capable of image editing (`bestFor` in `packages/contracts/types/src/models.json`), but no Desktop command, executor, or web route accepts a source image for edit: 🔭 Planned. Requirement when built: an explicit edit request must carry the source image plus prompt, route through the same trust-mode gate as generation, and never silently upload a Local file to Cloud without the transfer consent step.
 
 ## Inpainting
 
@@ -56,7 +56,7 @@ Structured export — save-to-Project/Artifact, batch export, or export with met
 - `apps/desktop/src/api/media.ts`, `apps/desktop/src/stores/mediaGenerationStore.ts`, `apps/desktop/src/stores/editingStore.ts`, `apps/desktop/src/types/media.ts`.
 - `apps/desktop/src/features/images/ImagesGallery.tsx`, `apps/desktop/src/features/images/ImageStylePresets.tsx`, `apps/desktop/src/features/chat/MediaLab.tsx`, `apps/desktop/src/features/chat/InlineToolResults/InlineMediaGeneration.tsx`, `apps/desktop/src/features/chat/InlinePanels/ImageInlinePanel.tsx`, `apps/desktop/src/features/media/MediaGenerationProgress.tsx`.
 - `apps/web/app/api/media/image/generate/route.ts` — Managed-Cloud generation route.
-- `packages/types/src/models.json` — image model catalog (`modelType: "image"`, `imageApi`).
+- `packages/contracts/types/src/models.json` — image model catalog (`modelType: "image"`, `imageApi`).
 
 ## Competitor notes
 
@@ -72,7 +72,7 @@ Production-ready when: generation succeeds from every entry point through one co
 
 ## Anti-patterns
 
-- Hardcoding image model IDs — always resolve `apiModelId`/`imageApi` from `packages/types/src/models.json` (as `resolve_image_model` does).
+- Hardcoding image model IDs — always resolve `apiModelId`/`imageApi` from `packages/contracts/types/src/models.json` (as `resolve_image_model` does).
 - Offering BYOK image generation on Web or Mobile, or auto-forking Local→BYOK without consent, secret scan, and payload preview.
 - Silently uploading a Local source image to Cloud for edit/inpaint/outpaint.
 - Claiming editing/inpainting/outpainting/export as shipped — they are 🔭 with no repo path.

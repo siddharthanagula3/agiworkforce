@@ -224,7 +224,7 @@ Set the floor from what the suite _actually reports today_, then forbid regressi
 Non-determinism is the enemy of regression. Before a regression run, pin everything you can:
 
 1. **Fixed device/sim profile.** Use the same simulator (per `detox.config.js` the canonical device is **iPhone 17 Pro**) at the same OS via the session defaults (Phase 24's `session_use_defaults_profile`). Same device + OS = comparable screenshots.
-2. **Fixed model.** Pin the chat model so the _plumbing_ is what's under test, not the model's prose. Read the model id from `packages/types/src/models.json` (never hardcode/guess a model id). For Local mode, pin the installed local model; for Cloud, pin one model id and one effort setting.
+2. **Fixed model.** Pin the chat model so the _plumbing_ is what's under test, not the model's prose. Read the model id from `packages/contracts/types/src/models.json` (never hardcode/guess a model id). For Local mode, pin the installed local model; for Cloud, pin one model id and one effort setting.
 3. **Seeded prompts.** Use a fixed prompt set so the same tool calls fire each run: one plain prompt, one that forces a tool call (web_search/MCP), one long prompt for long-list scroll, one that triggers an artifact. Store them in the run config.
 4. **Appearance + type fixed per pass.** Run the visual diff pass twice deliberately (light, then dark) and at default + one larger Dynamic Type — but compare light-vs-light and dark-vs-dark, never across appearances.
 5. **Stable clock/state where it matters.** Start from a known state (fresh install or a seeded conversation) so "empty state vs populated" isn't a spurious diff. Reset between runs (`stop_app_sim` + reinstall clean) when a test needs a virgin app.
@@ -621,7 +621,7 @@ Confirm each tool was exercised somewhere across Parts 1–4. Tools whose **firs
 
 Run id: <YYYY-MM-DD-HHMM> Device/OS: <e.g. iPhone 17 Pro / iOS xx.x>
 Build: <Debug|Release> <bundle id> <build hash/path from get_sim_app_path>
-Model pinned: <model id from packages/types/src/models.json> Appearance: <light|dark + Dynamic Type>
+Model pinned: <model id from packages/contracts/types/src/models.json> Appearance: <light|dark + Dynamic Type>
 Operator: autonomous QA agent (XcodeBuildMCP, 44 tools)
 
 ## 1. Per-phase result

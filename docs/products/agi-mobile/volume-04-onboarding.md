@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified against real repo paths: `apps/mobile/app/index.tsx`, `apps/mobile/app/(public)/{_layout,age-gate,onboarding}.tsx`, `apps/mobile/src/features/onboarding/`, `apps/mobile/services/{modelDownload,complianceLedger,notifications}.ts`, `apps/mobile/src/features/auth/services/ageGate.ts`, `apps/mobile/src/features/voice/services/voiceInput.ts`, `apps/mobile/src/features/settings/personalization/index.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app.config.js`, and `packages/local-llm/src/catalog.ts`. Local on-device model selection comes from the local catalog; cloud model IDs (when surfaced later) come only from `packages/types/src/models.json`.
+Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified against real repo paths: `apps/mobile/app/index.tsx`, `apps/mobile/app/(public)/{_layout,age-gate,onboarding}.tsx`, `apps/mobile/src/features/onboarding/`, `apps/mobile/services/{modelDownload,complianceLedger,notifications}.ts`, `apps/mobile/src/features/auth/services/ageGate.ts`, `apps/mobile/src/features/voice/services/voiceInput.ts`, `apps/mobile/src/features/settings/personalization/index.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app.config.js`, and `packages/platform/local-llm/src/catalog.ts`. Local on-device model selection comes from the local catalog; cloud model IDs (when surfaced later) come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -26,7 +26,7 @@ Requirements: onboarding to working Local chat requires **zero** OS permissions.
 
 ## Feature Introduction
 
-The shipped introduction is a 3-screen flow: **Hero** (brand + value line) → device-tier disclosure → **Device tier** (detected device, recommended local model, optional model picker) → **Download** (radial progress, background-safe, skippable once the model is loaded). ✅ Built (`apps/mobile/app/(public)/onboarding.tsx`; model catalog via `packages/local-llm/src/catalog.ts` `getDefaultModel`/`getShippableModels`; picker `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx`).
+The shipped introduction is a 3-screen flow: **Hero** (brand + value line) → device-tier disclosure → **Device tier** (detected device, recommended local model, optional model picker) → **Download** (radial progress, background-safe, skippable once the model is loaded). ✅ Built (`apps/mobile/app/(public)/onboarding.tsx`; model catalog via `packages/platform/local-llm/src/catalog.ts` `getDefaultModel`/`getShippableModels`; picker `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx`).
 
 A first-run **compliance disclosure** (EU AI Act Article 50 transparency) fires before the device-tier screen and is recorded in an MMKV ledger. ✅ Built (`FirstRunDisclosureModal.tsx`, `@agiworkforce/compliance`, `apps/mobile/services/complianceLedger.ts`). On mobile first-run the disclosure declares **no third-party cloud providers** (`offersManagedCloud: false`).
 
@@ -66,7 +66,7 @@ Requirements: completion is idempotent and survives relaunch; a user who skips t
 - `apps/mobile/services/{modelDownload,complianceLedger,notifications}.ts`; `apps/mobile/storage/installedModels.ts`.
 - `apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx`; `apps/mobile/src/features/voice/services/voiceInput.ts`; `apps/mobile/src/features/settings/personalization/index.tsx`.
 - `apps/mobile/lib/{v1FeatureFlags,mmkv}.ts`; `apps/mobile/app.config.js`.
-- Shared: `packages/local-llm/src/catalog.ts`; `@agiworkforce/compliance`.
+- Shared: `packages/platform/local-llm/src/catalog.ts`; `@agiworkforce/compliance`.
 
 ## Competitor notes
 
@@ -85,6 +85,6 @@ Onboarding is production-ready when a fresh install reaches a working Local chat
 - Do **not** add any BYOK / API-key entry to mobile onboarding.
 - Do **not** put a sign-in wall before Local chat, or make Cloud sign-in a completion blocker.
 - Do **not** auto-route Local chats/files to Managed Cloud without explicit consent and payload preview.
-- Do **not** hardcode or invent model IDs; read on-device models from `packages/local-llm/src/catalog.ts` and cloud IDs from `packages/types/src/models.json`.
+- Do **not** hardcode or invent model IDs; read on-device models from `packages/platform/local-llm/src/catalog.ts` and cloud IDs from `packages/contracts/types/src/models.json`.
 - Do **not** request OS permissions upfront or promise notification categories whose flags are off.
 - Do **not** claim a 🔭 step (personalization, voice primer, notification primer, guided tour) is shipped, and never reference Supabase or removed tiers (Plus / pro_plus / Hobby).

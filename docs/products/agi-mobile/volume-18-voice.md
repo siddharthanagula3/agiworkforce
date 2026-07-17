@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`. Grounded in real repo paths: `apps/mobile/src/features/voice/` (services `voiceInput.ts`, `voice.ts`, `tts.ts`, `voiceOutput.ts`; components `VoiceConversationScreen.tsx`, `VoiceSelector.tsx`; hook `useVoicePlayback.ts`; `voicePresets.ts`), `apps/mobile/src/features/settings/voice/index.tsx`, `apps/mobile/stores/settingsStore.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app.config.js`, and `packages/types/src/models.json` (model SSOT).
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`. Grounded in real repo paths: `apps/mobile/src/features/voice/` (services `voiceInput.ts`, `voice.ts`, `tts.ts`, `voiceOutput.ts`; components `VoiceConversationScreen.tsx`, `VoiceSelector.tsx`; hook `useVoicePlayback.ts`; `voicePresets.ts`), `apps/mobile/src/features/settings/voice/index.tsx`, `apps/mobile/stores/settingsStore.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app.config.js`, and `packages/contracts/types/src/models.json` (model SSOT).
 
 ## Overview & stance
 
-Voice on AGI Mobile is **local-first by default**. Speech-to-text and text-to-speech run on-device through the platform speech engines, so a user can hold a spoken conversation with a Local on-device model with no audio leaving the phone. Mobile exposes exactly two trust modes — **Local** (on-device LLM, free) and **Managed Cloud** (public alpha, real auth gate). **There is no BYOK on mobile**: the "Provider" choice in voice settings selects an on-device versus a future AGI-Cloud speech engine, never a user-supplied API key. Cloud STT/TTS helpers exist but stay behind `FEATURES.cloudChat` and a hard-locked provider toggle; they must obey the same trust boundary as cloud chat (Clerk auth, egress guard, fail-closed in Local mode). Models that back cloud voice resolve only from `packages/types/src/models.json` — never a hardcoded ID. This volume covers the spoken conversation loop, recognition, synthesis, playback, voice selection, interruption, and audio routing.
+Voice on AGI Mobile is **local-first by default**. Speech-to-text and text-to-speech run on-device through the platform speech engines, so a user can hold a spoken conversation with a Local on-device model with no audio leaving the phone. Mobile exposes exactly two trust modes — **Local** (on-device LLM, free) and **Managed Cloud** (public alpha, real auth gate). **There is no BYOK on mobile**: the "Provider" choice in voice settings selects an on-device versus a future AGI-Cloud speech engine, never a user-supplied API key. Cloud STT/TTS helpers exist but stay behind `FEATURES.cloudChat` and a hard-locked provider toggle; they must obey the same trust boundary as cloud chat (Clerk auth, egress guard, fail-closed in Local mode). Models that back cloud voice resolve only from `packages/contracts/types/src/models.json` — never a hardcoded ID. This volume covers the spoken conversation loop, recognition, synthesis, playback, voice selection, interruption, and audio routing.
 
 ## Voice Conversations — full duplex
 
@@ -69,7 +69,7 @@ Today playback and capture use the **OS default audio route**; there is no expli
 - `apps/mobile/src/features/settings/voice/index.tsx`, `settings/voice-language/` — voice settings + provider/auto-listen/rate.
 - `apps/mobile/stores/settingsStore.ts` — `selectedVoiceId`, `speechRate`, `speechPitch`, `selectedPresetId`, `ttsProvider`.
 - `apps/mobile/lib/v1FeatureFlags.ts` — `FEATURES.cloudChat` gate. `apps/mobile/app.config.js` — mic/speech permissions + `expo-speech-recognition` plugin.
-- `packages/types/src/models.json` — model SSOT for any cloud-backed voice model.
+- `packages/contracts/types/src/models.json` — model SSOT for any cloud-backed voice model.
 
 ## Competitor notes
 
@@ -94,6 +94,6 @@ Production-ready when: on-device STT and TTS work offline against a Local model;
 - Adding a BYOK / API-key field to any voice screen (mobile has no BYOK — ever).
 - Silently routing Local voice audio or transcripts to Deepgram/cloud TTS without explicit cloud mode + consent.
 - Claiming full duplex, natural barge-in, or Bluetooth route control as shipped — they are 🔭 Planned.
-- Hardcoding a voice model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a voice model ID instead of reading `packages/contracts/types/src/models.json`.
 - Making mobile the first heavy synthesis/recognition compute surface; delegate heavy cloud voice work upstream.
 - Referencing Supabase or any retired tier (Plus/Hobby/pro_plus) in pricing or gating copy.

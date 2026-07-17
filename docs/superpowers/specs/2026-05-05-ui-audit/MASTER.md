@@ -154,7 +154,7 @@ Where does per-connector and per-tool permission config live for BYOK/Local user
 - A. Cloud-first — store in `connectorsStore` Supabase table; require login for any connector use.
 - B. Local-first — store in `~/.agiworkforce/connectors.json` (encrypted) on desktop, AsyncStorage on mobile.
 - C. Hybrid — local for BYOK/Local users, Supabase for Cloud users, sync on auth.
-- **Recommendation: C.** Matches the `Local mode (Desktop only)` vs `Cloud mode` architecture already in the project memory. Detection via `packages/runtime/src/detect.ts` (`isTauri`, `isCloudWeb`).
+- **Recommendation: C.** Matches the `Local mode (Desktop only)` vs `Cloud mode` architecture already in the project memory. Detection via `packages/client-runtime/src/detect.ts` (`isTauri`, `isCloudWeb`).
 
 **DECISION 2 — Billing-tab destination.**
 Stripe portal redirect or inline subscription summary?

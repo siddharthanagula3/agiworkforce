@@ -96,5 +96,5 @@ Security
 - Do not sync schedules, run history, or memory across devices or to the cloud; no Neon delta-sync, no Projects.
 - Do not route a scheduled prompt to any provider host, embed provider keys, or add BYOK/Local on Chrome.
 - Do not hold schedule state only in worker memory (MV3 kills it); do not assume exact wall-clock firing.
-- Do not hardcode or invent model IDs — resolve via the catalog (`packages/types/src/models.json`); do not reference Supabase or removed tiers ("Plus", `pro_plus`, "Hobby"), and never spec in-extension checkout or credit top-ups.
+- Do not hardcode or invent model IDs — resolve via the catalog (`packages/contracts/types/src/models.json`); do not reference Supabase or removed tiers ("Plus", `pro_plus`, "Hobby"), and never spec in-extension checkout or credit top-ups.
 - Do not claim annually/quarterly scheduling as shipped — it is 🔭 Planned until `ScheduleType` and `getAlarmPeriod` support it.

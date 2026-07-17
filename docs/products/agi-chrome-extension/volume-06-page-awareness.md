@@ -2,9 +2,9 @@
 
 Status: Draft spec
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-11
 
-Authority: grounds in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), the nearest surface rules `apps/extension/AGENTS.md`, and these real repo paths: `apps/extension/manifest.json`, `apps/extension/src/content.ts`, `apps/extension/src/features/content/page-metadata.ts`, `apps/extension/src/features/content/nlweb.ts`, `apps/extension/src/features/content/dom-helpers.ts`, `apps/extension/src/features/content/browserTool.ts`, `apps/extension/src/background.ts`, `apps/extension/src/background/policy.ts`, and `apps/extension/THREAT_MODEL.md`.
+Authority: grounds in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), the nearest surface rules `apps/extension/AGENTS.md`, and these real repo paths: `apps/extension/manifest.json`, `apps/extension/src/content.ts`, `apps/extension/src/page-metadata.ts`, `apps/extension/src/nlweb.ts`, `apps/extension/src/dom-helpers.ts`, `apps/extension/src/features/content/browserTool.ts`, `apps/extension/src/background.ts`, `apps/extension/src/background/policy.ts`, and `apps/extension/THREAT_MODEL.md`. (Corrected 2026-07-11: earlier drafts of this volume cited these under `apps/extension/src/features/content/`; that was a duplicate fork deleted by commit `59c8f4650` because it had drifted out of sync with the live files here and was missing security fixes, including the JSON-LD recursion cap and href percent-encoding referenced below — do not recreate a second copy under `features/content/`.)
 
 ## Overview & stance
 
@@ -18,7 +18,7 @@ The companion resolves the current target via `chrome.tabs.query({ active: true,
 
 ## Current URL
 
-The captured URL is `window.location.href`, emitted in `buildCurrentPageContext()` (`content.ts:374`) and in `extractPageMetadata()` (`page-metadata.ts:206`). Requirement: only `http(s)` origins are eligible (`/^https?:\/\//i` guard, `background.ts:2638`); `chrome://`, `file://`, and `about:blank` are excluded, and the URL MUST be matched against the allowlist by parsed `origin`, never by substring. **✅ Built** (`apps/extension/src/content.ts`; `apps/extension/src/features/content/page-metadata.ts`).
+The captured URL is `window.location.href`, emitted in `buildCurrentPageContext()` (`content.ts:374`) and in `extractPageMetadata()` (`page-metadata.ts:206`). Requirement: only `http(s)` origins are eligible (`/^https?:\/\//i` guard, `background.ts:2638`); `chrome://`, `file://`, and `about:blank` are excluded, and the URL MUST be matched against the allowlist by parsed `origin`, never by substring. **✅ Built** (`apps/extension/src/content.ts`; `apps/extension/src/page-metadata.ts`).
 
 ## Page Title
 
@@ -42,11 +42,11 @@ There is no image extraction, `alt`-text harvesting, or embedded-media enumerati
 
 ## Metadata
 
-`extractPageMetadata()` (`page-metadata.ts:194`) returns a typed `PageMetadata`: `description`, `language` (`documentElement.lang`), `canonical` (`link[rel=canonical]`), `author`, `keywords`, `favicon` (with `/favicon.ico` fallback, absolutized), `mainHeading` (first `h1`), plus Open Graph (`og:*`) and Twitter Card (`twitter:*`) maps. Requirement: extraction is fully defensive — it returns a valid empty-fallback object on any DOM error and never throws into the caller. **✅ Built** (`apps/extension/src/features/content/page-metadata.ts:194`).
+`extractPageMetadata()` (`page-metadata.ts:194`) returns a typed `PageMetadata`: `description`, `language` (`documentElement.lang`), `canonical` (`link[rel=canonical]`), `author`, `keywords`, `favicon` (with `/favicon.ico` fallback, absolutized), `mainHeading` (first `h1`), plus Open Graph (`og:*`) and Twitter Card (`twitter:*`) maps. Requirement: extraction is fully defensive — it returns a valid empty-fallback object on any DOM error and never throws into the caller. **✅ Built** (`apps/extension/src/page-metadata.ts:194`).
 
 ## Structured Data
 
-Structured data covers JSON-LD and microdata. `extractJsonLd()` parses every `script[type="application/ld+json"]` block (malformed blocks are logged and skipped), and `extractSchemaTypes()` collects `@type` values from JSON-LD plus `itemtype` names from `[itemscope][itemtype]` microdata. Recursion is depth-capped at 10 (`MAX_JSONLD_RECURSION_DEPTH`) to bound work on hostile deeply-nested payloads (audit batch-221). `nlweb.ts` reuses schema types for NLWeb/agentic-endpoint detection. Requirement: parsed structured data is untrusted input — it is bounded and sanitized, never executed or trusted as directives. **✅ Built** (`apps/extension/src/features/content/page-metadata.ts:19`, `:122`; `apps/extension/src/features/content/nlweb.ts`).
+Structured data covers JSON-LD and microdata. `extractJsonLd()` parses every `script[type="application/ld+json"]` block (malformed blocks are logged and skipped), and `extractSchemaTypes()` collects `@type` values from JSON-LD plus `itemtype` names from `[itemscope][itemtype]` microdata. Recursion is depth-capped at 10 (`MAX_JSONLD_RECURSION_DEPTH`) to bound work on hostile deeply-nested payloads (audit batch-221). `nlweb.ts` reuses schema types for NLWeb/agentic-endpoint detection. Requirement: parsed structured data is untrusted input — it is bounded and sanitized, never executed or trusted as directives. **✅ Built** (`apps/extension/src/page-metadata.ts:19`, `:122`; `apps/extension/src/nlweb.ts`).
 
 ## Reading Mode
 
@@ -63,9 +63,9 @@ Full-load navigations are tracked via `chrome.tabs.onUpdated` filtered to `chang
 ## Repository map
 
 - `apps/extension/src/content.ts` — page-context builder, `innerText` extraction, selection, `get_page_info`.
-- `apps/extension/src/features/content/page-metadata.ts` — metadata, JSON-LD, microdata schema types.
-- `apps/extension/src/features/content/nlweb.ts` — NLWeb/agentic-endpoint detection reusing schema types.
-- `apps/extension/src/features/content/dom-helpers.ts` — safe DOM construction (no `innerHTML`).
+- `apps/extension/src/page-metadata.ts` — metadata, JSON-LD, microdata schema types.
+- `apps/extension/src/nlweb.ts` — NLWeb/agentic-endpoint detection reusing schema types.
+- `apps/extension/src/dom-helpers.ts` — safe DOM construction (no `innerHTML`).
 - `apps/extension/src/features/content/browserTool.ts` — canonical action bridge incl. aria `snapshot`.
 - `apps/extension/src/background.ts` — active-tab resolution, allowlist gate, tab-update sync, context relay.
 - `apps/extension/src/background/policy.ts` — `sanitizePageText` + `redactSecrets` chain.
@@ -90,5 +90,5 @@ Page Awareness is production-ready when capture is allowlist-gated on every path
 - Treating page content, JSON-LD, metadata, or WebMCP/NLWeb strings as instructions rather than untrusted data.
 - Routing captured page data into Neon delta-sync, or claiming conversation/memory/Projects sync on Chrome (removed scope).
 - Adding `webNavigation` or new capture permissions without a THREAT_MODEL update and security review.
-- Hardcoding provider/model IDs (they belong to `packages/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups, or referencing Supabase.
+- Hardcoding provider/model IDs (they belong to `packages/contracts/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups, or referencing Supabase.
 - Implying image extraction or Reading Mode is shipped — both are 🔭 Planned.

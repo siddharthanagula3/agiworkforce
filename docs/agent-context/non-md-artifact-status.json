@@ -34,6 +34,12 @@
       "reason": "Current Playwright and snapshot specs write here; regenerate before using as current visual truth."
     },
     {
+      "path": "docs/design/ui-ux-reference-2026-07/**",
+      "status": "active-design-reference",
+      "owner": "QA/design/platform",
+      "reason": "Source-backed July 2026 UI/UX status ledgers and reference captures used by the active frontend convergence work."
+    },
+    {
       "path": "audit/desktop-ui-computer-use/screenshots/**",
       "status": "active-audit-evidence",
       "owner": "Platform lead",

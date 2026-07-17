@@ -24,7 +24,7 @@ Cloud/Local stance in governance terms: the trust boundary is the one rule that 
 ## Repository map / authority docs
 
 - Constitution + precedence + Operating Laws + volume index: `docs/spec/AGI_CODE_MASTER_SPEC.md`.
-- Agent entry + mirrored critical rules: `AGENTS.md`, `CLAUDE.md`, path-scoped `apps/*/AGENTS.md`, `packages/providers/AGENTS.md`, `services/AGENTS.md`.
+- Agent entry + mirrored critical rules: `AGENTS.md`, `CLAUDE.md`, path-scoped `apps/*/AGENTS.md`, `packages/ai/providers/AGENTS.md`, `services/AGENTS.md`.
 - The loop protocol + phases + gates: `docs/strategy/11-execution-playbook.md`; live status + license register: `PORTING-TRACKER.md`; attribution: `THIRD_PARTY_NOTICES.md`.
 - Working detail: `docs/current/` (source-of-truth, parity matrix, PRD, BYOK strategy, trust-mode matrix), `docs/engineering/` (naming, service-layer, harness rollout), `docs/agent-context/` (repo-map, known-flaws, commands, risk-map, llm-failure-taxonomy).
 - Surface subagents: `.claude/agents/` (`desktop-engineer`, `web-engineer`, `mobile-engineer`, `cli-engineer`, `chrome-ext-engineer`, `vscode-ext-engineer`, `supervisor`).
