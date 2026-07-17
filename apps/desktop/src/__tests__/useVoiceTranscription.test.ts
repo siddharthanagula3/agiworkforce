@@ -1,6 +1,15 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { canonicalVoiceModel } = vi.hoisted(() => ({
+  canonicalVoiceModel: 'catalog-voice-transcription-model',
+}));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  getRoutingSlotModel: () => canonicalVoiceModel,
+}));
+
 vi.mock('../lib/tauri-mock', () => ({
   invoke: vi.fn().mockResolvedValue([]),
   isTauri: false,
@@ -98,6 +107,8 @@ describe('useVoiceTranscription', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
       }),
     );
+    const [, request] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect((request.body as FormData).get('model')).toBe(canonicalVoiceModel);
     expect(onResult).toHaveBeenCalledWith('hello world');
   });
 });

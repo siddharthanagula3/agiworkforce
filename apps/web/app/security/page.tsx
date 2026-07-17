@@ -42,7 +42,7 @@ const TOOLS: { title: string; body: string }[] = [
 const DATA_ROWS: { k: string; v: string }[] = [
   {
     k: 'Database',
-    v: 'Managed Cloud data is scoped by authenticated user in server routes and database policies. Broad Cloud release remains gated until audits are complete.',
+    v: 'Managed Cloud data is scoped by authenticated user in server routes and database policies. Managed Cloud is in public alpha; billing, metering, abuse, retention, and deletion controls keep pace with public usage.',
   },
   {
     k: 'Local storage',
@@ -78,7 +78,8 @@ export default function SecurityPage() {
             Our operational posture in plain language.{' '}
             <strong>
               AGI separates Local, BYOK, and Cloud paths. Sensitive tool actions use visible
-              approvals. Managed Cloud remains gated until operational controls are proven.
+              approvals. Managed Cloud is in public alpha, with operational controls maintained as
+              usage grows.
             </strong>{' '}
             For the dated compliance status, see{' '}
             <Link href="/trust" style={{ color: 'var(--agi-ink)' }}>

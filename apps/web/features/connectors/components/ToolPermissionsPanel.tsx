@@ -1,5 +1,22 @@
 'use client';
 
+/**
+ * ⚠️ UNMOUNTED — do not mount without fixing the key contract first.
+ *
+ * This panel writes tool-permission decisions keyed by whatever strings
+ * CONNECTOR_TOOLS (config/connector-logos.ts) contains for the connector. The
+ * store's real consumers — useChatStream's approval auto-resolve and
+ * ToolTimeline's ToolPermissionQuickPicker — key by the WIRE tool name parsed
+ * from `mcp__<serverId>__<toolName>`. Today only the github entry in
+ * CONNECTOR_TOOLS holds wire names; every other connector's list is
+ * display-label marketing copy with no backing implementation, so mounting
+ * this panel for those would save decisions under keys nothing ever reads
+ * (silent no-op permissions). Operator-mapped and custom connectors advertise
+ * their tool names at runtime from the remote catalog, which this static
+ * config cannot know. The live per-tool permission UX is the quick picker on
+ * the approval card in ToolTimeline; keep this unmounted until connector tool
+ * lists are server-derived.
+ */
 import React from 'react';
 import { Check, Ban, HelpCircle, RotateCcw } from 'lucide-react';
 import {

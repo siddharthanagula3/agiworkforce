@@ -27,7 +27,11 @@ import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { DEFAULT_CLOUD_MODEL_ID } from '@/src/features/model-picker/service';
+import {
+  DEFAULT_CLOUD_MODEL_ID,
+  getDefaultCloudModelIdForTier,
+} from '@/src/features/model-picker/service';
+import { useTierStore } from '@/src/features/billing/store';
 import {
   executionModeForConversation,
   isHistoryVisibleConversation,
@@ -284,6 +288,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const subscriptionTier = useTierStore((s) => s.tier);
   const setModel = useModelStore((s) => s.setModel);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
@@ -346,9 +351,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     setModeSwitchVisible(false);
     if (!DEFAULT_CLOUD_MODEL_ID) return;
     setAppMode('cloud');
-    setModel(DEFAULT_CLOUD_MODEL_ID);
+    setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
     navigate('/(app)/(tabs)/chat');
-  }, [navigate, setAppMode, setModel]);
+  }, [navigate, setAppMode, setModel, subscriptionTier]);
 
   const handleModeSwitchCancel = useCallback(() => {
     setModeSwitchVisible(false);

@@ -21,17 +21,6 @@ export interface OrganizationMember {
   };
 }
 
-export interface ApiKey {
-  id: string;
-  user_id: string;
-  name: string;
-  key_hash: string; // Only used internally or never sent to client full
-  scopes: string[];
-  last_used_at: string | null;
-  expires_at: string | null;
-  created_at: string;
-}
-
 export interface AuditLog {
   id: string;
   organization_id?: string;

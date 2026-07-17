@@ -50,8 +50,11 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, {})));
 
     const saved = await saveMessageToDb('conv-1', MSG, TOK, FAST);
+    const sent = JSON.parse(
+      String((vi.mocked(fetch).mock.calls[0]?.[1] as RequestInit | undefined)?.body),
+    ) as { id: string };
 
-    expect(saved).toEqual({ id: 'client-id-1' });
+    expect(saved).toEqual({ id: sent.id });
   });
 
   it('surfaces a 429 (rate-limited persist = turn not saved) by throwing, without retrying', async () => {
@@ -82,9 +85,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(500, { error: 'boom' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(
-      /save message to DB/i,
-    );
+    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(/save message to DB/i);
     expect(fetchMock).toHaveBeenCalledTimes(3); // default maxAttempts = 3
   });
 
@@ -92,9 +93,7 @@ describe('saveMessageToDb durability (P1 silent-data-loss regression)', () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(404, { error: 'not found' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(
-      /save message to DB/i,
-    );
+    await expect(saveMessageToDb('conv-1', MSG, TOK, FAST)).rejects.toThrow(/save message to DB/i);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

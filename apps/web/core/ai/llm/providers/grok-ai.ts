@@ -537,12 +537,9 @@ export class GrokProvider {
 
   /**
    * Get models optimized for tool calling.
-   *
-   * NOTE: Legacy Grok 4 fast aliases route through catalog canonicalization.
-   * The user-facing agent list exposes only the current catalog model.
    */
   static getAgentModels(): string[] {
-    return ['grok-4.3'];
+    return [...SUPPORTED_GROK_MODELS];
   }
 }
 

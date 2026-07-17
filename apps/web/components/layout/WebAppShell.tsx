@@ -15,15 +15,15 @@
  * state, dialogs, etc.) and is intentionally NOT refactored onto this shell —
  * this is the light-weight, navigation-focused variant for the project surfaces.
  *
- * All data-loading effects here are gated on Clerk `isSignedIn` so a signed-out
- * visit to `/projects/[id]` never fires an authenticated fetch (keeps the
- * signed-out console clean — see e2e/public-auth-clean.spec.ts).
+ * Project data is loaded through the account-scoped managed-cloud session.
+ * Signed-out visits never fire authenticated project requests and never reuse
+ * project metadata from the previous Clerk account.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth, useClerk } from '@clerk/nextjs';
-import { Settings, LogOut, ChevronUp, LibraryBig } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
+import { Settings, LogOut, ChevronUp, LibraryBig, CalendarClock, Menu } from 'lucide-react';
 import {
   Sidebar,
   type SidebarSession,
@@ -36,14 +36,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
-import { useChatProjectStore, type Project as UnifiedProject } from '@agiworkforce/unified-chat';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@/stores/unified/auth';
-import { useProjectStore } from '@/features/projects/stores/project-store';
+import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@/components/agi/SidebarWordmark';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
+import { toast } from 'sonner';
 
 interface WebAppShellProps {
   children: React.ReactNode;
@@ -51,48 +51,61 @@ interface WebAppShellProps {
 
 export function WebAppShell({ children }: WebAppShellProps) {
   const router = useRouter();
-  const { isSignedIn } = useAuth();
+  const pathname = usePathname();
   const { signOut: clerkSignOut } = useClerk();
   const { user, logout } = useAuthStore();
   const subscription = useBillingStore((s) => s.subscription);
 
   const [collapsed, setCollapsed] = useState(false);
 
+  // ---- Narrow-viewport navigation (WEB-APPSHELL-MOBILE-SIDEBAR-01) ----
+  // Below 768px the persistent ~260px sidebar reduced every route on this
+  // shell to a clipped strip. Narrow viewports get a compact header with an
+  // "Open navigation" control and a modal drawer instead; desktop keeps the
+  // persistent/collapsible sidebar. Tracked separately from the manual
+  // collapse toggle so widening the window restores the user's choice.
+  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileNavDrawerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsNarrowViewport(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+
+  // Close the drawer after any navigation so it never lingers over the new route.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  // Escape closes; focus moves into the drawer on open and back to the
+  // trigger on close (the cleanup also runs on unmount, which is harmless).
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const trigger = mobileNavTriggerRef.current;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    mobileNavDrawerRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      trigger?.focus();
+    };
+  }, [mobileNavOpen]);
+
   // ---- Conversations (recents). useConversations auto-fetches, auth-gated. ----
   const { conversations, deleteConversation, updateConversation } = useConversations();
   const updateConversationInStore = useChatStore((s) => s.updateConversation);
 
   // ---- Projects ----
-  const storeProjects = useChatProjectStore((s) => s.projects);
-  const setStoreProjects = useChatProjectStore((s) => s.setProjects);
-  const toggleStar = useChatProjectStore((s) => s.toggleStar);
+  const { projects: storeProjects } = useManagedCloudProjects();
+  const toggleStar = useProjectStore((s) => s.toggleStar);
   const removeProjectFromStore = useProjectStore((s) => s.removeProject);
-
-  // Hydrate projects from the server for the sidebar list. Gated on isSignedIn
-  // so a signed-out visit never fires the authenticated /api/projects call.
-  useEffect(() => {
-    if (!isSignedIn) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/projects?limit=100', { credentials: 'same-origin' });
-        if (!res.ok) return;
-        const json = (await res.json()) as { projects?: UnifiedProject[] };
-        const serverProjects = Array.isArray(json.projects) ? json.projects : [];
-        if (cancelled || serverProjects.length === 0) return;
-        const serverIds = new Set(serverProjects.map((p) => p.id));
-        const localOnly = useChatProjectStore
-          .getState()
-          .projects.filter((p) => !serverIds.has(p.id));
-        setStoreProjects([...serverProjects, ...localOnly]);
-      } catch {
-        // Non-fatal: sidebar shows whatever is already in the store.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isSignedIn, setStoreProjects]);
 
   const sidebarSessions = useMemo<SidebarSession[]>(
     () =>
@@ -178,7 +191,8 @@ export function WebAppShell({ children }: WebAppShellProps) {
     [router],
   );
   const handleProjectNewChat = useCallback(
-    (projectId: string) => router.push(`/chat?project=${encodeURIComponent(projectId)}`),
+    // `?projectId=` is the ONE canonical project entry param for /chat.
+    (projectId: string) => router.push(`/chat?projectId=${encodeURIComponent(projectId)}`),
     [router],
   );
   const handleProjectSettings = useCallback(
@@ -189,13 +203,10 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const handleProjectDelete = useCallback(
     async (projectId: string) => {
       try {
-        await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
-          method: 'DELETE',
-          headers: await addCsrfHeaders(),
-          credentials: 'same-origin',
-        });
-      } finally {
+        await webManagedCloudProjects.deleteProject(projectId);
         removeProjectFromStore(projectId);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to delete project');
       }
     },
     [removeProjectFromStore],
@@ -211,7 +222,14 @@ export function WebAppShell({ children }: WebAppShellProps) {
         label: 'Library',
         icon: LibraryBig,
         onClick: () => router.push('/library'),
-        isActive: false,
+        isActive: pathname.startsWith('/library'),
+      },
+      {
+        id: 'schedules',
+        label: 'Schedules',
+        icon: CalendarClock,
+        onClick: () => router.push('/schedules'),
+        isActive: pathname.startsWith('/schedules'),
       },
       {
         id: 'customize',
@@ -221,7 +239,7 @@ export function WebAppShell({ children }: WebAppShellProps) {
         isActive: false,
       },
     ],
-    [router],
+    [pathname, router],
   );
 
   // ---- Account footer ----
@@ -291,35 +309,84 @@ export function WebAppShell({ children }: WebAppShellProps) {
     </div>
   );
 
+  const sharedSidebarProps = {
+    sessions: sidebarSessions,
+    projects: sidebarProjects,
+    mode: 'cloud' as const,
+    headerSlot: <SidebarWordmark />,
+    navItems: sidebarNavItems,
+    footerSlot,
+    onNewChat: handleNewChat,
+    onSelect: handleSelectSession,
+    onDelete: (id: string) => void handleDeleteSession(id),
+    onRename: handleRenameSession,
+    onTogglePin: handlePinSession,
+    onStar: handleStarSession,
+    onArchive: handleArchiveSession,
+    onMoveToProject: handleMoveToProjectSession,
+    onProjectOpen: handleProjectOpen,
+    onProjectNewChat: handleProjectNewChat,
+    onProjectSettings: handleProjectSettings,
+    onProjectPin: handleProjectPin,
+    onProjectDelete: handleProjectDelete,
+    onProjectCreate: handleProjectCreate,
+  };
+
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
-      <Sidebar
-        sessions={sidebarSessions}
-        projects={sidebarProjects}
-        collapsed={collapsed}
-        mode="cloud"
-        headerSlot={<SidebarWordmark />}
-        navItems={sidebarNavItems}
-        footerSlot={footerSlot}
-        onNewChat={handleNewChat}
-        onToggleCollapse={() => setCollapsed((c) => !c)}
-        onSelect={handleSelectSession}
-        onDelete={(id) => void handleDeleteSession(id)}
-        onRename={handleRenameSession}
-        onTogglePin={handlePinSession}
-        onStar={handleStarSession}
-        onArchive={handleArchiveSession}
-        onMoveToProject={handleMoveToProjectSession}
-        onProjectOpen={handleProjectOpen}
-        onProjectNewChat={handleProjectNewChat}
-        onProjectSettings={handleProjectSettings}
-        onProjectPin={handleProjectPin}
-        onProjectDelete={handleProjectDelete}
-        onProjectCreate={handleProjectCreate}
-      />
+      {/* Desktop: persistent/collapsible sidebar. Narrow: replaced by the
+          header trigger + modal drawer below (WEB-APPSHELL-MOBILE-SIDEBAR-01). */}
+      {!isNarrowViewport && (
+        <Sidebar
+          {...sharedSidebarProps}
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((c) => !c)}
+        />
+      )}
 
-      {/* Content area — scrolls inside the shell (the outer wrapper is fixed). */}
-      <div className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {isNarrowViewport && (
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-2">
+            <button
+              ref={mobileNavTriggerRef}
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={mobileNavOpen}
+              aria-controls="webappshell-mobile-nav"
+              onClick={() => setMobileNavOpen(true)}
+              className="flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <SidebarWordmark />
+          </header>
+        )}
+
+        {/* Content area — scrolls inside the shell (the outer wrapper is fixed). */}
+        <div className="min-h-0 min-w-0 flex-1 overflow-auto">{children}</div>
+      </div>
+
+      {isNarrowViewport && mobileNavOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          <div
+            data-testid="mobile-nav-backdrop"
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <div
+            id="webappshell-mobile-nav"
+            ref={mobileNavDrawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation"
+            tabIndex={-1}
+            className="relative z-10 h-full w-[280px] max-w-[85vw] overflow-hidden bg-[hsl(var(--background))] shadow-xl outline-none"
+          >
+            <Sidebar {...sharedSidebarProps} collapsed={false} isMobile />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

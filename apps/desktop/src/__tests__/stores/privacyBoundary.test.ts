@@ -25,7 +25,7 @@ import {
 
 beforeEach(() => {
   // Partial merge reset — preserves store actions (setState with true would strip them)
-  useAppModeStore.setState({ mode: 'local', planTier: 'free' });
+  useAppModeStore.setState({ mode: 'local' });
 });
 
 // ---------------------------------------------------------------------------
@@ -196,20 +196,13 @@ describe('CRITICAL: managed-cloud credential-forward gate (real selectPrivacyMod
     expect(pm !== 'local').toBe(true);
   });
 
-  it('byok (cloud + providerMode=cloud) never resolves to managed credential forward', async () => {
-    // Drive the REAL selectPrivacyMode through the REAL settingsStore so a BYOK
-    // user (external provider keys) is never treated as managed-cloud.
+  it('provider settings cannot reclassify the managed Cloud workspace as BYOK', async () => {
     useAppModeStore.setState({ mode: 'cloud' });
     const { useSettingsStore } = await import('../../stores/settingsStore');
     useSettingsStore.getState().setProviderMode('cloud');
 
     const pm = selectPrivacyMode(useAppModeStore.getState());
-    // Depending on whether the lazy settingsStore read resolves in this env,
-    // pm is 'byok' (BYOK detected) or 'managed' (fallback). The load-bearing
-    // invariant verified everywhere else is local→never-managed; here we assert
-    // the selector returns a valid non-local cloud tier and is deterministic.
-    expect(['byok', 'managed']).toContain(pm);
-    expect(pm).not.toBe('local');
+    expect(pm).toBe('managed');
 
     // Reset providerMode so we do not leak BYOK state into other tests/files.
     useSettingsStore.getState().setProviderMode('auto');
@@ -230,14 +223,10 @@ describe('store state transitions (real store)', () => {
     expect(useAppModeStore.getState().mode).toBe('local');
   });
 
-  it('planTier resets to free in beforeEach', () => {
-    expect(useAppModeStore.getState().planTier).toBe('free');
-  });
-
-  it('planTier can be set independently of mode', () => {
-    useAppModeStore.setState({ planTier: 'pro' });
-    expect(useAppModeStore.getState().planTier).toBe('pro');
-    expect(useAppModeStore.getState().mode).toBe('local');
+  it('does not duplicate the backend-owned account plan', () => {
+    const state = useAppModeStore.getState() as unknown as Record<string, unknown>;
+    expect(state).not.toHaveProperty('planTier');
+    expect(state).not.toHaveProperty('setPlanTier');
   });
 });
 

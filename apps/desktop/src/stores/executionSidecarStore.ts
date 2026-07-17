@@ -1,4 +1,4 @@
-// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
+// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 /**
  * Execution Sidecar Store
  *

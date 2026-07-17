@@ -1,14 +1,15 @@
 /**
  * features/chat-participant/ — @agi chat participant registered in VS Code Chat panel.
  * Handles /explain /fix /refactor /tests /docs /model slash commands.
- * Streams from AGI Workforce API with fallback to vscode.lm.
+ * Streams workspace-scoped developer sessions from the local AGI app-server.
  */
 export {
   createChatHandler,
   registerChatParticipant,
-  buildSystemPrompt,
+  buildRuntimeTurnInput,
   buildUserMessage,
   gatherEditorContext,
-  historyToMessages,
+  isExecutionConfirmation,
+  localThreadIdFromHistory,
 } from './chatParticipant';
 export type { EditorContext } from './chatParticipant';

@@ -1,0 +1,19 @@
+{
+  "image": {
+    "prompt": "A catalog-backed image request",
+    "negative_prompt": "blur",
+    "provider": "google",
+    "model": "catalog-image-model",
+    "size": "1536x1536",
+    "style": "photorealistic",
+    "n": 1,
+    "quality": "hd"
+  },
+  "video": {
+    "prompt": "A catalog-backed video request",
+    "provider": "google",
+    "model": "catalog-video-model",
+    "duration_secs": 8,
+    "resolution": "1080p"
+  }
+}

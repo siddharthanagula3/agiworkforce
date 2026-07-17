@@ -1,0 +1,85 @@
+{
+  "chatPush": {
+    "protocolVersion": 2,
+    "conversations": [
+      {
+        "id": "018f6f2a-0000-7000-8000-000000000001",
+        "title": "Quarterly plan",
+        "model": "model-x",
+        "projectId": null,
+        "pinned": false,
+        "baseVersion": "42"
+      }
+    ],
+    "messages": [
+      {
+        "id": "018f6f2a-0000-7000-8000-000000000002",
+        "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+        "role": "user",
+        "content": "Ship it",
+        "model": null,
+        "provider": null
+      }
+    ],
+    "artifacts": []
+  },
+  "chatPushResponse": {
+    "protocolVersion": 2,
+    "applied": {
+      "conversations": [
+        {
+          "id": "018f6f2a-0000-7000-8000-000000000001",
+          "server_version": "45"
+        }
+      ],
+      "messages": [],
+      "artifacts": []
+    },
+    "conflicts": {
+      "conversations": [],
+      "messages": [
+        {
+          "id": "018f6f2a-0000-7000-8000-000000000002",
+          "current": null
+        }
+      ],
+      "artifacts": []
+    },
+    "cursor": "45"
+  },
+  "memoryPush": {
+    "protocolVersion": 2,
+    "memories": [
+      {
+        "id": "018f6f2a-0000-7000-8000-000000000004",
+        "content": "User prefers dark mode",
+        "category": "preference",
+        "source": "mobile",
+        "pinned": true,
+        "baseVersion": "7",
+        "isDeleted": false
+      }
+    ]
+  },
+  "memoryPushResponse": {
+    "protocolVersion": 2,
+    "applied": [],
+    "conflicts": [
+      {
+        "id": "018f6f2a-0000-7000-8000-000000000004",
+        "current": {
+          "id": "018f6f2a-0000-7000-8000-000000000004",
+          "content": "Server winner",
+          "category": "preference",
+          "source": "web",
+          "pinned": false,
+          "is_deleted": false,
+          "created_at": "2026-07-01T00:00:00.000Z",
+          "updated_at": "2026-07-02T00:00:00.000Z",
+          "server_version": "8"
+        }
+      }
+    ],
+    "cursor": "8"
+  }
+}

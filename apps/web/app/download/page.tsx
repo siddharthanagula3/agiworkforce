@@ -6,13 +6,15 @@ import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { DevBand, FinalCta, SurfaceIndex } from '../../components/marketing/FlagshipSections';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
 import { PublicWaitlistForm } from '../../components/marketing/PublicWaitlistForm';
-import { LAUNCH, COMING_SOON_LABEL, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { COMING_SOON_LABEL, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';
 
 export const metadata = buildMetadata({
-  title: 'AGI: Coming Soon on Every Surface',
-  description: `AGI is coming to six surfaces: Web, Desktop, CLI, Mobile, Chrome, and VS Code. All are in development toward public launch. ${LAUNCH.publicLabel}. Leave your email to get notified.`,
+  title: 'Download AGI | Desktop and Product Availability',
+  description:
+    'Download the signed AGI Desktop AppImage for Linux x64. macOS and Windows installers are not yet published. Check availability across Web, Mobile, CLI, Chrome, and VS Code.',
   path: '/download',
 });
 
@@ -24,21 +26,21 @@ export default function DownloadPage() {
 
         <section className="agi-fl-hero" aria-labelledby="agi-download-hero-title">
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
-          <p className="agi-fl-eyebrow">{COMING_SOON_LABEL}</p>
+          <p className="agi-fl-eyebrow">Product availability</p>
           <h1 id="agi-download-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">AGI is coming</span>
+            <span className="agi-fl-h1-line">AGI on</span>
             <span className="agi-fl-h1-line">
-              <em className="agi-fl-h1-em">to every surface.</em>
+              <em className="agi-fl-h1-em">every surface.</em>
             </span>
           </h1>
           <p className="agi-fl-lede">
-            Web, Desktop, Mobile, CLI, Chrome, and VS Code are all in development toward the same
-            public launch. Nothing here is a placeholder link — leave your email and we will tell
-            you the moment each surface opens.
+            AGI Web is available in the browser. The Desktop stable release channel is limited to
+            signed Linux x64 AppImages, with live availability verified below. macOS and Windows
+            installers are not published. Other surfaces are individually labeled.
           </p>
           <div className="agi-fl-cta-row">
-            <Link href="#agi-download-notify-title" className="agi-fl-cta agi-fl-cta--primary">
-              Get notified
+            <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
+              View Desktop downloads
             </Link>
             <WaitlistTrigger
               label="Team & Enterprise access"
@@ -74,8 +76,8 @@ export default function DownloadPage() {
 
         <SurfaceIndex
           eyebrow="Pick your surface"
-          title="Six surfaces, honestly labeled."
-          lede="Every surface below is coming soon, ahead of the same public launch. Nothing is marked available until it actually is."
+          title="Six surfaces, individually labeled."
+          lede="Availability is tracked per surface and platform. A working Web entry and verified Desktop installer are linked directly; unavailable products do not receive download controls."
           items={[
             {
               index: '01',
@@ -114,8 +116,8 @@ export default function DownloadPage() {
                 'MCP connectors & tool approvals',
                 'Scheduled work with AGI Work',
               ],
-              platforms: 'macOS · Windows · Linux',
-              status: SURFACE_STATUS.desktop,
+              platforms: 'Linux x64 release channel · macOS and Windows not published',
+              status: 'Check Linux release',
               href: '/desktop',
               frame: { variant: 'desktop', title: 'AGI Desktop', badge: 'Local' },
             },
@@ -186,15 +188,17 @@ export default function DownloadPage() {
           ]}
         />
 
+        <DesktopDownloadAvailability />
+
         <section className="agi-fl-section" aria-labelledby="agi-download-notify-title">
           <p className="agi-fl-eyebrow">{COMING_SOON_LABEL}</p>
           <h2 id="agi-download-notify-title" className="agi-fl-h2">
-            Nothing to install yet. Here&rsquo;s what&rsquo;s coming.
+            Get updates for unavailable surfaces.
           </h2>
           <p className="agi-fl-section-lede">
-            Every surface above is in active development toward the same public launch. No
-            placeholder download links, no fake availability badges. Leave your email and we will
-            tell you the day each one opens.
+            macOS and Windows Desktop installers do not have published release dates. Mobile,
+            Chrome, and VS Code availability is also tracked separately. Leave your email for
+            product updates without treating an unavailable platform as downloadable.
           </p>
           <div className="agi-fl-launch-form">
             <PublicWaitlistForm
@@ -216,14 +220,15 @@ export default function DownloadPage() {
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
-          title="Be first to know when a surface opens."
-          body="Every AGI surface is in development toward the same public launch. Leave your email above and we will tell you the moment each one is ready — no placeholder links, no fake availability."
+          eyebrow="Current availability"
+          title="Use AGI now, or follow the next release."
+          body="AGI Web is available now. The signed Linux x64 Desktop AppImage is offered only when the stable release API verifies it; unavailable platforms remain clearly labeled."
           ctas={[
-            { href: '#agi-download-notify-title', label: 'Get notified' },
+            { href: WEB_CHAT_ENTRY_HREF, label: 'Use AGI Web' },
+            { href: '#desktop-downloads', label: 'Desktop availability' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp="Linux x64 · signed AppImage release channel"
         />
 
         <MarketingFooter />

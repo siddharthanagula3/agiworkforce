@@ -10,10 +10,7 @@ export { useChatExecutionStore } from './chat/chatExecutionStore';
 export { useChatViewStore } from './chat/chatViewStore';
 
 import { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
-import {
-  useChatExecutionStore,
-  compareCloudMessagesByCreatedAtThenId,
-} from './chat/chatExecutionStore';
+import { useChatExecutionStore } from './chat/chatExecutionStore';
 import { useChatViewStore } from './chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import type { ForkConversationOptions } from './chat/chatMessageStore';
@@ -98,6 +95,12 @@ export interface CombinedChatState {
   stopStreaming: () => void;
   retryMessage: (conversationId: string, messageId: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
+  resolveToolApproval: (
+    conversationId: string,
+    assistantMessageId: string,
+    toolCallId: string,
+    decision: 'approved' | 'rejected',
+  ) => Promise<void>;
   clearError: () => void;
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
@@ -120,24 +123,10 @@ function buildCombinedState(
   // be written back into each other's stores. Cloud conversations come after
   // local so local chats are shown first in list order.
   const mergedConversations = [...msg.conversations, ...cloud.conversations];
-  // Conversations normally live in exactly one store (separate MMKV namespaces),
-  // but the live send/stream path writes streaming state to the LOCAL store even
-  // for CLOUD conversations — so a cloud conversation can transiently exist in
-  // BOTH stores. A blind { ...local, ...cloud } lets the cloud copy (which lacks
-  // the in-flight assistant turn until it is mirrored on completion) HIDE the
-  // local streaming/error assistant, making cloud replies, the typing indicator,
-  // and timeout errors invisible. For overlapping conversations, union by message
-  // id: the cloud copy stays authoritative for shared ids (synced / cross-device),
-  // while local-only ids (the in-flight assistant turn) are kept and shown.
-  // Display-only — neither store is written back (separation invariant intact).
+  // Each conversation has exactly one message owner. Cloud keys override only
+  // legacy residue with the same id; a display-time union would conceal a
+  // storage-boundary violation instead of correcting its writer.
   const mergedMessages: Record<string, ChatMessage[]> = { ...msg.messages, ...cloud.messages };
-  for (const convId of Object.keys(msg.messages)) {
-    const cloudMsgs = cloud.messages[convId];
-    if (!cloudMsgs) continue; // not overlapping — local copy already merged in
-    const byId = new Map(msg.messages[convId].map((m) => [m.id, m]));
-    for (const m of cloudMsgs) byId.set(m.id, m); // cloud authoritative for shared ids
-    mergedMessages[convId] = Array.from(byId.values()).sort(compareCloudMessagesByCreatedAtThenId);
-  }
   return {
     conversations: mergedConversations,
     currentConversationId: msg.currentConversationId,
@@ -173,6 +162,7 @@ function buildCombinedState(
     stopStreaming: exec.stopStreaming,
     retryMessage: exec.retryMessage,
     editMessage: exec.editMessage,
+    resolveToolApproval: exec.resolveToolApproval,
     clearError: exec.clearError,
     setSendError: exec.setSendError,
     clearPaywallError: exec.clearPaywallError,

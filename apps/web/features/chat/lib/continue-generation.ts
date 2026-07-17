@@ -6,7 +6,7 @@
  * copy of the semantics instead of duplicating them. This module re-exports them
  * to preserve web's existing import paths.
  *
- * See `packages/unified-chat/src/lib/continue-generation.ts` for the doc on what
+ * See `packages/ui/unified-chat/src/lib/continue-generation.ts` for the doc on what
  * makes a turn continuable (truncated at the token cap, or user-stopped with
  * partial content) and why a normally-completed / empty / errored turn is not.
  */
@@ -14,6 +14,10 @@
 export {
   isContinuableFinishReason,
   isMessageContinuable,
+  hasStreamError,
+  getStreamErrorMessage,
   CONTINUE_GENERATION_INSTRUCTION,
   type ContinuableMessageLike,
+  type StreamErrorMessageLike,
+  type StreamErrorInfo,
 } from '@agiworkforce/unified-chat';

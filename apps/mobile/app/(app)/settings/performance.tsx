@@ -40,7 +40,11 @@ import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
-import { getCapabilities, getModelById as getLocalModelById } from '@agiworkforce/local-llm';
+import {
+  getCapabilities,
+  getDefaultModel as getDefaultLocalModel,
+  getModelById as getLocalModelById,
+} from '@agiworkforce/local-llm';
 import type { DeviceCapabilities } from '@agiworkforce/local-llm';
 import {
   getThermalState,
@@ -437,7 +441,7 @@ export default function PerformanceScreen() {
 
     try {
       // Determine the active local model
-      const activeModelId = selectedModelId ?? 'qwen3-4b-instruct-2507';
+      const activeModelId = selectedModelId ?? getDefaultLocalModel().id;
       const localModel = getLocalModelById(activeModelId);
       const backend: BackendName = caps?.tier1Runtime ?? 'llama_rn';
 

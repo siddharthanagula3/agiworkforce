@@ -1,0 +1,361 @@
+{
+  "schemaVersion": 1,
+  "harnesses": {
+    "managed-cloud/gateway": {
+      "provider": "managed_cloud",
+      "apiFamily": "managed_gateway",
+      "adapter": "services/api-gateway",
+      "trustModes": ["managed_cloud"],
+      "features": {
+        "webSearch": {
+          "providerSupport": "agi",
+          "implementation": "implemented"
+        }
+      }
+    },
+    "ollama/chat": {
+      "provider": "ollama",
+      "apiFamily": "ollama_chat",
+      "adapter": "@agiworkforce/providers-ollama",
+      "trustModes": ["local"],
+      "features": {}
+    },
+    "openai/responses": {
+      "provider": "openai",
+      "apiFamily": "responses",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "webSearch": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "toolDiscovery": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "mcp": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "memory": {
+          "providerSupport": "agi",
+          "implementation": "unwired"
+        },
+        "codeExecution": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "imageGeneration": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        }
+      }
+    },
+    "openai/chat-completions": {
+      "provider": "openai",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "openai/media": {
+      "provider": "openai",
+      "apiFamily": "media",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "anthropic/messages": {
+      "provider": "anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "webSearch": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        },
+        "webSearchInjection": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
+    },
+    "google/generate-content": {
+      "provider": "google",
+      "apiFamily": "generate_content",
+      "adapter": "@agiworkforce/providers-google",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "webSearch": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        },
+        "webSearchInjection": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
+    },
+    "google/media": {
+      "provider": "google",
+      "apiFamily": "media",
+      "adapter": "@agiworkforce/providers-google",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "google/embeddings": {
+      "provider": "google",
+      "apiFamily": "embed_content",
+      "adapter": "desktop-google-batch",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "xai/chat-completions": {
+      "provider": "xai",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-xai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "deepseek/chat-completions": {
+      "provider": "deepseek",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-deepseek",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "qwen/chat-completions": {
+      "provider": "qwen",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-qwen",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "moonshot/chat-completions": {
+      "provider": "moonshot",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-moonshot",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "mistral/chat-completions": {
+      "provider": "mistral",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-mistral",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "zhipu/chat-completions": {
+      "provider": "zhipu",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-zhipu",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "perplexity/chat-completions": {
+      "provider": "perplexity",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-perplexity",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "webSearch": {
+          "providerSupport": "native",
+          "implementation": "implemented"
+        }
+      }
+    },
+    "groq/chat-completions": {
+      "provider": "groq",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-groq",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "open-router/chat-completions": {
+      "provider": "open_router",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openrouter",
+      "trustModes": ["byok"],
+      "features": {}
+    },
+    "nvidia-nim/chat-completions": {
+      "provider": "nvidia_nim",
+      "apiFamily": "chat_completions",
+      "adapter": "desktop-direct-api",
+      "trustModes": ["byok"],
+      "features": {}
+    },
+    "runway/media": {
+      "provider": "runway",
+      "apiFamily": "media",
+      "adapter": "managed-media",
+      "trustModes": ["managed_cloud"],
+      "features": {}
+    }
+  },
+  "harnessGroups": {
+    "managed-text": [
+      "openai/responses",
+      "openai/chat-completions",
+      "anthropic/messages",
+      "google/generate-content",
+      "xai/chat-completions",
+      "deepseek/chat-completions",
+      "qwen/chat-completions",
+      "moonshot/chat-completions",
+      "mistral/chat-completions",
+      "zhipu/chat-completions",
+      "perplexity/chat-completions",
+      "groq/chat-completions"
+    ],
+    "byok-text": [
+      "openai/responses",
+      "openai/chat-completions",
+      "anthropic/messages",
+      "google/generate-content",
+      "xai/chat-completions",
+      "deepseek/chat-completions",
+      "qwen/chat-completions",
+      "moonshot/chat-completions",
+      "mistral/chat-completions",
+      "zhipu/chat-completions",
+      "perplexity/chat-completions",
+      "groq/chat-completions",
+      "open-router/chat-completions",
+      "nvidia-nim/chat-completions"
+    ],
+    "managed-media": ["managed-cloud/gateway", "openai/media", "google/media", "runway/media"]
+  },
+  "runtimeProfiles": {
+    "web/cloud-chat": {
+      "family": "consumer",
+      "surface": "web",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "allowedHarnessGroups": ["managed-text", "managed-media"],
+      "features": {
+        "webSearch": { "implementation": "implemented" },
+        "toolDiscovery": { "implementation": "partial" },
+        "memory": { "implementation": "partial" },
+        "codeExecution": { "implementation": "partial" },
+        "imageGeneration": { "implementation": "implemented" }
+      }
+    },
+    "desktop/cloud-chat": {
+      "family": "consumer",
+      "surface": "desktop",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "unwired",
+      "allowedHarnessGroups": ["managed-text"]
+    },
+    "desktop/byok-chat": {
+      "family": "consumer",
+      "surface": "desktop",
+      "executionMode": "local",
+      "trustMode": "byok",
+      "status": "implemented",
+      "allowedHarnessGroups": ["byok-text"]
+    },
+    "desktop/local-chat": {
+      "family": "consumer",
+      "surface": "desktop",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "partial",
+      "allowedHarnessGroups": []
+    },
+    "mobile/cloud-chat": {
+      "family": "consumer",
+      "surface": "mobile",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "allowedHarnessGroups": ["managed-text", "managed-media"],
+      "features": {
+        "webSearch": { "implementation": "implemented" },
+        "toolDiscovery": { "implementation": "unwired" },
+        "memory": { "implementation": "partial" },
+        "imageGeneration": { "implementation": "implemented" }
+      }
+    },
+    "mobile/local-chat": {
+      "family": "consumer",
+      "surface": "mobile",
+      "executionMode": "local",
+      "trustMode": "on_device",
+      "status": "partial",
+      "allowedHarnessGroups": []
+    },
+    "cli/byok-chat": {
+      "family": "developer",
+      "surface": "cli",
+      "executionMode": "local",
+      "trustMode": "byok",
+      "status": "implemented",
+      "allowedHarnessGroups": ["byok-text"]
+    },
+    "cli/managed-chat": {
+      "family": "developer",
+      "surface": "cli",
+      "executionMode": "local",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "allowedHarnessGroups": ["managed-text"]
+    },
+    "cli/local-chat": {
+      "family": "developer",
+      "surface": "cli",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "partial",
+      "allowedHarnessGroups": []
+    },
+    "vscode/byok-chat": {
+      "family": "developer",
+      "surface": "vscode",
+      "executionMode": "local",
+      "trustMode": "byok",
+      "status": "unwired",
+      "allowedHarnessGroups": ["byok-text"]
+    },
+    "vscode/managed-chat": {
+      "family": "developer",
+      "surface": "vscode",
+      "executionMode": "local",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "allowedHarnessGroups": ["managed-text"]
+    },
+    "vscode/local-chat": {
+      "family": "developer",
+      "surface": "vscode",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "unwired",
+      "allowedHarnessGroups": []
+    },
+    "chrome/managed-chat": {
+      "family": "browser",
+      "surface": "chrome",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "allowedHarnessGroups": ["managed-text"],
+      "features": {
+        "webSearch": { "implementation": "implemented" }
+      }
+    },
+    "chrome/browser-task": {
+      "family": "browser",
+      "surface": "chrome",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "implemented",
+      "allowedHarnessGroups": []
+    }
+  }
+}

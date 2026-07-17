@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
 import { FolderOpen, MoreHorizontal, Settings2, Pin, PinOff } from 'lucide-react';
 import {
   ProjectHeader,
@@ -21,6 +20,7 @@ import { useProjectMetaStore } from '@/features/projects/stores/project-meta-sto
 import { useChatStore } from '@/stores/chatStore';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
+import { useManagedCloudProjects } from '@/features/projects';
 import { WebAppShell } from '@/components/layout/WebAppShell';
 
 /**
@@ -84,54 +84,18 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const projectId = params?.id;
-  const project = useProjectStore((s) => s.projects.find((p) => p.id === projectId));
+  const {
+    accountId,
+    projects,
+    status: projectStatus,
+    error: projectError,
+    retry: retryProjects,
+  } = useManagedCloudProjects();
+  const project = projects.find((candidate) => candidate.id === projectId);
   const updateProject = useProjectStore((s) => s.updateProject);
   const removeProject = useProjectStore((s) => s.removeProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
-  const setProjects = useProjectStore((s) => s.setProjects);
   const toggleStar = useProjectStore((s) => s.toggleStar);
-
-  // Hydrate the project store from the server so a server-created project (in
-  // user_projects) resolves here even when it isn't in this device's local
-  // store yet. Gate on Clerk auth: `/api/projects` requires a session, so a
-  // signed-out visit must NOT fire it (otherwise the route emits 401 console
-  // spam — the same signed-out-API-quiet rule enforced by
-  // e2e/public-auth-clean.spec.ts for /login and /signup). Signed-out users
-  // fall back to the local project store, which is the documented behavior.
-  const { isLoaded: authLoaded, isSignedIn } = useAuth();
-  const [hydratingProjects, setHydratingProjects] = useState(true);
-  useEffect(() => {
-    if (!authLoaded) return; // wait until Clerk resolves auth state
-    if (!isSignedIn) {
-      // No session → skip the authenticated fetch and resolve to local store.
-      setHydratingProjects(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/projects?limit=100', { credentials: 'same-origin' });
-        if (res.ok) {
-          const json = (await res.json()) as { projects?: Array<{ id: string }> };
-          const serverProjects = Array.isArray(json.projects) ? json.projects : [];
-          if (!cancelled && serverProjects.length > 0) {
-            const serverIds = new Set(serverProjects.map((p) => p.id));
-            const localOnly = useProjectStore
-              .getState()
-              .projects.filter((p) => !serverIds.has(p.id));
-            setProjects([...(serverProjects as any), ...localOnly]);
-          }
-        }
-      } catch {
-        // Non-fatal: fall back to whatever is already in the store.
-      } finally {
-        if (!cancelled) setHydratingProjects(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [setProjects, authLoaded, isSignedIn]);
 
   // Per-project model selection.
   const globalModelId = useChatModelStore((s) => s.selectedModelId);
@@ -187,7 +151,10 @@ export default function ProjectDetailPage() {
         // sessionStorage unavailable
       }
       setActiveProject(project.id);
-      router.push(`/chat?project=${encodeURIComponent(project.id)}`);
+      // `?projectId=` is the ONE canonical project entry param for /chat
+      // (matches the sidebar project-row "New chat"); WebChatPage reads it to
+      // preselect the project and the composer opens in AGI Work mode.
+      router.push(`/chat?projectId=${encodeURIComponent(project.id)}`);
     },
     [project, router, setActiveProject],
   );
@@ -204,24 +171,28 @@ export default function ProjectDetailPage() {
     if (!project) return null;
     const record: ProjectRecord = {
       id: project.id,
-      ownerUserId: 'local-user',
+      ownerUserId: project.ownerUserId ?? accountId ?? '',
+      organizationId: project.organizationId,
       name: project.name,
       description: project.description ?? null,
-      defaultPrivacyMode: 'local',
-      defaultProviderMode: 'Local',
-      allowedSurfaces: [...SYNCED_APP_SURFACES],
+      defaultPrivacyMode: project.defaultPrivacyMode ?? 'managed',
+      defaultProviderMode: project.defaultProviderMode ?? 'ManagedGateway',
+      allowedSurfaces: project.allowedSurfaces ?? [...SYNCED_APP_SURFACES],
       instructions: project.instructions ?? null,
+      defaultModelId: project.defaultModelId,
       iconEmoji: project.iconEmoji ?? null,
       accentColor: normalizeAccent(project.accentColor),
-      knowledgeFileCount: null,
-      memberCount: null,
-      lastUsedAt: project.updatedAt,
-      importedFrom: 'manual',
+      knowledgeFileCount: project.knowledgeFileCount,
+      memberCount: project.memberCount,
+      lastUsedAt: project.lastUsedAt ?? project.updatedAt,
+      importedFrom: project.importedFrom ?? 'manual',
+      isArchived: project.isArchived,
+      metadata: project.metadata,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
     return summarizeProjectHeader({ project: record });
-  }, [project]);
+  }, [accountId, project]);
 
   // Web conversation store
   const allConversations = useChatStore((s) => s.conversations);
@@ -234,7 +205,7 @@ export default function ProjectDetailPage() {
   }, [allConversations]);
 
   // Loading state while hydrating from server
-  if (!project && hydratingProjects) {
+  if (projectStatus === 'loading' || projectStatus === 'idle') {
     return (
       <WebAppShell>
         <main
@@ -250,6 +221,32 @@ export default function ProjectDetailPage() {
           }}
         >
           Loading project...
+        </main>
+      </WebAppShell>
+    );
+  }
+
+  if (projectStatus === 'error') {
+    return (
+      <WebAppShell>
+        <main
+          data-design="agi"
+          style={{
+            minHeight: '100%',
+            background: 'var(--agi-bg-2)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            color: 'var(--agi-ink-2)',
+            fontSize: 14,
+          }}
+        >
+          <p role="alert">{projectError ?? 'Projects could not be loaded.'}</p>
+          <button type="button" onClick={retryProjects}>
+            Retry
+          </button>
         </main>
       </WebAppShell>
     );
@@ -295,8 +292,9 @@ export default function ProjectDetailPage() {
               Project not found
             </h1>
             <p style={{ fontSize: 13, color: 'var(--agi-ink-2)', margin: 0 }}>
-              This project does not exist on this device. It may live on another device, or it was
-              deleted. Cloud sync arrives with Cloud Managed.
+              {projectStatus === 'signed-out'
+                ? 'Sign in to view this cloud project.'
+                : 'This cloud project does not exist, is unavailable to this account, or was deleted.'}
             </p>
           </div>
         </main>

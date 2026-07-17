@@ -48,27 +48,32 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       messages: {},
 
       setCloudConversations: (cloudConversations) => {
-        // DATA-LOSS FIX: preserve any locally-dirty (un-pushed) conversation
-        // title so a server snapshot fetched before the next push does not
-        // revert the user's rename. Scoped to dirty ids that appear in the
-        // snapshot — a merge, not a union (a dirty id ABSENT from the snapshot
-        // is the separate create-race case, intentionally not handled here).
+        // Preserve every locally-dirty mutation so a paginated/stale list snapshot
+        // cannot revert it or drop a create that has not appeared in that page yet.
+        // A later delta tombstone remains authoritative and removes the record.
         const dirtyIds = useCloudSyncStateStore.getState().dirtyConversationIds;
         set((state) => {
           const localById = new Map(state.conversations.map((c) => [c.id, c]));
           const normalized = cloudConversations.map((c) => {
+            const local = localById.get(c.id);
+            const serverVersion = c.serverVersion ?? local?.serverVersion;
             const base: ConversationSummary = {
               ...c,
               provider: c.provider ?? providerForExecutionMode('cloud'),
               executionMode: c.executionMode ?? ('cloud' as const),
+              ...(serverVersion !== undefined ? { serverVersion } : {}),
             };
             if (dirtyIds.includes(c.id)) {
-              const local = localById.get(c.id);
-              if (local) return { ...base, title: local.title };
+              if (local) return { ...base, ...local, serverVersion };
             }
             return base;
           });
-          return { conversations: normalized };
+          const snapshotIds = new Set(normalized.map((conversation) => conversation.id));
+          const dirtyOutsideSnapshot = state.conversations.filter(
+            (conversation) =>
+              dirtyIds.includes(conversation.id) && !snapshotIds.has(conversation.id),
+          );
+          return { conversations: [...dirtyOutsideSnapshot, ...normalized] };
         });
       },
 
@@ -135,17 +140,44 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       partialize: (state) => {
         const MAX_CONVERSATIONS = 200;
         const MAX_MESSAGES_PER_CONVERSATION = 100;
+        const syncState = useCloudSyncStateStore.getState();
+        const dirtyConversationIds = new Set(syncState.dirtyConversationIds);
+        const dirtyMessageIdsByConversation = new Map<string, Set<string>>();
+        for (const dirty of syncState.dirtyMessages) {
+          const ids = dirtyMessageIdsByConversation.get(dirty.conversationId) ?? new Set<string>();
+          ids.add(dirty.messageId);
+          dirtyMessageIdsByConversation.set(dirty.conversationId, ids);
+        }
         // Only persist cloud conversations — enforced by the executionMode guard
         // at write-time (setCloudConversations + addCloudConversation). Temporary
         // conversations are excluded so they never survive relaunch.
-        const conversations = state.conversations
-          .filter((c) => !c.temporary)
-          .slice(0, MAX_CONVERSATIONS);
+        const persistentConversations = state.conversations.filter((c) => !c.temporary);
+        const conversations = persistentConversations.slice(0, MAX_CONVERSATIONS);
+        const persistedConversationIds = new Set(
+          conversations.map((conversation) => conversation.id),
+        );
+        for (const conversation of persistentConversations) {
+          if (
+            dirtyConversationIds.has(conversation.id) &&
+            !persistedConversationIds.has(conversation.id)
+          ) {
+            conversations.push(conversation);
+            persistedConversationIds.add(conversation.id);
+          }
+        }
         const conversationIds = new Set(conversations.map((c) => c.id));
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {
           if (conversationIds.has(id)) {
-            messages[id] = msgs.filter((m) => !m.isStreaming).slice(-MAX_MESSAGES_PER_CONVERSATION);
+            const persistentMessages = msgs.filter((message) => !message.isStreaming);
+            const selected = persistentMessages.slice(-MAX_MESSAGES_PER_CONVERSATION);
+            const selectedIds = new Set(selected.map((message) => message.id));
+            const dirtyMessageIds = dirtyMessageIdsByConversation.get(id);
+            const dirtyOutsideCap = persistentMessages.filter(
+              (message) =>
+                dirtyMessageIds?.has(message.id) === true && !selectedIds.has(message.id),
+            );
+            messages[id] = [...dirtyOutsideCap, ...selected];
           }
         }
         return { conversations, messages };

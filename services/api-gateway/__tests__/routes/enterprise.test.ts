@@ -78,11 +78,8 @@ vi.mock('../../src/lib/neonClients', () => {
     return query;
   }
 
-  // P1-GW-RLS (Wave 4): organizations/organization_members/
-  // organization_admin_policies/support_cases have no RLS policy coverage
-  // (RLS-GAP), so routes/enterprise.ts now calls getServiceClient() for
-  // everything, same as middleware/auth.ts's kill-switch profiles lookup.
-  // Dispatch on table name so both see the right chain.
+  // Canonical organization membership reads use the user-scoped client;
+  // unowned enterprise compatibility tables use the explicit system client.
   const serviceClient = {
     from: vi.fn((table: string) => {
       if (table === 'profiles') {
@@ -103,7 +100,8 @@ vi.mock('../../src/lib/neonClients', () => {
   };
 
   return {
-    getServiceClient: vi.fn(() => serviceClient),
+    getUserScopedClient: vi.fn(() => serviceClient),
+    getSystemClient: vi.fn(() => serviceClient),
   };
 });
 

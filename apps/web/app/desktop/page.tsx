@@ -7,14 +7,15 @@ import {
   FinalCta,
   TrustTriptych,
 } from '../../components/marketing/FlagshipSections';
-import { FeatureGrid, LedgerSection } from '../../components/marketing/LandingSections';
+import { LedgerSection } from '../../components/marketing/LandingSections';
 import { ProductFrame } from '../../components/marketing/ProductFrame';
 import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
-import { LAUNCH, COMING_SOON_LABEL } from '../../lib/marketing-constants';
+import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
 
 export const metadata = buildMetadata({
   title: 'AGI Desktop | Runs on Your Machine',
-  description: `The native AGI app, built in Rust. Local models with Ollama and LM Studio. Keys encrypted on your machine. Chats in SQLite on your disk. macOS, Windows, Linux. ${LAUNCH.publicLabel}.`,
+  description:
+    'The native AGI app, built in Rust. Download the signed Linux x64 AppImage. macOS and Windows installers are not yet published. Run local models with Ollama and LM Studio.',
   path: '/desktop',
 });
 
@@ -40,8 +41,8 @@ export default function DesktopPage() {
                 Chats live in SQLite on your disk. Keys never leave the machine.
               </p>
               <div className="agi-fl-cta-row">
-                <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-                  Get notified
+                <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
+                  Check installer availability
                 </Link>
                 <Link href="/local" className="agi-fl-cta agi-fl-cta--secondary">
                   Run AGI Locally
@@ -151,30 +152,7 @@ export default function DesktopPage() {
           ]}
         />
 
-        <FeatureGrid
-          eyebrow="Platforms"
-          title="macOS. Windows. Linux."
-          items={[
-            {
-              meta: 'macOS',
-              title: 'Apple Silicon & Intel',
-              body: `Universal, aarch64, and x86_64 bundles. ${COMING_SOON_LABEL}.`,
-              href: '/download',
-            },
-            {
-              meta: 'Windows',
-              title: 'Windows x64',
-              body: `The same Rust app, on x64. ${COMING_SOON_LABEL}.`,
-              href: '/download',
-            },
-            {
-              meta: 'Linux',
-              title: 'Linux x64',
-              body: `An x64 AppImage. ${COMING_SOON_LABEL}.`,
-              href: '/download',
-            },
-          ]}
-        />
+        <DesktopDownloadAvailability />
 
         <LedgerSection
           eyebrow="Specifications"
@@ -188,22 +166,21 @@ export default function DesktopPage() {
             { k: 'Computer use', v: 'Browser · files · terminal · screen, with explicit consent' },
             { k: 'MCP transports', v: 'stdio · SSE · streamable HTTP' },
             { k: 'Skills', v: 'Markdown + frontmatter' },
-            { k: 'Bundles', v: 'macOS universal · Windows x64 · Linux x64' },
-            { k: 'Installers', v: COMING_SOON_LABEL },
-            { k: 'Launch', v: LAUNCH.date },
+            { k: 'Published installer', v: 'Linux x64 AppImage · signed stable channel' },
+            { k: 'macOS & Windows', v: 'Installers not published · no release date announced' },
           ]}
         />
 
         <FinalCta
-          eyebrow={LAUNCH.publicLabel}
-          title="Put AGI on your desktop."
-          body="Point it at Ollama, LM Studio, or your own keys. Installers open at public launch."
+          eyebrow="Linux x64"
+          title="Install AGI Desktop on Linux."
+          body="The download control appears only when the stable release API verifies a signed Linux x64 AppImage. macOS and Windows installers are not published."
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '#desktop-downloads', label: 'Check installer availability' },
             { href: '/byok', label: 'Set Up BYOK' },
             { label: 'Team & Enterprise access', waitlist: true },
           ]}
-          stamp={`Public launch · ${LAUNCH.date}`}
+          stamp="Linux x64 · signed AppImage release channel"
         />
 
         <MarketingFooter />

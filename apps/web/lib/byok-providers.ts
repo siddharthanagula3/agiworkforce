@@ -14,7 +14,7 @@
  * path in apps/web to keep separate from the server-key path.
  *
  * `pendingAdapter` no longer applies to any entry: Mistral/Groq/OpenRouter
- * adapters (`packages/providers/{mistral,groq,openrouter}`) all shipped and
+ * adapters (`packages/ai/providers/{mistral,groq,openrouter}`) all shipped and
  * are wired into every server-key adapter table (v1 chat-completions route's
  * `ADAPTER_PROVIDERS`, `apps/web/lib/services/provider-adapter-service.ts`).
  * Field kept on the type in case a future provider genuinely lands here

@@ -1,10 +1,18 @@
 'use client';
 
-import { createContext, useCallback, useContext, useRef, useEffect } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useEffect,
+  type MutableRefObject,
+} from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { toast } from 'sonner';
 import {
   useChatStore,
+  selectIsActiveConversationStreaming,
   type Message,
   type Attachment,
   type MessageMetadata,
@@ -13,6 +21,13 @@ import {
 } from '@/stores/chatStore';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { Effort } from '@agiworkforce/types';
+import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
+import {
+  createManagedCloudChatClient,
+  ManagedCloudChatHttpError,
+  parseGeneratedFilesDelta,
+  type ManagedCloudSaveMessageOptions,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   buildFreeTrialPaywallSlot,
@@ -27,6 +42,8 @@ import {
   CONTINUE_GENERATION_INSTRUCTION,
   isMessageContinuable,
 } from '@/features/chat/lib/continue-generation';
+import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
+import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 
 interface SendMessageOptions {
   model?: string;
@@ -143,10 +160,17 @@ function buildAssistantErrorContent(message: string): string {
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
-const DEFAULT_SAVE_MAX_ATTEMPTS = 3;
-const DEFAULT_SAVE_RETRY_DELAY_MS = 350;
-
-const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/**
+ * A tool-only assistant turn (e.g. a connector call or file write with no
+ * closing remark) can finish with an empty `fullContent`. `CreateMessageSchema`
+ * (lib/validations/chat.ts) rejects empty and whitespace-only content, so an
+ * empty string can never reach the DB — but the turn's tool timeline and
+ * generated-file metadata still need to persist. U+200B is not stripped by
+ * `String.prototype.trim()` (it is not in the Unicode `White_Space` set used
+ * by ECMAScript trim semantics, unlike a plain space), so it satisfies the
+ * schema's non-whitespace check while rendering as nothing.
+ */
+const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
 
 /**
  * Provider that yields a CURRENTLY-valid Clerk session token. Clerk JWTs are
@@ -161,12 +185,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  */
 type AuthTokenProvider = () => Promise<string>;
 
-interface SaveRetryOptions {
-  /** Total attempts including the first try. Default 3 (1 + 2 retries). */
-  maxAttempts?: number;
-  /** Base backoff between attempts; multiplied by attempt number. Default 350ms. */
-  retryDelayMs?: number;
-}
+type SaveRetryOptions = ManagedCloudSaveMessageOptions;
 
 /**
  * Persist a chat message to the database, returning the saved row id.
@@ -199,79 +218,39 @@ async function saveMessageToDb(
   getAuthToken: AuthTokenProvider,
   options: SaveRetryOptions = {},
 ): Promise<{ id: string }> {
-  const maxAttempts = options.maxAttempts ?? DEFAULT_SAVE_MAX_ATTEMPTS;
-  const retryDelayMs = options.retryDelayMs ?? DEFAULT_SAVE_RETRY_DELAY_MS;
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    let response: Response;
-    try {
-      // Fetch a FRESH token for THIS attempt. Reusing a token captured when the
-      // request started would already be expired after a long stream (see
-      // AuthTokenProvider). Clerk's getToken() returns a valid token, refreshing
-      // the session as needed, so a slow response always persists.
-      const authToken = await getAuthToken();
-      const headers = await addCsrfHeaders({
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-      });
-      response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          id: message.id,
-          role: message.role,
-          content: message.content,
-          model: message.model,
-          metadata: message.metadata,
-          skipLlm: true, // Flag to save message without triggering LLM call
-        }),
-      });
-    } catch (networkError) {
-      // Network-level failure (offline, DNS, connection reset) — transient.
-      lastError = networkError;
-      if (attempt < maxAttempts) {
-        await delay(retryDelayMs * attempt);
-        continue;
+  const client = createManagedCloudChatClient({
+    getAuthToken,
+    decorateMutationHeaders: addCsrfHeaders,
+    fetchImpl: (input, init) => fetch(input, init),
+  });
+  try {
+    const saved = await client.saveMessage(
+      conversationId,
+      {
+        id:
+          message.id &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            message.id,
+          )
+            ? message.id
+            : crypto.randomUUID(),
+        role: message.role as 'user' | 'assistant' | 'system',
+        content: message.content,
+        model: message.model,
+        metadata: message.metadata ? { ...message.metadata } : undefined,
+      },
+      options,
+    );
+    return { id: saved.id };
+  } catch (error) {
+    if (error instanceof ManagedCloudChatHttpError) {
+      if (error.status === 429) {
+        console.warn('[useChatStream] Message persistence rate-limited (429); turn not saved');
       }
-      throw networkError instanceof Error
-        ? networkError
-        : new Error('Network error while saving message');
+      throw new Error(`Failed to save message to DB: ${error.status}`);
     }
-
-    if (response.ok) {
-      const data = await response.json().catch(() => ({}) as Record<string, unknown>);
-      // On a 200 with no body we still know the row was saved; fall back to the
-      // id we sent (the route uses it via coalesce) so the store id stays in
-      // sync — never invent a random id that won't match the DB.
-      return (
-        (data as { message?: { id: string } }).message ||
-        (data as { userMessage?: { id: string } }).userMessage ||
-        (message.id ? { id: message.id } : { id: crypto.randomUUID() })
-      );
-    }
-
-    // A 429 means the persist write was rate-limited, so the turn was NOT saved.
-    // It is not retried (the rate-limit window outlasts the request) — fall
-    // through to the throw below so the caller surfaces it instead of silently
-    // dropping the turn. Logged distinctly for diagnostics.
-    if (response.status === 429) {
-      console.warn('[useChatStream] Message persistence rate-limited (429); turn not saved');
-    }
-
-    // 5xx is transient — retry before giving up.
-    if (response.status >= 500 && attempt < maxAttempts) {
-      lastError = new Error(`Save failed: ${response.status}`);
-      await delay(retryDelayMs * attempt);
-      continue;
-    }
-
-    // Non-retryable 4xx, or a 5xx after exhausting retries: a real failure the
-    // caller must surface so the turn is not silently lost.
-    throw new Error(`Failed to save message to DB: ${response.status}`);
+    throw error;
   }
-
-  throw lastError instanceof Error ? lastError : new Error('Failed to save message to DB');
 }
 
 /**
@@ -289,7 +268,7 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
   );
 }
 
-export { saveMessageToDb, notifyPersistenceFailure };
+export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
 
 // ─── Shared SSE-stream types + module-level approval registry ───────────────
 
@@ -333,6 +312,21 @@ export function __resetPendingTurnsForTests(): void {
 }
 
 /**
+ * Whether a suspended turn is actually resolvable right now. `pendingTurns`
+ * is process-memory-only (module state, reset on every page load), while an
+ * `awaiting_approval` tool card is durably persisted on the message. A page
+ * reload -- or loading a conversation whose last turn suspended in a PRIOR
+ * session -- leaves the store showing `awaiting_approval` with no matching
+ * registry entry: the Approve/Reject buttons would render live-wired but
+ * silently no-op, since `resolveToolApproval` bails out on a missing turn
+ * (see its `if (!turn || turn.resolving) return;` guard). Callers must check
+ * this before wiring the buttons and render an expired state instead.
+ */
+export function isApprovalTurnLive(assistantMessageId: string): boolean {
+  return pendingTurns.has(assistantMessageId);
+}
+
+/**
  * Context carrying the tool-approval resolver down to per-message components
  * (MessageBubble) WITHOUT prop-drilling through the memoized message-list layers.
  * The provider is mounted by the chat page (which owns the Clerk-authenticated
@@ -345,6 +339,38 @@ const ToolApprovalContext = createContext<ResolveToolApprovalFn | null>(null);
 export const ToolApprovalProvider = ToolApprovalContext.Provider;
 export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
   return useContext(ToolApprovalContext);
+}
+
+/**
+ * Client-side convenience only: consult the user's saved per-(connector,
+ * tool) decision (tool-permissions-store.ts, set from the ToolTimeline
+ * approval card's "Remember" picker) and auto-resolve any pending call that
+ * already has an 'allow'/'deny' verdict, through the SAME resolveToolApproval
+ * path a manual click uses — so the resume/decision bookkeeping (turn.decisions,
+ * the "wait for every call" gate) stays in one place. 'ask' (the default) is a
+ * no-op: the card is left for a manual decision, exactly like today.
+ *
+ * The server re-validates every approval on resume regardless of what the
+ * client sends — this only saves the user a repeat click, it grants nothing.
+ * Non-MCP tool names (parseQualifiedMcpToolName returns null) are untouched;
+ * the permission store is connector-scoped only.
+ */
+function autoResolvePendingApprovals(
+  assistantMessageId: string,
+  calls: PendingApprovalCall[],
+  resolve: ResolveToolApprovalFn,
+): void {
+  const permissions = useToolPermissionsStore.getState();
+  for (const call of calls) {
+    const parsed = parseQualifiedMcpToolName(call.name);
+    if (!parsed) continue;
+    const level = permissions.getToolPermission(parsed.serverId, parsed.toolName);
+    if (level === 'allow') {
+      void resolve(assistantMessageId, call.toolCallId, 'approved');
+    } else if (level === 'deny') {
+      void resolve(assistantMessageId, call.toolCallId, 'rejected');
+    }
+  }
 }
 
 interface StreamOutcome {
@@ -429,6 +455,18 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
    * is honest and survives reload.
    */
   let finishReason: string | undefined;
+  /**
+   * Classified payload from an additive `x_stream_error` delta: the provider
+   * failed mid-stream (after the response had already committed a 200), so
+   * this turn's [DONE] still arrives normally with no other visible signal —
+   * see `hasStreamError` in packages/ui/unified-chat/src/lib/continue-generation.ts
+   * for why `finish_reason` alone cannot carry this. Sticky (once set, never
+   * cleared) so an isolated retry of the SAME turn can't un-set it before the
+   * terminal persist reads it. `code`/`retryable` ride along when the
+   * provider adapter supplied them.
+   */
+  let streamErrorInfo: { message: string; code?: string; retryable?: boolean } | undefined =
+    seedMetadata?.streamError;
 
   // ── Reasoning (thinking) accumulation ──────────────────────────────────────
   // updateMessage REPLACES metadata wholesale, so a bare `{ metadata: {...} }`
@@ -608,6 +646,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (finishReason) {
       metadata.finishReason = finishReason;
     }
+    if (streamErrorInfo) {
+      metadata.streamError = streamErrorInfo;
+    }
     // Persist reasoning so it survives reload (previously dropped — only the answer
     // was saved). Read the accumulated thinking off the store bag. Always persist
     // isThinkingStreaming:false and a stable duration so a reloaded turn renders the
@@ -646,15 +687,39 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   const persistAssistant = (fullContent: string) => {
-    if (!fullContent || isTemporaryConversation) return;
+    if (isTemporaryConversation) return;
+    const metadata = buildAssistantMetadata();
+    // A tool-only turn (connector call, generated file, code execution) can
+    // finish with no visible closing text — fullContent is then ''. Bailing
+    // out unconditionally here used to drop the tool timeline and generated
+    // file cards on reload along with the (rightfully) skipped empty text.
+    // Persist whenever there is either real content or metadata worth
+    // keeping; see EMPTY_ASSISTANT_CONTENT_PLACEHOLDER for why a metadata-only
+    // turn cannot be saved with content: ''.
+    const hasMeaningfulMetadata = Boolean(
+      metadata &&
+      ((metadata.tools?.length ?? 0) > 0 ||
+        (metadata.generatedFiles?.length ?? 0) > 0 ||
+        metadata.searchResults ||
+        metadata.codeExecutionResult ||
+        metadata.research ||
+        metadata.thinkingContent ||
+        (metadata.thinkingSegments?.length ?? 0) > 0 ||
+        // A provider failure on the very first token (zero content streamed)
+        // must still persist — otherwise the x_stream_error signal is
+        // silently dropped and the turn looks like it never happened at all
+        // on reload, worse than rendering a clean-looking empty completion.
+        metadata.streamError),
+    );
+    if (!fullContent && !hasMeaningfulMetadata) return;
     saveMessageToDb(
       conversationId,
       {
         id: assistantMessageId,
         role: 'assistant',
-        content: fullContent,
+        content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
         model,
-        metadata: buildAssistantMetadata(),
+        metadata,
       },
       getAuthToken,
     )
@@ -763,9 +828,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             // 'length'/'max_tokens') renders immediately, not only after reload.
             patchMessageMeta({ finishReason });
           }
+          if (streamErrorInfo) {
+            // Same "publish before persist" treatment as finishReason above,
+            // so the incomplete-response notice + regenerate affordance
+            // (hasStreamError) renders immediately, not only after reload.
+            patchMessageMeta({ streamError: streamErrorInfo });
+          }
           persistAssistant(fullAssistantContent);
-          stopStreaming();
-          setLoading(false);
+          stopStreaming(conversationId);
+          setLoading(false, conversationId);
           return { suspended, pendingCalls };
         }
 
@@ -854,6 +925,34 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             setSearching(assistantMessageId, true);
           } else if (toolStatus?.status === 'executing') {
             setExecutingCode(assistantMessageId, true);
+          }
+
+          // Mid-stream provider failure (additive marker — see the
+          // streamErrorInfo declaration above for why this can't ride on
+          // finish_reason alone). Sticky: keep the FIRST payload seen, not
+          // the last, since it identifies the actual failure. Accepts the
+          // current object shape defensively (a stray bare-string sender
+          // would still be classified, though the wire only sends objects).
+          const streamErrorDelta = parsed.choices?.[0]?.delta?.x_stream_error;
+          if (!streamErrorInfo) {
+            if (
+              streamErrorDelta &&
+              typeof streamErrorDelta === 'object' &&
+              typeof streamErrorDelta.message === 'string' &&
+              streamErrorDelta.message
+            ) {
+              streamErrorInfo = {
+                message: streamErrorDelta.message,
+                ...(typeof streamErrorDelta.code === 'string'
+                  ? { code: streamErrorDelta.code }
+                  : {}),
+                ...(typeof streamErrorDelta.retryable === 'boolean'
+                  ? { retryable: streamErrorDelta.retryable }
+                  : {}),
+              };
+            } else if (typeof streamErrorDelta === 'string' && streamErrorDelta) {
+              streamErrorInfo = { message: streamErrorDelta };
+            }
           }
 
           // Manual-approval request: surface an awaiting_approval card and record
@@ -1001,28 +1100,28 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           // Generated files (tool/provider runs that produced real bytes).
           // Emitted once by the server before [DONE] with same-origin
           // /api/files/{id} uris. UPSERT by file name so a re-harvested file
-          // replaces its earlier descriptor instead of duplicating.
-          const generatedFilesBlock = parsed.choices?.[0]?.delta?.x_generated_files;
-          if (generatedFilesBlock?.files && Array.isArray(generatedFilesBlock.files)) {
-            const incoming = (generatedFilesBlock.files as Record<string, unknown>[])
-              .filter((f) => typeof f['uri'] === 'string' && typeof f['file_name'] === 'string')
-              .map((f) => ({
-                id: typeof f['id'] === 'string' ? f['id'] : (f['file_name'] as string),
-                fileName: f['file_name'] as string,
-                mimeType:
-                  typeof f['mime_type'] === 'string' ? f['mime_type'] : 'application/octet-stream',
-                uri: f['uri'] as string,
-                byteCount: typeof f['byte_count'] === 'number' ? f['byte_count'] : 0,
-                kind: typeof f['kind'] === 'string' ? f['kind'] : 'other',
-                checksumSha256:
-                  typeof f['checksum_sha256'] === 'string' ? f['checksum_sha256'] : undefined,
-                // Server-derived classification (file-creation parity Wave A).
-                // Pass-through only; absent on pre-classification payloads.
-                ...(f['surface'] === 'artifact' || f['surface'] === 'file'
-                  ? { surface: f['surface'] as 'artifact' | 'file' }
-                  : {}),
-                ...(typeof f['previewable'] === 'boolean' ? { previewable: f['previewable'] } : {}),
-              }));
+          // replaces its earlier descriptor instead of duplicating. Parsed
+          // with the shared cloud contract (desktop WebRuntime and mobile use
+          // the same parseGeneratedFilesDelta) instead of hand-rolled field
+          // coercion, so all surfaces agree on what counts as a valid
+          // descriptor and salvage per-file the same way.
+          {
+            const incoming = parseGeneratedFilesDelta(
+              parsed.choices?.[0]?.delta?.x_generated_files,
+            ).map((f) => ({
+              id: f.id,
+              fileName: f.file_name,
+              mimeType: f.mime_type,
+              uri: f.uri,
+              byteCount: f.byte_count,
+              kind: f.kind,
+              ...(f.checksum_sha256 ? { checksumSha256: f.checksum_sha256 } : {}),
+              // Server-derived classification (file-creation parity Wave A).
+              // Always present — the contract defaults pre-classification
+              // payloads to 'file' / not-previewable.
+              surface: f.surface,
+              previewable: f.previewable,
+            }));
             if (incoming.length > 0) {
               const merged = [...(currentGeneratedFiles ?? [])];
               for (const file of incoming) {
@@ -1060,9 +1159,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (finishReason) {
       patchMessageMeta({ finishReason });
     }
+    if (streamErrorInfo) {
+      patchMessageMeta({ streamError: streamErrorInfo });
+    }
     persistAssistant(fullAssistantContent);
-    stopStreaming();
-    setLoading(false);
+    stopStreaming(conversationId);
+    setLoading(false, conversationId);
     return { suspended, pendingCalls };
   } catch (error) {
     // Browsers reject an aborted fetch read with a DOMException named
@@ -1118,8 +1220,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         });
         persistAssistant(partialContent);
         useChatStore.getState().setError(errorMessage);
-        stopStreaming();
-        setLoading(false);
+        stopStreaming(conversationId);
+        setLoading(false, conversationId);
         return { suspended, pendingCalls };
       }
     }
@@ -1141,7 +1243,11 @@ export function useChatStream(): UseChatStreamReturn {
   const setLoading = useChatStore((state) => state.setLoading);
   const setError = useChatStore((state) => state.setError);
   const selectedModel = useChatStore((state) => state.selectedModel);
-  const isStreaming = useChatStore((state) => state.isStreaming);
+  // Scoped to the ACTIVE conversation, not the raw global flag -- a
+  // background stream for a conversation the user has switched away from
+  // must not show this conversation as generating (see
+  // streamingConversationIds's doc comment in the store).
+  const isStreaming = useChatStore(selectIsActiveConversationStreaming);
 
   // On unmount, do NOT abort the in-flight stream and do NOT null the ref.
   // The chatStore is a global singleton, so streamed tokens continue updating
@@ -1152,6 +1258,13 @@ export function useChatStream(): UseChatStreamReturn {
       // intentionally empty: preserve controller across unmount
     };
   }, []);
+
+  // Declared before sendMessage (which auto-resolves connector approvals
+  // through this SAME function — see autoResolvePendingApprovals) rather than
+  // after, so it is in scope for sendMessage's closure. Shares
+  // abortControllerRef with sendMessage/continueGeneration/stopGeneration
+  // (Finding 4) so Stop cancels a resume exactly like any other in-flight turn.
+  const resolveToolApproval = useResolveToolApproval(abortControllerRef);
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}) => {
@@ -1231,7 +1344,7 @@ export function useChatStream(): UseChatStreamReturn {
         isStreaming: true,
       };
       addMessage(assistantMessage);
-      startStreaming(assistantMessageId);
+      startStreaming(assistantMessageId, conversationId);
       setLoading(true);
       setError(null);
 
@@ -1277,6 +1390,11 @@ export function useChatStream(): UseChatStreamReturn {
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
+          'Idempotency-Key': createManagedChatIdempotencyKey({
+            surface: 'web',
+            purpose: 'send',
+            operationId: assistantMessageId,
+          }),
         });
         const thinkingState = useThinkingStore.getState();
         const thinkingEnabled = options.thinkingEnabled ?? thinkingState.enabled;
@@ -1350,6 +1468,11 @@ export function useChatStream(): UseChatStreamReturn {
             decisions: new Map(),
             resolving: false,
           });
+          autoResolvePendingApprovals(
+            assistantMessageId,
+            outcome.pendingCalls,
+            resolveToolApproval,
+          );
         }
       } catch (error) {
         handleStreamError(error, {
@@ -1374,6 +1497,7 @@ export function useChatStream(): UseChatStreamReturn {
       setLoading,
       setError,
       getToken,
+      resolveToolApproval,
     ],
   );
 
@@ -1390,14 +1514,17 @@ export function useChatStream(): UseChatStreamReturn {
   const continueGeneration = useCallback(
     async (assistantMessageId: string) => {
       const store = useChatStore.getState();
-      if (store.isStreaming) return;
+      const conversationId = store.activeConversationId;
+      // Scoped to this conversation, not the raw global isStreaming -- a
+      // background stream for a DIFFERENT conversation must not block
+      // continuing generation on the one actually displayed.
+      if (conversationId && store.streamingConversationIds.includes(conversationId)) return;
       const messageIndex = store.messages.findIndex((m) => m.id === assistantMessageId);
       const message = messageIndex >= 0 ? store.messages[messageIndex] : undefined;
       // No fake availability: only a truncated/stopped assistant turn with
       // non-empty partial content can continue.
       if (!message || !isMessageContinuable(message)) return;
 
-      const conversationId = store.activeConversationId;
       if (!conversationId) {
         setError('No active conversation. Please create a new conversation first.');
         return;
@@ -1444,14 +1571,20 @@ export function useChatStream(): UseChatStreamReturn {
         isStreaming: true,
         metadata: { ...priorMetadata, finishReason: undefined },
       });
-      startStreaming(assistantMessageId);
+      startStreaming(assistantMessageId, conversationId);
       setLoading(true);
       setError(null);
 
       try {
+        const continuationOperationId = crypto.randomUUID();
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
+          'Idempotency-Key': createManagedChatIdempotencyKey({
+            surface: 'web',
+            purpose: 'continue',
+            operationId: continuationOperationId,
+          }),
         });
         const response = await fetch('/api/llm/v1/chat/completions', {
           method: 'POST',
@@ -1496,8 +1629,8 @@ export function useChatStream(): UseChatStreamReturn {
           // consumeAssistantStream already flushed + re-marked 'stopped' +
           // persisted the merged partial; just tear down here.
           updateMessage(assistantMessageId, { isStreaming: false });
-          stopStreaming();
-          setLoading(false);
+          stopStreaming(conversationId);
+          setLoading(false, conversationId);
           return;
         }
 
@@ -1511,8 +1644,8 @@ export function useChatStream(): UseChatStreamReturn {
           }
           updateMessage(assistantMessageId, { isStreaming: false, metadata: priorMetadata });
           setError(errorMessage);
-          stopStreaming();
-          setLoading(false);
+          stopStreaming(conversationId);
+          setLoading(false, conversationId);
           return;
         }
 
@@ -1544,14 +1677,12 @@ export function useChatStream(): UseChatStreamReturn {
             getAuthToken,
           ).catch((err) => notifyPersistenceFailure('assistant', err));
         }
-        stopStreaming();
-        setLoading(false);
+        stopStreaming(conversationId);
+        setLoading(false, conversationId);
       }
     },
     [selectedModel, updateMessage, startStreaming, stopStreaming, setLoading, setError, getToken],
   );
-
-  const resolveToolApproval = useResolveToolApproval();
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1577,17 +1708,29 @@ export function useChatStream(): UseChatStreamReturn {
  * that renders once per message (e.g. MessageBubble) can wire approve/reject
  * without incurring a re-render on every streaming toggle. useChatStream reuses
  * it so there is a single implementation of the resume flow.
+ *
+ * `sharedAbortControllerRef` is the SAME ref `sendMessage`/`continueGeneration`
+ * use, passed in by the caller rather than owned here. A resume is just
+ * another kind of in-flight turn on the conversation, so it must share one
+ * abort target with the rest -- previously this hook kept a private
+ * `abortRef` that `stopGeneration` never touched, so clicking Stop during a
+ * tool-approval resume did nothing (Finding 4).
  */
-export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApproval'] {
+export function useResolveToolApproval(
+  sharedAbortControllerRef: MutableRefObject<AbortController | null>,
+): UseChatStreamReturn['resolveToolApproval'] {
   const { getToken } = useAuth();
-  const abortRef = useRef<AbortController | null>(null);
+  const abortRef = sharedAbortControllerRef;
 
   return useCallback(
-    async (
+    // Named (not an anonymous arrow) so it can call itself below when a
+    // resumed turn suspends AGAIN on a further connector call — auto-resolving
+    // that next batch needs the exact same resolver, not a re-derived one.
+    async function resolveToolApproval(
       assistantMessageId: string,
       toolCallId: string,
       decision: ToolApprovalDecision,
-    ): Promise<void> => {
+    ): Promise<void> {
       const store = useChatStore.getState();
       const {
         startStreaming,
@@ -1666,14 +1809,20 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
       const seedTools = useChatStore.getState().messages.find((m) => m.id === assistantMessageId)
         ?.metadata?.tools;
 
-      startStreaming(assistantMessageId);
+      startStreaming(assistantMessageId, turn.conversationId);
       setLoading(true);
       setError(null);
 
       try {
+        const resumeOperationId = crypto.randomUUID();
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
+          'Idempotency-Key': createManagedChatIdempotencyKey({
+            surface: 'web',
+            purpose: 'tool-resume',
+            operationId: resumeOperationId,
+          }),
         });
         const response = await fetch('/api/llm/v1/chat/completions/approve', {
           method: 'POST',
@@ -1714,7 +1863,15 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
         if (outcome.suspended && outcome.pendingCalls.length > 0) {
           // The continuation suspended again (a further tool needs approval):
           // register a fresh turn carrying the now-longer thread (assistant
-          // tool_call turn + this batch's tool results).
+          // tool_call turn + this batch's tool results). The just-finished
+          // resume already streamed each approved call's REAL result onto
+          // this message's tool timeline (see the x_tool_result handling
+          // above) -- read it from there instead of a placeholder, so the
+          // model sees the genuine file contents / command output / search
+          // results it needs to reason about the NEXT tool call.
+          const currentTools =
+            useChatStore.getState().messages.find((m) => m.id === assistantMessageId)?.metadata
+              ?.tools ?? [];
           pendingTurns.set(assistantMessageId, {
             priorMessages: [
               ...turn.priorMessages,
@@ -1724,7 +1881,8 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
                   role: 'tool',
                   content:
                     turn.decisions.get(c.toolCallId) === 'approved'
-                      ? '(executed)'
+                      ? (currentTools.find((t) => t.toolCallId === c.toolCallId)?.result ??
+                        '(executed)')
                       : 'The user denied permission to run this tool.',
                   tool_call_id: c.toolCallId,
                 }),
@@ -1737,6 +1895,11 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
             decisions: new Map(),
             resolving: false,
           });
+          autoResolvePendingApprovals(
+            assistantMessageId,
+            outcome.pendingCalls,
+            resolveToolApproval,
+          );
         } else {
           pendingTurns.delete(assistantMessageId);
         }
@@ -1755,7 +1918,7 @@ export function useResolveToolApproval(): UseChatStreamReturn['resolveToolApprov
         });
       }
     },
-    [getToken],
+    [abortRef, getToken],
   );
 }
 
@@ -1768,8 +1931,8 @@ interface StreamErrorContext {
   isTemporaryConversation: boolean;
   getAuthToken: AuthTokenProvider;
   setError: (message: string | null) => void;
-  stopStreaming: () => void;
-  setLoading: (loading: boolean) => void;
+  stopStreaming: (conversationId?: string) => void;
+  setLoading: (loading: boolean, conversationId?: string) => void;
   updateMessage: (id: string, updates: Partial<Message>) => void;
 }
 
@@ -1794,8 +1957,8 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
     (error as { name?: unknown }).name === 'AbortError';
   if (isAbort) {
     updateMessage(assistantMessageId, { isStreaming: false });
-    stopStreaming();
-    setLoading(false);
+    stopStreaming(conversationId);
+    setLoading(false, conversationId);
     return;
   }
 
@@ -1830,8 +1993,8 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
       },
     });
     setError(errorMessage);
-    stopStreaming();
-    setLoading(false);
+    stopStreaming(conversationId);
+    setLoading(false, conversationId);
     return;
   }
 
@@ -1862,6 +2025,6 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
       .catch((err) => notifyPersistenceFailure('assistant', err));
   }
 
-  stopStreaming();
-  setLoading(false);
+  stopStreaming(conversationId);
+  setLoading(false, conversationId);
 }

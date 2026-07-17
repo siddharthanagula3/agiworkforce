@@ -17,7 +17,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getServiceClient } from '../lib/neonClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout';
@@ -193,10 +193,7 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
 
   logger.info({ userId: user.userId, desktopId, code }, 'Pairing confirmation from desktop');
 
-  // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables
-  // none) — migration TODO. The explicit ownership filter below is the SOLE
-  // tenant-isolation mechanism until a policy ships.
-  const userDb = getServiceClient();
+  const userDb = getUserScopedClient(user);
 
   // Verify the desktop belongs to this user
   const { data: desktop, error: desktopError } = await userDb

@@ -56,6 +56,21 @@ export interface ToolCall {
   duration?: number;
   /** Structured web_search results (favicon/title/domain cards), when present. */
   searchResults?: ToolSearchResult[];
+  /**
+   * True while this MCP/connector tool call is suspended awaiting the user's
+   * approve/reject decision (manual-approval mode, `x_tool_approval_request`).
+   * Cleared once a further `x_tool_status`/`x_tool_result` event lands for the
+   * same call (approved calls resume executing; rejected calls get a denial
+   * result) or once `resolveToolApproval` records a local decision.
+   */
+  requiresApproval?: boolean;
+  /**
+   * The server's `tool_call_id` for a call requiring approval — the id the
+   * resume request (`POST /api/llm/v1/chat/completions/approve`) references in
+   * `tool_approvals[].tool_call_id`. Only set when `requiresApproval` is/was
+   * true; other tool families key by `id` alone.
+   */
+  toolCallId?: string;
 }
 
 export type RiskLevel = 'low' | 'medium' | 'high';
@@ -156,6 +171,8 @@ export interface ConversationSummary {
   temporary?: boolean;
   /** True when there are messages newer than the last time the user opened this chat */
   unread?: boolean;
+  /** Last server-owned Managed Cloud sync revision. Missing legacy state means `0`. */
+  serverVersion?: string;
 }
 
 export type AutoApproveMode = 'ask' | 'smart' | 'full';

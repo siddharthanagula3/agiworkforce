@@ -348,11 +348,18 @@ export async function sendCloudMessage(
   webSearch?: boolean,
   messageHistory?: Array<{ role: string; content: string }>,
   thinkingEnabled?: boolean,
+  codeExecution?: boolean,
+  idempotencyKey?: string,
+  requestOptions?: { research?: boolean },
 ): Promise<void> {
   let headers: Record<string, string>;
 
   try {
     headers = await getAuthHeaders();
+    if (!idempotencyKey) {
+      throw new Error('Managed Cloud chat requires a stable idempotency key');
+    }
+    headers['Idempotency-Key'] = idempotencyKey;
   } catch (err) {
     onError(err instanceof Error ? err : new Error(String(err)));
     return;
@@ -371,6 +378,8 @@ export async function sendCloudMessage(
     stream: true,
     ...(webSearch ? { web_search: true } : {}),
     ...(thinkingEnabled ? { thinking_mode: true } : {}),
+    ...(codeExecution ? { code_execution: true } : {}),
+    ...(requestOptions?.research ? { research: true } : {}),
   };
 
   let res: Response;
@@ -389,6 +398,76 @@ export async function sendCloudMessage(
     return;
   }
 
+  await consumeCloudSseResponse(res, onChunk, onDone, onError, onEvent);
+}
+
+// ============================================================================
+// Tool-approval resume — POST /api/llm/v1/chat/completions/approve
+// ============================================================================
+
+/**
+ * Resumes a turn the server suspended on `x_tool_approval_request`. Sends the
+ * full replayed thread (`priorMessages` + the reconstructed assistant
+ * `tool_calls` turn) plus the per-call `tool_approvals` decisions, per the
+ * shared `ToolApprovalResumeRequestSchema` contract
+ * (`@agiworkforce/cloud-contracts`, `tool-approval-resume.ts`). On
+ * success the response is the SAME `text/event-stream` shape as
+ * `sendCloudMessage` — streamed through the identical callbacks so the
+ * continuation appends onto the same assistant message.
+ */
+export async function sendCloudApprovalResume(
+  model: string,
+  messages: Array<Record<string, unknown>>,
+  toolApprovals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (err: Error) => void,
+  signal?: AbortSignal,
+  onEvent?: (payload: Record<string, unknown>) => void,
+  idempotencyKey?: string,
+): Promise<void> {
+  let headers: Record<string, string>;
+
+  try {
+    headers = await getAuthHeaders();
+    if (!idempotencyKey) {
+      throw new Error('Managed Cloud tool resume requires a stable idempotency key');
+    }
+    headers['Idempotency-Key'] = idempotencyKey;
+  } catch (err) {
+    onError(err instanceof Error ? err : new Error(String(err)));
+    return;
+  }
+
+  let res: Response;
+  try {
+    res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions/approve`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model, messages, stream: true, tool_approvals: toolApprovals }),
+      signal,
+      credentials: 'include',
+    });
+  } catch (err) {
+    onError(err instanceof Error ? err : new Error(String(err)));
+    return;
+  }
+
+  await consumeCloudSseResponse(res, onChunk, onDone, onError, onEvent);
+}
+
+/**
+ * Shared SSE-response consumer for both `sendCloudMessage` and
+ * `sendCloudApprovalResume` — same OpenAI-compatible `data: {...}` line
+ * format, same [DONE] sentinel, same error-response handling.
+ */
+async function consumeCloudSseResponse(
+  res: Response,
+  onChunk: (text: string) => void,
+  onDone: () => void,
+  onError: (err: Error) => void,
+  onEvent?: (payload: Record<string, unknown>) => void,
+): Promise<void> {
   if (!res.ok) {
     onError(new Error(`Send message failed: HTTP ${res.status}`));
     return;

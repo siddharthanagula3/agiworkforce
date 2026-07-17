@@ -57,8 +57,8 @@ vi.mock('@shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     // Case (a): normal model — no requiresEnvironment
     {
-      id: 'gpt-5.5',
-      name: 'GPT-5.5',
+      id: 'gpt-5.6-sol',
+      name: 'GPT-5.6 Sol',
       provider: 'OpenAI',
       providerKey: 'openai',
       description: 'Fast and capable',
@@ -100,8 +100,8 @@ vi.mock('@/constants/llm', () => ({
   getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
   getBestAutoModeForTier: () => 'auto-premium',
   getModelMetadata: (id: string) => {
-    if (id === 'gpt-5.5') {
-      return { id: 'gpt-5.5', name: 'GPT-5.5', capabilities: { thinking: false } };
+    if (id === 'gpt-5.6-sol') {
+      return { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', capabilities: { thinking: true } };
     }
     if (id === 'hypothetical-e2b-model') {
       return {
@@ -179,7 +179,7 @@ vi.mock('@/components/agi/AgiMark', () => ({
   AgiMark: () => null,
 }));
 
-vi.mock('@agiworkforce/llm-normalize', () => ({
+vi.mock('@agiworkforce/provider-protocol', () => ({
   supportsOpenAIReasoningEffort: () => false,
 }));
 
@@ -205,14 +205,14 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
   it('(a) normal model without requiresEnvironment is selectable — no env-lock indicator', () => {
     render(<ComposerFooter />);
 
-    // GPT-5.5 is in the recommended section (no requiresEnvironment, passes env check).
+    // GPT-5.6 Sol is in the recommended section (no requiresEnvironment, passes env check).
     // Its row aria-label should be just the model name, with no lock indicator and
     // no aria-disabled attribute.
-    const gptRow = screen.getByRole('button', { name: 'GPT-5.5' });
+    const gptRow = screen.getByRole('button', { name: 'GPT-5.6 Sol' });
     expect(gptRow).toBeInTheDocument();
     expect(gptRow).not.toHaveAttribute('aria-disabled', 'true');
     // Confirm no "environment not available" text in the aria-label
-    expect(gptRow.getAttribute('aria-label')).toBe('GPT-5.5');
+    expect(gptRow.getAttribute('aria-label')).toBe('GPT-5.6 Sol');
   });
 
   it('(b) env-gated model is locked and carries the evaluateModelEnvironment reason', () => {
@@ -225,7 +225,7 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
       name: /e2b sandbox model.*requires managed compute/i,
     });
     expect(envLockedRow).toBeInTheDocument();
-    expect(envLockedRow).toHaveAttribute('aria-disabled', 'true');
+    expect(envLockedRow).toBeDisabled();
   });
 
   it('(b) env-gated model shows "Beta" badge, not "Pro" or "Upgrade"', () => {
@@ -240,13 +240,12 @@ describe('ComposerFooter · environment gating (Phase A)', () => {
     expect(screen.queryByText(/^(Upgrade|Pro)$/i)).not.toBeInTheDocument();
   });
 
-  it('(b) env-gated model row has aria-disabled and tabIndex -1 (not an upgrade path)', () => {
+  it('(b) env-gated model row uses native disabled semantics (not an upgrade path)', () => {
     render(<ComposerFooter />);
 
     const envLockedRow = screen.getByRole('button', {
       name: /e2b sandbox model/i,
     });
-    expect(envLockedRow).toHaveAttribute('aria-disabled', 'true');
-    expect(envLockedRow).toHaveAttribute('tabindex', '-1');
+    expect(envLockedRow).toBeDisabled();
   });
 });

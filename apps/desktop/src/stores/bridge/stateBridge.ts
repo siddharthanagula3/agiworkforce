@@ -2,7 +2,7 @@
  * stateBridge.ts — Bridge between zustand stores and the canonical AppStateStore.
  *
  * MIGRATION PATTERN (Task 1.3 PoC):
- *   The canonical AppStateStore in packages/runtime/src/state/ is the long-term
+ *   The canonical AppStateStore in packages/client/client-runtime/src/state/ is the long-term
  *   target. During the transition, this bridge:
  *     1. Subscribes to existing zustand stores.
  *     2. Syncs relevant fields to appStateStore via setState.
@@ -14,7 +14,7 @@
  *
  * STORES BRIDGED (12 out of 67):
  *   1. auth.ts → AppState.auth (userId, email, planTier, isAuthenticated, accessToken)
- *   2. appModeStore.ts → AppState.chat.appMode + AppState.subscriptions.planTier
+ *   2. appModeStore.ts → AppState.chat.appMode
  *   3. notificationStore.ts → (no AppState field needed; bridge registers for future)
  *   4. thinkingStore.ts → AppState.settings.showThinking
  *   5. settingsDialogStore.ts → (UI-only; bridge registers for observability)
@@ -30,8 +30,8 @@
  * Returns a cleanup function that unsubscribes all bridges.
  */
 
-import { appStateStore } from '@agiworkforce/runtime';
-import type { AppState } from '@agiworkforce/runtime';
+import { appStateStore } from '@agiworkforce/client-runtime';
+import type { AppState } from '@agiworkforce/client-runtime';
 
 // We import store types but not the full stores to avoid heavy initialization.
 // Each bridge function is called lazily when the store is available.
@@ -65,7 +65,8 @@ export function bridgeAuthStore(): void {
             prev.auth.email === email &&
             prev.auth.planTier === planTier &&
             prev.auth.isAuthenticated === isAuthenticated &&
-            prev.auth.accessToken === accessToken
+            prev.auth.accessToken === accessToken &&
+            prev.subscriptions.planTier === planTier
           ) {
             return prev;
           }
@@ -83,6 +84,7 @@ export function bridgeAuthStore(): void {
               accessToken,
               lastSyncedAt: Date.now(),
             },
+            subscriptions: { ...prev.subscriptions, planTier },
           };
         });
       });
@@ -94,7 +96,7 @@ export function bridgeAuthStore(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Bridge 2: appModeStore.ts → AppState.chat.appMode + AppState.subscriptions
+// Bridge 2: appModeStore.ts → AppState.chat.appMode
 // ---------------------------------------------------------------------------
 
 export function bridgeAppModeStore(): void {
@@ -103,16 +105,13 @@ export function bridgeAppModeStore(): void {
       const unsubscribe = useAppModeStore.subscribe((state) => {
         appStateStore.setState((prev: AppState) => {
           const appMode = state.mode;
-          const planTier = (state.planTier ?? 'free') as AppState['subscriptions']['planTier'];
-
-          if (prev.chat.appMode === appMode && prev.subscriptions.planTier === planTier) {
+          if (prev.chat.appMode === appMode) {
             return prev;
           }
 
           return {
             ...prev,
             chat: { ...prev.chat, appMode },
-            subscriptions: { ...prev.subscriptions, planTier },
           };
         });
       });
@@ -444,7 +443,7 @@ export function bridgeLogoutCleanup(): void {
 
       (registerFn as (fn: () => void) => void)(() => {
         // Reset canonical state on logout
-        import('@agiworkforce/runtime')
+        import('@agiworkforce/client-runtime')
           .then(({ initialAppState }) => {
             appStateStore.setState(() => initialAppState);
           })

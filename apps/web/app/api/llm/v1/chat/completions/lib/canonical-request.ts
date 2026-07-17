@@ -3,12 +3,13 @@ import 'server-only';
 import {
   openAIWireRequestToChatRequest,
   supportsOpenAIReasoningEffort,
+  toProviderApiModelId,
   type OpenAIWireChatRequest,
   type OpenAIWireMessage,
   type OpenAIWireToolCall,
   type OpenAIWireToolChoice,
   type OpenAIWireToolDefinition,
-} from '@agiworkforce/llm-normalize';
+} from '@agiworkforce/provider-protocol';
 import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
 import type { ChatRequest, Effort, ThinkingConfig } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
@@ -16,41 +17,12 @@ import type { ProcessedRequest } from './request-processor';
 /**
  * Bridges `request-processor.ts`'s already-policy-resolved `llmRequest`
  * (routing/billing/quota decisions applied) onto the canonical `ChatRequest`
- * consumed by `packages/providers/*` adapters (restructure Wave 2 step 5).
+ * consumed by `packages/ai/providers/*` adapters (restructure Wave 2 step 5).
  *
- * NOT WIRED INTO THE ROUTE YET. route.ts / tool-loop.ts still dispatch
- * through `LLMProviderFactory`. Anthropic's server-managed-tool events,
- * `adaptive` thinking, and `output_config.effort` now have canonical
- * representations (StreamChunk + ThinkingConfig extended, Option A, see
- * task #34) and this file uses them below. Still open: OpenAI's canonical
- * reasoning-effort re-derivation from budgetTokens disagrees with the
- * existing OPENAI_REASONING_EFFORT table on 3 of 4 tiers -- escalated to
- * team-lead, blocks routing OpenAI thinking through this path only.
+ * Provider adapters consume these canonical requests through
+ * `adapter-providers.ts`. Reasoning effort remains model-specific and is
+ * validated against the canonical registry before translation.
  */
-
-/**
- * Reproduces `LLMProviderFactory.mapModelIdToApiId` (apps/web/lib/llm-
- * providers/factory.ts:310-321) exactly: `llmRequest.model` is the internal/
- * canonical model id (e.g. dot-form `claude-opus-4.8`) picked by request-
- * processor.ts's auto-model-resolution + quota-override logic -- it is NEVER
- * apiModelId-mapped upstream. The legacy factory only rewrote the model on a
- * local copy immediately before the provider HTTP call, so the mapped id
- * never round-tripped back into the response's `model` field (stream-
- * transform.ts / response-builder.ts both read the unmapped
- * `requestedModel` / `chatRequest.model` off `ProcessedRequest`, never the
- * provider-bound id -- callers building the response MUST keep doing that,
- * not read `ChatRequest.model` back off the object this function returns).
- * `toCanonicalChatRequest` sits at that same "immediately before the
- * provider call" point, so it must apply the same mapping here -- skipping
- * it would send e.g. `claude-opus-4.8` verbatim to Anthropic (translate.ts
- * uses `req.model` with zero normalization), silently wrong for every one of
- * the 22 catalog entries whose apiModelId differs from the catalog id.
- */
-function toApiModelId(modelId: string): string {
-  const metadata = getModelMetadataById(modelId);
-  const normalized = normalizeModelId(modelId);
-  return metadata?.apiModelId ?? normalized ?? modelId;
-}
 
 type InternalMessage = ProcessedRequest['llmRequest']['messages'][number];
 
@@ -125,18 +97,18 @@ function splitTools(tools: unknown[] | undefined): {
  * directly) since they aren't part of `ProcessedRequest['llmRequest']` in a
  * form this function's message/tool conversion touches.
  *
- * Sets `model` to the apiModelId-mapped id, NOT `llmRequest.model` verbatim
- * -- see `toApiModelId` above. Callers building the OpenAI-wire response
- * must keep sourcing the response `model` field from `ProcessedRequest`
- * (`requestedModel` / `chatRequest.model`), never from the returned
- * `ChatRequest.model`.
+ * Sets `model` to the provider `apiModelId` through the shared
+ * `toProviderApiModelId` boundary, not to `llmRequest.model` verbatim. Callers
+ * building the OpenAI-wire response must keep sourcing the response `model`
+ * field from `ProcessedRequest` (`requestedModel` / `chatRequest.model`),
+ * never from the returned `ChatRequest.model`.
  */
 export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest {
   const { llmRequest } = processed;
   const { functionTools, rawVendorTools } = splitTools(llmRequest.tools);
 
   const wireRequest: OpenAIWireChatRequest = {
-    model: toApiModelId(llmRequest.model),
+    model: toProviderApiModelId(llmRequest.model),
     messages: llmRequest.messages.map(toWireMessage),
     ...(llmRequest.stream !== undefined ? { stream: llmRequest.stream } : {}),
     ...(llmRequest.temperature !== undefined ? { temperature: llmRequest.temperature } : {}),
@@ -158,7 +130,7 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
  *
  * `{type:'adaptive'}` (anthropicUsesAdaptiveThinking models) maps straight
  * through -- `ThinkingConfig` gained an `'adaptive'` variant and
- * packages/providers/anthropic/src/translate.ts translates it back to
+ * packages/ai/providers/anthropic/src/translate.ts translates it back to
  * `{type:'adaptive'}` on the wire (Option A, addendum item 2, see task #34).
  * This used to throw before that extension landed; keep it mapping, not
  * throwing, now that the canonical layer supports it.
@@ -167,7 +139,7 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
  * resolved an effort: the canonical OpenAI translate.ts re-derives
  * `reasoning_effort` from `budgetTokens` via thresholds that disagree with
  * the existing OPENAI_REASONING_EFFORT table on 3 of 4 tiers (escalated gap,
- * still open -- needs packages/providers/openai, not yet granted). Sending
+ * still open -- needs packages/ai/providers/openai, not yet granted). Sending
  * no reasoning_effort (model default) is a smaller behavior delta than
  * sending the wrong tier.
  */
@@ -190,17 +162,9 @@ export function toCanonicalThinking(
  * Map `llmRequest.effort` onto the canonical `ChatRequest.effort`, gated to
  * Anthropic only (mirrors `toCanonicalThinking`'s provider gate).
  *
- * `llmRequest.effort` is `Effort | undefined` for every provider except
- * OpenAI, where request-processor.ts pre-remaps it through
- * `OPENAI_REASONING_EFFORT` (a same-valued lookup for low/medium/high/xhigh,
- * `undefined` for 'max' -- OpenAI has no Max tier). That remap is specific
- * to the still-open OpenAI reasoning-effort gap (see `toCanonicalThinking`'s
- * docstring) and isn't reused here: returning undefined for non-Anthropic
- * providers means this function never has to reason about it.
- *
  * Anthropic sends `thinking` and `output_config.effort` independently (old
  * anthropic.ts:245,425 -- addendum item 3); `ChatRequest.effort` exists
- * specifically so `packages/providers/anthropic/src/translate.ts` can
+ * specifically so `packages/ai/providers/anthropic/src/translate.ts` can
  * reproduce that independence (see effort-thinking.test.ts). Callers set
  * both `chatRequest.thinking` (via `toCanonicalThinking`) and
  * `chatRequest.effort` (via this function) from the same `llmRequest` --
@@ -228,7 +192,7 @@ export function toCanonicalEffort(
  * effort` IS populated for Google by request-processor.ts (`modelSupports
  * Effort` explicitly includes 'google'; `llmRequest.effort` is the raw tier
  * string for every provider except OpenAI's special-cased remap). But
- * `packages/providers/google/src/translate.ts`'s `translateChatRequest` only
+ * `packages/ai/providers/google/src/translate.ts`'s `translateChatRequest` only
  * reads `ChatRequest.thinking` (Gemini's `generationConfig.thinkingConfig`)
  * -- it does not read `ChatRequest.effort` at all, unlike Anthropic's
  * independent thinking/effort pair. And `toCanonicalThinking` above is
@@ -271,12 +235,10 @@ export function toCanonicalGoogleThinking(
   model?: string,
 ): ThinkingConfig | undefined {
   if (provider !== 'google') return undefined;
-  // Gemini 3.x: migrate to the discrete `thinkingLevel` control (current API).
-  // Legacy 2.5-era models keep the `thinkingBudget` integer (still accepted) so
-  // this migration does NOT touch the byte-stable legacy Gemini wire. Level is
-  // gated on a 3.x id so the pinned 2.5 byte-stability test is unaffected.
-  // reasoning-effort-capability-matrix-2026-07-10 flag 4.
-  if (isGemini3xModel(model)) {
+  // Use the model registry's declared provider wire path. Model-family names
+  // are not a contract: an unknown future/custom model must not inherit a
+  // request shape merely because its ID resembles a known release family.
+  if (usesGoogleThinkingLevel(model)) {
     const thinkingLevel = GOOGLE_THINKING_LEVEL[effort as 'low' | 'medium' | 'high'];
     if (thinkingLevel === undefined) return undefined;
     return { type: 'enabled', thinkingLevel, includeThoughts: false };
@@ -286,8 +248,11 @@ export function toCanonicalGoogleThinking(
   return { type: 'enabled', budgetTokens, includeThoughts: false };
 }
 
-function isGemini3xModel(model: string | undefined): boolean {
-  return typeof model === 'string' && /^gemini-3(?:[.-]|$)/u.test(model);
+function usesGoogleThinkingLevel(model: string | undefined): boolean {
+  if (!model) return false;
+  return (
+    getModelMetadataById(model)?.reasoning?.request?.effortPath === 'thinkingConfig.thinkingLevel'
+  );
 }
 
 const GOOGLE_THINKING_BUDGET: Readonly<Record<'low' | 'medium' | 'high', number>> = {
@@ -297,9 +262,9 @@ const GOOGLE_THINKING_BUDGET: Readonly<Record<'low' | 'medium' | 'high', number>
 };
 
 /**
- * Gemini 3.x effort→thinkingLevel map. The UI only sends low/medium/high for
- * Gemini (xhigh/max are unsupported and dropped upstream), mirroring the legacy
- * budget map's tier coverage.
+ * Registry-declared thinking-level effort map. The UI only sends
+ * low/medium/high for Gemini (xhigh/max are unsupported and dropped upstream),
+ * mirroring the legacy budget map's tier coverage.
  */
 const GOOGLE_THINKING_LEVEL: Readonly<
   Record<'low' | 'medium' | 'high', 'low' | 'medium' | 'high'>
@@ -349,50 +314,24 @@ export function buildGoogleChatRequest(processed: ProcessedRequest): ChatRequest
 }
 
 /**
- * Reproduces `apps/web/lib/llm-providers/openai.ts`'s `normalizeReasoningEffort` exactly:
- * `low`/`medium`/`high` pass through UNCONDITIONALLY (legacy never model-gates these three
- * tiers at all); `xhigh` requires the model to support it (`supportsOpenAIReasoningEffort`)
- * or is DROPPED to `undefined` -- never downgraded. `effort` here is `llmRequest.effort`,
- * which request-processor.ts already pre-remapped through `OPENAI_REASONING_EFFORT` (a
- * same-valued lookup for low/medium/high/xhigh, `undefined` for 'max' -- OpenAI has no Max
- * tier), so this only ever sees one of those four tiers or undefined.
- *
- * FOUND while wiring OpenAI (task #34's OpenAI slice): `packages/providers/openai/src/
- * translate.ts`'s `resolveOpenAIReasoningEffortForModel` (used generally, including by this
- * function's own caller further down) has a DIFFERENT, richer fallback ladder than legacy --
- * on a model that doesn't support `xhigh`, it DOWNGRADES to `high` instead of dropping the
- * field entirely (see packages/providers/openai/src/__tests__/translate-responses.test.ts's
- * "downgrades xhigh budgets to high" test, which intentionally locks that richer behavior
- * for translateChatRequest's OTHER callers). That's a real, response-affecting divergence
- * for the web v1 route specifically (a different reasoning_effort value is a materially
- * different request to OpenAI, not just a wire-shape nuance) -- NOT reproduced here or
- * changed in the shared function; this dedicated resolver exists so the web v1 route gets
- * legacy's exact tier-or-nothing behavior without altering `resolveOpenAIReasoningEffortForModel`
- * for api-gateway/CLI/desktop, who may genuinely want the graceful-degrade behavior.
- *
- * Uses `processed.llmRequest.model` (the ORIGINAL, pre-apiModelId-mapped id) rather than
- * `toApiModelId`'s output, matching legacy exactly -- `openai.ts`'s `normalizeReasoningEffort`
- * was always called with `request.model`, the un-mapped id `LLMProviderFactory` only rewrites
- * on a local copy immediately before the HTTP call (see `toApiModelId`'s docstring above).
+ * Preserve a requested OpenAI effort only when the selected model's canonical
+ * registry entry supports it. This exact-tier behavior avoids silently changing
+ * the requested inference budget while allowing newly cataloged effort levels
+ * to propagate without another application-owned map.
  */
 export function resolveWebOpenAIReasoningEffort(
   provider: string,
   effort: ProcessedRequest['llmRequest']['effort'],
   model: string,
-): 'low' | 'medium' | 'high' | 'xhigh' | undefined {
+): Effort | undefined {
   if (provider !== 'openai') return undefined;
   const normalized = typeof effort === 'string' ? effort.toLowerCase() : undefined;
-  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
-    return normalized;
-  }
-  if (normalized === 'xhigh') {
-    const supportsXhigh = supportsOpenAIReasoningEffort(
-      { provider: 'openai', id: normalizeModelId(model) ?? model },
-      'xhigh',
-    );
-    return supportsXhigh ? 'xhigh' : undefined;
-  }
-  return undefined;
+  if (!normalized) return undefined;
+  const supported = supportsOpenAIReasoningEffort(
+    { provider: 'openai', id: normalizeModelId(model) ?? model },
+    normalized,
+  );
+  return supported ? (normalized as Effort) : undefined;
 }
 
 /**
@@ -400,10 +339,10 @@ export function resolveWebOpenAIReasoningEffort(
  * `buildAnthropicChatRequest`/`buildGoogleChatRequest` -- same `toCanonicalChatRequest`
  * base, but sets `chatRequest.effort` (not `thinking`: legacy `openai.ts` only ever sent a
  * categorical `reasoning_effort` string, never a budget/thinking object) from
- * `resolveWebOpenAIReasoningEffort`. `packages/providers/openai/src/translate.ts`'s
+ * `resolveWebOpenAIReasoningEffort`. `packages/ai/providers/openai/src/translate.ts`'s
  * `translateChatRequest` reads `ChatRequest.effort` directly when present, bypassing its
  * own `thinking.budgetTokens`-derived heuristic (task #34's OpenAI slice) -- since
- * `resolveWebOpenAIReasoningEffort` already applied legacy's exact model-gating, the value
+ * `resolveWebOpenAIReasoningEffort` already applied exact model-gating, the value
  * set here is passed straight through by `resolveOpenAIReasoningEffortForModel`'s "already
  * supported" fast path with no further remapping.
  */

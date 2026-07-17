@@ -7,10 +7,14 @@
 // DESKTOP-PLAN-TIER-DISPLAY-STALE-01, DESKTOP-BYOK-PROVIDER-UI-COVERAGE-01,
 // DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01, DESKTOP-MISC-CRITICAL-GAPS-01).
 
+import * as fs from 'node:fs';
+
 const SCREEN_DIR =
   '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/settings';
 
-// Canonical order from packages/ui/src/settings-nav.ts (SETTINGS_NAV).
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
+
+// Canonical order from packages/ui/ui/src/settings-nav.ts (SETTINGS_NAV).
 const NAV_LABELS = [
   'General',
   'Account',

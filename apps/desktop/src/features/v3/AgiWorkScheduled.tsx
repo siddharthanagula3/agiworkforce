@@ -1,6 +1,7 @@
 import { RefreshCw, Trash2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ConfirmDialog } from '@/ui/ConfirmDialog';
 import { cn } from '../../lib/utils';
 import {
   useSchedulerStore,
@@ -9,42 +10,28 @@ import {
   type ScheduledTask,
 } from '../../stores/schedulerStore';
 
-function IosToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+function IosToggle({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
+      aria-label={label}
       onClick={onToggle}
       className={cn(
-        'relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none',
+        'relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--chat-surface-base)]',
         on ? 'bg-[var(--chat-accent-secondary)]' : 'bg-[var(--chat-border-strong)]',
       )}
     >
       <span
         className={cn(
-          'inline-block h-4 w-4 rounded-full bg-[var(--chat-surface-elevated)] shadow transition-transform',
-          on ? 'translate-x-4' : 'translate-x-0.5',
+          'inline-block h-5 w-5 rounded-full bg-[var(--chat-surface-elevated)] shadow transition-transform',
+          on ? 'translate-x-5' : 'translate-x-0.5',
         )}
       />
     </button>
   );
-}
-
-function getKeepAwake(): boolean {
-  try {
-    return localStorage.getItem('agi-work-keep-awake') !== 'false';
-  } catch {
-    return true;
-  }
-}
-
-function setKeepAwakePref(v: boolean): void {
-  try {
-    localStorage.setItem('agi-work-keep-awake', v ? 'true' : 'false');
-  } catch {
-    // ignore
-  }
 }
 
 function isTaskOn(t: ScheduledTask): boolean {
@@ -63,8 +50,7 @@ export function AgiWorkScheduled() {
   const fetchTasks = useSchedulerStore((s) => s.fetchTasks);
   const toggleTask = useSchedulerStore((s) => s.toggleTask);
   const deleteTask = useSchedulerStore((s) => s.deleteTask);
-
-  const keepAwake = getKeepAwake();
+  const [deleteCandidate, setDeleteCandidate] = useState<ScheduledTask | null>(null);
 
   useEffect(() => {
     void fetchTasks();
@@ -78,19 +64,6 @@ export function AgiWorkScheduled() {
           <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
             {t('agiWork.scheduled.title')}
           </h1>
-        </div>
-
-        {/* Keep-Mac-awake banner */}
-        <div className="flex items-start justify-between gap-4 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-4 py-3.5">
-          <div className="space-y-0.5">
-            <div className="text-sm font-medium text-[var(--chat-text-primary)]">
-              {t('agiWork.scheduled.keepAwake')}
-            </div>
-            <div className="text-xs text-[var(--chat-text-secondary)]">
-              {t('agiWork.scheduled.keepAwakeDesc')}
-            </div>
-          </div>
-          <IosToggle on={keepAwake} onToggle={() => setKeepAwakePref(!keepAwake)} />
         </div>
 
         {/* Task list */}
@@ -129,15 +102,24 @@ export function AgiWorkScheduled() {
                   <span className="text-[var(--chat-text-secondary)]">{nextRunDisplay(task)}</span>
                 </div>
 
-                <IosToggle on={isTaskOn(task)} onToggle={() => void toggleTask(task.id)} />
+                <IosToggle
+                  on={isTaskOn(task)}
+                  onToggle={() => void toggleTask(task.id)}
+                  label={t(
+                    isTaskOn(task)
+                      ? 'agiWork.scheduled.pauseAria'
+                      : 'agiWork.scheduled.resumeAria',
+                    { name: task.name },
+                  )}
+                />
 
-                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                   <button
                     type="button"
-                    className="flex h-6 w-6 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-destructive)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
-                    title={t('common.delete')}
-                    aria-label={t('common.delete')}
-                    onClick={() => void deleteTask(task.id)}
+                    className="flex h-8 w-8 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-destructive)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+                    title={`${t('common.delete')} ${task.name}`}
+                    aria-label={`${t('common.delete')} ${task.name}`}
+                    onClick={() => setDeleteCandidate(task)}
                   >
                     <Trash2 size={12} aria-hidden="true" />
                   </button>
@@ -153,6 +135,23 @@ export function AgiWorkScheduled() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={deleteCandidate !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteCandidate(null);
+        }}
+        title={t('agiWork.scheduled.deleteTitle')}
+        description={t('agiWork.scheduled.deleteDescription', {
+          name: deleteCandidate?.name ?? '',
+        })}
+        confirmText={t('common.delete')}
+        variant="destructive"
+        onConfirm={() => {
+          const taskId = deleteCandidate?.id;
+          setDeleteCandidate(null);
+          if (taskId) void deleteTask(taskId);
+        }}
+      />
     </div>
   );
 }

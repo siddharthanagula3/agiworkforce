@@ -2,18 +2,24 @@
 
 Status: Current
 Owner role: Platform lead
-Last updated: 2026-05-23
+Last updated: 2026-07-14
 Kind: tool adapter
 
 ## Purpose
 
-`.claude/` stores project-shared Claude Code adapter files: role prompts, safe project settings, and launch helpers. Durable repo rules live in root `AGENTS.md`, scoped `AGENTS.md`, and `docs/agent-context/`; this folder may mirror critical rules but must not become the detailed source of truth.
+`.claude/` stores project-shared Claude Code loader settings and safe launch
+helpers. Durable repository rules live in root `AGENTS.md`, path-scoped
+`AGENTS.md` files, and `docs/agent-context/`; this folder must not become a
+second architecture source of truth.
 
 ## Tracked Policy
 
-- Track reusable team agent prompts and sanitized project settings.
-- Do not track local session memory, credentials, transcripts, or personal preferences.
-- Do not make this folder the source of truth for repo maps, commands, or product decisions; update `AGENTS.md` and `docs/agent-context/*` first.
+- Track only reusable, sanitized project settings and hooks.
+- Do not track local memory, credentials, transcripts, or personal preferences.
+- Update `AGENTS.md` and `docs/agent-context/*` before mirroring any critical
+  Claude-specific loader guidance here.
+- Do not restore retired per-surface prompt agents; use the canonical repo map,
+  lane map, and nearest path-scoped rules.
 
 ## Verification
 

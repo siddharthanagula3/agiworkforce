@@ -225,6 +225,12 @@ export function ConversationExportSheet({
                     : colors.teal;
 
                 return (
+                  // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
+                  // (docs/agent-context/known-flaws.md): a function-style `style`
+                  // prop silently drops flexDirection/alignItems/padding in this
+                  // stack, which would stack the icon above the label instead of
+                  // beside it. `children`-as-function keeps pressed state while
+                  // every real style lives on a plain View.
                   <Pressable
                     key={option.key}
                     onPress={() => {
@@ -233,52 +239,59 @@ export function ConversationExportSheet({
                     disabled={isDisabled}
                     accessibilityLabel={option.label}
                     accessibilityRole="button"
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      gap: 14,
-                      opacity: isDisabled && !isLoading ? 0.45 : 1,
-                      backgroundColor:
-                        pressed && !isDisabled ? colors.surfaceHover : colors.transparent,
-                      borderBottomWidth: index < EXPORT_OPTIONS.length - 1 ? 1 : 0,
-                      borderBottomColor: colors.border,
-                    })}
                   >
-                    {/* Icon container */}
-                    <View
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 8,
-                        backgroundColor: isCopied ? colors.successSurface : colors.accentSurface,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {isLoading ? (
-                        <ActivityIndicator size="small" color={colors.teal} />
-                      ) : (
-                        <IconComponent size={18} color={iconColor} />
-                      )}
-                    </View>
-
-                    {/* Label + description */}
-                    <View style={{ flex: 1 }}>
-                      <Text
+                    {({ pressed }) => (
+                      <View
                         style={{
-                          fontSize: 14,
-                          fontWeight: '500',
-                          color: isCopied ? colors.agentSuccess : colors.textPrimary,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          paddingHorizontal: 16,
+                          paddingVertical: 14,
+                          gap: 14,
+                          opacity: isDisabled && !isLoading ? 0.45 : 1,
+                          backgroundColor:
+                            pressed && !isDisabled ? colors.surfaceHover : colors.transparent,
+                          borderBottomWidth: index < EXPORT_OPTIONS.length - 1 ? 1 : 0,
+                          borderBottomColor: colors.border,
                         }}
                       >
-                        {isCopied ? 'Copied!' : option.label}
-                      </Text>
-                      <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
-                        {option.description}
-                      </Text>
-                    </View>
+                        {/* Icon container */}
+                        <View
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            backgroundColor: isCopied
+                              ? colors.successSurface
+                              : colors.accentSurface,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {isLoading ? (
+                            <ActivityIndicator size="small" color={colors.teal} />
+                          ) : (
+                            <IconComponent size={18} color={iconColor} />
+                          )}
+                        </View>
+
+                        {/* Label + description */}
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: '500',
+                              color: isCopied ? colors.agentSuccess : colors.textPrimary,
+                            }}
+                          >
+                            {isCopied ? 'Copied!' : option.label}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
+                            {option.description}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}

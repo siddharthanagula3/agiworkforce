@@ -99,7 +99,7 @@ REPOS: tuple[RepoSpec, ...] = (
         "opencode",
         Path.home() / "Desktop/reference/opencode",
         extra_excluded_dirs=(
-            "packages/ui/src/assets/icons/file-types",
+            "packages/ui/ui/src/assets/icons/file-types",
             "packages/sdk/js/src/gen",
             "packages/sdk/js/src/v2/gen",
         ),

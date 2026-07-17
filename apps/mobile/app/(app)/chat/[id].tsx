@@ -39,7 +39,6 @@ import {
 import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
-import { ApiPaywallError } from '@/services/api';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { useWaitlistStore } from '@/src/features/waitlist';
@@ -50,11 +49,12 @@ import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton'
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
-  isAutoMode,
+  getDefaultCloudModelIdForTier,
 } from '@/src/features/model-picker/service';
+import { useTierStore } from '@/src/features/billing/store';
 import {
   executionModeForConversation,
-  executionModeForModel,
+  executionModeForSelection,
 } from '@/src/features/chat/utils/conversationMode';
 import {
   imageAssetsToChatAttachments,
@@ -62,13 +62,14 @@ import {
 } from '@/src/features/media/photo-picker';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
-import { api } from '@/services/api';
+import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { offlineQueue } from '@/services/offlineQueue';
-import { generateImage, getGeneratedImageUri } from '@/src/features/image/services/imagegen';
+import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
+import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { useProjectStore } from '@/src/features/projects/store';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
@@ -131,6 +132,7 @@ export default function ChatScreen() {
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const retryMessage = useChatStore((s) => s.retryMessage);
   const editMessage = useChatStore((s) => s.editMessage);
+  const resolveToolApproval = useChatStore((s) => s.resolveToolApproval);
   const renameConversation = useChatStore((s) => s.renameConversation);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const paywallError = useChatStore((s) => s.paywallError);
@@ -146,6 +148,8 @@ export default function ChatScreen() {
   const markConversationRead = useChatStore((s) => s.markConversationRead);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const subscriptionTier = useTierStore((s) => s.tier);
+  const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const approveRequest = useAgentStore((s) => s.approveRequest);
   const rejectRequest = useAgentStore((s) => s.rejectRequest);
@@ -155,7 +159,7 @@ export default function ChatScreen() {
   const title = conversation?.title ?? 'Chat';
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
-    : executionModeForModel(selectedModel);
+    : executionModeForSelection(selectedModel, appMode);
 
   // Set current conversation and load messages on mount
   useEffect(() => {
@@ -219,6 +223,7 @@ export default function ChatScreen() {
       text: string,
       attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
       mode?: TaskChipType,
+      dispatchOptions?: { awaitCompletion?: boolean },
     ): boolean | Promise<boolean> => {
       // Returns false when a pre-flight gate blocks the send so the composer
       // keeps the user's draft; true (or a promise resolving true on
@@ -247,9 +252,26 @@ export default function ChatScreen() {
         finalText = `> ${quoteLabel}: ${quotePreview}\n\n${text}`;
       }
 
-      // Handle /image command — generate an image and add result to conversation
-      if (finalText.trimStart().startsWith('/image')) {
-        const prompt = finalText.trimStart().slice('/image'.length).trim();
+      const trimmedInput = text.trim();
+      const cloudDispatch =
+        conversationExecutionMode === 'cloud' && !attachments?.length
+          ? resolveMobileCloudDispatch({
+              selection: selectedModel,
+              message: trimmedInput,
+              subscriptionTier,
+            })
+          : null;
+      const slashImageRequest = trimmedInput.startsWith('/image');
+      const routedImageRequest =
+        cloudDispatch?.status === 'selected' && cloudDispatch.dispatch === 'media';
+
+      // Image output is dispatched through the canonical media route for both
+      // slash commands and natural language. Local conversations never call
+      // the Managed Cloud resolver.
+      if (slashImageRequest || routedImageRequest) {
+        const prompt = slashImageRequest
+          ? trimmedInput.slice('/image'.length).trim()
+          : trimmedInput;
         if (!prompt) {
           Alert.alert('Add an image prompt', 'Type what you want AGI to create after /image.');
           return false;
@@ -277,41 +299,30 @@ export default function ChatScreen() {
         }
 
         setQuotedMessage(null);
-        const assistantMessageId = beginImageGeneration(id, finalText, prompt, selectedModel);
-        generateImage({ prompt })
-          .then((result) => {
-            const image = result.images?.[0];
-            const imageUrl = getGeneratedImageUri(image);
-            if (result.success === false || !imageUrl) {
-              failImageGeneration(
-                id,
-                assistantMessageId,
-                result.error ?? 'AGI Cloud did not return an image.',
-              );
-              return;
-            }
-            completeImageGeneration(id, assistantMessageId, {
-              imageUrl,
-              revisedPrompt: image?.revisedPrompt,
-              model: result.model,
+        const imageTurn = runImageGenerationTurn({
+          conversationId: id,
+          displayText: finalText,
+          prompt,
+          model: cloudDispatch?.status === 'selected' ? cloudDispatch.modelKey : selectedModel,
+          begin: beginImageGeneration,
+          complete: completeImageGeneration,
+          fail: failImageGeneration,
+          remove: deleteMessage,
+          onPaywall: (error) => {
+            setPaywallError({
+              feature: error.feature,
+              requiredTier: error.requiredTier,
+              reason: error.reason,
             });
-          })
-          .catch((err) => {
-            if (err instanceof ApiPaywallError) {
-              // Paywall/tier-limit block — remove the "generating" placeholder
-              // and surface the upgrade sheet instead of a generic failure.
-              deleteMessage(id, assistantMessageId);
-              setPaywallError({
-                feature: err.feature,
-                requiredTier: err.requiredTier,
-                reason: err.reason,
-              });
-              return;
-            }
-            const message = err instanceof Error ? err.message : String(err);
-            console.warn('[ChatScreen] Image generation failed:', err);
-            failImageGeneration(id, assistantMessageId, message);
-          });
+          },
+          onUnexpectedError: (error) => {
+            console.warn('[ChatScreen] Image generation failed:', error);
+          },
+        });
+        if (dispatchOptions?.awaitCompletion) {
+          return imageTurn.then(() => true);
+        }
+        void imageTurn;
         return true;
       }
 
@@ -353,6 +364,7 @@ export default function ChatScreen() {
       id,
       conversationExecutionMode,
       selectedModel,
+      subscriptionTier,
       sendMessage,
       beginImageGeneration,
       completeImageGeneration,
@@ -372,16 +384,14 @@ export default function ChatScreen() {
   }, [stopStreaming]);
 
   const resolveAppMode = useCallback((modelId: string): AppMode => {
-    // Auto-routing modes run in Local mode.
-    if (isAutoMode(modelId)) return 'local';
     // Use the canonical classifier, which consults the FULL managed-cloud catalog
     // (cloudModelSourceMap). The old path used getModelById, whose map only holds
     // local models + ONE "preview" cloud model per provider — so every non-preview
     // cloud model (e.g. Claude Opus 4.8, GPT-5.5, Grok 4.3) fell through to 'local'
     // and wrongly triggered a "Switch from AGI Cloud to Local Mode" prompt when
     // selected inside a Cloud chat. executionModeForModel classifies them as 'cloud'.
-    return executionModeForModel(modelId) === 'cloud' ? 'cloud' : 'local';
-  }, []);
+    return executionModeForSelection(modelId, conversationExecutionMode);
+  }, [conversationExecutionMode]);
 
   const handleOpenModelPicker = useCallback(
     (scope?: 'local' | 'cloud') => {
@@ -401,10 +411,12 @@ export default function ChatScreen() {
     setAppMode(conversationExecutionMode);
     const preferredModel =
       conversationExecutionMode === 'cloud'
-        ? conversation.model && executionModeForModel(conversation.model) === 'cloud'
+        ? conversation.model &&
+          executionModeForSelection(conversation.model, conversationExecutionMode) === 'cloud'
           ? conversation.model
-          : DEFAULT_CLOUD_MODEL_ID
-        : conversation.model && executionModeForModel(conversation.model) === 'local'
+          : (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID)
+        : conversation.model &&
+            executionModeForSelection(conversation.model, conversationExecutionMode) === 'local'
           ? conversation.model
           : DEFAULT_LOCAL_MODEL_ID;
 
@@ -413,7 +425,7 @@ export default function ChatScreen() {
     if (useModelStore.getState().selectedModel !== preferredModel) {
       useModelStore.getState().setModel(preferredModel);
     }
-  }, [cloudUnlocked, conversation, conversationExecutionMode, setAppMode]);
+  }, [cloudUnlocked, conversation, conversationExecutionMode, setAppMode, subscriptionTier]);
 
   // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default —
   // signing in IS the entitlement (no invite, no waitlist). Every cloud-gated
@@ -584,13 +596,22 @@ export default function ChatScreen() {
       return;
     }
     setAppMode('cloud');
-    useModelStore.getState().setModel(DEFAULT_CLOUD_MODEL_ID);
+    useModelStore
+      .getState()
+      .setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
     if (conversationExecutionMode === 'cloud') {
       handleOpenModelPicker('cloud');
       return;
     }
     router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-  }, [cloudUnlocked, conversationExecutionMode, handleOpenModelPicker, router, setAppMode]);
+  }, [
+    cloudUnlocked,
+    conversationExecutionMode,
+    handleOpenModelPicker,
+    router,
+    setAppMode,
+    subscriptionTier,
+  ]);
 
   const handleTapLocalMode = useCallback(() => {
     setAppMode('local');
@@ -649,7 +670,10 @@ export default function ChatScreen() {
       if (!id) throw new Error('No conversation');
       stopSpeaking();
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[id] ?? []);
-      const accepted = await sendMessage(id, text, selectedModel);
+      // Reuse the exact composer dispatch path so voice requests receive the
+      // same Auto routing, image-generation specialist handoff, gates, and
+      // visible errors as typed requests.
+      const accepted = await handleSend(text, undefined, undefined, { awaitCompletion: true });
       if (!accepted) {
         // Pre-flight gate blocked the send — surface the store's real reason
         // in the voice UI instead of a misleading "Sent to chat."
@@ -660,7 +684,7 @@ export default function ChatScreen() {
         ''
       );
     },
-    [id, sendMessage, selectedModel, stopSpeaking],
+    [handleSend, id, stopSpeaking],
   );
 
   const handleDeleteMessage = useCallback(
@@ -674,10 +698,7 @@ export default function ChatScreen() {
         // persist the delete server-side so a resync doesn't bring it back.
         const previous = useChatCloudMessageStore.getState().messages[id];
         useChatCloudMessageStore.getState().deleteCloudMessage(id, messageId);
-        api
-          .delete(
-            `/api/chat/conversations/${encodeURIComponent(id)}/messages/${encodeURIComponent(messageId)}`,
-          )
+        deleteCloudMessagesRemote(id, [messageId])
           .catch(() => {
             if (previous) {
               useChatCloudMessageStore.getState().setCloudMessages(id, previous);
@@ -707,6 +728,14 @@ export default function ChatScreen() {
       editMessage(id, messageId, newContent);
     },
     [id, editMessage, stopSpeaking],
+  );
+
+  const handleResolveToolApproval = useCallback(
+    (messageId: string, toolCallId: string, decision: 'approved' | 'rejected') => {
+      if (!id) return;
+      void resolveToolApproval(id, messageId, toolCallId, decision);
+    },
+    [id, resolveToolApproval],
   );
 
   const handleBack = useCallback(() => {
@@ -960,6 +989,7 @@ export default function ChatScreen() {
             onRefresh={handleRefresh}
             refreshing={refreshing}
             onQuoteReply={handleQuoteReply}
+            onResolveToolApproval={handleResolveToolApproval}
           />
         )}
 

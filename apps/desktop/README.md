@@ -20,7 +20,7 @@ Criticality: high
 
 This is an app, not a package. Other apps and packages must not import from `apps/desktop`.
 
-Reusable contracts belong in `packages/types`, `packages/runtime`, `packages/mcp`, `packages/unified-chat`, or Rust crates. Tauri commands are the boundary between frontend and `src-tauri`.
+Reusable contracts belong in `packages/contracts/types`, `packages/client/client-runtime`, `packages/tools/mcp`, `packages/ui/unified-chat`, or Rust crates. Tauri commands are the boundary between frontend and `src-tauri`.
 
 ## What Belongs Here
 
@@ -28,7 +28,7 @@ Reusable contracts belong in `packages/types`, `packages/runtime`, `packages/mcp
 - Desktop-only React UI and Desktop v3 shell behavior.
 - Local file, artifact, MCP, generated-file, and desktop bridge UI.
 - `src-tauri` Rust backend commands specific to the desktop app.
-- Desktop Playwright/Vitest tests and release packaging config.
+- Desktop WebdriverIO/Playwright/Vitest tests and release packaging config.
 
 ## What Does Not Belong Here
 
@@ -41,7 +41,8 @@ Reusable contracts belong in `packages/types`, `packages/runtime`, `packages/mcp
 
 - `src/` - desktop React frontend.
 - `src-tauri/` - Tauri Rust backend.
-- `e2e/` and `playwright/` - desktop e2e tests and harnesses.
+- `wdio/` and `wdio.conf.ts` - primary e2e runner (`pnpm test:e2e`); drives the real Tauri app via an embedded WebDriver, so it's the only harness that exercises native IPC/Rust commands, not just the DOM.
+- `e2e/` and `playwright.config.ts` - DOM-only e2e harness (`pnpm test:e2e:dom`); drives the Vite dev URL in a plain browser, so it cannot see or exercise Tauri IPC/Rust commands. Useful for pure-DOM assertions; not a substitute for `test:e2e` on anything that crosses the Tauri bridge.
 - `vite.config.ts` - desktop/web build behavior.
 - `mcp-servers-config.example.json` - local MCP config example.
 

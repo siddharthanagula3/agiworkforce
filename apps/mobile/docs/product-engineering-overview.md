@@ -74,7 +74,7 @@
 
 - **Backend:** `services/api-gateway` (**Express 5** `^5.2.1`, Node) serves `/api/llm/v1/*` + provider streaming; default host `agiworkforce.com` is the **Next.js `^16.2.6`** web app.
 - **Database:** **Neon serverless Postgres** `@neondatabase/serverless ^1.1.0`; migrations in `apps/web/db/neon/0001…0027+`.
-- **AI providers:** gateway wires `@agiworkforce/providers-{anthropic,google,openai,ollama}`; mobile recognizes anthropic/openai/google/xai/deepseek/qwen/moonshot/ollama. Model IDs from `packages/types/src/models.json` (never hardcoded).
+- **AI providers:** gateway wires `@agiworkforce/providers-{anthropic,google,openai,ollama}`; mobile recognizes anthropic/openai/google/xai/deepseek/qwen/moonshot/ollama. Model IDs from `packages/contracts/types/src/models.json` (never hardcoded).
 - **Cache/limits:** Redis (`ioredis`) + `express-rate-limit` at gateway.
 
 **Gaps in tooling:**

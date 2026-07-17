@@ -10,7 +10,7 @@
  *
  * Related stores (distinct purposes, different shapes -- do NOT merge):
  *   - shared/stores/chat-store.ts         (MGX-style conversation store; persist key 'agi-chat-store')
- *   - packages/unified-chat/src/stores/chatStore.ts  (shared package, persist key 'agi-web-chat')
+ *   - packages/ui/unified-chat/src/stores/chatStore.ts  (shared package, persist key 'agi-web-chat')
  */
 
 import { create } from 'zustand';
@@ -148,6 +148,20 @@ export interface MessageMetadata {
    * See features/chat/lib/continue-generation.ts for the continuable predicate.
    */
   finishReason?: string;
+  /**
+   * Classified payload from an additive `x_stream_error` SSE delta: the
+   * provider failed mid-stream (after the response had already committed a
+   * 200), so the turn ends with only partial content and no other visible
+   * signal (the server still sends a clean `[DONE]`; `finish_reason` cannot
+   * reliably say 'error' — see packages/ui/unified-chat's `hasStreamError` doc
+   * comment). `code`/`retryable` are surfaced when the provider adapter
+   * supplied them, so the failure stays diagnosable later and the retry
+   * affordance has something to condition on. Drives a "response may be
+   * incomplete" notice + regenerate affordance instead of silently
+   * rendering the partial as a normal completion. Persisted so the notice
+   * survives reload.
+   */
+  streamError?: { message: string; code?: string; retryable?: boolean };
   /** Media tool type for inline rendering (e.g. 'image-generation'). */
   toolType?: string;
   /** Generated image URL; displayed inline when toolType === 'image-generation'. */
@@ -274,6 +288,16 @@ interface ChatState {
 
   // UI State
   isStreaming: boolean;
+  /**
+   * Conversation ids with a live stream. `isStreaming` above is the OR of
+   * this (kept for callers that only care whether anything anywhere is
+   * generating); a component that renders one conversation must key its own
+   * "is this conversation generating" UI off `streamingConversationIds`
+   * instead, or switching conversations mid-stream shows a stale Stop
+   * button / false "generating" state for a conversation that isn't
+   * actually streaming (mirrors mobile's chatExecutionStore fix).
+   */
+  streamingConversationIds: string[];
   isLoading: boolean;
   error: string | null;
 
@@ -324,9 +348,23 @@ interface ChatState {
   clearMessages: () => void;
 
   // Actions - Streaming
-  startStreaming: (messageId: string) => void;
-  stopStreaming: () => void;
-  setLoading: (loading: boolean) => void;
+  startStreaming: (messageId: string, conversationId: string) => void;
+  /**
+   * `conversationId` omitted = the user-initiated Stop path, which always
+   * targets whatever conversation is currently active. Callers tearing down
+   * a specific stream's completion (natural finish, error, abort) MUST pass
+   * the conversation that stream belongs to, so an orphaned background
+   * stream's teardown can't clear a different, genuinely-active stream.
+   */
+  stopStreaming: (conversationId?: string) => void;
+  /**
+   * `conversationId` scopes a `false` write: a background conversation's
+   * stream completing must not clear `isLoading` out from under a
+   * conversation the user has since switched to and is genuinely sending
+   * in. Omit it (e.g. `loadConversation`'s fetch-loading use, or the
+   * user-initiated Stop path) to write unconditionally.
+   */
+  setLoading: (loading: boolean, conversationId?: string) => void;
   setError: (error: string | null) => void;
 
   // Actions - Model
@@ -348,6 +386,7 @@ const initialState = {
   activeConversationId: null,
   messages: [],
   isStreaming: false,
+  streamingConversationIds: [] as string[],
   isLoading: false,
   error: null,
   selectedModel: 'auto-balanced',
@@ -400,18 +439,29 @@ export const useChatStore = create<ChatState>()(
 
         setActiveConversation: (id) =>
           set(
-            {
+            (state) => ({
               activeConversationId: id,
               messages: [], // Clear messages when switching conversations
               error: null,
-            },
+              // A background stream for a DIFFERENT conversation must not
+              // leave the newly-active conversation showing stale
+              // isLoading:true; if `id` itself has a genuinely live stream
+              // (switching back to one whose send is still in flight), this
+              // correctly keeps isLoading true instead of clearing it.
+              isLoading: id !== null && state.streamingConversationIds.includes(id),
+            }),
             undefined,
             'chat/setActiveConversation',
           ),
 
         setActiveConversationWithMessages: (id, messages) =>
           set(
-            { activeConversationId: id, messages, error: null },
+            (state) => ({
+              activeConversationId: id,
+              messages,
+              error: null,
+              isLoading: state.streamingConversationIds.includes(id),
+            }),
             undefined,
             'chat/setActiveConversationWithMessages',
           ),
@@ -577,29 +627,67 @@ export const useChatStore = create<ChatState>()(
         clearMessages: () => set({ messages: [] }, undefined, 'chat/clearMessages'),
 
         // Streaming
-        startStreaming: (messageId) =>
+        startStreaming: (messageId, conversationId) =>
           set(
-            (state) => ({
-              isStreaming: true,
-              messages: state.messages.map((m) =>
-                m.id === messageId ? { ...m, isStreaming: true } : m,
-              ),
-            }),
+            (state) => {
+              const streamingConversationIds = state.streamingConversationIds.includes(
+                conversationId,
+              )
+                ? state.streamingConversationIds
+                : [...state.streamingConversationIds, conversationId];
+              return {
+                streamingConversationIds,
+                isStreaming: true,
+                messages: state.messages.map((m) =>
+                  m.id === messageId ? { ...m, isStreaming: true } : m,
+                ),
+              };
+            },
             undefined,
             'chat/startStreaming',
           ),
 
-        stopStreaming: () =>
+        stopStreaming: (conversationId) =>
           set(
-            (state) => ({
-              isStreaming: false,
-              messages: state.messages.map((m) => ({ ...m, isStreaming: false })),
-            }),
+            (state) => {
+              const targetId = conversationId ?? state.activeConversationId ?? undefined;
+              const streamingConversationIds = targetId
+                ? state.streamingConversationIds.filter((id) => id !== targetId)
+                : state.streamingConversationIds;
+              // Only sweep the visible messages' isStreaming flag when the
+              // stream ending belongs to the conversation currently loaded
+              // in `messages` (or no id was given -- the user-initiated Stop
+              // path, which always targets whatever's on screen). An
+              // orphaned background conversation's completion must not touch
+              // a genuinely-active different conversation's message bubbles.
+              const affectsVisible = !targetId || targetId === state.activeConversationId;
+              return {
+                streamingConversationIds,
+                isStreaming: streamingConversationIds.length > 0,
+                messages: affectsVisible
+                  ? state.messages.map((m) => ({ ...m, isStreaming: false }))
+                  : state.messages,
+              };
+            },
             undefined,
             'chat/stopStreaming',
           ),
 
-        setLoading: (loading) => set({ isLoading: loading }, undefined, 'chat/setLoading'),
+        setLoading: (loading, conversationId) =>
+          set(
+            (state) => {
+              if (
+                loading === false &&
+                conversationId &&
+                conversationId !== state.activeConversationId
+              ) {
+                return state;
+              }
+              return { isLoading: loading };
+            },
+            undefined,
+            'chat/setLoading',
+          ),
 
         setError: (error) => set({ error }, undefined, 'chat/setError'),
 
@@ -651,6 +739,13 @@ export const selectConversations = (state: ChatState) => state.conversations;
 export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
 export const selectIsStreaming = (state: ChatState) => state.isStreaming;
 export const selectIsLoading = (state: ChatState) => state.isLoading;
+/** Whether the ACTIVE conversation specifically has a live stream -- what
+ *  per-conversation UI (composer, Stop button) should key off instead of
+ *  the global `isStreaming`, which stays true while any background
+ *  conversation is still generating. */
+export const selectIsActiveConversationStreaming = (state: ChatState) =>
+  state.activeConversationId !== null &&
+  state.streamingConversationIds.includes(state.activeConversationId);
 export const selectSelectedModel = (state: ChatState) => state.selectedModel;
 export const selectSelectedModelTier = (state: ChatState) => state.selectedModelTier;
 export const selectError = (state: ChatState) => state.error;

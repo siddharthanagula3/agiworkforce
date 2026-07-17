@@ -103,7 +103,15 @@ describe('robots', () => {
     for (const bot of ['*', ...AI_BOTS, 'Googlebot']) {
       const rule = rules.find((r) => r.userAgent === bot);
       const disallow = (rule?.disallow ?? []) as string[];
-      for (const path of ['/chat', '/settings', '/billing', '/projects', '/user', '/customize']) {
+      for (const path of [
+        '/chat',
+        '/settings',
+        '/billing',
+        '/projects',
+        '/schedules',
+        '/user',
+        '/customize',
+      ]) {
         expect(disallow, `${bot} should disallow ${path}`).toContain(path);
       }
     }
@@ -142,6 +150,7 @@ describe('sitemap', () => {
       '/settings',
       '/billing',
       '/projects',
+      '/schedules',
       '/user',
       '/customize',
     ]) {

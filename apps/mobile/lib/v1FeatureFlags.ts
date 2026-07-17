@@ -130,6 +130,15 @@ export const FEATURES = {
 
   /** Cross-device sync of conversation threads. */
   crossDeviceSync: false,
+
+  /** Server-side code execution (E2B sandbox) via the AddToChatSheet "Run code"
+   *  toggle. 2026-07-11: enabled — the chat-completions body carries
+   *  `code_execution: true` (chatExecutionStore → streaming.ts) when the toggle
+   *  is on; actual availability is still gated per-send on the selected model's
+   *  `codeExecution` capability and the deployment's `/api/me` feature_flags
+   *  (see useTierStore.codeExecutionAvailable), so this flag alone never makes
+   *  the toggle appear for an unsupported model/deployment. */
+  codeExecution: true,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

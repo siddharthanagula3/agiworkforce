@@ -136,7 +136,9 @@ beforeEach(() => {
     if ((path as string) === MEMORY_SYNC_PATH) {
       const mems = (body?.memories as Array<{ id: string }>) ?? [];
       return {
+        protocolVersion: 2,
         applied: mems.map((m) => ({ id: m.id, server_version: '1' })),
+        conflicts: [],
         cursor: '1',
       } as never;
     }
@@ -144,11 +146,13 @@ beforeEach(() => {
     const convs = (body?.conversations as Array<{ id: string }>) ?? [];
     const msgs = (body?.messages as Array<{ id: string }>) ?? [];
     return {
+      protocolVersion: 2,
       applied: {
         conversations: convs.map((c) => ({ id: c.id, server_version: '1' })),
         messages: msgs.map((m) => ({ id: m.id, server_version: '1' })),
         artifacts: [],
       },
+      conflicts: { conversations: [], messages: [], artifacts: [] },
       cursor: '1',
     } as never;
   });
@@ -303,10 +307,41 @@ describe('memory sync — push', () => {
     const memoryCalls = mockPost.mock.calls.filter((c) => c[0] === MEMORY_SYNC_PATH);
     expect(memoryCalls).toHaveLength(1);
     const body = memoryCalls[0]![1] as { memories: Array<{ id: string; content: string }> };
+    expect(body).toMatchObject({ protocolVersion: 2 });
     expect(body.memories).toHaveLength(1);
     expect(body.memories[0]!.id).toBe('m-push');
     expect(body.memories[0]!.content).toBe('push me');
+    expect(body.memories[0]).toMatchObject({ baseVersion: '0' });
+    expect(body.memories[0]).not.toHaveProperty('updatedAt');
     expect(useMemorySyncStateStore.getState().dirtyMemoryIds).not.toContain('m-push');
+  });
+
+  it('preserves an edit made while a memory push is in flight', async () => {
+    seedCloudMemory('m-race', 'sent');
+    useCloudMemoryStore.getState().upsertCloudMemory({
+      ...useCloudMemoryStore.getState().entries[0]!,
+      serverVersion: '7',
+    });
+    markMemoryForSync('m-race');
+    mockPost.mockImplementationOnce(async (path) => {
+      expect(path).toBe(MEMORY_SYNC_PATH);
+      const current = useCloudMemoryStore.getState().entries.find((e) => e.id === 'm-race')!;
+      useCloudMemoryStore.getState().upsertCloudMemory({ ...current, content: 'edited later' });
+      return {
+        protocolVersion: 2,
+        applied: [{ id: 'm-race', server_version: '8' }],
+        conflicts: [],
+        cursor: '8',
+      } as never;
+    });
+
+    await syncNow();
+
+    expect(useCloudMemoryStore.getState().entries.find((e) => e.id === 'm-race')).toMatchObject({
+      content: 'edited later',
+      serverVersion: '8',
+    });
+    expect(useMemorySyncStateStore.getState().dirtyMemoryIds).toContain('m-race');
   });
 
   it('does NOT post to /api/memory/sync when dirty queue is empty', async () => {
@@ -340,9 +375,15 @@ describe('memory sync — push', () => {
 
     // Server returns empty applied list (simulates server rejection).
     mockPost.mockImplementation(async (path: string) => {
-      if ((path as string) === MEMORY_SYNC_PATH) return { applied: [], cursor: '0' } as never;
+      if ((path as string) === MEMORY_SYNC_PATH)
+        return { protocolVersion: 2, applied: [], conflicts: [], cursor: '0' } as never;
       // Chat sync ack
-      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+      return {
+        protocolVersion: 2,
+        applied: { conversations: [], messages: [], artifacts: [] },
+        conflicts: { conversations: [], messages: [], artifacts: [] },
+        cursor: '0',
+      } as never;
     });
 
     await syncNow();
@@ -441,7 +482,7 @@ describe('memory store — cloud pin/unpin persistence', () => {
   });
 
   it('adopts the server pinned state from a pulled delta (LWW — pinned always on the wire)', async () => {
-    // The /api/memory/sync contract (packages/services cloud-contracts/sync.ts)
+    // The /api/memory/sync contract (packages/contracts/cloud-contracts/src/sync.ts)
     // guarantees `pinned` on every delta, so the old "server omits pinned"
     // preserve-local fallback is gone. A pulled pinned:true delta must pin the
     // local entry; a locally-dirty pin is protected by push-before-pull order,

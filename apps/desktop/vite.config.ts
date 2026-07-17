@@ -192,7 +192,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               id.includes('/apps/desktop/src/lib/tauri-mock.ts') ||
               id.includes('/apps/desktop/src/lib/cloudChatStream.ts') ||
               id.includes('/apps/desktop/src/api/') ||
-              id.includes('/packages/runtime/src/')
+              id.includes('/packages/client/client-runtime/src/')
             ) {
               return 'desktop-core';
             }
@@ -300,16 +300,22 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '@types': path.resolve(__dirname, './src/types'),
         '@assets': path.resolve(__dirname, './src/assets'),
         '@lib': path.resolve(__dirname, './src/lib'),
-        '@agiworkforce/runtime': path.resolve(
+        '@agiworkforce/client-runtime': path.resolve(
           __dirname,
-          '../../packages/runtime/src/desktop-index.ts',
+          '../../packages/client/client-runtime/src/desktop-index.ts',
         ),
-        '@agiworkforce/utils/uuidv7': path.resolve(__dirname, '../../packages/utils/src/uuidv7.ts'),
-        '@agiworkforce/utils': path.resolve(__dirname, '../../packages/utils/src/index.ts'),
-        // Resolve the shared service layer (incl. the shared egress host policy)
-        // to workspace src so worktree/dev builds and vitest pick up local
-        // changes, mirroring the runtime/utils aliases above.
-        '@agiworkforce/services': path.resolve(__dirname, '../../packages/services/src/index.ts'),
+        '@agiworkforce/cloud-contracts': path.resolve(
+          __dirname,
+          '../../packages/contracts/cloud-contracts/src/index.ts',
+        ),
+        '@agiworkforce/artifacts': path.resolve(__dirname, '../../packages/platform/artifacts/src/index.ts'),
+        '@agiworkforce/sync': path.resolve(__dirname, '../../packages/client/sync/src/index.ts'),
+        '@agiworkforce/trust-boundaries': path.resolve(
+          __dirname,
+          '../../packages/contracts/trust-boundaries/src/index.ts',
+        ),
+        '@agiworkforce/utils/uuidv7': path.resolve(__dirname, '../../packages/platform/utils/src/uuidv7.ts'),
+        '@agiworkforce/utils': path.resolve(__dirname, '../../packages/platform/utils/src/index.ts'),
         ...webTauriAliases,
       },
     },

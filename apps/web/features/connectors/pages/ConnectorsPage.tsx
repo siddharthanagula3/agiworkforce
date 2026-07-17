@@ -3,16 +3,19 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { toast } from 'sonner';
 import {
   Search,
   Plus,
   Check,
   Zap,
-  Lock,
   ExternalLink,
   Loader2,
   Link2,
   BookOpen,
+  AlertTriangle,
+  Plug,
+  X,
 } from 'lucide-react';
 import {
   Badge,
@@ -29,13 +32,26 @@ import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { getConnectorTools } from '../config/connector-logos';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { OfficialConnectorLogo } from '../components/OfficialConnectorLogo';
+import {
+  useConnectors,
+  invalidateConnectorsCache,
+  type ConnectorSource,
+} from '../hooks/use-connectors';
 import { getCsrfToken } from '@/lib/client/csrf';
+
+interface CustomConnectorSummary {
+  id: string;
+  name: string;
+  url: string;
+  transport: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 import {
   CATEGORIES,
   CONNECTORS,
   getConnectorAvailabilityLabel,
-  isConnectorReady,
   type Connector,
   type ConnectorCategory,
 } from '../data/connectors';
@@ -50,7 +66,7 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Connected', value: 'connected' },
   { label: 'Ready', value: 'ready' },
-  { label: 'Request access', value: 'request_access' },
+  { label: 'Coming soon', value: 'request_access' },
 ];
 
 // ─── InspectMcpServerDialog ───────────────────────────────────────────────────
@@ -58,6 +74,10 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
 interface InspectMcpServerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Only signed-in users can persist a connector (POST /api/connectors/custom requires auth). */
+  isSignedIn: boolean | undefined;
+  /** Called after a connector is successfully saved, so the page can refresh its lists. */
+  onAdded: () => void;
 }
 
 type McpInspectResult = {
@@ -68,12 +88,18 @@ type McpInspectResult = {
   }>;
 };
 
-function InspectMcpServerDialog({ open, onOpenChange }: InspectMcpServerDialogProps) {
+function InspectMcpServerDialog({
+  open,
+  onOpenChange,
+  isSignedIn,
+  onAdded,
+}: InspectMcpServerDialogProps) {
   const [mcpUrl, setMcpUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isInspecting, setIsInspecting] = useState(false);
   const [inspectResult, setInspectResult] = useState<McpInspectResult | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
 
   const handleInspect = useCallback(async () => {
     const trimmedUrl = mcpUrl.trim();
@@ -155,6 +181,53 @@ function InspectMcpServerDialog({ open, onOpenChange }: InspectMcpServerDialogPr
     }
   }, [authToken, mcpUrl]);
 
+  // Persist the just-inspected server as a custom connector — reuses the same
+  // URL + auth token already entered above, so there's nothing new to fill in.
+  const handleAddConnector = useCallback(async () => {
+    const trimmedUrl = mcpUrl.trim();
+    if (!inspectResult || !trimmedUrl) return;
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(trimmedUrl);
+    } catch {
+      setError('Enter a valid HTTP or HTTPS URL.');
+      return;
+    }
+
+    setIsAdding(true);
+    try {
+      const csrfToken = await getCsrfToken();
+      const response = await fetch('/api/connectors/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: inspectResult.serverName,
+          url: trimmedUrl,
+          transport: parsedUrl.pathname.endsWith('/sse') ? 'sse' : 'streamable-http',
+          ...(authToken.trim() ? { authToken: authToken.trim() } : {}),
+        }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        throw new Error(body.message ?? body.error ?? `HTTP ${response.status}`);
+      }
+      toast.success(`Added ${inspectResult.serverName}.`);
+      setMcpUrl('');
+      setAuthToken('');
+      setInspectResult(null);
+      onOpenChange(false);
+      onAdded();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not add connector. Try again.');
+    } finally {
+      setIsAdding(false);
+    }
+  }, [authToken, inspectResult, mcpUrl, onAdded, onOpenChange]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-md">
@@ -224,6 +297,28 @@ function InspectMcpServerDialog({ open, onOpenChange }: InspectMcpServerDialogPr
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {isSignedIn && (
+                    <>
+                      <p className="mt-3 flex items-start gap-1.5 text-[11px] text-amber-500">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                        Only add connectors from developers you trust — they can read the
+                        conversation context you share with their tools.
+                      </p>
+                      <Button
+                        size="sm"
+                        className="mt-2 h-8 w-full text-xs bg-emerald-600 text-white hover:bg-emerald-600/90"
+                        onClick={() => void handleAddConnector()}
+                        disabled={isAdding}
+                      >
+                        {isAdding ? (
+                          <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Plug className="mr-1.5 h-3 w-3" />
+                        )}
+                        Add connector
+                      </Button>
+                    </>
                   )}
                 </div>
               )}
@@ -318,12 +413,14 @@ const ConnectorListRow: React.FC<ConnectorListRowProps> = ({
 interface ConnectorDetailPanelProps {
   connector: Connector;
   connected: boolean;
+  /** Whether this deployment can actually connect this connector right now. */
+  available: boolean;
+  source?: ConnectorSource;
   mutating: boolean;
   connectedAt?: string;
   onBack: () => void;
   onConnect: () => void;
   onDisconnect: () => void;
-  onUpgrade: () => void;
 }
 
 function useConnectorTools(connectorId: string): string[] {
@@ -333,15 +430,15 @@ function useConnectorTools(connectorId: string): string[] {
 const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
   connector,
   connected,
+  available,
+  source,
   mutating,
   connectedAt,
   onBack,
   onConnect,
   onDisconnect,
-  onUpgrade,
 }) => {
-  const isAvailable = isConnectorReady(connector);
-  const hasRealCredentials = connected && isAvailable;
+  const isAvailable = available;
   const availabilityLabel = getConnectorAvailabilityLabel(connector);
   const tools = useConnectorTools(connector.id);
 
@@ -362,31 +459,44 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold text-foreground">{connector.name}</h2>
-            {!isAvailable && (
-              <Badge
-                variant="outline"
-                className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
-              >
-                {availabilityLabel}
-              </Badge>
-            )}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {connector.authType === 'oauth'
-              ? 'OAuth 2.0'
-              : connector.authType === 'api_key'
-                ? 'API Key'
-                : connector.authType === 'pat'
-                  ? 'Personal Access Token'
-                  : 'Connection String'}{' '}
-            &middot; {connector.actionCount} actions
+            {source === 'github-app'
+              ? 'GitHub App'
+              : connector.authType === 'oauth'
+                ? 'OAuth 2.0'
+                : connector.authType === 'api_key'
+                  ? 'API Key'
+                  : connector.authType === 'pat'
+                    ? 'Personal Access Token'
+                    : 'Connection String'}
+            {(isAvailable || connected) && tools.length > 0 ? (
+              <> &middot; {tools.length} tools</>
+            ) : null}
           </p>
         </div>
 
         {/* Primary action */}
         <div className="shrink-0">
-          {hasRealCredentials ? (
+          {connected ? (
             <div className="flex items-center gap-1">
+              {source === 'github-app' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() =>
+                    window.open(
+                      'https://github.com/settings/installations',
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                >
+                  Manage on GitHub
+                  <ExternalLink className="ml-1 h-3 w-3" aria-hidden="true" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -397,17 +507,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 {mutating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
               </Button>
             </div>
-          ) : !isAvailable ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground"
-              onClick={onUpgrade}
-            >
-              <Lock className="mr-1.5 h-3 w-3" />
-              Request access
-            </Button>
-          ) : (
+          ) : isAvailable ? (
             <Button
               size="sm"
               className="h-7 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
@@ -423,11 +523,18 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 </>
               )}
             </Button>
+          ) : (
+            <Badge
+              variant="outline"
+              className="border-white/10 px-2 py-1 text-[11px] text-muted-foreground"
+            >
+              {availabilityLabel}
+            </Badge>
           )}
         </div>
       </div>
 
-      {hasRealCredentials && connectedAt && (
+      {connected && connectedAt && (
         <p className="mb-3 text-[10px] text-muted-foreground/60">
           Connected {formatRelativeTime(connectedAt)}
         </p>
@@ -436,8 +543,9 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
       {/* Description */}
       <p className="mb-5 text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
 
-      {/* Tools */}
-      {tools.length > 0 && (
+      {/* Tools — only shown for connectors that actually work in this deployment,
+          so fabricated capability badges never render as product state. */}
+      {(isAvailable || connected) && tools.length > 0 && (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
@@ -465,14 +573,22 @@ export function ConnectorsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { isLoaded: authLoaded, isSignedIn } = useAuth();
+  const { isSignedIn } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ConnectorCategory | 'All'>('All');
-  const [connectedIds, setConnectedIds] = useState<Set<string>>(new Set());
-  const [connectedAtMap, setConnectedAtMap] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
+  const {
+    connectedIds,
+    connectedAtMap,
+    sources,
+    availableIds,
+    loading,
+    error: connectorsError,
+    mutatingIds,
+    connect,
+    disconnect,
+    retry: retryConnectors,
+  } = useConnectors();
   const [showInspectDialog, setShowInspectDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   // Master-detail: which connector row is selected in the left list
@@ -480,7 +596,81 @@ export function ConnectorsPage() {
   // Overview dialog: shown before connecting
   const [overviewConnector, setOverviewConnector] = useState<Connector | null>(null);
 
+  // User-added custom remote MCP connectors (/api/connectors/custom). These
+  // have no entry in the static CONNECTORS catalog, so they render as a
+  // separate minimal row set inside the "Connected" group instead of going
+  // through the Connector/ConnectorDetailPanel master-detail flow.
+  const [customConnectors, setCustomConnectors] = useState<CustomConnectorSummary[]>([]);
+  const [removingCustomId, setRemovingCustomId] = useState<string | null>(null);
+
+  const refreshCustomConnectors = useCallback(async () => {
+    if (!isSignedIn) {
+      setCustomConnectors([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/connectors/custom', { credentials: 'include' });
+      if (!res.ok) return;
+      const json = (await res.json()) as { connectors: CustomConnectorSummary[] };
+      setCustomConnectors(json.connectors ?? []);
+    } catch {
+      // degrade gracefully
+    }
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    void refreshCustomConnectors();
+  }, [refreshCustomConnectors]);
+
+  const handleRemoveCustomConnector = useCallback(async (id: string) => {
+    setRemovingCustomId(id);
+    try {
+      const csrfToken = await getCsrfToken();
+      const res = await fetch(`/api/connectors/custom?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'x-csrf-token': csrfToken },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        throw new Error('Could not remove this connector. Try again.');
+      }
+      setCustomConnectors((prev) => prev.filter((c) => c.id !== id));
+      invalidateConnectorsCache();
+      toast.success('Connector removed.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not remove this connector.');
+    } finally {
+      setRemovingCustomId(null);
+    }
+  }, []);
+
   const ITEMS_PER_PAGE = 20;
+
+  const isAvailable = useCallback(
+    (connector: Connector) => availableIds.has(connector.id),
+    [availableIds],
+  );
+
+  // Surface the GitHub App install callback outcome (?github=...) as a toast,
+  // then strip the param so refreshes don't re-toast.
+  useEffect(() => {
+    const github = searchParams.get('github');
+    if (!github) return;
+    if (github === 'connected') {
+      toast.success('GitHub connected.');
+    } else if (github === 'unavailable') {
+      toast.error('GitHub App is not configured in this deployment.');
+    } else if (github === 'invalid_state') {
+      toast.error('GitHub connection failed a security check. Please try again.');
+    } else {
+      toast.error('Could not complete the GitHub connection. Please try again.');
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('github');
+    router.replace(`${pathname}${params.size > 0 ? `?${params.toString()}` : ''}`, {
+      scroll: false,
+    });
+  }, [searchParams, router, pathname]);
 
   // Status filter is stored in URL search params so it persists on refresh/share
   const rawStatus = searchParams.get('status');
@@ -501,49 +691,6 @@ export function ConnectorsPage() {
     },
     [router, pathname, searchParams],
   );
-
-  // Fetch connected connectors only for signed-in users. Public visitors can
-  // browse the directory without generating 401 console noise.
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchConnectors() {
-      if (!authLoaded) return;
-      if (!isSignedIn) {
-        setConnectedIds(new Set());
-        setConnectedAtMap({});
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/connectors');
-        if (!res.ok) {
-          // User may not be authenticated · degrade gracefully to empty set
-          setLoading(false);
-          return;
-        }
-        const json = (await res.json()) as {
-          connectors: Array<{ connectorId: string; connectedAt?: string }>;
-        };
-        if (!cancelled) {
-          setConnectedIds(new Set(json.connectors.map((c) => c.connectorId)));
-          const atMap: Record<string, string> = {};
-          for (const c of json.connectors) {
-            if (c.connectedAt) atMap[c.connectorId] = c.connectedAt;
-          }
-          setConnectedAtMap(atMap);
-        }
-      } catch {
-        // Network error · degrade gracefully
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    void fetchConnectors();
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoaded, isSignedIn]);
 
   // Reset to page 1 whenever filters change
   const prevFiltersRef = React.useRef({ searchQuery, activeCategory, activeStatus });
@@ -569,18 +716,18 @@ export function ConnectorsPage() {
       const matchesStatus =
         activeStatus === 'all' ||
         (activeStatus === 'connected' && connectedIds.has(c.id)) ||
-        (activeStatus === 'ready' && !connectedIds.has(c.id) && isConnectorReady(c)) ||
-        (activeStatus === 'request_access' && !connectedIds.has(c.id) && !isConnectorReady(c));
+        (activeStatus === 'ready' && !connectedIds.has(c.id) && isAvailable(c)) ||
+        (activeStatus === 'request_access' && !connectedIds.has(c.id) && !isAvailable(c));
       return matchesCategory && matchesSearch && matchesStatus;
     });
-  }, [searchQuery, activeCategory, activeStatus, connectedIds]);
+  }, [searchQuery, activeCategory, activeStatus, connectedIds, isAvailable]);
 
   const connectedConnectors = filteredConnectors.filter((c) => connectedIds.has(c.id));
   const readyConnectors = filteredConnectors.filter(
-    (c) => !connectedIds.has(c.id) && isConnectorReady(c),
+    (c) => !connectedIds.has(c.id) && isAvailable(c),
   );
   const requestAccessConnectors = filteredConnectors.filter(
-    (c) => !connectedIds.has(c.id) && !isConnectorReady(c),
+    (c) => !connectedIds.has(c.id) && !isAvailable(c),
   );
   const visibleConnectedCount = useMemo(
     () => VISIBLE_CONNECTORS.filter((connector) => connectedIds.has(connector.id)).length,
@@ -597,7 +744,7 @@ export function ConnectorsPage() {
     activeStatus === 'ready'
       ? 'Ready'
       : activeStatus === 'request_access'
-        ? 'Request access'
+        ? 'Coming soon'
         : 'Browse';
   const totalBrowsePages = Math.ceil(browseConnectors.length / ITEMS_PER_PAGE);
   const pagedBrowseConnectors = browseConnectors.slice(
@@ -609,85 +756,9 @@ export function ConnectorsPage() {
     async (id: string) => {
       const connector = VISIBLE_CONNECTORS.find((c) => c.id === id);
       if (!connector) return;
-      if (!isSignedIn) {
-        router.push(`/login?redirectTo=${encodeURIComponent(pathname || '/connectors')}`);
-        return;
-      }
-
-      // Optimistic update
-      setConnectedIds((prev) => new Set([...prev, id]));
-      setMutatingIds((prev) => new Set([...prev, id]));
-
-      try {
-        const csrfToken = await getCsrfToken();
-        const res = await fetch('/api/connectors', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-          body: JSON.stringify({ connectorId: id, authType: connector.authType }),
-        });
-        if (!res.ok) {
-          // Revert optimistic update on failure
-          setConnectedIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
-        }
-      } catch {
-        // Revert on network error
-        setConnectedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      } finally {
-        setMutatingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }
+      await connect(id, connector.authType);
     },
-    [isSignedIn, pathname, router],
-  );
-
-  const handleDisconnect = useCallback(
-    async (id: string) => {
-      if (!isSignedIn) {
-        router.push(`/login?redirectTo=${encodeURIComponent(pathname || '/connectors')}`);
-        return;
-      }
-
-      // Optimistic update
-      setConnectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      setMutatingIds((prev) => new Set([...prev, id]));
-
-      try {
-        const csrfToken = await getCsrfToken();
-        const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
-          method: 'DELETE',
-          headers: { 'x-csrf-token': csrfToken },
-        });
-        if (!res.ok) {
-          // Revert on failure
-          setConnectedIds((prev) => new Set([...prev, id]));
-        }
-      } catch {
-        // Revert on network error
-        setConnectedIds((prev) => new Set([...prev, id]));
-      } finally {
-        setMutatingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }
-    },
-    [isSignedIn, pathname, router],
+    [connect],
   );
 
   return (
@@ -710,14 +781,18 @@ export function ConnectorsPage() {
                 <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
                   {VISIBLE_CONNECTORS.length} total
                 </Badge>
-                <Button
-                  size="sm"
-                  className="h-8 gap-1.5 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
-                  onClick={() => setShowInspectDialog(true)}
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  Inspect MCP server
-                </Button>
+                {/* /api/mcp requires an authenticated user — showing this to
+                    signed-out visitors made the primary CTA a guaranteed 401. */}
+                {isSignedIn && (
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
+                    onClick={() => setShowInspectDialog(true)}
+                  >
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                    Inspect MCP server
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -780,6 +855,22 @@ export function ConnectorsPage() {
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : connectorsError ? (
+            // Distinct from "zero connectors" — without this, a failed
+            // GET /api/connectors rendered identically to a genuinely empty
+            // account, with no signal anything went wrong.
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-16 text-center">
+              <AlertTriangle className="h-5 w-5 text-destructive" aria-hidden="true" />
+              <p className="text-sm text-destructive">{connectorsError}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 border-destructive/30 px-3 text-xs text-destructive hover:bg-destructive/10"
+                onClick={() => retryConnectors()}
+              >
+                Retry
+              </Button>
+            </div>
           ) : (
             <div className="flex gap-0 lg:gap-4">
               {/* ── Left: scrollable compact list ───────────────────────────── */}
@@ -790,13 +881,13 @@ export function ConnectorsPage() {
                   selectedConnector ? 'hidden lg:block' : 'block',
                 )}
               >
-                {/* Connected group */}
-                {connectedConnectors.length > 0 && (
+                {/* Connected group — catalog connectors + user-added custom MCP connectors */}
+                {(connectedConnectors.length > 0 || customConnectors.length > 0) && (
                   <div className="mb-4">
                     <div className="mb-1.5 flex items-center gap-1.5 px-1">
                       <Check className="h-3 w-3 text-emerald-400" />
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Connected ({connectedConnectors.length})
+                        Connected ({connectedConnectors.length + customConnectors.length})
                       </span>
                     </div>
                     <div className="space-y-0.5">
@@ -808,6 +899,33 @@ export function ConnectorsPage() {
                           connected
                           onClick={() => setSelectedConnector(connector)}
                         />
+                      ))}
+                      {customConnectors.map((c) => (
+                        <div
+                          key={c.id}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-muted-foreground"
+                        >
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.06]">
+                            <Plug className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                            {c.name}
+                          </span>
+                          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                          <button
+                            type="button"
+                            aria-label={`Remove ${c.name}`}
+                            onClick={() => void handleRemoveCustomConnector(c.id)}
+                            disabled={removingCustomId === c.id}
+                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                          >
+                            {removingCustomId === c.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <X className="h-3 w-3" aria-hidden="true" />
+                            )}
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -887,12 +1005,13 @@ export function ConnectorsPage() {
                   <ConnectorDetailPanel
                     connector={selectedConnector}
                     connected={connectedIds.has(selectedConnector.id)}
+                    available={isAvailable(selectedConnector)}
+                    source={sources[selectedConnector.id]}
                     mutating={mutatingIds.has(selectedConnector.id)}
                     connectedAt={connectedAtMap[selectedConnector.id]}
                     onBack={() => setSelectedConnector(null)}
                     onConnect={() => setOverviewConnector(selectedConnector)}
-                    onDisconnect={() => void handleDisconnect(selectedConnector.id)}
-                    onUpgrade={() => router.push('/pricing')}
+                    onDisconnect={() => void disconnect(selectedConnector.id)}
                   />
                 ) : (
                   /* Placeholder shown on desktop when nothing is selected */
@@ -911,8 +1030,8 @@ export function ConnectorsPage() {
             </div>
           )}
 
-          {/* Roadmap Callout - shown below master-detail */}
-          {!loading && (
+          {/* Roadmap Callout - shown below master-detail (not during an error state, so the retry banner stays the focus) */}
+          {!loading && !connectorsError && (
             <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -922,9 +1041,9 @@ export function ConnectorsPage() {
                   <h3 className="text-sm font-semibold text-foreground">Connector roadmap</h3>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     We&apos;re rolling out connectors in phases, starting from core productivity
-                    tools to AI models, marketing platforms, and enterprise apps. Phase labels show
-                    the planned rollout order; request-access connectors are visible for demos and
-                    account-bound upgrade planning.
+                    tools to AI models, marketing platforms, and enterprise apps. Coming-soon
+                    connectors are browsable so you can plan what to connect; they become
+                    connectable as each integration ships.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {[
@@ -961,7 +1080,12 @@ export function ConnectorsPage() {
         </div>
       </div>
 
-      <InspectMcpServerDialog open={showInspectDialog} onOpenChange={setShowInspectDialog} />
+      <InspectMcpServerDialog
+        open={showInspectDialog}
+        onOpenChange={setShowInspectDialog}
+        isSignedIn={isSignedIn}
+        onAdded={() => void refreshCustomConnectors()}
+      />
 
       <ConnectorOverviewDialog
         connector={overviewConnector}

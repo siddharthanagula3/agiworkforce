@@ -32,6 +32,12 @@ interface MessageListProps {
   /** Called when user reacts to a message */
   onReaction?: (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => void;
   onPairDesktop?: () => void;
+  /** Called when the user allows/denies a suspended MCP/connector tool call. */
+  onResolveToolApproval?: (
+    messageId: string,
+    toolCallId: string,
+    decision: 'approved' | 'rejected',
+  ) => void;
 }
 
 /**
@@ -50,6 +56,7 @@ export function MessageList({
   onQuoteReply,
   onReaction,
   onPairDesktop,
+  onResolveToolApproval,
 }: MessageListProps) {
   const colors = useThemeColors();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
@@ -100,6 +107,7 @@ export function MessageList({
           onRetryMessage={onRetryMessage}
           onEditMessage={onEditMessage}
           onReaction={onReaction}
+          onResolveToolApproval={onResolveToolApproval}
         />
       </SwipeReplyWrapper>
     ),
@@ -112,6 +120,7 @@ export function MessageList({
       onEditMessage,
       onQuoteReply,
       onReaction,
+      onResolveToolApproval,
     ],
   );
 

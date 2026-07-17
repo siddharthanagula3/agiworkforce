@@ -50,8 +50,7 @@ jobs:
         working-directory: apps/desktop
 
       - name: Build desktop web frontend
-        run: pnpm build:web
-        working-directory: apps/desktop
+        run: pnpm exec turbo run build:web --filter=@agiworkforce/desktop
         env:
           CI: true
           # Vite needs the web target so esbuild uses the right browser support

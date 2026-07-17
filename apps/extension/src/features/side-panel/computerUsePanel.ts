@@ -455,7 +455,7 @@ export interface ComputerUsePanelAPI {
   /**
    * Re-check the cloud auth token and update the auth-status chip.
    * Called by side_panel.ts whenever the Computer Use tab becomes visible,
-   * so the chip reflects any token that was pasted in Options since last open.
+   * so the chip reflects the latest Clerk session state.
    */
   refreshAuthChip(): void;
 }
@@ -539,7 +539,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     if (_runAutofillHandler) _runAutofillHandler();
   });
 
-  // Auth-status chip — green "Signed in" or amber "Paste token in Options".
+  // Auth-status chip — green "Signed in" or amber "Sign in required".
   // Checked once on panel build; re-checked whenever the panel becomes visible
   // via the exported refreshAuthChip() helper wired to the tab-switch event.
   const authChip = document.createElement('span');
@@ -562,9 +562,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
           authChip.title = 'Cloud token present — agent can run.';
         } else {
           authChip.className = 'sp-cu-auth-chip unauthed';
-          authLabel.textContent = 'Paste token in Options';
-          authChip.title =
-            'No cloud token found. Open Options and paste your AGI bearer token to enable the agent.';
+          authLabel.textContent = 'Sign in required';
+          authChip.title = 'Sign in to AGI Cloud from the extension drawer to enable the agent.';
         }
       })
       .catch(() => {

@@ -25,7 +25,7 @@ import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
   type LibraryItem,
-} from '@agiworkforce/services';
+} from '@agiworkforce/cloud-contracts';
 import {
   summarizeGeneratedFileBundle,
   type GeneratedFile,

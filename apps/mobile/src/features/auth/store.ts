@@ -140,6 +140,7 @@ export const useAuthStore = create<AuthState>()(
             const { useCloudSettingsStore } = require('@/stores/settings/cloudSettingsStore');
             const { useTierStore } = require('@/src/features/billing/store');
             const { useArtifactStore } = require('@/src/features/artifacts/store');
+            const { useIntegrationStore } = require('@/src/features/integrations/store');
             const { unregisterPushToken } = require('@/services/notifications');
             /* eslint-enable @typescript-eslint/no-require-imports */
             stopCloudSyncLoop();
@@ -186,6 +187,14 @@ export const useAuthStore = create<AuthState>()(
             // the Billing screen shows a stale "You are on the Pro plan" to a
             // signed-out (or different) user.
             useTierStore.getState().setTier('free');
+            // Integrations trust-boundary reset: platform connection status
+            // (connected/lastSynced/accountName) is scoped to the signed-in
+            // user and persisted to MMKV, but had no sign-out reset at all —
+            // a subsequent account on this device would otherwise see a
+            // prior user's "Connected" badges (Slack/Gmail/etc.) as its own,
+            // with no self-heal (fetchPlatforms() does not reconcile against
+            // the server; see its own doc comment).
+            useIntegrationStore.getState().clearPlatformConnections();
             // Push-token trust-boundary reset: mobile_devices is keyed by
             // deviceId, not by session, so an unregistered token survives
             // sign-out server-side indefinitely — a subsequent different

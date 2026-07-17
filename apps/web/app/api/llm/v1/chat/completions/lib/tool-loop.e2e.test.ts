@@ -226,14 +226,22 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockGetE2BExecutor.mockResolvedValue(executor);
 
     const processed = makeProcessed('conv-123');
-    await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    await drain(runToolLoop(processed, { approvalMode: 'auto', userId: 'user-123' }));
 
     // Getting the executor exactly once (no reconnect between tool calls in the
     // same turn) proves it's reused, not recreated per call.
     expect(mockGetE2BExecutor).toHaveBeenCalledTimes(1);
-    expect(mockGetE2BExecutor).toHaveBeenCalledWith('conv-123');
+    expect(mockGetE2BExecutor).toHaveBeenCalledWith({
+      tenantId: 'managed-cloud',
+      userId: 'user-123',
+      conversationId: 'conv-123',
+    });
     // Conversation-scoped: paused (state preserved for the next turn), never killed here.
-    expect(mockPauseE2BSession).toHaveBeenCalledWith('conv-123');
+    expect(mockPauseE2BSession).toHaveBeenCalledWith({
+      tenantId: 'managed-cloud',
+      userId: 'user-123',
+      conversationId: 'conv-123',
+    });
     expect(dispose).not.toHaveBeenCalled();
   });
 

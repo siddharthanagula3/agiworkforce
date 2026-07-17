@@ -89,6 +89,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 const mockCheckAvailable = vi.fn();
 const mockCreditGetBalance = vi.fn();
 const mockDeductCredits = vi.fn();
+const mockSettleCreditsDurably = vi.fn();
 const mockGenerateIdempotencyKey = vi.fn();
 
 vi.mock('@/lib/services/credit-service', () => ({
@@ -96,6 +97,7 @@ vi.mock('@/lib/services/credit-service', () => ({
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     getBalance: (...args: unknown[]) => mockCreditGetBalance(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
+    settleCreditsDurably: (...args: unknown[]) => mockSettleCreditsDurably(...args),
     generateIdempotencyKey: (...args: unknown[]) => mockGenerateIdempotencyKey(...args),
   },
 }));
@@ -166,6 +168,11 @@ describe('POST /api/media/video/generate', () => {
     mockCheckAvailable.mockResolvedValue(true);
     mockCreditGetBalance.mockResolvedValue({ credits_remaining_cents: 10000 });
     mockDeductCredits.mockResolvedValue({ success: true });
+    mockSettleCreditsDurably.mockResolvedValue({
+      status: 'succeeded',
+      success: true,
+      attempt_count: 1,
+    });
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
 
     // Set env vars
@@ -433,6 +440,15 @@ describe('POST /api/media/video/generate', () => {
       expect(response.status).toBe(400);
       expect(data.error.code).toBe('VALIDATION_ERROR');
     });
+
+    it('rejects unknown client fields instead of silently stripping contract drift', async () => {
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a sunset', provider: 'runway', style: 'cinematic' }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   // =========================================================================
@@ -472,6 +488,9 @@ describe('POST /api/media/video/generate', () => {
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('runway');
       expect(typeof data.estimated_duration_secs).toBe('number');
+      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 25);
+      const [, runwayRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(String(runwayRequest.body))).toMatchObject({ model: 'gen4_turbo' });
     });
 
     it('should include estimated_duration_secs based on video duration', async () => {
@@ -529,6 +548,45 @@ describe('POST /api/media/video/generate', () => {
       expect(data.task_id).toBe('google_12345678');
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('google');
+      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 240);
+      const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(String(googleRequest.body))).toMatchObject({
+        parameters: { durationSeconds: '6', resolution: '720p' },
+      });
+    });
+
+    it('reserves catalog pricing for the billable 8-second 4k Veo request', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ name: 'operations/4k-task', done: false }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic mountain',
+          provider: 'google',
+          duration_secs: 4,
+          resolution: '4k',
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 480);
+      const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(String(googleRequest.body))).toMatchObject({
+        parameters: { durationSeconds: '8', resolution: '4k' },
+      });
+    });
+
+    it('rejects a requested model whose catalog provider contradicts the provider field', async () => {
+      process.env['RUNWAY_API_KEY'] = 'test-runway-key';
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'runway', model: 'veo-3' }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
@@ -638,6 +696,16 @@ describe('POST /api/media/video/generate', () => {
       await response.json();
 
       expect(response.status).toBe(500);
+      expect(mockSettleCreditsDurably).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: TEST_USER.userId,
+          amountCents: expect.any(Number),
+          metadata: expect.objectContaining({ type: 'refund' }),
+          idempotencyKey: expect.any(String),
+        }),
+      );
+      const operation = mockSettleCreditsDurably.mock.calls[0]?.[0] as { amountCents: number };
+      expect(operation.amountCents).toBeLessThan(0);
     });
   });
 });

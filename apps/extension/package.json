@@ -27,17 +27,19 @@
     "pretest": "bash scripts/check-conflict-markers.sh",
     "test": "vitest run",
     "clean": "rm -rf dist",
-    "package": "pnpm build && cd dist && zip -r ../extension.zip . -x '*.map'",
-    "lint": "eslint src --ext .ts,.js --cache --cache-strategy content --cache-location .cache/eslint",
+    "package": "pnpm build && node scripts/prepare-package.mjs && cd dist && zip -r ../extension.zip . -x '*.map'",
+    "lint": "eslint src --ext .ts,.js --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "format": "prettier --write \"src/**/*.{js,html}\"",
     "check:no-hex": "node scripts/check-no-hex-colors.mjs",
     "check:no-cloud-ipc": "node scripts/check-no-cloud-ipc-v1.mjs"
   },
   "dependencies": {
+    "@clerk/chrome-extension": "^3.1.52",
     "@agiworkforce/browser-tool": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
-    "@agiworkforce/llm-runtime": "workspace:*",
-    "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/provider-runtime": "workspace:*",
+    "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.3.3"

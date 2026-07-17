@@ -16,6 +16,7 @@ const DISALLOW_APP = [
   '/dashboard/',
   '/account/',
   '/chat',
+  '/schedules',
   '/settings',
   '/billing',
   '/projects',

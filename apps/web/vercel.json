@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && bash apps/web/scripts/build-with-chat.sh",
+  "buildCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && bash scripts/build-with-chat.sh",
   "devCommand": "pnpm dev",
-  "installCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install --no-frozen-lockfile",
+  "installCommand": "cd ../.. && corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install --frozen-lockfile",
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
@@ -44,6 +44,14 @@
     {
       "path": "/api/cron/purge-temporary-chats",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-credits",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/run-schedules",
+      "schedule": "* * * * *"
     }
   ]
 }

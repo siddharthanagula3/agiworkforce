@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CLOUD_LOCK_REASON, type ModelDef } from '@/src/features/model-picker/service';
+import { getModelReasoning } from '@agiworkforce/types';
 import type { ModelInstallJob } from '@/src/features/model-picker/installStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
@@ -45,7 +46,10 @@ export function ModelRow({
   // (→ upgrade). The badge and a11y strings must match the actual unlock path.
   const isSignInLock = isLocked && model.lockReason === CLOUD_LOCK_REASON;
   const isLocal = model.surface === 'local';
-  const canToggleThinking = !isLocked && model.supportsThinking;
+  const reasoning = getModelReasoning(model.id);
+  const requiresThinking = reasoning.capable && reasoning.canDisableThinking === false;
+  const canToggleThinking = !isLocked && model.supportsThinking && !requiresThinking;
+  const effectiveThinkingEnabled = requiresThinking || thinkingEnabled;
   const isDownloading = installStatus.status === 'downloading';
   const isUnavailable = installStatus.status === 'unavailable';
   const isFailed = installStatus.status === 'failed';
@@ -215,7 +219,7 @@ export function ModelRow({
         </View>
       ) : null}
 
-      {isExpanded && canToggleThinking ? (
+      {isExpanded && (canToggleThinking || requiresThinking) ? (
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(150)}
           exiting={reducedMotion ? undefined : FadeOut.duration(100)}
@@ -229,25 +233,32 @@ export function ModelRow({
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-            <Brain size={15} color={thinkingEnabled ? colors.agentThinking : colors.textMuted} />
+            <Brain
+              size={15}
+              color={effectiveThinkingEnabled ? colors.agentThinking : colors.textMuted}
+            />
             <Text
               style={{
-                color: thinkingEnabled ? colors.agentThinking : colors.textSecondary,
+                color: effectiveThinkingEnabled ? colors.agentThinking : colors.textSecondary,
                 fontSize: 13,
                 fontWeight: '600',
               }}
             >
-              With thinking
+              {requiresThinking ? 'Reasoning always on' : 'With thinking'}
             </Text>
           </View>
-          <Switch
-            value={thinkingEnabled}
-            onValueChange={handleThinkingToggle}
-            trackColor={{ false: colors.border, true: colors.purpleSurface }}
-            thumbColor={thinkingEnabled ? colors.agentThinking : colors.textMuted}
-            style={{ transform: [{ scaleX: 0.82 }, { scaleY: 0.82 }] }}
-            accessibilityLabel={`Thinking mode for ${model.name}`}
-          />
+          {requiresThinking ? (
+            <Badge label="Always on" color="gray" />
+          ) : (
+            <Switch
+              value={thinkingEnabled}
+              onValueChange={handleThinkingToggle}
+              trackColor={{ false: colors.border, true: colors.purpleSurface }}
+              thumbColor={thinkingEnabled ? colors.agentThinking : colors.textMuted}
+              style={{ transform: [{ scaleX: 0.82 }, { scaleY: 0.82 }] }}
+              accessibilityLabel={`Thinking mode for ${model.name}`}
+            />
+          )}
         </Animated.View>
       ) : null}
     </View>

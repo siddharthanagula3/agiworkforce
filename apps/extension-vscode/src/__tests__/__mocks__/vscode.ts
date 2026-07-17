@@ -377,7 +377,10 @@ class ChatRequestTurn {
 }
 
 class ChatResponseTurn {
-  constructor(public readonly response: unknown[] = []) {}
+  constructor(
+    public readonly response: unknown[] = [],
+    public readonly result: { metadata?: Record<string, unknown> } = {},
+  ) {}
 }
 
 class ChatResponseMarkdownPart {

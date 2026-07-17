@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 1,
+  "auto": {
+    "kind": "routing_policy",
+    "defaultAlias": "auto-balanced",
+    "fallbackSlot": "workhorse_general",
+    "profileOrder": ["economy", "balanced", "premium"],
+    "tierMaximumProfiles": {
+      "free": "economy",
+      "pro": "balanced",
+      "max": "premium",
+      "enterprise": "premium",
+      "byok": "premium"
+    },
+    "tierAllowedSlots": {
+      "free": ["workhorse_general"],
+      "pro": [
+        "workhorse_general",
+        "general_balanced",
+        "escalation_coding",
+        "coding_balanced",
+        "reasoning_economy",
+        "reasoning_balanced",
+        "creative_balanced",
+        "multimodal_balanced",
+        "long_context_balanced",
+        "search_fast",
+        "search_premium",
+        "computer_use_balanced",
+        "image_generation"
+      ],
+      "max": [
+        "workhorse_general",
+        "general_balanced",
+        "flagship_general",
+        "escalation_coding",
+        "coding_balanced",
+        "flagship_coding",
+        "reasoning_economy",
+        "reasoning_balanced",
+        "creative_balanced",
+        "creative_premium",
+        "multimodal_balanced",
+        "long_context_balanced",
+        "search_fast",
+        "search_premium",
+        "computer_use_balanced",
+        "computer_use_premium",
+        "image_generation"
+      ],
+      "enterprise": [
+        "workhorse_general",
+        "general_balanced",
+        "flagship_general",
+        "escalation_coding",
+        "coding_balanced",
+        "flagship_coding",
+        "reasoning_economy",
+        "reasoning_balanced",
+        "creative_balanced",
+        "creative_premium",
+        "multimodal_balanced",
+        "long_context_balanced",
+        "search_fast",
+        "search_premium",
+        "computer_use_balanced",
+        "computer_use_premium",
+        "image_generation"
+      ],
+      "byok": [
+        "workhorse_general",
+        "general_balanced",
+        "flagship_general",
+        "escalation_coding",
+        "coding_balanced",
+        "flagship_coding",
+        "reasoning_economy",
+        "reasoning_balanced",
+        "creative_balanced",
+        "creative_premium",
+        "multimodal_balanced",
+        "long_context_balanced",
+        "search_fast",
+        "search_premium",
+        "computer_use_balanced",
+        "computer_use_premium",
+        "image_generation"
+      ]
+    },
+    "providerPolicies": {
+      "usOnly": {
+        "allowedTiers": ["max", "enterprise"],
+        "excludedProviders": ["deepseek", "qwen", "moonshot", "zhipu", "minimax"]
+      }
+    },
+    "aliases": {
+      "auto": {
+        "profile": "balanced",
+        "label": "Auto",
+        "description": "Automatically select an eligible route for the task",
+        "selectable": false
+      },
+      "auto-economy": {
+        "profile": "economy",
+        "label": "Economy",
+        "description": "Lowest-cost eligible route for the task",
+        "selectable": true
+      },
+      "auto-balanced": {
+        "profile": "balanced",
+        "label": "Balanced",
+        "description": "Best balance of capability, latency, and cost",
+        "selectable": true
+      },
+      "auto-premium": {
+        "profile": "premium",
+        "label": "Best",
+        "description": "Most capable eligible route for the task",
+        "selectable": true
+      }
+    },
+    "continuity": {
+      "preserveExplicitSelection": true,
+      "preferCurrentModelWhenEligible": true,
+      "preferCurrentRouteForCache": true,
+      "reevaluateOnTaskChange": true
+    },
+    "tasks": {
+      "simple_chat": {
+        "requiredCapabilities": ["textInput", "textOutput"],
+        "requiredHarnessFeatures": [],
+        "preferredSlots": {
+          "economy": ["workhorse_general"],
+          "balanced": ["general_balanced", "workhorse_general"],
+          "premium": ["general_balanced", "flagship_general", "workhorse_general"]
+        },
+        "benchmarkWeights": { "mmlu": 1 }
+      },
+      "general": {
+        "requiredCapabilities": ["textInput", "textOutput"],
+        "requiredHarnessFeatures": [],
+        "preferredSlots": {
+          "economy": ["workhorse_general"],
+          "balanced": ["general_balanced", "workhorse_general"],
+          "premium": ["flagship_general", "general_balanced", "workhorse_general"]
+        },
+        "benchmarkWeights": { "mmlu": 1 }
+      },
+      "coding": {
+        "requiredCapabilities": ["textInput", "textOutput", "functionCalling"],
+        "requiredHarnessFeatures": [],
+        "preferredSlots": {
+          "economy": ["escalation_coding", "workhorse_general"],
+          "balanced": ["coding_balanced", "escalation_coding", "workhorse_general"],
+          "premium": ["flagship_coding", "coding_balanced", "escalation_coding"]
+        },
+        "benchmarkWeights": { "swebench": 0.7, "humaneval": 0.3 }
+      },
+      "reasoning": {
+        "requiredCapabilities": ["textInput", "textOutput", "reasoning"],
+        "requiredHarnessFeatures": [],
+        "preferredSlots": {
+          "economy": ["reasoning_economy", "workhorse_general"],
+          "balanced": ["reasoning_balanced", "reasoning_economy"],
+          "premium": ["reasoning_balanced", "flagship_general", "reasoning_economy"]
+        },
+        "benchmarkWeights": { "gpqa": 0.55, "aime": 0.45 }
+      },
+      "creative_writing": {
+        "requiredCapabilities": ["textInput", "textOutput"],
+        "requiredHarnessFeatures": [],
+        "preferredSlots": {
+          "economy": ["workhorse_general"],
+          "balanced": ["creative_balanced", "general_balanced"],
+          "premium": ["creative_premium", "creative_balanced"]
+        },
+        "benchmarkWeights": {}
+      },
+      "multimodal": {
+        "requiredCapabilities": ["textInput", "imageInput", "textOutput"],
+        "requiredHarnessFeatures": [],
+        "preferredSlots": {
+          "economy": ["workhorse_general"],
+          "balanced": ["multimodal_balanced", "workhorse_general"],
+          "premium": ["multimodal_balanced", "workhorse_general"]
+        },
+        "benchmarkWeights": {}
+      },
+      "long_context": {
+        "requiredCapabilities": ["textInput", "textOutput"],
+        "requiredHarnessFeatures": [],
+        "minimumContextTokens": 50000,
+        "preferredSlots": {
+          "economy": ["workhorse_general"],
+          "balanced": ["long_context_balanced", "workhorse_general"],
+          "premium": ["long_context_balanced", "flagship_general", "workhorse_general"]
+        },
+        "benchmarkWeights": {}
+      },
+      "research": {
+        "requiredCapabilities": ["textInput", "textOutput"],
+        "requiredHarnessFeatures": ["webSearch"],
+        "preferredSlots": {
+          "economy": ["search_fast"],
+          "balanced": ["search_fast"],
+          "premium": ["search_premium", "search_fast"]
+        },
+        "benchmarkWeights": {}
+      },
+      "agentic": {
+        "requiredCapabilities": ["textInput", "textOutput", "functionCalling"],
+        "requiredHarnessFeatures": ["toolDiscovery"],
+        "preferredSlots": {
+          "economy": ["workhorse_general"],
+          "balanced": ["general_balanced", "coding_balanced"],
+          "premium": ["flagship_general", "flagship_coding"]
+        },
+        "benchmarkWeights": { "swebench": 0.5, "mmlu": 0.5 }
+      },
+      "computer-use": {
+        "requiredCapabilities": ["textInput", "imageInput", "textOutput", "functionCalling"],
+        "requiredHarnessFeatures": ["computerUse"],
+        "preferredSlots": {
+          "economy": ["computer_use_balanced"],
+          "balanced": ["computer_use_balanced"],
+          "premium": ["computer_use_premium", "computer_use_balanced"]
+        },
+        "benchmarkWeights": { "osWorldVerified": 1 }
+      },
+      "image_generation": {
+        "requiredCapabilities": ["imageOutput"],
+        "requiredHarnessFeatures": [],
+        "preferredSlots": {
+          "economy": ["image_generation"],
+          "balanced": ["image_generation"],
+          "premium": ["image_generation"]
+        },
+        "benchmarkWeights": {}
+      }
+    },
+    "slots": {
+      "general_fast": { "modelKey": "gemini-3.1-flash-lite" },
+      "workhorse_general": { "modelKey": "gemini-3.1-flash-lite" },
+      "general_balanced": { "modelKey": "gpt-5.6-terra" },
+      "general_premium": { "modelKey": "gemini-3.5-flash" },
+      "flagship_general": { "modelKey": "gpt-5.6-sol" },
+      "coding_fast": { "modelKey": "deepseek-v4-flash" },
+      "coding_premium": { "modelKey": "gpt-5.6-sol" },
+      "escalation_coding": { "modelKey": "glm-5.2" },
+      "coding_balanced": { "modelKey": "claude-sonnet-5" },
+      "flagship_coding": { "modelKey": "claude-opus-4.8" },
+      "reasoning_premium": { "modelKey": "deepseek-v4-flash" },
+      "reasoning_economy": { "modelKey": "deepseek-v4-flash" },
+      "reasoning_balanced": { "modelKey": "kimi-k2.6" },
+      "creative_writing": { "modelKey": "claude-sonnet-5" },
+      "creative_writing_premium": { "modelKey": "claude-opus-4.8" },
+      "creative_balanced": { "modelKey": "claude-sonnet-5" },
+      "creative_premium": { "modelKey": "claude-opus-4.8" },
+      "vision_fast": { "modelKey": "gemini-3.1-flash-lite" },
+      "vision_premium": { "modelKey": "gemini-3.5-flash" },
+      "multimodal_balanced": { "modelKey": "gemini-3.5-flash" },
+      "long_context_balanced": { "modelKey": "gemini-3.1-pro-preview" },
+      "search_fast": { "modelKey": "sonar" },
+      "search_premium": { "modelKey": "sonar-deep-research" },
+      "browser_dom": { "modelKey": "claude-sonnet-5" },
+      "computer_use": { "modelKey": "claude-sonnet-5" },
+      "computer_use_balanced": { "modelKey": "claude-sonnet-5" },
+      "computer_use_premium": { "modelKey": "claude-opus-4.8" },
+      "image_generation": { "modelKey": "gemini-3.1-flash-image" },
+      "video_generation": { "modelKey": "veo-3" },
+      "embedding_default": { "modelKey": "gemini-embedding-2" },
+      "voice_transcription": { "modelKey": "whisper-1" },
+      "voice_rewrite": { "modelKey": "gemini-3.1-flash-lite" },
+      "general_balanced_pro": { "modelKey": "gpt-5.6-terra" },
+      "coding_premium_pro": { "modelKey": "claude-sonnet-5" },
+      "reasoning_premium_pro": { "modelKey": "kimi-k2.6" },
+      "multimodal_pro": { "modelKey": "gemini-3.5-flash" },
+      "long_context_pro": { "modelKey": "gemini-3.1-pro-preview" },
+      "flagship_coding_pro_plus": { "modelKey": "claude-opus-4.8" },
+      "flagship_general_pro_plus": { "modelKey": "gpt-5.6-sol" },
+      "video_generation_pro_plus": { "modelKey": "veo-3" }
+    }
+  }
+}

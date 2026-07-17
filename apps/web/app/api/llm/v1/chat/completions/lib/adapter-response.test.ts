@@ -85,7 +85,7 @@ describe('drainToLlmResponse · tool_calls index scheme', () => {
     // Mirrors apps/web/lib/llm-providers/anthropic.ts's non-streaming
     // `toolUseBlocks.map((block, index) => ({..., index}))` -- a DIFFERENT
     // indexing scheme from the streaming wire's vendorIndex (see
-    // packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts,
+    // packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts,
     // where the same tool_use block gets index 4, its raw content-block
     // position). Text before the tool_use block proves this isn't
     // accidentally correct only when the tool call is the first block.

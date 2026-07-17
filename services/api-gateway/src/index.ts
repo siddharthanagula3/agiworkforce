@@ -42,13 +42,7 @@ import {
 import { createRateLimiter, warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';
 import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
-import { getServiceClient, disposeUserScopedClientPool } from './lib/neonClients';
-import {
-  registrationRouter,
-  assignmentRouter,
-  heartbeatRouter,
-  startHeartbeatSweep,
-} from './worker';
+import { getSystemClient, disposeUserScopedClientPool } from './lib/neonClients';
 
 try {
   validateStartupEnv();
@@ -134,12 +128,6 @@ app.use('/api/v1/enterprise', enterpriseRouter);
 app.use('/api/agents', agentsRouter);
 app.use('/api/mcp', mcpRouter);
 
-// Outbound-worker protocol (direction-inversion layer, Task 1.7).
-// Inbound bridge at /ws remains live for 30-day backward-compat window.
-app.use('/', registrationRouter);
-app.use('/', assignmentRouter);
-app.use('/', heartbeatRouter);
-
 // SECURITY: Rate limited to 100/min for monitoring endpoints
 app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) => {
   res.json({
@@ -159,7 +147,7 @@ app.get('/api/v1/status', createRateLimiter('status'), async (_req: Request, res
     // a 404 even when the database was healthy).
     // Wave 1.5+ singleton sweep: liveness probe runs without user context;
     // service-role is the right client for a system-health query.
-    const { error } = await getServiceClient()
+    const { error } = await getSystemClient('gateway-health')
       .from('profiles')
       .select('id', { count: 'exact', head: true });
 
@@ -191,8 +179,6 @@ setupWebSocket(wss);
 server.listen(port, () => {
   logger.info({ port }, 'API Gateway running');
   logger.info({ port, path: '/ws' }, 'WebSocket server available');
-  startHeartbeatSweep();
-  logger.info({}, 'Worker heartbeat sweep started (60s interval)');
 });
 
 process.on('SIGTERM', () => {
@@ -205,7 +191,7 @@ process.on('SIGTERM', () => {
   server.close(() => {
     logger.info({}, 'Server closed');
     // Release the pooled RLS adapter's WebSocket connections (lib/neonClients.ts
-    // getUserScopedClient) — separate connection strategy from the one-shot HTTP
+    // user-scoped database client) — separate connection strategy from the one-shot HTTP
     // service client, so it needs an explicit teardown.
     disposeUserScopedClientPool()
       .catch((err) => logger.error({ err }, 'Failed to dispose RLS adapter pool'))

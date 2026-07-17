@@ -15,11 +15,23 @@ import {
   BookOpen,
   Search,
   ExternalLink,
+  Plug,
+  Check,
+  Ban,
+  HelpCircle,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 import { FileTypeIcon } from './FileTypeIcon';
 import type { ResearchSource } from '../../stores/research-panel-store';
+import {
+  parseQualifiedMcpToolName,
+  describeMcpTool,
+} from '@/features/connectors/lib/mcp-tool-name';
+import {
+  useToolPermissionsStore,
+  type PermissionLevel,
+} from '@/features/connectors/stores/tool-permissions-store';
 
 // ─── File reference helper ──────────────────────────────────────────────────
 
@@ -42,6 +54,12 @@ function getFileName(args?: string): string | null {
 type IconComponent = React.FC<{ className?: string }>;
 
 function getToolIcon(toolName: string, filename?: string | null): IconComponent {
+  // Connector/MCP tool call (mcp__<serverId>__<toolName>) — a consistent
+  // "connector" glyph beats guessing from substrings in the tool name, which
+  // can misfire (e.g. a GitHub "search_issues" tool matching the generic
+  // 'search' bucket below and losing its connector identity).
+  if (parseQualifiedMcpToolName(toolName)) return Plug;
+
   const n = toolName.toLowerCase();
 
   // File-type icon is handled separately in the step row when filename is present
@@ -113,8 +131,11 @@ export function isWebSearchTool(name: string): boolean {
  * Rules (in priority order):
  *  1. If the tool is a web-search variant and `args` contains a recognizable
  *     query string (parameters.query or the raw args string), show that query.
- *  2. Otherwise map known raw IDs to short English labels.
- *  3. Fall back to the original name (for human-named tools like "Read"/"Bash").
+ *  2. If the tool is a connector/MCP call (mcp__<serverId>__<toolName>), show
+ *     "<Connector> · <tool>" so it carries its identity instead of the raw
+ *     qualified wire name.
+ *  3. Otherwise map known raw IDs to short English labels.
+ *  4. Fall back to the original name (for human-named tools like "Read"/"Bash").
  */
 export function humanizeToolName(
   name: string,
@@ -131,7 +152,11 @@ export function humanizeToolName(
     return 'Web search';
   }
 
-  // 2. Known raw snake_case → friendly label map
+  // 2. Connector/MCP tool call: render its connector identity
+  const mcpTool = describeMcpTool(name);
+  if (mcpTool) return mcpTool.label;
+
+  // 3. Known raw snake_case → friendly label map
   const map: Record<string, string> = {
     web_search: 'Web search',
     search_web: 'Web search',
@@ -161,7 +186,7 @@ export function humanizeToolName(
   };
   if (map[name]) return map[name]!;
 
-  // 3. Return as-is (human-named tools: "Read", "Bash", "Write", etc.)
+  // 4. Return as-is (human-named tools: "Read", "Bash", "Write", etc.)
   return name;
 }
 
@@ -294,6 +319,15 @@ interface ToolTimelineProps {
    */
   onApprove?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
+  /**
+   * True when this message's suspended turn is no longer in the live
+   * approval registry (e.g. reloaded since it suspended) -- awaiting_approval
+   * cards render an expired notice instead of live buttons, which would
+   * otherwise silently no-op. See MessageBubble's `isApprovalTurnLive` check.
+   */
+  expired?: boolean;
+  /** Resend affordance shown on an expired approval card. */
+  onResend?: (toolCallId: string) => void;
 }
 
 interface EntryGroup {
@@ -356,6 +390,7 @@ function groupTools(tools: ToolEntry[]): EntryGroup[] {
  */
 function buildCompactSummary(tools: ToolEntry[]): string {
   type Bucket =
+    | 'connector'
     | 'shell'
     | 'file-read'
     | 'file-write'
@@ -365,7 +400,20 @@ function buildCompactSummary(tools: ToolEntry[]): string {
     | 'codebase-search'
     | 'list';
 
+  // Connector identity for the compact phrase (claude.ai parity: "Used GitHub
+  // integration", not "ran a command"). Collected up front because the
+  // per-bucket phrase builder only sees counts.
+  const connectorNames = new Set<string>();
+  for (const tool of tools) {
+    const described = describeMcpTool(tool.name);
+    if (described) connectorNames.add(described.label.split(' · ')[0] ?? described.serverId);
+  }
+
   function categorize(name: string): Bucket {
+    // Qualified connector calls first — their tool names (post_issue_comment,
+    // get_pull_request_diff, ...) would false-positive into the substring
+    // heuristics below.
+    if (parseQualifiedMcpToolName(name)) return 'connector';
     const n = name.toLowerCase();
     if (
       n.includes('bash') ||
@@ -416,6 +464,15 @@ function buildCompactSummary(tools: ToolEntry[]): string {
   function phrase(bucket: Bucket, count: number): string {
     const n = count;
     switch (bucket) {
+      case 'connector': {
+        if (connectorNames.size === 1) {
+          const only = [...connectorNames][0]!;
+          return n === 1
+            ? `used the ${only} integration`
+            : `used the ${only} integration ${n} times`;
+        }
+        return `used ${connectorNames.size} integrations`;
+      }
       case 'shell':
         return n === 1 ? 'ran a command' : `ran ${n} commands`;
       case 'file-write':
@@ -470,6 +527,8 @@ function TimelineStepRow({
   searchQuery,
   onApprove,
   onReject,
+  expired,
+  onResend,
 }: {
   tool: ToolEntry;
   toolCall: ToolCall;
@@ -478,8 +537,15 @@ function TimelineStepRow({
   searchQuery?: string;
   onApprove?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
+  expired?: boolean;
+  onResend?: (toolCallId: string) => void;
 }) {
-  const filename = getFileName(tool.args);
+  // A connector/MCP call's args (owner/repo/issue_number, etc.) can
+  // incidentally look like a filename to getFileName — check this first so a
+  // connector step always gets its Plug icon + connector label, never a
+  // misfired FileTypeIcon.
+  const mcpTool = parseQualifiedMcpToolName(tool.name);
+  const filename = mcpTool ? null : getFileName(tool.args);
   const hasFile = filename != null;
   const StepIcon = hasFile ? null : getToolIcon(tool.name, null);
   const isWebSearch = isWebSearchTool(tool.name);
@@ -488,6 +554,9 @@ function TimelineStepRow({
   // Build the humanized label for this tool call
   const humanLabel = humanizeToolName(tool.name, tool.args, tool.parameters);
   const displayToolCall: ToolCall = { ...toolCall, name: humanLabel };
+  // A quick-pick preference for a dead turn would silently no-op exactly
+  // like live Approve/Reject buttons would -- hide it too when expired.
+  const showPermissionPicker = mcpTool != null && tool.status === 'awaiting_approval' && !expired;
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -514,6 +583,8 @@ function TimelineStepRow({
               showParameters={showParameters}
               onApprove={onApprove}
               onReject={onReject}
+              expired={expired}
+              onResend={onResend}
             />
           )}
         </div>
@@ -532,6 +603,87 @@ function TimelineStepRow({
           <InlineSourceCards sources={searchSources!} query={searchQuery} />
         </div>
       )}
+      {/* Per-tool permission quick-pick: only for a connector call awaiting
+          approval (Claude parity — allow/ask/block with a persisted decision). */}
+      {showPermissionPicker && mcpTool && (
+        <div className="pl-7 mt-1">
+          <ToolPermissionQuickPicker
+            serverId={mcpTool.serverId}
+            toolName={mcpTool.toolName}
+            toolCallId={tool.toolCallId}
+            onApprove={onApprove}
+            onReject={onReject}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tool permission quick-picker ──────────────────────────────────────────────
+
+/**
+ * Compact allow/ask/block picker rendered under a connector tool call that is
+ * awaiting approval. Persists the decision to the same per-(connectorId,
+ * toolName) store useChatStream consults to auto-resolve future calls
+ * (see tool-permissions-store.ts); picking Always allow / Block also resolves
+ * THIS pending call immediately via the same onApprove/onReject callbacks the
+ * card's own buttons use, so the user isn't left clicking twice.
+ */
+const PERMISSION_QUICK_PICKS: { level: PermissionLevel; label: string; icon: IconComponent }[] = [
+  { level: 'allow', label: 'Always allow', icon: Check },
+  { level: 'ask', label: 'Ask', icon: HelpCircle },
+  { level: 'deny', label: 'Block', icon: Ban },
+];
+
+function ToolPermissionQuickPicker({
+  serverId,
+  toolName,
+  toolCallId,
+  onApprove,
+  onReject,
+}: {
+  serverId: string;
+  toolName: string;
+  toolCallId?: string;
+  onApprove?: (toolCallId: string) => void;
+  onReject?: (toolCallId: string) => void;
+}) {
+  const setToolPermission = useToolPermissionsStore((s) => s.setToolPermission);
+  const current = useToolPermissionsStore((s) => s.getToolPermission(serverId, toolName));
+
+  const handlePick = (level: PermissionLevel) => {
+    setToolPermission(serverId, toolName, level);
+    if (!toolCallId) return;
+    if (level === 'allow') onApprove?.(toolCallId);
+    if (level === 'deny') onReject?.(toolCallId);
+  };
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1"
+      role="group"
+      aria-label={`Remember permission for ${toolName}`}
+    >
+      <span className="text-[10px] text-muted-foreground">Remember:</span>
+      {PERMISSION_QUICK_PICKS.map(({ level, label, icon: Icon }) => (
+        <button
+          key={level}
+          type="button"
+          onClick={() => handlePick(level)}
+          aria-pressed={current === level}
+          title={label}
+          className={cn(
+            'flex h-6 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium transition-colors',
+            current === level
+              ? 'border-primary/50 bg-primary/10 text-primary'
+              : 'border-border/40 text-muted-foreground hover:border-border/70 hover:text-foreground',
+          )}
+        >
+          <Icon className="h-2.5 w-2.5" aria-hidden="true" />
+          <span>{label}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -544,6 +696,8 @@ function ToolTimeline({
   searchQuery,
   onApprove,
   onReject,
+  expired,
+  onResend,
 }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -710,6 +864,7 @@ function ToolTimeline({
                               durationMs: tool.durationMs,
                               parameters: buildParameters(tool.args, tool.parameters),
                               result: tool.result,
+                              error: tool.error,
                             };
                             const attachSources =
                               !sourcesAttached &&
@@ -727,6 +882,8 @@ function ToolTimeline({
                                 searchQuery={attachSources ? searchQuery : undefined}
                                 onApprove={onApprove}
                                 onReject={onReject}
+                                expired={expired}
+                                onResend={onResend}
                               />
                             );
                           })}
@@ -745,6 +902,7 @@ function ToolTimeline({
                         durationMs: tool.durationMs,
                         parameters: buildParameters(tool.args, tool.parameters),
                         result: tool.result,
+                        error: tool.error,
                         requiresApproval: tool.requiresApproval,
                       };
                       const attachSources =
@@ -763,6 +921,8 @@ function ToolTimeline({
                           searchQuery={attachSources ? searchQuery : undefined}
                           onApprove={onApprove}
                           onReject={onReject}
+                          expired={expired}
+                          onResend={onResend}
                         />
                       );
                     });
@@ -797,6 +957,7 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   // Approval callbacks are stable useCallback refs; a change means a different
   // wiring and must re-render so the buttons dispatch to the new handler.
   if (prev.onApprove !== next.onApprove || prev.onReject !== next.onReject) return false;
+  if (prev.expired !== next.expired || prev.onResend !== next.onResend) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
   for (let i = 0; i < prev.tools.length; i++) {

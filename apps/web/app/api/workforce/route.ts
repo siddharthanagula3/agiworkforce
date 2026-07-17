@@ -123,8 +123,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         [userId],
       );
       totalTasksCompleted = countRows[0]?.count ?? 0;
-    } catch {
-      // Table may not exist
+    } catch (err) {
+      // Table may not exist (expected on a fresh deployment) OR a genuine DB
+      // failure — this catch doesn't distinguish the two, so log it rather
+      // than swallowing silently. Falls through to 0 either way: this stat
+      // is decorative (workforce dashboard hero), not worth failing the
+      // whole request over.
+      logger.warn(
+        { err, userId, route: 'GET /api/workforce' },
+        'Failed to fetch totalTasksCompleted; defaulting to 0',
+      );
     }
 
     return NextResponse.json(

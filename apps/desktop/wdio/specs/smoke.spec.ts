@@ -1,3 +1,10 @@
+import * as fs from 'node:fs';
+
+const SCREEN_DIR =
+  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
+
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
+
 describe('AGI Desktop native window smoke test', () => {
   it('should launch and render a non-empty document', async () => {
     await browser.pause(1500);
@@ -18,8 +25,6 @@ describe('AGI Desktop native window smoke test', () => {
     await composer.addValue('hello from wdio');
     await expect(composer).toHaveValue('hello from wdio');
 
-    await browser.saveScreenshot(
-      '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/empty-chat-home.png',
-    );
+    await browser.saveScreenshot(`${SCREEN_DIR}/empty-chat-home.png`);
   });
 });

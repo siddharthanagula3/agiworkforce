@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
       },
       // agentContext.ts uses AsyncLocalStorage from node:async_hooks, which is
       // unavailable in the browser. Stub async_hooks so client components that
-      // transitively import @agiworkforce/runtime don't pull in Node-only APIs.
+      // transitively import @agiworkforce/client-runtime don't pull in Node-only APIs.
       'node:async_hooks': {
         browser: './shared/lib/async-hooks-stub.ts',
         default: './shared/lib/async-hooks-stub.ts',

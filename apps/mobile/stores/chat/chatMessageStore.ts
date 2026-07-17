@@ -13,12 +13,24 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import {
   executionModeForConversation,
   executionModeForModel,
+  executionModeForSelection,
   providerForExecutionMode,
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
-import { markConversationForSync } from '@/services/cloudSyncEngine';
+import {
+  ManagedCloudConversationListResponseSchema,
+  ManagedCloudConversationResponseSchema,
+  ManagedCloudCreateConversationResponseSchema,
+  ManagedCloudUpdateConversationRequestSchema,
+  managedCloudConversationPath,
+  normalizeManagedCloudConversation,
+  normalizeManagedCloudMessage,
+  type ManagedCloudConversation,
+} from '@agiworkforce/cloud-contracts';
+import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
+import { getConversationMessageStore } from './conversationRepository';
 // SEPARATION-FIX: cloud conversations are physically separated into their own store.
 // Lazy import to avoid circular dependency at module initialisation time.
 function getCloudStore() {
@@ -102,12 +114,16 @@ export const useChatMessageStore = create<MessageState>()(
           // to useChatCloudMessageStore, never written into this local store.
           // This store only holds Local Mode conversations.
           if (shouldLoadCloudConversationList()) {
-            const data = await api.get<{ conversations: ConversationSummary[] }>(
-              '/api/chat/conversations',
+            const data = ManagedCloudConversationListResponseSchema.parse(
+              await api.get<unknown>('/api/chat/conversations'),
             );
             getCloudStore()
               .getState()
-              .setCloudConversations(data.conversations ?? []);
+              .setCloudConversations(
+                data.conversations
+                  .map(normalizeManagedCloudConversation)
+                  .map(normalizeManagedCloudConversationForMobile),
+              );
           }
         } catch {
           // Keep existing conversations on failure — offline resilience
@@ -123,7 +139,7 @@ export const useChatMessageStore = create<MessageState>()(
           requestedMode === 'local'
             ? (projectId ?? useProjectStore.getState().activeProjectId ?? undefined)
             : resolveCloudProjectId(projectId);
-        const selectedModelMode = executionModeForModel(selectedModel);
+        const selectedModelMode = executionModeForSelection(selectedModel, requestedMode);
         const conversationModel = selectedModelMode === requestedMode ? selectedModel : undefined;
 
         return createConversationForMode(
@@ -136,13 +152,17 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       forkConversation: async (sourceConversationId, options) => {
-        const sourceConversation = get().conversations.find((c) => c.id === sourceConversationId);
-        const sourceMessages = get().messages[sourceConversationId] ?? [];
+        const sourceStore = getConversationMessageStore(sourceConversationId);
+        const sourceState = sourceStore.getState();
+        const sourceConversation = sourceState.conversations.find(
+          (conversation) => conversation.id === sourceConversationId,
+        );
+        const sourceMessages = sourceState.messages[sourceConversationId] ?? [];
         const sourceMode = sourceConversation
           ? executionModeForConversation(sourceConversation)
           : executionModeForModel(options?.model);
         const requestedModelMode = options?.model
-          ? executionModeForModel(options.model)
+          ? executionModeForSelection(options.model, sourceMode)
           : sourceMode;
         const forkModel =
           options?.model && requestedModelMode === sourceMode
@@ -175,13 +195,14 @@ export const useChatMessageStore = create<MessageState>()(
 
           return {
             ...safeMessage,
-            id: `${message.id}_fork_${now}_${index}`,
+            id: sourceMode === 'cloud' ? uuidv7() : `${message.id}_fork_${now}_${index}`,
             conversationId: forkId,
             model: forkModel ?? message.model,
           };
         });
 
-        set((state) => ({
+        const forkStore = getConversationMessageStore(forkId);
+        forkStore.setState((state) => ({
           conversations: state.conversations.map((conversation) =>
             conversation.id === forkId
               ? {
@@ -197,6 +218,14 @@ export const useChatMessageStore = create<MessageState>()(
           messages: { ...state.messages, [forkId]: forkedMessages },
           currentConversationId: forkId,
         }));
+
+        if (sourceMode === 'cloud') {
+          markConversationForSync(forkId);
+          for (const message of forkedMessages) {
+            markMessageForSync(forkId, message.id);
+          }
+          void syncNow();
+        }
 
         return forkId;
       },
@@ -262,15 +291,18 @@ export const useChatMessageStore = create<MessageState>()(
         set({ isLoadingMessages: true });
         try {
           if (!shouldLoadRemoteMessages(conversation)) return;
-          const data = await api.get<{ messages: ChatMessage[] }>(
-            `/api/chat/conversations/${conversationId}`,
+          const data = ManagedCloudConversationResponseSchema.parse(
+            await api.get<unknown>(managedCloudConversationPath(conversationId)),
           );
+          const normalizedMessages = data.messages.map((message) =>
+            normalizeManagedCloudMessage(message, conversationId),
+          ) as ChatMessage[];
           // Route messages to the correct store.
           if (cloudConversation) {
-            cloudStore.getState().setCloudMessages(conversationId, data.messages ?? []);
+            cloudStore.getState().setCloudMessages(conversationId, normalizedMessages);
           } else {
             set((state) => ({
-              messages: { ...state.messages, [conversationId]: data.messages ?? [] },
+              messages: { ...state.messages, [conversationId]: normalizedMessages },
             }));
           }
         } catch {
@@ -306,7 +338,10 @@ export const useChatMessageStore = create<MessageState>()(
             // locally-dirty title until the push lands.
             markConversationForSync(id);
             try {
-              await api.put(`/api/chat/conversations/${id}`, { title });
+              await api.put(
+                managedCloudConversationPath(id),
+                ManagedCloudUpdateConversationRequestSchema.parse({ title }),
+              );
             } catch {
               // Optimistic rename stands; the dirty-queue retry (push) persists it.
             }
@@ -329,7 +364,10 @@ export const useChatMessageStore = create<MessageState>()(
           cloudStore.getState().patchCloudConversation(id, { pinned });
           if (shouldSyncConversationRemote(cloudConv)) {
             try {
-              await api.put(`/api/chat/conversations/${id}`, { pinned });
+              await api.put(
+                managedCloudConversationPath(id),
+                ManagedCloudUpdateConversationRequestSchema.parse({ pinned }),
+              );
             } catch {
               cloudStore.getState().patchCloudConversation(id, { pinned: !pinned });
             }
@@ -369,7 +407,8 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       deleteMessage: (conversationId, messageId) => {
-        set((state) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        ownerStore.setState((state) => {
           const msgs = state.messages[conversationId];
           if (!msgs) return state;
           return {
@@ -392,7 +431,8 @@ export const useChatMessageStore = create<MessageState>()(
           isQueued: true,
           offlineQueueId: queueId,
         };
-        set((state) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        ownerStore.setState((state) => {
           const existing = state.messages[conversationId] ?? [];
           return {
             messages: { ...state.messages, [conversationId]: [...existing, userMessage] },
@@ -401,10 +441,19 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       beginImageGeneration: (conversationId, commandContent, prompt, model) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        const isCloudConversation = ownerStore
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === conversationId &&
+              executionModeForConversation(conversation) === 'cloud',
+          );
+        const newMessageId = () => (isCloudConversation ? uuidv7() : generateMessageId());
         const now = new Date().toISOString();
-        const assistantMessageId = generateMessageId();
+        const assistantMessageId = newMessageId();
         const userMessage: ChatMessage = {
-          id: generateMessageId(),
+          id: newMessageId(),
           conversationId,
           role: 'user',
           content: commandContent,
@@ -424,7 +473,7 @@ export const useChatMessageStore = create<MessageState>()(
           imageGenPrompt: prompt,
         };
 
-        set((state) => {
+        ownerStore.setState((state) => {
           const existingMessages = state.messages[conversationId] ?? [];
           return {
             messages: {
@@ -447,6 +496,11 @@ export const useChatMessageStore = create<MessageState>()(
           };
         });
 
+        if (isCloudConversation) {
+          markConversationForSync(conversationId);
+          markMessageForSync(conversationId, userMessage.id);
+        }
+
         return assistantMessageId;
       },
 
@@ -456,7 +510,15 @@ export const useChatMessageStore = create<MessageState>()(
           ? `Generated image: ${result.revisedPrompt}`
           : 'Generated image';
 
-        set((state) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        const isCloudConversation = ownerStore
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === conversationId &&
+              executionModeForConversation(conversation) === 'cloud',
+          );
+        ownerStore.setState((state) => {
           const messages = state.messages[conversationId];
           if (!messages) return state;
           return {
@@ -485,7 +547,6 @@ export const useChatMessageStore = create<MessageState>()(
                     ...conversation,
                     lastMessage: finalContent,
                     updatedAt: now,
-                    model: result.model ?? conversation.model,
                     provider: conversation.provider ?? providerForExecutionMode('cloud'),
                     executionMode: conversation.executionMode ?? 'cloud',
                   }
@@ -493,13 +554,26 @@ export const useChatMessageStore = create<MessageState>()(
             ),
           };
         });
+        if (isCloudConversation) {
+          markConversationForSync(conversationId);
+          markMessageForSync(conversationId, assistantMessageId);
+          void syncNow();
+        }
       },
 
       failImageGeneration: (conversationId, assistantMessageId, errorMessage) => {
         const now = new Date().toISOString();
         const finalContent = `Image generation failed: ${errorMessage}`;
 
-        set((state) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        const isCloudConversation = ownerStore
+          .getState()
+          .conversations.some(
+            (conversation) =>
+              conversation.id === conversationId &&
+              executionModeForConversation(conversation) === 'cloud',
+          );
+        ownerStore.setState((state) => {
           const messages = state.messages[conversationId];
           if (!messages) return state;
           return {
@@ -529,10 +603,16 @@ export const useChatMessageStore = create<MessageState>()(
             ),
           };
         });
+        if (isCloudConversation) {
+          markConversationForSync(conversationId);
+          markMessageForSync(conversationId, assistantMessageId);
+          void syncNow();
+        }
       },
 
       resolveOfflineMessage: (conversationId, queueId) => {
-        set((state) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        ownerStore.setState((state) => {
           const msgs = state.messages[conversationId];
           if (!msgs) return state;
           return {
@@ -545,7 +625,8 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       clearQueuedPlaceholders: (conversationId) => {
-        set((state) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        ownerStore.setState((state) => {
           const msgs = state.messages[conversationId];
           if (!msgs) return state;
           return {
@@ -617,7 +698,7 @@ function httpStatusFromError(error: unknown): number | null {
 async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await api.delete(`/api/chat/conversations/${id}`);
+      await api.delete(managedCloudConversationPath(id));
       return true;
     } catch (error) {
       const status = httpStatusFromError(error);
@@ -703,22 +784,24 @@ async function createConversationForMode(
     // server round-trip. The create endpoint accepts and echoes this id.
     const id = uuidv7();
     const isTemporary = useSettingsStore.getState().isTemporaryChat;
-    const data = await api.post<{ conversation: ConversationSummary }>('/api/chat/conversations', {
-      id,
-      title: title ?? 'New Chat',
-      projectId,
-      // Server stores this as web_conversations.is_temporary so the
-      // purge-temporary-chats cron job can bound retention (~30 days) —
-      // see apps/web/db/neon/0050_temporary_chat_retention.sql.
-      isTemporary,
-    });
+    const data = ManagedCloudCreateConversationResponseSchema.parse(
+      await api.post<unknown>('/api/chat/conversations', {
+        id,
+        title: title ?? 'New Chat',
+        projectId,
+        // Server stores this as web_conversations.is_temporary so the
+        // purge-temporary-chats cron job can bound retention (~30 days) —
+        // see apps/web/db/neon/0050_temporary_chat_retention.sql.
+        isTemporary,
+      }),
+    );
+    const normalizedCloudConversation = normalizeManagedCloudConversation(data.conversation);
     const conversation: ConversationSummary = {
-      ...data.conversation,
-      id: data.conversation?.id ?? id,
+      ...normalizeManagedCloudConversationForMobile(normalizedCloudConversation),
       projectId,
-      model: data.conversation.model ?? model,
-      provider: data.conversation.provider ?? providerForExecutionMode('cloud'),
-      executionMode: data.conversation.executionMode ?? 'cloud',
+      model: normalizedCloudConversation.model ?? model,
+      provider: providerForExecutionMode('cloud'),
+      executionMode: 'cloud',
       // Local history-visibility flag (see isHistoryVisibleConversation) — set
       // from the same toggle value sent to the server above.
       temporary: isTemporary,
@@ -734,6 +817,24 @@ async function createConversationForMode(
   } catch {
     throw new Error('AGI Cloud conversation could not be created.');
   }
+}
+
+function normalizeManagedCloudConversationForMobile(
+  conversation: ManagedCloudConversation,
+): ConversationSummary {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    updatedAt: conversation.updatedAt,
+    createdAt: conversation.createdAt,
+    messageCount: 0,
+    pinned: conversation.pinned,
+    ...(conversation.model ? { model: conversation.model } : {}),
+    ...(conversation.projectId ? { projectId: conversation.projectId } : {}),
+    provider: providerForExecutionMode('cloud'),
+    executionMode: 'cloud',
+    temporary: conversation.isTemporary,
+  };
 }
 
 function createStoredConversation(

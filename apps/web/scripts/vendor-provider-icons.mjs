@@ -51,7 +51,7 @@ function buildInitialSvg(label, hexColor, initial) {
 }
 
 // ---- Provider map ----------------------------------------------------------------
-// Keys match ProviderId in packages/types/src/design-system/provider-display.ts
+// Keys match ProviderId in packages/contracts/types/src/design-system/provider-display.ts
 const PROVIDERS = [
   // simple-icons match
   { id: 'anthropic', siKey: 'siAnthropic', fill: '#D4A27F' },

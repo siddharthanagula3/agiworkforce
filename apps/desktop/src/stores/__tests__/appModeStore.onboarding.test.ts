@@ -19,7 +19,6 @@ describe('app mode onboarding boundary', () => {
   beforeEach(() => {
     useAppModeStore.setState({
       mode: 'local',
-      planTier: 'free',
       hasOnboarded: false,
       hasSelectedMode: false,
       isOnline: true,
@@ -27,6 +26,7 @@ describe('app mode onboarding boundary', () => {
     useAuthStore.setState({
       isAuthenticated: false,
       accessToken: null,
+      plan: 'free',
     });
   });
 
@@ -40,5 +40,27 @@ describe('app mode onboarding boundary', () => {
     useAppModeStore.getState().setMode('cloud');
 
     expect(useAppModeStore.getState().mode).toBe('local');
+  });
+
+  it('drops the legacy persisted plan tier during hydration', async () => {
+    localStorage.setItem(
+      'app-mode-store',
+      JSON.stringify({
+        version: 2,
+        state: {
+          mode: 'local',
+          planTier: 'enterprise',
+          hasOnboarded: true,
+          hasSelectedMode: true,
+        },
+      }),
+    );
+
+    await useAppModeStore.persist.rehydrate();
+
+    const state = useAppModeStore.getState() as unknown as Record<string, unknown>;
+    expect(state).not.toHaveProperty('planTier');
+    expect(state).not.toHaveProperty('setPlanTier');
+    expect(state['hasOnboarded']).toBe(true);
   });
 });

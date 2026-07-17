@@ -227,6 +227,12 @@ export function FileExportButton({
                 const ActionIcon = action.icon;
 
                 return (
+                  // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
+                  // (docs/agent-context/known-flaws.md): a function-style `style`
+                  // prop silently drops flexDirection/alignItems/padding in this
+                  // stack, which would stack the icon above the label instead of
+                  // beside it. `children`-as-function keeps pressed state while
+                  // every real style lives on a plain View.
                   <Pressable
                     key={action.key}
                     onPress={() => handleAction(action.key)}
@@ -234,58 +240,63 @@ export function FileExportButton({
                     accessibilityLabel={action.label}
                     accessibilityRole="button"
                     accessibilityState={{ disabled: loading !== null }}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 14,
-                      paddingVertical: 14,
-                      paddingHorizontal: 12,
-                      borderRadius: 12,
-                      backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-                      opacity: loading !== null && !isLoading ? 0.4 : 1,
-                    })}
                   >
-                    {/* Icon / spinner / check */}
-                    <View
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 10,
-                        backgroundColor: colors.neutralSurface,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {isLoading ? (
-                        <ActivityIndicator size="small" color={colors.teal} />
-                      ) : isSuccess ? (
-                        <Check size={20} color={colors.agentSuccess} />
-                      ) : (
-                        <ActionIcon size={20} color={colors[action.iconColorToken]} />
-                      )}
-                    </View>
+                    {({ pressed }) => (
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 14,
+                          paddingVertical: 14,
+                          paddingHorizontal: 12,
+                          borderRadius: 12,
+                          backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                          opacity: loading !== null && !isLoading ? 0.4 : 1,
+                        }}
+                      >
+                        {/* Icon / spinner / check */}
+                        <View
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 10,
+                            backgroundColor: colors.neutralSurface,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {isLoading ? (
+                            <ActivityIndicator size="small" color={colors.teal} />
+                          ) : isSuccess ? (
+                            <Check size={20} color={colors.agentSuccess} />
+                          ) : (
+                            <ActionIcon size={20} color={colors[action.iconColorToken]} />
+                          )}
+                        </View>
 
-                    {/* Label */}
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={{
-                          fontSize: 15,
-                          fontWeight: '500',
-                          color: isSuccess ? colors.agentSuccess : colors.textPrimary,
-                        }}
-                      >
-                        {isSuccess ? 'Done!' : action.label}
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: colors.textMuted,
-                          marginTop: 2,
-                        }}
-                      >
-                        {action.sublabel}
-                      </Text>
-                    </View>
+                        {/* Label */}
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: 15,
+                              fontWeight: '500',
+                              color: isSuccess ? colors.agentSuccess : colors.textPrimary,
+                            }}
+                          >
+                            {isSuccess ? 'Done!' : action.label}
+                          </Text>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: colors.textMuted,
+                              marginTop: 2,
+                            }}
+                          >
+                            {action.sublabel}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                   </Pressable>
                 );
               })}

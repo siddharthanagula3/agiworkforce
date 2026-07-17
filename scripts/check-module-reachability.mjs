@@ -78,11 +78,15 @@ function rustPathAttribute(source, moduleName) {
 
 function resolveRustModule(currentFile, moduleName) {
   const currentDir = path.dirname(currentFile);
+  const currentBase = path.basename(currentFile);
+  const moduleDir = ['lib.rs', 'main.rs', 'mod.rs'].includes(currentBase)
+    ? currentDir
+    : path.join(currentDir, path.basename(currentFile, '.rs'));
   const source = readText(currentFile);
   const pathOverride = rustPathAttribute(source, moduleName);
   const candidates = pathOverride
     ? [path.resolve(currentDir, pathOverride)]
-    : [path.join(currentDir, `${moduleName}.rs`), path.join(currentDir, moduleName, 'mod.rs')];
+    : [path.join(moduleDir, `${moduleName}.rs`), path.join(moduleDir, moduleName, 'mod.rs')];
 
   return candidates.find((candidate) => exists(candidate)) ?? null;
 }

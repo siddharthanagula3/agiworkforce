@@ -4,8 +4,18 @@ import { describe, expect, it } from 'vitest';
 
 // registry.rs was deleted; lib.rs generate_handler![] is now the sole source of truth.
 const libRs = readFileSync(resolve(__dirname, '../../src-tauri/src/lib.rs'), 'utf8');
+const conversationRs = readFileSync(
+  resolve(__dirname, '../../src-tauri/src/sys/commands/chat/conversation.rs'),
+  'utf8',
+);
+const dataModRs = readFileSync(resolve(__dirname, '../../src-tauri/src/data/mod.rs'), 'utf8');
 
 describe('tauri command registration contracts', () => {
+  it('keeps the generation-aware frontend coordinator as the sole live Desktop settings-sync owner', () => {
+    expect(conversationRs).not.toContain('settings_sync::sync_settings_now');
+    expect(dataModRs).not.toMatch(/^pub mod settings_sync;/m);
+  });
+
   it('keeps realtime + messaging commands registered when frontend invokes them', () => {
     const libPaths = [
       'crate::sys::commands::messaging::send_message',

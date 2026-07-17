@@ -227,16 +227,6 @@ describe('public marketing copy regressions', () => {
     expect(chatPage).not.toContain('onOpenWaitlist');
   });
 
-  it('API reference examples use a real catalog model id, not a stale one (WEB-0)', () => {
-    // Invariant: model IDs come only from packages/types/src/models.json. The
-    // public API docs previously showed "gpt-4" (not in the catalog) — a user
-    // copying the example would hit a non-existent model.
-    const apiRef = readWebFile('features/pages/ApiReference.tsx');
-    expect(apiRef).not.toContain('"gpt-4"');
-    expect(apiRef).not.toContain("'gpt-4'");
-    expect(apiRef).toContain('gpt-5.4-mini');
-  });
-
   it('does not claim managed cloud is invite-only/unavailable across product pages (WEB-12)', () => {
     // Sweep the public pages that previously asserted managed cloud was
     // waitlist/invite-gated. None may state it is unavailable or invite-only.

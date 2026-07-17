@@ -10,7 +10,7 @@
  *
  * REUSE:
  *   - `buildToolLoopStream` (tool-loop-anthropic.ts) -- table-driven per-provider
- *     dispatch through packages/providers/* adapters, sharing route.ts's
+ *     dispatch through packages/ai/providers/* adapters, sharing route.ts's
  *     `ADAPTER_PROVIDERS` table (restructure Wave 2, task #34's tool-loop slice;
  *     generalized from an Anthropic-only bridge once every provider needed it).
  *     Converges back onto `collectProviderStream` below, unchanged either way.
@@ -44,6 +44,7 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
+import { classifyError } from '@agiworkforce/provider-runtime';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -55,6 +56,7 @@ import {
 } from '@/lib/mcp-tool-executor';
 import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
+import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import type { E2BExecutor } from '@/lib/e2b/types';
 import {
   snapshotSandboxFiles,
@@ -64,7 +66,14 @@ import {
 } from '@/lib/e2b/generated-files';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
+import {
+  isWebSearchTool,
+  executeWebSearch,
+  formatWebSearchResultForModel,
+  webSearchResultsToFetchedSources,
+} from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
+import type { ObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -155,6 +164,8 @@ export interface ToolLoopOptions {
    * falling back to the operator MCP dispatcher. See ConnectorToolExecutor.
    */
   connectorExecutor?: ConnectorToolExecutor;
+  /** Canonical usage accumulated across every provider call in this loop. */
+  usage?: ObservedProviderUsage;
 }
 
 /** Shape of a parsed tool_call from the provider stream. */
@@ -338,22 +349,32 @@ export function toolResultEvent(
   });
 }
 
-/** A citation source captured from a successful url_fetch. */
+/** A citation source captured from a successful url_fetch or web_search call.
+ * `snippet` is url_fetch's permanent absence (a fetched page has no separate
+ * snippet, it IS the content) vs web_search's populated field (mapped to
+ * `encrypted_content` on the wire — see `searchResultsEvent`). */
 export interface FetchedSource {
   url: string;
   title: string;
+  snippet?: string;
 }
 
 /**
  * Emit an `x_search_results` SSE event carrying the CUMULATIVE list of fetched
- * sources — the same content shape the Anthropic web_search path and the
- * research loop's SourceAggregator emit, so the client's sources panel and [n]
- * citations work unchanged. Emitting the full list each time keeps positions
- * stable on the client, which replaces its source list per event.
+ * (url_fetch) sources — the same content shape the Anthropic web_search path
+ * and the research loop's SourceAggregator emit, so the client's sources panel
+ * and [n] citations work unchanged. Emitting the full list each time keeps
+ * positions stable on the client, which replaces its source list per event.
  *
  * The additive `tool: 'url_fetch'` field lets clients distinguish fetch
  * sources from web_search sources (e.g. to avoid synthesizing a web_search
  * timeline entry). Existing fields are unchanged.
+ *
+ * url_fetch ONLY — web_search sources use `searchResultsEvent` below (no
+ * `tool` field, snippet included), matching research-loop.ts's
+ * SourceAggregator shape so both native and generic-tool web search render
+ * identically on the client. Do not repoint url_fetch at that shape or vice
+ * versa: the `tool` field's presence/absence is the client's disambiguator.
  *
  * Exported for unit testing only.
  */
@@ -368,6 +389,44 @@ export function fetchSourcesEvent(sources: FetchedSource[], responseModel: strin
               type: 'web_search_result',
               url: source.url,
               title: source.title,
+              position: index + 1,
+            })),
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+/**
+ * Emit an `x_search_results` SSE event carrying the CUMULATIVE list of
+ * web_search (generic-tool, WP4) sources. Deliberately matches
+ * research-loop.ts's `SourceAggregator.toSearchResultsEvent` shape exactly —
+ * NO `tool` field (absent, not `undefined` — the client's contract treats
+ * "web_search sources" as the field-omitted case; see
+ * packages/contracts/cloud-contracts/src/tool-events.ts's
+ * `SearchResultsDeltaEnvelopeSchema` doc comment) and `snippet` mapped to
+ * `encrypted_content` (the client's established field for the source-card
+ * snippet, per research-loop.ts:222-223). This keeps the source-card UI
+ * uniform whether search came from Anthropic/Google's native tool, the
+ * research loop, or this generic tool — the client cannot tell them apart,
+ * by design.
+ *
+ * Exported for unit testing only.
+ */
+export function searchResultsEvent(sources: FetchedSource[], responseModel: string): SseLine {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_search_results: {
+            content: sources.map((source, index) => ({
+              type: 'web_search_result',
+              url: source.url,
+              title: source.title,
+              encrypted_content: source.snippet ?? '',
               position: index + 1,
             })),
           },
@@ -525,6 +584,9 @@ async function runMcpTool(
   content: string;
   isError: boolean;
   source?: FetchedSource;
+  /** Plural sibling of `source` — web_search returns many results per call
+   * (vs url_fetch's one page per call). Never both set on the same result. */
+  sources?: FetchedSource[];
   /** Base64 PNG rich results from an E2B runCode (charts) — persisted by the loop. */
   pngResults?: string[];
 }> {
@@ -542,6 +604,24 @@ async function runMcpTool(
       content: `Fetched ${outcome.url} — ${outcome.title}\n\n${outcome.content}`,
       isError: false,
       source: { url: outcome.url, title: outcome.title },
+    };
+  }
+
+  // WP4 generic web_search: platform-executed search (Perplexity Search API today
+  // — see lib/web-search/web-search-tool.ts) for every provider with no working
+  // native search path on this route. Same treatment as url_fetch: read-only, no
+  // approval gate, every failure mode is a structured tool-result error the model
+  // can react to and recover from — NOT routed through the provider-call
+  // x_stream_error path above (that path is turn-terminating; a single failed
+  // search should not end the whole agentic turn, any more than a failed
+  // url_fetch or E2B call does). Successful searches return `sources` (plural —
+  // a search returns many results per call, unlike url_fetch's one page).
+  if (isWebSearchTool(toolCall.qualifiedName)) {
+    const outcome = await executeWebSearch(toolCall.args);
+    return {
+      content: formatWebSearchResultForModel(outcome),
+      isError: !outcome.ok,
+      sources: webSearchResultsToFetchedSources(outcome),
     };
   }
 
@@ -663,6 +743,7 @@ function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
 function isToolOffered(qualifiedName: string, mcpTools: WebMcpToolDef[]): boolean {
   if (isExecutionTool(qualifiedName)) return true;
   if (isUrlFetchTool(qualifiedName)) return true;
+  if (isWebSearchTool(qualifiedName)) return true;
   return mcpTools.some((t) => t.qualifiedName === qualifiedName);
 }
 
@@ -711,14 +792,26 @@ export async function* runToolLoop(
   // Cumulative citation sources from url_fetch calls across ALL steps.
   // Re-emitted in full whenever a new source lands so client positions stay stable.
   const fetchedSources: FetchedSource[] = [];
+  // Cumulative citation sources from web_search calls across ALL steps. Kept
+  // SEPARATE from fetchedSources (not merged into one list): the two emitters
+  // produce different wire shapes (fetchSourcesEvent's `tool:'url_fetch'` tag
+  // vs searchResultsEvent's tag-absent + snippet shape), so a turn using both
+  // tools needs two independently-emitted cumulative lists, not one merged
+  // list with an ambiguous tag.
+  const searchedSources: FetchedSource[] = [];
 
   // Conversation-scoped E2B executor: resolved (created, or resumed from a paused
   // session) at most ONCE per loop invocation and reused across every execution-tool
   // call in every step of this turn, so a code context's variables/imports persist
   // instead of being torn down after each call. Cleaned up in the `finally` below --
-  // paused (not killed) when `conversationId` is known so the NEXT turn's loop can
-  // resume it; killed immediately otherwise (no conversation to resume into).
+  // paused (not killed) only when both an owned `conversationId` and authenticated
+  // `userId` are known so the NEXT turn's loop can resume it; killed immediately
+  // otherwise (a conversation id alone is never a sandbox authorization token).
   const conversationId = processed.conversationId;
+  const e2bSessionScope =
+    conversationId && options.userId
+      ? managedCloudE2BSessionScope(options.userId, conversationId)
+      : undefined;
   let e2bExecutor: E2BExecutor | null = null;
   let e2bExecutorResolved = false;
   // Generated-file harvest state: the workspace is snapshotted once, when the
@@ -731,7 +824,7 @@ export async function* runToolLoop(
   const turnPngResults: string[] = [];
   async function resolveE2BExecutor(): Promise<E2BExecutor | null> {
     if (!e2bExecutorResolved) {
-      e2bExecutor = await getE2BExecutor(conversationId);
+      e2bExecutor = await getE2BExecutor(e2bSessionScope);
       e2bExecutorResolved = true;
       if (e2bExecutor) e2bBaseline = await snapshotSandboxFiles(e2bExecutor);
     }
@@ -784,7 +877,12 @@ export async function* runToolLoop(
         });
         if (outcome.ok) {
           files.push(outcome.file);
-        } else if (outcome.reason !== 'not_configured') {
+        } else {
+          // Count `not_configured` the same as any other persist failure so the
+          // honest "could not be retrieved" note below fires for it too --
+          // matches the disk-file harvest's semantics in generated-files.ts,
+          // where storage-not-configured is also a counted failure, not a
+          // silent drop.
           failedCount += 1;
         }
       } catch (err) {
@@ -814,6 +912,21 @@ export async function* runToolLoop(
   }
 
   /**
+   * Terminal-flush: harvest generated files (if any execution ran) and close
+   * the stream with `[DONE]`. Invoked from every loop exit EXCEPT the
+   * manual-approval suspend (which must not flush/close -- the turn resumes
+   * later, and files are harvested when it eventually reaches a real terminal
+   * state). Callers must `return` immediately after exhausting this generator
+   * so exactly one flush -- and one `[DONE]` -- happens per invocation.
+   */
+  async function* flushTerminal(): AsyncGenerator<Uint8Array> {
+    for (const line of await harvestGeneratedFilesEvents()) {
+      yield encoder.encode(line);
+    }
+    yield encoder.encode(sseDone());
+  }
+
+  /**
    * Execute a batch of tool calls and stream their status/result events, then
    * append each `role: 'tool'` result message to the thread. Shared by the
    * auto-mode loop body and the manual-approval resume preamble so both paths
@@ -836,6 +949,7 @@ export async function* runToolLoop(
       content: string;
       isError: boolean;
       source?: FetchedSource;
+      sources?: FetchedSource[];
       pngResults?: string[];
     }[] = [];
 
@@ -862,7 +976,8 @@ export async function* runToolLoop(
 
     // Emit status + result events, and append tool result messages.
     let sourcesAdded = false;
-    for (const { tc, content, isError, source } of results) {
+    let searchSourcesAdded = false;
+    for (const { tc, content, isError, source, sources } of results) {
       yield encoder.encode(
         toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
       );
@@ -876,6 +991,17 @@ export async function* runToolLoop(
         sourcesAdded = true;
       }
 
+      // Search results join the SEPARATE web_search citations flow (same
+      // dedupe-by-URL, stable-positions treatment, own cumulative list — see
+      // searchedSources' declaration for why these don't merge with
+      // fetchedSources).
+      for (const s of sources ?? []) {
+        if (!searchedSources.some((existing) => existing.url === s.url)) {
+          searchedSources.push(s);
+          searchSourcesAdded = true;
+        }
+      }
+
       messages.push({
         role: 'tool',
         content,
@@ -885,6 +1011,9 @@ export async function* runToolLoop(
 
     if (sourcesAdded) {
       yield encoder.encode(fetchSourcesEvent(fetchedSources, responseModel));
+    }
+    if (searchSourcesAdded) {
+      yield encoder.encode(searchResultsEvent(searchedSources, responseModel));
     }
   }
 
@@ -1007,7 +1136,11 @@ export async function* runToolLoop(
       // collectProviderStream reads have already stripped/flattened. Fresh per
       // step (like the assembler that fills it). Fixes known-flaw
       // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
-      const stepSink: ToolLoopStepSink = { thinkingBlocks: [], text: '' };
+      const stepSink: ToolLoopStepSink = {
+        thinkingBlocks: [],
+        text: '',
+        usage: options.usage,
+      };
 
       // Call the provider through the shared, table-driven adapter dispatch
       // (restructure Wave 2, task #34's tool-loop slice, see
@@ -1023,6 +1156,7 @@ export async function* runToolLoop(
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        const classified = classifyError(err);
         logger.error(
           { provider: processed.provider, step, error: msg },
           '[tool-loop] provider call failed',
@@ -1033,7 +1167,38 @@ export async function* runToolLoop(
             model: responseModel,
           }),
         );
-        break;
+        // Additive x_stream_error marker (see openai-wire-compat.ts's
+        // sseChunks() 'error' case for the base-path twin of this) -- the
+        // tool-loop hand-rolls its own SSE emission (no OpenAIWireAssembler),
+        // so without this, tool-calling-path failures were invisible to the
+        // hasStreamError() check web/desktop/mobile use, even though the
+        // base path's failures were already detectable. `code` mirrors the
+        // provider adapters' own convention (String(status), not the
+        // semantic classifier code) so the field means the same thing
+        // regardless of which path produced it.
+        yield encoder.encode(
+          sseData({
+            choices: [
+              {
+                delta: {
+                  x_stream_error: {
+                    message: classified.message,
+                    ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+                    retryable: classified.retryable,
+                  },
+                },
+                index: 0,
+              },
+            ],
+            model: responseModel,
+          }),
+        );
+        // Terminal exit: a mid-loop provider error still owes the client any
+        // files generated by earlier steps' execution tools, plus a closing
+        // [DONE] -- previously this `break`d straight to the loop's exit,
+        // skipping both (harvest only ran on natural finish or maxSteps).
+        yield* flushTerminal();
+        return;
       }
 
       // Collect and pass through the provider stream.
@@ -1049,11 +1214,8 @@ export async function* runToolLoop(
       // files (file cards need durable URLs before the stream closes), then
       // emit [DONE] and exit.
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
-        for (const filesLine of await harvestGeneratedFilesEvents()) {
-          yield encoder.encode(filesLine);
-        }
-        yield encoder.encode(sseDone());
-        break;
+        yield* flushTerminal();
+        return;
       }
 
       // Append the assistant's tool-use turn to the thread.
@@ -1105,27 +1267,27 @@ export async function* runToolLoop(
       // Continue to next step.
     }
 
-    if (step >= maxSteps) {
-      logger.warn(
-        { maxSteps, provider: processed.provider },
-        '[tool-loop] max steps reached without terminal stop',
-      );
-      for (const filesLine of await harvestGeneratedFilesEvents()) {
-        yield encoder.encode(filesLine);
-      }
-      yield encoder.encode(sseDone());
-    }
+    // Falling out of the `while` (rather than hitting one of the `return`s
+    // above) means every step re-invoked the provider and never reached a
+    // terminal stop -- maxSteps exhausted. This is the only way execution
+    // reaches here, so the flush below is unconditional (no redundant
+    // `step >= maxSteps` re-check).
+    logger.warn(
+      { maxSteps, provider: processed.provider },
+      '[tool-loop] max steps reached without terminal stop',
+    );
+    yield* flushTerminal();
   } finally {
     // Lifecycle cleanup: only relevant if an E2B execution tool actually ran during this
-    // loop invocation. Runs on normal completion, on `return` (manual-approval suspend),
-    // on `break` (provider error / terminal stop), AND on early `.return()` from the
+    // loop invocation. Runs on every `return` above (manual-approval suspend, provider
+    // error, natural finish, maxSteps exhaustion) AND on early `.return()` from the
     // caller's `cancel()` (client disconnect / abort) -- generator `finally` blocks fire
     // in all of these cases, closing the billing-leak gap of a mid-turn abort.
     if (e2bExecutor) {
-      if (conversationId) {
+      if (e2bSessionScope) {
         // Pause (not kill): stops billing while preserving sandbox + context state so
-        // the NEXT turn's runToolLoop can resume it via getE2BExecutor(conversationId).
-        await pauseE2BSession(conversationId);
+        // the NEXT turn's runToolLoop can resume it via the same authenticated scope.
+        await pauseE2BSession(e2bSessionScope);
       } else {
         // No conversation to resume into -- release the sandbox immediately.
         await e2bExecutor.dispose();

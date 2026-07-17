@@ -1,0 +1,89 @@
+{
+  "description": "Golden bigint-string cursor comparisons — length-then-lexicographic compare on the leading-zero-stripped string. Replayed against TS bigintGreater/maxCursor (packages/client/sync/src/__tests__/fixtures.test.ts) and Rust bigint_greater/max_cursor (apps/desktop/src-tauri/src/data/cloud_sync.rs fixture-replay tests).",
+  "bigintGreaterCases": [
+    { "name": "simple_greater", "a": "10", "b": "9", "expected": true },
+    { "name": "simple_less", "a": "9", "b": "10", "expected": false },
+    { "name": "equal", "a": "42", "b": "42", "expected": false },
+    { "name": "leading_zero_equal", "a": "007", "b": "7", "expected": false },
+    { "name": "leading_zero_greater", "a": "0100", "b": "099", "expected": true },
+    { "name": "both_zero", "a": "0", "b": "0", "expected": false },
+    { "name": "zero_vs_positive", "a": "0", "b": "1", "expected": false },
+    { "name": "positive_vs_zero", "a": "1", "b": "0", "expected": true },
+    { "name": "same_length_lexicographic", "a": "99", "b": "98", "expected": true },
+    {
+      "name": "longer_beats_shorter_even_if_lexicographically_smaller",
+      "a": "1000000000000000000",
+      "b": "999999999999999999",
+      "expected": true
+    },
+    {
+      "name": "very_large_equal_length",
+      "a": "18446744073709551615",
+      "b": "18446744073709551614",
+      "expected": true
+    },
+    { "name": "all_zeros_stripped", "a": "000", "b": "0", "expected": false }
+  ],
+  "maxCursorCases": [
+    { "name": "no_versions_returns_base", "base": "5", "versions": [], "expected": "5" },
+    { "name": "single_greater_version_wins", "base": "5", "versions": ["9"], "expected": "9" },
+    { "name": "single_lesser_version_ignored", "base": "9", "versions": ["5"], "expected": "9" },
+    {
+      "name": "picks_max_across_multiple_versions",
+      "base": "1",
+      "versions": ["4", "2", "9", "3"],
+      "expected": "9"
+    },
+    {
+      "name": "empty_string_version_ignored",
+      "base": "5",
+      "versions": ["", "3"],
+      "expected": "5"
+    },
+    {
+      "name": "leading_zero_versions_compare_numerically",
+      "base": "007",
+      "versions": ["0008"],
+      "expected": "0008"
+    }
+  ],
+  "selectNextCursorCases": [
+    {
+      "name": "advances_to_response_cursor",
+      "current": "5",
+      "responseCursor": "9",
+      "expected": "9"
+    },
+    {
+      "name": "null_response_keeps_current",
+      "current": "5",
+      "responseCursor": null,
+      "expected": "5"
+    },
+    {
+      "name": "undefined_response_keeps_current",
+      "current": "5",
+      "responseCursor": null,
+      "expected": "5"
+    },
+    {
+      "name": "empty_string_response_keeps_current",
+      "current": "5",
+      "responseCursor": "",
+      "expected": "5"
+    },
+    {
+      "name": "never_moves_backwards",
+      "current": "20",
+      "responseCursor": "10",
+      "expected": "20"
+    },
+    {
+      "name": "safe_frontier_not_per_row_max",
+      "description": "server returns a SAFE cursor (10) bounded to the lagging table's frontier even though a row inside the page carries server_version 99; the client must persist 10, not 99.",
+      "current": "0",
+      "responseCursor": "10",
+      "expected": "10"
+    }
+  ]
+}

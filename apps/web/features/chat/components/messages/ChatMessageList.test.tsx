@@ -482,3 +482,99 @@ describe('ChatMessageList Continue Generation', () => {
     expect(continueButton()).not.toBeInTheDocument();
   });
 });
+
+describe('ChatMessageList stream error notice', () => {
+  const retryButton = () => screen.queryByRole('button', { name: /regenerate this response/i });
+  // Matches both the fallback copy ("This response may be incomplete — ...")
+  // and the enriched copy ("Response may be incomplete: <classified message>").
+  const noticeText = () => screen.queryByText(/response may be incomplete/i);
+
+  function streamErrorThread(streamError: string | undefined, content = 'partial answer') {
+    return [
+      makeMessage({ id: 'u1', role: 'user', content: 'write something long' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content,
+        metadata: streamError ? { streamError } : undefined,
+      }),
+    ];
+  }
+
+  it('shows the incomplete-response notice + retry when the last assistant message has metadata.streamError', () => {
+    render(
+      <ChatMessageList
+        messages={streamErrorThread('Anthropic API overloaded')}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(noticeText()).toBeInTheDocument();
+    expect(retryButton()).toBeInTheDocument();
+  });
+
+  it('calls onRegenerate with the last assistant message id when Retry is clicked', () => {
+    const onRegenerate = vi.fn();
+    render(
+      <ChatMessageList messages={streamErrorThread('rate limited')} onRegenerate={onRegenerate} />,
+    );
+    fireEvent.click(retryButton()!);
+    expect(onRegenerate).toHaveBeenCalledWith('a1');
+  });
+
+  it('does NOT show the notice on a normally-completed turn (no streamError)', () => {
+    render(<ChatMessageList messages={streamErrorThread(undefined)} onRegenerate={vi.fn()} />);
+    expect(noticeText()).not.toBeInTheDocument();
+    expect(retryButton()).not.toBeInTheDocument();
+  });
+
+  it('does NOT show the notice while a request is in flight or while streaming', () => {
+    const { rerender } = render(
+      <ChatMessageList messages={streamErrorThread('boom')} onRegenerate={vi.fn()} isLoading />,
+    );
+    expect(noticeText()).not.toBeInTheDocument();
+
+    const streaming = [
+      makeMessage({ id: 'u1', role: 'user', content: 'q' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content: 'partial',
+        isStreaming: true,
+        metadata: { streamError: 'boom' },
+      }),
+    ];
+    rerender(<ChatMessageList messages={streaming} onRegenerate={vi.fn()} />);
+    // hasStreamError itself doesn't check isStreaming (pure metadata read),
+    // so showStreamErrorNotice guards on it explicitly — this message would
+    // never realistically carry a terminal streamError while still
+    // isStreaming, but the safety bar must hold regardless.
+    expect(noticeText()).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the affordance when the surface has not opted in (no onRegenerate)', () => {
+    render(<ChatMessageList messages={streamErrorThread('boom')} />);
+    expect(noticeText()).not.toBeInTheDocument();
+    expect(retryButton()).not.toBeInTheDocument();
+  });
+
+  it('is mutually exclusive with Continue Generation (finishReason takes precedence)', () => {
+    // A turn with BOTH a continuable finishReason and a streamError shouldn't
+    // realistically happen (see the field's doc comment), but the notice
+    // must not double up with Continue if it ever does.
+    const messages = [
+      makeMessage({ id: 'u1', role: 'user', content: 'q' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content: 'partial',
+        metadata: { finishReason: 'length', streamError: 'boom' },
+      }),
+    ];
+    render(<ChatMessageList messages={messages} onContinue={vi.fn()} onRegenerate={vi.fn()} />);
+    const continueButton = screen.queryByRole('button', {
+      name: /continue generating this response/i,
+    });
+    expect(continueButton).toBeInTheDocument();
+    expect(noticeText()).not.toBeInTheDocument();
+  });
+});

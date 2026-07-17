@@ -182,13 +182,18 @@ export function WebSettingsModal({
   );
 
   // ── Connected connectors state ─────────────────────────────────────────────
-  // Two REAL sources (no optimistic fakery):
+  // Three REAL sources (no optimistic fakery):
   //   1. Active user_connectors rows (GET /api/connectors) — the per-user
   //      enablement gate.
   //   2. GitHub App installations (GET /api/github/installations) — GitHub
   //      cannot have a user_connectors row (known-flaws WEB-CONNECTORS row);
   //      the installation IS the real "connected" signal, matching what the
   //      chat tool loop actually offers.
+  //   3. The user's own custom remote MCP connectors (GET /api/connectors/custom)
+  //      — these have no static catalog entry, so they're synthesized into
+  //      both `connectors` (the catalog the shared table renders) and
+  //      `connectedConnectors` below, namespaced `custom-<row id>` to match
+  //      the chat tool loop (lib/user-connector-tools.ts).
 
   const [connectedConnectors, setConnectedConnectors] = useState<
     { connectorId: string; connectedAt?: string }[]
@@ -196,6 +201,23 @@ export function WebSettingsModal({
   const [githubInstallations, setGithubInstallations] = useState<
     { installation_id: number; created_at?: string }[]
   >([]);
+  const [customConnectors, setCustomConnectors] = useState<
+    { id: string; name: string; url: string; createdAt: string }[]
+  >([]);
+
+  const refreshCustomConnectors = useCallback(() => {
+    return fetch('/api/connectors/custom', { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          connectors: Array<{ id: string; name: string; url: string; createdAt: string }>;
+        };
+        setCustomConnectors(json.connectors ?? []);
+      })
+      .catch(() => {
+        // degrade gracefully
+      });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -222,18 +244,51 @@ export function WebSettingsModal({
       .catch(() => {
         // degrade gracefully
       });
+    void refreshCustomConnectors();
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, refreshCustomConnectors]);
+
+  const customSettingsConnectors = useMemo(
+    () =>
+      customConnectors.map((c) => ({
+        id: `custom-${c.id}`,
+        name: c.name,
+        description: c.url,
+        category: 'Custom',
+        authType: 'custom_mcp',
+        actionCount: 0,
+        phase: 1,
+        iconBg: 'from-slate-500 to-slate-600',
+        iconText: 'MCP',
+        canConnect: false,
+      })),
+    [customConnectors],
+  );
+
+  const mergedSettingsConnectors = useMemo(
+    () => [...SETTINGS_CONNECTORS, ...customSettingsConnectors],
+    [customSettingsConnectors],
+  );
 
   const mergedConnectedConnectors = useMemo(() => {
-    const rows = connectedConnectors.filter((c) => c.connectorId !== 'github');
+    // Drop github AND custom rows from the raw /api/connectors list: github is
+    // re-derived from real installations below, and custom rows are re-pushed
+    // from the richer /api/connectors/custom fetch (this modal keys customs by
+    // `custom-<row uuid>` because its remove flow slices the uuid back out;
+    // the API's connectorId uses `custom-<shortId>`, the chat serverId).
+    const rows = connectedConnectors.filter(
+      (c) => c.connectorId !== 'github' && !c.connectorId.startsWith('custom-'),
+    );
     if (githubInstallations.length > 0) {
       rows.push({ connectorId: 'github', connectedAt: githubInstallations[0]?.created_at });
     }
+    for (const c of customConnectors) {
+      rows.push({ connectorId: `custom-${c.id}`, connectedAt: c.createdAt });
+    }
     return rows;
-  }, [connectedConnectors, githubInstallations]);
+  }, [connectedConnectors, githubInstallations, customConnectors]);
 
   const connectConnector = useCallback(async (id: string) => {
     // Web has no working per-provider authorization flow yet, so the catalog
@@ -279,6 +334,19 @@ export function WebSettingsModal({
           }
         }
         setGithubInstallations([]);
+        return;
+      }
+      if (id.startsWith('custom-')) {
+        const rowId = id.slice('custom-'.length);
+        const res = await fetch(`/api/connectors/custom?id=${encodeURIComponent(rowId)}`, {
+          method: 'DELETE',
+          headers: { 'x-csrf-token': csrfToken },
+          credentials: 'include',
+        });
+        if (!res.ok) {
+          throw new Error('Could not remove this connector. Try again.');
+        }
+        setCustomConnectors((prev) => prev.filter((c) => c.id !== rowId));
         return;
       }
       const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
@@ -333,20 +401,42 @@ export function WebSettingsModal({
 
   // ── Data adapter ───────────────────────────────────────────────────────────
 
-  // Custom remote-MCP connectors have NO web persistence today:
-  // /api/connectors allowlists catalog IDs (arbitrary IDs are rejected) and
-  // remote-MCP endpoints are operator-configured server-side (known-flaws
-  // WEB-CONNECTORS row). The form renders per spec, but submitting must be
-  // honest — throw so the shared form surfaces the message, never a fake
-  // success.
-  const addCustomConnector = useCallback(async () => {
-    throw new Error(
-      'Custom connectors are not yet supported on web. Remote MCP servers are configured by the operator today.',
-    );
-  }, []);
+  // Custom remote-MCP connectors: persisted via POST /api/connectors/custom
+  // (live connect-and-list + encrypted-at-rest bearer token — see
+  // lib/user-connector-tools.ts). The shared form's "Advanced settings" only
+  // collects OAuth client id/secret, which this endpoint does not support yet
+  // (bearer-token auth only, entered via Connectors > Inspect MCP server) —
+  // reject early with an honest message rather than silently dropping them.
+  const addCustomConnector = useCallback(
+    async (input: {
+      name: string;
+      url: string;
+      oauthClientId?: string;
+      oauthClientSecret?: string;
+    }) => {
+      if (input.oauthClientId || input.oauthClientSecret) {
+        throw new Error(
+          'OAuth client credentials are not supported yet for custom connectors. Leave those fields blank, or add a bearer-token-secured connector from Connectors → Inspect MCP server.',
+        );
+      }
+      const csrfToken = await getCsrfToken();
+      const res = await fetch('/api/connectors/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+        credentials: 'include',
+        body: JSON.stringify({ name: input.name, url: input.url }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'Could not add connector. Try again.');
+      }
+      await refreshCustomConnectors();
+    },
+    [refreshCustomConnectors],
+  );
 
   const adapter: SettingsDataAdapter = {
-    connectors: SETTINGS_CONNECTORS,
+    connectors: mergedSettingsConnectors,
     connectedConnectors: mergedConnectedConnectors,
     connectConnector,
     disconnectConnector,

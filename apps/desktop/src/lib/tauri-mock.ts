@@ -1895,8 +1895,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'artifact_clear_all':
       return { success: true, data: null } as T;
 
+    case 'artifact_link_to_message':
+      return { success: true, data: 0, error: null } as T;
+
     case 'artifact_list':
     case 'artifact_get_by_conversation':
+    case 'artifact_get_conversation_snapshot':
     case 'artifact_list_persisted':
     case 'artifact_get_versions':
     case 'artifact_export_all':

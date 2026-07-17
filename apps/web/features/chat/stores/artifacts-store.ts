@@ -3,7 +3,7 @@
 import { useStore } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { create } from 'zustand';
-import { createArtifactStore } from '@agiworkforce/stores';
+import { createArtifactStore } from '@agiworkforce/artifacts';
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData, ArtifactVersion } from '../components/artifacts/ArtifactPreview';
 import { logger } from '@shared/lib/logger';

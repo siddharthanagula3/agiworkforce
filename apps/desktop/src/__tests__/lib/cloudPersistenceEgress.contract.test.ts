@@ -1,7 +1,7 @@
 /**
  * DCL-3 — Cloud chat persistence egress CONTRACT test.
  *
- * Ties the REAL shared persistence client (`@agiworkforce/unified-chat`) to the
+ * Ties the REAL shared persistence client (`@agiworkforce/cloud-contracts`) to the
  * REAL desktop egress guard (`guardedFetch`) and proves the trust boundary on
  * every path desktop Cloud mode will use (`<WEB_APP_URL>/api/chat/conversations*`,
  * including the per-message `.../:id/messages` save route added to the shared
@@ -26,7 +26,7 @@ vi.mock('../../stores/appModeStore', () => ({
   selectPrivacyMode: (state: { privacyMode: unknown }) => state.privacyMode,
 }));
 
-import { createCloudChatPersistenceClient } from '@agiworkforce/unified-chat';
+import { createManagedCloudChatClient } from '@agiworkforce/cloud-contracts';
 import { guardedFetch } from '../../lib/egressGuard';
 import { WEB_APP_URL } from '../../api/config';
 
@@ -42,7 +42,7 @@ function fetchUrlAt(n: number): string {
 }
 
 function makeClient() {
-  return createCloudChatPersistenceClient({
+  return createManagedCloudChatClient({
     baseUrl: WEB_APP_URL,
     getAuthToken: async () => 'desktop-clerk-token',
     fetchImpl: guardedFetch,
@@ -53,15 +53,42 @@ beforeEach(() => {
   getStateMock.mockReset();
   // Return a FRESH Response per call — a Response body can only be read once, so
   // a single shared instance would throw "Body is unusable" across verbs.
-  fetchSpy = vi
-    .fn()
-    .mockImplementation(
-      async () =>
-        new Response(
-          JSON.stringify({ conversation: { id: 'c1', user_id: 'u1' }, conversations: [] }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        ),
-    );
+  fetchSpy = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
+    const path = new URL(input).pathname;
+    const conversation = {
+      id: 'c1',
+      title: 'Cloud chat',
+      model: 'auto',
+      project_id: null,
+      pinned: false,
+      is_temporary: false,
+      created_at: '2026-07-14T00:00:00.000Z',
+      updated_at: '2026-07-14T00:00:00.000Z',
+    };
+    let body: unknown;
+    if (init?.method === 'DELETE') body = { success: true };
+    else if (path.endsWith('/messages')) {
+      body = {
+        message: {
+          id: 'm1',
+          role: 'user',
+          content: 'hi',
+          model: null,
+          provider: null,
+          input_tokens: 0,
+          output_tokens: 0,
+          cost_cents: 0,
+          created_at: conversation.created_at,
+          metadata: {},
+        },
+      };
+    } else if (init?.method === 'POST' || init?.method === 'PUT') body = { conversation };
+    else body = { conversations: [], hasMore: false, nextOffset: 0 };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
   vi.stubGlobal('fetch', fetchSpy);
 });
 
@@ -125,7 +152,7 @@ describe('cloud persistence is ALLOWED in managed mode and reaches only the allo
     const client = makeClient();
     await client.createConversation({ title: 'a' });
     await client.listConversations();
-    await client.updateConversationTitle('c1', 'b');
+    await client.updateConversation('c1', { title: 'b' });
     await client.deleteConversation('c1');
     await client.saveMessage('c1', { role: 'user', content: 'hi' });
 

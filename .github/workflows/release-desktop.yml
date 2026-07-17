@@ -1,42 +1,19 @@
 name: Release Desktop
 
-# ============================================================================
-# LINUX-ONLY RELEASE (per Wave 1 task #10 P1-25, 2026-05-08)
-#
-# This workflow ships Linux .AppImage / .deb bundles only. macOS and Windows
-# build jobs were previously present but disabled with `if: false` because:
-#
-#   - macOS: the six APPLE_* signing secrets (APPLE_CERTIFICATE,
-#     APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY, APPLE_ID,
-#     APPLE_PASSWORD, APPLE_TEAM_ID) are not configured in repo settings.
-#     The Developer ID cert itself still exists locally (last shipped
-#     v1.1.6 on 2026-03-07); it just needs to be re-exported and uploaded.
-#   - Windows: the SSL.com EV cert ($249/yr) is not paid for v1.x. The
-#     libsqlite3-sys 0.30.1 + windows-latest OpenSSL pathing also needs
-#     fixing — but there's no point until the EV cert lands.
-#
-# Rather than ship runtime-skipped placeholders that confused readers,
-# the gated jobs were deleted in this commit. To re-enable a target:
-#
-#   - macOS: add the APPLE_* secrets, then restore the `build-macos` and
-#     `windows-smoke`-equivalent jobs and append `build-macos` to the
-#     `needs:` list of `update-database` and `publish-release`.
-#   - Windows: ship the EV cert, fix OpenSSL_DIR on windows-latest, then
-#     restore `windows-smoke` + `build-windows` and append to the same
-#     `needs:` lists.
-#
-# /download advertises web + CLI as macOS/Windows alternatives until then.
-# ============================================================================
+# Linux x86_64 is the only target produced and published by this workflow.
+# Add another target only after its build, signing, updater, smoke-test, and
+# release-ingestion paths are implemented and verified together. Release copy
+# and database records must describe only artifacts produced by this run.
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v-desktop-*'
   workflow_dispatch:
     inputs:
       version:
         description: 'Version to release (e.g., 1.0.5)'
-        required: false
+        required: true
         type: string
       prerelease:
         description: 'Mark as pre-release'
@@ -52,6 +29,10 @@ on:
           - beta
           - nightly
         default: stable
+
+concurrency:
+  group: release-desktop-${{ github.event_name == 'workflow_dispatch' && format('v-desktop-{0}', inputs.version) || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -82,33 +63,103 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Require release signing and updater-ingestion credentials
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ] || [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+            echo "ERROR: Tauri updater signing credentials are required before a desktop release" >&2
+            exit 1
+          fi
+          if [ -z "$NEON_DATABASE_URL" ]; then
+            echo "ERROR: NEON_DATABASE_URL is required before a desktop release" >&2
+            exit 1
+          fi
+
       - name: Get version info
         id: get-version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_VERSION: ${{ inputs.version }}
+          DISPATCH_CHANNEL: ${{ inputs.channel }}
+          DISPATCH_PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-            TAG="v${VERSION}"
-            CHANNEL="${{ inputs.channel }}"
-            PRERELEASE="${{ inputs.prerelease }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$DISPATCH_VERSION"
+            TAG="v-desktop-${VERSION}"
+            CHANNEL="$DISPATCH_CHANNEL"
+            PRERELEASE="$DISPATCH_PRERELEASE"
           else
             TAG="${GITHUB_REF#refs/tags/}"
-            # Tag formats supported:
-            #   v1.2.0           -> VERSION=1.2.0  (legacy tags)
-            #   v-desktop-1.2.0  -> VERSION=1.2.0  (current desktop tags)
-            #   v-cli-1.0.0      -> VERSION=1.0.0  (cli tags, separate workflow)
-            VERSION=$(echo "$TAG" | sed -E 's/^v(-[a-z]+)?-?//')
+            VERSION="${TAG#v-desktop-}"
             CHANNEL="stable"
             PRERELEASE="false"
 
-            # Check if version contains pre-release identifiers
-            if [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
+            VERSION_WITHOUT_BUILD="${VERSION%%+*}"
+            if [[ "$VERSION_WITHOUT_BUILD" == *-* ]]; then
               PRERELEASE="true"
-              CHANNEL="beta"
-            elif [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-nightly"* ]]; then
-              PRERELEASE="true"
-              CHANNEL="nightly"
+              PRERELEASE_ID="${VERSION_WITHOUT_BUILD#*-}"
+              PRERELEASE_ID="${PRERELEASE_ID%%.*}"
+              case "$PRERELEASE_ID" in
+                alpha|nightly|canary) CHANNEL="nightly" ;;
+                *) CHANNEL="beta" ;;
+              esac
             fi
           fi
+
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'; then
+            echo "ERROR: invalid desktop release version: $VERSION" >&2
+            exit 1
+          fi
+          if [ "$TAG" != "v-desktop-${VERSION}" ]; then
+            echo "ERROR: desktop release tag must be v-desktop-${VERSION}; got $TAG" >&2
+            exit 1
+          fi
+
+          VERSION_WITHOUT_BUILD="${VERSION%%+*}"
+          if [[ "$VERSION_WITHOUT_BUILD" == *-* ]]; then
+            HAS_PRERELEASE="true"
+          else
+            HAS_PRERELEASE="false"
+          fi
+
+          case "$PRERELEASE" in
+            true|false) ;;
+            *)
+              echo "ERROR: prerelease must be true or false; got $PRERELEASE" >&2
+              exit 1
+              ;;
+          esac
+          case "$CHANNEL" in
+            stable)
+              if [ "$HAS_PRERELEASE" = "true" ] || [ "$PRERELEASE" != "false" ]; then
+                echo "ERROR: stable channel requires a stable SemVer and prerelease=false" >&2
+                exit 1
+              fi
+              ;;
+            beta|nightly)
+              if [ "$HAS_PRERELEASE" != "true" ] || [ "$PRERELEASE" != "true" ]; then
+                echo "ERROR: non-stable channels require a pre-release SemVer and prerelease=true" >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "ERROR: unsupported desktop release channel: $CHANNEL" >&2
+              exit 1
+              ;;
+          esac
+
+          PACKAGE_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          TAURI_VERSION=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          CARGO_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' apps/desktop/src-tauri/Cargo.toml | head -1)
+          for source_version in "$PACKAGE_VERSION" "$TAURI_VERSION" "$CARGO_VERSION"; do
+            if [ "$source_version" != "$VERSION" ]; then
+              echo "ERROR: release tag $TAG does not match desktop source version $source_version" >&2
+              exit 1
+            fi
+          done
 
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
@@ -124,7 +175,7 @@ jobs:
         id: changelog
         run: |
           # Get previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --match 'v-desktop-*' --abbrev=0 HEAD^ 2>/dev/null || echo "")
 
           if [ -z "$PREV_TAG" ]; then
             CHANGELOG="Initial release"
@@ -142,6 +193,7 @@ jobs:
             echo "changelog<<CHANGELOG_EOF"
             echo "$CHANGELOG"
             echo "CHANGELOG_EOF"
+            echo "previous_tag=${PREV_TAG}"
           } >> $GITHUB_OUTPUT
 
       - name: Create draft release
@@ -160,6 +212,7 @@ jobs:
           # Reading from process.env keeps the value as a plain string — JS template
           # literal evaluation only happens against the literal text we author below.
           CHANGELOG: ${{ steps.changelog.outputs.changelog }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
         with:
           script: |
             const version = process.env.VERSION;
@@ -167,8 +220,12 @@ jobs:
             const prerelease = process.env.PRERELEASE === 'true';
             const channel = process.env.CHANNEL;
             const changelog = process.env.CHANGELOG ?? '';
+            const previousTag = process.env.PREVIOUS_TAG ?? '';
 
             const channelBadge = channel !== 'stable' ? ` [${channel.toUpperCase()}]` : '';
+            const comparison = previousTag
+              ? `\n**Full changelog:** https://github.com/${context.repo.owner}/${context.repo.repo}/compare/${previousTag}...${tag}`
+              : '';
 
             const releaseBody = `## AGI Workforce ${version}${channelBadge}
 
@@ -180,26 +237,18 @@ jobs:
 
             | Platform | Architecture | Download |
             |----------|--------------|----------|
-            | macOS | Apple Silicon (M1/M2/M3) | _Available in v1.2.1_ — see https://agiworkforce.com/chat in the meantime |
-            | macOS | Intel | _Available in v1.2.1_ |
-            | Windows | x64 | _Coming Q3 2026_ — use the web app at https://agiworkforce.com/chat or install the CLI |
-            | Linux | x64 | \`AGI.Workforce_${version}_amd64.AppImage\` |
+            | Linux | x86_64 | \`.AppImage\` plus Tauri updater-signature attached to this release |
 
             ### Installation
 
-            **macOS:** The signed \`.dmg\` is being rebuilt for v1.2.1 (code-signing pipeline is being reconfigured). The web app at https://agiworkforce.com/chat works in any browser today.
-
-            **Windows:** The native installer is not available yet (planned Q3 2026). In the meantime, the web app at https://agiworkforce.com/chat works in any browser, and the CLI installs via \`cargo install agiworkforce-cli\`.
-
-            **Linux:** Download the \`.AppImage\`, make it executable (\`chmod +x\`), and run it.
+            Download the \`.AppImage\`, make it executable (\`chmod +x <file>.AppImage\`), and run it. This workflow does not publish macOS or Windows desktop artifacts.
 
             ### Auto-Updates
 
-            Existing installations will automatically update to this version.
+            Supported Linux installations can discover this signed updater artifact through the configured AGI update endpoint.
 
             ---
-
-            **Full Changelog:** https://github.com/${context.repo.owner}/${context.repo.repo}/compare/v${version}...HEAD
+            ${comparison}
             `;
 
             const { data } = await github.rest.repos.createRelease({
@@ -238,6 +287,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Lint
         run: pnpm lint
+      - name: Lint VS Code extension
+        run: pnpm lint:extension
       - name: Type check
         run: pnpm typecheck:all
       - name: Test
@@ -294,12 +345,13 @@ jobs:
             zlib1g-dev \
             libwebp-dev \
             libasound2-dev \
-            libclang-dev
+            libclang-dev \
+            minisign
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          workspaces: apps/desktop/src-tauri
+          workspaces: 'apps/desktop/src-tauri -> target'
           cache-on-failure: true
 
       - name: Install JavaScript dependencies
@@ -328,16 +380,52 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           CI: 'true'
         with:
+          projectPath: apps/desktop
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
+          # This monorepo publishes CLI and desktop releases. The action's
+          # releaseId-only latest.json would point at cross-product
+          # /releases/latest; AGI's target-scoped updater API is canonical.
+          includeUpdaterJson: false
+          args: --bundles appimage
+
+      - name: Verify Linux updater artifact pair
+        shell: bash
+        run: |
+          shopt -s nullglob
+          appimages=(target/release/bundle/appimage/*.AppImage)
+          signatures=(target/release/bundle/appimage/*.AppImage.sig)
+          if [ "${#appimages[@]}" -ne 1 ] || [ "${#signatures[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one AppImage and one Tauri updater signature" >&2
+            exit 1
+          fi
+          if [ ! -s "${appimages[0]}" ] || [ ! -s "${signatures[0]}" ]; then
+            echo "ERROR: AppImage updater artifact pair contains an empty file" >&2
+            exit 1
+          fi
+
+          public_key_file="${RUNNER_TEMP}/agi-updater.pub"
+          node - "$public_key_file" <<'NODE'
+          const fs = require('node:fs');
+          const config = require('./apps/desktop/src-tauri/tauri.conf.json');
+          const encoded = config.plugins?.updater?.pubkey;
+          if (typeof encoded !== 'string' || encoded.length === 0) {
+            throw new Error('committed Tauri updater public key is missing');
+          }
+          const decoded = Buffer.from(encoded, 'base64');
+          if (!decoded.toString('utf8').includes('minisign public key')) {
+            throw new Error('committed Tauri updater public key is invalid');
+          }
+          fs.writeFileSync(process.argv[2], decoded);
+          NODE
+          minisign -Vm "${appimages[0]}" -x "${signatures[0]}" -p "$public_key_file"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: linux-x64-artifacts
           path: |
-            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
-            apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.AppImage.sig
           retention-days: 7
 
   # ==========================================================================
@@ -345,7 +433,10 @@ jobs:
   # ==========================================================================
   update-database:
     name: Update Release Database
-    needs: [prepare-release, build-linux]
+    # Ingest only after GitHub serves the artifact URL. Publishing database
+    # metadata first creates an updater-visible 404 window and leaves a stale
+    # row when draft publication fails.
+    needs: [prepare-release, build-linux, publish-release]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
@@ -372,12 +463,13 @@ jobs:
         env:
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
           CHANNEL: ${{ needs.prepare-release.outputs.channel }}
           PRERELEASE: ${{ needs.prepare-release.outputs.prerelease }}
           GITHUB_REPO: ${{ github.repository }}
         run: |
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
+          BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}"
           IS_PRERELEASE=$( [ "${PRERELEASE}" = "true" ] && echo "true" || echo "false" )
 
           # Call the Neon-backed release RPC through the serverless Postgres driver.
@@ -413,16 +505,13 @@ jobs:
               echo "Updated release for ${platform}: ${VERSION}"
             else
               echo "Failed to upsert release for ${platform}" >&2
+              return 1
             fi
           }
 
           # Platform mapping: artifact_dir platform extension
           PLATFORMS="
-          macos-universal-artifacts darwin-universal .app.tar.gz
-          macos-aarch64-artifacts darwin-aarch64 .app.tar.gz
-          macos-x86_64-artifacts darwin-x86_64 .app.tar.gz
-          windows-x64-artifacts windows-x86_64 .nsis.zip
-          linux-x64-artifacts linux-x86_64 .AppImage.tar.gz
+          linux-x64-artifacts linux-x86_64 .AppImage
           "
 
           echo "$PLATFORMS" | while read -r dir platform ext; do
@@ -430,15 +519,15 @@ jobs:
             artifact_path="artifacts/${dir}"
 
             if [ ! -d "$artifact_path" ]; then
-              echo "No artifacts found for ${platform}"
-              continue
+              echo "Required artifact directory is missing for ${platform}: ${artifact_path}" >&2
+              exit 1
             fi
 
             # Find first matching file (excluding .sig files)
             file_path=$(find "$artifact_path" -name "*${ext}" ! -name "*.sig" -type f | head -1)
             if [ -z "$file_path" ]; then
-              echo "No artifacts found for ${platform}"
-              continue
+              echo "Required updater artifact is missing for ${platform}" >&2
+              exit 1
             fi
 
             file_name=$(basename "$file_path")
@@ -446,7 +535,7 @@ jobs:
 
             if [ ! -f "$sig_path" ]; then
               echo "Signature not found for ${platform}: ${sig_path}" >&2
-              continue
+              exit 1
             fi
 
             signature=$(cat "$sig_path" | tr -d '\n')
@@ -461,7 +550,7 @@ jobs:
   # ==========================================================================
   publish-release:
     name: Publish Release
-    needs: [prepare-release, build-linux, update-database]
+    needs: [prepare-release, build-linux]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -501,8 +590,11 @@ jobs:
   # ==========================================================================
   cleanup-on-failure:
     name: Cleanup Failed Release
-    needs: [prepare-release, build-linux]
-    if: failure()
+    # The draft is created before validation/building. Depend on the terminal
+    # publication job so failures in validate, build, or database ingestion do
+    # not leave an orphan draft behind.
+    needs: [prepare-release, publish-release]
+    if: ${{ always() && needs.prepare-release.result == 'success' && needs.publish-release.result != 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write

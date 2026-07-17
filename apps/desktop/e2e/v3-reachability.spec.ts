@@ -80,21 +80,10 @@ test.describe('@reachability v3 surface', () => {
     await expect(el.first()).toBeAttached();
   });
 
-  // NOTE (found 2026-07-03, corrected alongside the auth-gate fix above):
-  // `DesktopShellV3.tsx` renders `ChatInterface` from `@agiworkforce/unified-chat`
-  // (packages/unified-chat/src/components/ChatInput.tsx +
-  // ModelSelector.tsx), not the local `apps/desktop/src/features/v3/Composer.tsx`
-  // these three tests were originally written against. `Composer.tsx` documents
-  // itself as intending to "replace unified-chat's ChatInput for the v3 shell"
-  // but is never imported by `DesktopShellV3.tsx` — it (and the matching
-  // `composer.*` keys in `src/i18n/locales/en/v3.json`) is dead code. The
-  // labels below were previously never exercised against the real DOM (masked
-  // by the same auth-gate bug fixed above, always skip()ing on count===0), so
-  // this drift shipped silently. Updated to match the aria-labels the actual
-  // unified-chat components render; the `Composer.tsx`/stale-i18n-key drift
-  // itself is a separate, out-of-scope architecture question for whoever owns
-  // the v3 chat surface (see CLAUDE.md's "verify current App.tsx and package
-  // imports before changing chat wiring" note).
+  // `DesktopShellV3.tsx` renders the canonical ChatInterface from
+  // `@agiworkforce/unified-chat`. The former v3-only Composer and its private
+  // popovers were removed as a disconnected duplicate; these selectors pin the
+  // shipping shared composer instead of a second unmounted implementation.
   test('composer add-button reachable by aria-label', async ({ page }) => {
     const el = page.getByRole('button', { name: /add attachment/i });
     await expect(el.first()).toBeAttached();

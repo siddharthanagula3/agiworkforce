@@ -1,6 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getRoutingSlotModel } from '@agiworkforce/types';
+
+const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
 /**
  * Transcription mode
@@ -556,7 +559,7 @@ export function useVoiceTranscription(
           );
           const formData = new FormData();
           formData.append('file', transcriptionFile);
-          formData.append('model', 'whisper-1');
+          formData.append('model', CLOUD_TRANSCRIPTION_MODEL);
           if (language) {
             formData.append('language', language);
           }

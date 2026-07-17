@@ -88,26 +88,46 @@ async function refundStreamReservation(params: {
   reason: string;
 }) {
   const refundKey = CreditService.generateIdempotencyKey(params.userId, 'refund', params.requestId);
-  const result = await CreditService.deductCredits(
-    params.db,
-    params.userId,
-    -MIN_STREAM_COST_CENTS,
-    'Stream refund (upstream error)',
-    {
-      provider: params.providerId,
-      providerId: params.providerId,
-      model: params.model,
-      requestId: params.requestId,
-      reason: params.reason,
-      type: 'refund',
-    },
-    refundKey,
-  );
+  try {
+    const result = await CreditService.settleCreditsDurably(
+      {
+        userId: params.userId,
+        amountCents: -MIN_STREAM_COST_CENTS,
+        description: 'Stream refund (upstream error)',
+        metadata: {
+          provider: params.providerId,
+          providerId: params.providerId,
+          model: params.model,
+          requestId: params.requestId,
+          reason: params.reason,
+          type: 'refund',
+        },
+        idempotencyKey: refundKey,
+      },
+      params.db,
+    );
 
-  if (!result.success) {
+    if (result.status !== 'succeeded') {
+      logger.error(
+        {
+          providerId: params.providerId,
+          userId: params.userId,
+          requestId: params.requestId,
+          result,
+        },
+        'Stream refund was not completed inline',
+      );
+    }
+  } catch (error) {
     logger.error(
-      { providerId: params.providerId, userId: params.userId, requestId: params.requestId, result },
-      'Stream refund failed',
+      {
+        event: 'provider_stream_refund_settlement_unrecorded',
+        error,
+        providerId: params.providerId,
+        userId: params.userId,
+        requestId: params.requestId,
+      },
+      'Stream refund could not be persisted',
     );
   }
 }

@@ -1,7 +1,7 @@
 /**
  * Golden fixtures for buildStreamResponse's CURRENT wire output.
  *
- * Wave 2 step 5 (migrate off lib/llm-providers onto packages/providers
+ * Wave 2 step 5 (migrate off lib/llm-providers onto packages/ai/providers
  * adapters) must keep the public SSE contract byte-stable. This suite
  * pins down exactly what today's implementation emits for representative
  * upstream event sequences -- Anthropic-native raw SSE (which stream-

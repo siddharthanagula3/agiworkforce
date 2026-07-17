@@ -18,11 +18,38 @@
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { logger } from '@shared/lib/logger';
 import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
-import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 
 const VIDEO_GENERATION_MODEL_ID = getRoutingSlotModel('video_generation');
 const VEO_MODEL_METADATA = getModelMetadataById(VIDEO_GENERATION_MODEL_ID);
 const VEO_API_MODEL_ID = VEO_MODEL_METADATA?.apiModelId ?? VIDEO_GENERATION_MODEL_ID;
+type VeoResolution = '720p' | '1080p' | '4k';
+
+function getSupportedVeoResolutions(model: ModelMetadata | null | undefined): VeoResolution[] {
+  return Object.keys(model?.videoPerSecondCostByResolution ?? {}) as VeoResolution[];
+}
+
+const VEO_SUPPORTED_RESOLUTIONS = getSupportedVeoResolutions(VEO_MODEL_METADATA);
+
+function normalizeVeoDuration(resolution: VeoResolution, requestedDuration: number): 4 | 6 | 8 {
+  if (resolution === '1080p' || resolution === '4k') return 8;
+  if (requestedDuration <= 4) return 4;
+  if (requestedDuration <= 6) return 6;
+  return 8;
+}
+
+function calculateVeoCost(modelId: string, resolution: VeoResolution, duration: number): number {
+  const model = getModelMetadataById(modelId);
+  const pricePerSecond = model?.videoPerSecondCostByResolution?.[resolution];
+  if (pricePerSecond === undefined) {
+    throw new Error(`Catalog pricing is unavailable for ${modelId} ${resolution} output`);
+  }
+  return Number((pricePerSecond * duration).toFixed(8));
+}
 
 export interface VeoGenerationRequest {
   prompt: string;
@@ -32,8 +59,8 @@ export interface VeoGenerationRequest {
    * type change here.
    */
   model?: string;
-  resolution?: '720p' | '1080p';
-  duration?: number; // 5-8 seconds
+  resolution?: VeoResolution;
+  duration?: number; // Normalized to 4/6/8 seconds; 1080p and 4k require 8.
   aspectRatio?: '16:9' | '9:16' | '1:1';
   fps?: number; // 24 or 30
   seed?: number;
@@ -95,12 +122,6 @@ export interface VeoServiceError {
 // SECURITY: API calls route through Netlify proxy
 const VEO_PROXY_URL = '/.netlify/functions/media-proxies/google-veo-proxy';
 
-// Pricing per video (USD)
-const VEO_PRICING = {
-  '720p': 0.05,
-  '1080p': 0.08,
-};
-
 export class GoogleVeoService {
   private static instance: GoogleVeoService;
   // SECURITY: API keys removed from client-side code
@@ -157,7 +178,29 @@ export class GoogleVeoService {
       );
     }
 
-    const model = request.model || VEO_API_MODEL_ID;
+    const requestedModel = getModelMetadataById(request.model ?? VIDEO_GENERATION_MODEL_ID);
+    if (
+      !requestedModel ||
+      requestedModel.provider !== 'google' ||
+      requestedModel.modelType !== 'video'
+    ) {
+      throw this.createError(
+        'VALIDATION_ERROR',
+        `Unknown or unsupported Google video model: ${request.model ?? VIDEO_GENERATION_MODEL_ID}`,
+      );
+    }
+    const model = requestedModel.apiModelId ?? requestedModel.id;
+    const resolution = request.resolution ?? '1080p';
+    if (!getSupportedVeoResolutions(requestedModel).includes(resolution)) {
+      throw this.createError('VALIDATION_ERROR', `${requestedModel.name} does not support ${resolution}`);
+    }
+    const duration = normalizeVeoDuration(resolution, request.duration ?? 8);
+    const normalizedRequest: VeoGenerationRequest = {
+      ...request,
+      model,
+      resolution,
+      duration,
+    };
     const generationId = `vid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Create initial response
@@ -167,8 +210,8 @@ export class GoogleVeoService {
       prompt: request.prompt,
       model,
       metadata: {
-        resolution: request.resolution || '1080p',
-        duration: request.duration || 8,
+        resolution,
+        duration,
         fps: request.fps || 24,
         aspectRatio: request.aspectRatio || '16:9',
         seed: request.seed,
@@ -184,11 +227,11 @@ export class GoogleVeoService {
     try {
       if (this.isDemoMode) {
         // Demo mode - return mock data
-        return this.generateDemoVideo(request, response, onProgress);
+        return this.generateDemoVideo(normalizedRequest, response, onProgress);
       }
 
       // Real API call
-      return await this.callVeoAPI(request, response, onProgress);
+      return await this.callVeoAPI(normalizedRequest, response, onProgress);
     } catch (error) {
       response.status = 'failed';
       throw this.handleError(error);
@@ -336,8 +379,11 @@ export class GoogleVeoService {
         }
 
         // Calculate cost and token usage
-        response.cost =
-          VEO_PRICING[response.metadata.resolution as '720p' | '1080p'] || VEO_PRICING['1080p'];
+        response.cost = calculateVeoCost(
+          response.model,
+          response.metadata.resolution as VeoResolution,
+          response.metadata.duration,
+        );
         response.tokensUsed = Math.floor(response.prompt.length / 4);
         response.status = 'completed';
         response.progress = 100;
@@ -381,7 +427,11 @@ export class GoogleVeoService {
       mimeType: 'image/jpeg',
     };
 
-    response.cost = VEO_PRICING[request.resolution || '1080p'];
+    response.cost = calculateVeoCost(
+      response.model,
+      request.resolution ?? '1080p',
+      response.metadata.duration,
+    );
     response.tokensUsed = Math.floor(request.prompt.length / 4);
     response.status = 'completed';
     response.progress = 100;
@@ -528,7 +578,7 @@ export class GoogleVeoService {
         name: VEO_MODEL_METADATA?.name ?? 'Catalog video model',
         description: VEO_MODEL_METADATA?.bestFor[0] ?? 'Video generation with audio',
         features: [
-          '720p or 1080p resolution',
+          `${VEO_SUPPORTED_RESOLUTIONS.join(', ')} resolution`,
           'Native audio generation',
           'Text-to-video',
           'Image-to-video',
@@ -543,7 +593,7 @@ export class GoogleVeoService {
    * Get supported resolutions
    */
   getSupportedResolutions(): string[] {
-    return ['720p', '1080p'];
+    return [...VEO_SUPPORTED_RESOLUTIONS];
   }
 
   /**

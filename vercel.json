@@ -1,13 +1,58 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm --filter @agiworkforce/web build",
+  "buildCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && bash apps/web/scripts/build-with-chat.sh",
   "devCommand": "pnpm --filter @agiworkforce/web dev",
-  "installCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install",
+  "installCommand": "corepack enable && corepack prepare pnpm@9.15.3 --activate && pnpm install --frozen-lockfile",
   "outputDirectory": "apps/web/.next",
   "framework": "nextjs",
   "git": {
     "deploymentEnabled": {
       "main": true
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/v1/chat/completions",
+      "destination": "/api/llm/v1/chat/completions",
+      "has": [{ "type": "host", "value": "api.agiworkforce.com" }]
+    },
+    {
+      "source": "/v1/models",
+      "destination": "/api/llm/v1/models",
+      "has": [{ "type": "host", "value": "api.agiworkforce.com" }]
+    },
+    {
+      "source": "/v1/credits/balance",
+      "destination": "/api/llm/v1/credits/balance",
+      "has": [{ "type": "host", "value": "api.agiworkforce.com" }]
+    },
+    {
+      "source": "/v1/audio/transcriptions",
+      "destination": "/api/llm/v1/audio/transcriptions",
+      "has": [{ "type": "host", "value": "api.agiworkforce.com" }]
+    },
+    {
+      "source": "/health",
+      "destination": "/api/health",
+      "has": [{ "type": "host", "value": "api.agiworkforce.com" }]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/reset-credits",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/purge-temporary-chats",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-credits",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/run-schedules",
+      "schedule": "* * * * *"
+    }
+  ]
 }

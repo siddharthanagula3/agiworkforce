@@ -35,6 +35,24 @@ const GITHUB_APP_ID = process.env['GITHUB_APP_ID'];
 const GITHUB_APP_PRIVATE_KEY_BASE64 = process.env['GITHUB_APP_PRIVATE_KEY_BASE64'];
 const GITHUB_WEBHOOK_SECRET = process.env['GITHUB_WEBHOOK_SECRET'];
 const GITHUB_TOKEN_ENCRYPTION_KEY = process.env['GITHUB_TOKEN_ENCRYPTION_KEY'];
+/** Public app slug (github.com/apps/<slug>) — required only for the install-start redirect. */
+const GITHUB_APP_SLUG = process.env['GITHUB_APP_SLUG'];
+
+/**
+ * Whether installation tokens can be minted in this deployment. Offering GitHub
+ * connector tools requires this (tokens are minted lazily at execution time, so
+ * a cached access_token_enc is NOT required — only the app credentials).
+ */
+export function isGitHubAppConfigured(): boolean {
+  return Boolean(GITHUB_APP_ID && GITHUB_APP_PRIVATE_KEY_BASE64);
+}
+
+/** Install URL on github.com, or null when the app slug is not configured. */
+export function getGitHubAppInstallUrl(): string | null {
+  return GITHUB_APP_SLUG
+    ? `https://github.com/apps/${encodeURIComponent(GITHUB_APP_SLUG)}/installations/new`
+    : null;
+}
 
 export function verifyGitHubWebhookSignature(
   payload: string,

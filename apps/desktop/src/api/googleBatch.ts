@@ -7,6 +7,23 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
+import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
+
+const embeddingModelId = getRoutingSlotModel('embedding_default');
+const embeddingModel = getModelMetadataById(embeddingModelId);
+
+if (
+  !embeddingModel ||
+  embeddingModel.provider !== 'google' ||
+  embeddingModel.modelType !== 'embedding' ||
+  !isModelLive(embeddingModel)
+) {
+  throw new Error(
+    `The embedding_default routing slot does not reference a live Google embedding model: ${embeddingModelId}`,
+  );
+}
+
+const DEFAULT_GOOGLE_EMBEDDING_MODEL = embeddingModel.apiModelId ?? embeddingModel.id;
 
 // ========================================
 // Types
@@ -339,7 +356,7 @@ export async function createEmbeddingsBatch(
     return await invoke('google_batch_create_embeddings', {
       texts: options.texts,
       inputFilePath: options.inputFilePath,
-      model: options.model || 'gemini-embedding-001',
+      model: options.model || DEFAULT_GOOGLE_EMBEDDING_MODEL,
       taskType: options.taskType,
       displayName: options.displayName,
     });

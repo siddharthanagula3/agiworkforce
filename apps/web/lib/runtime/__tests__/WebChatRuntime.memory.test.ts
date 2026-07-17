@@ -61,4 +61,24 @@ describe('WebChatRuntime memory injection', () => {
     expect(messages.every((m) => m.role !== 'system')).toBe(true);
     expect(messages).toEqual([{ role: 'user', content: 'hello' }]);
   });
+
+  it('advertises Research and sends the exact research field to the managed API', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      json: async () => ({}),
+    })) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', fetchMock);
+
+    const runtime = new WebChatRuntime();
+    expect(runtime.supportsResearch).toBe(true);
+
+    await runtime.sendMessage('conv-1', 'investigate', {
+      messageHistory: [],
+      research: true,
+    });
+
+    expect(bodyOf(fetchMock as unknown as ReturnType<typeof vi.fn>)).toEqual(
+      expect.objectContaining({ research: true }),
+    );
+  });
 });

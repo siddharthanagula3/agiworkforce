@@ -13,6 +13,16 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const { canonicalVoiceModel } = vi.hoisted(() => ({
+  canonicalVoiceModel: 'catalog-voice-transcription-model',
+}));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  getRoutingSlotModel: () => canonicalVoiceModel,
+}));
+
 import { useVoiceInputStore, _resetRuntimeRefs } from './voice-input-store';
 
 // ─── Mock SpeechRecognition ───────────────────────────────────────────────────
@@ -399,6 +409,8 @@ describe('voiceInputStore', () => {
       // Non-null assertion is safe: the toHaveBeenCalled() above guarantees calls[0] exists.
 
       expect(fetchMock.mock.calls[0]![0]).toBe('/api/voice/transcribe');
+      const request = fetchMock.mock.calls[0]![1] as RequestInit;
+      expect((request.body as FormData).get('model')).toBe(canonicalVoiceModel);
     });
   });
 

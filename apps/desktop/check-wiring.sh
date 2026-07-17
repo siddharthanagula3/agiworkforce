@@ -18,10 +18,14 @@ MISSING=0
 # --------------------------------------------------------------------------
 # 1. Frontend invoke() call -> lib.rs registration
 # --------------------------------------------------------------------------
-TS_INVOKES=$(grep -rh "invoke(" "$SRC_TS" --exclude-dir="__tests__" \
-  --include="*.ts" --include="*.tsx" \
-  | grep -oE "invoke\(['\"][a-z_][a-z0-9_]*['\"]" \
-  | sed -E "s/invoke\(['\"]([a-z_][a-z0-9_]*)['\"]/\\1/" \
+# Matches bare invoke('cmd'), the common invoke<ReturnType>('cmd') generic
+# form, and local wrapper functions whose name starts with "invoke" (e.g.
+# invokeWithTimeout<T>('cmd', ...), invokeWithRetry<T>('cmd', ...) in
+# apps/desktop/src/api/*.ts) — a prior version of this script only matched
+# literal `invoke(` and undercounted real call sites by ~3x.
+TS_INVOKES=$(grep -rhoE "invoke[A-Za-z]*(<[^>]*>)?\(['\"][a-z_][a-z0-9_]*['\"]" "$SRC_TS" \
+  --exclude-dir="__tests__" --include="*.ts" --include="*.tsx" \
+  | sed -E "s/^.*['\"]([a-z_][a-z0-9_]*)['\"]\$/\\1/" \
   | sort -u) || true
 
 for cmd in $TS_INVOKES; do
@@ -51,12 +55,21 @@ done
 # --------------------------------------------------------------------------
 # 3. Advisory: lib.rs registrations that no frontend invokes
 # --------------------------------------------------------------------------
-# Extract command names from `crate::sys::commands::<name>,` lines inside
-# the generate_handler! block. Uses a heuristic — prints a count rather
-# than failing, since some commands are intentionally invoked from Rust
-# (e.g. tray menu actions) and never from the frontend.
-REG_CMDS=$(grep -oE "crate::sys::commands::[a-z_][a-z0-9_]*" "$LIB_RS" 2>/dev/null \
-  | sed -E "s/crate::sys::commands:://" \
+# Extract command names from inside the generate_handler![...] block only
+# (not the whole file — `app.manage(...ArtifactState::with_db(...))` and
+# similar non-command calls elsewhere in lib.rs also match a bare
+# `crate::sys::commands::...` prefix and would otherwise leak in as phantom
+# entries). Registrations use both flat (`crate::sys::commands::foo`) and
+# nested module paths (`crate::sys::commands::agent::agent_stop`, or other
+# top-level modules entirely, e.g. `crate::sys::billing::stripe_...`) — the
+# real command/registered-fn name is always the LAST `::`-separated segment,
+# not the first one after `commands::`. A prior version of this script
+# matched only the first segment and only the `commands::` prefix, which
+# both undercounted real registrations and miscounted nested ones (e.g.
+# truncating `agent::agent_stop` to a phantom bare "agent" entry).
+REG_CMDS=$(awk '/tauri::generate_handler!\[/{flag=1; next} flag && /^\s*\]\)\s*$/{flag=0} flag' "$LIB_RS" \
+  | grep -oE "crate::[a-zA-Z_:]+" 2>/dev/null \
+  | sed -E "s/.*:://" \
   | sort -u) || true
 
 UNUSED=0

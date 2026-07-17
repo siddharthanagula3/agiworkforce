@@ -1,17 +1,17 @@
 /**
  * L1 Security - Provider Routing (no hardcoded model IDs)
  *
- * Exercises the REAL web model-routing layer:
- *   - apps/web/lib/modelRouter.ts (getModelForRequest)
+ * Exercises the canonical model-routing layer used by application surfaces:
+ *   - @agiworkforce/routing (resolveAutoRoute)
  *   - apps/web/constants/llm.ts (getAllModels, getModelMetadata, normalizeModelId)
  *
- * Both read from the single source of truth packages/types/src/models.json.
+ * Both read from the single source of truth packages/contracts/types/src/models.json.
  * No external mocks: this validates that routing decisions come from catalog
  * metadata, never from string literals invented at the call site.
  */
 
 import { describe, test, expect } from 'vitest';
-import { getModelForRequest } from '@/lib/modelRouter';
+import { classifyTaskLocally, resolveAutoRoute } from '@agiworkforce/routing';
 import { getAllModels, getModelMetadata, normalizeModelId, MODEL_METADATA } from '@/constants/llm';
 
 describe('L1 Security - Provider Routing (No Hardcoding)', () => {
@@ -43,20 +43,47 @@ describe('L1 Security - Provider Routing (No Hardcoding)', () => {
   test('SECURITY: manual selection routes to a normalized catalog id (no invented id)', () => {
     // Pick a concrete, manually-selectable model (not an "auto*" pseudo-model).
     const realId = getAllModels().find((m) => !m.id.startsWith('auto'))!.id;
-    const result = getModelForRequest(realId, 'hello world', false);
-    // A concrete id is a manual selection — it is not auto-routed.
-    expect(result.wasRouted).toBe(false);
+    const result = resolveAutoRoute({
+      selection: realId,
+      taskType: 'general',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    });
+    expect(result.status).toBe('selected');
+    if (result.status !== 'selected') return;
+    expect(result.reason).toBe('explicit');
     // Resolved id must normalize to a real catalog entry.
-    const canonical = normalizeModelId(result.modelId) ?? result.modelId;
+    const canonical = normalizeModelId(result.modelKey) ?? result.modelKey;
     expect(getModelMetadata(canonical)).not.toBeNull();
   });
 
   test('SECURITY: auto mode resolves to a real catalog model (not a hardcoded fallback)', () => {
-    const result = getModelForRequest('auto', 'Write a function to sort an array', false);
-    expect(result.wasRouted).toBe(true);
-    const canonical = normalizeModelId(result.modelId) ?? result.modelId;
+    const classifier = classifyTaskLocally('Write a function to sort an array', []);
+    const result = resolveAutoRoute({
+      selection: 'auto-balanced',
+      taskType: classifier.type,
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    });
+    expect(result.status).toBe('selected');
+    if (result.status !== 'selected') return;
+    const canonical = normalizeModelId(result.modelKey) ?? result.modelKey;
     // The routed model must exist in the catalog — proves routing is data-driven.
     expect(getModelMetadata(canonical)).not.toBeNull();
+  });
+
+  test('SECURITY: unknown model selections fail closed', () => {
+    const result = resolveAutoRoute({
+      selection: 'totally-not-a-real-model-xyz',
+      taskType: 'general',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    });
+
+    expect(result).toMatchObject({ status: 'unavailable', code: 'unknown_selection' });
   });
 
   test('SECURITY: unknown model id does not resolve to catalog metadata', () => {

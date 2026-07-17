@@ -3,7 +3,7 @@ import { verifyToken } from '@clerk/backend';
 import jwt from 'jsonwebtoken';
 import { authenticatedUserSchema, type AuthenticatedRequestUser } from '../authenticated-user';
 import { requireEnv } from '../env';
-import { getServiceClient } from '../lib/neonClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
@@ -126,7 +126,7 @@ export async function authenticateToken(
     const payload = await verifyGatewayOrClerkToken(token);
     // `token` is the raw, already-verified bearer string (verified just above
     // via Clerk verifyToken() or jwt.verify(..., JWT_SECRET)). Attaching it
-    // lets getUserScopedClient() (lib/neonClients.ts) bind Postgres RLS via
+    // lets the user-scoped database client bind Postgres RLS via
     // NeonDatabaseAdapter.withUser(token) for the handful of call sites that
     // have real policy coverage — see UserAuth's doc comment there.
     req.user = { ...authenticatedUserSchema.parse(payload), token };
@@ -143,7 +143,7 @@ export async function authenticateToken(
         try {
           // Revocation lookup happens during token verification and must
           // succeed-or-fail-closed.
-          const { data: revokedRow, error: revokedError } = await getServiceClient()
+          const { data: revokedRow, error: revokedError } = await getUserScopedClient(req.user)
             .from('revoked_jwts')
             .select('jti')
             .eq('jti', jti)
@@ -189,7 +189,7 @@ export async function authenticateToken(
     if (accountStatus === null) {
       try {
         // Kill-switch check during auth verification. It must fail closed.
-        const { data: profile, error: profileError } = await getServiceClient()
+        const { data: profile, error: profileError } = await getUserScopedClient(req.user)
           .from('profiles')
           .select('account_status')
           .eq('id', userId)

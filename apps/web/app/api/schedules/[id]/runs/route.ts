@@ -1,134 +1,95 @@
-/**
- * Schedule Runs API
- *
- * GET /api/schedules/[id]/runs - List runs for a schedule
- * POST /api/schedules/[id]/runs - Trigger an immediate run
- */
+import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  ScheduleConflictError,
+  ScheduleNotFoundError,
+  ScheduleValidationError,
+  createManualScheduleRun,
+  listScheduleRuns,
+  processClaimedScheduleRun,
+} from '@/lib/services/schedule-service';
+import { executeScheduledAgent } from '@/lib/services/scheduled-agent-executor';
 
-function mapRowToRun(row: Record<string, unknown>) {
-  return {
-    id: row['id'],
-    scheduleId: row['schedule_id'],
-    status: row['status'],
-    startedAt: row['started_at'],
-    completedAt: row['completed_at'] ?? null,
-    result: row['result'] ?? null,
-    error: row['error'] ?? null,
-  };
-}
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// ---------------------------------------------------------------------------
-// GET /api/schedules/[id]/runs
-// ---------------------------------------------------------------------------
+function integerQueryValue(value: string | null, fallback: number): number {
+  if (value === null || !/^-?\d+$/.test(value)) return fallback;
+  return Number(value);
+}
+
+function rethrowScheduleError(error: unknown): never {
+  if (error instanceof ScheduleValidationError) throw createError.validation(error.message);
+  if (error instanceof ScheduleNotFoundError) throw createError.notFound('Schedule not found');
+  if (error instanceof ScheduleConflictError) throw createError.conflict(error.message);
+  throw error;
+}
 
 async function handleGetRuns(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const { id: scheduleId } = await context.params;
-
+  const { db, userId } = await getUserScopedDb(request);
+  const { id: taskId } = await context.params;
   const url = new URL(request.url);
-  const parsedLimit = parseInt(url.searchParams.get('limit') ?? '20', 10);
-  const limit = Math.min(Number.isNaN(parsedLimit) ? 20 : parsedLimit, 100);
-
-  // Verify the schedule belongs to this user
-  const [schedule] = await db.query<{ id: string }>(
-    `select id from scheduled_tasks where id = $1 and user_id = $2 limit 1`,
-    [scheduleId, userId],
+  const limit = Math.min(100, Math.max(1, integerQueryValue(url.searchParams.get('limit'), 20)));
+  const offset = Math.min(
+    10_000,
+    Math.max(0, integerQueryValue(url.searchParams.get('offset'), 0)),
   );
 
-  if (!schedule) {
-    throw createError.notFound('Schedule not found');
-  }
-
-  // Fetch runs
-  let data: Record<string, unknown>[];
   try {
-    data = await db.query<Record<string, unknown>>(
-      `select * from schedule_runs
-       where schedule_id = $1 and user_id = $2
-       order by started_at desc
-       limit $3`,
-      [scheduleId, userId, limit],
-    );
+    const runs = await listScheduleRuns(db, userId, taskId, { limit, offset });
+    return NextResponse.json({ runs, pagination: { limit, offset } });
   } catch (error) {
-    logger.error({ error, scheduleId }, 'Failed to fetch schedule runs');
-    throw createError.internal('Failed to fetch schedule runs');
+    rethrowScheduleError(error);
   }
-
-  return NextResponse.json({
-    runs: data.map(mapRowToRun),
-  });
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/schedules/[id]/runs (trigger immediate run)
-// ---------------------------------------------------------------------------
-
 async function handleTriggerRun(request: NextRequest, context: RouteContext) {
-  // CSRF protection for state-changing POST endpoint
-  const csrfError = await requireCsrfToken(request);
-  if (csrfError) return csrfError as NextResponse;
-
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
-  const { id: scheduleId } = await context.params;
+  const { db, userId } = await getUserScopedDb(request);
+  const csrfError = await requireCsrfToken(request, userId);
+  if (csrfError) return csrfError as NextResponse;
 
-  // Verify the schedule belongs to this user
-  const [schedule] = await db.query<{ id: string }>(
-    `select id from scheduled_tasks where id = $1 and user_id = $2 limit 1`,
-    [scheduleId, userId],
-  );
-
-  if (!schedule) {
-    throw createError.notFound('Schedule not found');
+  const idempotencyKey = request.headers.get('idempotency-key')?.trim() ?? '';
+  if (!idempotencyKey) {
+    throw createError.validation('Idempotency-Key header is required');
   }
+  const { id: taskId } = await context.params;
 
-  // Create a pending run
-  let runData: Record<string, unknown>;
   try {
-    const [inserted] = await db.query<Record<string, unknown>>(
-      `insert into schedule_runs (schedule_id, user_id, status)
-       values ($1, $2, 'pending')
-       returning *`,
-      [scheduleId, userId],
-    );
-    if (!inserted) throw new Error('No row returned');
-    runData = inserted;
+    const manual = await createManualScheduleRun(db, {
+      userId,
+      taskId,
+      idempotencyKey,
+      leaseSeconds: 45,
+    });
+    if (manual.replay) {
+      if (manual.run.status === 'running') {
+        throw new ScheduleConflictError('This manual run is already in progress');
+      }
+      return NextResponse.json({ run: manual.run, replay: true });
+    }
+
+    const run = await processClaimedScheduleRun(db, manual.claim, executeScheduledAgent, {
+      timeoutMs: 40_000,
+      signal: request.signal,
+    });
+    return NextResponse.json({ run, replay: false }, { status: 201 });
   } catch (error) {
-    logger.error({ error, scheduleId }, 'Failed to trigger schedule run');
-    throw createError.internal('Failed to trigger schedule run');
+    rethrowScheduleError(error);
   }
-
-  // Update the schedule's last_run_at (best-effort, do not fail the request)
-  try {
-    await db.execute(
-      `update scheduled_tasks
-       set last_run_at = now(), last_run_status = 'pending'
-       where id = $1 and user_id = $2`,
-      [scheduleId, userId],
-    );
-  } catch {
-    // non-fatal
-  }
-
-  return NextResponse.json({ run: mapRowToRun(runData) }, { status: 201 });
 }
 
 export const GET = withErrorHandler(handleGetRuns);

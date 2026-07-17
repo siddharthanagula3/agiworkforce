@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getShortDisplayName, isAutoMode, getModelById } from '@/src/features/model-picker/service';
+import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors, radii } from '@/src/ui/theme';
 
 interface ModelSelectorButtonProps {
@@ -21,9 +22,10 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const selectedModel = useModelStore((s) => s.selectedModel);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const subscriptionTier = useTierStore((s) => s.tier);
 
   const isAuto = isAutoMode(selectedModel);
-  const label = getShortDisplayName(selectedModel);
+  const label = getShortDisplayName(selectedModel, subscriptionTier);
   const thinkingOn = thinkingEnabledPerModel[selectedModel] ?? false;
 
   const model = isAuto ? null : getModelById(selectedModel);

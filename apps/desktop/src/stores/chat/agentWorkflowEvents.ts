@@ -1,4 +1,4 @@
-import { agent } from '@agiworkforce/api';
+import { agent } from '@agiworkforce/desktop-command-client';
 import type { BrowserActivityEventDetail } from '@agiworkforce/types';
 import { EVENTS } from '../../constants/event-names';
 import { invoke, listen, type UnlistenFn, isTauri } from '../../lib/tauri-mock';

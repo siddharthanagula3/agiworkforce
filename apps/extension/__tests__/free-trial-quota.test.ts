@@ -7,7 +7,7 @@
  *   - Quota helpers: getFreePromptsUsed, getRemainingFreePrompts
  *   - streamFreeChat: happy-path SSE streaming, quota_exceeded (403), auth_required (401),
  *     server_error (5xx), network failure, abort, input truncation, [DONE] sentinel,
- *     inline stream error, post-stream done without [DONE]
+ *     inline stream error, explicit terminal enforcement, and routing options
  *
  * @vitest-environment jsdom
  */
@@ -71,6 +71,13 @@ const chromeMock = vi.hoisted(() => {
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
+const clerkAuthMock = vi.hoisted(() => ({
+  getFreshClerkToken: vi.fn(async (): Promise<string | null> => null),
+  signOutClerk: vi.fn(async (): Promise<void> => undefined),
+}));
+
+vi.mock('../src/features/cloud-bridge/clerkAuth', () => clerkAuthMock);
+
 // ---------------------------------------------------------------------------
 // Imports — after mock hoisting
 // ---------------------------------------------------------------------------
@@ -79,13 +86,18 @@ import {
   FREE_TRIAL_PROMPT_LIMIT,
   FREE_TRIAL_MODEL,
   FREE_TRIAL_ENDPOINT,
+  MANAGED_MODELS_ENDPOINT,
   FREE_PROMPTS_USED_KEY,
+  MANAGED_CHAT_MAX_ATTACHMENTS,
+  MANAGED_CHAT_MAX_SSE_FRAME_CHARS,
+  MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS,
   getAuthToken,
-  storeSessionToken,
   clearAuthToken,
   getFreePromptsUsed,
   getRemainingFreePrompts,
+  getManagedModelAccess,
   streamFreeChat,
+  createMultimodalUserContent,
   type FreeTrialMessage,
   type FreeTrialChunk,
 } from '../src/features/cloud-bridge/freeTrialClient';
@@ -125,6 +137,21 @@ function makeStreamResponse(dataLines: string[], status = 200): Response {
   } as unknown as Response;
 }
 
+function makeRawStreamResponse(payload: string, status = 200): Response {
+  const encoder = new TextEncoder();
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(payload));
+        controller.close();
+      },
+    }),
+    text: vi.fn().mockResolvedValue(''),
+  } as unknown as Response;
+}
+
 /** Construct a fake error Response (no body stream). */
 function makeErrorResponse(status: number, bodyText: string): Response {
   return {
@@ -146,6 +173,9 @@ beforeEach(() => {
   for (const k of Object.keys(chromeMock._localStore)) delete chromeMock._localStore[k];
   for (const k of Object.keys(chromeMock._sessionStore)) delete chromeMock._sessionStore[k];
   vi.clearAllMocks();
+  fetchMock.mockReset();
+  clerkAuthMock.getFreshClerkToken.mockResolvedValue(null);
+  clerkAuthMock.signOutClerk.mockResolvedValue(undefined);
   // Re-install chrome global after clearAllMocks resets mocks
   (globalThis as Record<string, unknown>).chrome = chromeMock;
 });
@@ -177,6 +207,92 @@ describe('constants', () => {
   });
 });
 
+describe('getManagedModelAccess', () => {
+  function accessResponse(body: unknown, status = 200): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: vi.fn().mockResolvedValue(body),
+    } as unknown as Response;
+  }
+
+  it('uses the bearer credential and forwards cancellation to the model owner', async () => {
+    const controller = new AbortController();
+    fetchMock.mockResolvedValueOnce(
+      accessResponse({
+        data: [{ id: 'model-a' }],
+        x_agi_workforce: { user_tier: 'pro', allowed_auto_modes: ['auto'] },
+      }),
+    );
+
+    await expect(getManagedModelAccess('session-token', controller.signal)).resolves.toEqual({
+      subscriptionTier: 'pro',
+      modelIds: ['model-a'],
+      allowedAutoModes: ['auto'],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      MANAGED_MODELS_ENDPOINT,
+      expect.objectContaining({
+        method: 'GET',
+        signal: controller.signal,
+        headers: expect.objectContaining({ Authorization: 'Bearer session-token' }),
+      }),
+    );
+  });
+
+  it('normalizes duplicates and caps untrusted server arrays', async () => {
+    fetchMock.mockResolvedValueOnce(
+      accessResponse({
+        data: [
+          { id: ' model-a ' },
+          { id: 'model-a' },
+          ...Array.from({ length: 250 }, (_, index) => ({ id: `model-${index}` })),
+        ],
+        x_agi_workforce: {
+          user_tier: 'pro',
+          allowed_auto_modes: [
+            ' auto ',
+            'auto',
+            ...Array.from({ length: 100 }, (_, index) => `mode-${index}`),
+          ],
+        },
+      }),
+    );
+
+    const access = await getManagedModelAccess('session-token');
+    expect(access.modelIds).toHaveLength(200);
+    expect(access.modelIds[0]).toBe('model-a');
+    expect(access.allowedAutoModes).toHaveLength(50);
+    expect(access.allowedAutoModes[0]).toBe('auto');
+  });
+
+  it('fails closed on empty auth, rejected auth, and malformed payloads', async () => {
+    await expect(getManagedModelAccess('   ')).rejects.toThrow('Authentication is required');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockResolvedValueOnce(accessResponse({}, 401));
+    await expect(getManagedModelAccess('expired')).rejects.toThrow('Authentication is required');
+
+    fetchMock.mockResolvedValueOnce(
+      accessResponse({
+        data: [{ id: '' }],
+        x_agi_workforce: { user_tier: '', allowed_auto_modes: [] },
+      }),
+    );
+    await expect(getManagedModelAccess('token')).rejects.toThrow('Invalid model-access response');
+  });
+
+  it('propagates an abort without retrying or converting it into admission', async () => {
+    const controller = new AbortController();
+    const abort = new DOMException('Aborted', 'AbortError');
+    fetchMock.mockRejectedValueOnce(abort);
+    controller.abort();
+
+    await expect(getManagedModelAccess('token', controller.signal)).rejects.toBe(abort);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Auth: getAuthToken
 // ---------------------------------------------------------------------------
@@ -186,8 +302,8 @@ describe('getAuthToken', () => {
     expect(await getAuthToken()).toBeNull();
   });
 
-  it('returns session token when agi_clerk_session_token is set', async () => {
-    chromeMock._sessionStore['agi_clerk_session_token'] = 'sess-token-abc';
+  it('returns a fresh Clerk Native API session token', async () => {
+    clerkAuthMock.getFreshClerkToken.mockResolvedValueOnce('sess-token-abc');
     expect(await getAuthToken()).toBe('sess-token-abc');
   });
 
@@ -196,27 +312,16 @@ describe('getAuthToken', () => {
     expect(await getAuthToken()).toBe('dev-token-xyz');
   });
 
-  it('prefers session token over local dev token', async () => {
-    chromeMock._sessionStore['agi_clerk_session_token'] = 'sess-token';
+  it('prefers the Clerk session over a local dev token', async () => {
+    clerkAuthMock.getFreshClerkToken.mockResolvedValueOnce('sess-token');
     chromeMock._localStore['agi_dev_bearer_token'] = 'dev-token';
     expect(await getAuthToken()).toBe('sess-token');
   });
 
   it('ignores empty string tokens', async () => {
-    chromeMock._sessionStore['agi_clerk_session_token'] = '';
+    clerkAuthMock.getFreshClerkToken.mockResolvedValueOnce('');
     chromeMock._localStore['agi_dev_bearer_token'] = '';
     expect(await getAuthToken()).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Auth: storeSessionToken
-// ---------------------------------------------------------------------------
-
-describe('storeSessionToken', () => {
-  it('writes to session storage when available', async () => {
-    await storeSessionToken('my-token');
-    expect(chromeMock._sessionStore['agi_clerk_session_token']).toBe('my-token');
   });
 });
 
@@ -229,6 +334,7 @@ describe('clearAuthToken', () => {
     chromeMock._sessionStore['agi_clerk_session_token'] = 'sess';
     chromeMock._localStore['agi_dev_bearer_token'] = 'dev';
     await clearAuthToken();
+    expect(clerkAuthMock.signOutClerk).toHaveBeenCalledTimes(1);
     expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
   });
@@ -312,10 +418,12 @@ describe('streamFreeChat — network failure', () => {
 
 describe('streamFreeChat — auth and quota errors', () => {
   it('yields auth_required on 401', async () => {
+    chromeMock._sessionStore['agi_clerk_session_token'] = 'bad-token';
     fetchMock.mockResolvedValueOnce(makeErrorResponse(401, 'Unauthorized'));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'bad-token'));
     expect(chunks).toHaveLength(1);
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'auth_required' });
+    expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
   });
 
   it('yields quota_exceeded on 403 with limit_reached body', async () => {
@@ -332,10 +440,18 @@ describe('streamFreeChat — auth and quota errors', () => {
     expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(FREE_TRIAL_PROMPT_LIMIT);
   });
 
-  it('yields auth_required on 403 without quota keywords', async () => {
+  it('yields plan_required on 403 without quota keywords', async () => {
     fetchMock.mockResolvedValueOnce(makeErrorResponse(403, 'plan gated'));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'auth_required' });
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required' });
+  });
+
+  it('treats a generic 429 as rate limiting without corrupting the free quota cache', async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{"error":"rate_limited"}'));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'rate_limited' });
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('yields quota_exceeded when body contains "Upgrade" (capital U)', async () => {
@@ -402,6 +518,22 @@ describe('streamFreeChat — SSE happy path', () => {
     expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(1);
   });
 
+  it('does not mutate the free-tier display cache for a paid account', async () => {
+    const sseLines = [
+      JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+    ];
+    fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
+
+    await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'valid-token', {
+        model: FREE_TRIAL_MODEL,
+        subscriptionTier: 'pro',
+      }),
+    );
+
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+  });
+
   it('increments counter cumulatively across calls', async () => {
     chromeMock._localStore[FREE_PROMPTS_USED_KEY] = 1;
     const sseLines = [
@@ -429,7 +561,8 @@ describe('streamFreeChat — SSE happy path', () => {
     ];
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
-    expect(chunks.some((c) => c.type === 'done')).toBe(true);
+    expect(chunks.filter((c) => c.type === 'done')).toHaveLength(1);
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(1);
   });
 
   it('accepts alternative done format: parsed.done = true', async () => {
@@ -442,6 +575,70 @@ describe('streamFreeChat — SSE happy path', () => {
     expect(chunks.some((c) => c.type === 'done')).toBe(true);
     const textChunks = chunks.filter((c) => c.type === 'text');
     expect((textChunks[0] as { type: 'text'; text: string }).text).toBe('hello');
+  });
+
+  it('fails closed when the server reports success without any visible text', async () => {
+    fetchMock.mockResolvedValueOnce(makeStreamResponse(['[DONE]']));
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+  });
+
+  it('decodes CR-only SSE framing', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeRawStreamResponse(
+        `data: ${JSON.stringify({ content: 'hello', done: false })}\r\rdata: [DONE]\r\r`,
+      ),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(chunks).toEqual([{ type: 'text', text: 'hello' }, { type: 'done' }]);
+  });
+
+  it('joins multiple data lines into one standards-compliant SSE event', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeRawStreamResponse(
+        'data: {"content":\n' + 'data: "hello","done":false}\n\n' + 'data: [DONE]\n\n',
+      ),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(chunks).toEqual([{ type: 'text', text: 'hello' }, { type: 'done' }]);
+  });
+
+  it('rejects unknown JSON events instead of silently drifting to a later terminal', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([JSON.stringify({ unexpected: true }), '[DONE]']),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
+  });
+
+  it('rejects an oversized unterminated SSE frame', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeRawStreamResponse(`data: ${'x'.repeat(MANAGED_CHAT_MAX_SSE_FRAME_CHARS + 1)}`),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
+  });
+
+  it('bounds total visible streamed output', async () => {
+    const oversized = 'x'.repeat(MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS + 1);
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([JSON.stringify({ content: oversized, done: false }), '[DONE]']),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
   });
 
   it('sends Authorization: Bearer header with the token', async () => {
@@ -518,6 +715,56 @@ describe('streamFreeChat — input truncation', () => {
     };
     expect(body.messages[0]!.content).toBe(shortContent);
   });
+
+  it('applies the character cap across the entire request, not once per message', async () => {
+    const messages: FreeTrialMessage[] = Array.from({ length: 8 }, (_, index) => ({
+      role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+      content: String(index).repeat(10_000),
+    }));
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+
+    await collectChunks(streamFreeChat(messages, 'token'));
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as { messages: FreeTrialMessage[] };
+    const totalText = body.messages.reduce(
+      (sum, message) => sum + (typeof message.content === 'string' ? message.content.length : 0),
+      0,
+    );
+    expect(totalText).toBe(32_000);
+    expect(body.messages.at(-1)?.content).toBe(messages.at(-1)?.content);
+  });
+});
+
+describe('managed-cloud attachment payloads', () => {
+  it('preserves image data as OpenAI-compatible multimodal content', () => {
+    const image = 'data:image/png;base64,aGVsbG8=';
+
+    expect(createMultimodalUserContent('Describe this image', [image])).toEqual([
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: image, detail: 'auto' } },
+    ]);
+  });
+
+  it('rejects malformed or non-image data URLs instead of silently summarizing them', () => {
+    expect(() =>
+      createMultimodalUserContent('Read this', ['data:text/plain;base64,aGVsbG8=']),
+    ).toThrow('Unsupported attachment');
+  });
+
+  it('rejects an attachment-count overflow before constructing a request', () => {
+    const image = 'data:image/png;base64,aGVsbG8=';
+    expect(() =>
+      createMultimodalUserContent(
+        'Describe these',
+        Array.from({ length: MANAGED_CHAT_MAX_ATTACHMENTS + 1 }, () => image),
+      ),
+    ).toThrow('Too many attachments');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -557,6 +804,51 @@ describe('streamFreeChat — inline stream error', () => {
     await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(FREE_TRIAL_PROMPT_LIMIT);
   });
+
+  it('honors the gateway x_stream_error delta instead of counting finish_reason error as success', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'partial' }, finish_reason: null }] }),
+        JSON.stringify({
+          choices: [
+            {
+              delta: {
+                x_stream_error: {
+                  message: 'Provider failed mid-stream',
+                  code: 'provider_unavailable',
+                  retryable: true,
+                },
+              },
+              finish_reason: 'error',
+            },
+          ],
+        }),
+      ]),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(chunks).toEqual([
+      { type: 'text', text: 'partial' },
+      expect.objectContaining({ type: 'error', code: 'server_error' }),
+    ]);
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+  });
+
+  it('fails closed on finish_reason error even when a malformed server omits x_stream_error', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'partial' }, finish_reason: null }] }),
+        JSON.stringify({ choices: [{ delta: {}, finish_reason: 'error' }] }),
+      ]),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(chunks.at(-1)).toMatchObject({ type: 'error', code: 'server_error' });
+    expect(chunks.some((chunk) => chunk.type === 'done')).toBe(false);
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -564,16 +856,34 @@ describe('streamFreeChat — inline stream error', () => {
 // ---------------------------------------------------------------------------
 
 describe('streamFreeChat — abort signal', () => {
-  it('yields server_error when signal is already aborted before fetch', async () => {
+  it('yields cancelled without issuing a fetch when the signal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort();
 
-    fetchMock.mockRejectedValueOnce(
-      Object.assign(new Error('The user aborted a request.'), { name: 'AbortError' }),
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token', controller.signal));
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'cancelled' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes the gateway deadline from user cancellation', async () => {
+    fetchMock.mockImplementationOnce(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener(
+            'abort',
+            () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+            { once: true },
+          );
+        }),
     );
 
-    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token', controller.signal));
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'server_error' });
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        timeoutMs: 5,
+      }),
+    );
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'timeout' })]);
   });
 });
 
@@ -582,22 +892,30 @@ describe('streamFreeChat — abort signal', () => {
 // ---------------------------------------------------------------------------
 
 describe('streamFreeChat — stream ends without finish_reason', () => {
-  it('emits done and increments counter when stream closes after text', async () => {
+  it('fails closed and does not increment when a stream closes after partial text', async () => {
     // Send text but no finish_reason — stream just closes
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'hello' }, finish_reason: null }] }),
     ];
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks.some((c) => c.type === 'done')).toBe(true);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(1);
+    expect(chunks.at(-1)).toMatchObject({ type: 'error', code: 'protocol_error' });
+    expect(chunks.some((c) => c.type === 'done')).toBe(false);
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
-  it('emits done but does NOT increment counter when no text was received', async () => {
+  it('fails closed when the response body closes without any terminal event', async () => {
     // Stream closes without any content
     fetchMock.mockResolvedValueOnce(makeStreamResponse([]));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks.some((c) => c.type === 'done')).toBe(true);
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+  });
+
+  it('fails closed on a malformed data frame instead of silently skipping it', async () => {
+    fetchMock.mockResolvedValueOnce(makeStreamResponse(['{not-json}', '[DONE]']));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
     expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });
@@ -607,16 +925,36 @@ describe('streamFreeChat — stream ends without finish_reason', () => {
 // ---------------------------------------------------------------------------
 
 describe('streamFreeChat — model routing', () => {
-  it('sends FREE_TRIAL_MODEL (from models.json) in the request body', async () => {
+  it('sends the concrete routed model supplied by the caller', async () => {
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
     ];
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
-    await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', { model: 'routed-model-from-registry' }),
+    );
 
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(fetchOpts.body as string) as { model: string };
-    expect(body.model).toBe(FREE_TRIAL_MODEL);
+    expect(body.model).toBe('routed-model-from-registry');
+  });
+
+  it('forwards the documented thinking_mode request flag', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+    await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        extendedThinking: true,
+      }),
+    );
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as { thinking_mode?: boolean };
+    expect(body.thinking_mode).toBe(true);
   });
 
   it('requests stream=true', async () => {
@@ -629,5 +967,42 @@ describe('streamFreeChat — model routing', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(fetchOpts.body as string) as { stream: boolean };
     expect(body.stream).toBe(true);
+  });
+
+  it('rejects a runtime-invalid role without calling the gateway', async () => {
+    const chunks = await collectChunks(
+      streamFreeChat([{ role: 'tool' as 'user', content: 'untrusted' }], 'token', {
+        model: FREE_TRIAL_MODEL,
+      }),
+    );
+    expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('counts two concurrent explicit-success streams without a lost update', async () => {
+    const success = () =>
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]);
+    fetchMock.mockResolvedValueOnce(success()).mockResolvedValueOnce(success());
+
+    await Promise.all([
+      collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token')),
+      collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token')),
+    ]);
+
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(2);
+  });
+
+  it('emits and counts exactly one terminal when the server sends duplicate terminals', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+        '[DONE]',
+      ]),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks.filter((chunk) => chunk.type === 'done')).toHaveLength(1);
+    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(1);
   });
 });

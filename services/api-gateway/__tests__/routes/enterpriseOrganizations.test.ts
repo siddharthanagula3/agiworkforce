@@ -43,10 +43,8 @@ const { state } = vi.hoisted(() => ({
   },
 }));
 
-// P1-GW-RLS (Wave 4): organization_members/organizations have no RLS policy
-// coverage (RLS-GAP), so routes/enterprise.ts now calls getServiceClient()
-// for everything, same as middleware/auth.ts's kill-switch profiles lookup.
-// One table-dispatching mock serves both.
+// Canonical organization discovery and the auth kill switch use the
+// user-scoped boundary. One table-dispatching mock serves both.
 vi.mock('../../src/lib/neonClients', () => {
   function from(table: string) {
     if (table === 'organization_members') {
@@ -83,7 +81,8 @@ vi.mock('../../src/lib/neonClients', () => {
 
   const serviceClient = { from: vi.fn(from) };
   return {
-    getServiceClient: vi.fn(() => serviceClient),
+    getUserScopedClient: vi.fn(() => serviceClient),
+    getSystemClient: vi.fn(() => serviceClient),
   };
 });
 

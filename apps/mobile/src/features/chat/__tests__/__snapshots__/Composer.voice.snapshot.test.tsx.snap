@@ -200,6 +200,7 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disable
         },
       ]
     }
+    testID="voice-input-button"
   >
     <View
       color="#aaa"
@@ -257,6 +258,7 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks idle mi
         undefined,
       ]
     }
+    testID="voice-input-button"
   >
     <View
       color="#aaa"

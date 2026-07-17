@@ -132,7 +132,9 @@ import {
   DEFAULT_LOCAL_MODEL_ID,
   LOCKED_CLOUD_MODELS,
   MODEL_LIST,
+  getDefaultCloudModelIdForTier,
   getModelByIdForCloudAccess,
+  getModelListForCloudAccess,
 } from '../src/features/model-picker/service';
 
 // ---------------------------------------------------------------------------
@@ -198,28 +200,36 @@ describe('ModelPickerSheet', () => {
     useAgentControlStore.setState({ byConversation: {}, byProject: {} });
   });
 
-  it('renders all local auto mode cards', () => {
+  it('renders all registry-owned auto mode cards in Local mode', () => {
     const { getAllByText, queryByText } = renderPicker();
 
-    for (const mode of AUTO_MODES.filter((mode) => mode.id !== 'auto-premium')) {
+    for (const mode of AUTO_MODES) {
       expect(getAllByText(mode.name).length).toBeGreaterThanOrEqual(1);
     }
     expect(queryByText('Vision')).toBeNull();
   });
 
-  it('renders only production-ready local auto mode descriptions', () => {
-    const { getAllByText, queryByText } = renderPicker();
+  it('renders boundary-neutral registry descriptions for Auto modes', () => {
+    const { getAllByText } = renderPicker();
 
-    expect(getAllByText('Best local model for this device').length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText('Small local model when battery matters').length).toBeGreaterThanOrEqual(1);
-    expect(queryByText('On-device vision when available')).toBeNull();
+    for (const mode of AUTO_MODES) {
+      expect(getAllByText(mode.description).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('offers the same registry-owned Auto modes in AGI Cloud', () => {
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+
+    for (const mode of AUTO_MODES) {
+      expect(getByLabelText(`${mode.name}: ${mode.description}`)).toBeTruthy();
+    }
   });
 
   it('marks the selected auto mode as selected', () => {
     useModelStore.setState({ selectedModel: 'auto-economy' });
     const { getByLabelText } = renderPicker();
 
-    const economyCard = getByLabelText('Lite: Small local model when battery matters');
+    const economyCard = getByLabelText('Economy: Lowest-cost eligible route for the task');
     expect(economyCard.props.accessibilityState.selected).toBe(true);
   });
 
@@ -410,29 +420,22 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
 
-  it('shows and selects the curated free preset (nano) cloud models for a free-tier user', () => {
-    // Product decision (2026-07-11): the free-tier picker is NANO-ONLY — it
-    // shows the curated FREE_TIER_PRESET_MODEL_IDS (gpt-5-nano, gpt-4.1-nano,
-    // gemini-3.1-flash-lite) as selectable, flagship models as locked upsells,
-    // and curates non-preset economy models (e.g. the default gpt-5.4-mini) OUT
-    // of the list even though the server still accepts them (see cross-surface
-    // follow-up in known-flaws MOBILE-JEST-REGRESSION).
+  it('shows and selects registry-admitted cloud models for a free-tier user', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'free' });
 
-    // A curated free preset (nano) is ready + selectable.
-    expect(getModelByIdForCloudAccess('gpt-5-nano', true, 'free')?.availability).toBe('ready');
-    // Flagship models stay tier-locked for free users.
-    expect(getModelByIdForCloudAccess('claude-opus-4.8', true, 'free')?.availability).toBe(
-      'locked',
+    const models = getModelListForCloudAccess(true, 'free').filter(
+      (model) => model.surface === 'cloud_managed',
     );
+    const readyModel = models.find((model) => model.availability === 'ready');
+    const lockedModel = models.find((model) => model.availability === 'locked');
+    expect(readyModel).toBeDefined();
+    expect(lockedModel).toBeDefined();
 
-    const { getByTestId, queryByTestId } = renderPicker({ modelScope: 'cloud' });
-    // Non-preset economy model (the default) is curated out of the free picker.
-    expect(queryByTestId('model-row-gpt-5.4-mini')).toBeNull();
-    fireEvent.press(getByTestId('model-row-gpt-5-nano'));
+    const { getByTestId } = renderPicker({ modelScope: 'cloud' });
+    fireEvent.press(getByTestId(`model-row-${readyModel!.id}`));
 
-    expect(useModelStore.getState().selectedModel).toBe('gpt-5-nano');
+    expect(useModelStore.getState().selectedModel).toBe(readyModel!.id);
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
   });
 
@@ -471,19 +474,22 @@ describe('ModelPickerSheet', () => {
 
     useTierStore.setState({ tier: 'pro' });
 
-    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_CLOUD_MODEL_ID);
+    expect(useModelStore.getState().selectedModel).toBe(getDefaultCloudModelIdForTier('pro'));
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
   });
 
   it('keeps an accessible selection unchanged when the tier changes', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
-    useModelStore.getState().setModel('gpt-5.4-mini');
+    const freeReadyModel = getModelListForCloudAccess(true, 'free').find(
+      (model) => model.surface === 'cloud_managed' && model.availability === 'ready',
+    );
+    expect(freeReadyModel).toBeDefined();
+    useModelStore.getState().setModel(freeReadyModel!.id);
 
     useTierStore.setState({ tier: 'free' });
 
-    // Economy-list models survive even a downgrade to free.
-    expect(useModelStore.getState().selectedModel).toBe('gpt-5.4-mini');
+    expect(useModelStore.getState().selectedModel).toBe(freeReadyModel!.id);
   });
 
   it('does not render the reasoning effort selector for the local scope', () => {
@@ -524,6 +530,56 @@ describe('ModelPickerSheet', () => {
     expect(useAgentControlStore.getState().byConversation).toEqual({});
   });
 
+  it('renders the full current GPT-5.6 Sol effort ladder, including none and max', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.getState().setModel('gpt-5.6-sol');
+    const { getByLabelText, queryByLabelText } = renderPicker({ modelScope: 'cloud' });
+
+    expect(getByLabelText('Reasoning effort None')).toBeTruthy();
+    expect(getByLabelText('Reasoning effort Low')).toBeTruthy();
+    expect(getByLabelText('Reasoning effort Medium')).toBeTruthy();
+    expect(getByLabelText('Reasoning effort High')).toBeTruthy();
+    expect(getByLabelText('Reasoning effort xHigh')).toBeTruthy();
+    expect(getByLabelText('Reasoning effort Max')).toBeTruthy();
+    expect(queryByLabelText('Reasoning effort Minimal')).toBeNull();
+  });
+
+  it('hides the reasoning effort control entirely for a non-reasoning model', () => {
+    // gemini-3.1-flash-lite's catalog reasoning block is
+    // { capable: false, control: 'none' } — the control must not render at
+    // all (no disabled placeholder either): the founder rule is that the
+    // toggle is invisible, not just unusable, for a model with no efforts.
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.getState().setModel('gemini-3.1-flash-lite');
+    const { queryByTestId, queryByText } = renderPicker({ modelScope: 'cloud' });
+
+    expect(queryByTestId('model-picker-effort-selector')).toBeNull();
+    expect(queryByText('Reasoning effort')).toBeNull();
+  });
+
+  it('clamps the reasoning effort to the new model default when switching to a model that lacks the previous value', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.getState().setModel('claude-opus-4.8');
+    const { getByLabelText, getByTestId } = renderPicker({
+      modelScope: 'cloud',
+      conversationId: 'conv-1',
+    });
+
+    fireEvent.press(getByLabelText('Reasoning effort Max'));
+    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('max');
+
+    // Gemini 3.5 Flash's supportedEfforts has no 'max' — selecting it must clamp
+    // the conversation's effort to the new model's own defaultEffort instead
+    // of silently keeping a value the new model doesn't support.
+    fireEvent.press(getByTestId('model-row-gemini-3.5-flash'));
+
+    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('medium');
+    expect(getByLabelText('Reasoning effort Medium').props.accessibilityState.selected).toBe(true);
+  });
+
   it('expands the thinking toggle when re-tapping the already-selected cloud model', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
@@ -541,10 +597,44 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();
   });
 
+  it('shows Fable 5 reasoning as always on and never renders an off switch', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.getState().setModel('claude-fable-5');
+
+    const { getByLabelText, getByText, queryByLabelText } = renderPicker({
+      modelScope: 'cloud',
+    });
+    fireEvent.press(getByLabelText('Claude Fable 5, selected'));
+
+    expect(getByText('Reasoning always on')).toBeTruthy();
+    expect(queryByLabelText('Thinking mode for Claude Fable 5')).toBeNull();
+    expect(useModelStore.getState().thinkingEnabledPerModel['claude-fable-5']).toBe(true);
+  });
+
+  it('renders the current OpenAI and Anthropic roster without stale coming-soon copy', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const { getByTestId, queryByText } = renderPicker({ modelScope: 'cloud' });
+
+    for (const id of [
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'claude-fable-5',
+      'claude-opus-4.8',
+      'claude-sonnet-5',
+      'claude-haiku-4.5',
+    ]) {
+      expect(getByTestId(`model-row-${id}`)).toBeTruthy();
+    }
+    expect(queryByText('Coming soon')).toBeNull();
+  });
+
   it('selects a local auto mode when tapped', () => {
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(getByLabelText('Lite: Small local model when battery matters'));
+    fireEvent.press(getByLabelText('Economy: Lowest-cost eligible route for the task'));
 
     expect(useModelStore.getState().selectedModel).toBe('auto-economy');
   });
@@ -553,7 +643,7 @@ describe('ModelPickerSheet', () => {
     useModelStore.setState({ selectedModel: 'auto-balanced' });
     const { getByLabelText, queryByText } = renderPicker();
 
-    fireEvent.press(getByLabelText('Best: Best local model for this device'));
+    fireEvent.press(getByLabelText('Balanced: Best balance of capability, latency, and cost'));
 
     expect(queryByText('With thinking')).toBeNull();
   });

@@ -7,7 +7,7 @@ Purpose: Library view — browse uploaded and model-generated files (images, doc
 
 ## Rules
 
-- List data comes from `GET /api/library`; validate responses against the `@agiworkforce/services` library cloud contract.
+- List data comes from `GET /api/library`; validate responses against the `@agiworkforce/cloud-contracts` library contract.
 - Downloads and previews go through the owner-scoped `/api/files/{id}` serve route — never mint public URLs.
 - Reuse shared file-card components from `@agiworkforce/unified-chat`; do not fork a library-only card.
 - Honest empty/error states only — no fabricated content or metrics.

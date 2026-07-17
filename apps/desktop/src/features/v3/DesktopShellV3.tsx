@@ -4,6 +4,7 @@ import {
   CapabilityProvider,
   type ChatHostBridge,
   type ChatInterfaceProps,
+  useChatStore as useSharedChatStore,
 } from '@agiworkforce/unified-chat';
 import type { ChatRuntime } from '@agiworkforce/unified-chat';
 import { EmptyChat } from './EmptyChat';
@@ -12,11 +13,16 @@ import { Sidebar } from './Sidebar';
 import { AgiWorkProjects } from './AgiWorkProjects';
 import { AgiWorkArtifacts } from './AgiWorkArtifacts';
 import { AgiWorkScheduled } from './AgiWorkScheduled';
-import { AgiWorkDispatch } from './AgiWorkDispatch';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
+import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import {
+  formatSelectedContextDraft,
+  SelectedContextReview,
+  type SelectedContextHandoff,
+} from '../context-handoff/SelectedContextReview';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -29,7 +35,7 @@ function useV3Mode() {
   return { mode };
 }
 
-type V3Panel = 'chat' | 'projects' | 'artifacts' | 'scheduled' | 'dispatch';
+type V3Panel = 'chat' | 'projects' | 'artifacts' | 'scheduled';
 
 // ─── shell props ───────────────────────────────────────────────────────────────
 
@@ -78,6 +84,14 @@ export function DesktopShellV3({
     onModelSelectorClick?.();
   }, [onModelSelectorClick]);
 
+  const handleSelectedContextAccept = useCallback((handoff: SelectedContextHandoff) => {
+    if (selectPrivacyMode(useAppModeStore.getState()) !== 'local') {
+      throw new Error('Browser context can only be inserted into a Local Desktop conversation.');
+    }
+    setActivePanel('chat');
+    useSharedChatStore.getState().appendDraftContent(formatSelectedContextDraft(handoff));
+  }, []);
+
   const handleNewChat = useCallback(
     (projectId?: string) => {
       setActivePanel('chat');
@@ -107,11 +121,6 @@ export function DesktopShellV3({
         setActivePanel('scheduled');
         return;
       }
-      if (view === 'work-dispatch') {
-        setActivePanel('dispatch');
-        return;
-      }
-
       // Forward cloud/settings views through the host bridge.
       if (onNavigateView) {
         onNavigateView(view as Parameters<NonNullable<typeof onNavigateView>>[0]);
@@ -162,10 +171,8 @@ export function DesktopShellV3({
             <AgiWorkProjects />
           ) : activePanel === 'artifacts' ? (
             <AgiWorkArtifacts />
-          ) : activePanel === 'scheduled' ? (
-            <AgiWorkScheduled />
           ) : (
-            <AgiWorkDispatch />
+            <AgiWorkScheduled />
           )}
           <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
 
@@ -187,6 +194,7 @@ export function DesktopShellV3({
               <ArtifactPanel onClose={closeArtifactPanel} />
             </div>
           )}
+          <SelectedContextReview onAccept={handleSelectedContextAccept} />
         </div>
       </div>
     </CapabilityProvider>

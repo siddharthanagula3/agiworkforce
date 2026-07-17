@@ -78,63 +78,6 @@
       "web": "Busca en la web "
     }
   },
-  "composer": {
-    "placeholder": "¿En qué puedo ayudarte hoy?",
-    "placeholderReply": "Responde o pregunta algo más…",
-    "inputAriaLabel": "Entrada de mensaje de chat",
-    "addAriaLabel": "Añadir archivos, skills, conectores…",
-    "modelAriaLabel": "Elegir modelo",
-    "voiceAriaLabel": "Configuración de voz",
-    "stopAriaLabel": "Detener generación",
-    "sendAriaLabel": "Enviar mensaje",
-    "adaptive": "Adaptativo",
-    "standard": "Estándar",
-    "disclaimer": "La IA puede cometer errores. Verifica las respuestas."
-  },
-  "plusMenu": {
-    "addFiles": "Añadir archivos o fotos",
-    "addProject": "Añadir al proyecto",
-    "addGithub": "Añadir desde GitHub",
-    "skills": "Skills",
-    "connectors": "Conectores",
-    "plugins": "Plugins",
-    "research": "Investigar",
-    "webSearch": "Búsqueda web",
-    "useStyle": "Usar estilo",
-    "browseAll": "Ver todos los plugins",
-    "manageSkills": "Gestionar skills",
-    "addConnector": "Añadir conector"
-  },
-  "modelPopover": {
-    "primary": {
-      "premium": "Más capaz para trabajos ambiciosos",
-      "balanced": "Trabajo diario receptivo",
-      "fast": "Más rápido y eficiente"
-    },
-    "groups": {
-      "olderAnthropic": "Anthropic antiguos",
-      "otherProviders": "Otros proveedores"
-    },
-    "tags": {
-      "local": "Local"
-    },
-    "thinking": "Pensamiento adaptativo",
-    "thinkingDesc": "Piensa para tareas más complejas",
-    "moreModels": "Más modelos"
-  },
-  "micSettings": {
-    "title": "Entrada de voz",
-    "source": "Fuente",
-    "loadingDevices": "Cargando dispositivos…",
-    "defaultMic": "Micrófono predeterminado",
-    "microphone": "Micrófono",
-    "holdToRecord": "Mantener para grabar",
-    "holdToRecordDesc": "Toca para empezar, toca para parar cuando esté apagado",
-    "autoTrim": "Recortar silencio automáticamente",
-    "autoTrimDesc": "Cortar pausas al inicio/final",
-    "footer": "En dispositivo · Whisper-small",
-    "settings": "Configuración"
-  },
   "responseActions": {
     "copy": "Copiar",
     "copied": "Copiado",

@@ -29,7 +29,7 @@ import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
  * Billing plan types
  */
 // pro_plus removed 2026-06-20; 'hobby' renamed to 'basic' 2026-07-02 (see
-// packages/types/src/billing-catalog.ts). Locked tiers are free, basic, pro, max, team, enterprise.
+// packages/contracts/types/src/billing-catalog.ts). Locked tiers are free, basic, pro, max, team, enterprise.
 export type BillingPlan = 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
 
 /**
@@ -627,8 +627,35 @@ export interface InvoiceLineItem {
   };
 }
 
+/** Wire shape returned by GET /api/billing/invoices (Stripe snake_case). */
+interface InvoiceApiResponse {
+  invoices?: Array<{
+    id: string;
+    number: string;
+    status: string;
+    amount: number;
+    currency: string;
+    description: string;
+    created_at: string;
+    due_date: string | null;
+    paid_at: string | null;
+    invoice_pdf: string | null;
+    hosted_invoice_url: string | null;
+    line_items: Array<{
+      id: string;
+      description: string;
+      amount: number;
+      quantity: number;
+      period: { start: string; end: string };
+    }>;
+  }>;
+}
+
 /**
- * Fetch user invoices
+ * Fetch user invoices via /api/billing/invoices (the same real, Stripe-backed
+ * route BillingSection.tsx already uses — this hook previously returned a
+ * hardcoded [], which desynced the standalone /billing page from Settings →
+ * Billing's real invoice history).
  *
  * @returns UseQueryResult with array of Invoice
  */
@@ -637,10 +664,33 @@ export function useInvoices(): UseQueryResult<Invoice[], Error> {
 
   return useQuery<Invoice[], Error>({
     queryKey: queryKeys.billing.invoices(),
-    // TODO: Add /api/billing/invoices endpoint for invoice history.
     queryFn: async (): Promise<Invoice[]> => {
       if (!user?.id) return [];
-      return [];
+      try {
+        const res = await fetch('/api/billing/invoices', { credentials: 'include' });
+        if (!res.ok) {
+          logger.warn('[BillingQuery] /api/billing/invoices returned', res.status);
+          return [];
+        }
+        const json = (await res.json()) as InvoiceApiResponse;
+        return (json.invoices ?? []).map((inv) => ({
+          id: inv.id,
+          number: inv.number,
+          status: inv.status as Invoice['status'],
+          amount: inv.amount,
+          currency: inv.currency,
+          description: inv.description,
+          createdAt: inv.created_at,
+          dueDate: inv.due_date,
+          paidAt: inv.paid_at,
+          invoicePdf: inv.invoice_pdf,
+          hostedInvoiceUrl: inv.hosted_invoice_url,
+          lineItems: inv.line_items ?? [],
+        }));
+      } catch (err) {
+        logger.error('[BillingQuery] fetchInvoices error:', err);
+        return [];
+      }
     },
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -683,8 +733,34 @@ export interface PaymentMethod {
   createdAt: string;
 }
 
+/** Wire shape returned by GET /api/billing/payment-methods (Stripe snake_case). */
+interface PaymentMethodApiResponse {
+  payment_methods?: Array<{
+    id: string;
+    type: string;
+    is_default: boolean;
+    card?: { brand: string; last4: string; exp_month: number; exp_year: number };
+    billing_details: {
+      name: string | null;
+      email: string | null;
+      address: {
+        city: string | null;
+        country: string | null;
+        line1: string | null;
+        line2: string | null;
+        postal_code: string | null;
+        state: string | null;
+      };
+    };
+    created_at: string;
+  }>;
+}
+
 /**
- * Fetch user payment methods
+ * Fetch user payment methods via /api/billing/payment-methods (the same
+ * real, Stripe-backed route BillingSection.tsx already uses — this hook
+ * previously returned a hardcoded [], which desynced the standalone /billing
+ * page from Settings → Billing's real payment-method list).
  *
  * @returns UseQueryResult with array of PaymentMethod
  */
@@ -693,10 +769,45 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
 
   return useQuery<PaymentMethod[], Error>({
     queryKey: queryKeys.billing.paymentMethods(),
-    // TODO: Add /api/billing/payment-methods endpoint for payment method management.
     queryFn: async (): Promise<PaymentMethod[]> => {
       if (!user?.id) return [];
-      return [];
+      try {
+        const res = await fetch('/api/billing/payment-methods', { credentials: 'include' });
+        if (!res.ok) {
+          logger.warn('[BillingQuery] /api/billing/payment-methods returned', res.status);
+          return [];
+        }
+        const json = (await res.json()) as PaymentMethodApiResponse;
+        return (json.payment_methods ?? []).map((pm) => ({
+          id: pm.id,
+          type: pm.type as PaymentMethod['type'],
+          isDefault: pm.is_default,
+          card: pm.card
+            ? {
+                brand: pm.card.brand,
+                last4: pm.card.last4,
+                expMonth: pm.card.exp_month,
+                expYear: pm.card.exp_year,
+              }
+            : undefined,
+          billingDetails: {
+            name: pm.billing_details.name,
+            email: pm.billing_details.email,
+            address: {
+              city: pm.billing_details.address.city,
+              country: pm.billing_details.address.country,
+              line1: pm.billing_details.address.line1,
+              line2: pm.billing_details.address.line2,
+              postalCode: pm.billing_details.address.postal_code,
+              state: pm.billing_details.address.state,
+            },
+          },
+          createdAt: pm.created_at,
+        }));
+      } catch (err) {
+        logger.error('[BillingQuery] fetchPaymentMethods error:', err);
+        return [];
+      }
     },
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000, // 10 minutes

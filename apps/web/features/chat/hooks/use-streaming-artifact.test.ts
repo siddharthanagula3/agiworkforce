@@ -4,7 +4,7 @@ import {
   computeDerivedArtifactId,
   extractTrailingUnclosedBlock,
   type TrailingUnclosedBlock,
-} from '@agiworkforce/services';
+} from '@agiworkforce/artifacts';
 import { useStreamingArtifactSync } from './use-streaming-artifact';
 import { useStreamingArtifactStore } from '../stores/streaming-artifact-store';
 import { useArtifactsStore } from '../stores/artifacts-store';

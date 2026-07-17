@@ -52,7 +52,7 @@ export default function ApiDocsPage() {
               BYOK setup
             </Link>
             <Link href="/waitlist" className="agi-cta-ghost">
-              Team &amp; Enterprise early access →
+              SSO &amp; org-seat early access →
             </Link>
           </div>
         </section>

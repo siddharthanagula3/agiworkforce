@@ -28,7 +28,7 @@ import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 
 // ---------------------------------------------------------------------------
 // Demo Step definitions
@@ -112,9 +112,16 @@ export const useDemoStore = create<DemoState>()(
     {
       name: 'companion-demo-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[companion-demo-store] Hydration failed:', error);
+      },
     },
   ),
 );
+
+rehydrateWhenMmkvReady(useDemoStore, 'companion-demo-store');
 
 // ---------------------------------------------------------------------------
 // Step Indicator dots

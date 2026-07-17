@@ -1,18 +1,17 @@
-import { getAllowedModelsForTier, getRoutingSlotModel } from '@agiworkforce/types';
+import { getAllowedModelsForTier, getDefaultModelFor } from '@agiworkforce/types';
 
 // Free website/cloud users get the FULL Hobby experience (the economy-tier model
 // set + its features) but capped at FREE_TRIAL_PROMPT_LIMIT prompts. Every model
 // ID is read from the catalog (never hardcoded) so the trial automatically tracks
-// the live curation in packages/types/src/models.json.
+// the live curation in packages/contracts/types/src/models.json.
 
 /**
- * Default selection for a free trial: GPT-5.4 Mini — the demo/free-tier hero
- * (vision + function-calling capable, so the inline tool-call experience works
- * out of the box). Resolved from the `general_balanced` routing slot rather than
- * a literal ID. Still bounded by the 3-prompt cap + per-prompt token budget
- * below (~$0.05 worst case across all 3 prompts).
+ * Default selection for a free trial. The tier-aware catalog policy resolves
+ * the current free-chat workhorse without duplicating a model ID or selecting a
+ * model outside the Economy allowlist. Still bounded by the 3-prompt cap and
+ * per-prompt token budget below.
  */
-export const FREE_TRIAL_MODEL = getRoutingSlotModel('general_balanced');
+export const FREE_TRIAL_MODEL = getDefaultModelFor('free', 'chat');
 export const FREE_TRIAL_PROMPT_LIMIT = 3;
 
 // Per-prompt token budget. Caps a single free prompt so the 3 prompts can't be

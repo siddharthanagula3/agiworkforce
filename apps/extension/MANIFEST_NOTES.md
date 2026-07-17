@@ -21,12 +21,19 @@ mitigated by (a) requiring the tab to be on an approved origin before the agent 
 the service worker under explicit user invocation. Update `THREAT_MODEL.md` accordingly before
 Chrome Web Store submission.
 
-## `host_permissions` (localhost only)
+## `host_permissions`
 
 Broad `localhost/*` is intentional: the bridge port is user-configurable via
 `chrome.storage.local` `agi_bridge_url` (default 8787, matches the VS Code extension and the
 desktop bridge). Restricting to a fixed port would break configurability. Runtime enforcement:
 `validateBridgeUrl()` in `background.ts` rejects any non-local URL.
+
+Production builds additionally inject only the exact origins configured by
+`CLERK_FRONTEND_API` and `CLERK_SYNC_HOST`. Wildcard Clerk domains are not used.
+The release package also injects `CHROME_EXTENSION_PUBLIC_KEY`, because Clerk
+Sync Host authorization is bound to a stable `chrome-extension://<id>` origin.
+`scripts/prepare-package.mjs` fails before zipping if those requirements are not
+present in the built manifest.
 
 ## `content_security_policy`
 

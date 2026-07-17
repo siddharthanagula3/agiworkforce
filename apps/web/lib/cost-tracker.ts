@@ -91,7 +91,8 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
 
   // Use catalog cached_input price when available; fall back to 10% of input rate.
   // cached_input is defined on ModelMetadata as an optional sparse field sourced
-  // from models.synced.json (upstream-derived) or models.curation.json overrides.
+  // from packages/ai/model-registry/catalog/models.synced.json (upstream-derived)
+  // or models.curation.json overrides.
   // Confirmed prices (June 2026): Anthropic = 0.10× input, OpenAI = 0.10× input,
   // DeepSeek = per catalog, Gemini 3.5 Flash = $0.15/M.
   const cacheReadPerM = typeof meta.cached_input === 'number' ? meta.cached_input : inputPerM * 0.1;

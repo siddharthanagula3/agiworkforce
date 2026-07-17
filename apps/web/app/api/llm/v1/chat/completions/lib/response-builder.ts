@@ -9,6 +9,10 @@ import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-hel
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import type { ProcessedRequest } from './request-processor';
+import {
+  finalizeManagedUsageRequest,
+  markManagedUsageClientDelivered,
+} from '@/lib/services/managed-usage-request-service';
 
 export async function buildNonStreamResponse(
   request: NextRequest,
@@ -62,47 +66,67 @@ export async function buildNonStreamResponse(
 
   const costDifference = actualCostCents - estimatedCostCents;
 
-  try {
-    if (!freeTrial && costDifference !== 0) {
-      const reconciliationKey = CreditService.generateIdempotencyKey(
-        userId,
-        'reconciliation',
-        requestId,
-      );
-      await CreditService.deductCredits(
-        userId,
-        costDifference,
-        costDifference > 0
-          ? `Additional charge: ${provider}/${llmResponse.model}`
-          : `Credit adjustment: ${provider}/${llmResponse.model}`,
+  if (processed.managedUsage) {
+    // Financial terminal state is durable before the successful HTTP response
+    // is constructed. Do not swallow this failure and hand out an unmetered
+    // completion; stale recovery will refund customer-favorably instead.
+    await finalizeManagedUsageRequest({
+      ...processed.managedUsage,
+      outcome: 'completed',
+      actualCostCents,
+      usage: {
+        inputTokens: llmResponse.promptTokens,
+        outputTokens: llmResponse.completionTokens,
+        reasoningTokens: llmResponse.reasoningOutputTokens,
+        cacheReadTokens: llmResponse.cachedInputTokens,
+        cacheWriteTokens: llmResponse.cacheCreationInputTokens,
+        cacheWrite1hTokens: llmResponse.cacheCreation1hInputTokens,
+      },
+    });
+  } else {
+    try {
+      if (!freeTrial && costDifference !== 0) {
+        const reconciliationKey = CreditService.generateIdempotencyKey(
+          userId,
+          'reconciliation',
+          requestId,
+        );
+        await CreditService.settleCreditsDurably({
+          userId,
+          amountCents: costDifference,
+          description:
+            costDifference > 0
+              ? `Additional charge: ${provider}/${llmResponse.model}`
+              : `Credit adjustment: ${provider}/${llmResponse.model}`,
+          metadata: {
+            provider,
+            model: llmResponse.model,
+            type: 'reconciliation',
+            estimatedCostCents,
+            actualCostCents,
+            promptTokens: llmResponse.promptTokens,
+            completionTokens: llmResponse.completionTokens,
+            totalTokens: llmResponse.totalTokens,
+            requestId,
+          },
+          idempotencyKey: reconciliationKey,
+        });
+      }
+    } catch (reconciliationError) {
+      logger.error(
         {
+          error: reconciliationError,
+          userId,
+          requestId,
           provider,
           model: llmResponse.model,
-          type: 'reconciliation',
           estimatedCostCents,
           actualCostCents,
-          promptTokens: llmResponse.promptTokens,
-          completionTokens: llmResponse.completionTokens,
-          totalTokens: llmResponse.totalTokens,
-          requestId,
+          costDifference,
         },
-        reconciliationKey,
+        'Credit reconciliation failed after successful LLM response - may require manual adjustment',
       );
     }
-  } catch (reconciliationError) {
-    logger.error(
-      {
-        error: reconciliationError,
-        userId,
-        requestId,
-        provider,
-        model: llmResponse.model,
-        estimatedCostCents,
-        actualCostCents,
-        costDifference,
-      },
-      'Credit reconciliation failed after successful LLM response - may require manual adjustment',
-    );
   }
 
   // Cache analytics
@@ -168,7 +192,7 @@ export async function buildNonStreamResponse(
     responseHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
   }
 
-  return NextResponse.json(
+  const response = NextResponse.json(
     {
       id: responseId,
       object: 'chat.completion',
@@ -233,6 +257,17 @@ export async function buildNonStreamResponse(
     },
     { headers: responseHeaders },
   );
+
+  if (processed.managedUsage) {
+    // Financial settlement already succeeded. Delivery marking is audit-only;
+    // a transient audit failure must not turn a paid provider success into a
+    // client-visible error.
+    await markManagedUsageClientDelivered(processed.managedUsage).catch((error) => {
+      logger.warn({ error, userId, requestId }, 'Managed usage delivery marker failed');
+    });
+  }
+
+  return response;
 }
 
 export function buildUpstreamErrorResponse(

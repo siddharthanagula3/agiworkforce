@@ -37,6 +37,13 @@ import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop } from '@/services/cloudSyncEngine';
 
+// Expo Router only wires up a route's error boundary when the route file
+// itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
+// otherwise just an ordinary, unreachable screen. RootErrorBoundary already
+// has the full App-Store-resilience UI (retry / go back); re-export it here
+// under the name Expo Router looks for so it actually fires.
+export { default as ErrorBoundary } from './error';
+
 // Inject a CSPRNG for UUIDv7 once at module load. React Native has no global Web
 // Crypto, and the cloud sync engine's client-generated ids must never fall back to
 // Math.random (a weak RNG would risk cross-device id collisions → silent corruption).
@@ -258,6 +265,23 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
   }, [isClerkSignedIn, refreshTier]);
+
+  // Tier refresh on Local -> Cloud mode entry. The app always launches into
+  // Local mode, so the sign-in+init refresh above fires while `/api/me` is
+  // still blocked by guardedFetch's egress guard (Local mode must never call
+  // our-cloud hosts) — it fails silently and the cached/default tier ('free')
+  // sticks. Without this effect, tier only ever gets a real chance to refresh
+  // if the user happens to background/foreground the app (the effect above)
+  // or visit Settings > Billing (which had its own local copy of this same
+  // check — see cloud-billing/index.tsx). A signed-in Pro/Max user who
+  // switches to Cloud and just starts chatting would keep seeing free-tier
+  // model presets and gates for the entire session despite being entitled.
+  useEffect(() => {
+    if (!isClerkSignedIn || !isCloud) return;
+    refreshTier().catch((err) => {
+      console.warn('[RootLayout] Cloud-mode-entry tier refresh failed:', err);
+    });
+  }, [isClerkSignedIn, isCloud, refreshTier]);
 
   // LOW-MOB-3 fix: tell notifications.ts the navigator is mounted. Slot is
   // rendered on every render of this component, so on the first render we

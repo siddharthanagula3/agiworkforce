@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { execFileSync } from 'node:child_process';
 
 const root = process.cwd();
 const errors = [];
@@ -13,6 +14,11 @@ const ignoredParts = new Set([
   '.cache',
   'coverage',
   'build',
+  'out',
+  'target',
+  '.git',
+  '.next',
+  '.turbo',
 ]);
 
 function exists(relativePath) {
@@ -52,9 +58,224 @@ function requireIncludes(relativePath, expected) {
   }
 }
 
-const forbiddenWebSrcFeatureFiles = walk('apps/web/src/features');
-for (const file of forbiddenWebSrcFeatureFiles) {
-  errors.push(`Web product feature code must live in apps/web/features, not ${file}`);
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function workspaceTextFiles() {
+  const output = execFileSync('git', ['ls-files', '-co', '--exclude-standard'], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  const textExtensions = new Set([
+    '.cjs',
+    '.css',
+    '.html',
+    '.js',
+    '.json',
+    '.jsx',
+    '.md',
+    '.mjs',
+    '.rs',
+    '.scss',
+    '.sh',
+    '.toml',
+    '.ts',
+    '.tsx',
+    '.txt',
+    '.yaml',
+    '.yml',
+  ]);
+  const textBasenames = new Set(['CODEOWNERS', 'Dockerfile', 'pnpm-lock.yaml']);
+
+  return [...new Set(output.split('\n'))]
+    .filter(Boolean)
+    .filter(exists)
+    .filter(
+      (file) => textExtensions.has(path.extname(file)) || textBasenames.has(path.basename(file)),
+    );
+}
+
+const completedPackageRenames = [
+  {
+    retiredPath: ['packages', 'runtime'].join('/'),
+    canonicalPath: 'packages/client/client-runtime',
+    retiredPackage: ['@agiworkforce', 'runtime'].join('/'),
+    canonicalPackage: '@agiworkforce/client-runtime',
+    requiredExports: ['.', './node', './state', './queue', './offline-queue', './offline-sync'],
+  },
+  {
+    retiredPath: ['packages', 'api'].join('/'),
+    canonicalPath: 'packages/client/desktop-command-client',
+    retiredPackage: ['@agiworkforce', 'api'].join('/'),
+    canonicalPackage: '@agiworkforce/desktop-command-client',
+    requiredExports: ['.'],
+  },
+];
+
+const trackedTextFiles = workspaceTextFiles();
+
+// T-wave regrouping moved shared packages under stable domain groups. A plain
+// existence check is insufficient for names such as `packages/ui`: that old
+// package path now exists as a grouping directory, so stale comments and docs
+// can look valid while pointing developers at the wrong owner. Scan active
+// operational sources and current docs, while preserving point-in-time plans,
+// decisions, research, and changelog history.
+const activeOperationalFiles = trackedTextFiles.filter((file) => {
+  if (file === 'scripts/check-structure-conventions.mjs') return false;
+
+  if (
+    file === 'AGENTS.md' ||
+    file === 'CLAUDE.md' ||
+    file === 'PLAN.md' ||
+    file === 'README.md' ||
+    file === 'TODO.md'
+  ) {
+    return true;
+  }
+
+  return [
+    '.github/',
+    'apps/',
+    'crates/',
+    'infrastructure/',
+    'packages/',
+    'scripts/',
+    'services/',
+    'tools/',
+    'docs/agent-context/',
+    'docs/current/',
+    'docs/design/',
+    'docs/engineering/',
+    'docs/enterprise/',
+    'docs/launch/',
+    'docs/marketing/',
+    'docs/surfaces/',
+  ].some((prefix) => file.startsWith(prefix));
+});
+
+const completedPackageRegroupMoves = [
+  ['packages/types', 'packages/contracts/types'],
+  ['packages/model-registry', 'packages/ai/model-registry'],
+  ['packages/providers', 'packages/ai/providers'],
+  ['packages/llm-runtime', 'packages/ai/provider-runtime'],
+  ['packages/llm-normalize', 'packages/ai/provider-protocol'],
+  ['packages/routing', 'packages/ai/routing'],
+  ['packages/search', 'packages/ai/search'],
+  ['packages/cloud-contracts', 'packages/contracts/cloud-contracts'],
+  ['packages/compliance', 'packages/contracts/compliance'],
+  ['packages/licensing', 'packages/contracts/licensing'],
+  ['packages/trust-boundaries', 'packages/contracts/trust-boundaries'],
+  ['packages/client-runtime', 'packages/client/client-runtime'],
+  ['packages/desktop-command-client', 'packages/client/desktop-command-client'],
+  ['packages/sync', 'packages/client/sync'],
+  ['packages/design-tokens', 'packages/ui/design-tokens'],
+  ['packages/ui/src', 'packages/ui/ui/src'],
+  ['packages/unified-chat', 'packages/ui/unified-chat'],
+  ['packages/mcp', 'packages/tools/mcp'],
+  ['packages/skills', 'packages/tools/skills'],
+  ['packages/apply-patch', 'packages/tools/apply-patch'],
+  ['packages/browser-tool', 'packages/tools/browser-tool'],
+  ['packages/artifacts', 'packages/platform/artifacts'],
+  ['packages/data-layer', 'packages/platform/data-layer'],
+  ['packages/local-llm', 'packages/platform/local-llm'],
+  ['packages/utils', 'packages/platform/utils'],
+];
+
+for (const [retiredPath, canonicalPath] of completedPackageRegroupMoves) {
+  const pattern = new RegExp(`${escapeRegExp(retiredPath)}(?![-\\w])`, 'i');
+  for (const file of activeOperationalFiles) {
+    if (pattern.test(readText(file))) {
+      errors.push(
+        `${file} contains stale pre-regroup package path ${retiredPath}; use ${canonicalPath}.`,
+      );
+    }
+  }
+}
+
+const completedPackageRegroupRenames = [
+  ['@agiworkforce/llm-runtime', '@agiworkforce/provider-runtime'],
+  ['@agiworkforce/llm-normalize', '@agiworkforce/provider-protocol'],
+];
+
+for (const [retiredPackage, canonicalPackage] of completedPackageRegroupRenames) {
+  const pattern = new RegExp(`${escapeRegExp(retiredPackage)}(?![-\\w])`, 'i');
+  for (const file of activeOperationalFiles) {
+    if (pattern.test(readText(file))) {
+      errors.push(
+        `${file} contains stale pre-regroup package name ${retiredPackage}; use ${canonicalPackage}.`,
+      );
+    }
+  }
+}
+
+for (const rename of completedPackageRenames) {
+  if (exists(rename.retiredPath)) {
+    errors.push(
+      `Interrupted package rename: ${rename.retiredPath} still exists; only ${rename.canonicalPath} is allowed.`,
+    );
+  }
+
+  const canonicalManifestPath = `${rename.canonicalPath}/package.json`;
+  if (!exists(canonicalManifestPath)) {
+    errors.push(`Interrupted package rename: missing ${canonicalManifestPath}.`);
+    continue;
+  }
+
+  const canonicalManifest = JSON.parse(readText(canonicalManifestPath));
+  if (canonicalManifest.name !== rename.canonicalPackage) {
+    errors.push(
+      `${canonicalManifestPath} must be named ${rename.canonicalPackage}, found ${String(canonicalManifest.name)}.`,
+    );
+  }
+
+  const actualExports =
+    typeof canonicalManifest.exports === 'string'
+      ? ['.']
+      : Object.keys(canonicalManifest.exports ?? {});
+  for (const requiredExport of rename.requiredExports) {
+    if (!actualExports.includes(requiredExport)) {
+      errors.push(`${canonicalManifestPath} lost required compatibility export ${requiredExport}.`);
+    }
+  }
+
+  const retiredMarkers = [rename.retiredPath, rename.retiredPackage].map((marker) => ({
+    marker,
+    pattern: new RegExp(`${escapeRegExp(marker)}(?![-\\w])`, 'i'),
+  }));
+  for (const file of trackedTextFiles) {
+    const lowerFile = file.toLowerCase();
+    const retiredPathPrefix = `${rename.retiredPath.toLowerCase()}/`;
+    const canonicalPathPrefix = `${rename.canonicalPath.toLowerCase()}/`;
+    if (lowerFile.startsWith(retiredPathPrefix)) {
+      errors.push(`${file} remains under retired or case-variant path ${rename.retiredPath}.`);
+    }
+    if (lowerFile.startsWith(canonicalPathPrefix) && !file.startsWith(`${rename.canonicalPath}/`)) {
+      errors.push(`${file} uses incorrect path casing; expected ${rename.canonicalPath}/...`);
+    }
+
+    const body = readText(file);
+    for (const retiredMarker of retiredMarkers) {
+      if (retiredMarker.pattern.test(body)) {
+        errors.push(
+          `${file} contains stale reference to completed package rename marker ${retiredMarker.marker}.`,
+        );
+      }
+    }
+  }
+
+  const lockfile = readText('pnpm-lock.yaml').toLowerCase();
+  const retiredRelativeLink = ['link:', '..', '/', rename.retiredPath.split('/').at(-1)].join('');
+  if (lockfile.includes(retiredRelativeLink)) {
+    errors.push(`pnpm-lock.yaml contains stale package link ${retiredRelativeLink}.`);
+  }
+}
+
+// The orphan apps/web/src skeleton was deleted in the W8 dead-code sweep
+// (2026-07-15). Web product code lives in apps/web/{app,features,components,
+// lib}; a reappearing src/ tree is a structure regression.
+if (exists('apps/web/src')) {
+  errors.push('apps/web/src was deleted in W8 and must not reappear (use apps/web/features)');
 }
 
 if (exists('apps/web/.feature-migration')) {
@@ -130,9 +351,9 @@ const activeReferencePaths = [
   ...walk('docs/design'),
   ...walk('docs/research'),
   'apps/mobile/README.md',
-  'packages/data-layer/README.md',
-  ...walk('packages/data-layer/src'),
-  ...walk('packages/unified-chat/src'),
+  'packages/platform/data-layer/README.md',
+  ...walk('packages/platform/data-layer/src'),
+  ...walk('packages/ui/unified-chat/src'),
   'apps/web/app/api/me/route.ts',
   'apps/desktop/src-tauri/src/sys/commands/migration.rs',
   'apps/extension/THREAT_MODEL.md',
@@ -555,7 +776,7 @@ const workspaceFilterFiles = [
   'BUILD.md',
   'vercel.json',
   '.github/workflows/ci.yml',
-  'apps/sandbox/README.md',
+  'infrastructure/sandbox/README.md',
   'apps/web/scripts/build-chat-spa.sh',
   'apps/web/scripts/build-with-chat.sh',
   'scripts/verify-surfaces.sh',
@@ -618,7 +839,6 @@ if (exists('docs/cli/COMMAND_SURFACE.md')) {
 }
 
 requireIncludes('apps/web/README.md', '`features/` - product-domain feature code.');
-requireIncludes('apps/web/src/README.md', 'Product-domain code belongs in');
 requireIncludes('apps/web/features/index.ts', 'canonical Web product-domain root');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/web/features/`');
 requireIncludes('docs/plans/domain-first-reorg.md', '`apps/mobile/src/features');
@@ -652,8 +872,13 @@ requireIncludes('apps/cli/Cargo.toml', 'name = "agi"\npath = "src/main.rs"');
 requireIncludes('apps/cli/Cargo.toml', 'name = "agiworkforce"\npath = "src/bin/agiworkforce.rs"');
 requireIncludes('apps/cli/npm/package.json', '"agi": "bin/agi.js"');
 requireIncludes('apps/cli/npm/package.json', '"agiworkforce": "bin/agiworkforce.js"');
-requireIncludes('vercel.json', 'pnpm --filter @agiworkforce/web build');
-requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/web build');
+requireIncludes('vercel.json', 'bash apps/web/scripts/build-with-chat.sh');
+requireIncludes(
+  'apps/web/scripts/build-with-chat.sh',
+  'pnpm --filter @agiworkforce/web build:next-only',
+);
+requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run build --affected');
+requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/release-cli.yml', "- 'v-cli-*'");
 requireIncludes('.github/workflows/release-cli.yml', 'agiworkforce-*.${{ matrix.archive }}');
 requireIncludes('.github/workflows/release-cli.yml', 'platform: linux-arm64');

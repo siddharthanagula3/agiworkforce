@@ -1,15 +1,13 @@
 /**
  * Project Meta Store · web-surface local metadata keyed by project id.
  *
- * Stores per-project preferences that are not part of the canonical
- * `@agiworkforce/unified-chat` `Project` shape: the selected model id
- * for each project. Persisted to localStorage under `agi-project-meta-web`.
- *
- * v1 LOCAL-ONLY: device-local only. Cloud Managed sync is rolling out in public alpha.
+ * Stores ephemeral per-project preferences that are not yet returned by the
+ * canonical managed-cloud project contract. Web is Cloud-only, so an
+ * unscoped localStorage key must not retain one account's metadata for the
+ * next account. Durable defaults belong in the project API.
  */
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 
 interface ProjectMeta {
   /** Model id selected for this project (mirrors useModelStore.selectedModelId). */
@@ -25,33 +23,20 @@ interface ProjectMetaState {
   getProjectModel: (projectId: string) => string | undefined;
 }
 
-export const useProjectMetaStore = create<ProjectMetaState>()(
-  persist(
-    (set, get) => ({
-      meta: {},
+export const useProjectMetaStore = create<ProjectMetaState>()((set, get) => ({
+  meta: {},
 
-      setProjectModel: (projectId, modelId) =>
-        set((state) => ({
-          meta: {
-            ...state.meta,
-            [projectId]: { ...state.meta[projectId], selectedModelId: modelId },
-          },
-        })),
+  setProjectModel: (projectId, modelId) =>
+    set((state) => ({
+      meta: {
+        ...state.meta,
+        [projectId]: { ...state.meta[projectId], selectedModelId: modelId },
+      },
+    })),
 
-      getProjectModel: (projectId) => get().meta[projectId]?.selectedModelId,
-    }),
-    {
-      name: 'agi-project-meta-web',
-      storage: createJSONStorage(() => {
-        if (typeof window === 'undefined') {
-          return {
-            getItem: () => null,
-            setItem: () => undefined,
-            removeItem: () => undefined,
-          };
-        }
-        return localStorage;
-      }),
-    },
-  ),
-);
+  getProjectModel: (projectId) => get().meta[projectId]?.selectedModelId,
+}));
+
+export function resetProjectMetaStore(): void {
+  useProjectMetaStore.setState({ meta: {} });
+}

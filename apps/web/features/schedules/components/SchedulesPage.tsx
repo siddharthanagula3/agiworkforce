@@ -1,0 +1,572 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Skeleton,
+} from '@agiworkforce/ui';
+import { CalendarClock, Loader2, Plus, RotateCcw } from 'lucide-react';
+import { ScheduleCard, type ScheduleOperation } from './ScheduleCard';
+import { ScheduleForm } from './ScheduleForm';
+import type { ScheduleHistoryState } from './ScheduleRunHistory';
+import {
+  createInitialScheduleDraft,
+  scheduleToDraft,
+  validateAndBuildScheduleRequest,
+} from '../lib/schedule-form';
+import { scheduleApi, type ScheduleApi } from '../services/schedule-api';
+import type { ScheduleDraft, ScheduleFormErrors, ScheduleRun, ScheduleTask } from '../types';
+
+const SCHEDULE_PAGE_SIZE = 50;
+const RUN_PAGE_SIZE = 20;
+
+const EMPTY_HISTORY: ScheduleHistoryState = {
+  status: 'idle',
+  runs: [],
+  error: null,
+  hasMore: false,
+  nextOffset: 0,
+  loadingMore: false,
+};
+
+interface SchedulesPageProps {
+  api?: ScheduleApi;
+  now?: () => Date;
+  createIdempotencyKey?: () => string;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function uniqueSchedules(current: ScheduleTask[], incoming: ScheduleTask[]): ScheduleTask[] {
+  const byId = new Map(current.map((schedule) => [schedule.id, schedule]));
+  for (const schedule of incoming) byId.set(schedule.id, schedule);
+  return [...byId.values()];
+}
+
+function uniqueRuns(current: ScheduleRun[], incoming: ScheduleRun[]): ScheduleRun[] {
+  const byId = new Map(current.map((run) => [run.id, run]));
+  for (const run of incoming) byId.set(run.id, run);
+  return [...byId.values()].sort(
+    (left, right) => new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime(),
+  );
+}
+
+function defaultIdempotencyKey(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+export function SchedulesPage({
+  api = scheduleApi,
+  now = () => new Date(),
+  createIdempotencyKey = defaultIdempotencyKey,
+}: SchedulesPageProps) {
+  const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
+  const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [listError, setListError] = useState<string | null>(null);
+  const [hasMoreSchedules, setHasMoreSchedules] = useState(false);
+  const [nextScheduleOffset, setNextScheduleOffset] = useState(0);
+  const [loadingMoreSchedules, setLoadingMoreSchedules] = useState(false);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<ScheduleTask | null>(null);
+  const [draft, setDraft] = useState<ScheduleDraft>(() => createInitialScheduleDraft());
+  const initialDraftRef = useRef('');
+  const [formErrors, setFormErrors] = useState<ScheduleFormErrors>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [operations, setOperations] = useState<Record<string, ScheduleOperation>>({});
+  const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [historyById, setHistoryById] = useState<Record<string, ScheduleHistoryState>>({});
+  const [deleteTarget, setDeleteTarget] = useState<ScheduleTask | null>(null);
+  const [actionMessage, setActionMessage] = useState('');
+  const manualRunKeys = useRef<Record<string, string>>({});
+
+  const draftDirty = dialogOpen && JSON.stringify(draft) !== initialDraftRef.current;
+
+  const loadSchedules = useCallback(
+    async (options: { append?: boolean; offset?: number; signal?: AbortSignal } = {}) => {
+      const append = options.append ?? false;
+      setListError(null);
+      if (append) setLoadingMoreSchedules(true);
+      else {
+        setListStatus('loading');
+      }
+      const offset = append ? (options.offset ?? 0) : 0;
+      try {
+        const result = await api.listSchedules({
+          limit: SCHEDULE_PAGE_SIZE,
+          offset,
+          signal: options.signal,
+        });
+        setSchedules((current) =>
+          append ? uniqueSchedules(current, result.schedules) : result.schedules,
+        );
+        setHasMoreSchedules(result.hasMore);
+        setNextScheduleOffset(result.pagination.offset + result.pagination.limit);
+        setListStatus('success');
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        if (!append) {
+          setListStatus('error');
+          setListError(errorMessage(error, 'Schedules could not be loaded.'));
+        } else {
+          setListError(errorMessage(error, 'More schedules could not be loaded.'));
+        }
+      } finally {
+        if (append) setLoadingMoreSchedules(false);
+      }
+    },
+    [api],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadSchedules({ signal: controller.signal });
+    return () => controller.abort();
+  }, [loadSchedules]);
+
+  useEffect(() => {
+    if (!draftDirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [draftDirty]);
+
+  const setOperation = (scheduleId: string, operation: ScheduleOperation) => {
+    setOperations((current) => ({ ...current, [scheduleId]: operation }));
+  };
+  const setRowError = (scheduleId: string, message: string | null) => {
+    setRowErrors((current) => ({ ...current, [scheduleId]: message }));
+  };
+  const replaceSchedule = (next: ScheduleTask) => {
+    setSchedules((current) =>
+      current.map((schedule) => (schedule.id === next.id ? next : schedule)),
+    );
+  };
+
+  const openCreate = () => {
+    const nextDraft = createInitialScheduleDraft();
+    setEditing(null);
+    setDraft(nextDraft);
+    initialDraftRef.current = JSON.stringify(nextDraft);
+    setFormErrors({});
+    setSubmitError(null);
+    setDialogOpen(true);
+  };
+
+  const openEdit = (schedule: ScheduleTask) => {
+    const nextDraft = scheduleToDraft(schedule);
+    setEditing(schedule);
+    setDraft(nextDraft);
+    initialDraftRef.current = JSON.stringify(nextDraft);
+    setFormErrors({});
+    setSubmitError(null);
+    setDialogOpen(true);
+  };
+
+  const closeEditor = (force = false) => {
+    if (saving) return;
+    if (!force && draftDirty && !window.confirm('Discard your unsaved schedule changes?')) return;
+    setDialogOpen(false);
+    setEditing(null);
+    setFormErrors({});
+    setSubmitError(null);
+  };
+
+  const saveSchedule = async () => {
+    const validation = validateAndBuildScheduleRequest(draft, now());
+    if (!validation.ok) {
+      setFormErrors(validation.errors);
+      setSubmitError(null);
+      return;
+    }
+    setFormErrors({});
+    setSubmitError(null);
+    setSaving(true);
+    try {
+      const saved = editing
+        ? await api.updateSchedule(editing.id, validation.payload)
+        : await api.createSchedule(validation.payload);
+      setSchedules((current) =>
+        editing
+          ? current.map((schedule) => (schedule.id === saved.id ? saved : schedule))
+          : [saved, ...current],
+      );
+      setActionMessage(editing ? 'Schedule updated.' : 'Schedule created.');
+      initialDraftRef.current = JSON.stringify(draft);
+      setDialogOpen(false);
+      setEditing(null);
+    } catch (error) {
+      setSubmitError(errorMessage(error, 'Schedule could not be saved.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleEnabled = async (schedule: ScheduleTask) => {
+    setOperation(schedule.id, 'toggle');
+    setRowError(schedule.id, null);
+    try {
+      const updated = await api.setScheduleEnabled(schedule.id, !schedule.isEnabled);
+      replaceSchedule(updated);
+      setActionMessage(updated.isEnabled ? 'Schedule resumed.' : 'Schedule paused.');
+    } catch (error) {
+      setRowError(schedule.id, errorMessage(error, 'Schedule status could not be changed.'));
+    } finally {
+      setOperation(schedule.id, null);
+    }
+  };
+
+  const loadHistory = async (schedule: ScheduleTask, append = false) => {
+    const current = historyById[schedule.id] ?? EMPTY_HISTORY;
+    setHistoryById((all) => ({
+      ...all,
+      [schedule.id]: {
+        ...current,
+        status: append ? current.status : 'loading',
+        loadingMore: append,
+        error: null,
+      },
+    }));
+    try {
+      const result = await api.listRuns(schedule.id, {
+        limit: RUN_PAGE_SIZE,
+        offset: append ? current.nextOffset : 0,
+      });
+      setHistoryById((all) => ({
+        ...all,
+        [schedule.id]: {
+          status: 'success',
+          runs: append ? uniqueRuns(current.runs, result.runs) : result.runs,
+          error: null,
+          hasMore: result.hasMore,
+          nextOffset: result.pagination.offset + result.pagination.limit,
+          loadingMore: false,
+        },
+      }));
+    } catch (error) {
+      setHistoryById((all) => ({
+        ...all,
+        [schedule.id]: {
+          ...current,
+          status: append ? current.status : 'error',
+          error: errorMessage(error, 'Run history could not be loaded.'),
+          loadingMore: false,
+        },
+      }));
+    }
+  };
+
+  const toggleHistory = (schedule: ScheduleTask) => {
+    if (expandedHistoryId === schedule.id) {
+      setExpandedHistoryId(null);
+      return;
+    }
+    setExpandedHistoryId(schedule.id);
+    const current = historyById[schedule.id];
+    if (!current || current.status === 'idle') void loadHistory(schedule);
+  };
+
+  const runNow = async (schedule: ScheduleTask) => {
+    setOperation(schedule.id, 'run');
+    setRowError(schedule.id, null);
+    const key = manualRunKeys.current[schedule.id] ?? createIdempotencyKey();
+    manualRunKeys.current[schedule.id] = key;
+    try {
+      const result = await api.runNow(schedule.id, key);
+      delete manualRunKeys.current[schedule.id];
+      setHistoryById((all) => {
+        const current = all[schedule.id] ?? EMPTY_HISTORY;
+        return {
+          ...all,
+          [schedule.id]: {
+            ...current,
+            status: 'success',
+            runs: uniqueRuns(current.runs, [result.run]),
+          },
+        };
+      });
+      try {
+        replaceSchedule(await api.getSchedule(schedule.id));
+      } catch {
+        setRowError(
+          schedule.id,
+          'The run finished, but the schedule summary could not be refreshed.',
+        );
+      }
+      setActionMessage(
+        result.run.status === 'success'
+          ? 'Schedule finished successfully.'
+          : `Schedule finished with status ${result.run.status}.`,
+      );
+    } catch (error) {
+      setRowError(schedule.id, errorMessage(error, 'Schedule could not be run.'));
+    } finally {
+      setOperation(schedule.id, null);
+    }
+  };
+
+  const deleteSchedule = async () => {
+    const target = deleteTarget;
+    if (!target) return;
+    setOperation(target.id, 'delete');
+    setRowError(target.id, null);
+    try {
+      await api.deleteSchedule(target.id);
+      setSchedules((current) => current.filter((schedule) => schedule.id !== target.id));
+      setHistoryById((current) => {
+        const next = { ...current };
+        delete next[target.id];
+        return next;
+      });
+      if (expandedHistoryId === target.id) setExpandedHistoryId(null);
+      setDeleteTarget(null);
+      setActionMessage('Schedule deleted.');
+    } catch (error) {
+      setRowError(target.id, errorMessage(error, 'Schedule could not be deleted.'));
+      setDeleteTarget(null);
+    } finally {
+      setOperation(target.id, null);
+    }
+  };
+
+  const sortedSchedules = useMemo(
+    () =>
+      [...schedules].sort((left, right) => {
+        if (left.isEnabled !== right.isEnabled) return left.isEnabled ? -1 : 1;
+        const leftNext = left.nextExecutionAt ? new Date(left.nextExecutionAt).getTime() : Infinity;
+        const rightNext = right.nextExecutionAt
+          ? new Date(right.nextExecutionAt).getTime()
+          : Infinity;
+        return leftNext - rightNext || right.createdAt.localeCompare(left.createdAt);
+      }),
+    [schedules],
+  );
+
+  return (
+    <main className="min-h-full bg-background text-foreground">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+        <header className="flex flex-col gap-5 border-b border-border/70 pb-7 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-3xl space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <CalendarClock className="h-4 w-4" aria-hidden="true" />
+              Managed Cloud
+            </div>
+            <h1 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+              Schedules
+            </h1>
+            <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Run self-contained text tasks at a future time or on a recurring schedule. Times stay
+              anchored to the IANA time zone you choose, including daylight-saving changes.
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="rounded-full border border-border px-2.5 py-1">Text Output</span>
+              <span className="rounded-full border border-border px-2.5 py-1">Managed Models</span>
+              <span className="rounded-full border border-border px-2.5 py-1">No Chat Memory</span>
+              <span className="rounded-full border border-border px-2.5 py-1">No Tools</span>
+            </div>
+          </div>
+          <Button type="button" onClick={openCreate} className="shrink-0">
+            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+            Create Schedule
+          </Button>
+        </header>
+
+        <div
+          role="status"
+          aria-label="Schedule action result"
+          aria-live="polite"
+          className={actionMessage ? 'text-sm text-emerald-700 dark:text-emerald-300' : 'sr-only'}
+        >
+          {actionMessage || 'No schedule action completed.'}
+        </div>
+
+        {listStatus === 'loading' && (
+          <section role="status" aria-label="Loading schedules" className="space-y-4">
+            {[0, 1, 2].map((item) => (
+              <Skeleton key={item} className="h-52 w-full rounded-2xl" />
+            ))}
+            <span className="sr-only">Loading schedules…</span>
+          </section>
+        )}
+
+        {listStatus === 'error' && (
+          <section className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-center">
+            <p role="alert" className="text-sm text-destructive">
+              {listError ?? 'Schedules could not be loaded.'} Check your connection, then retry.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-4"
+              onClick={() => void loadSchedules()}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+              Retry Loading Schedules
+            </Button>
+          </section>
+        )}
+
+        {listStatus === 'success' && sortedSchedules.length === 0 && (
+          <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center">
+            <CalendarClock className="mx-auto h-9 w-9 text-muted-foreground" aria-hidden="true" />
+            <h2 className="mt-4 text-xl font-semibold">No schedules yet</h2>
+            <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+              Create a self-contained Managed Cloud text task and choose exactly when it can run.
+            </p>
+            <Button type="button" className="mt-5" onClick={openCreate}>
+              Create Your First Schedule
+            </Button>
+          </section>
+        )}
+
+        {listStatus === 'success' && sortedSchedules.length > 0 && (
+          <section aria-label="Your Schedules" className="space-y-4">
+            {listError && (
+              <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+                {listError} Retry loading more schedules.
+              </p>
+            )}
+            {sortedSchedules.map((schedule) => (
+              <ScheduleCard
+                key={schedule.id}
+                schedule={schedule}
+                operation={operations[schedule.id] ?? null}
+                error={rowErrors[schedule.id] ?? null}
+                historyExpanded={expandedHistoryId === schedule.id}
+                history={historyById[schedule.id] ?? EMPTY_HISTORY}
+                onToggleEnabled={(selected) => void toggleEnabled(selected)}
+                onRunNow={(selected) => void runNow(selected)}
+                onEdit={openEdit}
+                onDelete={setDeleteTarget}
+                onToggleHistory={toggleHistory}
+                onRetryHistory={(selected) => void loadHistory(selected)}
+                onLoadMoreHistory={(selected) => void loadHistory(selected, true)}
+              />
+            ))}
+            {hasMoreSchedules && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void loadSchedules({ append: true, offset: nextScheduleOffset })}
+                  disabled={loadingMoreSchedules}
+                  aria-busy={loadingMoreSchedules}
+                >
+                  {loadingMoreSchedules && (
+                    <Loader2
+                      className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {loadingMoreSchedules
+                    ? 'Loading More…'
+                    : listError
+                      ? 'Retry Loading More Schedules'
+                      : 'Load More Schedules'}
+                </Button>
+              </div>
+            )}
+          </section>
+        )}
+      </div>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) closeEditor();
+        }}
+      >
+        <DialogContent
+          className="flex h-[min(92dvh,54rem)] max-h-[calc(100dvh-1rem)] flex-col sm:max-w-2xl"
+          closeLabel="Close schedule editor"
+        >
+          <DialogHeader className="shrink-0">
+            <DialogTitle>{editing ? 'Edit Schedule' : 'Create Schedule'}</DialogTitle>
+            <DialogDescription>
+              Configure a text-only Managed Cloud task. The server validates timing again before
+              saving.
+            </DialogDescription>
+          </DialogHeader>
+          <ScheduleForm
+            draft={draft}
+            errors={formErrors}
+            submitError={submitError}
+            saving={saving}
+            isEdit={Boolean(editing)}
+            onChange={(patch) => {
+              setDraft((current) => ({ ...current, ...patch }));
+              setFormErrors((current) => {
+                const next = { ...current };
+                for (const field of Object.keys(patch) as (keyof ScheduleDraft)[])
+                  delete next[field];
+                return next;
+              });
+              setSubmitError(null);
+            }}
+            onSubmit={() => void saveSchedule()}
+            onCancel={() => closeEditor()}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && deleteTarget && operations[deleteTarget.id] !== 'delete')
+            setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Schedule?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Delete “{deleteTarget?.name}” and its run history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={Boolean(deleteTarget && operations[deleteTarget.id] === 'delete')}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={Boolean(deleteTarget && operations[deleteTarget.id] === 'delete')}
+              onClick={(event) => {
+                event.preventDefault();
+                void deleteSchedule();
+              }}
+            >
+              {deleteTarget && operations[deleteTarget.id] === 'delete'
+                ? 'Deleting…'
+                : 'Delete Schedule'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </main>
+  );
+}
+
+export default SchedulesPage;

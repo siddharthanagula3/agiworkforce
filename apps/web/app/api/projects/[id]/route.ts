@@ -14,32 +14,10 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
+import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getNeonDb } from '@/lib/server/neon-db';
-import {
-  PRIVACY_MODES,
-  PROVIDER_MODES,
-  SYNCED_APP_SURFACES,
-  DEVELOPER_SESSION_SURFACES,
-  type PrivacyMode,
-  type ProviderMode,
-  type ProjectAccentColor,
-  type ProjectImportSource,
-  type SourceSurface,
-} from '@agiworkforce/types';
-
-const ACCENT_COLORS: readonly ProjectAccentColor[] = [
-  'emerald',
-  'sky',
-  'amber',
-  'rose',
-  'violet',
-  'zinc',
-];
-const IMPORT_SOURCES: readonly ProjectImportSource[] = ['claude', 'openai', 'manual'];
-const ALL_SURFACES: readonly SourceSurface[] = [
-  ...SYNCED_APP_SURFACES,
-  ...DEVELOPER_SESSION_SURFACES,
-];
+import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
+import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -54,7 +32,9 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
 
   const [data] = await db.query<Record<string, unknown>>(
-    `select * from user_projects where id = $1 and user_id = $2 limit 1`,
+    `select * from user_projects
+     where id = $1 and user_id = $2 and deleted_at is null
+     limit 1`,
     [id, userId],
   );
 
@@ -79,88 +59,13 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   const db = getNeonDb();
   const { id } = await context.params;
 
-  let body: {
-    name?: string;
-    description?: string;
-    instructions?: string;
-    color?: string;
-    isArchived?: boolean;
-    iconEmoji?: string | null;
-    accentColor?: ProjectAccentColor | null;
-    defaultPrivacyMode?: PrivacyMode;
-    defaultProviderMode?: ProviderMode;
-    allowedSurfaces?: SourceSurface[];
-    defaultModelId?: string | null;
-    importedFrom?: ProjectImportSource | null;
-  };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
-
-  if (body.name !== undefined) {
-    if (typeof body.name !== 'string' || body.name.trim().length === 0) {
-      throw createError.validation('Name must be a non-empty string');
-    }
-    if (body.name.trim().length > 200) {
-      throw createError.validation('Name must be 200 characters or less');
-    }
-  }
-
-  if (
-    body.description !== undefined &&
-    body.description !== null &&
-    body.description.length > 2_000
-  ) {
-    throw createError.validation('Description must be 2,000 characters or less');
-  }
-
-  if (
-    body.instructions !== undefined &&
-    body.instructions !== null &&
-    body.instructions.length > 10_000
-  ) {
-    throw createError.validation('Instructions must be 10,000 characters or less');
-  }
-
-  if (
-    body.defaultPrivacyMode !== undefined &&
-    !(PRIVACY_MODES as readonly string[]).includes(body.defaultPrivacyMode)
-  ) {
-    throw createError.validation(`defaultPrivacyMode must be one of: ${PRIVACY_MODES.join(', ')}`);
-  }
-
-  if (
-    body.defaultProviderMode !== undefined &&
-    !(PROVIDER_MODES as readonly string[]).includes(body.defaultProviderMode)
-  ) {
-    throw createError.validation(
-      `defaultProviderMode must be one of: ${PROVIDER_MODES.join(', ')}`,
-    );
-  }
-
-  if (
-    body.accentColor !== undefined &&
-    body.accentColor !== null &&
-    !(ACCENT_COLORS as readonly string[]).includes(body.accentColor)
-  ) {
-    throw createError.validation(`accentColor must be one of: ${ACCENT_COLORS.join(', ')}`);
-  }
-
-  if (
-    body.importedFrom !== undefined &&
-    body.importedFrom !== null &&
-    !(IMPORT_SOURCES as readonly string[]).includes(body.importedFrom)
-  ) {
-    throw createError.validation(`importedFrom must be one of: ${IMPORT_SOURCES.join(', ')}`);
-  }
-
-  if (body.iconEmoji !== undefined && body.iconEmoji !== null) {
-    if (typeof body.iconEmoji !== 'string' || body.iconEmoji.length > 16) {
-      throw createError.validation('iconEmoji must be a string of 16 characters or less');
-    }
-  }
+  const body = parseProjectRequest(ManagedCloudProjectUpdateRequestSchema, rawBody);
 
   // Build SET clauses for legacy fields
   const baseSetClauses: string[] = ['updated_at = now()'];
@@ -195,10 +100,10 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.defaultProviderMode !== undefined)
     addRound10('default_provider_mode', body.defaultProviderMode);
   if (body.allowedSurfaces !== undefined) {
-    const filtered = body.allowedSurfaces.filter((s) =>
-      (ALL_SURFACES as readonly string[]).includes(s),
+    addRound10(
+      'allowed_surfaces',
+      body.allowedSurfaces.length > 0 ? body.allowedSurfaces : [...SYNCED_APP_SURFACES],
     );
-    addRound10('allowed_surfaces', filtered.length > 0 ? filtered : [...SYNCED_APP_SURFACES]);
   }
   if (body.defaultModelId !== undefined) addRound10('default_model_id', body.defaultModelId);
   if (body.importedFrom !== undefined) addRound10('imported_from', body.importedFrom);
@@ -214,7 +119,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     const idIdx = params.length + 1;
     const userIdx = params.length + 2;
     return {
-      sql: `update user_projects set ${setClauses.join(', ')} where id = $${idIdx} and user_id = $${userIdx} returning *`,
+      sql: `update user_projects set ${setClauses.join(', ')} where id = $${idIdx} and user_id = $${userIdx} and deleted_at is null returning *`,
       params: [...params, id, userId],
     };
   }
@@ -263,6 +168,7 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const db = getNeonDb();
   const { id } = await context.params;
 
+  let affected: number;
   try {
     // SOFT-delete (set the deleted_at tombstone) instead of a hard DELETE so the
     // deletion propagates across devices via cross-device sync (0041). The BEFORE
@@ -270,7 +176,7 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
     // carries the tombstone. Hard-deleting would resurrect the row on the next pull
     // from another device that still has it. updated_at is bumped so last-writer-wins
     // treats the delete as the latest change.
-    await db.execute(
+    affected = await db.execute(
       `update user_projects
          set deleted_at = now(), updated_at = now()
        where id = $1 and user_id = $2 and deleted_at is null`,
@@ -279,6 +185,10 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   } catch (error) {
     logger.error({ error, projectId: id, userId }, 'Failed to delete project');
     throw createError.internal('Failed to delete project');
+  }
+
+  if (affected === 0) {
+    throw createError.notFound('Project not found');
   }
 
   return NextResponse.json({ success: true });

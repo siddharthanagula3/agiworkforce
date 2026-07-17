@@ -1,7 +1,7 @@
 # AGI Workforce Chrome Extension — Threat Model
 
 **Surface:** `apps/extension/` (Chrome MV3 v1.2.0)
-**Last updated:** 2026-06-11
+**Last updated:** 2026-07-15
 **Owners:** Chrome extension engineer (delegated). Audit owner per `docs/current/agent-and-repo-operability.md`.
 
 This document declares the trust planes, data classes, and flow rules that
@@ -17,28 +17,29 @@ mitigation is shaped the way it is.
 
 ## 1. Trust planes (most-trusted → least-trusted)
 
-| Plane                                           | Reachable code                                                                        | Trust assumption                                                                                                                                                                                                |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A. Extension page**                           | popup, side panel, options                                                            | The user _intends_ this action. `sender.id === chrome.runtime.id && !sender.tab` is the predicate.                                                                                                              |
-| **B. Native messaging host**                    | desktop bridge over `chrome.runtime.connectNative('com.agiworkforce.browser')`        | Installed by the user via a separate desktop-app installer. Trusted to host the LLM, but its responses are still validated (`validateShortcutActions` on bridge-supplied action plans — L-09 audit 2026-05-19). |
-| **C. Local desktop HTTP bridge**                | `http://localhost:8787` (port configurable via `agi_bridge_url` chrome.storage.local) | Trusted only after pairing (token in `chrome.storage.session.agi_bridge_token`). URL validated by `validateBridgeUrl`.                                                                                          |
-| **D. Content script on allowlisted origin**     | `agi_site_allowlist` Set in chrome.storage.local                                      | The user added this origin specifically. Can drive its own tab's DOM via `DOM_MUTATION_MESSAGE_TYPES`, query its own page context, call `REPLAY_SHORTCUT` on shortcuts it created (origin-stamped).             |
-| **E. Content script on non-allowlisted origin** | any `http(s)://*/*` page where the user has NOT clicked "allow"                       | Untrusted. Messages rejected at `isAllowlistedSender`.                                                                                                                                                          |
-| **F. Page DOM / page-supplied data**            | innerText, JSON-LD blocks, WebMCP tool descriptions, NLWeb probe responses            | Fully untrusted, even on allowlisted origins. Sanitization, redaction, size caps applied.                                                                                                                       |
+| Plane                                           | Reachable code                                                                        | Trust assumption                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Extension page**                           | popup, side panel, options                                                            | The user _intends_ this action. `sender.id === chrome.runtime.id && !sender.tab` is the predicate.                                                                                                                                                                                                                                                |
+| **B. Managed Cloud API**                        | exact-match `https://agiworkforce.com/api/llm/v1/*` endpoints                         | Remote privileged boundary. Requires a fresh Clerk Native API bearer token, authenticates model admission server-side, and owns Chrome chat inference. Client tier, model, quota, and routing claims are untrusted.                                                                                                                               |
+| **C. Native messaging host**                    | desktop bridge over `chrome.runtime.connectNative('com.agiworkforce.browser')`        | Installed by the user via the Desktop installer. Chrome's launch origin is bound to the configured extension ID. Only the initial `connect` is unsigned; every subsequent request and response requires the negotiated per-process HMAC session secret. Native messaging owns explicit context handoff and browser mechanics, not chat inference. |
+| **D. Local desktop HTTP bridge**                | `http://localhost:8787` (port configurable via `agi_bridge_url` chrome.storage.local) | Trusted only after pairing (token in `chrome.storage.session.agi_bridge_token`). URL validated by `validateBridgeUrl`. It does not own Chrome chat inference.                                                                                                                                                                                     |
+| **E. Content script on allowlisted origin**     | `agi_site_allowlist` Set in chrome.storage.local                                      | The user added this origin specifically. Can drive its own tab's DOM via `DOM_MUTATION_MESSAGE_TYPES`, query its own page context, call `REPLAY_SHORTCUT` on shortcuts it created (origin-stamped).                                                                                                                                               |
+| **F. Content script on non-allowlisted origin** | any `http(s)://*/*` page where the user has NOT clicked "allow"                       | Untrusted. Messages rejected at `isAllowlistedSender`.                                                                                                                                                                                                                                                                                            |
+| **G. Page DOM / page-supplied data**            | innerText, JSON-LD blocks, WebMCP tool descriptions, NLWeb probe responses            | Fully untrusted, even on allowlisted origins. Sanitization, redaction, size caps applied.                                                                                                                                                                                                                                                         |
 
 ---
 
 ## 2. Data classes
 
-| Class                | Where stored                                      | Egress allowed to                                                                                                  | Notes                                                                                                                   |
-| -------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| Provider API key     | `chrome.storage.session.agi_api_key`              | The configured provider's HTTPS endpoint. **Never** the local bridge (chrome-HIGH-3).                              | Written exclusively by the trusted side-panel UI.                                                                       |
-| Web API session      | Browser cookies managed by the AGI web app        | AGI web/API origins only. Extension waitlist and invite calls must use the web API boundary, not database clients. | Configured by `VITE_API_BASE_URL` / `VITE_AGI_WEB_API_BASE_URL`; absent config fails closed.                            |
-| Bridge pairing token | `chrome.storage.session.agi_bridge_token`         | Local bridge only (`X-Bridge-Token` header). Shape validated (H-07): `^[A-Za-z0-9_\-]{32,128}$`.                   | Set by pairing flow.                                                                                                    |
-| Autofill profile     | `chrome.storage.local.agi_autofill_profile`       | Form fields on `linkedin.com` / `jobs.lever.co` autofill targets. **Never** `chrome.storage.sync` (H-04).          | Migrated from sync via `migrateAutofillProfile()`.                                                                      |
-| Recorded actions     | `chrome.storage.local.agi_recorded_actions`       | Replay against recorder's own tab.                                                                                 | Default selector-only (C-05). Opt-in to values drops passwords, redacts `cc-*` / `one-time-code`, runs `redactSecrets`. |
-| Page innerText       | Sent to desktop LLM via native port / HTTP bridge | Allowlisted origins only (H-06b).                                                                                  | Invisible Unicode stripped + secrets redacted via `sanitizePageText`. Capped at `MAX_CONTEXT_HTML_CHARS` (100 KB).      |
-| Conversation history | `chrome.storage.local.agi_conversation_history`   | Same as page innerText (forwarded as LLM context).                                                                 | 100 entries cap, 30-day TTL.                                                                                            |
+| Class                | Where stored                                                            | Egress allowed to                                                                                                          | Notes                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Legacy provider key  | Removed from local, session, and sync storage at service-worker startup | **Nowhere.** Chrome has no BYOK execution path and chat code never reads or transmits this value.                          | `purgeLegacyProviderCredentials` is idempotent and attempts every storage plane independently.                          |
+| Managed session      | Clerk Chrome Extension SDK-managed session state                        | Exact-match AGI Managed Cloud endpoints only.                                                                              | The app never owns or accepts a hand-pasted production token. The MV3 worker asks Clerk for a fresh token; retired manual keys are cleanup-only. |
+| Bridge pairing token | `chrome.storage.session.agi_bridge_token`                               | Local bridge only (`X-Bridge-Token` header). Shape validated (H-07): `^[A-Za-z0-9_\-]{32,128}$`.                           | Set by pairing flow.                                                                                                    |
+| Autofill profile     | `chrome.storage.local.agi_autofill_profile`                             | Form fields on `linkedin.com` / `jobs.lever.co` autofill targets. **Never** `chrome.storage.sync` (H-04).                  | Migrated from sync via `migrateAutofillProfile()`.                                                                      |
+| Recorded actions     | `chrome.storage.local.agi_recorded_actions`                             | Replay against recorder's own tab.                                                                                         | Default selector-only (C-05). Opt-in to values drops passwords, redacts `cc-*` / `one-time-code`, runs `redactSecrets`. |
+| Page innerText       | Ephemeral request context                                               | Only an explicit user chat submission or an approved selected/redacted handoff; never automatic navigation/readiness sync. | Invisible Unicode stripped + secrets redacted via `sanitizePageText`. Capped at `MAX_CONTEXT_HTML_CHARS` (100 KB).      |
+| Conversation history | `chrome.storage.local.agi_browser_conversations_v2`                     | Managed Cloud chat context only. It never joins Web/Mobile/Desktop consumer-chat synchronization implicitly.               | v1 and legacy stores migrate locally. Each conversation owns its model-selection and route-continuity state.            |
 
 ---
 
@@ -59,8 +60,17 @@ Runtime access is narrower than the manifest:
 - Desktop bridge calls require explicit pairing before an `X-Bridge-Token` is
   attached to local bridge requests.
 
-Demo rule: show Chrome as an approved-site companion for AGI Desktop, not as an
-ungated web automation product.
+Demo rule: show Chrome as a Managed Cloud chat and approved-site browser companion.
+Native messaging is an explicit Desktop context-handoff/browser-mechanics boundary,
+not a fallback inference path.
+
+### 2.2 Incognito boundary
+
+The manifest sets `"incognito": "not_allowed"`. Chrome documents that both
+`chrome.storage.local` and `chrome.storage.sync` remain shared even in split mode;
+therefore split processes alone cannot isolate browser conversations, route state,
+tokens, automation records, or allowlists. Incognito support stays disabled until
+every persistent data class has an explicitly separate storage owner and lifecycle.
 
 ---
 
@@ -152,6 +162,16 @@ The computer-use feature drives a tab via the agent loop (`features/computer-use
 - **Page-data egress is a trust-boundary crossing.** Action planning sends page content/screenshots to the LLM (managed gateway). This leaves the page's trust plane; page text must pass `sanitizePageText` (3.4) and our-cloud targets stay on the exact-match gateway allowlist (3.10).
 - **`chrome.debugger` scope / detach.** CDP control requires the `debugger` permission (per-tab attach). The attach surfaces Chrome's "started debugging this browser" banner (cannot be suppressed); the loop must detach when the goal completes or the tab closes so no stale CDP session outlives the task.
 
+### 3.15 Native messaging and selected-context handoff
+
+- Chrome supplies the invoking extension origin when launching the native host. Desktop binds the in-protocol `extension_id` claim to that OS-mediated origin and the manifest allowlist.
+- The first `connect` request is the only unsigned message. Desktop returns a random 32-byte per-process secret, and Chrome refuses to mark the bridge connected unless that secret is present and well formed.
+- Every later request signs `id|timestamp|exact JSON.stringify(message)` with HMAC-SHA256. Desktop rejects missing/invalid MACs, expired/future envelopes, duplicate request IDs, malformed IDs, and replay-cache overflow. Responses use the same authenticated envelope discipline.
+- Service-worker suspension sends no ad-hoc protocol envelope. `onSuspend` marks suspension in progress, cancels any pending reconnect timer, and closes the native port; the disconnect handler sees the suspension flag and does not schedule a reconnect. The next worker instance must establish a new port and negotiate a fresh authenticated session.
+- A context-menu selection is stored only as a redacted, size-limited, query-free preview. Nothing crosses the native boundary until the extension page explicitly approves it.
+- Desktop validates the approved payload again, stages it as `desktop_context_preview`, and does not inject it into a conversation automatically. The Desktop UI recovers late native stages, validates the exact payload and expiry again, and presents an explicit review dialog with the query-free source URL, a URL-derived source label, and the selected text marked as untrusted page data.
+- Accept is enabled only in the Local Desktop trust plane and writes the exact reviewed payload into the canonical composer draft without sending it. Discard and expiry remove the preview without insertion; exact-match native acknowledgement prevents an older review from clearing a newer stage. The authenticated protocol does not currently carry the page title, so the displayed source label is explicitly identified as URL-derived rather than asserted to be the page title.
+
 ---
 
 ## 4. Invariants the test suite enforces
@@ -166,10 +186,16 @@ These are contracts every PR must keep — failing any of them is a release-bloc
 - `redactSecrets` covers all 14 patterns (`security-fixes.test.ts` P1-14 + `extract-page-html-unicode.test.ts`).
 - `sanitizePageText` strips invisible Unicode (`extract-page-html-unicode.test.ts`).
 - Side panel does NOT send `apiKey:` on CHAT_MESSAGE; background `handleChatMessage` does NOT destructure `apiKey` (static AST checks in `security-fixes.test.ts`).
+- Chrome chat and in-page prompt handlers use the Managed Cloud owner and never fall back to native messaging or the local Desktop HTTP bridge (`security-fixes.test.ts`).
+- The manifest explicitly disallows incognito while browser-owned data uses shared Chrome local storage (`manifest-contract.test.ts`).
+- Production packaging requires an exact HTTPS Clerk Frontend API/Sync Host,
+  a live publishable key, and stable CRX public key; it never emits wildcard
+  Clerk host permissions (`release-manifest-config.test.ts`).
 - `migrateAutofillProfile` is idempotent + clears sync (`autofill-storage.test.ts`).
 - Recorder defaults to selector-only and redacts password / cc / one-time-code on opt-in (`recorder-redaction.test.ts`).
 - `CAPTURE_SCREENSHOT` restricts content scripts to their own tab (`screenshot-tab-restriction.test.ts`).
-- `tabs.onUpdated` sync gated on allowlist (`tab-updated-allowlist.test.ts`).
+- No readiness/navigation listener performs implicit page-context transfer (`context-handoff-boundary.test.ts`).
+- Only the initial native `connect` response may be unsigned; every post-connect request and response requires the negotiated HMAC session (`context-handoff-boundary.test.ts` plus Desktop native-messaging tests).
 - No `<<<<<<<` or `>>>>>>>` markers in `src/` or `__tests__/` (`scripts/check-conflict-markers.sh`, wired as `pretest`).
 - `patchConsole` removed entirely (`security-fixes.test.ts` M-13 block).
 - Computer-use defaults to ask-before-acting: an unset `agi_cu_ask_before_acting` is treated as gated (default-deny), never allow-all (`computer-use-default-ask.test.ts`; §3.14).
@@ -179,12 +205,14 @@ These are contracts every PR must keep — failing any of them is a release-bloc
 
 ## 5. Known residual risks (tracked, not yet mitigated)
 
-| Risk                                    | Why deferred                                                                                                                                     | Tracking                                                                                                                                                           |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `chrome.storage.sync` history retention | The migrator (H-04) clears the _current_ sync value but Google retains history. Notifying existing users is a product decision.                  | PR description for the audit batch.                                                                                                                                |
-| ~~`style-src 'unsafe-inline'` in CSP~~  | ~~Inline-style usage is pervasive. Refactor is bigger than the audit batch.~~                                                                    | **M-08 RESOLVED 2026-05-19**: popup.html / side_panel.html load styles via `<link>`; side_panel.ts uses Constructable Stylesheets (`document.adoptedStyleSheets`). |
-| Pre-stamp legacy records                | Records without `createdByOrigin` are permitted at fire-time (legacy grace).                                                                     | Acceptable: field set on creation post-fix.                                                                                                                        |
-| Cross-extension messaging               | `externally_connectable` not declared, so other extensions cannot send. If that changes, message-router gates must extend their sender-id check. | Declared rule, not a tested invariant today.                                                                                                                       |
+| Risk                                                | Why deferred                                                                                                                                               | Tracking                                                                                                                                                                  |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chrome.storage.sync` history retention             | The migrator (H-04) clears the _current_ sync value but Google retains history. Notifying existing users is a product decision.                            | PR description for the audit batch.                                                                                                                                       |
+| ~~`style-src 'unsafe-inline'` in CSP~~              | ~~Inline-style usage is pervasive. Refactor is bigger than the audit batch.~~                                                                              | **M-08 RESOLVED 2026-05-19**: popup.html / side_panel.html load styles via `<link>`; side_panel.ts uses Constructable Stylesheets (`document.adoptedStyleSheets`).        |
+| Pre-stamp legacy records                            | Records without `createdByOrigin` are permitted at fire-time (legacy grace).                                                                               | Acceptable: field set on creation post-fix.                                                                                                                               |
+| Cross-extension messaging                           | `externally_connectable` not declared, so other extensions cannot send. If that changes, message-router gates must extend their sender-id check.           | Declared rule, not a tested invariant today.                                                                                                                              |
+| Clerk dashboard/store identity                      | Native API enablement and production `allowed_origins` are external state; repository tests cannot prove them.                                             | Release is blocked until the stable store ID is added as `chrome-extension://<id>` and verified against the production instance.                                          |
+| ~~Staged Desktop context has no accept/discard UI~~ | ~~The authenticated receiver deliberately does not inject selected text into chat; Desktop had no frontend listener for `extension:selected_text_query`.~~ | **RESOLVED 2026-07-15:** Desktop now has a Local-only, explicit context review with accept/discard, expiry, late-stage recovery, queueing, and listener cleanup coverage. |
 
 ---
 

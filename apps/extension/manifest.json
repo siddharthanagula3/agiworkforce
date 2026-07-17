@@ -2,9 +2,10 @@
   "manifest_version": 3,
   "name": "AGI Browser Companion",
   "version": "1.2.0",
-  "description": "Approved-site browser context and automation for AGI Desktop",
+  "description": "Managed Cloud chat, approved-site browser context, and automation for AGI",
   "author": "AGI",
   "homepage_url": "https://agiworkforce.com",
+  "incognito": "not_allowed",
   "permissions": [
     "activeTab",
     "tabs",

@@ -2,7 +2,7 @@
 /**
  * Mobile shared-primitive snapshot tests.
  *
- * Mirrors `packages/unified-chat/src/components/__tests__/SharedPrimitives.snapshot.test.tsx`
+ * Mirrors `packages/ui/unified-chat/src/components/__tests__/SharedPrimitives.snapshot.test.tsx`
  * for the RN-native ProjectHeader. Locks the rendered RN tree so any future
  * layout drift fires a diff. Structural visual-verification step — not
  * pixel parity. Discharges part of the Stop-hook visual-verification debt

@@ -21,7 +21,7 @@ describe('cloudAccountAuth', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        // Contract-valid /api/me payload (packages/services cloud-contracts/me.ts):
+        // Contract-valid /api/me payload (packages/contracts/cloud-contracts/src/me.ts):
         // the route returns unix-second numbers for updated_at/current_period_end
         // and always includes display_name, the two base flags, credits, and
         // routing_preferences. Extra feature flags exercise normalizeFeatureFlags.

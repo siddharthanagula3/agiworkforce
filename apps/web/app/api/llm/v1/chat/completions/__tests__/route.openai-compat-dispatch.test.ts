@@ -1,6 +1,7 @@
 /**
- * Route-level dispatch proof for the 9 openai-compat providers (task #34's
- * compat batch) -- the same gap-closing pattern
+ * Route-level dispatch proof for the OpenAI-compatible providers that have a
+ * live, selectable Managed Web route. Providers without one are rejected by
+ * canonical registry admission before adapter construction.
  * apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts already
  * applies to Anthropic/Google/OpenAI: mock each package's create*Adapter,
  * send an explicit model for that provider through the REAL route.ts POST
@@ -147,6 +148,36 @@ vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 
+const managedUsageMocks = vi.hoisted(() => ({
+  reserve: vi.fn(),
+  providerStarted: vi.fn(() => Promise.resolve()),
+  finalize: vi.fn(() =>
+    Promise.resolve({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 4,
+    }),
+  ),
+  delivered: vi.fn(() => Promise.resolve()),
+}));
+
+const rlsMocks = vi.hoisted(() => ({
+  getUserScopedDb: vi.fn(),
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: rlsMocks.getUserScopedDb,
+}));
+
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  reserveManagedUsageRequest: managedUsageMocks.reserve,
+  markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
+  finalizeManagedUsageRequest: managedUsageMocks.finalize,
+  markManagedUsageClientDelivered: managedUsageMocks.delivered,
+}));
+
 const mockGetSubscription = vi.fn();
 const mockCheckAvailable = vi.fn();
 const mockDeductCredits = vi.fn();
@@ -167,12 +198,9 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// request-processor.ts resolves `processed.provider` via
-// resolveProviderFromModel (task #34 -- lib/llm-providers retirement, not
-// LLMProviderFactory.getProviderFromModel any more). Mocked per-case below
-// so each synthetic test model id (e.g. 'moonshot-v1-8k', 'openrouter-auto')
-// deterministically maps to its intended provider regardless of whether the
-// real catalog/heuristic chain would also happen to resolve it that way.
+// Quota downgrade still resolves a provider from a canonical model id through
+// this service. Normal route admission derives provider identity from the
+// registry-backed route decision.
 const mockGetProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/provider-adapter-service')>();
@@ -191,11 +219,20 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
 
-function makeRequest(model: string): NextRequest {
+function makeRequest(model: string, conversationId?: string): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
     method: 'POST',
-    headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], stream: false }),
+    headers: {
+      Authorization: 'Bearer test-token',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'test-managed-chat-request',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: 'hi' }],
+      stream: false,
+      ...(conversationId ? { conversation_id: conversationId } : {}),
+    }),
   });
 }
 
@@ -211,14 +248,12 @@ function makeSubscription() {
 }
 
 const COMPAT_CASES: Array<{ provider: string; model: string; content: string }> = [
-  { provider: 'groq', model: 'groq-llama-3.3-70b', content: 'Groq says hi.' },
-  { provider: 'mistral', model: 'mistral-large', content: 'Mistral says hi.' },
-  { provider: 'moonshot', model: 'moonshot-v1-8k', content: 'Moonshot says hi.' },
-  { provider: 'zhipu', model: 'glm-4.6', content: 'Zhipu says hi.' },
+  { provider: 'mistral', model: 'mistral-large-3', content: 'Mistral says hi.' },
+  { provider: 'moonshot', model: 'kimi-k2.6', content: 'Moonshot says hi.' },
+  { provider: 'zhipu', model: 'glm-5.2', content: 'Zhipu says hi.' },
   { provider: 'qwen', model: 'qwen-max', content: 'Qwen says hi.' },
-  { provider: 'openrouter', model: 'openrouter-auto', content: 'OpenRouter says hi.' },
-  { provider: 'deepseek', model: 'deepseek-chat', content: 'DeepSeek says hi.' },
-  { provider: 'xai', model: 'grok-4', content: 'XAI says hi.' },
+  { provider: 'deepseek', model: 'deepseek-v4-flash', content: 'DeepSeek says hi.' },
+  { provider: 'xai', model: 'grok-4.3', content: 'XAI says hi.' },
   { provider: 'perplexity', model: 'sonar', content: 'Perplexity says hi.' },
 ];
 
@@ -229,6 +264,7 @@ describe.each(COMPAT_CASES)(
       vi.clearAllMocks();
       mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
       mockGetSubscription.mockResolvedValue(makeSubscription());
+      rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
       mockCheckAvailable.mockResolvedValue(true);
       mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
       mockGetBalance.mockResolvedValue({
@@ -236,6 +272,14 @@ describe.each(COMPAT_CASES)(
         credits_remaining_cents: 10000,
         credits_allocated_cents: 20000,
       });
+      managedUsageMocks.reserve.mockImplementation(async (input) => ({
+        db: input.db,
+        userId: input.userId,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: input.requestHash,
+        leaseToken: 'lease-test',
+        estimatedCostCents: input.estimatedCostCents,
+      }));
       mockGetProviderFromModel.mockReturnValue(provider);
 
       const response = await POST(makeRequest(model));
@@ -251,3 +295,49 @@ describe.each(COMPAT_CASES)(
     });
   },
 );
+
+describe('Managed Web provider admission', () => {
+  it.each([
+    ['groq', 'groq-llama-3.3-70b'],
+    ['openrouter', 'meta-llama/llama-3.3-70b-instruct:free'],
+  ])('rejects %s when it has no selectable Managed Web route', async (provider, model) => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetSubscription.mockResolvedValue(makeSubscription());
+    mockGetProviderFromModel.mockReturnValue(provider);
+
+    const response = await POST(makeRequest(model));
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'model_route_unavailable' },
+    });
+    expect(mockCheckAvailable).not.toHaveBeenCalled();
+  });
+});
+
+describe('Managed Web conversation ownership', () => {
+  it('rejects a foreign conversation before reserving credits or starting a provider', async () => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'attacker-user', email: 'a@example.com' });
+    mockGetSubscription.mockResolvedValue(makeSubscription());
+    const query = vi.fn().mockResolvedValue([]);
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'attacker-user' });
+    mockGetProviderFromModel.mockReturnValue('mistral');
+
+    const response = await POST(
+      makeRequest('mistral-large-3', '0190a000-0000-7000-8000-0000000000cc'),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'conversation_not_found' },
+    });
+    expect(query).toHaveBeenCalledWith(
+      expect.stringMatching(/web_conversations[\s\S]*user_id\s*=\s*\$2/i),
+      ['0190a000-0000-7000-8000-0000000000cc', 'attacker-user'],
+    );
+    expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+  });
+});

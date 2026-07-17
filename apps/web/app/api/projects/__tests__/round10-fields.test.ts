@@ -3,13 +3,14 @@
  * /api/projects/[id] (PUT).
  *
  * Covers: each new field round-trips, invalid enum returns 400,
- * invalid allowedSurfaces entry is filtered, partial PUT leaves other
+ * invalid allowedSurfaces entries are rejected, partial PUT leaves other
  * fields untouched, POST accepts round-10 fields, mapper output matches
  * PUT response.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { ManagedCloudProjectResponseSchema } from '@agiworkforce/cloud-contracts';
 
 // ── Hoisted mocks (vi.hoisted runs before all imports/mocks) ─────────────────
 
@@ -22,6 +23,7 @@ const {
   mockSingle,
   mockGetClerkAuthUser,
   mockNeonQuery,
+  mockNeonExecute,
 } = vi.hoisted(() => {
   const mockSingle = vi.fn();
   const mockSelect = vi.fn();
@@ -31,6 +33,7 @@ const {
   const mockFrom = vi.fn();
   const mockGetClerkAuthUser = vi.fn();
   const mockNeonQuery = vi.fn();
+  const mockNeonExecute = vi.fn();
   return {
     mockFrom,
     mockUpdate,
@@ -40,6 +43,7 @@ const {
     mockSingle,
     mockGetClerkAuthUser,
     mockNeonQuery,
+    mockNeonExecute,
   };
 });
 
@@ -64,7 +68,7 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockNeonQuery(...args),
-    execute: vi.fn().mockResolvedValue(1),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
     transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
     withUser: vi.fn(() => ({})),
     dispose: vi.fn(),
@@ -73,7 +77,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 // ── Route imports (after mocks) ───────────────────────────────────────────────
 
-import { PUT } from '@/app/api/projects/[id]/route';
+import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
 import { POST } from '@/app/api/projects/route';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -101,6 +105,10 @@ function makePutRequest(id: string, body: unknown): NextRequest {
   });
 }
 
+function makeProjectRequest(id: string, method: 'GET' | 'DELETE'): NextRequest {
+  return new NextRequest(`http://localhost/api/projects/${id}`, { method });
+}
+
 function makePostRequest(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/projects', {
     method: 'POST',
@@ -114,6 +122,7 @@ function makePostRequest(body: unknown): NextRequest {
 // in every beforeEach rather than relying on module-level defaults.
 function wireAuthAndDb() {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
+  mockNeonExecute.mockResolvedValue(1);
 }
 
 // Set up neon query chain: db.query() resolves with row array (update/select returning *)
@@ -161,6 +170,7 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
 
     expect(res.status).toBe(200);
     const json = (await res.json()) as { project: Record<string, unknown> };
+    expect(ManagedCloudProjectResponseSchema.safeParse(json).success).toBe(true);
     expect(json.project['iconEmoji']).toBe('🚀');
     expect(json.project['accentColor']).toBe('sky');
   });
@@ -168,8 +178,8 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
   it('round-trips defaultPrivacyMode, defaultProviderMode, allowedSurfaces, defaultModelId, importedFrom', async () => {
     const dbRow = {
       ...BASE_DB_ROW,
-      default_privacy_mode: 'byok',
-      default_provider_mode: 'DirectByok',
+      default_privacy_mode: 'managed',
+      default_provider_mode: 'ManagedNative',
       allowed_surfaces: ['web', 'mobile'],
       default_model_id: PROJECT_DEFAULT_MODEL_FIXTURE,
       imported_from: 'claude',
@@ -177,8 +187,8 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     setupUpdateChain({ data: dbRow, error: null });
 
     const req = makePutRequest('proj-1', {
-      defaultPrivacyMode: 'byok',
-      defaultProviderMode: 'DirectByok',
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedNative',
       allowedSurfaces: ['web', 'mobile'],
       defaultModelId: PROJECT_DEFAULT_MODEL_FIXTURE,
       importedFrom: 'claude',
@@ -187,8 +197,8 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
 
     expect(res.status).toBe(200);
     const json = (await res.json()) as { project: Record<string, unknown> };
-    expect(json.project['defaultPrivacyMode']).toBe('byok');
-    expect(json.project['defaultProviderMode']).toBe('DirectByok');
+    expect(json.project['defaultPrivacyMode']).toBe('managed');
+    expect(json.project['defaultProviderMode']).toBe('ManagedNative');
     expect(json.project['allowedSurfaces']).toEqual(['web', 'mobile']);
     expect(json.project['defaultModelId']).toBe(PROJECT_DEFAULT_MODEL_FIXTURE);
     expect(json.project['importedFrom']).toBe('claude');
@@ -212,21 +222,53 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     expect(json.error?.message ?? '').toMatch(/defaultPrivacyMode/i);
   });
 
-  it('filters invalid allowedSurfaces entries and keeps valid ones', async () => {
-    const dbRow = { ...BASE_DB_ROW, allowed_surfaces: ['web', 'desktop'] };
-    setupUpdateChain({ data: dbRow, error: null });
+  it('rejects Local or BYOK defaults for a Managed Cloud project', async () => {
+    const req = makePutRequest('proj-1', {
+      defaultPrivacyMode: 'byok',
+      defaultProviderMode: 'DirectByok',
+    });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 instead of crashing when color is null', async () => {
+    const req = makePutRequest('proj-1', { color: null });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('does not update a soft-deleted project', async () => {
+    mockNeonQuery.mockImplementation(async (sql: string) =>
+      sql.includes('deleted_at is null') ? [] : [{ ...BASE_DB_ROW, deleted_at: new Date() }],
+    );
+
+    const req = makePutRequest('proj-1', { name: 'Must stay deleted' });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
+
+    expect(res.status).toBe(404);
+    expect((mockNeonQuery.mock.calls[0] as [string])[0]).toContain('deleted_at is null');
+  });
+
+  it('rejects invalid allowedSurfaces entries instead of silently rewriting them', async () => {
     const req = makePutRequest('proj-1', {
       allowedSurfaces: ['web', 'invalid-surface', 'desktop'],
     });
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
-    expect(res.status).toBe(200);
-    // Verify the SQL params passed to db.query contain only the valid surfaces
-    const callArgs = mockNeonQuery.mock.calls[0] as [string, unknown[]];
-    const sqlParams = callArgs[1];
-    // params is an array; one element should be the filtered surfaces array
-    expect(sqlParams).toContainEqual(['web', 'desktop']);
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('rejects local developer-session surfaces for a Managed Cloud project', async () => {
+    const req = makePutRequest('proj-1', { allowedSurfaces: ['web', 'cli'] });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
   it('partial PUT · only iconEmoji provided leaves other fields untouched', async () => {
@@ -269,6 +311,35 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
   });
 });
 
+describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
+  beforeEach(() => {
+    wireAuthAndDb();
+  });
+
+  it('does not return a soft-deleted project by direct ID', async () => {
+    mockNeonQuery.mockImplementation(async (sql: string) =>
+      sql.includes('deleted_at is null') ? [] : [{ ...BASE_DB_ROW, deleted_at: new Date() }],
+    );
+
+    const res = await GET(makeProjectRequest('proj-1', 'GET'), {
+      params: Promise.resolve({ id: 'proj-1' }),
+    });
+
+    expect(res.status).toBe(404);
+    expect((mockNeonQuery.mock.calls[0] as [string])[0]).toContain('deleted_at is null');
+  });
+
+  it('returns not found when delete matched no live project', async () => {
+    mockNeonExecute.mockResolvedValue(0);
+
+    const res = await DELETE(makeProjectRequest('missing', 'DELETE'), {
+      params: Promise.resolve({ id: 'missing' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('POST /api/projects · round-10 fields', () => {
   beforeEach(() => {
     wireAuthAndDb();
@@ -281,8 +352,8 @@ describe('POST /api/projects · round-10 fields', () => {
       name: 'New Project',
       icon_emoji: '📁',
       accent_color: 'amber',
-      default_privacy_mode: 'byok',
-      default_provider_mode: 'DirectByok',
+      default_privacy_mode: 'managed',
+      default_provider_mode: 'ManagedGateway',
       allowed_surfaces: ['web', 'desktop', 'mobile'],
       imported_from: 'openai',
     };
@@ -292,8 +363,8 @@ describe('POST /api/projects · round-10 fields', () => {
       name: 'New Project',
       iconEmoji: '📁',
       accentColor: 'amber',
-      defaultPrivacyMode: 'byok',
-      defaultProviderMode: 'DirectByok',
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
       allowedSurfaces: ['web', 'desktop', 'mobile'],
       importedFrom: 'openai',
     });
@@ -301,10 +372,11 @@ describe('POST /api/projects · round-10 fields', () => {
 
     expect(res.status).toBe(201);
     const json = (await res.json()) as { project: Record<string, unknown> };
+    expect(ManagedCloudProjectResponseSchema.safeParse(json).success).toBe(true);
     expect(json.project['iconEmoji']).toBe('📁');
     expect(json.project['accentColor']).toBe('amber');
-    expect(json.project['defaultPrivacyMode']).toBe('byok');
-    expect(json.project['defaultProviderMode']).toBe('DirectByok');
+    expect(json.project['defaultPrivacyMode']).toBe('managed');
+    expect(json.project['defaultProviderMode']).toBe('ManagedGateway');
     expect(json.project['allowedSurfaces']).toEqual(['web', 'desktop', 'mobile']);
     expect(json.project['importedFrom']).toBe('openai');
   });
@@ -316,5 +388,17 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
     expect(json.error?.message ?? '').toMatch(/importedFrom/i);
+  });
+
+  it.each([
+    { name: 'Test', description: 42 },
+    { name: 'Test', instructions: { text: 'unsafe' } },
+    { name: 'Test', allowedSurfaces: null },
+    { name: 'Test', color: 7 },
+  ])('POST rejects malformed field types without reaching the database: %j', async (body) => {
+    const res = await POST(makePostRequest(body));
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });

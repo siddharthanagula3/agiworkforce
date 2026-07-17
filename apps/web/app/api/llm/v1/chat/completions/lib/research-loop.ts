@@ -10,7 +10,7 @@
  * REUSE:
  *   - `buildToolLoopStream` (tool-loop-anthropic.ts) -- the same table-driven
  *     per-provider adapter dispatch the agentic tool loop uses (restructure
- *     Wave 2, task #34): packages/providers adapters via ADAPTER_PROVIDERS +
+ *     Wave 2, task #34): packages/ai/providers adapters via ADAPTER_PROVIDERS +
  *     startProviderStream, reshaped onto OpenAI-compatible SSE bytes by
  *     OpenAIWireAssembler. Every provider therefore reaches this loop on the
  *     same normalized wire (route.ts still keeps Anthropic on the existing
@@ -42,12 +42,15 @@
 import 'server-only';
 
 import { logger } from '@/lib/logger';
-import { buildToolLoopStream } from './tool-loop-anthropic';
+import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import { toolStatusEvent as loopToolStatusEvent, toolResultEvent } from './tool-loop';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
-import { CreditService } from '@/lib/services/credit-service';
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { reconcileUsage } from '@/lib/assert-quota';
+import {
+  accumulateObservedProviderUsage,
+  createObservedProviderUsage,
+  type ObservedProviderUsage,
+} from '@/lib/services/managed-usage-accounting-service';
 import type { ProcessedRequest } from './request-processor';
 
 // ─── Bounds ───────────────────────────────────────────────────────────────────
@@ -96,6 +99,8 @@ export interface ResearchLoopOptions {
   budgetMs?: number;
   /** Injectable clock for deterministic budget tests. */
   now?: () => number;
+  /** Canonical usage accumulated across every provider call in this run. */
+  usage?: ObservedProviderUsage;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -469,9 +474,9 @@ function stripMarkers(text: string): string {
 /**
  * Run the deep-research loop, yielding SSE chunks (Uint8Array).
  *
- * Billing: usage is accumulated across ALL turns and reconciled against the
- * single-turn reservation in a finally block, so cancellation mid-run still
- * settles the credits actually consumed.
+ * Usage is accumulated across ALL turns from canonical provider chunks. The
+ * route owns durable financial settlement; this loop only updates quota
+ * counters in its finally block so cancellation cannot skip accounting.
  */
 export async function* runResearchLoop(
   processed: ProcessedRequest,
@@ -498,8 +503,7 @@ export async function* runResearchLoop(
   let totalSearches = 0;
   let totalFetches = 0;
   let iteration = 0;
-  let totalPromptTokens = 0;
-  let totalCompletionTokens = 0;
+  const observedUsage = options.usage ?? createObservedProviderUsage();
 
   // Strip client-custom function tools EXCEPT the platform url_fetch tool:
   // research turns use provider-native web search plus loop-executed url_fetch
@@ -545,19 +549,36 @@ export async function* runResearchLoop(
     forwardContent: boolean,
   ): AsyncGenerator<Uint8Array, TurnResult> {
     const stepRequest = { ...baseRequest, messages: turnMessages };
+    const callsBefore = observedUsage.providerCalls;
+    const stepSink: ToolLoopStepSink = {
+      thinkingBlocks: [],
+      text: '',
+      usage: observedUsage,
+    };
     const stream = await buildToolLoopStream(
       processed.provider.toLowerCase(),
       processed,
       stepRequest,
       responseModel,
+      stepSink,
     );
     const gen = collectTurn(stream, sources, forwardContent);
     try {
       while (true) {
         const next = await gen.next();
         if (next.done) {
-          totalPromptTokens += next.value.promptTokens;
-          totalCompletionTokens += next.value.completionTokens;
+          // Unit-test streams and any future bridge that cannot expose
+          // canonical StreamChunk usage still get a wire-level fallback. Do
+          // not add it when the canonical sink already recorded this call.
+          if (
+            observedUsage.providerCalls === callsBefore &&
+            (next.value.promptTokens > 0 || next.value.completionTokens > 0)
+          ) {
+            accumulateObservedProviderUsage(observedUsage, {
+              inputTokens: next.value.promptTokens,
+              outputTokens: next.value.completionTokens,
+            });
+          }
           return next.value;
         }
         yield encoder.encode(next.value);
@@ -812,69 +833,17 @@ export async function* runResearchLoop(
     yield status('complete', 'Research complete');
     yield encoder.encode(sseDone());
   } finally {
-    // Billing reconciliation runs whether the run completed, errored, or was
-    // cancelled (generator.return on client abort) -- multi-turn usage must be
-    // settled against the single-turn reservation. Usage is read from the
-    // trailing usage-only wire event, which OpenAIWireAssembler emits only in
-    // 'openai-passthrough' wireMode; 'legacy-web' providers (google/anthropic)
-    // surface no usage on this wire, so their runs keep the upfront
-    // reservation un-reconciled -- same disclosed gap as the agentic tool
-    // loop (tool-loop.ts bills reservation-only), logged below for visibility.
-    const totalTokens = totalPromptTokens + totalCompletionTokens;
-    if (totalTokens === 0) {
+    // Financial settlement belongs to the route's managed usage lifecycle.
+    // This finally block only updates quota counters and always runs on
+    // completion, provider error, and generator.return() cancellation.
+    const totalTokens = observedUsage.inputTokens + observedUsage.outputTokens;
+    if (observedUsage.providerCalls === 0) {
       logger.warn(
         { provider: processed.provider, requestId: processed.requestId },
-        '[research-loop] no usage observed on wire; skipping reconciliation (reservation stands)',
+        '[research-loop] provider emitted no usage; managed settlement will use its reservation estimate',
       );
     }
     if (totalTokens > 0) {
-      try {
-        const actualCostCents = LLMCostCalculator.calculateCost(
-          processed.provider,
-          processed.chatRequest.model,
-          {
-            promptTokens: totalPromptTokens,
-            completionTokens: totalCompletionTokens,
-            totalTokens,
-          },
-        );
-        const costDifference = actualCostCents - processed.estimatedCostCents;
-        if (costDifference !== 0) {
-          const reconciliationKey = CreditService.generateIdempotencyKey(
-            billing.userId,
-            'reconciliation',
-            processed.requestId,
-          );
-          await CreditService.deductCredits(
-            billing.userId,
-            costDifference,
-            `Credit adjustment (research): ${processed.provider}/${processed.chatRequest.model}`,
-            {
-              provider: processed.provider,
-              model: processed.chatRequest.model,
-              type: 'research_reconciliation',
-              estimatedCostCents: processed.estimatedCostCents,
-              actualCostCents,
-              promptTokens: totalPromptTokens,
-              completionTokens: totalCompletionTokens,
-              totalTokens,
-              requestId: processed.requestId,
-            },
-            reconciliationKey,
-          );
-        }
-      } catch (reconciliationError) {
-        logger.error(
-          {
-            error: reconciliationError,
-            userId: billing.userId,
-            requestId: processed.requestId,
-            totalPromptTokens,
-            totalCompletionTokens,
-          },
-          'CRITICAL: research credit reconciliation failed - may require manual adjustment',
-        );
-      }
       void reconcileUsage({
         userId: billing.userId,
         token: billing.token,

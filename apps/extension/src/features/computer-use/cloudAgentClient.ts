@@ -5,19 +5,13 @@
  * OpenAI-compatible format with stream:true and browser tool definitions.
  *
  * AUTH SEAM:
- *   The service worker cannot run Clerk's browser SDK directly. Two paths:
- *     A. RECOMMENDED: the popup/side-panel obtains a Clerk session token and
- *        posts it to the service worker via chrome.runtime.sendMessage before
- *        starting the agent loop. The token is stored in chrome.storage.session
- *        under key `agi_clerk_session_token` with a short TTL.
- *     B. DEV/DEMO: set `agi_dev_bearer_token` in chrome.storage.local for a
- *        static token (useful for screencasts where re-auth is inconvenient).
- *   getAuthToken() checks session storage first (path A), then local storage
- *   (path B). A null return means no token is available; the caller should
- *   surface an auth prompt.
+ *   Uses the same Clerk Chrome Extension Native API token owner as managed
+ *   chat. MV3 workers create Clerk with `background:true`, so tokens refresh
+ *   without copying bearer credentials through extension storage. Development
+ *   builds retain the explicit local test-token fallback owned by that module.
  *
  * MODEL:
- *   Read from packages/types/src/models.json managed_cloud.taskRouting.computer_use.
+ *   Read from packages/contracts/types/src/models.json managed_cloud.taskRouting.computer_use.
  *   Value at time of writing: "gpt-5.4-mini" (vision + function-calling capable).
  *   Not hardcoded here — the catalog value is embedded at build time via the
  *   COMPUTER_USE_MODEL constant exported below so callers can log or override it.
@@ -34,11 +28,14 @@
  */
 
 import { validateGatewayUrl } from '../../background/policy';
+import { getAuthToken } from '../cloud-bridge/freeTrialClient';
+
+export { getAuthToken };
 
 // ─── Model selection ─────────────────────────────────────────────────────────
 // Read from the canonical model catalog's SLOT_REGISTRY at build time
 // (managed_cloud.taskRouting in models.json was cleared in favour of the slot
-// registry — see packages/types/src/model-catalog.ts).
+// registry — see packages/contracts/types/src/model-catalog.ts).
 import { getRoutingSlotModel } from '@agiworkforce/types';
 
 /**
@@ -52,61 +49,7 @@ export const COMPUTER_USE_MODEL: string = getRoutingSlotModel('computer_use');
 
 export const DEFAULT_GATEWAY_BASE = 'https://api.agiworkforce.com';
 
-/** Storage keys */
-const SESSION_TOKEN_KEY = 'agi_clerk_session_token';
-const DEV_TOKEN_KEY = 'agi_dev_bearer_token';
 const GATEWAY_URL_OVERRIDE_KEY = 'agi_gateway_url';
-
-// ─── Auth seam ───────────────────────────────────────────────────────────────
-
-/**
- * Retrieve the Bearer token for the cloud gateway.
- *
- * Priority:
- *   1. chrome.storage.session["agi_clerk_session_token"] — set by popup/side-panel
- *      after obtaining a fresh Clerk JWT (short-lived, cleared on browser close).
- *   2. chrome.storage.local["agi_dev_bearer_token"] — static dev/demo token.
- *   3. null — caller must surface an auth prompt.
- *
- * TODO (Day-2): integrate createClerkClient for service workers once the
- * Clerk Chrome Extension patterns are wired (see clerk-chrome-extension-patterns
- * skill). The popup should call `clerk.session.getToken()` and post the result
- * to the service worker via the SESSION_TOKEN_KEY path above.
- */
-export async function getAuthToken(): Promise<string | null> {
-  try {
-    // Path A: session token from popup/side-panel
-    if (
-      typeof chrome !== 'undefined' &&
-      chrome.storage &&
-      'session' in chrome.storage &&
-      chrome.storage.session
-    ) {
-      const sess = await (
-        chrome.storage.session as unknown as {
-          get: (keys: string[]) => Promise<Record<string, unknown>>;
-        }
-      ).get([SESSION_TOKEN_KEY]);
-      const token = sess[SESSION_TOKEN_KEY];
-      if (typeof token === 'string' && token.length > 0) return token;
-    }
-  } catch {
-    // chrome.storage.session unavailable in test environments — fall through
-  }
-
-  try {
-    // Path B: dev/demo static token
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const local = await chrome.storage.local.get([DEV_TOKEN_KEY]);
-      const token = local[DEV_TOKEN_KEY];
-      if (typeof token === 'string' && token.length > 0) return token;
-    }
-  } catch {
-    // unavailable in test environments — fall through
-  }
-
-  return null;
-}
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -423,7 +366,7 @@ export async function callCloud(
     if (response.status === 401) {
       throw new Error(
         'callCloud: authentication failed (401). ' +
-          'Paste a fresh Clerk session token via AGI Cloud sign-in in the drawer.',
+          'Sign in to AGI Cloud again from the extension drawer.',
       );
     }
     throw new Error(`callCloud: gateway returned ${response.status}: ${errText.slice(0, 300)}`);

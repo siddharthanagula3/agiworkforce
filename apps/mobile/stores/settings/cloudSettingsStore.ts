@@ -6,14 +6,14 @@
  * + cloudSyncEngine). A change here is completely independent from the local-mode
  * store (`localSettingsStore`).
  *
- * `settingsUpdatedAt` is the LWW (last-writer-wins) timestamp used by the sync
- * engine when pushing to POST /api/settings/sync. It is cloud-only by design:
- * local-mode preferences never sync and therefore have no need for an updatedAt.
+ * `settingsUpdatedAt` is a local-only dirty marker. It is never sent to the
+ * server and never participates in conflict resolution; Cloud pushes use the
+ * last observed server revision instead.
  *
  * MIGRATION: On first run (when the MMKV key doesn't exist yet), this store
  * seeds its fields from the legacy 'settings-store' to prevent a flash-of-defaults
  * before the first server pull. settingsUpdatedAt is left null so the seeded state
- * is not treated as a local edit — the next pull reconciles via LWW.
+ * is not treated as a local edit — the next pull adopts the server revision.
  */
 
 import { create } from 'zustand';
@@ -45,9 +45,8 @@ export interface CloudSettingsState {
   personalization: Personalization;
   /**
    * ISO timestamp of the last cloud-safe settings edit in cloud mode. Null until
-   * the user explicitly changes a setting. Used by the sync engine as the LWW
-   * `updatedAt` in push payloads. Null means "never edited on this device" →
-   * sync engine skips the POST and pulls instead.
+   * the user explicitly changes a setting. Null means "never edited on this
+   * device" so the sync engine skips the POST and pulls instead.
    *
    * Internal metadata — NEVER included in the push payload itself.
    */
@@ -102,8 +101,8 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       // pulls server state on the first cloud sync cycle.
       settingsUpdatedAt: null,
 
-      // Cloud-safe setters — stamp settingsUpdatedAt so the sync engine knows a
-      // real local edit happened and can use this timestamp as the LWW key.
+      // Cloud-safe setters stamp the local dirty marker. Its wall-clock value is
+      // never used as a server conflict key.
       setThemeMode: (mode) => set({ themeMode: mode, settingsUpdatedAt: nowIso() }),
       setAccentColor: (color) => set({ accentColor: color, settingsUpdatedAt: nowIso() }),
       setFontPreference: (pref) => set({ fontPreference: pref, settingsUpdatedAt: nowIso() }),

@@ -20,7 +20,7 @@ Criticality: medium
 
 This service exposes HTTP/WebSocket behavior from `src/`. It is not imported by apps or packages.
 
-Shared message schemas belong in `packages/types`; reusable queue/runtime behavior belongs in `packages/runtime`.
+Shared message schemas belong in `packages/contracts/types`; reusable queue/runtime behavior belongs in `packages/client/client-runtime`.
 
 ## What Belongs Here
 

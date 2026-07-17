@@ -5,7 +5,7 @@ import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { AppError } from '../middleware/errorHandler';
 import { authenticateToken, evictRevocationCache } from '../middleware/auth';
-import { getServiceClient } from '../lib/neonClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const router: Router = Router();
@@ -86,9 +86,10 @@ router.post('/logout', authRateLimiter, authenticateToken, async (req: Request, 
 
   const jti = typeof payload.jti === 'string' ? payload.jti : null;
   const exp = typeof payload.exp === 'number' ? payload.exp : null;
-  const userId = req.user?.userId;
+  const user = req.user;
+  const userId = user?.userId;
 
-  if (!jti || !exp || !userId) {
+  if (!jti || !exp || !user) {
     // Token without jti is from before the fix — we cannot revoke it
     // individually. Treat as a successful no-op so clients don't loop.
     logger.info({ userId }, 'Logout for legacy token without jti — no revocation possible');
@@ -96,9 +97,7 @@ router.post('/logout', authRateLimiter, authenticateToken, async (req: Request, 
   }
 
   const untilExp = new Date(exp * 1000).toISOString();
-  // Wave 1.5+ singleton sweep: revoked_jwts is a security table; inserts
-  // bypass user-RLS by design (the policy only allows service-role writes).
-  const { error } = await getServiceClient()
+  const { error } = await getUserScopedClient(user)
     .from('revoked_jwts')
     .insert({ jti, user_id: userId, until_exp: untilExp, reason: 'sign_out' });
 

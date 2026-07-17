@@ -1,0 +1,104 @@
+/**
+ * Route-level smoke test for the `cloud_chat` session-taxonomy labeling
+ * added to `POST /api/chat/conversations` (W5 discipline wave 1 stage 2).
+ *
+ * Pure-function coverage of the label shape and the invariant gate lives in
+ * `lib/services/chat-session-label-service.test.ts` — this file exists to
+ * prove the ACTUAL route wiring behaves: a normal create request still
+ * returns 201 with the exact same response shape as before (additive, no
+ * chat-flow behavior change), and the labeling step runs against real
+ * insert-returned row data without throwing.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('server-only', () => ({}));
+
+const { mockAuth, mockNeonQuery } = vi.hoisted(() => ({
+  mockAuth: vi.fn(),
+  mockNeonQuery: vi.fn(),
+}));
+
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/csrf', () => ({
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: mockAuth,
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+  })),
+}));
+
+import { POST } from '../route';
+
+function makePostRequest(body: unknown) {
+  return new Request('http://localhost:3000/api/chat/conversations', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }) as never;
+}
+
+describe('POST /api/chat/conversations — cloud_chat session labeling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAuth.mockResolvedValue({ userId: 'user_label_1' });
+  });
+
+  it('still returns 201 with the unchanged conversation response shape (additive)', async () => {
+    mockNeonQuery
+      // assertAccountActive's account_status lookup
+      .mockResolvedValueOnce([{ account_status: 'active' }])
+      // the insert...returning
+      .mockResolvedValueOnce([
+        {
+          id: 'conv_label_1',
+          title: 'New conversation',
+          model: 'auto',
+          project_id: null,
+          pinned: false,
+          is_temporary: false,
+          created_at: '2026-07-15T00:00:00.000Z',
+          updated_at: '2026-07-15T00:00:00.000Z',
+        },
+      ]);
+
+    const res = await POST(makePostRequest({}));
+    expect(res.status).toBe(201);
+
+    const body = await res.json();
+    // Same shape the route always returned — labeling must not add or
+    // rename response fields.
+    expect(Object.keys(body)).toEqual(['conversation']);
+    expect(body.conversation.id).toBe('conv_label_1');
+  });
+
+  it('does not throw the assertion for a project-scoped conversation either', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ account_status: 'active' }]).mockResolvedValueOnce([
+      {
+        id: 'conv_label_2',
+        title: 'Project chat',
+        model: 'auto',
+        project_id: 'proj_9',
+        pinned: false,
+        is_temporary: false,
+        created_at: '2026-07-15T00:00:00.000Z',
+        updated_at: '2026-07-15T00:00:00.000Z',
+      },
+    ]);
+
+    const res = await POST(makePostRequest({ title: 'Project chat', projectId: 'proj_9' }));
+    expect(res.status).toBe(201);
+  });
+});

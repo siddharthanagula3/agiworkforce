@@ -1,7 +1,7 @@
 /**
  * Offline Queue (Web wrapper)
  *
- * Web-surface binding of the shared `@agiworkforce/runtime/offline-queue`
+ * Web-surface binding of the shared `@agiworkforce/client-runtime/offline-queue`
  * factory. Provides browser-localStorage storage, the pino-style logger
  * from `@/lib/logger`, an `/api/health` HEAD probe, and a
  * `window.addEventListener('storage')` change subscriber.
@@ -11,7 +11,7 @@
  * surfaces now share the canonical factory; only the adapters differ.
  */
 
-import { createOfflineQueue } from '@agiworkforce/runtime/offline-queue';
+import { createOfflineQueue } from '@agiworkforce/client-runtime/offline-queue';
 import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
 import { logger } from '@/lib/logger';
 

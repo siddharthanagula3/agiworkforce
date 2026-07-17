@@ -36,12 +36,8 @@ const { usageRows } = vi.hoisted(() => ({
 }));
 
 // Wave 1.5+ task #17 (2026-05-08): legacy `lib/db` singleton deleted.
-// P1-GW-RLS (Wave 4): usage_events has no RLS policy coverage (RLS-GAP), so
-// routes/usage.ts now calls getServiceClient() directly, same as
-// middleware/auth.ts's kill-switch profiles lookup. Both call sites share one
-// mocked getServiceClient — dispatch on the table name passed to .from() so
-// each sees the right chain (profile mock for the kill-switch, usage mock for
-// the usage routes).
+// The route and auth middleware both run through the user-scoped client. The
+// table-dispatching mock preserves the distinct profile and usage responses.
 vi.mock('../../src/lib/neonClients', () => {
   const usageQuery = {
     eq: vi.fn(() => usageQuery),
@@ -70,7 +66,7 @@ vi.mock('../../src/lib/neonClients', () => {
   };
 
   return {
-    getServiceClient: vi.fn(() => serviceClient),
+    getUserScopedClient: vi.fn(() => serviceClient),
   };
 });
 

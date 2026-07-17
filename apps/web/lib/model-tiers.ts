@@ -8,7 +8,7 @@ import {
 /**
  * Shared model tier definitions for LLM access control.
  *
- * Canonical access policy now comes from `packages/types/src/models.json`.
+ * Canonical access policy now comes from `packages/contracts/types/src/models.json`.
  * This server helper only adapts that catalog into the web API shape.
  */
 

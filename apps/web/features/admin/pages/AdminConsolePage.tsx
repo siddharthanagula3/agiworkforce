@@ -12,69 +12,94 @@ import {
   DEFAULT_ENTERPRISE_ADMIN_POLICY,
   MANAGED_COMPUTE_MARGIN_POLICY,
 } from '@agiworkforce/types';
+import {
+  isManagedComputePrivateBetaEnabled,
+  MANAGED_COMPUTE_PRIVATE_BETA_ENV,
+} from '@/lib/managed-compute-gate';
 
-const readinessRows = [
-  {
-    area: 'Privacy modes',
-    status: 'Fail-closed',
-    owner: 'Platform',
-    evidence: `${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')} allowed by default`,
-  },
-  {
-    area: 'Managed compute',
-    status: 'Public alpha',
-    owner: 'Billing',
-    evidence: `Hard review at ${MANAGED_COMPUTE_MARGIN_POLICY.hardStopAtRevenueShare * 100}% provider-cost share`,
-  },
-  {
-    area: 'Identity',
-    status: 'Org/Teams only — no SSO/SCIM schema',
-    owner: 'Enterprise',
-    evidence:
-      'apps/web/db/neon has teams/organizations tables (0007, 0015); no sso_connections or directory_sync_connections migration exists anywhere, so /api/admin/sso and /api/admin/directory-sync will fail against a real database',
-  },
-  {
-    area: 'Audit logs',
-    status: 'Append-only',
-    owner: 'Security',
-    evidence: 'Enterprise audit events and export requests are separated from support logs',
-  },
-  {
-    area: 'Support loop',
-    status: 'Routed',
-    owner: 'Support',
-    evidence: 'Support cases, feedback cases, and release fix links have shared tables',
-  },
-];
+// Managed compute has been public alpha (open by default) since 2026-06-27.
+// AGI_MANAGED_COMPUTE_PRIVATE_BETA is an incident-response kill-switch only
+// (0/false/off re-gates); every status element below reads the same live
+// signal so this page cannot drift into the retired "launch gate"/"private
+// beta"/"waitlisted" framing again.
+function managedComputeStatusLabel(open: boolean): string {
+  return open ? 'Public alpha' : 'Temporarily disabled (incident kill-switch)';
+}
 
-const policyTiles = [
-  {
-    icon: LockKeyhole,
-    label: 'Default Privacy',
-    value: DEFAULT_ENTERPRISE_ADMIN_POLICY.defaultPrivacyMode.toUpperCase(),
-    detail: 'Local and BYOK are public-safe. Managed mode requires admin and commercial gates.',
-  },
-  {
-    icon: ShieldCheck,
-    label: 'Chat Sync',
-    value: DEFAULT_ENTERPRISE_ADMIN_POLICY.chatSyncSurfaces.join(' / '),
-    detail: 'Normal synced chat is intentionally limited to Web, Desktop, and Mobile.',
-  },
-  {
-    icon: BadgeDollarSign,
-    label: 'Launch Gate',
-    value: 'Blocked',
-    detail: 'Managed credits default to public_launch_blocked until ledger evidence clears.',
-  },
-  {
-    icon: Activity,
-    label: 'Margin Warning',
-    value: `${MANAGED_COMPUTE_MARGIN_POLICY.warningAtRevenueShare * 100}%`,
-    detail: 'Provider-cost share at or above this level requires a commercial review.',
-  },
-];
+function buildReadinessRows(managedComputeOpen: boolean) {
+  return [
+    {
+      area: 'Privacy modes',
+      status: 'Fail-closed',
+      owner: 'Platform',
+      evidence: `${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')} allowed by default`,
+    },
+    {
+      area: 'Managed compute',
+      status: managedComputeStatusLabel(managedComputeOpen),
+      owner: 'Billing',
+      evidence: managedComputeOpen
+        ? `Open by default since 2026-06-27. Hard review at ${MANAGED_COMPUTE_MARGIN_POLICY.hardStopAtRevenueShare * 100}% provider-cost share.`
+        : `${MANAGED_COMPUTE_PRIVATE_BETA_ENV} is engaged as an incident-response kill-switch.`,
+    },
+    {
+      area: 'Identity',
+      status: 'Org/Teams only — no SSO/SCIM schema',
+      owner: 'Enterprise',
+      evidence:
+        'apps/web/db/neon has teams/organizations tables (0007, 0015); no sso_connections or directory_sync_connections migration exists anywhere, so /api/admin/sso and /api/admin/directory-sync will fail against a real database',
+    },
+    {
+      area: 'Audit logs',
+      status: 'Append-only',
+      owner: 'Security',
+      evidence: 'Enterprise audit events and export requests are separated from support logs',
+    },
+    {
+      area: 'Support loop',
+      status: 'Routed',
+      owner: 'Support',
+      evidence: 'Support cases, feedback cases, and release fix links have shared tables',
+    },
+  ];
+}
+
+function buildPolicyTiles(managedComputeOpen: boolean) {
+  return [
+    {
+      icon: LockKeyhole,
+      label: 'Default Privacy',
+      value: DEFAULT_ENTERPRISE_ADMIN_POLICY.defaultPrivacyMode.toUpperCase(),
+      detail: 'Local and BYOK are public-safe. Managed mode requires admin and commercial gates.',
+    },
+    {
+      icon: ShieldCheck,
+      label: 'Chat Sync',
+      value: DEFAULT_ENTERPRISE_ADMIN_POLICY.chatSyncSurfaces.join(' / '),
+      detail: 'Normal synced chat is intentionally limited to Web, Desktop, and Mobile.',
+    },
+    {
+      icon: BadgeDollarSign,
+      label: 'Managed Compute Access',
+      value: managedComputeOpen ? 'Open (public alpha)' : 'Temporarily disabled',
+      detail: managedComputeOpen
+        ? `Open by default since 2026-06-27. ${MANAGED_COMPUTE_PRIVATE_BETA_ENV} is an incident-response kill-switch only.`
+        : `${MANAGED_COMPUTE_PRIVATE_BETA_ENV} is engaged. Managed compute is temporarily disabled as an incident-response measure.`,
+    },
+    {
+      icon: Activity,
+      label: 'Margin Warning',
+      value: `${MANAGED_COMPUTE_MARGIN_POLICY.warningAtRevenueShare * 100}%`,
+      detail: 'Provider-cost share at or above this level requires a commercial review.',
+    },
+  ];
+}
 
 export default function AdminConsolePage() {
+  const managedComputeOpen = isManagedComputePrivateBetaEnabled();
+  const readinessRows = buildReadinessRows(managedComputeOpen);
+  const policyTiles = buildPolicyTiles(managedComputeOpen);
+
   return (
     <div className="min-h-screen bg-[#0b0d0f] text-zinc-100">
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
@@ -89,9 +114,21 @@ export default function AdminConsolePage() {
               managed-compute commercial gates.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
-            <CircleAlert className="h-4 w-4" aria-hidden="true" />
-            Managed compute remains gated
+          <div
+            className={
+              managedComputeOpen
+                ? 'flex items-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100'
+                : 'flex items-center gap-2 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100'
+            }
+          >
+            {managedComputeOpen ? (
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <CircleAlert className="h-4 w-4" aria-hidden="true" />
+            )}
+            {managedComputeOpen
+              ? 'Managed compute: public alpha, open by default'
+              : 'Managed compute temporarily disabled (incident kill-switch)'}
           </div>
         </header>
 

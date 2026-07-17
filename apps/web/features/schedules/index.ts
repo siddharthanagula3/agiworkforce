@@ -1,26 +1,24 @@
-/**
- * apps/web/features/schedules - public API barrel
- *
- * Scheduled AI task management: recurring prompts with CRON expressions,
- * run history, notification settings, API-backed persistence.
- *
- * Canonical Web schedules feature.
- */
-
 export { ScheduleCard } from './components/ScheduleCard';
 export { ScheduleForm } from './components/ScheduleForm';
-export { ScheduleNotificationSettings } from './components/ScheduleNotificationSettings';
 export { ScheduleRunHistory } from './components/ScheduleRunHistory';
-export { useScheduleStore, selectScheduleById } from './stores/schedule-store';
+export { SchedulesPage } from './components/SchedulesPage';
+export { scheduleApi, ScheduleApiError } from './services/schedule-api';
 export {
-  INITIAL_NOTIFICATION_SETTINGS,
-  INITIAL_FORM,
-  TIMEZONES,
   AVAILABLE_MODELS,
   DAYS_OF_WEEK,
-  formatDate,
+  formatDateTime,
   recurrenceLabel,
   formatDuration,
-  getNextRunCountdown,
+  scheduleResultText,
+  taskRecurrence,
 } from './types/index';
-export type { Schedule, ScheduleRun, NotificationSettings, ScheduleFormData } from './types/index';
+export type {
+  ScheduleDraft,
+  ScheduleFormErrors,
+  ScheduleMutation,
+  ScheduleRun,
+  ScheduleRunStatus,
+  ScheduleStatus,
+  ScheduleTask,
+  ScheduleTriggerSource,
+} from './types/index';

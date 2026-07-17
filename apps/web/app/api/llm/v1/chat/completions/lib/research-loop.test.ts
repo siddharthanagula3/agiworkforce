@@ -2,7 +2,7 @@
  * Unit tests for the Deep Research loop: iteration caps, search caps,
  * wall-clock budget, event emission (x_research_status / x_tool_status /
  * cumulative x_search_results), content suppression on gathering rounds,
- * mid-loop errors, cancellation, and billing reconciliation.
+ * mid-loop errors, cancellation, and usage accounting.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -12,12 +12,6 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: vi.fn(),
 }));
-vi.mock('@/lib/services/credit-service', () => ({
-  CreditService: {
-    generateIdempotencyKey: vi.fn(() => 'idem-key'),
-    deductCredits: vi.fn(async () => ({ success: true })),
-  },
-}));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 7) },
 }));
@@ -26,8 +20,8 @@ vi.mock('@/lib/assert-quota', () => ({
 }));
 
 import { buildToolLoopStream } from './tool-loop-anthropic';
-import { CreditService } from '@/lib/services/credit-service';
 import { reconcileUsage } from '@/lib/assert-quota';
+import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import {
   runResearchLoop,
   researchStatusEvent,
@@ -431,7 +425,7 @@ describe('runResearchLoop', () => {
     expect(run.doneCount).toBe(1);
   });
 
-  it('reconciles billing from accumulated multi-turn usage on completion', async () => {
+  it('exposes accumulated multi-turn usage for the route-owned settlement', async () => {
     streamRequestMock
       .mockResolvedValueOnce(
         sseStream([contentEvent(READY_MARKER), usageEvent(100, 50), finishEvent()]),
@@ -440,29 +434,26 @@ describe('runResearchLoop', () => {
         sseStream([contentEvent('report'), usageEvent(200, 80), finishEvent()]),
       );
 
-    await collectRun(runResearchLoop(makeProcessed(), BILLING));
+    const usage = createObservedProviderUsage();
+    await collectRun(runResearchLoop(makeProcessed(), BILLING, { usage }));
 
-    // calculateCost mocked to 7 cents vs 2 reserved -> +5 adjustment.
-    expect(CreditService.deductCredits).toHaveBeenCalledTimes(1);
-    const [userId, diff, , meta] = vi.mocked(CreditService.deductCredits).mock.calls[0]!;
-    expect(userId).toBe('user-1');
-    expect(diff).toBe(5);
-    expect(meta).toMatchObject({
-      type: 'research_reconciliation',
-      promptTokens: 300,
-      completionTokens: 130,
+    expect(usage).toMatchObject({
+      providerCalls: 2,
+      inputTokens: 300,
+      outputTokens: 130,
     });
     expect(reconcileUsage).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1', actualTokens: 430, feature: 'chat' }),
     );
   });
 
-  it('reconciles billing when the run is cancelled mid-stream (generator.return)', async () => {
+  it('preserves observed usage when cancelled mid-stream (generator.return)', async () => {
     streamRequestMock.mockResolvedValueOnce(
       sseStream([usageEvent(100, 50), contentEvent('notes'), finishEvent()]),
     );
 
-    const gen = runResearchLoop(makeProcessed(), BILLING);
+    const usage = createObservedProviderUsage();
+    const gen = runResearchLoop(makeProcessed(), BILLING, { usage });
     const decoder = new TextDecoder();
     // Consume until the first gathering round completes (its usage is then
     // recorded), then cancel like route.ts cancel() does.
@@ -475,10 +466,10 @@ describe('runResearchLoop', () => {
       if (text.includes('"status":"completed"')) break;
     }
     await gen.return(new Uint8Array());
-    // Reconciliation ran in the finally block despite the early cancel.
-    expect(CreditService.deductCredits).toHaveBeenCalledTimes(1);
-    const meta = vi.mocked(CreditService.deductCredits).mock.calls[0]![3];
-    expect(meta).toMatchObject({ promptTokens: 100, completionTokens: 50 });
+    expect(usage).toMatchObject({ providerCalls: 1, inputTokens: 100, outputTokens: 50 });
+    expect(reconcileUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', actualTokens: 150, feature: 'chat' }),
+    );
   });
 
   it('strips client-custom function tools but keeps provider-native search tools', async () => {

@@ -18,7 +18,6 @@ interface ConversationItemProps {
   conversation: ConversationSummary;
   isActive: boolean;
   snippet?: string;
-  onArchive?: (id: string) => void;
 }
 
 /**
@@ -28,12 +27,7 @@ interface ConversationItemProps {
  * - Long press for rename/delete menu
  * - Active state highlight with teal left border
  */
-export function ConversationItem({
-  conversation,
-  isActive,
-  snippet,
-  onArchive,
-}: ConversationItemProps) {
+export function ConversationItem({ conversation, isActive, snippet }: ConversationItemProps) {
   const router = useRouter();
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const renameConversation = useChatStore((s) => s.renameConversation);
@@ -95,18 +89,17 @@ export function ConversationItem({
     pinConversation(conversation.id);
   }, [conversation.id, pinConversation, hapticsEnabled]);
 
-  const handleArchive = useCallback(() => {
-    onArchive?.(conversation.id);
-  }, [conversation.id, onArchive]);
-
   const handleLongPress = useCallback(() => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+    // No "Archive" entry here: it rendered unconditionally with no wired
+    // action (no onArchive was ever passed by a caller, and conversations
+    // have no archived field) — a menu item that visibly did nothing on tap.
+    // Re-add once conversation archiving is actually implemented.
     Alert.alert(conversation.title, undefined, [
       { text: conversation.pinned ? 'Unpin' : 'Pin', onPress: handlePin },
       { text: 'Rename', onPress: handleRename },
-      { text: 'Archive', onPress: handleArchive },
       {
         text: 'Delete',
         style: 'destructive',
@@ -120,7 +113,6 @@ export function ConversationItem({
     hapticsEnabled,
     handlePin,
     handleRename,
-    handleArchive,
     handleDelete,
   ]);
 

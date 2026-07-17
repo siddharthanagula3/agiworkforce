@@ -1,4 +1,4 @@
-// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
+// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 /**
  * Scheduler Store
  *
@@ -16,7 +16,7 @@
  * - Persist middleware: Using createJSONStorage, partialize, version
  * - Tauri event subscription for real-time job updates
  */
-import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
+import { invoke, isTauri, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
@@ -699,44 +699,64 @@ export const useSchedulerStore = create<SchedulerState>()(
               lastOutput: null,
               createdAt: new Date(job.createdAt).getTime(),
             }));
-            set({ tasks, isLoading: false }, undefined, 'scheduler/fetchTasks/success');
-          } catch {
-            // Tauri command not available — fall back to localStorage
+            set(
+              { tasks, isLoading: false, error: null },
+              undefined,
+              'scheduler/fetchTasks/success',
+            );
+          } catch (error) {
+            if (isTauri) {
+              // Real native failure — keep whatever tasks are already in
+              // memory (avoid flashing to blank) but surface the error
+              // rather than silently serving a possibly-stale local cache.
+              const errorMessage = getSimpleErrorMessage(error);
+              console.error('[schedulerStore] Failed to fetch tasks from backend:', error);
+              set(
+                { error: errorMessage, isLoading: false },
+                undefined,
+                'scheduler/fetchTasks/error',
+              );
+              return;
+            }
+            // Tauri unavailable (web preview / dev without a native backend)
+            // — fall back to locally cached tasks.
             const tasks = loadTasksFromStorage();
             set({ tasks, isLoading: false }, undefined, 'scheduler/fetchTasks/fallback');
           }
         },
 
         createTask: async (input: CreateTaskInput) => {
-          const now = Date.now();
-          const newTask: ScheduledTask = {
-            ...input,
-            id: crypto.randomUUID(),
-            createdAt: now,
-            runCount: 0,
-            lastRunAt: null,
-            nextRunAt: computeNextRunAt(input.schedule),
-            lastOutput: null,
-          };
-
           try {
-            const id = await invoke<string>('scheduler_add_job', {
+            await invoke<string>('scheduler_add_job', {
               name: input.name,
               prompt: input.prompt,
               schedule: input.schedule,
             });
-            const taskWithBackendId: ScheduledTask = { ...newTask, id };
-            set(
-              (state) => {
-                const tasks = [taskWithBackendId, ...state.tasks];
-                persistTasksToStorage(tasks);
-                return { tasks };
-              },
-              undefined,
-              'scheduler/createTask/success',
-            );
-          } catch {
-            // Fallback: store locally
+            // Re-fetch from the backend rather than splicing a locally-built
+            // task in: the backend is the source of truth for computed
+            // fields like nextRun (real cron evaluation, not the client's
+            // computeNextRunAt approximation).
+            await get().fetchTasks();
+          } catch (error) {
+            if (isTauri) {
+              const errorMessage = getSimpleErrorMessage(error);
+              console.error('[schedulerStore] Failed to create task on backend:', error);
+              set({ error: errorMessage }, undefined, 'scheduler/createTask/error');
+              toast.error(`Failed to create task: ${errorMessage}`);
+              throw error;
+            }
+            // Tauri unavailable (web preview / dev without a native backend)
+            // — fall back to a local-only task so the UI stays usable.
+            const now = Date.now();
+            const newTask: ScheduledTask = {
+              ...input,
+              id: crypto.randomUUID(),
+              createdAt: now,
+              runCount: 0,
+              lastRunAt: null,
+              nextRunAt: computeNextRunAt(input.schedule),
+              lastOutput: null,
+            };
             set(
               (state) => {
                 const tasks = [newTask, ...state.tasks];
@@ -752,44 +772,62 @@ export const useSchedulerStore = create<SchedulerState>()(
         updateTask: async (id: string, updates: Partial<ScheduledTask>) => {
           try {
             await invoke('scheduler_update_job', { id, updates });
-          } catch {
-            // Fallback: update locally only
+            await get().fetchTasks();
+          } catch (error) {
+            if (isTauri) {
+              const errorMessage = getSimpleErrorMessage(error);
+              console.error('[schedulerStore] Failed to update task on backend:', error);
+              set({ error: errorMessage }, undefined, 'scheduler/updateTask/error');
+              toast.error(`Failed to update task: ${errorMessage}`);
+              throw error;
+            }
+            // Tauri unavailable — fall back to a local-only update.
+            set(
+              (state) => {
+                const tasks = state.tasks.map((t) =>
+                  t.id === id
+                    ? {
+                        ...t,
+                        ...updates,
+                        nextRunAt:
+                          updates.schedule != null
+                            ? computeNextRunAt(updates.schedule)
+                            : t.nextRunAt,
+                      }
+                    : t,
+                );
+                persistTasksToStorage(tasks);
+                return { tasks };
+              },
+              undefined,
+              'scheduler/updateTask/fallback',
+            );
           }
-          set(
-            (state) => {
-              const tasks = state.tasks.map((t) =>
-                t.id === id
-                  ? {
-                      ...t,
-                      ...updates,
-                      nextRunAt:
-                        updates.schedule != null ? computeNextRunAt(updates.schedule) : t.nextRunAt,
-                    }
-                  : t,
-              );
-              persistTasksToStorage(tasks);
-              return { tasks };
-            },
-            undefined,
-            'scheduler/updateTask',
-          );
         },
 
         deleteTask: async (id: string) => {
           try {
             await invoke('scheduler_remove_job', { jobId: id });
-          } catch {
-            // Fallback: delete locally
+            await get().fetchTasks();
+          } catch (error) {
+            if (isTauri) {
+              const errorMessage = getSimpleErrorMessage(error);
+              console.error('[schedulerStore] Failed to delete task on backend:', error);
+              set({ error: errorMessage }, undefined, 'scheduler/deleteTask/error');
+              toast.error(`Failed to delete task: ${errorMessage}`);
+              throw error;
+            }
+            // Tauri unavailable — fall back to a local-only delete.
+            set(
+              (state) => {
+                const tasks = state.tasks.filter((t) => t.id !== id);
+                persistTasksToStorage(tasks);
+                return { tasks };
+              },
+              undefined,
+              'scheduler/deleteTask/fallback',
+            );
           }
-          set(
-            (state) => {
-              const tasks = state.tasks.filter((t) => t.id !== id);
-              persistTasksToStorage(tasks);
-              return { tasks };
-            },
-            undefined,
-            'scheduler/deleteTask',
-          );
         },
 
         toggleTask: async (id: string) => {
@@ -800,45 +838,63 @@ export const useSchedulerStore = create<SchedulerState>()(
 
           try {
             await invoke('scheduler_toggle_job', { id });
-          } catch {
-            // Fallback: toggle locally
+            await get().fetchTasks();
+          } catch (error) {
+            if (isTauri) {
+              const errorMessage = getSimpleErrorMessage(error);
+              console.error('[schedulerStore] Failed to toggle task on backend:', error);
+              set({ error: errorMessage }, undefined, 'scheduler/toggleTask/error');
+              toast.error(`Failed to toggle task: ${errorMessage}`);
+              throw error;
+            }
+            // Tauri unavailable — fall back to a local-only toggle.
+            set(
+              (state) => {
+                const tasks = state.tasks.map((t) =>
+                  t.id === id ? { ...t, status: newStatus } : t,
+                );
+                persistTasksToStorage(tasks);
+                return { tasks };
+              },
+              undefined,
+              'scheduler/toggleTask/fallback',
+            );
           }
-          set(
-            (state) => {
-              const tasks = state.tasks.map((t) => (t.id === id ? { ...t, status: newStatus } : t));
-              persistTasksToStorage(tasks);
-              return { tasks };
-            },
-            undefined,
-            'scheduler/toggleTask',
-          );
         },
 
         runNow: async (id: string) => {
           try {
             await invoke('scheduler_run_job_now', { id });
-          } catch {
-            // Fallback: record local run attempt
+            await get().fetchTasks();
+          } catch (error) {
+            if (isTauri) {
+              const errorMessage = getSimpleErrorMessage(error);
+              console.error('[schedulerStore] Failed to run task on backend:', error);
+              set({ error: errorMessage }, undefined, 'scheduler/runNow/error');
+              toast.error(`Failed to run task: ${errorMessage}`);
+              throw error;
+            }
+            // Tauri unavailable — fall back to a local-only run record.
+            const now = Date.now();
+            set(
+              (state) => {
+                const tasks = state.tasks.map((t) =>
+                  t.id === id
+                    ? {
+                        ...t,
+                        lastRunAt: now,
+                        runCount: t.runCount + 1,
+                        nextRunAt: computeNextRunAt(t.schedule),
+                      }
+                    : t,
+                );
+                persistTasksToStorage(tasks);
+                return { tasks };
+              },
+              undefined,
+              'scheduler/runNow/fallback',
+            );
           }
-          const now = Date.now();
-          set(
-            (state) => {
-              const tasks = state.tasks.map((t) =>
-                t.id === id
-                  ? {
-                      ...t,
-                      lastRunAt: now,
-                      runCount: t.runCount + 1,
-                      nextRunAt: computeNextRunAt(t.schedule),
-                    }
-                  : t,
-              );
-              persistTasksToStorage(tasks);
-              return { tasks };
-            },
-            undefined,
-            'scheduler/runNow',
-          );
         },
       })),
       {
@@ -847,16 +903,21 @@ export const useSchedulerStore = create<SchedulerState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        partialize: (state) => ({
-          jobs: state.jobs,
-          tasks: state.tasks,
-        }),
+        // Under Tauri, SQLite (via the Rust scheduler) is the sole source of
+        // truth for `tasks` — persisting it to localStorage too would be a
+        // second copy that can silently mask a native failure (a `set()`
+        // only happens on the success path, so this can't persist a lie,
+        // but it can still serve stale data before the next fetchTasks()).
+        // Only in a non-Tauri context (web preview / dev) does localStorage
+        // need to hold `tasks`, since there is no backend to fetch from.
+        partialize: (state) =>
+          isTauri ? { jobs: state.jobs } : { jobs: state.jobs, tasks: state.tasks },
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<SchedulerState> | undefined;
           return {
             ...currentState,
             jobs: persisted?.jobs ?? currentState.jobs,
-            tasks: persisted?.tasks ?? currentState.tasks,
+            tasks: isTauri ? currentState.tasks : (persisted?.tasks ?? currentState.tasks),
           };
         },
         onRehydrateStorage: () => (state) => {

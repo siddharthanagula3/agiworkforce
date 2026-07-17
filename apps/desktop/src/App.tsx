@@ -1,7 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChatHostBridge } from '@agiworkforce/unified-chat';
-import { CapabilityProvider } from '@agiworkforce/unified-chat';
+import {
+  CapabilityProvider,
+  createChatModelInfo,
+  parseDiscoveredChatModels,
+  useChatSettingsStore,
+} from '@agiworkforce/unified-chat';
+import { useUnifiedAuthStore } from './stores/auth';
 import { useFolderSelection } from './hooks/useFolderSelection';
 import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
@@ -25,8 +31,7 @@ import {
 } from './hooks/useAgenticEvents';
 
 import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
-import { TauriRuntime } from './runtime/TauriRuntime';
-import { WebRuntime } from './runtime/WebRuntime';
+import { createDesktopChatRuntimeWithLabeling } from './runtime/sessionLabeling';
 import type { CommandOption } from './features/chat/CommandPalette';
 import { useSearchModal } from './hooks/useSearchModal';
 import { useThemeContext } from './providers/ThemeProvider';
@@ -57,7 +62,6 @@ import {
 } from 'lucide-react';
 import { ErrorBoundary } from './features/error-handling';
 import { TooltipProvider } from './components/ui/Tooltip';
-import { getModelMetadata, getProviderDefaultModel } from './constants/llm';
 import { errorReportingService } from './services/errorReporting';
 import { initializeWebAuth, cloudAccountAuth } from './services/cloudAccountAuth';
 import {
@@ -173,6 +177,7 @@ const ErrorToastContainer = lazy(() =>
 import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { initCloudSyncScheduler } from './lib/cloudSyncTrigger';
+import { initManagedCloudSettingsSync } from './services/managedCloudSettingsSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
 import { PlansModal } from './features/pricing/PlansModal';
@@ -251,7 +256,7 @@ const DesktopShell = () => {
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
   const accessToken = useAuthStore((state) => state.accessToken);
   const appMode = useAppModeStore((s) => s.mode);
-  const isCloudMode = useAppModeStore((s) => selectPrivacyMode(s) !== 'local');
+  const isCloudMode = useAppModeStore((s) => s.mode === 'cloud');
   const hasCloudSession = isAuthenticated && !!accessToken;
 
   // Hard 8 s boot timeout: if sessionValidated is still false (for example,
@@ -468,6 +473,9 @@ const DesktopShell = () => {
           () => useSettingsStore.getState().loadSettings(),
           { notify: true },
         );
+        if (!disposed) {
+          registerCleanup(initManagedCloudSettingsSync());
+        }
 
         // Apply window preferences on startup (dock/position)
         if (isTauri) {
@@ -617,14 +625,8 @@ const DesktopShell = () => {
         }
 
         const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-        interface RustModelInfo {
-          id: string;
-          name: string;
-          provider: string;
-          available: boolean;
-        }
         const rawRustModels = await invoke<unknown>('llm_get_available_models');
-        let rustModels = Array.isArray(rawRustModels) ? (rawRustModels as RustModelInfo[]) : [];
+        let rustModels = parseDiscoveredChatModels(rawRustModels);
         if (currentMode === 'local') {
           // Defensive direct-fetch fallback: `llm_get_available_models` only appends a
           // local runtime's models when the router already has it registered
@@ -645,9 +647,7 @@ const DesktopShell = () => {
             }
             try {
               const rawDirectModels = await invoke<unknown>(command);
-              const directModels = Array.isArray(rawDirectModels)
-                ? (rawDirectModels as RustModelInfo[])
-                : [];
+              const directModels = parseDiscoveredChatModels(rawDirectModels);
               rustModels = [
                 ...rustModels,
                 ...directModels.filter((model) => {
@@ -661,37 +661,6 @@ const DesktopShell = () => {
             }
           }
         }
-        const validProviders = new Set([
-          'anthropic',
-          'openai',
-          'google',
-          'managed_cloud',
-          'mistral',
-          'meta',
-          'xai',
-          'deepseek',
-          'qwen',
-          'moonshot',
-          'perplexity',
-          'zhipu',
-          'groq',
-          'together',
-          'fireworks',
-          'cerebras',
-          'deepinfra',
-          'nvidia_nim',
-          'open_router',
-          'cohere',
-          'ai21',
-          'sambanova',
-          'azure',
-          'bedrock',
-          'lmstudio',
-          'llamacpp',
-          'vllm',
-          'local',
-          'ollama',
-        ]);
         const visibleModels = rustModels.filter((model) => {
           const provider = model.provider.toLowerCase();
           const isLocalProvider =
@@ -701,51 +670,34 @@ const DesktopShell = () => {
             provider === 'llamacpp' ||
             provider === 'vllm';
           const isManagedProvider = provider === 'managed_cloud' || provider === 'managed-cloud';
-          const isConfiguredByok = model.available && !isLocalProvider && !isManagedProvider;
+          const isReachable = model.available === true;
+          const isConfiguredByok = isReachable && !isLocalProvider && !isManagedProvider;
 
           if (currentMode === 'local') {
-            return isLocalProvider || isConfiguredByok;
+            return (isLocalProvider && isReachable) || isConfiguredByok;
           }
 
           return isManagedProvider || model.id.startsWith('auto');
         });
 
-        const chatModels = visibleModels.map((m) => ({
-          id: m.id,
-          name: m.name,
-          provider: (validProviders.has(m.provider.toLowerCase())
-            ? m.provider.toLowerCase()
-            : 'openai') as import('@agiworkforce/unified-chat').ModelInfo['provider'],
-          tier: (m.name.toLowerCase().includes('opus') ||
-          m.name.toLowerCase().includes('4o') ||
-          m.name.toLowerCase().includes('pro')
-            ? 'flagship'
-            : m.name.toLowerCase().includes('haiku') ||
-                m.name.toLowerCase().includes('mini') ||
-                m.name.toLowerCase().includes('flash')
-              ? 'fast'
-              : 'standard') as import('@agiworkforce/unified-chat').ModelInfo['tier'],
-          supportsThinking:
-            m.name.toLowerCase().includes('think') || m.provider.toLowerCase() === 'anthropic',
-          supportsVision: true,
-          supportsTools: true,
-          contextWindow: 128000,
-          isLocal: ['ollama', 'local', 'lmstudio', 'llamacpp', 'vllm'].includes(
-            m.provider.toLowerCase(),
-          ),
-          isByok:
+        const chatModels = visibleModels.map((model) => {
+          const provider = model.provider.toLowerCase();
+          const isLocal = ['ollama', 'local', 'lmstudio', 'llamacpp', 'vllm'].includes(provider);
+          const isByok =
             currentMode === 'local' &&
-            m.available &&
-            ![
-              'ollama',
-              'local',
-              'lmstudio',
-              'llamacpp',
-              'vllm',
-              'managed_cloud',
-              'managed-cloud',
-            ].includes(m.provider.toLowerCase()),
-        }));
+            model.available === true &&
+            !isLocal &&
+            provider !== 'managed_cloud' &&
+            provider !== 'managed-cloud';
+
+          return createChatModelInfo({
+            id: model.id,
+            name: model.name,
+            provider,
+            isLocal,
+            isByok,
+          });
+        });
         useChatModelStore.getState().setModels(chatModels);
         // Mode-safe selection: keep the active model consistent with the mode's
         // available set. In Local mode an auto-routing / cloud model must never
@@ -766,95 +718,53 @@ const DesktopShell = () => {
           }
         }
       } catch {
-        // Backend unavailable — try cloud API in web mode, then fall back to hardcoded defaults
+        // A non-Tauri cloud build can read the public catalog endpoint, but the
+        // payload is untrusted and catalog membership alone does not prove
+        // capabilities or lifecycle. Validate its shape, then hydrate every
+        // canonical field through the registry-backed mapper.
         try {
           if (!isTauri) {
-            const res = await guardedFetch(`${API_BASE_URL}/api/models`);
-            if (res.ok) {
-              const data = await res.json();
-              if (Array.isArray(data?.models) && data.models.length > 0) {
+            const response = await guardedFetch(`${API_BASE_URL}/api/models`);
+            if (response.ok) {
+              const data: unknown = await response.json();
+              const discoveredModels = parseDiscoveredChatModels(
+                data && typeof data === 'object' && !Array.isArray(data)
+                  ? (data as Record<string, unknown>)['models']
+                  : undefined,
+              );
+              if (discoveredModels.length > 0) {
                 const { useChatModelStore } = await import('@agiworkforce/unified-chat');
                 useChatModelStore.getState().setModels(
-                  data.models.map((m: { id: string; name: string; provider: string }) => ({
-                    id: m.id,
-                    name: m.name,
-                    provider: (m.provider ||
-                      'openai') as import('@agiworkforce/unified-chat').ModelInfo['provider'],
-                    tier: 'standard' as const,
-                    supportsThinking: false,
-                    supportsVision: true,
-                    supportsTools: true,
-                    contextWindow: 128000,
-                    isLocal: false,
-                    isByok: false,
-                  })),
+                  discoveredModels.map((model) =>
+                    createChatModelInfo({
+                      id: model.id,
+                      name: model.name,
+                      provider: model.provider,
+                      isLocal: false,
+                      isByok: false,
+                    }),
+                  ),
                 );
                 toast.info('Loaded models from cloud API.');
-                return; // cloud API succeeded, skip hardcoded fallback
+                return;
               }
             }
           }
         } catch {
-          // Cloud API also failed — continue to hardcoded fallback
+          // Continue to the explicit unavailable state below.
         }
 
-        // Build fallback models from the shared catalog helpers (single source of truth)
-        try {
-          const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-          const fallbackProviders =
-            currentMode === 'local'
-              ? ['ollama']
-              : ['managed_cloud', 'anthropic', 'openai', 'google'];
-          const fallbackModels: import('@agiworkforce/unified-chat').ModelInfo[] =
-            fallbackProviders.flatMap((p) => {
-              const defaultModelId = getProviderDefaultModel(
-                p as import('./types/provider').Provider,
-              );
-              if (!defaultModelId) return [];
-              const m = getModelMetadata(defaultModelId);
-              if (!m) return [];
-              return [
-                {
-                  id: m.id,
-                  name: m.name,
-                  provider: p as import('@agiworkforce/unified-chat').ModelInfo['provider'],
-                  tier:
-                    m.speed === 'very-fast' || m.speed === 'fast'
-                      ? ('fast' as const)
-                      : ('standard' as const),
-                  supportsThinking: m.capabilities?.['thinking'] ?? false,
-                  supportsVision: m.capabilities?.['vision'] ?? false,
-                  supportsTools: m.capabilities?.['tools'] ?? false,
-                  contextWindow: m.contextWindow ?? 128000,
-                  isLocal: p === 'ollama',
-                  isByok: false,
-                },
-              ];
-            });
-          useChatModelStore.getState().setModels(fallbackModels);
-          // Mode-safe selection (see primary path above): never leave a cloud /
-          // auto model active in Local mode (egress-guarded → silent fail); fall
-          // back to the default auto-routing model in cloud mode.
-          {
-            const ms = useChatModelStore.getState();
-            const nextId = currentMode === 'local' ? (ms.models[0]?.id ?? '') : 'auto-economy';
-            if (
-              !ms.models.some((m) => m.id === ms.selectedModelId) &&
-              nextId !== ms.selectedModelId
-            ) {
-              ms.selectModel(nextId);
-            }
-          }
-          if (currentMode === 'local' && fallbackModels.length === 0) {
-            toast.info(
-              'No local or BYOK models detected yet. Add Ollama or an API key in Settings.',
-            );
-          } else {
-            toast.error('Could not load models from backend. Using mode-safe defaults.');
-          }
-        } catch {
-          // Even the fallback import failed — chat will use its own internal default
-        }
+        // Reachability is unknown. Never turn static catalog membership into a
+        // fake Local/BYOK/Managed availability claim.
+        const { useChatModelStore } = await import('@agiworkforce/unified-chat');
+        const modelStore = useChatModelStore.getState();
+        modelStore.setModels([]);
+        modelStore.selectModel('');
+        toast.error(
+          currentMode === 'local'
+            ? 'No verified local or BYOK model is reachable. Start a local runtime or configure a provider in Settings.'
+            : 'The managed model catalog is unavailable. Retry after the connection recovers.',
+        );
       }
     }
     void initModels();
@@ -1060,7 +970,7 @@ const DesktopShell = () => {
       useAppModeStore.getState().setOnline(false);
 
       // Show toast warning if user is in Cloud Mode
-      const isCloudMode = selectPrivacyMode(useAppModeStore.getState()) !== 'local';
+      const isCloudMode = useAppModeStore.getState().mode === 'cloud';
       if (isCloudMode) {
         toast.error("You're offline. Switch to Local Mode or reconnect.");
       }
@@ -1188,7 +1098,7 @@ const DesktopShell = () => {
         try {
           const { selectedModel, selectedProvider, selectModel } = useModelStore.getState();
           if (
-            selectPrivacyMode(useAppModeStore.getState()) !== 'local' &&
+            useAppModeStore.getState().mode === 'cloud' &&
             model &&
             (selectedModel !== model || selectedProvider !== 'managed_cloud')
           ) {
@@ -1295,7 +1205,26 @@ const DesktopShell = () => {
     setTimeoutWarning(null);
   }, []);
 
-  const tauriRuntime = useMemo(() => (isTauri ? new TauriRuntime() : new WebRuntime()), []);
+  const chatRuntime = useMemo(
+    () => createDesktopChatRuntimeWithLabeling({ isTauriHost: isTauri, appMode }),
+    [appMode],
+  );
+
+  // Keep the shared chat package's "is code execution actually available"
+  // signal in sync with this deployment's E2B cut-over flag
+  // (`/api/me` `feature_flags.code_execution`, already fetched into
+  // `useUnifiedAuthStore` by `cloudAccountAuth.refreshUserData`). The
+  // composer's "Run code" toggle (packages/ui/unified-chat) and useChat's
+  // send-time gate both read this instead of re-deriving it, so they can
+  // never disagree with what the account actually entitles.
+  const codeExecutionDeploymentEnabled = useUnifiedAuthStore(
+    (s) => s.featureFlags['code_execution'] ?? false,
+  );
+  useEffect(() => {
+    useChatSettingsStore
+      .getState()
+      .setCodeExecutionDeploymentEnabled(codeExecutionDeploymentEnabled);
+  }, [codeExecutionDeploymentEnabled]);
   const chatHostBridge = useMemo<ChatHostBridge>(
     () => ({
       getSnapshot: () => {
@@ -1310,6 +1239,8 @@ const DesktopShell = () => {
             pinned: conversation.pinned,
             archived: conversation.archived,
             lastMessage: conversation.lastMessage,
+            model: conversation.modelOverride,
+            executionMode: conversation.executionMode,
           })),
         };
       },
@@ -1337,6 +1268,9 @@ const DesktopShell = () => {
       selectConversation: (id) => {
         if (!id) return;
         useDesktopChatStore.getState().selectConversation(id);
+      },
+      setConversationModel: (id, modelId) => {
+        useDesktopChatStore.getState().setConversationModel(id, modelId);
       },
       // Managed-cloud generated files (x_generated_files): fetch bytes from
       // the authenticated /api/files route. Bearer is ONLY attached to uris on
@@ -1555,7 +1489,7 @@ const DesktopShell = () => {
             >
               {isV3DesktopChatEnabled ? (
                 <DesktopShellV3
-                  runtime={tauriRuntime}
+                  runtime={chatRuntime}
                   className="h-full w-full"
                   hostBridge={chatHostBridge}
                   onModelSelectorClick={() => openSettingsDialog('models-keys')}
@@ -1580,7 +1514,7 @@ const DesktopShell = () => {
               ) : (
                 <CapabilityProvider platform="desktop">
                   <ChatInterface
-                    runtime={tauriRuntime}
+                    runtime={chatRuntime}
                     className="h-full w-full"
                     manageTheme={false}
                     enableShortcuts={true}

@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { verifyToken } from '@clerk/backend';
 import { z } from 'zod';
 import { requireEnv } from '../env';
-import { getServiceClient } from '../lib/neonClients';
+import { getSystemClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../lib/logger';
@@ -12,7 +12,7 @@ import { logger } from '../lib/logger';
 // The device-code flow starts before the CLI has a cloud account token.
 // Server-side Neon access is the correct boundary for code creation and
 // post-approval lookups; /approve validates the browser's Clerk bearer token.
-const db = getServiceClient();
+const db = getSystemClient('device-authorization');
 
 const router: Router = Router();
 
@@ -171,22 +171,14 @@ router.post('/token', createRateLimiter('device-register'), async (req: Request,
   // SECURITY (P1-GW-RLS): also mint the standard `sub` claim (additive —
   // existing claims/consumers are unchanged, so pre-existing tokens keep
   // verifying fine, they just lack `sub` until they're replaced). data-layer's
-  // NeonDatabaseAdapter.withUser(token) (used by getUserScopedClient in
+  // NeonDatabaseAdapter.withUser(token) (used by the user-scoped database client in
   // lib/neonClients.ts) decodes `sub` from the token to bind Postgres RLS —
   // without it, requests authenticated via a device-paired gateway token
-  // would fail withUser() and fall back to the service client.
+  // would fail closed and require the device to authenticate again.
   //
-  // COMPAT WINDOW: tokens minted before this change (shipped 2026-07-09) lack
-  // `sub`. getUserScopedClient() falls back safely (logged, not a crash) for
-  // any of them it still sees. ACCESS_TOKEN_EXPIRES_SECONDS is 604800s (7
-  // days) — not short enough to justify forcing mass re-auth/bumping a token
-  // version, so the fallback (not a forced-reauth cutover) is the deliberate
-  // choice here. The window closes on its own: every gateway-issued token is
-  // guaranteed to carry `sub` by 2026-07-16 (7 days after ship), after which
-  // this comment block and the withUser() fallback-on-missing-sub path (see
-  // lib/neonClients.ts's getUserScopedClient) can be treated as dead code for
-  // this specific cause — the fallback should stay regardless, since it also
-  // covers the unrelated app_rls-provisioning failure mode documented there.
+  // Tokens minted before 2026-07-09 lack `sub`. They remain signature-valid,
+  // but database-backed user routes now fail closed and require reauth rather
+  // than retrying with the privileged system connection.
   const accessToken = jwt.sign({ userId, email, sub: userId }, JWT_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
     issuer: 'agiworkforce-api-gateway',

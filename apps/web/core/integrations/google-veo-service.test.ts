@@ -315,7 +315,7 @@ describe('Google Veo Service', () => {
         resolution: '720p',
       });
 
-      expect(result.cost).toBe(0.05);
+      expect(result.cost).toBe(3.2);
     });
 
     it('should calculate cost correctly for 1080p', async () => {
@@ -341,7 +341,7 @@ describe('Google Veo Service', () => {
         resolution: '1080p',
       });
 
-      expect(result.cost).toBe(0.08);
+      expect(result.cost).toBe(3.2);
     });
   });
 
@@ -447,7 +447,7 @@ describe('Google Veo Service', () => {
     it('should include features for each model', () => {
       const models = googleVeoService.getAvailableModels();
 
-      expect(models![0]!.features!).toContain('720p or 1080p resolution');
+      expect(models![0]!.features!).toContain('720p, 1080p, 4k resolution');
       expect(models![0]!.features!).toContain('Native audio generation');
       expect(models![0]!.features!).toContain('Text-to-video');
     });
@@ -459,7 +459,8 @@ describe('Google Veo Service', () => {
 
       expect(resolutions).toContain('720p');
       expect(resolutions).toContain('1080p');
-      expect(resolutions.length).toBe(2);
+      expect(resolutions).toContain('4k');
+      expect(resolutions.length).toBe(3);
     });
   });
 
@@ -551,7 +552,7 @@ describe('Google Veo Service', () => {
       expect(requestBody.model).toBe('veo-3.1-generate-preview');
       expect(requestBody.prompt).toBe('Test video');
       expect(requestBody.resolution).toBe('1080p');
-      expect(requestBody.duration).toBe(6);
+      expect(requestBody.duration).toBe(8);
       expect(requestBody.aspectRatio).toBe('9:16');
       expect(requestBody.fps).toBe(30);
       expect(requestBody.seed).toBe(12345);

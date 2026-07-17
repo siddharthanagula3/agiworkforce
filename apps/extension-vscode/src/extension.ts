@@ -6,20 +6,20 @@
  */
 
 import * as vscode from 'vscode';
-import { getApiKey } from './utils/api';
 import { fetchTierInfo } from './utils/api';
 import { Config } from './platform/config';
-import { AgentModePanel } from './providers/agentModeProvider';
 import { getDesktopBridge, activateDesktopBridge } from './features/desktop-bridge';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
-import { initCheckpointManager } from './data/checkpointManager';
 import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
 import { setupChat } from './core/chatSetup';
 import { setupProviders } from './core/providerSetup';
 import { setupCommands } from './core/commandSetup';
 import * as telemetry from './core/telemetry';
+import { LocalRuntimeClient } from './integrations/localRuntimeClient';
+import { LocalRuntimePool } from './integrations/localRuntimePool';
+import { getExtensionVersion } from './platform/version';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -49,11 +49,6 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   }
 
-  // ── 0d. Checkpoint manager ───────────────────────────────────────────────────
-  runBoot('checkpoint-manager', () => {
-    initCheckpointManager(context);
-  });
-
   // ── 0e. MCP enabled → ensure bridge connects on startup ─────────────────────
   if (Config.mcpEnabled()) {
     const bridge = getDesktopBridge();
@@ -72,21 +67,28 @@ export function activate(context: vscode.ExtensionContext): void {
     syncInlineCompletionProvider,
   } = providerState;
 
+  // One Rust app-server per workspace root. The pool is lazy, so activation
+  // never launches a process until a local developer session is actually used.
+  const localRuntimes = new LocalRuntimePool(
+    (cwd) =>
+      new LocalRuntimeClient({
+        cliPath: Config.cliPath(),
+        cwd,
+        clientVersion: getExtensionVersion(),
+      }),
+  );
+  context.subscriptions.push(localRuntimes);
+
   // ── 2. Chat participant + sidebar + conversation tree + context tree ─────────
-  const chatState = setupChat(context, diffDecorationProvider);
-  const {
-    sidebarProvider,
-    conversationStore,
-    conversationTreeProvider,
-    contextPanelProvider,
-    memoryTreeProvider,
-  } = chatState;
+  const chatState = setupChat(context, localRuntimes, diffDecorationProvider);
+  const { sidebarProvider, conversationTreeProvider, contextPanelProvider, memoryTreeProvider } =
+    chatState;
 
   // ── 3. Commands ──────────────────────────────────────────────────────────────
   setupCommands(context, {
     sidebarProvider,
-    conversationStore,
     conversationTreeProvider,
+    localRuntimes,
     contextPanelProvider,
     memoryTreeProvider,
     diffDecorationProvider,
@@ -118,6 +120,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('agiWorkforce.cliPath')) {
+        localRuntimes.restartAll();
+        conversationTreeProvider.refresh();
+      }
+
       if (
         e.affectsConfiguration('agiWorkforce.model') ||
         e.affectsConfiguration('agiWorkforce.agent.planMode') ||
@@ -152,13 +159,6 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.desktopBridge.port')
       ) {
         void validateAdvancedFeatureFlags(context);
-      }
-
-      if (
-        e.affectsConfiguration('agiWorkforce.agent.planMode') ||
-        e.affectsConfiguration('agiWorkforce.agent.mode')
-      ) {
-        AgentModePanel.currentPanel?.setPlanMode(Config.agentMode() === 'plan');
       }
 
       if (e.affectsConfiguration('agiWorkforce.mcp.enabled')) {
@@ -243,21 +243,15 @@ async function checkFirstRun(context: vscode.ExtensionContext): Promise<void> {
   const hasShownWelcome = context.globalState.get<boolean>('agiWorkforce.shownWelcome');
   if (hasShownWelcome === true) return;
 
-  const hasKey = (await getApiKey(context.secrets)) !== undefined;
-  if (hasKey) {
-    await context.globalState.update('agiWorkforce.shownWelcome', true);
-    return;
-  }
-
   const choice = await vscode.window.showInformationMessage(
-    'Welcome to AGI Workforce. Set up an API key to use supported providers in VS Code.',
-    'Set API Key',
+    'Welcome to AGI for VS Code. Developer sessions run through the local AGI CLI app-server. Install the CLI or configure its path in Settings.',
+    'Open Settings',
     'Later',
   );
 
   await context.globalState.update('agiWorkforce.shownWelcome', true);
 
-  if (choice === 'Set API Key') {
-    await vscode.commands.executeCommand('agi-workforce.setApiKey');
+  if (choice === 'Open Settings') {
+    await vscode.commands.executeCommand('workbench.action.openSettings', 'agiWorkforce.cliPath');
   }
 }

@@ -18,6 +18,7 @@
 
 import type {
   ChatRuntime,
+  Artifact,
   FileRef,
   SendMessageOptions,
   SendMessageParams,
@@ -25,6 +26,7 @@ import type {
   TauriAttachmentPayload,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
+import type { ChatExecutionMode } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useUnifiedAuthStore } from '../stores/auth';
@@ -84,6 +86,9 @@ interface ArtifactEventPayload {
     content: string;
     language?: string | null;
     metadata?: Record<string, unknown>;
+    version?: number;
+    created_at?: string;
+    updated_at?: string;
   };
 }
 
@@ -107,6 +112,86 @@ interface RawArtifact {
 interface RawArtifactVersion {
   version: number;
   content: string;
+  created_at?: string;
+}
+
+// Full Rust Artifact shape returned by artifact_get_conversation_snapshot.
+// `render_type` is the exact shared renderer type; `artifact_type` is the
+// coarser Rust category retained only for native rendering/filtering.
+interface RawConversationArtifact {
+  id: string;
+  artifact_type?: string;
+  render_type: string;
+  title: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  conversation_id?: string | number | null;
+  message_id?: string | number | null;
+  current_version: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+const ARTIFACT_RENDER_TYPES = new Set<Artifact['type']>([
+  'code',
+  'react',
+  'component',
+  'chart',
+  'diagram',
+  'table',
+  'mermaid',
+  'spreadsheet',
+  'presentation',
+  'html',
+  'image',
+  'video',
+  'audio',
+  'music',
+  'search',
+  'document',
+  'markdown',
+  'json',
+  'csv',
+  'svg',
+  'email',
+  'research',
+]);
+
+function isArtifactRenderType(value: unknown): value is Artifact['type'] {
+  return typeof value === 'string' && ARTIFACT_RENDER_TYPES.has(value as Artifact['type']);
+}
+
+function resolveArtifactRenderType(renderType: unknown, nativeType?: unknown): Artifact['type'] {
+  if (isArtifactRenderType(renderType)) return renderType;
+  switch (nativeType) {
+    case 'code':
+    case 'document':
+    case 'spreadsheet':
+    case 'diagram':
+    case 'chart':
+    case 'presentation':
+    case 'image':
+      return nativeType;
+    case 'web':
+      return 'html';
+    default:
+      return 'document';
+  }
+}
+
+function isRawConversationArtifact(value: unknown): value is RawConversationArtifact {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate['id'] === 'string' &&
+    candidate['id'].trim().length > 0 &&
+    typeof candidate['render_type'] === 'string' &&
+    typeof candidate['title'] === 'string' &&
+    typeof candidate['content'] === 'string' &&
+    typeof candidate['current_version'] === 'number' &&
+    Number.isInteger(candidate['current_version']) &&
+    candidate['current_version'] >= 0
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +215,8 @@ interface RawConversation {
   lastMessage?: string;
   tags?: string[];
   archived?: boolean;
+  execution_mode?: ChatExecutionMode;
+  executionMode?: ChatExecutionMode;
 }
 
 interface RawMessage {
@@ -172,6 +259,7 @@ function mapConversation(raw: RawConversation): Conversation {
     lastMessage: raw.last_message ?? raw.lastMessage,
     tags: raw.tags,
     archived: raw.archived ?? false,
+    executionMode: raw.execution_mode ?? raw.executionMode,
   };
 }
 
@@ -184,6 +272,28 @@ function mapMessage(raw: RawMessage): ChatMessage {
     createdAt: raw.created_at ?? raw.createdAt ?? new Date().toISOString(),
     model: raw.model ?? undefined,
     provider: raw.provider as ChatMessage['provider'] | undefined,
+  };
+}
+
+function mapPersistedArtifact(raw: RawConversationArtifact): Artifact {
+  const metadata = raw.metadata ?? {};
+  const metadataLanguage = metadata['language'];
+  return {
+    id: raw.id,
+    type: resolveArtifactRenderType(raw.render_type, raw.artifact_type),
+    title: raw.title,
+    content: raw.content,
+    language: typeof metadataLanguage === 'string' ? metadataLanguage : undefined,
+    version: raw.current_version,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    conversationId:
+      raw.conversation_id === null || raw.conversation_id === undefined
+        ? undefined
+        : String(raw.conversation_id),
+    messageId:
+      raw.message_id === null || raw.message_id === undefined ? undefined : String(raw.message_id),
+    metadata,
   };
 }
 
@@ -239,8 +349,9 @@ async function encodeAttachmentsForIpc(files: File[]): Promise<TauriAttachmentPa
 
 export class TauriRuntime implements ChatRuntime {
   // Track active stop requests keyed by conversationId so stopGeneration()
-  // can resolve the generator without waiting for Tauri to respond.
+  // can signal Tauri and wait for its authoritative stream-end acknowledgement.
   private readonly _stopFlags = new Map<string, boolean>();
+  private readonly _stopSettlers = new Map<string, () => void>();
 
   // Registered onStream callbacks
   private readonly _streamCallbacks = new Set<
@@ -258,9 +369,18 @@ export class TauriRuntime implements ChatRuntime {
     return selectPrivacyMode(useAppModeStore.getState()) === 'local' ? LOCAL_DESKTOP_USER_ID : '';
   }
 
+  private getConversationExecutionMode(conversationId: string): ChatExecutionMode {
+    const conversation = useDesktopChatStore
+      .getState()
+      .conversations.find((candidate) => candidate.id === conversationId);
+    if (conversation?.executionMode) return conversation.executionMode;
+    return useAppModeStore.getState().mode === 'cloud' ? 'cloud_managed' : 'local_only';
+  }
+
   private async ensureBackendConversation(
     frontendConversationId: string,
     content: string,
+    executionMode: ChatExecutionMode,
   ): Promise<number> {
     const existingId = uuidToDbId(frontendConversationId);
     if (typeof existingId === 'number' && existingId > 0) {
@@ -277,6 +397,7 @@ export class TauriRuntime implements ChatRuntime {
         title: content.trim().slice(0, 50) || 'New Conversation',
         userId,
         projectId: null,
+        executionMode,
       },
     });
 
@@ -286,6 +407,19 @@ export class TauriRuntime implements ChatRuntime {
     }
 
     useDesktopChatStore.getState().linkConversationId(frontendConversationId, dbId);
+    if (import.meta.env.DEV) {
+      // W5 stage-2 session labeling — additive, dev/test-only (see
+      // ./sessionLabeling.ts module doc). Does not change what gets persisted
+      // or returned; only asserts the new conversation's AppSession/
+      // ExecutionProfile are internally consistent.
+      const { desktopExecutionProfileFor, labelDesktopSession } = await import('./sessionLabeling');
+      labelDesktopSession({
+        id: String(dbId),
+        ownerUserId: userId,
+        chatExecutionMode: executionMode,
+      });
+      desktopExecutionProfileFor(executionMode);
+    }
     return dbId;
   }
 
@@ -396,6 +530,7 @@ export class TauriRuntime implements ChatRuntime {
     } = params;
     const frontendMessageId = crypto.randomUUID();
     const userId = this.getCurrentUserId();
+    const executionMode = this.getConversationExecutionMode(conversationId);
 
     if (!userId) {
       yield { type: 'error', content: 'Please sign in to send messages.' };
@@ -404,7 +539,11 @@ export class TauriRuntime implements ChatRuntime {
 
     let backendConversationId: number;
     try {
-      backendConversationId = await this.ensureBackendConversation(conversationId, content);
+      backendConversationId = await this.ensureBackendConversation(
+        conversationId,
+        content,
+        executionMode,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       yield { type: 'error', content: message };
@@ -420,7 +559,10 @@ export class TauriRuntime implements ChatRuntime {
     type Resolve = (value: StreamChunk | null) => void;
     const queue: StreamChunk[] = [];
     const waiting: Resolve[] = [];
+    const streamedArtifactIds = new Set<string>();
     let done = false;
+    let streamEndHandled = false;
+    let stopWatchdog: ReturnType<typeof setTimeout> | undefined;
 
     const push = (chunk: StreamChunk | null) => {
       if (chunk === null) {
@@ -445,6 +587,19 @@ export class TauriRuntime implements ChatRuntime {
         waiting.push(resolve);
       });
     };
+
+    const beginStopWait = () => {
+      if (stopWatchdog) return;
+      stopWatchdog = setTimeout(() => {
+        push({
+          type: 'error',
+          content:
+            'Stopping generation timed out before the native runtime could finalize the response and its artifacts.',
+        });
+        push(null);
+      }, 10_000);
+    };
+    this._stopSettlers.set(conversationId, beginStopWait);
 
     // Register all event listeners
     const unlisteners: Array<() => void> = [];
@@ -476,8 +631,46 @@ export class TauriRuntime implements ChatRuntime {
         payload.conversation_id !== backendConversationId
       )
         return;
-      push({ type: 'done' });
-      push(null);
+      if (streamEndHandled) return;
+      streamEndHandled = true;
+
+      void (async () => {
+        const backendMessageId = payload.backend_message_id;
+        if (
+          streamedArtifactIds.size > 0 &&
+          typeof backendMessageId === 'number' &&
+          backendMessageId > 0
+        ) {
+          const response = await invoke<RawArtifactResponse<number>>('artifact_link_to_message', {
+            conversationId: backendConversationId,
+            messageId: backendMessageId,
+            artifactIds: [...streamedArtifactIds],
+            userId,
+          });
+          if (!response.success) {
+            push({
+              type: 'error',
+              content:
+                response.error ??
+                'The response completed, but its artifacts could not be saved to conversation history.',
+            });
+            push(null);
+            return;
+          }
+        }
+
+        push({ type: 'done' });
+        push(null);
+      })().catch((error: unknown) => {
+        push({
+          type: 'error',
+          content:
+            error instanceof Error
+              ? error.message
+              : 'The response completed, but its artifacts could not be saved to conversation history.',
+        });
+        push(null);
+      });
     });
 
     // chat:stream-error — stream finished with error
@@ -525,14 +718,31 @@ export class TauriRuntime implements ChatRuntime {
     await registerListener<ArtifactEventPayload>('chat:artifact', (payload) => {
       const convId = payload.conversation_id === null ? null : String(payload.conversation_id);
       if (convId !== null && convId !== String(backendConversationId)) return;
+      if (
+        !payload.artifact ||
+        typeof payload.artifact.id !== 'string' ||
+        typeof payload.artifact.type !== 'string' ||
+        typeof payload.artifact.content !== 'string'
+      ) {
+        push({
+          type: 'error',
+          content: 'Received an invalid artifact payload from native runtime.',
+        });
+        return;
+      }
+      streamedArtifactIds.add(payload.artifact.id);
       push({
         type: 'artifact',
         data: {
           id: payload.artifact.id,
-          type: payload.artifact.type as import('@agiworkforce/unified-chat').Artifact['type'],
+          type: resolveArtifactRenderType(payload.artifact.type),
           title: payload.artifact.title,
           content: payload.artifact.content,
           language: payload.artifact.language ?? undefined,
+          version: payload.artifact.version ?? 1,
+          createdAt: payload.artifact.created_at,
+          updatedAt: payload.artifact.updated_at,
+          conversationId: String(backendConversationId),
           metadata: payload.artifact.metadata,
         },
       });
@@ -546,18 +756,15 @@ export class TauriRuntime implements ChatRuntime {
       unlisteners.length = 0;
     };
 
-    // If the caller provides an AbortSignal, treat abort as stopGeneration
+    // Cancellation must wait for native stream-end: that event carries the
+    // durable assistant-message ID required to link artifacts before teardown.
     if (signal) {
-      signal.addEventListener('abort', () => {
-        push({ type: 'done' });
-        push(null);
-        cleanup();
-      });
+      signal.addEventListener('abort', () => this.stopGeneration(conversationId), { once: true });
     }
 
     // Kick off the Rust-side stream after listeners are ready.
     try {
-      const activeMode = useAppModeStore.getState().mode;
+      const activeMode = executionMode === 'cloud_managed' ? 'cloud' : 'local';
       await invoke('chat_send_message', {
         request: {
           content,
@@ -571,12 +778,13 @@ export class TauriRuntime implements ChatRuntime {
           // activeMode is the authoritative trust-boundary signal.  The backend
           // MUST honor this: "local" => no ManagedCloud, "cloud" => cloud only.
           activeMode,
+          executionMode,
           // Cloud credits (AGI Managed Cloud) are ONLY for managed mode. BYOK is a
           // private path that goes DIRECT to the user's provider — it must never be
           // billed/routed through AGI managed cloud. activeMode is binary
           // ('local'|'cloud') and lumps byok+managed together, so derive the 3-way
           // PrivacyMode here (mirrors the canonical logic in features/chat/index.tsx).
-          preferCloudCredits: selectPrivacyMode(useAppModeStore.getState()) === 'managed',
+          preferCloudCredits: executionMode === 'cloud_managed',
           // Composer controls — the Rust ChatSendMessageRequest already accepts
           // these camelCase aliases; they were previously dropped client-side.
           thinkingMode: thinkingEnabled,
@@ -611,24 +819,22 @@ export class TauriRuntime implements ChatRuntime {
 
     try {
       while (true) {
-        // Check stop flag on each iteration
-        if (this._stopFlags.get(conversationId)) {
-          yield { type: 'done' };
-          break;
-        }
-
         const chunk = await nextChunk();
         if (chunk === null) break;
         yield chunk;
       }
     } finally {
+      if (stopWatchdog) clearTimeout(stopWatchdog);
       cleanup();
       this._stopFlags.delete(conversationId);
+      this._stopSettlers.delete(conversationId);
     }
   }
 
   stopGeneration(conversationId: string): void {
+    if (this._stopFlags.get(conversationId)) return;
     this._stopFlags.set(conversationId, true);
+    this._stopSettlers.get(conversationId)?.();
     const backendConversationId = uuidToDbId(conversationId);
     // Fire-and-forget: signal the Rust backend to halt the stream
     void invoke('chat_stop_generation', { conversationId: backendConversationId }).catch(() => {
@@ -638,11 +844,14 @@ export class TauriRuntime implements ChatRuntime {
 
   async createConversation(title?: string, projectId?: string): Promise<Conversation> {
     const userId = this.getCurrentUserId();
+    const executionMode: ChatExecutionMode =
+      useAppModeStore.getState().mode === 'cloud' ? 'cloud_managed' : 'local_only';
     const raw = await invoke<RawConversation>('chat_create_conversation', {
       request: {
         title: title ?? 'New Conversation',
         userId,
         projectId: projectId ?? null,
+        executionMode,
       },
     });
     return mapConversation(raw);
@@ -660,11 +869,50 @@ export class TauriRuntime implements ChatRuntime {
   }
 
   async loadMessages(conversationId: string): Promise<ChatMessage[]> {
+    const backendConversationId = uuidToDbId(conversationId);
     const raw = await invoke<RawMessage[]>('chat_get_messages', {
-      conversationId: uuidToDbId(conversationId),
+      conversationId: backendConversationId,
       userId: this.getCurrentUserId(),
     });
-    return Array.isArray(raw) ? raw.map(mapMessage) : [];
+    const messages = Array.isArray(raw) ? raw.map(mapMessage) : [];
+    if (
+      typeof backendConversationId !== 'number' ||
+      backendConversationId <= 0 ||
+      messages.length === 0
+    ) {
+      return messages;
+    }
+
+    let response: unknown;
+    try {
+      response = await invoke<unknown>('artifact_get_conversation_snapshot', {
+        conversationId: backendConversationId,
+        userId: this.getCurrentUserId(),
+      });
+    } catch {
+      // Message history remains usable if an older native binary does not yet
+      // expose the additive artifact snapshot command.
+      return messages;
+    }
+    if (!response || typeof response !== 'object') return messages;
+    const snapshotResponse = response as Record<string, unknown>;
+    if (snapshotResponse['success'] !== true || !Array.isArray(snapshotResponse['data'])) {
+      return messages;
+    }
+
+    const messagesById = new Map(messages.map((message) => [message.id, message]));
+    for (const rawArtifact of snapshotResponse['data']) {
+      if (!isRawConversationArtifact(rawArtifact)) continue;
+      const artifact = mapPersistedArtifact(rawArtifact);
+      if (!artifact.messageId || artifact.conversationId !== String(backendConversationId)) {
+        continue;
+      }
+      const owner = messagesById.get(artifact.messageId);
+      if (!owner) continue;
+      owner.artifacts = [...(owner.artifacts ?? []), artifact];
+    }
+
+    return messages;
   }
 
   async deleteConversation(id: string): Promise<void> {
@@ -721,7 +969,7 @@ export class TauriRuntime implements ChatRuntime {
 
   // ---------------------------------------------------------------------------
   // Artifact persistence — backs ArtifactPanel's edit-in-place + version
-  // stepper (packages/unified-chat/src/components/{ChatInterface,ArtifactPanel}.tsx).
+  // stepper (packages/ui/unified-chat/src/components/{ChatInterface,ArtifactPanel}.tsx).
   // ---------------------------------------------------------------------------
 
   async updateArtifact(
@@ -764,6 +1012,8 @@ export class TauriRuntime implements ChatRuntime {
       ...current,
       id: latest && version.version === latest.version ? realId : `${realId}::v${version.version}`,
       content: version.content,
+      version: version.version,
+      updatedAt: version.created_at ?? current.updatedAt,
     }));
   }
 }

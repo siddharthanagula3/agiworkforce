@@ -35,8 +35,6 @@ import {
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
-import { extractPageMetadata } from './page-metadata';
-import type { PageMetadata } from './page-metadata';
 import { detectNLWeb } from './nlweb';
 import { setupInPagePanel } from './inPagePanel/setup';
 import {
@@ -160,8 +158,8 @@ function initialize(): void {
   });
 
   void checkConnectionStatus();
-  // notifyTabReady() sends TAB_READY which triggers syncTabContextWithDesktop() in background.ts,
-  // so there is no need to call syncPageContext() separately here.
+  // TAB_READY is readiness-only. Page context may cross the Chrome boundary
+  // only through the side-panel's explicit redacted preview and approval flow.
   void notifyTabReady();
 
   // SECURITY (M-13 audit 2026-05-19): console-patch removed entirely.
@@ -188,8 +186,6 @@ function initialize(): void {
   } catch (err) {
     logger.debug('initWebMCP failed (non-fatal)', err);
   }
-
-  initSPANavigationWatcher();
 }
 
 function handleMessage(
@@ -237,15 +233,12 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'CONNECTION_STATUS_CHANGED': {
       const statusMsg = message as ConnectionStatusChangedMessage;
       const newStatus = statusMsg.connected ? 'connected' : 'disconnected';
-      // Idempotent: skip redundant updates to avoid unnecessary re-syncs.
+      // Idempotent: skip redundant UI updates.
       if (automationState.connectionStatus === newStatus) {
         return { success: true } as ExtensionResponse;
       }
       automationState.connectionStatus = newStatus;
       updateIndicatorStatus();
-      if (statusMsg.connected) {
-        void syncPageContext('connection_restored');
-      }
       return { success: true } as ExtensionResponse;
     }
 
@@ -368,47 +361,6 @@ async function notifyTabReady(): Promise<void> {
     });
   } catch (error) {
     logger.debug('Failed to notify TAB_READY', error);
-  }
-}
-
-function buildCurrentPageContext(): Record<string, unknown> {
-  const selectedText = window.getSelection()?.toString() || '';
-
-  let metadata: PageMetadata | undefined;
-  try {
-    metadata = extractPageMetadata();
-  } catch (e) {
-    logger.debug('Failed to extract page metadata for context', e);
-  }
-
-  const html = extractPageHtmlSafely();
-
-  return {
-    url: window.location.href,
-    title: document.title || 'Untitled',
-    html,
-    selectedText: selectedText.substring(0, 2_000),
-    timestamp: Date.now(),
-    ...(metadata ? { metadata } : {}),
-  };
-}
-
-async function syncPageContext(reason: string): Promise<void> {
-  try {
-    const pageContext = buildCurrentPageContext();
-    await chrome.runtime.sendMessage({
-      type: 'SYNC_PAGE_CONTEXT',
-      timestamp: Date.now(),
-      context: {
-        ...pageContext,
-        reason,
-      },
-      // Structured metadata is included inside context.metadata via buildCurrentPageContext(),
-      // but also surfaced at the top level for consumers that expect it there.
-      ...(pageContext['metadata'] ? { metadata: pageContext['metadata'] } : {}),
-    });
-  } catch (error) {
-    logger.debug('Failed to sync page context', { reason, error });
   }
 }
 
@@ -1113,7 +1065,7 @@ async function handleWaitForSelector(message: WaitForSelectorMessage): Promise<E
 
 /**
  * Allowlisted script operations that can be executed via handleExecuteScript.
- * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
+ * SECURITY: no dynamic code execution APIs are used. Only pre-defined operations are allowed.
  */
 const ALLOWED_SCRIPT_OPERATIONS: Record<string, (...args: unknown[]) => unknown> = {
   navigateTo: (...args: unknown[]) => {
@@ -1708,7 +1660,7 @@ const _userRecordedActions: UserRecordedAction[] = [];
 // ─── C-05 recorded-value sanitization ─────────────────────────────────────────
 //
 // Local secret-pattern list. Mirrors the shared `redactSecrets` in
-// `packages/utils/src/logger.ts` so the recorder doesn't need a workspace dep
+// `packages/platform/utils/src/logger.ts` so the recorder doesn't need a workspace dep
 // until Phase C2 lands. The patterns intentionally overlap with that helper —
 // when C2 ships, this can switch to `import { redactSecrets } from '@agiworkforce/utils'`
 // and the locally-defined REC_REDACTION_PATTERNS can be deleted.
@@ -2226,56 +2178,6 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   const msg = message as Record<string, unknown>;
   // [H9 fix] Validate type is a non-empty string in the known message type allowlist
   return typeof msg['type'] === 'string' && VALID_MESSAGE_TYPES.has(msg['type']);
-}
-
-/**
- * Watch for SPA route changes and re-sync page context with the desktop app.
- *
- * SPAs use history.pushState / history.replaceState to navigate without a full
- * page reload, so the browser's standard navigation events are not fired.
- * We monkey-patch those two methods (safely) to detect client-side navigations.
- * We also listen for the standard popstate event (back/forward navigation).
- *
- * To avoid hammering the background on every micro-state update we debounce
- * with a 300 ms delay and skip syncs when the URL has not changed.
- */
-function initSPANavigationWatcher(): void {
-  let lastSyncedUrl = window.location.href;
-  let spaDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function onSPANavigate(): void {
-    const currentUrl = window.location.href;
-    if (currentUrl === lastSyncedUrl) return;
-    lastSyncedUrl = currentUrl;
-
-    if (spaDebounceTimer !== null) {
-      clearTimeout(spaDebounceTimer);
-    }
-    spaDebounceTimer = setTimeout(() => {
-      spaDebounceTimer = null;
-      logger.debug('SPA navigation detected, re-syncing page context', { url: currentUrl });
-      void syncPageContext('spa_navigation').catch((err) => {
-        logger.debug('SPA navigation context sync failed (non-fatal)', err);
-      });
-    }, 300);
-  }
-
-  // history.pushState / replaceState are not observable via addEventListener so
-  // we wrap them. We preserve the original function signature strictly.
-  const originalPushState = history.pushState.bind(history);
-  const originalReplaceState = history.replaceState.bind(history);
-
-  history.pushState = function (...args: Parameters<typeof history.pushState>): void {
-    originalPushState(...args);
-    onSPANavigate();
-  };
-
-  history.replaceState = function (...args: Parameters<typeof history.replaceState>): void {
-    originalReplaceState(...args);
-    onSPANavigate();
-  };
-
-  window.addEventListener('popstate', onSPANavigate);
 }
 
 initialize();

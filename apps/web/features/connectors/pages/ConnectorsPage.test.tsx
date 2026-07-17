@@ -35,6 +35,10 @@ vi.mock('next/navigation', () => {
 
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => ({ isLoaded: true, isSignedIn: true }),
+  // useConnectors() (use-connectors.ts) reads useUser directly, separately
+  // from ConnectorsPage's own useAuth call — both must be mocked or the hook
+  // throws "useUser is not a function" before any test body runs.
+  useUser: () => ({ isLoaded: true, isSignedIn: true }),
 }));
 
 vi.mock('@shared/lib/utils', () => ({
@@ -73,6 +77,7 @@ vi.mock('@/lib/client/csrf', () => ({
 // ─── Import under test ────────────────────────────────────────────────────────
 
 import { ConnectorsPage } from './ConnectorsPage';
+import { invalidateConnectorsCache } from '../hooks/use-connectors';
 
 // ─── Helper: render with resolved loading state ──────────────────────────────
 
@@ -144,7 +149,7 @@ describe('ConnectorsPage', () => {
       // ConnectorListRow buttons do not use filter/header labels.
       const label = btn.textContent ?? '';
       return (
-        !['All', 'Connected', 'Ready', 'Request access', 'Browse', 'Connectors'].includes(label) &&
+        !['All', 'Connected', 'Ready', 'Coming soon', 'Browse', 'Connectors'].includes(label) &&
         !label.startsWith('0') &&
         label.length > 0
       );
@@ -174,7 +179,7 @@ describe('ConnectorsPage', () => {
     await renderConnectorsPage();
     expect(screen.getByText(/Browse \(\d+\)/)).toBeDefined();
     expect(screen.getByRole('button', { name: 'Ready' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Request access' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Coming soon' })).toBeDefined();
   });
 
   // 7. Shows search input placeholder
@@ -284,7 +289,15 @@ describe('ConnectorsPage', () => {
     const firstConnectorRow = listRows.find((btn) => {
       const label = btn.textContent ?? '';
       return (
-        !['All', 'Connected', 'Available', 'Connectors', 'Prev', 'Next'].includes(label) &&
+        ![
+          'All',
+          'Connected',
+          'Ready',
+          'Coming soon',
+          'Connectors',
+          'Prev',
+          'Next',
+        ].includes(label) &&
         !label.startsWith('0') &&
         label.length > 0 &&
         !label.includes('total')
@@ -332,5 +345,39 @@ describe('ConnectorsPage', () => {
     expect(screen.getAllByText('Inspect MCP server').length).toBeGreaterThan(0);
     expect(screen.getByText(/review its advertised tools/i)).toBeDefined();
     expect(screen.queryByText('Add custom connector')).toBeNull();
+  });
+
+  // Regression guard: a failed GET /api/connectors previously rendered
+  // identically to "you have zero connectors" — no error text, no way to
+  // distinguish "nothing connected" from "we couldn't check."
+  it('shows a distinct error state (not a silent empty list) when the connector fetch fails, and retry recovers it', async () => {
+    // use-connectors.ts caches successful GET /api/connectors responses at
+    // module scope (deliberately, to dedupe multiple mounted consumers) — an
+    // earlier test in this file already primed that cache, so without
+    // invalidating it here, this test would silently read stale success data
+    // instead of exercising the mocked failure below.
+    invalidateConnectorsCache();
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 500 })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: vi.fn().mockResolvedValue({ connectors: [] }),
+        }),
+    );
+
+    await renderConnectorsPage();
+
+    expect(screen.getByText(/failed to fetch connectors/i)).toBeDefined();
+    // The normal browse UI must not render underneath a failed load.
+    expect(screen.queryByText('No connectors found.')).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    });
+
+    expect(screen.queryByText(/failed to fetch connectors/i)).toBeNull();
   });
 });

@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { randomUUID } from 'crypto';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
@@ -13,6 +12,9 @@ import {
 } from '@/lib/e2b/execution-tools';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
+import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
+import { webSearchNeedsGenericTool } from '@agiworkforce/search';
+import { supportsOpenAIReasoningEffort } from '@agiworkforce/provider-protocol';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
@@ -32,14 +34,12 @@ import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
   ANTHROPIC_THINKING_BUDGET,
-  OPENAI_REASONING_EFFORT,
   getEconomyFallbackModels,
   getModelMetadataById,
   getModelReasoning,
   type Effort,
   getSlotForModel,
   normalizeModelId,
-  resolveAutoModeModel,
 } from '@agiworkforce/types';
 import type { RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
@@ -47,11 +47,26 @@ import {
   classifyTaskLocally,
   detectIndicScript,
   estimateTokens,
+  resolveAutoRoute,
 } from '@agiworkforce/routing';
 import type { RoutingTaskType } from '@agiworkforce/routing';
 import { assertQuota, reconcileUsage } from '@/lib/assert-quota';
 import type { QuotaFeature, QuotaOutcome } from '@/lib/assert-quota';
 import type { AuthGateSuccess } from './auth-gate';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  MANAGED_CHAT_CONTRACT_VERSION,
+  ManagedUsageRequestError,
+  fingerprintManagedUsageRequest,
+  parseManagedUsageIdempotencyKey,
+  reserveManagedUsageRequest,
+  type ManagedUsageRequestReservation,
+} from '@/lib/services/managed-usage-request-service';
+import {
+  applyProjectContext,
+  formatProjectSystemPrompt,
+  loadProjectContext,
+} from '@/lib/services/project-context-service';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z.object({
@@ -133,18 +148,18 @@ export const ChatCompletionRequestSchema = z.object({
     .optional(),
   effort: z.string().optional(),
   use_prompt_cache: z.boolean().optional(),
-  // Optional, additive: identifies the web conversation this request belongs to (see
-  // shared/stores/chat-store.ts). Backward-compatible -- any caller that omits it (other
-  // surfaces, direct API users) is unaffected. Used ONLY to key conversation-scoped E2B
-  // sandbox persistence (lib/e2b/runtime.ts); never trusted for authorization (ownership
-  // is enforced separately by /api/chat/conversations routes).
-  conversation_id: z.string().max(256).optional(),
+  // Optional, additive: identifies the owned cloud conversation this request belongs to.
+  // The processor verifies it against web_conversations.user_id before billing, provider,
+  // tool, or E2B work. A conversation id is never an authorization token.
+  conversation_id: z.string().uuid().optional(),
 });
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 
 export type ProcessedRequest = {
   requestId: string;
+  /** Durable paid-request lifecycle; absent only for the free-trial path. */
+  managedUsage?: ManagedUsageRequestReservation;
   chatRequest: ChatCompletionRequest;
   /** Conversation this request belongs to, if the caller sent one (see conversation_id). */
   conversationId: string | undefined;
@@ -217,6 +232,28 @@ function modelSupportsEffort(provider: string, model: string): boolean {
   const metadata = getModelMetadataById(model);
   if (metadata) return metadata.capabilities.thinking;
   return provider === 'anthropic' || provider === 'openai' || provider === 'google';
+}
+
+/**
+ * Resolve the user-facing effort selection against the selected model's
+ * canonical capability metadata. OpenAI effort ladders vary by model, so a
+ * global provider map would silently discard newly introduced levels (or send
+ * unsupported ones) until application code was edited.
+ */
+export function resolveRequestEffort(
+  provider: string,
+  model: string,
+  effort: string | undefined,
+): Effort | undefined {
+  const normalized = normalizeEffort(effort);
+  if (!normalized || !modelSupportsEffort(provider, model)) return undefined;
+  if (
+    provider === 'openai' &&
+    !supportsOpenAIReasoningEffort({ provider: 'openai', id: model }, normalized)
+  ) {
+    return undefined;
+  }
+  return normalized;
 }
 
 /**
@@ -334,14 +371,22 @@ export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
  * search tool and the model answered "I can't browse the internet"; those providers
  * are now gated out of the toggle client-side via `providerSupportsWebSearch`).
  *
- * Providers WITH a branch (kept in sync with `WEB_SEARCH_INJECTION_PROVIDERS`):
+ * Providers WITH a branch (kept in sync with `WEB_SEARCH_INJECTION_PROVIDERS` in
+ * `@agiworkforce/search`):
  *   - anthropic: `web_search_20260209` with `allowed_callers:['direct']` (verified
  *     against platform.claude.com — the current dynamic-filtering tool version;
  *     `allowed_callers:['direct']` is required to call it without code execution).
  *   - google:    `{ google_search: {} }`.
- *   - openai:    `{ type: 'web_search_preview' }` (Responses API).
  * `caps.search ?? true` keeps unknown/missing catalog entries permissive (a missing
  * entry never silently drops the tool for a provider that does support it).
+ *
+ * openai deliberately has NO branch (removed 2026-07-11, WP4): `web_search_preview`
+ * is a Responses-API-only tool type, and this route hardcodes `useResponsesApi:false`
+ * (adapter-factory.ts, deliberate) — so injecting it just adds a dead tool that
+ * `packages/ai/providers/openai/src/translate.ts`'s `OPENAI_RESPONSES_ONLY_TOOL_TYPES`
+ * strips before the wire for zero benefit. OpenAI (and every other no-native-path
+ * provider) searches via the generic `web_search` function tool instead — see
+ * `webSearchNeedsGenericTool` below and `lib/web-search/web-search-tool.ts`.
  */
 export function appendWebSearchTool(
   providerLower: string,
@@ -358,18 +403,57 @@ export function appendWebSearchTool(
   if (providerLower === 'google') {
     return [...(tools ?? []), { google_search: {} }];
   }
-  if (providerLower === 'openai') {
-    return [...(tools ?? []), { type: 'web_search_preview' }];
-  }
   return tools;
 }
 
-function resolveAutoModel(
+/**
+ * WP4 — should the generic platform-executed `web_search` function tool be offered
+ * for this request? Pure and exported (same reason as `appendWebSearchTool`: unit
+ * testable without invoking the rest of `processRequest`).
+ *
+ * True when: the provider has no working native search path on this route
+ * (`webSearchNeedsGenericTool` — openai plus every provider `appendWebSearchTool`
+ * never had a branch for), the resolved model is tools-capable (unknown models
+ * default to allowed), the request is streaming and non-free-trial (offer ⊆ run —
+ * only that path enters the tool loop in route.ts, mirrors url_fetch/E2B below), and
+ * a search backend is actually configured (`backendConfigured` —
+ * `webSearchBackendConfigured()` in production — so the tool is never offered as a
+ * promise the server can't back up).
+ */
+export function shouldOfferGenericWebSearchTool({
+  providerLower,
+  toolsCapable,
+  stream,
+  freeTrial,
+  backendConfigured,
+}: {
+  providerLower: string;
+  toolsCapable: boolean;
+  stream: boolean | undefined;
+  freeTrial: boolean;
+  backendConfigured: boolean;
+}): boolean {
+  return (
+    webSearchNeedsGenericTool(providerLower) &&
+    toolsCapable &&
+    Boolean(stream) &&
+    !freeTrial &&
+    backendConfigured
+  );
+}
+
+export function resolveWebCloudModelRoute(
   model: string,
-  subscriptionTier?: string,
-  taskType?: RoutingTaskType,
-): string {
-  return resolveAutoModeModel(model, subscriptionTier, taskType) ?? model;
+  subscriptionTier: string | undefined,
+  taskType: RoutingTaskType,
+) {
+  return resolveAutoRoute({
+    selection: model,
+    taskType,
+    subscriptionTier,
+    trustMode: 'managed_cloud',
+    runtimeProfileId: 'web/cloud-chat',
+  });
 }
 
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
@@ -436,6 +520,23 @@ export function handleCreditError(_deductResult: {
   );
 }
 
+function managedUsageErrorResponse(error: ManagedUsageRequestError): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        message: error.message,
+        type: 'invalid_request_error',
+        code: error.code,
+        contract_version: error.contractVersion,
+      },
+    },
+    {
+      status: error.status,
+      headers: { 'X-AGI-Chat-Contract-Version': MANAGED_CHAT_CONTRACT_VERSION },
+    },
+  );
+}
+
 const MAX_BODY_BYTES = 2_000_000;
 const MAX_TOTAL_LENGTH = 1000000;
 
@@ -445,7 +546,15 @@ export async function processRequest(
 ): Promise<ProcessResult> {
   const { userId, token, subscription } = auth;
 
-  const requestId = randomUUID();
+  let requestId: string;
+  try {
+    requestId = parseManagedUsageIdempotencyKey(request.headers.get('idempotency-key'));
+  } catch (error) {
+    if (error instanceof ManagedUsageRequestError) {
+      return { ok: false, response: managedUsageErrorResponse(error) };
+    }
+    throw error;
+  }
 
   // Body size guard (Content-Length header)
   const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
@@ -517,7 +626,106 @@ export async function processRequest(
     };
   }
 
+  // Fingerprint the caller's validated logical request before any server-side
+  // routing/fallback mutates `chatRequest`. Reusing a key with a different
+  // payload is a conflict; transport retries of the same payload are stable.
+  const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
+
   const chatRequest = validationResult.data;
+  let userScopedDb: Awaited<ReturnType<typeof getUserScopedDb>> | undefined;
+
+  if (chatRequest.conversation_id) {
+    try {
+      userScopedDb = await getUserScopedDb(request);
+      if (userScopedDb.userId !== userId) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: {
+                message: 'Conversation not found',
+                type: 'invalid_request_error',
+                code: 'conversation_not_found',
+              },
+            },
+            { status: 404 },
+          ),
+        };
+      }
+
+      const ownedRows = await userScopedDb.db.query<{ id: string; project_id: string | null }>(
+        `select id, project_id
+           from web_conversations
+          where id = $1 and user_id = $2 and deleted_at is null
+          limit 1`,
+        [chatRequest.conversation_id, userId],
+      );
+      if (!ownedRows[0]) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: {
+                message: 'Conversation not found',
+                type: 'invalid_request_error',
+                code: 'conversation_not_found',
+              },
+            },
+            { status: 404 },
+          ),
+        };
+      }
+
+      // Project-scoped conversation ("AGI Work"): load the owned project's
+      // instructions + knowledge-file manifest and merge them into the system
+      // context. Without this, a persisted project_id scopes nothing and the
+      // composer's project picker would be cosmetic. Enrichment is
+      // best-effort: a project-load failure must not take down the chat turn
+      // (ownership above already hard-fails), but it is logged loudly because
+      // silently dropping the user's project instructions is a scope lie.
+      if (ownedRows[0].project_id) {
+        try {
+          const projectContext = await loadProjectContext(userScopedDb.db, {
+            projectId: ownedRows[0].project_id,
+            userId,
+          });
+          const projectPrompt = projectContext ? formatProjectSystemPrompt(projectContext) : null;
+          if (projectPrompt) {
+            applyProjectContext(chatRequest, projectPrompt);
+          }
+        } catch (error) {
+          logger.error(
+            {
+              error,
+              userId,
+              conversationId: chatRequest.conversation_id,
+              projectId: ownedRows[0].project_id,
+            },
+            'Project context load failed; continuing without project instructions',
+          );
+        }
+      }
+    } catch (error) {
+      logger.error(
+        { error, userId, conversationId: chatRequest.conversation_id },
+        'Managed conversation ownership lookup failed',
+      );
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: 'Conversation ownership could not be verified',
+              type: 'server_error',
+              code: 'conversation_lookup_unavailable',
+            },
+          },
+          { status: 503 },
+        ),
+      };
+    }
+  }
+
   const requestedModel = chatRequest.model;
   const freeTrialEnabled = isFreeTrialRequest({
     requestedModel,
@@ -649,13 +857,22 @@ export async function processRequest(
   }
 
   // Task-aware classifier (synchronous · no DB/network)
-  const lastUserMsg = chatRequest.messages
-    .slice()
-    .reverse()
-    .find((m) => m.role === 'user');
+  let lastUserIndex = -1;
+  for (let index = chatRequest.messages.length - 1; index >= 0; index -= 1) {
+    if (chatRequest.messages[index]?.role === 'user') {
+      lastUserIndex = index;
+      break;
+    }
+  }
+  const lastUserMsg = lastUserIndex >= 0 ? chatRequest.messages[lastUserIndex] : undefined;
   const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
 
+  // The classifier contract expects PRIOR turns only; including the outgoing
+  // user message here double-counted its tokens and could trigger long-context
+  // routing prematurely. Multimodal parts are passed separately so Auto chooses
+  // a vision-capable route before the provider call.
   const routingHistory = chatRequest.messages
+    .slice(0, Math.max(lastUserIndex, 0))
     .filter(
       (
         m,
@@ -668,16 +885,28 @@ export async function processRequest(
       content: extractTextContent(m.content),
     }));
 
-  let classifierResult = classifyTaskLocally(lastUserText, routingHistory);
+  const routingAttachments = Array.isArray(lastUserMsg?.content)
+    ? lastUserMsg.content
+        .filter((part) => part.type === 'image_url' && typeof part.image_url?.url === 'string')
+        .map((part) => {
+          const dataMime = /^data:([^;,]+)/i.exec(part.image_url!.url)?.[1];
+          return {
+            mime: dataMime?.startsWith('image/') ? dataMime : 'image/*',
+            type: 'image' as const,
+          };
+        })
+    : undefined;
 
-  if (routingHistory.length > 1) {
+  let classifierResult = classifyTaskLocally(lastUserText, routingHistory, routingAttachments);
+
+  if (routingHistory.length > 0) {
     const cumulativeTokens = routingHistory.reduce(
       (sum, m) => sum + estimateTokens(m.content),
       estimateTokens(lastUserText),
     );
     const recentTaskTypes = routingHistory
       .filter((m) => m.role === 'user')
-      .map(() => classifierResult.type);
+      .map((m) => classifyTaskLocally(m.content, []).type);
     classifierResult = applyConversationContext(classifierResult, {
       cumulativeTokens,
       recentTaskTypes,
@@ -699,8 +928,59 @@ export async function processRequest(
     );
   }
 
-  // Resolve auto model names to actual models (task-aware, tier-aware)
-  chatRequest.model = resolveAutoModel(chatRequest.model, subscription.plan_tier, resolvedTaskType);
+  // Canonical registry admission for both Auto aliases and explicit selections.
+  // This is the same policy seam used by unified-chat/Desktop. It validates the
+  // Web managed-cloud runtime profile, exact provider route, model lifecycle,
+  // intrinsic capabilities, tier policy, and harness implementation status.
+  const routeDecision = resolveWebCloudModelRoute(
+    chatRequest.model,
+    subscription.plan_tier,
+    resolvedTaskType,
+  );
+  if (routeDecision.status === 'unavailable') {
+    logger.warn(
+      {
+        userId,
+        requestId,
+        requestedModel,
+        taskType: resolvedTaskType,
+        routeCode: routeDecision.code,
+        reasons: routeDecision.reasons,
+      },
+      'Managed Web model route unavailable',
+    );
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'The selected model is not available for this task in Managed Web chat.',
+            type: 'invalid_request_error',
+            code: 'model_route_unavailable',
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
+
+  if (routeDecision.harnessId.endsWith('/media')) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'This request requires the managed media-generation endpoint.',
+            type: 'invalid_request_error',
+            code: 'model_route_requires_media_dispatch',
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
+
+  chatRequest.model = routeDecision.modelKey;
 
   if (requestedModel !== chatRequest.model) {
     logger.info(
@@ -785,7 +1065,7 @@ export async function processRequest(
   let usedFallback = false;
   let fallbackReason: string | undefined;
 
-  let provider = resolveProviderFromModel(chatRequest.model);
+  let provider = routeDecision.provider;
 
   // Tier-aware quota gate
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
@@ -998,10 +1278,11 @@ export async function processRequest(
   }
 
   const providerLower = provider.toLowerCase();
-  const normalizedEffort = normalizeEffort(chatRequest.effort);
-  const effectiveEffort = modelSupportsEffort(providerLower, chatRequest.model)
-    ? normalizedEffort
-    : undefined;
+  const effectiveEffort = resolveRequestEffort(
+    providerLower,
+    chatRequest.model,
+    chatRequest.effort,
+  );
   const thinkingConfig = buildThinkingConfig({
     provider: providerLower,
     model: chatRequest.model,
@@ -1035,6 +1316,7 @@ export async function processRequest(
     maxTokens,
   );
   let freeTrial: FreeTrialReservation | undefined;
+  let managedUsage: ManagedUsageRequestReservation | undefined;
 
   if (freeTrialEnabled) {
     estimatedCostCents = 0;
@@ -1167,25 +1449,37 @@ export async function processRequest(
       }
     }
 
-    // Reserve credits with idempotency key
-    const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
-    const reserveResult = await CreditService.deductCredits(
-      userId,
-      estimatedCostCents,
-      `Credit reservation: ${provider}/${chatRequest.model}`,
-      {
+    // The request claim and financial reserve are one RLS-bound database
+    // transition. A concurrent/replayed key never reaches the provider twice.
+    try {
+      const scoped = userScopedDb ?? (await getUserScopedDb(request));
+      if (scoped.userId !== userId) {
+        throw new ManagedUsageRequestError(
+          'Managed usage tenant mismatch.',
+          403,
+          'tenant_mismatch',
+        );
+      }
+      managedUsage = await reserveManagedUsageRequest({
+        db: scoped.db,
+        userId,
+        idempotencyKey: requestId,
+        requestHash: managedRequestHash,
         provider,
         model: chatRequest.model,
-        type: 'reservation',
-        estimatedPromptTokens,
-        estimatedMaxTokens: maxTokens,
-        requestId,
-      },
-      reservationKey,
-    );
-
-    if (!reserveResult.success) {
-      return { ok: false, response: handleCreditError(reserveResult) };
+        estimatedCostCents,
+      });
+      estimatedCostCents = managedUsage.estimatedCostCents;
+    } catch (error) {
+      const managedError =
+        error instanceof ManagedUsageRequestError
+          ? error
+          : new ManagedUsageRequestError(
+              'Managed usage billing is temporarily unavailable.',
+              503,
+              'billing_unavailable',
+            );
+      return { ok: false, response: managedUsageErrorResponse(managedError) };
     }
   }
 
@@ -1204,6 +1498,23 @@ export async function processRequest(
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
   if (chatRequest.web_search) {
     resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps);
+
+    // WP4 generic fallback: platform-executed `web_search` function tool for every
+    // provider with no working native search path on this route (openai included —
+    // see appendWebSearchTool's doc comment — plus xai/deepseek/qwen/moonshot/zhipu/
+    // mistral/groq/nvidia_nim/open_router, which never had a native branch at all).
+    // Executed by the agentic tool loop exactly like url_fetch below.
+    if (
+      shouldOfferGenericWebSearchTool({
+        providerLower,
+        toolsCapable: resolvedModelCaps?.tools ?? true,
+        stream: chatRequest.stream,
+        freeTrial: Boolean(freeTrial),
+        backendConfigured: webSearchBackendConfigured(),
+      })
+    ) {
+      resolvedTools = [...(resolvedTools ?? []), webSearchToolDef()];
+    }
   }
 
   if (
@@ -1274,16 +1585,14 @@ export async function processRequest(
     tool_choice: chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
-    effort:
-      providerLower === 'openai' && effectiveEffort
-        ? OPENAI_REASONING_EFFORT[effectiveEffort]
-        : effectiveEffort,
+    effort: effectiveEffort,
     usePromptCache: chatRequest.use_prompt_cache,
   };
 
   return {
     ok: true,
     requestId,
+    managedUsage,
     chatRequest,
     conversationId: chatRequest.conversation_id,
     requestedModel,

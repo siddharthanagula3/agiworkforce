@@ -100,7 +100,7 @@ describe('iframe-sandbox regression (WEB-13)', () => {
       throw new Error(
         `WEB-13 regression — iframe sandbox combines allow-scripts + allow-same-origin:\n${msg}\n\n` +
           `This combination defeats the iframe sandbox per the W3C spec. Either ` +
-          `use the cross-origin sandbox subdomain (apps/sandbox) or sandbox="allow-scripts" alone.`,
+          `use the cross-origin sandbox subdomain (infrastructure/sandbox) or sandbox="allow-scripts" alone.`,
       );
     }
 

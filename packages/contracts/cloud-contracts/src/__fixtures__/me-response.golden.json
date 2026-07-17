@@ -1,0 +1,53 @@
+{
+  "id": "user_2xGoldenFixture0000000000",
+  "email": "founder@example.com",
+  "name": "Founder",
+  "avatar_url": null,
+  "created_at": null,
+  "updated_at": 1751712000.123,
+  "plan": {
+    "tier": "pro",
+    "display_name": "Pro",
+    "status": "active",
+    "current_period_end": 1754390400
+  },
+  "feature_flags": {
+    "beta_features": true,
+    "advanced_model_access": true
+  },
+  "credits": {
+    "account_id": "acct_golden",
+    "credits_remaining_cents": 1250
+  },
+  "routing_preferences": {
+    "us_only": false
+  },
+  "capability_handshake": {
+    "sessionId": "user_2xGoldenFixture0000000000",
+    "version": "me-handshake-v1",
+    "computedAt": "2026-07-15T00:00:00.000Z",
+    "sources": {
+      "model": "models.json@1",
+      "tier": "tier:pro",
+      "surface": "surface:web",
+      "settings": "settings:none-configured"
+    },
+    "granted": [
+      "canChat",
+      "canUseImages",
+      "canUploadFiles",
+      "canUseVoice",
+      "canUseMarketplace",
+      "canUseBilling",
+      "canUseCloudModels",
+      "canUseCloudExecution",
+      "canUseWebSearch",
+      "canUseConnectors",
+      "canUsePlugins",
+      "canUseSkills"
+    ],
+    "deniedBy": {
+      "canUseDeepResearch": ["tier"]
+    }
+  }
+}

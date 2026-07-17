@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/Dialog';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { feedback } from '@agiworkforce/api';
+import { feedback } from '@agiworkforce/desktop-command-client';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 
 interface FeedbackDialogProps {

@@ -19,7 +19,7 @@
  *   - MUST-FIX (real regressions, reconstructed exactly): the role-
  *     announcement first chunk, and the trailing usage-only chunk.
  *   - SHOULD-PRESERVE (additive passthrough via `StreamChunkResponseMeta`,
- *     packages/providers/openai/src/stream.ts's `translateOpenAIStream`):
+ *     packages/ai/providers/openai/src/stream.ts's `translateOpenAIStream`):
  *     real `id`/`created`.
  *   - BEST-EFFORT (cheap, included): `system_fingerprint`, `service_tier`
  *     (via the same `StreamChunkResponseMeta`), and a static `logprobs:

@@ -1,11 +1,7 @@
 /**
- * Regression test for the BYOK trust-boundary detection in selectPrivacyMode.
- *
- * BYOK (mode='cloud' + persisted llmConfig.providerMode='cloud') MUST resolve to
- * 'byok' so the egress guard and telemetry gate block our-cloud egress for BYOK
- * users. A prior `require('./settingsStore')` threw under ESM and fell through to
- * 'managed', making the guard fail OPEN for BYOK. selectPrivacyMode now reads the
- * persisted settings from localStorage; these cases lock that behaviour in.
+ * Workspace mode must not be reclassified by provider settings. BYOK is an
+ * immutable per-conversation execution mode inside the Local workspace; Cloud
+ * always means AGI-managed cloud.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
@@ -17,13 +13,13 @@ const setProviderMode = (pm: string) =>
     JSON.stringify({ state: { llmConfig: { providerMode: pm } }, version: 0 }),
   );
 
-describe('selectPrivacyMode — BYOK detection (persisted storage)', () => {
+describe('selectPrivacyMode — workspace boundary', () => {
   beforeEach(() => globalThis.localStorage.removeItem(KEY));
 
-  it('cloud + providerMode=cloud => byok (must NOT be managed; guard would fail open)', () => {
+  it('cloud + providerMode=cloud remains managed', () => {
     useAppModeStore.setState({ mode: 'cloud' });
     setProviderMode('cloud');
-    expect(selectPrivacyMode(useAppModeStore.getState())).toBe('byok');
+    expect(selectPrivacyMode(useAppModeStore.getState())).toBe('managed');
   });
 
   it('cloud + providerMode=auto => managed', () => {
@@ -32,7 +28,7 @@ describe('selectPrivacyMode — BYOK detection (persisted storage)', () => {
     expect(selectPrivacyMode(useAppModeStore.getState())).toBe('managed');
   });
 
-  it('cloud + no persisted settings => managed (BYOK requires configured keys)', () => {
+  it('cloud + no persisted settings => managed', () => {
     useAppModeStore.setState({ mode: 'cloud' });
     expect(selectPrivacyMode(useAppModeStore.getState())).toBe('managed');
   });

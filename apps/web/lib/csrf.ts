@@ -285,8 +285,9 @@ export async function getOrCreateAnonSession(
  * add `Authorization: Bearer bogus` to a cross-origin request, skip CSRF, then let
  * auth fail later · leaving any endpoint that checked CSRF before auth vulnerable.
  *
- * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Clerk
- * user. If verification fails, fall through to the CSRF token check as normal.
+ * Fix: Only bypass CSRF when the Bearer credential is verified as belonging to a
+ * real Clerk user OR a real AGI API key. If verification fails, fall through to
+ * the CSRF token check as normal.
  *
  * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
  *
@@ -294,19 +295,34 @@ export async function getOrCreateAnonSession(
  * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) · Bearer-bypass invariant         │
  * │                                                                          │
  * │ The Bearer-bypass branch is only sound because cross-origin browsers     │
- * │ cannot forge a valid Clerk JWT (same-origin policy blocks reading        │
- * │ another origin's localStorage / injecting Authorization on third-party   │
- * │ requests). It is NOT a generic "skip CSRF if any Bearer header is        │
- * │ present" · that pattern was the RT-04 vulnerability.                     │
+ * │ cannot forge a valid Clerk JWT or a valid AGI API key (same-origin       │
+ * │ policy blocks reading another origin's localStorage / injecting          │
+ * │ Authorization on third-party requests; a real API key requires an       │
+ * │ Argon2id match against a specific stored hash). It is NOT a generic     │
+ * │ "skip CSRF if any Bearer header is present" · that pattern was the      │
+ * │ RT-04 vulnerability, and WEB-APIKEY-CSRF-BLOCK-01's fix (the API-key    │
+ * │ branch below) deliberately does NOT relax this: an sk_live_/sk_test_    │
+ * │ token that fails ApiKeyService.verifyKey() falls through to the normal  │
+ * │ CSRF token check exactly like an invalid Clerk JWT does.                │
  * │                                                                          │
  * │ DO NOT add new routes that check CSRF BEFORE auth and rely on this       │
  * │ helper to skip CSRF. If such a route ever passes `Authorization: Bearer  │
  * │ <forged-but-shaped-correctly>`, the bypass attempts a verify call but    │
- * │ that call's network failure mode (Clerk auth reachable?)                 │
- * │ becomes part of the CSRF surface. The required order on any new route is:│
- * │     1. validate the Bearer JWT (or cookie session)                       │
+ * │ that call's network/DB failure mode becomes part of the CSRF surface.   │
+ * │ The required order on any new route is:                                  │
+ * │     1. validate the Bearer credential (or cookie session)                │
  * │     2. THEN call requireCsrfToken / validateCsrfFromRequest              │
  * │ Inverting that order is a vulnerability, not a style preference.         │
+ * │                                                                          │
+ * │ RESIDUAL (pre-existing, not introduced or worsened here): a request      │
+ * │ carrying both a verified Bearer credential and the caller's Clerk        │
+ * │ session cookie bypasses CSRF here, but lib/api-auth.ts's                 │
+ * │ getClerkAuthUser() still resolves identity from the COOKIE (Path 1)      │
+ * │ first, ignoring the Bearer token's principal. Bypass and identity can    │
+ * │ therefore diverge. This already applied to valid Clerk-JWT bearers       │
+ * │ before this change; API keys don't make it worse. Fixing it means        │
+ * │ making cookie-accepting routes reject cookie auth whenever a Bearer      │
+ * │ header is present, which is a separate, larger change.                  │
  * └──────────────────────────────────────────────────────────────────────────┘
  */
 async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
@@ -316,6 +332,22 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
   const token = authHeader.slice(7);
   if (token.length < 20 || token.length > 4096) {
     return false;
+  }
+
+  // AGI API keys (sk_live_/sk_test_), verified via ApiKeyService — mirrors
+  // lib/api-auth.ts's getClerkAuthUser Path 2a. Checked by prefix first so a
+  // Clerk JWT never pays for a DB round-trip and an API key never pays for a
+  // Clerk verifyToken call; the two formats never overlap. verifyKey() does
+  // its own parse-time rejection (VALID_KEY_PATTERN) before any DB work, so a
+  // garbage sk_-shaped bearer costs at most one indexed lookup, never Argon2.
+  if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) {
+    try {
+      const { ApiKeyService } = await import('@/lib/services/api-key-service');
+      const apiKey = await ApiKeyService.verifyKey(token);
+      return apiKey !== null;
+    } catch {
+      return false;
+    }
   }
 
   // Verify using Clerk token verification
@@ -346,12 +378,13 @@ export async function validateCsrfFromRequest(
     return true; // GET requests don't need CSRF protection
   }
 
-  // RT-04 fix: Only bypass CSRF when the Bearer token is cryptographically valid.
-  // Previously ANY Bearer string (including `Bearer bogus`) bypassed CSRF · this
-  // created a bypass for any endpoint checking CSRF before auth.
+  // RT-04 fix: Only bypass CSRF when the Bearer credential is cryptographically
+  // valid. Previously ANY Bearer string (including `Bearer bogus`) bypassed CSRF
+  // · this created a bypass for any endpoint checking CSRF before auth.
   // Threat model: a cross-origin page cannot forge a valid Bearer JWT (SOP blocks
-  // reading localStorage / injecting Authorization on third-party requests), so a
-  // valid JWT here means the request is from a legitimate client.
+  // reading localStorage / injecting Authorization on third-party requests) or a
+  // valid AGI API key (requires an Argon2id match against a stored hash), so a
+  // valid credential here means the request is from a legitimate client.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const validBearer = await isBearerTokenValid(authHeader);
@@ -387,8 +420,9 @@ export async function requireCsrfToken(
     return null; // GET requests don't need CSRF protection
   }
 
-  // RT-04 fix: Only bypass CSRF when the Bearer token is cryptographically valid.
-  // See isBearerTokenValid() for the threat model analysis.
+  // RT-04 fix: Only bypass CSRF when the Bearer credential is cryptographically
+  // valid (Clerk JWT or AGI API key). See isBearerTokenValid() for the threat
+  // model analysis.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const validBearer = await isBearerTokenValid(authHeader);

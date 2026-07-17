@@ -7,7 +7,20 @@ const root = process.cwd();
 const errors = [];
 const warnings = [];
 
-const scanRoots = ['apps', 'packages', 'packages/providers', 'crates', 'services'];
+const scanRoots = [
+  'apps',
+  // T-wave 2026-07-16: packages/ regrouped into domain dirs; each group is a
+  // scan root so every nested package keeps per-package README ownership.
+  'packages/contracts',
+  'packages/ai',
+  'packages/client',
+  'packages/ui',
+  'packages/tools',
+  'packages/platform',
+  'packages/ai/providers',
+  'crates',
+  'services',
+];
 const featureRoots = ['apps/web/features', 'apps/mobile/src/features', 'apps/desktop/src/features'];
 
 const missingReadmeDebt = new Set([]);

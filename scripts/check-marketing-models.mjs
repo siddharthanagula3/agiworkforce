@@ -4,7 +4,7 @@
  *
  * Scans apps/web/{lib,components}/**\/*.{ts,tsx} files whose paths contain
  * "marketing", plus three named anchor files, for:
- *   1. Hardcoded model-ID strings that do not exist in packages/types/src/models.json
+ *   1. Hardcoded model-ID strings that do not exist in packages/contracts/types/src/models.json
  *      ("phantom IDs") — EXIT 1 (blocking).
  *   2. Model IDs present in the catalog but not in the "marketing-safe" set
  *      (defaultModel + modelPresets per provider + all alias/canonical keys)
@@ -27,7 +27,7 @@ import { join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../');
-const MODELS_JSON = join(ROOT, 'packages/types/src/models.json');
+const MODELS_JSON = join(ROOT, 'packages/contracts/types/src/models.json');
 const WEB_DIR = join(ROOT, 'apps/web');
 
 // ─── 1. Build the valid ID set from models.json ───────────────────────────
@@ -212,7 +212,7 @@ console.log(`Scanned ${targetFiles.length} file(s).`);
 
 if (phantomCount > 0) {
   console.error(
-    `FAIL: ${phantomCount} phantom model ID(s) found. Update marketing-constants.ts or the source file to use IDs from packages/types/src/models.json.`,
+    `FAIL: ${phantomCount} phantom model ID(s) found. Update marketing-constants.ts or the source file to use IDs from packages/contracts/types/src/models.json.`,
   );
   process.exit(1);
 }

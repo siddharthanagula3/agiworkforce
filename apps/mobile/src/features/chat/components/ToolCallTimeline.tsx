@@ -12,8 +12,17 @@
  * removed) for every tool call in the transcript.
  */
 import { useMemo, useState, useCallback } from 'react';
+import { useRecyclingState } from '@shopify/flash-list';
 import { View, Pressable, Modal, ScrollView } from 'react-native';
-import { ChevronDown, ChevronRight, CircleCheck, Loader2, Maximize2, X } from 'lucide-react-native';
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  Loader2,
+  Maximize2,
+  ShieldAlert,
+  X,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { lucideRNToolIcon, lucideRNIconByName } from './toolIconRN';
@@ -55,6 +64,10 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
   const colors = useThemeColors();
   const sourceBadge = getToolSourceBadge(tool.name);
 
+  if (tool.requiresApproval) {
+    return <ShieldAlert size={15} strokeWidth={1.75} color={colors.agentWarning} />;
+  }
+
   if (sourceBadge) {
     return (
       <View
@@ -90,6 +103,7 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
 }
 
 function trailingChipLabel(tool: ToolCall): string | null {
+  if (tool.requiresApproval) return 'Needs approval';
   if (tool.searchResults?.length) {
     return `${tool.searchResults.length} result${tool.searchResults.length === 1 ? '' : 's'}`;
   }
@@ -107,11 +121,17 @@ function ToolCallTimelineRow({
   isFirst,
   isLast,
   onOpenFullScreen,
+  onResolveApproval,
+  approvalExpired,
+  onResendApproval,
 }: {
   tool: ToolCall;
   isFirst: boolean;
   isLast: boolean;
   onOpenFullScreen: (tool: ToolCall) => void;
+  onResolveApproval?: (toolCallId: string, decision: 'approved' | 'rejected') => void;
+  approvalExpired?: boolean;
+  onResendApproval?: () => void;
 }) {
   const colors = useThemeColors();
   const [expanded, setExpanded] = useState(false);
@@ -183,6 +203,96 @@ function ToolCallTimelineRow({
           ) : null}
         </View>
       </Pressable>
+
+      {tool.requiresApproval && tool.toolCallId ? (
+        <View style={{ paddingLeft: 20, paddingBottom: 10 }}>
+          <View
+            style={{
+              backgroundColor: approvalExpired ? colors.surfaceOverlay : colors.warningSurface,
+              borderRadius: 8,
+              padding: 10,
+              gap: 8,
+            }}
+          >
+            {approvalExpired ? (
+              <>
+                <Text style={{ fontSize: 12.5, color: colors.textSecondary }}>
+                  This approval request expired — the app was restarted before it could be resolved.{' '}
+                  {onResendApproval
+                    ? 'Send a new message to try again.'
+                    : 'Send a new message to continue.'}
+                </Text>
+                {onResendApproval ? (
+                  <Pressable
+                    onPress={onResendApproval}
+                    accessibilityRole="button"
+                    accessibilityLabel="Resend"
+                    style={{
+                      alignSelf: 'flex-start',
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: 8,
+                      backgroundColor: colors.surfaceOverlay,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
+                      Resend
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 12.5, color: colors.textPrimary }}>
+                  {nameText} wants to run. Review the request before allowing it to proceed.
+                </Text>
+                {tool.input ? (
+                  <Text
+                    numberOfLines={4}
+                    style={{ fontFamily: 'monospace', fontSize: 11, color: colors.textSecondary }}
+                  >
+                    {tool.input}
+                  </Text>
+                ) : null}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable
+                    onPress={() => onResolveApproval?.(tool.toolCallId!, 'rejected')}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Deny ${nameText}`}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: colors.surfaceOverlay,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
+                      Deny
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => onResolveApproval?.(tool.toolCallId!, 'approved')}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Allow ${nameText}`}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      backgroundColor: colors.agentWarning,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.surfaceBase }}>
+                      Allow
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      ) : null}
 
       {expanded ? (
         <View style={{ paddingLeft: 20, paddingBottom: 8 }}>
@@ -374,16 +484,39 @@ function ToolCallFullScreen({ tool, onClose }: { tool: ToolCall | null; onClose:
 }
 
 export function ToolCallTimeline({
+  messageId,
   toolCalls,
   summary,
+  onResolveApproval,
+  approvalExpired,
+  onResendApproval,
 }: {
+  /** The assistant message this timeline belongs to -- see the `collapsed` state's doc comment. */
+  messageId: string;
   toolCalls: ToolCall[];
   summary: string;
+  /** Called when the user taps Allow/Deny on a tool awaiting approval. */
+  onResolveApproval?: (toolCallId: string, decision: 'approved' | 'rejected') => void;
+  /**
+   * True when this message's suspended approval turn is no longer live (the
+   * in-memory registry resolveToolApproval consults doesn't survive a cold
+   * start, even though a persisted awaiting_approval tool call does).
+   * Renders an expired notice instead of live Allow/Deny buttons, which
+   * would otherwise render wired but silently no-op.
+   */
+  approvalExpired?: boolean;
+  /** Resend affordance shown on an expired approval card. Omit to show text guidance only (no fake availability). */
+  onResendApproval?: () => void;
 }) {
   const colors = useThemeColors();
-  const [collapsed, setCollapsed] = useState(false);
-  const [fullScreenTool, setFullScreenTool] = useState<ToolCall | null>(null);
-  const closeFullScreen = useCallback(() => setFullScreenTool(null), []);
+  // FlashList v2 recycles component instances across list items for
+  // performance -- a bare useState here would bleed a PRIOR message's
+  // collapsed/expanded state, or a stuck-open full-screen tool viewer, onto
+  // whichever message this instance now renders after a recycle.
+  // useRecyclingState resets whenever messageId changes.
+  const [collapsed, setCollapsed] = useRecyclingState(false, [messageId]);
+  const [fullScreenTool, setFullScreenTool] = useRecyclingState<ToolCall | null>(null, [messageId]);
+  const closeFullScreen = useCallback(() => setFullScreenTool(null), [setFullScreenTool]);
   const allDone = useMemo(
     () => toolCalls.length > 0 && toolCalls.every((t) => t.status !== 'running'),
     [toolCalls],
@@ -416,6 +549,9 @@ export function ToolCallTimeline({
               isFirst={i === 0}
               isLast={i === toolCalls.length - 1 && !allDone}
               onOpenFullScreen={setFullScreenTool}
+              onResolveApproval={onResolveApproval}
+              approvalExpired={approvalExpired}
+              onResendApproval={onResendApproval}
             />
           ))}
           {allDone ? (

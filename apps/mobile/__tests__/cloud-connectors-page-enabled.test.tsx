@@ -43,11 +43,6 @@ jest.mock('lucide-react-native', () => {
   };
 });
 
-jest.mock('../src/features/connectors/store', () => ({
-  useConnectorsStore: (selector: (s: { connectedIds: string[]; toggle: () => void }) => unknown) =>
-    selector({ connectedIds: [], toggle: jest.fn() }),
-}));
-
 // The connectors screen shows a "Chat is set to Local Mode" blocked banner
 // unless the app is in Cloud mode (connectors are a cloud-managed feature —
 // same trust gate as the AddToChatSheet). Put the screen in Cloud mode so the

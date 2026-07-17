@@ -7,7 +7,7 @@
  */
 
 import { logger } from '@shared/lib/logger';
-import { parseMeResponse } from '@agiworkforce/services';
+import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 
 export interface AuthUser {
   id: string;

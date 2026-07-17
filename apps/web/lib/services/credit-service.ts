@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
+import { retryWithBackoff } from '@/lib/retry';
 
 export interface CreditBalance {
   account_id: string;
@@ -29,6 +30,103 @@ export interface DeductCreditsResult {
   daily_limit?: number;
   daily_used?: number;
   daily_remaining?: number;
+}
+
+export interface CreditSettlementOperation {
+  userId: string;
+  amountCents: number;
+  description?: string;
+  metadata?: Record<string, unknown>;
+  idempotencyKey: string;
+}
+
+export interface CreditSettlementResult {
+  status: 'succeeded' | 'pending' | 'terminal';
+  success: boolean;
+  remaining_cents?: number;
+  code?: string;
+  error?: string;
+  attempt_count: number;
+}
+
+export interface CreditSettlementQueueSummary {
+  processed: number;
+  succeeded: number;
+  pending: number;
+  terminal: number;
+}
+
+export class CreditSettlementUnavailableError extends Error {
+  override readonly cause: unknown;
+
+  constructor(cause: unknown) {
+    super('Unable to persist credit settlement after retrying transient failures');
+    this.name = 'CreditSettlementUnavailableError';
+    this.cause = cause;
+  }
+}
+
+function isRetryableSettlementTransportError(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false;
+
+  const status = 'status' in error && typeof error.status === 'number' ? error.status : undefined;
+  if (status === 429 || (status !== undefined && status >= 500 && status < 600)) return true;
+  if (status !== undefined && status >= 400 && status < 500) return false;
+
+  const code =
+    'code' in error && typeof error.code === 'string' ? error.code.toUpperCase() : undefined;
+  if (
+    code &&
+    (code.startsWith('08') ||
+      code.startsWith('53') ||
+      ['40001', '40P01', '55P03', '57014', '57P01', '57P02', '57P03'].includes(code) ||
+      ['ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'EPIPE'].includes(code))
+  ) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  return (
+    message.includes('connection reset') ||
+    message.includes('connection refused') ||
+    message.includes('connection terminated') ||
+    message.includes('network') ||
+    message.includes('timeout') ||
+    message.includes('temporarily unavailable')
+  );
+}
+
+function parseSettlementResult(row: unknown): CreditSettlementResult {
+  if (row === null || typeof row !== 'object') {
+    throw Object.assign(new Error('Credit settlement RPC returned no result'), {
+      code: 'BILLING_PROTOCOL_ERROR',
+    });
+  }
+
+  const record = row as Record<string, unknown>;
+  const status = record['status'];
+  const success = record['success'];
+  const attemptCount = record['attempt_count'];
+  if (
+    (status !== 'succeeded' && status !== 'pending' && status !== 'terminal') ||
+    typeof success !== 'boolean' ||
+    typeof attemptCount !== 'number'
+  ) {
+    throw Object.assign(new Error('Credit settlement RPC returned an invalid result'), {
+      code: 'BILLING_PROTOCOL_ERROR',
+    });
+  }
+
+  return {
+    status,
+    success,
+    attempt_count: attemptCount,
+    ...(typeof record['remaining_cents'] === 'number'
+      ? { remaining_cents: record['remaining_cents'] }
+      : {}),
+    ...(typeof record['code'] === 'string' ? { code: record['code'] } : {}),
+    ...(typeof record['error'] === 'string' ? { error: record['error'] } : {}),
+  };
 }
 
 export class CreditService {
@@ -154,6 +252,143 @@ export class CreditService {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
+  }
+
+  /**
+   * Persist and apply a post-response credit settlement through the canonical
+   * Neon outbox. The database function atomically owns idempotency, terminal
+   * business decisions, retry state, and the call into deduct_credits().
+   *
+   * A transport failure is retried inline with the exact same idempotency key.
+   * If the database accepted an attempt but the response was lost, the next
+   * call returns the stored result instead of charging twice.
+   */
+  static async settleCreditsDurably(
+    operation: CreditSettlementOperation,
+    db: DatabaseAdapter = getNeonDb(),
+  ): Promise<CreditSettlementResult> {
+    const retryResult = await retryWithBackoff(
+      async () => {
+        const rows = await db.query<CreditSettlementResult>(
+          `select
+             settlement_status as status,
+             deduction_success as success,
+             remaining_cents,
+             error_code as code,
+             error_message as error,
+             attempts as attempt_count
+           from enqueue_credit_settlement($1, $2, $3, $4, $5)`,
+          [
+            operation.userId,
+            operation.amountCents,
+            operation.description ?? null,
+            JSON.stringify(operation.metadata ?? {}),
+            operation.idempotencyKey,
+          ],
+        );
+        return parseSettlementResult(rows[0]);
+      },
+      {
+        maxRetries: 2,
+        initialDelayMs: 50,
+        maxDelayMs: 200,
+        jitter: true,
+        isRetryable: isRetryableSettlementTransportError,
+        onRetry: (error, attempt, delayMs) => {
+          logger.warn(
+            {
+              event: 'credit_settlement_inline_retry',
+              error,
+              userId: operation.userId,
+              idempotencyKey: operation.idempotencyKey,
+              attempt,
+              delayMs,
+            },
+            'Retrying transient credit settlement transport failure',
+          );
+        },
+      },
+    );
+
+    if (!retryResult.success || !retryResult.data) {
+      logger.error(
+        {
+          event: 'credit_settlement_unrecorded',
+          error: retryResult.error,
+          userId: operation.userId,
+          idempotencyKey: operation.idempotencyKey,
+          amountCents: operation.amountCents,
+          attempts: retryResult.attempts,
+        },
+        'Credit settlement could not be persisted after inline retries',
+      );
+      throw new CreditSettlementUnavailableError(retryResult.error);
+    }
+
+    const result = retryResult.data;
+    if (result.status === 'pending') {
+      logger.warn(
+        {
+          event: 'credit_settlement_queued',
+          userId: operation.userId,
+          idempotencyKey: operation.idempotencyKey,
+          amountCents: operation.amountCents,
+          code: result.code,
+          attemptCount: result.attempt_count,
+        },
+        'Credit settlement persisted for background retry',
+      );
+    } else if (result.status === 'terminal') {
+      logger.error(
+        {
+          event: 'credit_settlement_terminal',
+          userId: operation.userId,
+          idempotencyKey: operation.idempotencyKey,
+          amountCents: operation.amountCents,
+          code: result.code,
+          error: result.error,
+          attemptCount: result.attempt_count,
+        },
+        'Credit settlement reached a terminal state',
+      );
+    }
+
+    return result;
+  }
+
+  /** SERVICE-CONTEXT: cron-only recovery across all users. */
+  static async processPendingSettlements(
+    batchSize = 100,
+    db: DatabaseAdapter = getNeonDb(),
+  ): Promise<CreditSettlementQueueSummary> {
+    const boundedBatchSize = Math.max(1, Math.min(Math.trunc(batchSize), 500));
+    const rows = await db.query<{
+      job_id: string;
+      settlement_status: 'succeeded' | 'pending' | 'terminal';
+      error_code: string | null;
+      attempts: number;
+    }>('select * from process_credit_settlement_queue($1)', [boundedBatchSize]);
+
+    const summary: CreditSettlementQueueSummary = {
+      processed: rows.length,
+      succeeded: 0,
+      pending: 0,
+      terminal: 0,
+    };
+    for (const row of rows) {
+      if (row.settlement_status === 'succeeded') summary.succeeded += 1;
+      else if (row.settlement_status === 'pending') summary.pending += 1;
+      else if (row.settlement_status === 'terminal') summary.terminal += 1;
+      else {
+        throw new Error(`Unexpected credit settlement status: ${String(row.settlement_status)}`);
+      }
+    }
+
+    logger.info(
+      { event: 'credit_settlement_queue_processed', ...summary },
+      'Processed durable credit settlement queue',
+    );
+    return summary;
   }
 
   static generateIdempotencyKey(

@@ -798,37 +798,37 @@
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/app/not-found.tsx",
+      "file": "apps/mobile/app/+not-found.tsx",
       "line": 32,
       "literal": "#0f0f0f",
       "rule": "hex"
     },
     {
-      "file": "apps/mobile/app/not-found.tsx",
+      "file": "apps/mobile/app/+not-found.tsx",
       "line": 43,
       "literal": "rgba(",
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/app/not-found.tsx",
+      "file": "apps/mobile/app/+not-found.tsx",
       "line": 49,
       "literal": "#ffffff",
       "rule": "hex"
     },
     {
-      "file": "apps/mobile/app/not-found.tsx",
+      "file": "apps/mobile/app/+not-found.tsx",
       "line": 55,
       "literal": "rgba(",
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/app/not-found.tsx",
+      "file": "apps/mobile/app/+not-found.tsx",
       "line": 63,
       "literal": "#14b8a6",
       "rule": "hex"
     },
     {
-      "file": "apps/mobile/app/not-found.tsx",
+      "file": "apps/mobile/app/+not-found.tsx",
       "line": 69,
       "literal": "#ffffff",
       "rule": "hex"

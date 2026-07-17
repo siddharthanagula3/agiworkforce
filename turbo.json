@@ -1,0 +1,65 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["CI"],
+  "globalPassThroughEnv": ["NODE_OPTIONS"],
+  "tasks": {
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.base.json"],
+      "outputs": [
+        "dist/**",
+        "out/**",
+        ".next/**",
+        "!.next/cache/**",
+        "extension.zip",
+        ".tsbuildinfo",
+        "tsconfig.tsbuildinfo"
+      ],
+      "env": [
+        "CLERK_SECRET_KEY",
+        "DATABASE_URL",
+        "NEON_DATABASE_URL",
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+        "NODE_ENV",
+        "SENTRY_DSN"
+      ]
+    },
+    "build:web": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".tsbuildinfo"],
+      "env": ["VITE_BUILD_TARGET"]
+    },
+    "build:native-host": {
+      "outputs": ["src-tauri/binaries/**"]
+    },
+    "lint": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/eslint.config.mjs"],
+      "outputs": [".cache/eslint/**"]
+    },
+    "test": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.base.json"],
+      "env": [
+        "CLERK_SECRET_KEY",
+        "DATABASE_URL",
+        "NEON_DATABASE_URL",
+        "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+        "NODE_ENV",
+        "TZ"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.base.json"],
+      "outputs": [".tsbuildinfo", "tsconfig.tsbuildinfo"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

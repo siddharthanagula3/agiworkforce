@@ -32,14 +32,18 @@ const VIEW_ROUTES: Record<string, string> = {
   artifacts: '/gallery',
   'customize-home': '/customize',
   'work-projects': '/agi-work',
-  'work-scheduled': '/agi-work',
   'work-artifacts': '/gallery',
   'work-dispatch': '/agi-work',
   code: '/agi-code',
   routines: '/agi-code',
   'voice-settings': '/settings/voice',
   account: '/settings/account',
+  schedules: '/schedules',
 };
+
+export function resolveWebViewRoute(view: string): string | undefined {
+  return VIEW_ROUTES[view];
+}
 
 /**
  * v3 web shell.
@@ -101,7 +105,7 @@ export function WebShellV3({
         onNavigateView(view as Parameters<NonNullable<typeof onNavigateView>>[0]);
         return;
       }
-      const route = VIEW_ROUTES[view];
+      const route = resolveWebViewRoute(view);
       if (route) {
         router.push(route);
       }

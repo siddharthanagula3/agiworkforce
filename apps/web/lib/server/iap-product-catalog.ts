@@ -6,7 +6,7 @@
  * client's App Store Connect / Play Console product-id table can't be
  * imported directly here. This copy must be kept in sync by hand whenever
  * the mobile catalog changes — flagged as a follow-up to hoist into a
- * shared package (e.g. packages/types) so both sides read one source of
+ * shared package (e.g. packages/contracts/types) so both sides read one source of
  * truth instead of two hand-maintained literals.
  *
  * All product ids below are the same placeholders as the mobile file: they

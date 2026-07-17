@@ -2,124 +2,79 @@ import 'server-only';
 
 import { getOptionalEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
-import { validateBaseUrl, ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/llm-runtime';
-import { createAnthropicAdapter } from '@agiworkforce/providers-anthropic';
-import { createGoogleAdapter } from '@agiworkforce/providers-google';
-import { createOpenAIAdapter } from '@agiworkforce/providers-openai';
-import { createGroqAdapter } from '@agiworkforce/providers-groq';
-import { createMistralAdapter } from '@agiworkforce/providers-mistral';
-import { createMoonshotAdapter } from '@agiworkforce/providers-moonshot';
-import { createZhipuAdapter } from '@agiworkforce/providers-zhipu';
-import { createQwenAdapter } from '@agiworkforce/providers-qwen';
-import { createOpenRouterAdapter } from '@agiworkforce/providers-openrouter';
-import { createDeepSeekAdapter } from '@agiworkforce/providers-deepseek';
-import { createXAIAdapter } from '@agiworkforce/providers-xai';
-import { createPerplexityAdapter } from '@agiworkforce/providers-perplexity';
+import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
+import { validateBaseUrl, ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';
 import {
-  getModelMetadataById,
-  normalizeModelId,
-  detectProviderFromModelId,
-} from '@agiworkforce/types';
+  createProviderAdapter,
+  type ProviderAdapterConfigMap,
+  type ProviderAdapterId,
+} from '@agiworkforce/providers-factory';
+import { detectProviderFromModelId } from '@agiworkforce/types';
 import type { ProviderAdapter, StreamChunk } from '@agiworkforce/types';
 
 /**
- * Server-managed-key `ProviderAdapter` construction, shared by web routes
- * that call an LLM provider with AGI's OWN API key (restructure Wave 2, task
- * #34's "6 remaining importers" batch -- mission, completion,
- * settings/test-provider). Generalizes the env-read + SSRF-validate +
- * construct mechanic `apps/app/api/llm/v1/chat/completions/lib/
- * adapter-factory.ts` already established per-provider for that route.
+ * Server-managed-key `ProviderAdapter` construction shared by Web routes
+ * that call an LLM provider with AGI's own API key. This is the Web owner for
+ * environment lookup, base-URL validation, and provider SDK construction.
  *
- * NOT reused by the v1 chat-completions route itself: its Anthropic builder
- * threads per-request prompt-cache config derived from that route's own
- * `ProcessedRequest`, which no caller here has -- unifying them would force
- * either a fake `ProcessedRequest` or a behavior change on that route's
- * already byte-verified path. This function always builds with cache-control
- * left at the adapter's own default instead.
+ * The v1 chat-completions route passes only its derived Anthropic cache policy
+ * through `ServerProviderAdapterOptions`; request parsing and routing remain
+ * route-owned. Callers cannot replace the managed API key or base URL.
  *
- * Trust boundary: this ONLY reads server env vars (`{PREFIX}_API_KEY`, the
- * same vars the legacy `LLMProviderFactory` reads for the managed-cloud
- * tier). It never accepts a caller-supplied key. BYOK (user-supplied key)
- * construction is a separate, explicit code path -- do not route BYOK
- * requests through this function.
+ * Trust boundary: this only reads server environment variables. It never
+ * accepts a caller-supplied key. BYOK construction is a separate, explicit
+ * code path; do not route BYOK requests through this function.
  */
 
-const PROVIDER_ENV_PREFIX: Readonly<Record<string, string>> = {
-  anthropic: 'ANTHROPIC',
-  google: 'GOOGLE',
-  openai: 'OPENAI',
-  groq: 'GROQ',
-  mistral: 'MISTRAL',
-  moonshot: 'MOONSHOT',
-  zhipu: 'ZHIPU',
-  qwen: 'QWEN',
-  openrouter: 'OPENROUTER',
-  deepseek: 'DEEPSEEK',
-  xai: 'XAI',
-  perplexity: 'PERPLEXITY',
+const SERVER_PROVIDER_CONFIG: Readonly<
+  Record<string, { envPrefix: string; adapterId: ProviderAdapterId }>
+> = {
+  anthropic: { envPrefix: 'ANTHROPIC', adapterId: 'anthropic' },
+  google: { envPrefix: 'GOOGLE', adapterId: 'google' },
+  openai: { envPrefix: 'OPENAI', adapterId: 'openai' },
+  groq: { envPrefix: 'GROQ', adapterId: 'groq' },
+  mistral: { envPrefix: 'MISTRAL', adapterId: 'mistral' },
+  moonshot: { envPrefix: 'MOONSHOT', adapterId: 'moonshot' },
+  zhipu: { envPrefix: 'ZHIPU', adapterId: 'zhipu' },
+  qwen: { envPrefix: 'QWEN', adapterId: 'qwen' },
+  openrouter: { envPrefix: 'OPENROUTER', adapterId: 'open_router' },
+  deepseek: { envPrefix: 'DEEPSEEK', adapterId: 'deepseek' },
+  xai: { envPrefix: 'XAI', adapterId: 'xai' },
+  perplexity: { envPrefix: 'PERPLEXITY', adapterId: 'perplexity' },
 };
 
-type AdapterCreator = (config: { apiKey: string; baseUrl?: string }) => ProviderAdapter;
-
-/**
- * `useResponsesApi: false` is REQUIRED for OpenAI here, matching
- * `adapter-factory.ts`'s `buildOpenAIAdapter`: without it, `createOpenAIAdapter`
- * defaults to routing catalog-known models with tool/vision/thinking
- * capabilities through the Responses API, which none of this function's
- * callers (mission, completion, test-provider) expect.
- */
-const PROVIDER_CREATORS: Readonly<Record<string, AdapterCreator>> = {
-  anthropic: createAnthropicAdapter,
-  google: createGoogleAdapter,
-  openai: (config) => createOpenAIAdapter({ ...config, useResponsesApi: false }),
-  groq: createGroqAdapter,
-  mistral: createMistralAdapter,
-  moonshot: createMoonshotAdapter,
-  zhipu: createZhipuAdapter,
-  qwen: createQwenAdapter,
-  openrouter: createOpenRouterAdapter,
-  deepseek: createDeepSeekAdapter,
-  xai: createXAIAdapter,
-  perplexity: createPerplexityAdapter,
+const PROVIDER_API_KEY_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
+  google: ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'],
 };
 
-/** All provider ids this service can construct an adapter for. */
-export const SUPPORTED_SERVER_PROVIDER_IDS: readonly string[] = Object.keys(PROVIDER_ENV_PREFIX);
-
-/**
- * Map a catalog/internal model id to the vendor-specific API model string.
- * The canonical adapter path (`ProviderAdapter.stream`) sends `ChatRequest.model`
- * to the wire VERBATIM -- unlike the legacy `LLMProviderFactory.sendRequest`,
- * which called this same mapping internally before dispatch. Callers building
- * a `ChatRequest` directly (not via the v1 route's `toCanonicalChatRequest`,
- * which already does this) MUST map the model id themselves first or the
- * request goes out with an id the vendor doesn't recognize. Same logic as
- * `apps/web/app/api/llm/v1/chat/completions/lib/canonical-request.ts`'s
- * private `toApiModelId` (kept as a small local reimplementation there rather
- * than importing this, to avoid adding a cross-route dependency to that
- * route's already byte-verified path).
- */
-export function toApiModelId(modelId: string): string {
-  const metadata = getModelMetadataById(modelId);
-  const normalized = normalizeModelId(modelId);
-  return metadata?.apiModelId ?? normalized ?? modelId;
+export interface ServerProviderAdapterOptions {
+  /** Request-derived Anthropic prompt-cache policy; credentials remain service-owned. */
+  anthropicCache?: Readonly<
+    Pick<ProviderAdapterConfigMap['anthropic'], 'enableCacheControl' | 'cacheRetention'>
+  >;
 }
 
+/** All provider ids this service can construct an adapter for. */
+export const SUPPORTED_SERVER_PROVIDER_IDS: readonly string[] = Object.keys(SERVER_PROVIDER_CONFIG);
+
 /**
- * Resolve which provider serves a given model id. Byte-for-byte port of
- * `apps/web/lib/llm-providers/factory.ts`'s `LLMProviderFactory.
- * getProviderFromModel` (same catalog lookup, same `open_router` ->
- * `openrouter` normalization, same ordered heuristic fallback chain,
- * same `openai` default) -- that module is being retired (restructure
- * Wave 2, task #34), so this is the replacement for its callers.
- * `detectProviderFromModelId` itself already lives in `@agiworkforce/types`
- * (the legacy function only wrapped it); reused directly, not duplicated.
+ * Compatibility alias for Web routes that construct a `ChatRequest` directly.
+ * The canonical implementation is owned by `@agiworkforce/provider-protocol`.
+ */
+export const toApiModelId = toProviderApiModelId;
+
+/**
+ * Resolve catalogued models through the shared registry and preserve the
+ * ordered compatibility fallback for uncatalogued model IDs. The Web dispatch
+ * key remains `openrouter`; construction translates it to the canonical
+ * `open_router` adapter ID.
  */
 export function resolveProviderFromModel(model: string): string {
   const catalogProvider = detectProviderFromModelId(model);
   if (catalogProvider) {
-    // models.json canonical id is 'open_router'; normalize so this always
-    // matches PROVIDER_ENV_PREFIX / PROVIDER_CREATORS' 'openrouter' key.
+    // Web chat's historical dispatch key is 'openrouter'; the aggregate
+    // factory boundary translates that to the catalog's canonical
+    // 'open_router' adapter id only when construction happens.
     if (catalogProvider === 'open_router') return 'openrouter';
     return catalogProvider;
   }
@@ -175,15 +130,30 @@ export function toGenericUpstreamError(
  * exactly, since some callers (e.g. settings/test-provider's error
  * classifier) pattern-match on it.
  */
-export function buildServerProviderAdapter(providerId: string): ProviderAdapter {
-  const envPrefix = PROVIDER_ENV_PREFIX[providerId];
-  const create = PROVIDER_CREATORS[providerId];
-  if (!envPrefix || !create) {
+export function buildServerProviderAdapter(
+  providerId: string,
+  options: ServerProviderAdapterOptions = {},
+): ProviderAdapter {
+  const providerConfig = SERVER_PROVIDER_CONFIG[providerId];
+  if (!providerConfig) {
     throw new Error(`Provider "${providerId}" is not supported.`);
   }
+  const { adapterId, envPrefix } = providerConfig;
 
-  const apiKey = getOptionalEnv(`${envPrefix}_API_KEY`);
+  const apiKeyEnvKeys = PROVIDER_API_KEY_ENV_KEYS[providerId] ?? [`${envPrefix}_API_KEY`];
+  let apiKey: string | undefined;
+  for (const envKey of apiKeyEnvKeys) {
+    apiKey = getOptionalEnv(envKey);
+    if (apiKey) break;
+  }
   if (!apiKey) {
+    if (providerId === 'google') {
+      throw new Error(
+        'Provider "google" is not configured. ' +
+          'Please set GOOGLE_API_KEY (or GEMINI_API_KEY). ' +
+          'Check your .env.local file or deployment environment variables.',
+      );
+    }
     throw new Error(
       `Provider "${providerId}" is not configured. ` +
         `Please ensure the ${envPrefix}_API_KEY environment variable is set. ` +
@@ -212,5 +182,13 @@ export function buildServerProviderAdapter(providerId: string): ProviderAdapter 
     }
   }
 
-  return create({ apiKey, ...(baseUrl ? { baseUrl } : {}) });
+  const baseConfig = { apiKey, ...(baseUrl ? { baseUrl } : {}) };
+  if (providerId === 'anthropic' && options.anthropicCache) {
+    return createProviderAdapter('anthropic', { ...baseConfig, ...options.anthropicCache });
+  }
+  if (providerId === 'openai') {
+    return createProviderAdapter('openai', { ...baseConfig, useResponsesApi: false });
+  }
+
+  return createProviderAdapter(adapterId, baseConfig);
 }

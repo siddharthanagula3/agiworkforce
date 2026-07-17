@@ -27,18 +27,25 @@
 /apps/extension-vscode/ @siddhartha
 
 # Shared runtime, contracts, providers, and database.
-/packages/types/ @siddhartha
-/packages/providers/ @siddhartha
-/packages/llm-runtime/ @siddhartha
-/packages/runtime/ @siddhartha
-/packages/unified-chat/ @siddhartha
+/packages/contracts/types/ @siddhartha
+/packages/contracts/cloud-contracts/ @siddhartha
+/packages/platform/artifacts/ @siddhartha
+/packages/client/sync/ @siddhartha
+/packages/contracts/trust-boundaries/ @siddhartha
+/packages/ai/providers/ @siddhartha
+/packages/ai/provider-runtime/ @siddhartha
+/packages/ai/routing/ @siddhartha
+/packages/ai/search/ @siddhartha
+/packages/client/client-runtime/ @siddhartha
+/packages/ui/unified-chat/ @siddhartha
 /crates/ @siddhartha
 /services/ @siddhartha
+/tools/ @siddhartha
 /apps/web/db/neon/ @siddhartha
 
 # Enterprise/security/compliance claims.
 /docs/enterprise/ @siddhartha
 /docs/security/ @siddhartha
 /docs/legal/ @siddhartha
-/packages/compliance/ @siddhartha
-/packages/licensing/ @siddhartha
+/packages/contracts/compliance/ @siddhartha
+/packages/contracts/licensing/ @siddhartha

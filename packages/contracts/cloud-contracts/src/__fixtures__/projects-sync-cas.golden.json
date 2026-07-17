@@ -1,0 +1,55 @@
+{
+  "push": {
+    "projects": [
+      {
+        "id": "018f6f2a-0000-7000-8000-000000000005",
+        "name": "Mobile launch",
+        "instructions": "Ship it",
+        "color": "#ff0000",
+        "isArchived": false,
+        "baseVersion": "3"
+      }
+    ]
+  },
+  "pushResponse": {
+    "applied": [],
+    "conflicts": [
+      {
+        "id": "018f6f2a-0000-7000-8000-000000000005",
+        "current": {
+          "id": "018f6f2a-0000-7000-8000-000000000005",
+          "name": "Mobile launch",
+          "description": null,
+          "instructions": "Ship it",
+          "color": "#ff0000",
+          "is_archived": false,
+          "metadata": null,
+          "created_at": "2026-07-01T00:00:00.000Z",
+          "updated_at": "2026-07-02T00:00:00.000Z",
+          "deleted_at": null,
+          "server_version": "4"
+        }
+      }
+    ],
+    "cursor": "4"
+  },
+  "pullResponse": {
+    "projects": [
+      {
+        "id": "018f6f2a-0000-7000-8000-000000000005",
+        "name": "Mobile launch",
+        "description": null,
+        "instructions": "Ship it",
+        "color": "#ff0000",
+        "is_archived": false,
+        "metadata": null,
+        "created_at": "2026-07-01T00:00:00.000Z",
+        "updated_at": "2026-07-02T00:00:00.000Z",
+        "deleted_at": null,
+        "server_version": "4"
+      }
+    ],
+    "cursor": "4",
+    "hasMore": false
+  }
+}

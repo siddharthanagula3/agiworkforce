@@ -53,15 +53,20 @@ jest.mock('../services/api', () => {
   };
 });
 
-// Mock @agiworkforce/types normalizeBillingPlanTier to keep tests self-contained
-jest.mock('@agiworkforce/types', () => ({
-  normalizeBillingPlanTier: (val: string | null | undefined): string => {
-    if (!val) return 'free';
-    const known = ['local-only', 'byok', 'free', 'hobby', 'pro', 'pro_plus', 'max', 'enterprise'];
-    const lower = val.toLowerCase();
-    return known.includes(lower) ? lower : 'free';
-  },
-}));
+// Override only the billing normalizer. Cloud-contract schemas loaded by the
+// store also consume shared contract constants from this package.
+jest.mock('@agiworkforce/types', () => {
+  const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  return {
+    ...actual,
+    normalizeBillingPlanTier: (val: string | null | undefined): string => {
+      if (!val) return 'free';
+      const known = ['local-only', 'byok', 'free', 'hobby', 'pro', 'pro_plus', 'max', 'enterprise'];
+      const lower = val.toLowerCase();
+      return known.includes(lower) ? lower : 'free';
+    },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Imports

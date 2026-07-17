@@ -1,8 +1,8 @@
 /**
  * VS Code provider stream client.
  *
- * Thin wrapper around the shared `@agiworkforce/llm-runtime` SSE client
- * (`packages/llm-runtime/src/client/streamFromProvider.ts`). Keeps this
+ * Thin wrapper around the shared `@agiworkforce/provider-runtime` SSE client
+ * (`packages/ai/provider-runtime/src/client/streamFromProvider.ts`). Keeps this
  * surface's public API (types + `streamFromProvider` signature) stable for
  * its callers. Uses Node's global fetch (available in VS Code's Node 18+
  * host) and the same SSE frame parser as the other surfaces.
@@ -14,7 +14,7 @@
  * VS Code settings.
  */
 
-import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/llm-runtime';
+import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/provider-runtime';
 
 export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
 

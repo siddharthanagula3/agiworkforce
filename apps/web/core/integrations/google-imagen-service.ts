@@ -14,13 +14,17 @@
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
+import {
+  getModelMetadataById,
+  getModelsForProvider,
+  isModelLive,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 
 export interface ImagenGenerationRequest {
   prompt: string;
-  model?:
-    | 'imagen-4.0-generate-001'
-    | 'imagen-4.0-ultra-generate-001'
-    | 'imagen-4.0-fast-generate-001';
+  /** Canonical catalog id or provider API id. */
+  model?: string;
   numberOfImages?: number; // 1-4
   aspectRatio?: '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
   negativePrompt?: string;
@@ -63,12 +67,43 @@ export interface ImagenServiceError {
 // SECURITY: API calls route through Netlify proxy
 const IMAGEN_PROXY_URL = '/.netlify/functions/media-proxies/google-imagen-proxy';
 
-// Pricing per image (USD)
-const IMAGEN_PRICING = {
-  'imagen-4.0-generate-001': 0.002,
-  'imagen-4.0-ultra-generate-001': 0.004,
-  'imagen-4.0-fast-generate-001': 0.001,
-};
+function getImagenCatalogModels(): ModelMetadata[] {
+  return getModelsForProvider('google', {
+    includeDeprecated: false,
+    modelTypes: ['image'],
+  }).filter((model) => model.imageApi === 'imagen' && isModelLive(model));
+}
+
+function resolveImagenModel(modelId?: string): ModelMetadata {
+  if (modelId) {
+    const requested = getModelMetadataById(modelId);
+    if (
+      requested?.provider === 'google' &&
+      requested.modelType === 'image' &&
+      requested.imageApi === 'imagen' &&
+      requested.status !== 'deprecated' &&
+      isModelLive(requested)
+    ) {
+      return requested;
+    }
+    throw new Error(`Unsupported Google Imagen model: ${modelId}`);
+  }
+
+  const model =
+    getImagenCatalogModels().find((candidate) => candidate.qualityTier === 'balanced') ??
+    getImagenCatalogModels()[0];
+  if (!model) {
+    throw new Error('No live Google Imagen model is configured in the canonical catalog');
+  }
+  return model;
+}
+
+function getImagenPerImageCost(model: ModelMetadata): number {
+  if (typeof model.imagePerImageCost !== 'number' || model.imagePerImageCost < 0) {
+    throw new Error(`Google Imagen model ${model.id} has no catalog per-image price`);
+  }
+  return model.imagePerImageCost;
+}
 
 export class GoogleImagenService {
   private static instance: GoogleImagenService;
@@ -121,7 +156,8 @@ export class GoogleImagenService {
       );
     }
 
-    const model = request.model || 'imagen-4.0-generate-001';
+    const catalogModel = resolveImagenModel(request.model);
+    const model = catalogModel.apiModelId ?? catalogModel.id;
     const generationId = `img-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Create initial response
@@ -148,7 +184,7 @@ export class GoogleImagenService {
       }
 
       // Real API call
-      return await this.callImagenAPI(request, response);
+      return await this.callImagenAPI({ ...request, model }, response);
     } catch (error) {
       response.status = 'failed';
       throw this.handleError(error);
@@ -172,7 +208,8 @@ export class GoogleImagenService {
       );
     }
 
-    const model = request.model || 'imagen-4.0-generate-001';
+    const catalogModel = resolveImagenModel(request.model);
+    const model = catalogModel.apiModelId ?? catalogModel.id;
 
     const requestBody = {
       model,
@@ -232,7 +269,7 @@ export class GoogleImagenService {
 
     // Calculate cost and token usage
     const numberOfImages = request.numberOfImages || 1;
-    response.cost = IMAGEN_PRICING[model] * numberOfImages;
+    response.cost = getImagenPerImageCost(catalogModel) * numberOfImages;
     response.tokensUsed = Math.floor(request.prompt.length / 4);
     response.status = 'completed';
 
@@ -254,7 +291,7 @@ export class GoogleImagenService {
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const model = request.model || 'imagen-4.0-generate-001';
+    const catalogModel = resolveImagenModel(request.model);
     const numberOfImages = request.numberOfImages || 1;
 
     // Generate demo images
@@ -263,7 +300,7 @@ export class GoogleImagenService {
       mimeType: 'image/png',
     }));
 
-    response.cost = IMAGEN_PRICING[model] * numberOfImages;
+    response.cost = getImagenPerImageCost(catalogModel) * numberOfImages;
     response.tokensUsed = Math.floor(request.prompt.length / 4);
     response.status = 'completed';
 
@@ -394,26 +431,12 @@ export class GoogleImagenService {
     description: string;
     pricing: number;
   }> {
-    return [
-      {
-        id: 'imagen-4.0-generate-001',
-        name: 'Imagen 4.0 Standard',
-        description: 'Best quality text-to-image model with improved text rendering',
-        pricing: IMAGEN_PRICING['imagen-4.0-generate-001'],
-      },
-      {
-        id: 'imagen-4.0-ultra-generate-001',
-        name: 'Imagen 4.0 Ultra',
-        description: 'Highest quality for advanced use-cases',
-        pricing: IMAGEN_PRICING['imagen-4.0-ultra-generate-001'],
-      },
-      {
-        id: 'imagen-4.0-fast-generate-001',
-        name: 'Imagen 4.0 Fast',
-        description: 'Fast generation with good quality',
-        pricing: IMAGEN_PRICING['imagen-4.0-fast-generate-001'],
-      },
-    ];
+    return getImagenCatalogModels().map((model) => ({
+      id: model.apiModelId ?? model.id,
+      name: model.name,
+      description: model.bestFor.join(', '),
+      pricing: getImagenPerImageCost(model),
+    }));
   }
 
   /**

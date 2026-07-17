@@ -11,7 +11,8 @@ import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../../lib/tauri-mock';
 import { getModelContextWindow } from '../../constants/llm';
 import { safeGetJSON, safeSetJSON, storageFallback } from '../../utils/localStorage';
-import { useAppModeStore, selectPrivacyMode } from '../appModeStore';
+import { useAppModeStore } from '../appModeStore';
+import type { ChatExecutionMode } from '@agiworkforce/types';
 import { useUnifiedAuthStore } from '../auth';
 import { useModelStore } from '../modelStore';
 import { registerChatStoreStateReader } from './chatStoreRef';
@@ -65,7 +66,11 @@ export type {
 } from './types';
 
 function isCloudMode(): boolean {
-  return selectPrivacyMode(useAppModeStore.getState()) !== 'local';
+  return useAppModeStore.getState().mode === 'cloud';
+}
+
+function defaultConversationExecutionMode(): ChatExecutionMode {
+  return isCloudMode() ? 'cloud_managed' : 'local_only';
 }
 
 interface BackendConversation {
@@ -74,6 +79,7 @@ interface BackendConversation {
   title: string;
   created_at: string;
   updated_at: string;
+  execution_mode?: ChatExecutionMode;
 }
 
 function convertBackendConversation(conv: BackendConversation): ConversationSummary {
@@ -84,6 +90,7 @@ function convertBackendConversation(conv: BackendConversation): ConversationSumm
     pinned: false,
     lastMessage: '',
     updatedAt: new Date(conv.updated_at),
+    executionMode: conv.execution_mode ?? defaultConversationExecutionMode(),
   };
 }
 
@@ -385,6 +392,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                   pinned: false,
                   lastMessage: '',
                   updatedAt: new Date(),
+                  executionMode: defaultConversationExecutionMode(),
                 };
                 state.conversations.unshift(created);
                 state.activeConversationId = id;
@@ -405,6 +413,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                   pinned: false,
                   lastMessage: '',
                   updatedAt: new Date(),
+                  executionMode: defaultConversationExecutionMode(),
                   ...(options?.incognito ? { incognito: true } : {}),
                 };
                 state.conversations.unshift(convo);
@@ -521,6 +530,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                   customInstructions: sourceConversation?.customInstructions,
                   projectId: sourceConversation?.projectId,
                   modelOverride: options?.model ?? sourceConversation?.modelOverride,
+                  executionMode: 'byok',
                 };
 
                 state.conversations.unshift(forkConversation);
@@ -578,6 +588,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                   updatedAt: new Date(c.updated_at),
                   createdAt: new Date(c.created_at),
                   messageCount: c.message_count ?? 0,
+                  executionMode: 'cloud_managed',
                 }));
                 set(
                   (state) => {
@@ -945,6 +956,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                     pinned: false,
                     lastMessage: '',
                     updatedAt: new Date(),
+                    executionMode: defaultConversationExecutionMode(),
                   };
                   state.conversations.unshift(convo);
                   state.activeConversationId = id;
@@ -998,6 +1010,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                     pinned: false,
                     lastMessage: '',
                     updatedAt: new Date(),
+                    executionMode: defaultConversationExecutionMode(),
                   };
                   state.conversations.unshift(convo);
                   state.activeConversationId = id;
@@ -1525,6 +1538,7 @@ export const useChatMessageStore = create<ChatMessageState>()(
                   pinned: false,
                   lastMessage: '',
                   updatedAt: new Date(),
+                  executionMode: defaultConversationExecutionMode(),
                 };
                 state.conversations.unshift(convo);
                 state.activeConversationId = newId;

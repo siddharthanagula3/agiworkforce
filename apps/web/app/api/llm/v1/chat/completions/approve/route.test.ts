@@ -34,6 +34,30 @@ vi.mock('@/lib/user-connector-tools', () => ({
   makeUserConnectorExecutor: vi.fn(),
 }));
 
+const managedUsageMocks = vi.hoisted(() => ({
+  providerStarted: vi.fn(async () => undefined),
+  finalizeObserved: vi.fn(async () => ({
+    requestStatus: 'completed',
+    operationResult: 'finalized',
+    settlementStatus: 'succeeded',
+    actualCostCents: 3,
+  })),
+  delivered: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
+  markManagedUsageClientDelivered: managedUsageMocks.delivered,
+}));
+
+vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/lib/services/managed-usage-accounting-service')
+  >()),
+  finalizeObservedManagedUsage: managedUsageMocks.finalizeObserved,
+}));
+
 import { POST } from './route';
 
 function makeRequest(body: unknown): NextRequest {
@@ -64,6 +88,9 @@ describe('POST /api/llm/v1/chat/completions/approve — security boundary', () =
     mockRunAuthGate.mockReset();
     mockProcessRequest.mockReset();
     mockRunToolLoop.mockReset();
+    managedUsageMocks.providerStarted.mockClear();
+    managedUsageMocks.finalizeObserved.mockClear();
+    managedUsageMocks.delivered.mockClear();
     mockRunAuthGate.mockResolvedValue({
       ok: true,
       userId: 'user-1',
@@ -161,5 +188,59 @@ describe('POST /api/llm/v1/chat/completions/approve — security boundary', () =
 
     expect(mockProcessRequest).toHaveBeenCalledTimes(1);
     expect(res.status).toBe(402);
+  });
+
+  it('settles observed resume usage before exposing the terminal event', async () => {
+    const managedUsage = {
+      db: {},
+      userId: 'user-1',
+      idempotencyKey: 'agi.chat.web.tool-resume.resume-1',
+      requestHash: 'hash-1',
+      leaseToken: 'lease-1',
+      estimatedCostCents: 5,
+    };
+    mockProcessRequest.mockResolvedValue({
+      ok: true,
+      requestId: 'request-1',
+      provider: 'anthropic',
+      requestedModel: 'claude-test',
+      chatRequest: { model: 'claude-test' },
+      llmRequest: {},
+      quotaWarningHeader: null,
+      managedUsage,
+    });
+    mockRunToolLoop.mockImplementation((_processed, options) => {
+      Object.assign(options.usage, {
+        providerCalls: 1,
+        inputTokens: 120,
+        outputTokens: 30,
+      });
+      return (async function* () {
+        yield new TextEncoder().encode('data: [DONE]\n\n');
+      })();
+    });
+
+    const res = await POST(
+      makeRequest({
+        model: 'claude-test',
+        messages: suspendedThread,
+        tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
+      }),
+    );
+    const body = await res.text();
+
+    expect(body.match(/data: \[DONE\]/g)).toHaveLength(1);
+    expect(managedUsageMocks.finalizeObserved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reservation: managedUsage,
+        reason: 'tool_resume_completed',
+        usage: expect.objectContaining({
+          providerCalls: 1,
+          inputTokens: 120,
+          outputTokens: 30,
+        }),
+      }),
+    );
+    expect(managedUsageMocks.delivered).toHaveBeenCalledWith(managedUsage);
   });
 });

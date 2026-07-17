@@ -14,18 +14,24 @@ import {
   Input,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useProjectStore } from '@features/projects/stores/project-store';
 import type { Project } from '@features/projects/stores/project-store';
+import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * When provided, the created project is handed to the caller INSTEAD of
+   * navigating to /projects/[id] — used by the composer "Project or folder"
+   * picker, where the user is mid-composition and must stay on /chat.
+   */
+  onCreated?: (project: Project) => void;
 }
 
 type SubmitState = 'idle' | 'submitting' | 'error';
 
-export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
+export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreateProjectDialogProps) {
   const router = useRouter();
   const addProject = useProjectStore((s) => s.addProject);
 
@@ -57,34 +63,24 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
     setErrorMsg(null);
 
     try {
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        credentials: 'same-origin',
-        body: JSON.stringify({ name: trimmedName }),
-      });
-
-      if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-        throw new Error(
-          errData.error?.message ?? `Failed to create project (${String(res.status)})`,
-        );
-      }
-
-      const json = (await res.json()) as { project: Project };
-      const project = json.project;
+      const project: Project = await webManagedCloudProjects.createProject({ name: trimmedName });
 
       // Merge into the store so the sidebar picks it up immediately
       addProject(project);
 
-      // Close modal and navigate to the new project
+      // Close modal, then either hand the project to the caller (composer
+      // picker flow) or navigate to the new project page (sidebar flow).
       onOpenChange(false);
-      router.push(`/projects/${project.id}`);
+      if (onCreated) {
+        onCreated(project);
+      } else {
+        router.push(`/projects/${project.id}`);
+      }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
       setSubmitState('error');
     }
-  }, [addProject, canSubmit, onOpenChange, router, trimmedName]);
+  }, [addProject, canSubmit, onCreated, onOpenChange, router, trimmedName]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {

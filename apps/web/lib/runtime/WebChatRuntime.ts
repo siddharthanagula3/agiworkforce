@@ -79,6 +79,9 @@ export class WebChatRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
 
+  /** This managed-cloud runtime forwards the API's `research` request field. */
+  readonly supportsResearch = true;
+
   private emit(event: StreamEvent): void {
     for (const cb of this._streamCallbacks) cb(event);
   }
@@ -141,6 +144,7 @@ export class WebChatRuntime implements ChatRuntime {
         stream: true,
         thinking_mode: options?.thinkingEnabled ?? undefined,
         web_search: options?.webSearch ?? undefined,
+        research: options?.research ?? undefined,
         code_execution: options?.codeExecution ?? undefined,
         agent_mode: options?.agentMode ?? undefined,
         use_prompt_cache: true,

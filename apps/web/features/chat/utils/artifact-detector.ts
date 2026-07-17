@@ -2,7 +2,7 @@
  * Web artifact adapter.
  *
  * Delegates ALL derivation to the canonical shared service
- * (`@agiworkforce/services` `artifact-derivation`) and maps the
+ * (`@agiworkforce/artifacts`) and maps the
  * platform-agnostic `SharedArtifact` to the web `ArtifactData` view type.
  *
  * Do NOT reimplement derivation here — the shared service is the single source
@@ -19,7 +19,7 @@ import {
   isRenderableArtifact,
   extractCodeBlocks,
   type DeriveArtifactsOptions,
-} from '@agiworkforce/services';
+} from '@agiworkforce/artifacts';
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 

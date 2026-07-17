@@ -22,6 +22,39 @@ export function isSentryConfigured(): boolean {
   return process.env.NODE_ENV === 'production' && !!getSentryDsn();
 }
 
+/**
+ * Client-side gate for the browser Sentry init, mirroring Settings → Privacy
+ * → "Share crash and usage telemetry" (default OFF). The preference itself
+ * lives server-side only (`/api/settings/preferences`), but
+ * `instrumentation-client.ts` must decide whether to call `Sentry.init()`
+ * synchronously at module load — before any fetch to that route could
+ * resolve. `PrivacySection.tsx` mirrors the server value into this
+ * localStorage key whenever it loads or the toggle changes; a device that
+ * hasn't synced yet (no key set) fails CLOSED (no telemetry), matching the
+ * toggle's own default, so an explicit opt-out is never overridden and a
+ * never-visited device never opts a user in by accident.
+ */
+export const TELEMETRY_CONSENT_STORAGE_KEY = 'agi.privacy.shareTelemetry';
+
+export function hasTelemetryConsent(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setTelemetryConsentCache(value: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, value ? 'true' : 'false');
+  } catch {
+    // Private-browsing / storage-disabled — the toggle still saves server-side via
+    // savePreferenceNamespace; only the synchronous local gate is unavailable.
+  }
+}
+
 // Keys whose VALUES must never leave the process. Matched case-insensitively as a
 // substring of the key name, so `api_key`, `apiKey`, `x-api-key`, `userPrompt`,
 // `messages`, `conversationId`'s sibling content fields, etc. are all caught.

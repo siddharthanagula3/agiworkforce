@@ -3,25 +3,40 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  activateConversation,
+  createBrowserConversationId,
+  getActiveConversation,
   saveConversation,
+  saveActiveConversation,
+  upsertConversation,
+  startNewConversation,
   listConversations,
   getConversation,
   deleteConversation,
   type HistoryMessage,
-} from '../src/conversation-history';
+} from '../src/features/background/conversation-history';
 
 // ─── Chrome storage mock ─────────────────────────────────────────────────────
 
 const _store: Record<string, unknown> = {};
 
+function selectedValues(key: string | string[]): Record<string, unknown> {
+  const keys = Array.isArray(key) ? key : [key];
+  return Object.fromEntries(keys.map((entry) => [entry, _store[entry]]));
+}
+
 const chromeMock = {
   storage: {
     local: {
-      get: vi.fn((key: string, cb: (res: Record<string, unknown>) => void) => {
-        cb({ [key]: _store[key] });
+      get: vi.fn((key: string | string[], cb: (res: Record<string, unknown>) => void) => {
+        cb(selectedValues(key));
       }),
       set: vi.fn((items: Record<string, unknown>, cb?: () => void) => {
         for (const [k, v] of Object.entries(items)) _store[k] = v;
+        cb?.();
+      }),
+      remove: vi.fn((keys: string | string[], cb?: () => void) => {
+        for (const key of Array.isArray(keys) ? keys : [keys]) delete _store[key];
         cb?.();
       }),
     },
@@ -44,22 +59,31 @@ function msgs(count: number): HistoryMessage[] {
 }
 
 const HISTORY_KEY = 'agi_conversation_history';
+const ACTIVE_MESSAGES_KEY = 'agi_side_panel_messages';
+const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
+const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('conversation-history', () => {
   beforeEach(() => {
-    delete _store[HISTORY_KEY];
+    for (const key of Object.keys(_store)) delete _store[key];
     chromeMock.runtime.lastError = undefined;
     vi.clearAllMocks();
     chromeMock.storage.local.get.mockImplementation(
-      (key: string, cb: (res: Record<string, unknown>) => void) => {
-        cb({ [key]: _store[key] });
+      (key: string | string[], cb: (res: Record<string, unknown>) => void) => {
+        cb(selectedValues(key));
       },
     );
     chromeMock.storage.local.set.mockImplementation(
       (items: Record<string, unknown>, cb?: () => void) => {
         for (const [k, v] of Object.entries(items)) _store[k] = v;
+        cb?.();
+      },
+    );
+    chromeMock.storage.local.remove.mockImplementation(
+      (keys: string | string[], cb?: () => void) => {
+        for (const key of Array.isArray(keys) ? keys : [keys]) delete _store[key];
         cb?.();
       },
     );
@@ -125,7 +149,7 @@ describe('conversation-history', () => {
 
   it('pruneExpired removes entries older than 30 days', async () => {
     const THIRTY_ONE_DAYS = 31 * 24 * 60 * 60 * 1000;
-    const old: import('../src/conversation-history').ConversationEntry = {
+    const old: import('../src/features/background/conversation-history').ConversationEntry = {
       id: 'old-conv',
       title: 'Old',
       messages: msgs(2),
@@ -137,15 +161,13 @@ describe('conversation-history', () => {
   });
 
   it('caps at MAX_CONVERSATIONS (100) dropping the last entry', async () => {
-    const entries: import('../src/conversation-history').ConversationEntry[] = Array.from(
-      { length: 100 },
-      (_, i) => ({
+    const entries: import('../src/features/background/conversation-history').ConversationEntry[] =
+      Array.from({ length: 100 }, (_, i) => ({
         id: `conv-old-${i}`,
         title: `Old ${i}`,
         messages: msgs(2),
         savedAt: Date.now() - (100 - i) * 1000,
-      }),
-    );
+      }));
     _store[HISTORY_KEY] = entries;
     const newId = await saveConversation(msgs(2));
     const list = await listConversations();
@@ -168,5 +190,225 @@ describe('conversation-history', () => {
     expect(list[0].id).toBe(id2);
     const entry = await getConversation(id2);
     expect(entry?.messages).toHaveLength(4);
+  });
+
+  it('persists one active browser conversation instead of duplicating each turn', async () => {
+    const first = await saveActiveConversation(msgs(2));
+    const second = await saveActiveConversation(msgs(4));
+
+    expect(first?.id).toBe(second?.id);
+    expect(await listConversations()).toHaveLength(1);
+    expect((await getActiveConversation())?.messages).toHaveLength(4);
+  });
+
+  it('writes to the explicit conversation owner even when another panel changes the active chat', async () => {
+    const panelAConversationId = createBrowserConversationId();
+    const panelBConversationId = createBrowserConversationId();
+
+    await upsertConversation(panelAConversationId, msgs(2));
+    await upsertConversation(panelBConversationId, msgs(4));
+    await activateConversation(panelAConversationId);
+
+    await upsertConversation(panelBConversationId, msgs(6));
+
+    expect((await getConversation(panelAConversationId))?.messages).toHaveLength(2);
+    expect((await getConversation(panelBConversationId))?.messages).toHaveLength(6);
+  });
+
+  it('rejects malformed explicit conversation owners instead of creating ambiguous records', async () => {
+    await expect(upsertConversation('bad\u0000owner', msgs(2))).rejects.toThrow(
+      'Invalid browser conversation id',
+    );
+    expect(await listConversations()).toHaveLength(0);
+  });
+
+  it('starts a separate browser conversation without syncing or deleting the prior one', async () => {
+    const first = await saveActiveConversation(msgs(2));
+    await startNewConversation();
+    expect(await getActiveConversation()).toBeUndefined();
+
+    const second = await saveActiveConversation(msgs(4));
+    expect(second?.id).not.toBe(first?.id);
+    expect(await listConversations()).toHaveLength(2);
+  });
+
+  it('restores a saved browser conversation as the active conversation', async () => {
+    const first = await saveActiveConversation(msgs(2), {
+      selectedModel: 'auto',
+      currentModelKey: 'anthropic/claude-current',
+      previousTaskType: 'coding',
+    });
+    await startNewConversation();
+    await saveActiveConversation(msgs(4), {
+      selectedModel: 'openai/gpt-current',
+      currentModelKey: 'openai/gpt-current',
+      previousTaskType: 'reasoning',
+    });
+
+    const restored = await activateConversation(first!.id);
+    expect(restored?.id).toBe(first?.id);
+    expect(restored?.routing).toEqual({
+      selectedModel: 'auto',
+      currentModelKey: 'anthropic/claude-current',
+      previousTaskType: 'coding',
+    });
+    expect((await getActiveConversation())?.id).toBe(first?.id);
+  });
+
+  it('migrates a version-one browser store without losing conversations', async () => {
+    _store[LEGACY_BROWSER_STORE_KEY] = {
+      version: 1,
+      activeConversationId: 'legacy-v1',
+      conversations: [
+        {
+          id: 'legacy-v1',
+          title: 'Version one',
+          messages: msgs(2),
+          savedAt: Date.now(),
+        },
+      ],
+    };
+
+    const active = await getActiveConversation();
+
+    expect(active?.id).toBe('legacy-v1');
+    expect(active?.routing).toEqual({ selectedModel: 'auto' });
+    expect(_store[BROWSER_STORE_KEY]).toMatchObject({ version: 2 });
+    expect(_store[LEGACY_BROWSER_STORE_KEY]).toBeUndefined();
+  });
+
+  it('drops malformed route continuity without discarding valid messages', async () => {
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: 'corrupt-route',
+      conversations: [
+        {
+          id: 'corrupt-route',
+          title: 'Keep my messages',
+          messages: msgs(2),
+          savedAt: Date.now(),
+          routing: {
+            selectedModel: 42,
+            currentModelKey: { injected: true },
+            previousTaskType: 'not-a-routing-task',
+          },
+        },
+      ],
+    };
+
+    const active = await getActiveConversation();
+
+    expect(active?.messages).toHaveLength(2);
+    expect(active?.routing).toEqual({ selectedModel: 'auto' });
+  });
+
+  it('keeps route continuity isolated across new, restored, and deleted conversations', async () => {
+    const first = await saveActiveConversation(msgs(2), {
+      selectedModel: 'auto',
+      currentModelKey: 'anthropic/claude-current',
+      previousTaskType: 'coding',
+    });
+    await startNewConversation();
+    expect(await getActiveConversation()).toBeUndefined();
+
+    const second = await saveActiveConversation(msgs(4), {
+      selectedModel: 'openai/gpt-current',
+      currentModelKey: 'openai/gpt-current',
+      previousTaskType: 'general',
+    });
+    expect(second?.routing.currentModelKey).toBe('openai/gpt-current');
+
+    expect((await activateConversation(first!.id))?.routing.currentModelKey).toBe(
+      'anthropic/claude-current',
+    );
+    await deleteConversation(first!.id);
+    expect(await getActiveConversation()).toBeUndefined();
+
+    expect((await activateConversation(second!.id))?.routing.currentModelKey).toBe(
+      'openai/gpt-current',
+    );
+  });
+
+  it('migrates the legacy live thread and archive into the single browser-owned store', async () => {
+    _store[HISTORY_KEY] = [
+      {
+        id: 'legacy-archive',
+        title: 'Archived browser chat',
+        messages: msgs(2),
+        savedAt: Date.now() - 1_000,
+      },
+    ];
+    _store[ACTIVE_MESSAGES_KEY] = msgs(4);
+
+    const active = await getActiveConversation();
+    const all = await listConversations();
+
+    expect(active?.messages).toHaveLength(4);
+    expect(all.map((entry) => entry.id)).toContain('legacy-archive');
+    expect(_store[BROWSER_STORE_KEY]).toBeDefined();
+    expect(_store[HISTORY_KEY]).toBeUndefined();
+    expect(_store[ACTIVE_MESSAGES_KEY]).toBeUndefined();
+  });
+
+  it('serializes overlapping active saves so the newest turn cannot be lost', async () => {
+    const writes: Array<() => void> = [];
+    chromeMock.storage.local.set.mockImplementation(
+      (items: Record<string, unknown>, cb?: () => void) => {
+        writes.push(() => {
+          for (const [key, value] of Object.entries(items)) _store[key] = value;
+          cb?.();
+        });
+      },
+    );
+
+    const firstSave = saveActiveConversation(msgs(2));
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    writes.shift()!();
+    await firstSave;
+
+    const secondSave = saveActiveConversation(msgs(3));
+    const finalSave = saveActiveConversation(msgs(4));
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    writes.shift()!();
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    writes.shift()!();
+    await Promise.all([secondSave, finalSave]);
+
+    const active = await getActiveConversation();
+    expect(active?.messages).toHaveLength(4);
+    expect(active?.messages.map((message) => message.content)).toEqual([
+      'message 0',
+      'message 1',
+      'message 2',
+      'message 3',
+    ]);
+    expect(await listConversations()).toHaveLength(1);
+  });
+
+  it('uses a cross-document Web Lock before browser-store read-modify-write', async () => {
+    const original = Object.getOwnPropertyDescriptor(navigator, 'locks');
+    const request = vi.fn(async (_name: string, callback: () => Promise<unknown>) => callback());
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request },
+    });
+
+    try {
+      await saveActiveConversation(msgs(2));
+      expect(request).toHaveBeenCalledWith(
+        'agi-browser-conversation-store-v2',
+        expect.any(Function),
+      );
+    } finally {
+      if (original) Object.defineProperty(navigator, 'locks', original);
+      else delete (navigator as Navigator & { locks?: LockManager }).locks;
+    }
+  });
+
+  it('fails closed on a storage read error instead of overwriting durable history', async () => {
+    chromeMock.runtime.lastError = { message: 'storage unavailable' };
+
+    await expect(saveActiveConversation(msgs(2))).rejects.toThrow('storage unavailable');
+    expect(chromeMock.storage.local.set).not.toHaveBeenCalled();
   });
 });

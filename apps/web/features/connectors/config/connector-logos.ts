@@ -556,7 +556,12 @@ export const CONNECTOR_TOOLS: Record<string, string[]> = {
   onedrive: ['List files', 'Read file', 'Upload file', 'Create folder', 'Delete file'],
 
   // Developer
-  github: ['Read repos', 'Create PR', 'Read issues', 'Create issue', 'Push code'],
+  // Mirrors GITHUB_TOOL_DEFS in lib/user-connector-tools.ts — the WIRE names of
+  // the tools that actually execute in chat (claude.ai parity: tool chips show
+  // raw tool names). These double as tool-permissions-store keys, which are
+  // wire-name-keyed — do not prettify, and do not advertise capabilities that
+  // don't exist.
+  github: ['get_pull_request_diff', 'post_issue_comment', 'post_pull_request_review'],
   linear: ['List issues', 'Create issue', 'Update issue', 'Manage cycles', 'List projects'],
   jira: ['List issues', 'Create issue', 'Update issue', 'Manage sprints', 'List projects'],
 

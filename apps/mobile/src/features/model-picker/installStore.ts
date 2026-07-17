@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import {
   getCapabilities,
   getModelById as getCatalogModelById,
+  getSystemModelForTier1Runtime,
   hasRunnableGgufArtifacts,
   tier2LoadModel,
 } from '@agiworkforce/local-llm';
@@ -146,12 +147,8 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
       listInstalledModels().catch(() => []),
       getCapabilities().catch(() => null),
     ]);
-    const readySystemModelIds =
-      caps?.tier1Runtime === 'foundation_models'
-        ? ['apple-foundation-models']
-        : caps?.tier1Runtime === 'aicore'
-          ? ['gemini-nano-aicore']
-          : [];
+    const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
+    const readySystemModelIds = systemModel ? [systemModel.id] : [];
     set({ installedModelIds: installed.map((model) => model.id), readySystemModelIds });
   },
 

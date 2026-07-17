@@ -1,19 +1,18 @@
-// SYNC-RULE COMPLIANCE — Chrome surface (developer-session only)
+// SYNC-RULE COMPLIANCE — Chrome surface (browser-session only)
 //
 // Locked rule: "CLI, VS Code, and Chrome must not sync consumer chat history.
-// They may keep separate developer-session history, event streams, exports,
+// They may keep separate browser-session history, event streams, exports,
 // and explicit user-approved handoffs."
 //
 // This surface is compliant:
-//   • Chat history (`agi_conversation_history`) is written exclusively to
+//   • Browser conversations (`agi_browser_conversations_v1`) are written exclusively to
 //     `chrome.storage.local` — device-scoped, never synced to Google's servers
 //     or to any consumer-identity endpoint.
 //   • No `ConversationSyncService` from `@agiworkforce/types` is imported or
 //     constructed here.
 //   • No POSTs to `/api/chat/conversations` or any web-surface consumer endpoint.
-//   • Bridge calls (localhost:8787) route chat operations to the desktop app,
-//     which is the designated persistence owner. That delegation is explicitly
-//     permitted by the locked rule — the Chrome surface itself does not persist.
+//   • Bridge calls execute a turn but do not transfer ownership or persistence;
+//     Chrome remains the sole owner of its browser-scoped conversation records.
 
 import type {
   ExtensionMessage,
@@ -31,11 +30,13 @@ import {
 } from './features/background/shortcuts';
 import {
   loadScheduledTasks,
-  saveScheduledTasks,
   handleCreateScheduledTask,
   handleListScheduledTasks,
   handleUpdateScheduledTask,
   handleDeleteScheduledTask,
+  dispatchScheduledPrompt,
+  assertScheduledExecutionSucceeded,
+  recordScheduledTaskRun,
   restoreScheduledTaskAlarms,
   TASK_ALARM_PREFIX,
 } from './features/background/tasks';
@@ -58,19 +59,24 @@ import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
-  DEFAULT_AGI_BRIDGE_URL,
   ORIGIN_EXTENSION_PAGE,
-  MAX_CONTEXT_HTML_CHARS,
   validateBridgeUrl,
-  validateShortcutActions,
 } from './background/policy';
 import {
-  getAuthToken,
-  getRemainingFreePrompts,
-  streamFreeChat,
-  FREE_TRIAL_PROMPT_LIMIT,
-  FREE_TRIAL_MODEL,
-} from './features/cloud-bridge/freeTrialClient';
+  CONTEXT_HANDOFF_DESTINATION,
+  CONTEXT_HANDOFF_STORAGE_KEY,
+  createSelectionContextHandoff,
+  isPendingContextHandoff,
+  toApprovedNativeSelectionMessage,
+} from './features/context-handoff';
+import {
+  createChromeManagedStreamKey,
+  createChromeManagedChatDependencies,
+  executeChromeManagedChat,
+  type ChromeManagedChatResult,
+} from './features/cloud-bridge/managedChatHandler';
+import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
+import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -80,16 +86,6 @@ interface BackgroundState {
   rateLimiter: RateLimiter;
   messageQueue: ExtensionMessage[];
   isProcessingQueue: boolean;
-}
-
-interface PageContextSnapshot {
-  success?: boolean;
-  url?: string;
-  title?: string;
-  html?: string;
-  selectedText?: string;
-  timestamp?: number;
-  error?: string;
 }
 
 interface NativeMessageEnvelope {
@@ -106,22 +102,6 @@ interface NativeResponseEnvelope {
   error?: string;
 }
 
-interface NativePageContextPlan {
-  success?: boolean;
-  task_id?: string;
-  actions?: RunPageAction[];
-  error?: string;
-}
-
-interface RunActionsExecutionPayload {
-  success?: boolean;
-  screenshot?: string;
-  result?: unknown;
-  error?: string;
-  actionsPerformed?: number;
-  duration?: number;
-}
-
 const state: BackgroundState = {
   isNativeConnected: false,
   nativePort: null,
@@ -133,6 +113,7 @@ const state: BackgroundState = {
 };
 
 interface ActiveChatStream {
+  clientInstanceId: string;
   controller: AbortController;
   cancelRequested: boolean;
   cancelNotified: boolean;
@@ -147,9 +128,11 @@ const pendingRequests = new Map<
     resolve: (value: ExtensionResponse) => void;
     reject: (reason: unknown) => void;
     timeout: ReturnType<typeof setTimeout>;
+    /** Only the first connect response may arrive before a secret exists. */
+    allowUnsignedResponse: boolean;
   }
 >();
-const lastPageContextSyncByTab = new Map<number, { fingerprint: string; at: number }>();
+const pendingContextHandoffApprovals = new Set<string>();
 
 // WebMCP: per-tab tool catalog
 const webmcpToolsByTab = new Map<
@@ -172,8 +155,6 @@ const nlwebByTab = new Map<
 const NATIVE_HOST_NAME = 'com.agiworkforce.browser';
 const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
-// MAX_CONTEXT_HTML_CHARS now imported from policy.ts (L-14 audit 2026-05-19) so
-// content.ts and background.ts share a single byte-budget constant.
 const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
 const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
 const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
@@ -189,6 +170,8 @@ export interface SharedBackgroundContext {
   nativeHandshakeInFlight: boolean;
   /** True when max reconnect attempts exhausted. Prevents macOS permission popup loops. */
   nativeReconnectGaveUp: boolean;
+  /** True once Chrome begins suspending this service worker. */
+  nativeSuspendInProgress: boolean;
 }
 
 function createSharedBackgroundContext(): SharedBackgroundContext {
@@ -197,6 +180,7 @@ function createSharedBackgroundContext(): SharedBackgroundContext {
     nativeReconnectAttempt: 0,
     nativeHandshakeInFlight: false,
     nativeReconnectGaveUp: false,
+    nativeSuspendInProgress: false,
   };
 }
 
@@ -215,12 +199,11 @@ const _bgCtx: SharedBackgroundContext = createSharedBackgroundContext();
  * Mitigation: at connect time, ask the native host for a 32-byte session
  * secret in its connect ack. Every outgoing request gets a per-request
  * `mac = HMAC-SHA256(secret, id || timestamp || body)` and every incoming
- * response is verified the same way against the request's id. If the host
- * doesn't return a session_secret (older builds), we log a one-time
- * warning and continue without MACing — fully backwards-compatible.
+ * response is verified the same way against the request's id. A host that
+ * does not negotiate this secret is incompatible and is rejected before any
+ * privileged request can be sent.
  */
 let nativeSessionSecret: ArrayBuffer | null = null;
-let nativeSessionSecretWarned = false;
 
 async function importHmacKey(rawSecret: ArrayBuffer): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', rawSecret, { name: 'HMAC', hash: 'SHA-256' }, false, [
@@ -233,10 +216,11 @@ async function computeEnvelopeMac(
   id: string,
   timestamp: number,
   body: unknown,
+  sessionSecret: ArrayBuffer | null = nativeSessionSecret,
 ): Promise<string | null> {
-  if (!nativeSessionSecret) return null;
+  if (!sessionSecret) return null;
   const payload = `${id}|${timestamp}|${JSON.stringify(body)}`;
-  const key = await importHmacKey(nativeSessionSecret);
+  const key = await importHmacKey(sessionSecret);
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
   return Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -253,15 +237,10 @@ function setNativeSessionSecret(hex: string | undefined): void {
   const isWellFormed =
     typeof hex === 'string' && hex.length === 64 && /^[0-9a-fA-F]{64}$/.test(hex);
   if (!isWellFormed) {
-    if (!nativeSessionSecretWarned) {
-      nativeSessionSecretWarned = true;
-      logger.warn(
-        '[native-mac] Native host did not return a well-formed session_secret in connect ack; ' +
-          'continuing without HMAC envelope verification (back-compat). Update the desktop ' +
-          'app to mint a 32-byte (64 hex char) per-session secret to enable ' +
-          'response-shuffle protection.',
-      );
-    }
+    logger.warn(
+      '[native-mac] Native host did not return a well-formed session_secret; ' +
+        'the connection will be rejected before privileged requests are sent.',
+    );
     nativeSessionSecret = null;
     return;
   }
@@ -377,6 +356,14 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
 
 function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
+  chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
+  void purgeLegacyProviderCredentials(chrome.storage).then((failures) => {
+    if (failures.length > 0) {
+      logger.warn('Failed to purge the obsolete provider credential from Chrome storage', {
+        storageAreas: failures,
+      });
+    }
+  });
   // Claude-style front door: clicking the toolbar icon opens the side-panel chat
   // (no popup). Persistent + idempotent, so calling it on every SW start is safe.
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
@@ -391,6 +378,33 @@ function initialize(): void {
   // Idempotent and silent on storage error. See H-04 in audits/2026-05-19.
   void migrateAutofillProfile().catch((err) => {
     logger.debug('Autofill profile migration failed (non-fatal)', err);
+  });
+}
+
+function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
+  const clientInstanceId = parseManagedChatPortName(port.name);
+  if (!clientInstanceId) return;
+  if (port.sender?.id !== chrome.runtime.id || port.sender.tab) {
+    port.disconnect();
+    return;
+  }
+
+  port.onMessage.addListener((message: unknown) => {
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      (message as Record<string, unknown>)['type'] !== 'MANAGED_CHAT_KEEPALIVE'
+    ) {
+      port.disconnect();
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    for (const [streamKey, active] of activeChatStreams) {
+      if (active.clientInstanceId !== clientInstanceId) continue;
+      active.cancelRequested = true;
+      active.controller.abort();
+      activeChatStreams.delete(streamKey);
+    }
   });
 }
 
@@ -422,6 +436,9 @@ function connectToNativeHost(): void {
         })) as unknown as NativeResponseEnvelope;
         if (!connectResult?.success) {
           throw new Error(connectResult?.error ?? 'Native connect handshake failed');
+        }
+        if (!nativeSessionSecret) {
+          throw new Error('Native host did not negotiate an authenticated session');
         }
 
         const pingResult = (await sendNativeRequest({
@@ -486,10 +503,18 @@ function createRequestId(): string {
   return `${Date.now()}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 }
 
+interface NativeRequestOptions {
+  timeoutMs?: number;
+  requireAuthenticatedSession?: boolean;
+}
+
 function sendNativeRequest(
   message: Record<string, unknown>,
-  timeoutMs: number = NATIVE_REQUEST_TIMEOUT_MS,
+  timeoutOrOptions: number | NativeRequestOptions = NATIVE_REQUEST_TIMEOUT_MS,
 ): Promise<ExtensionResponse> {
+  const options: NativeRequestOptions =
+    typeof timeoutOrOptions === 'number' ? { timeoutMs: timeoutOrOptions } : timeoutOrOptions;
+  const timeoutMs = options.timeoutMs ?? NATIVE_REQUEST_TIMEOUT_MS;
   // L-04 audit 2026-05-19: accept a per-call timeoutMs. Default stays at
   // NATIVE_REQUEST_TIMEOUT_MS (10s); long calls (chat_message, etc.)
   // now pass 30000 explicitly instead of getting wrapped in `withTimeout`
@@ -509,30 +534,63 @@ function sendNativeRequest(
         }
       }
 
-      const id = createRequestId();
-      const timeout = setTimeout(() => {
-        pendingRequests.delete(id);
-        reject(new Error(`Native request timeout after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      pendingRequests.set(id, { resolve, reject, timeout });
+      const activePort = state.nativePort;
+      const activeSessionSecret = nativeSessionSecret;
+      const isConnectRequest = message['type'] === 'connect';
+      if (!isConnectRequest && !activeSessionSecret) {
+        resolve({
+          success: false,
+          error: options.requireAuthenticatedSession
+            ? 'A secure AGI Desktop connection is required before selected context can leave Chrome.'
+            : 'Native host did not negotiate an authenticated session',
+        });
+        return;
+      }
 
       // FIX (audit 2026-05-20, §2): attach an HMAC envelope when a session
       // secret is available. The native host echoes the same id and signs
       // its response with the same secret; verifyResponseMac() rejects on
       // mismatch.
+      const id = createRequestId();
       const timestamp = Date.now();
       try {
-        const mac = await computeEnvelopeMac(id, timestamp, message);
-        state.nativePort?.postMessage({
+        const mac = await computeEnvelopeMac(id, timestamp, message, activeSessionSecret);
+        if (
+          !activePort ||
+          state.nativePort !== activePort ||
+          (options.requireAuthenticatedSession &&
+            (!state.isNativeConnected || nativeSessionSecret !== activeSessionSecret || !mac))
+        ) {
+          resolve({
+            success: false,
+            error: 'The secure AGI Desktop connection changed before the context was sent.',
+          });
+          return;
+        }
+
+        const timeout = setTimeout(() => {
+          pendingRequests.delete(id);
+          reject(new Error(`Native request timeout after ${timeoutMs}ms`));
+        }, timeoutMs);
+        pendingRequests.set(id, {
+          resolve,
+          reject,
+          timeout,
+          allowUnsignedResponse: isConnectRequest && !activeSessionSecret,
+        });
+
+        activePort.postMessage({
           id,
           timestamp,
           mac,
           message,
         });
       } catch (error) {
-        clearTimeout(timeout);
-        pendingRequests.delete(id);
+        const pending = pendingRequests.get(id);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          pendingRequests.delete(id);
+        }
         reject(error);
       }
     })();
@@ -544,8 +602,8 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
 
   // FIX (audit 2026-05-20, §2): if the native host sends a session_secret
   // (in the connect-handshake response), latch it for subsequent MAC
-  // computation. Best-effort: a missing secret falls back to the legacy
-  // no-MAC behavior with a one-time warn.
+  // computation. A missing or malformed secret makes the handshake fail;
+  // privileged requests are never allowed to downgrade to an unsigned mode.
   const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
   if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
     setNativeSessionSecret(maybeSecret);
@@ -605,7 +663,13 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         return;
       }
 
-      // No session secret negotiated — legacy back-compat path.
+      // The initial connect response is the only response allowed before the
+      // negotiated secret exists. It is used solely to obtain that secret; the
+      // handshake rejects immediately afterward if the response omitted it.
+      if (!request.allowUnsignedResponse) {
+        reject(new Error('Native response arrived without an authenticated session'));
+        return;
+      }
       if (message.success === false) {
         reject(new Error(message.error ?? 'Native request failed'));
       } else {
@@ -619,7 +683,6 @@ function handleNativeDisconnect(): void {
   // FIX (audit 2026-05-20, §2): drop the session secret on disconnect
   // so a reconnect must re-negotiate.
   nativeSessionSecret = null;
-  nativeSessionSecretWarned = false;
   const error = chrome.runtime.lastError?.message || 'Native host disconnected';
   logger.warn('Native host disconnected', { error });
 
@@ -635,6 +698,13 @@ function handleNativeDisconnect(): void {
   state.lastNativeError = error;
 
   void notifyConnectionStatusChange();
+
+  // A service worker that is already shutting down must not schedule another
+  // native connection. The next worker instance performs a fresh authenticated
+  // handshake from its newly initialized background context.
+  if (_bgCtx.nativeSuspendInProgress) {
+    return;
+  }
 
   // Stop retrying immediately for permanent errors (host not installed, or macOS
   // access denied) — these will never resolve without user action and would cause
@@ -753,13 +823,13 @@ async function handleReplayShortcut(
     taskId,
     actions: shortcut.actions,
   } as ExtensionMessage);
-  showNotification('Shortcut Replayed', `"${shortcut.name}" completed`);
+  if (result.success) {
+    showNotification('Shortcut Replayed', `"${shortcut.name}" completed`);
+  }
   return result;
 }
 
-// loadScheduledTasks, saveScheduledTasks, getAlarmPeriod, registerTaskAlarm, unregisterTaskAlarm,
-// handleCreateScheduledTask, handleListScheduledTasks, handleUpdateScheduledTask,
-// handleDeleteScheduledTask, restoreScheduledTaskAlarms extracted to background/tasks.ts
+// Scheduled-task storage and alarm mechanics live in background/tasks.ts.
 
 async function executeScheduledTask(task: ScheduledTask): Promise<void> {
   // SECURITY (C-02 audit 2026-05-19): fire-time allowlist re-check. Tasks
@@ -784,55 +854,38 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
 
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
 
-  if (task.shortcutId) {
-    await handleReplayShortcut({
-      type: 'REPLAY_SHORTCUT',
-      shortcutId: task.shortcutId,
-    } as import('./types').ReplayShortcutMessage);
-  } else if (task.prompt) {
-    // CHROME-NEW-007 fix (2026-05-05): cap stored task prompt length before
-    // dispatching to the LLM. The prompt sits in `chrome.storage.local` which
-    // is per-extension and not directly attacker-writable from outside, but
-    // any code path with this extension's context that can write to local
-    // storage (a future bug, a corrupted import-tasks flow) could plant a
-    // multi-megabyte prompt. We cap at 10 000 chars — far above legitimate
-    // user input but small enough to bound bridge/runtime work.
-    const TASK_PROMPT_MAX_CHARS = 10_000;
-    const safePrompt = String(task.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
-    if (safePrompt.length < task.prompt.length) {
-      logger.warn('Scheduled task prompt truncated', {
-        taskId: task.id,
-        originalLength: task.prompt.length,
-        truncatedTo: TASK_PROMPT_MAX_CHARS,
+  try {
+    let result: unknown;
+    if (task.shortcutId) {
+      result = await handleReplayShortcut({
+        type: 'REPLAY_SHORTCUT',
+        shortcutId: task.shortcutId,
+      } as import('./types').ReplayShortcutMessage);
+    } else if (task.prompt) {
+      result = await dispatchScheduledPrompt(task, async (safePrompt) => {
+        const chatMsg: import('./types').ChatMessageMessage = {
+          type: 'CHAT_MESSAGE',
+          clientInstanceId: 'scheduled-task',
+          id: `task_${task.id}_${crypto.randomUUID()}`,
+          text: safePrompt,
+          timestamp: Date.now(),
+          modelSelection: 'auto',
+        };
+        const scheduledTaskSender: chrome.runtime.MessageSender = {
+          id: chrome.runtime.id,
+        };
+        return handleChatMessage(chatMsg, scheduledTaskSender);
       });
     }
-    // Send as chat message via the same path as side panel.
-    //
-    // Arch #2 audit 2026-05-19: synthesize a sender that looks like an
-    // extension-page sender (`id === chrome.runtime.id`, `!sender.tab`) so
-    // any future origin-aware logic in `handleChatMessage` treats this as
-    // trusted UI rather than a faked content script. The prior `{} as
-    // MessageSender` was a type-cast lie that would have bypassed any
-    // future sender check on this path.
-    const chatMsg: import('./types').ChatMessageMessage = {
-      type: 'CHAT_MESSAGE',
-      id: `task_${task.id}_${Date.now()}`,
-      text: safePrompt,
-      timestamp: Date.now(),
-    };
-    const scheduledTaskSender: chrome.runtime.MessageSender = {
-      id: chrome.runtime.id,
-      // No `tab` — emulates an extension page (popup / side panel) call.
-    };
-    void handleChatMessage(chatMsg, scheduledTaskSender);
+
+    assertScheduledExecutionSucceeded(result);
+    await recordScheduledTaskRun(task.id);
+    showNotification('Task Completed', `Scheduled task "${task.name}" finished`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
+    showNotification('Task Failed', `Scheduled task "${task.name}" failed: ${detail}`);
+    throw error;
   }
-
-  // Update lastRun
-  const tasks = await loadScheduledTasks();
-  const updated = tasks.map((t) => (t.id === task.id ? { ...t, lastRun: Date.now() } : t));
-  await saveScheduledTasks(updated);
-
-  showNotification('Task Completed', `Scheduled task "${task.name}" finished`);
 }
 
 // EXT-1, EXT-2 (audit 2026-05-03): allowlist-based sender validation.
@@ -883,7 +936,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (next === 'ask' || next === 'act') actionModeCache = next;
 });
 
-// W5-06: quick mode cache — when true, model resolution uses the fast-status slot.
+// W5-06: persisted side-panel preference. Outgoing turns carry a snapshot so
+// routing cannot race a later toggle or affect non-side-panel chat surfaces.
 let quickModeCache = false;
 chrome.storage.local
   .get({ agi_quick_mode: false })
@@ -1062,53 +1116,117 @@ async function handleMessageAsync(
       return triggerManualReconnect();
 
     case 'TAB_READY': {
-      if (tabId) {
-        void syncTabContextWithDesktop(tabId, 'tab_ready').catch((error) => {
-          logger.debug('TAB_READY context sync failed', error);
-        });
-      }
       return { success: true, ready: true } as ExtensionResponse;
     }
 
     case 'SYNC_PAGE_CONTEXT': {
-      let resolvedTabId = tabId;
-      if (!resolvedTabId) {
-        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        resolvedTabId = activeTab?.id;
+      return {
+        success: false,
+        error: 'Implicit page-context transfer is disabled. Use the explicit context preview.',
+      } as ExtensionResponse;
+    }
+
+    case 'APPROVE_CONTEXT_HANDOFF': {
+      const approval = message as import('./types').ApproveContextHandoffMessage;
+      if (!/^ctx_[A-Za-z0-9_-]{8,80}$/.test(approval.handoffId)) {
+        return {
+          success: false,
+          error: 'Invalid context handoff identifier.',
+        } as ExtensionResponse;
       }
-      if (!resolvedTabId) {
-        return { success: false, error: 'No tab ID for page context sync' } as ExtensionResponse;
+      if (pendingContextHandoffApprovals.has(approval.handoffId)) {
+        return {
+          success: false,
+          error: 'This context handoff is already being sent.',
+        } as ExtensionResponse;
       }
 
-      // FIX (audit 2026-05-20, §9): the content script is on attacker-
-      // authored pages (Slack/Gmail/Docs/etc.). Page-script can postMessage
-      // arbitrary shapes into our SYNC_PAGE_CONTEXT path. Whitelist the
-      // fields by type at this boundary so a hostile context cannot smuggle
-      // extra keys past the downstream sender.
-      const rawContext =
-        (message as ExtensionMessage & { context?: Record<string, unknown> }).context ?? null;
-      let messageContext: Record<string, unknown> | undefined;
-      if (rawContext && typeof rawContext === 'object') {
-        const whitelisted: Record<string, unknown> = {
-          success: true,
-        };
-        const str = (k: string) => {
-          const v = rawContext[k];
-          if (typeof v === 'string') whitelisted[k] = v;
-        };
-        const num = (k: string) => {
-          const v = rawContext[k];
-          if (typeof v === 'number' && Number.isFinite(v)) whitelisted[k] = v;
-        };
-        str('url');
-        str('title');
-        str('html');
-        str('selectedText');
-        str('error');
-        num('timestamp');
-        messageContext = whitelisted;
+      const stored = await chrome.storage.session.get(CONTEXT_HANDOFF_STORAGE_KEY);
+      const pending = stored[CONTEXT_HANDOFF_STORAGE_KEY];
+      if (!isPendingContextHandoff(pending) || pending.id !== approval.handoffId) {
+        await chrome.storage.session.remove(CONTEXT_HANDOFF_STORAGE_KEY);
+        return {
+          success: false,
+          error: 'This context preview is invalid or expired. Select the context again.',
+          consumed: true,
+        } as ExtensionResponse;
       }
-      return syncTabContextWithDesktop(resolvedTabId, 'content_sync', messageContext);
+
+      let approvedMessage: ReturnType<typeof toApprovedNativeSelectionMessage>;
+      try {
+        approvedMessage = toApprovedNativeSelectionMessage(pending, nativeSessionSecret !== null);
+      } catch (error) {
+        return {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : 'A secure AGI Desktop connection is required before sending context.',
+          consumed: false,
+        } as ExtensionResponse;
+      }
+
+      pendingContextHandoffApprovals.add(pending.id);
+      await chrome.storage.session.remove(CONTEXT_HANDOFF_STORAGE_KEY);
+      try {
+        const nativeResponse = (await sendNativeRequest(
+          { ...approvedMessage },
+          {
+            requireAuthenticatedSession: true,
+          },
+        )) as unknown as NativeResponseEnvelope;
+        if (nativeResponse.success !== true) {
+          const retryable = isPendingContextHandoff(pending);
+          if (retryable) {
+            await chrome.storage.session.set({ [CONTEXT_HANDOFF_STORAGE_KEY]: pending });
+          }
+          return {
+            success: false,
+            error: String(nativeResponse.error ?? 'AGI Desktop did not accept the context.'),
+            consumed: !retryable,
+          } as ExtensionResponse;
+        }
+        return {
+          success: true,
+          consumed: true,
+          destination: CONTEXT_HANDOFF_DESTINATION.label,
+        } as ExtensionResponse;
+      } catch (error) {
+        return {
+          success: false,
+          error: `${error instanceof Error ? error.message : 'Native handoff failed.'} The delivery state is unknown; select the context again before retrying.`,
+          consumed: true,
+        } as ExtensionResponse;
+      } finally {
+        pendingContextHandoffApprovals.delete(pending.id);
+      }
+    }
+
+    case 'CANCEL_CONTEXT_HANDOFF': {
+      const cancellation = message as import('./types').CancelContextHandoffMessage;
+      if (!/^ctx_[A-Za-z0-9_-]{8,80}$/.test(cancellation.handoffId)) {
+        return {
+          success: false,
+          error: 'Invalid context handoff identifier.',
+        } as ExtensionResponse;
+      }
+      if (pendingContextHandoffApprovals.has(cancellation.handoffId)) {
+        return {
+          success: false,
+          error: 'The context handoff is already being sent and cannot be cancelled.',
+        } as ExtensionResponse;
+      }
+      const stored = await chrome.storage.session.get(CONTEXT_HANDOFF_STORAGE_KEY);
+      const pending = stored[CONTEXT_HANDOFF_STORAGE_KEY];
+      if (!isPendingContextHandoff(pending) || pending.id !== cancellation.handoffId) {
+        await chrome.storage.session.remove(CONTEXT_HANDOFF_STORAGE_KEY);
+        return {
+          success: false,
+          error: 'This context preview is no longer pending.',
+        } as ExtensionResponse;
+      }
+      await chrome.storage.session.remove(CONTEXT_HANDOFF_STORAGE_KEY);
+      return { success: true, consumed: true } as ExtensionResponse;
     }
 
     case 'QUEUE_MESSAGE': {
@@ -1139,13 +1257,24 @@ async function handleMessageAsync(
 
     case 'CHAT_MESSAGE': {
       const chatMsg = message as import('./types').ChatMessageMessage;
+      try {
+        createChromeManagedStreamKey(chatMsg.clientInstanceId, chatMsg.id);
+      } catch {
+        return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
+      }
       void handleChatMessage(chatMsg, sender);
       return { success: true } as ExtensionResponse;
     }
 
     case 'CANCEL_STREAM': {
       const cancelMsg = message as import('./types').CancelStreamMessage;
-      const active = activeChatStreams.get(cancelMsg.id);
+      let streamKey: string;
+      try {
+        streamKey = createChromeManagedStreamKey(cancelMsg.clientInstanceId, cancelMsg.id);
+      } catch {
+        return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
+      }
+      const active = activeChatStreams.get(streamKey);
       if (!active) {
         return { success: false, error: 'No active stream for id' } as ExtensionResponse;
       }
@@ -1154,6 +1283,7 @@ async function handleMessageAsync(
         active.cancelNotified = true;
         const chunk: import('./types').ChatChunkMessage = {
           type: 'CHAT_CHUNK',
+          clientInstanceId: cancelMsg.clientInstanceId,
           id: cancelMsg.id,
           text: '',
           done: true,
@@ -2183,183 +2313,6 @@ async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionRespo
   }
 }
 
-async function syncTabContextWithDesktop(
-  tabId: number,
-  reason: string,
-  providedContext?: Record<string, unknown>,
-): Promise<ExtensionResponse> {
-  const context = (providedContext ??
-    (await forwardToContentScript(tabId, {
-      type: 'GET_PAGE_INFO',
-      tabId,
-    } as ExtensionMessage))) as unknown as PageContextSnapshot;
-
-  if (!context || context.success !== true) {
-    return {
-      success: false,
-      error: String(context?.error ?? 'Unable to collect page context'),
-    } as ExtensionResponse;
-  }
-
-  const url = String(context.url ?? '').trim();
-  const title = String(context.title ?? '').trim();
-  if (!url || !title) {
-    return {
-      success: false,
-      error: 'Invalid page context: missing url/title',
-    } as ExtensionResponse;
-  }
-
-  const html = String(context.html ?? '').substring(0, MAX_CONTEXT_HTML_CHARS);
-  const selectedText = String(context.selectedText ?? '').substring(0, 2_000);
-  const timestamp = Number(context.timestamp ?? Date.now());
-  const fingerprint = `${url}::${title}::${selectedText.slice(0, 200)}`;
-  const previousSync = lastPageContextSyncByTab.get(tabId);
-  const now = Date.now();
-  if (previousSync && previousSync.fingerprint === fingerprint && now - previousSync.at < 5_000) {
-    return {
-      success: true,
-      skipped: true,
-      reason: 'page_context_unchanged',
-    } as ExtensionResponse;
-  }
-  lastPageContextSyncByTab.set(tabId, { fingerprint, at: now });
-
-  const pageContextResponse = (await sendNativeRequest({
-    type: 'page_context',
-    url,
-    title,
-    html,
-    selected_text: selectedText,
-    tab_id: tabId,
-    timestamp,
-    reason,
-  })) as unknown as NativeResponseEnvelope;
-
-  if (pageContextResponse.success !== true) {
-    return {
-      success: false,
-      error: String(pageContextResponse.error ?? 'Desktop rejected page context'),
-    } as ExtensionResponse;
-  }
-
-  const plannerData = (pageContextResponse.data ?? {}) as NativePageContextPlan;
-  const taskId = String(plannerData.task_id ?? '');
-  const rawActions = Array.isArray(plannerData.actions) ? plannerData.actions : [];
-  // SECURITY (L-09 audit 2026-05-19): validate the desktop-bridge-supplied
-  // action plan before forwarding to the content script. The bridge is
-  // trusted today, but defense-in-depth: if the bridge is ever compromised
-  // (e.g., a malicious local app binds port 8787), an attacker-crafted
-  // action plan should still be rejected by the same allowlist that gates
-  // user-saved shortcuts.
-  if (rawActions.length > 0 && !validateShortcutActions(rawActions)) {
-    logger.warn('Rejected desktop-bridge plan containing unknown action type', {
-      taskId,
-      actionCount: rawActions.length,
-    });
-    return {
-      success: false,
-      error: 'Desktop plan contains an unsupported action type.',
-    } as ExtensionResponse;
-  }
-  const actions = rawActions;
-
-  if (!taskId || actions.length === 0) {
-    return {
-      success: true,
-      taskId,
-      actionsDispatched: 0,
-    } as ExtensionResponse;
-  }
-
-  // BLOCKER-01/02: gate execution on autonomy mode. When mode='ask', prompt
-  // the user with an inline consent card before executing page actions.
-  if (actionModeCache === 'ask') {
-    // Derive the domain from the first action's URL or fall back to the tab URL.
-    let actionDomain = '';
-    try {
-      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (activeTab?.url) actionDomain = new URL(activeTab.url).hostname;
-    } catch {
-      // ignore — domain is best-effort for display only
-    }
-    if (!siteAllowlistCache.has(`https://${actionDomain}`)) {
-      const requestId = `perm_${actionDomain.replace(/\./g, '_dot_')}_${Date.now()}`;
-      const actionSummary =
-        actions.length === 1
-          ? `run 1 action on ${actionDomain}`
-          : `run ${actions.length} actions on ${actionDomain}`;
-      const permMsg: import('./types').PermissionRequiredMessage = {
-        type: 'PERMISSION_REQUIRED',
-        requestId,
-        domain: actionDomain,
-        actionDescription: actionSummary,
-      };
-      chrome.runtime.sendMessage(permMsg).catch(() => {});
-      // Wait up to 60 s for the user to respond; decline silently on timeout.
-      const decision = await new Promise<'allow' | 'deny' | 'always'>((resolve) => {
-        const timer = setTimeout(() => {
-          pendingPermissionRequests.delete(requestId);
-          resolve('deny');
-        }, 60_000);
-        pendingPermissionRequests.set(requestId, {
-          resolve: (d) => {
-            clearTimeout(timer);
-            resolve(d);
-          },
-        });
-      });
-      if (decision === 'deny') {
-        return {
-          success: false,
-          error: 'User declined permission for this action.',
-        } as ExtensionResponse;
-      }
-      // 'allow' or 'always' — proceed with execution
-    }
-  }
-
-  const executionResponse = (await forwardToContentScript(tabId, {
-    type: 'RUN_PAGE_ACTIONS',
-    tabId,
-    taskId,
-    actions,
-  } as ExtensionMessage)) as unknown as RunActionsExecutionPayload;
-
-  const taskResultPayload = {
-    type: 'task_result',
-    task_id: taskId,
-    success: executionResponse.success === true,
-    screenshot:
-      typeof executionResponse.screenshot === 'string' ? executionResponse.screenshot : undefined,
-    result: executionResponse.result !== undefined ? executionResponse.result : executionResponse,
-    error:
-      executionResponse.success === true
-        ? undefined
-        : String(executionResponse.error ?? 'Extension action execution failed'),
-    actions_performed: Number(executionResponse.actionsPerformed ?? 0),
-    duration: Number(executionResponse.duration ?? 0),
-  };
-
-  const taskResultResponse = (await sendNativeRequest(
-    taskResultPayload,
-  )) as unknown as NativeResponseEnvelope;
-  if (taskResultResponse.success !== true) {
-    return {
-      success: false,
-      error: String(taskResultResponse.error ?? 'Failed to submit task result'),
-      taskId,
-    } as ExtensionResponse;
-  }
-
-  return {
-    success: true,
-    taskId,
-    actionsDispatched: actions.length,
-    actionsPerformed: Number(executionResponse.actionsPerformed ?? 0),
-  } as ExtensionResponse;
-}
-
 async function forwardToContentScript(
   tabId: number,
   message: ExtensionMessage,
@@ -2534,28 +2487,34 @@ function setupContextMenu(): void {
         },
       );
     } else if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
-      // Store selection for side panel to pick up, then open it
-      chrome.storage.session
-        .set({
-          agi_pending_chat: {
-            type: 'ask',
-            text: info.selectionText,
-            url: info.pageUrl ?? '',
-            timestamp: Date.now(),
-          },
-        })
-        .catch((err) => {
-          logger.warn('Failed to store pending chat (ask)', err);
+      try {
+        const pending = createSelectionContextHandoff({
+          selectedText: info.selectionText,
+          pageUrl: info.pageUrl ?? tab.url ?? '',
+          tabId: tab.id,
         });
-      void sendNativeMessage({
-        type: 'selected_text_query',
-        tabId: tab.id,
-        url: info.pageUrl,
-        selectedText: info.selectionText,
-        timestamp: Date.now(),
-      });
-      if (chrome.sidePanel) {
-        chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+        void chrome.storage.session
+          .set({ [CONTEXT_HANDOFF_STORAGE_KEY]: pending })
+          .catch((error: unknown) => {
+            logger.warn('Failed to prepare selected-context handoff', error);
+            showNotification(
+              'Context handoff unavailable',
+              'The selected context was not sent. Open the side panel and try again.',
+            );
+          });
+        void chrome.sidePanel?.open({ tabId: pending.tabId }).catch((error: unknown) => {
+          logger.warn('Failed to open selected-context preview', error);
+          showNotification(
+            'Context preview ready',
+            'Open the AGI side panel to review and approve the selected context.',
+          );
+        });
+      } catch (error) {
+        logger.warn('Rejected selected-context handoff', error);
+        showNotification(
+          'Context handoff unavailable',
+          error instanceof Error ? error.message : 'The selected context was not sent.',
+        );
       }
     } else if (info.menuItemId === 'explain-selection' && info.selectionText && tab.id) {
       chrome.storage.session
@@ -2624,38 +2583,9 @@ function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   state.rateLimiter.reset(tabId);
-  lastPageContextSyncByTab.delete(tabId);
   webmcpToolsByTab.delete(tabId);
   nlwebByTab.delete(tabId);
   logger.debug('Cleaned up rate limit, webmcp tools, and nlweb for tab', { tabId });
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete') {
-    return;
-  }
-  const url = tab.url ?? '';
-  if (!/^https?:\/\//i.test(url)) {
-    return;
-  }
-  // SECURITY (H-06 audit 2026-05-19): the previous listener fired for every
-  // http(s) tab regardless of allowlist, shipping innerText to the desktop
-  // bridge for pages the user never authorized. Gate on the same
-  // `siteAllowlistCache` that controls message dispatch. Non-allowlisted
-  // origins get no implicit page-context sync.
-  let origin: string;
-  try {
-    origin = new URL(url).origin;
-  } catch {
-    return;
-  }
-  if (!siteAllowlistCache.has(origin)) {
-    return;
-  }
-
-  void syncTabContextWithDesktop(tabId, 'tab_updated').catch((error) => {
-    logger.debug('Tab update context sync skipped', error);
-  });
 });
 
 chrome.commands.onCommand.addListener((command) => {
@@ -2702,9 +2632,8 @@ async function captureCurrentPage(): Promise<void> {
   }
 }
 
-// DEFAULT_AGI_BRIDGE_URL and ALLOWED_BRIDGE_HOSTS are now imported from
-// `./background/policy` so side-panel, pairing, and tests share one source
-// of truth. See H-02 in audits/2026-05-19.
+// Bridge allowlisting is owned by `./background/policy` so side-panel,
+// pairing, and tests share one source of truth.
 
 /** Maximum response body size for NLWEB probe requests (256 KB). */
 const MAX_PROBE_RESPONSE_BYTES = 262_144;
@@ -2757,408 +2686,121 @@ function isAllowedProbeUrl(raw: string): boolean {
 // The function deliberately does not log here — it's called from multiple
 // surfaces (background, side panel, pairing); log at the call site instead.
 
-/**
- * Resolve the configured bridge URL from storage, falling back to the default.
- * Returns a base HTTP(S) URL derived from the stored ws:// or http:// value.
- * Rejects non-local URLs to prevent data exfiltration.
- */
-async function getAgiBridgeBaseUrl(): Promise<string> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get('agi_bridge_url', (result) => {
-      if (chrome.runtime.lastError) {
-        logger.warn('Failed to read bridge URL from storage', chrome.runtime.lastError.message);
-        resolve(DEFAULT_AGI_BRIDGE_URL);
-        return;
-      }
-      const raw = (result['agi_bridge_url'] as string | undefined)?.trim();
-      if (!raw) {
-        resolve(DEFAULT_AGI_BRIDGE_URL);
-        return;
-      }
-      const validated = validateBridgeUrl(raw);
-      if (!validated) {
-        logger.error('Stored bridge URL failed validation, using default', { raw });
-        resolve(DEFAULT_AGI_BRIDGE_URL);
-        return;
-      }
-      resolve(validated);
-    });
-  });
-}
-
 async function handleChatMessage(
   message: import('./types').ChatMessageMessage,
   _sender: chrome.runtime.MessageSender,
-): Promise<void> {
-  // SECURITY (chrome-HIGH-3, audit 2026-05-04): the previous implementation
-  // destructured an `apiKey` field straight off the inbound message and used
-  // it as the authoritative provider key. A malicious page (via a compromised
-  // allowlisted origin or via XSS on an allowlisted site) could craft a
-  // `CHAT_MESSAGE` carrying an attacker-controlled `apiKey` and force every
-  // outbound request to authenticate against that key, or to a key the
-  // attacker wants the user to bill. Chrome chat now stays inside the
-  // desktop/native bridge boundary, so no provider API key is resolved here.
-  // The `apiKey` destructure is gone.
-  const { id, text, pageContext, conversationHistory = [], attachments } = message;
-
-  const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
+): Promise<ChromeManagedChatResult> {
+  const { clientInstanceId, id } = message;
+  let streamKey: string;
+  try {
+    streamKey = createChromeManagedStreamKey(clientInstanceId, id);
+  } catch {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'Invalid chat stream identifier.',
+    };
+  }
+  const broadcastChunk = (
+    text: string,
+    done: boolean,
+    error?: string,
+    routing?: import('./types').ChatChunkMessage['routing'],
+  ): void => {
     const chunk: import('./types').ChatChunkMessage = {
       type: 'CHAT_CHUNK',
+      clientInstanceId,
       id,
-      text: chunkText,
+      text,
       done,
       error,
+      routing,
     };
-    // Send to all extension views — side panel receives this via onMessage
     chrome.runtime.sendMessage(chunk).catch(() => {
-      // Side panel may not be open; ignore
+      // The side panel may have closed while the Managed Cloud turn was active.
     });
   };
 
-  const streamController = new AbortController();
+  if (activeChatStreams.has(streamKey)) {
+    const result = {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'A stream with this identifier is already active.',
+    } as const;
+    broadcastChunk('', true, result.message);
+    return result;
+  }
+
   const activeStream: ActiveChatStream = {
-    controller: streamController,
+    clientInstanceId,
+    controller: new AbortController(),
     cancelRequested: false,
     cancelNotified: false,
   };
-  activeChatStreams.set(id, activeStream);
-
-  // Build message array for the API
-  const messages: Array<{ role: string; content: string }> = [];
-
-  // Prepend platform-specific knowledge prompt if on a known site (Gap 1)
-  try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    const tabUrl = activeTab?.url;
-    if (tabUrl) {
-      const platformPrompt = getPlatformPrompt(tabUrl);
-      if (platformPrompt) {
-        messages.push({ role: 'system', content: platformPrompt });
-      }
-    }
-  } catch {
-    // Tab query failed — proceed without platform prompt
-  }
-
-  messages.push(...conversationHistory.map((h) => ({ role: h.role, content: h.content })));
-
-  // Append page context to the user message if provided.
-  // SECURITY: The fixed `<page_context>` delimiter was trivially escapable —
-  // a hostile page (or a Slack DM / Gmail body that the user copies) could
-  // contain a literal `</page_context>` tag and break out of the fence,
-  // injecting attacker-controlled instructions into the model's user turn.
-  // Mitigation: bind the fence to a per-request random nonce so any injected
-  // closing tag the attacker chooses cannot match the actual fence string.
-  const fenceNonce = Array.from(crypto.getRandomValues(new Uint8Array(8)))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-  let userContent = pageContext
-    ? `${text}\n\n<page_context_${fenceNonce}>\n${pageContext}\n</page_context_${fenceNonce}>`
-    : text;
-
-  // Round-2 audit P0 #3 fix (2026-05-21): if the side panel forwarded inline
-  // data-URL attachments, surface them as a structured annotation so the
-  // model can reference them. The desktop bridge can upgrade this into proper
-  // multi-modal content in a follow-up; today the annotation alone closes the
-  // regression of attachments being silently dropped between the composer and
-  // the model.
-  if (attachments && attachments.length > 0) {
-    const attachmentSummary = attachments
-      .map((dataUrl, idx) => {
-        const mimeMatch = /^data:([^;,]+)/.exec(dataUrl);
-        const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-        return `- attachment_${idx + 1}: ${mime} (${dataUrl.length} chars)`;
-      })
-      .join('\n');
-    userContent += `\n\n<attachments_${fenceNonce}>\n${attachmentSummary}\n</attachments_${fenceNonce}>`;
-  }
-
-  messages.push({ role: 'user', content: userContent });
+  activeChatStreams.set(streamKey, activeStream);
 
   try {
-    // ── CLOUD FREE-TRIAL PATH ──────────────────────────────────────────────
-    // If the user has a Clerk session token and remaining free prompts, route
-    // through the AGI Cloud economy endpoint BEFORE trying the local bridge.
-    // This is the explicit Cloud path; it never runs for Local/bridge sessions.
-    // Local↔Cloud separation: this runs only when the user has explicitly
-    // signed in (token present). Desktop bridge is still attempted as fallback
-    // if the cloud path is unavailable.
-    const clerkToken = await getAuthToken();
-    if (clerkToken) {
-      const remaining = await getRemainingFreePrompts();
-
-      if (remaining <= 0) {
-        // Quota exhausted — broadcast a special QUOTA_EXCEEDED message so the
-        // side panel can show the upgrade modal.
-        const quotaMsg: import('./types').ChatChunkMessage = {
-          type: 'CHAT_CHUNK',
-          id,
-          text: '',
-          done: true,
-          error: '__QUOTA_EXCEEDED__',
-        };
-        chrome.runtime.sendMessage(quotaMsg).catch(() => {});
-        return;
-      }
-
-      // Attempt cloud stream. On success, return immediately (no bridge fallback).
-      // On network/server error, fall through to the bridge path so the user
-      // still gets a response.
-      let cloudStreamed = false;
-      try {
-        const cloudMessages = messages.map((m) => ({
-          role: m.role as 'user' | 'assistant' | 'system',
-          content: m.content,
-        }));
-
-        for await (const chunk of streamFreeChat(
-          cloudMessages,
-          clerkToken,
-          streamController.signal,
-        )) {
-          if (streamController.signal.aborted) {
-            if (!activeStream.cancelNotified) {
-              activeStream.cancelNotified = true;
-              broadcastChunk('', true, activeStream.cancelRequested ? 'Cancelled.' : undefined);
-            }
-            return;
-          }
-
-          if (chunk.type === 'text') {
-            cloudStreamed = true;
-            broadcastChunk(chunk.text, false);
-          } else if (chunk.type === 'done') {
-            broadcastChunk('', true);
-            // Notify side panel of updated remaining count
-            const newRemaining = await getRemainingFreePrompts();
-            chrome.runtime
-              .sendMessage({
-                type: 'FREE_PROMPTS_UPDATED',
-                remaining: newRemaining,
-                limit: FREE_TRIAL_PROMPT_LIMIT,
-                model: FREE_TRIAL_MODEL,
-              })
-              .catch(() => {});
-            return;
-          } else if (chunk.type === 'error') {
-            if (chunk.code === 'quota_exceeded') {
-              // Server confirmed quota exhausted — show upgrade modal
-              const quotaMsg: import('./types').ChatChunkMessage = {
-                type: 'CHAT_CHUNK',
-                id,
-                text: '',
-                done: true,
-                error: '__QUOTA_EXCEEDED__',
-              };
-              chrome.runtime.sendMessage(quotaMsg).catch(() => {});
-              return;
-            }
-            if (chunk.code === 'auth_required') {
-              // Token invalid — broadcast auth-required signal
-              const authMsg: import('./types').ChatChunkMessage = {
-                type: 'CHAT_CHUNK',
-                id,
-                text: '',
-                done: true,
-                error: '__AUTH_REQUIRED__',
-              };
-              chrome.runtime.sendMessage(authMsg).catch(() => {});
-              return;
-            }
-            // Other error (network / 5xx) — fall through to bridge
-            logger.debug('Free-trial cloud chat error, falling back to bridge', chunk.message);
-            if (cloudStreamed) {
-              // Already emitted some text — close the stream rather than bridging
-              broadcastChunk('', true, chunk.message);
-              return;
-            }
-            break; // fall through to bridge path below
-          }
-        }
-      } catch (cloudErr) {
-        // Unexpected error in the cloud path — fall through to bridge
-        logger.debug(
-          'Free-trial cloud stream threw unexpectedly, falling back to bridge',
-          cloudErr,
-        );
-      }
-    }
-    // ── END CLOUD FREE-TRIAL PATH ──────────────────────────────────────────
-
-    // Resolve the bridge URL at call time so it picks up any in-session changes.
-    const AGI_API_BASE = await getAgiBridgeBaseUrl();
-    if (streamController.signal.aborted) {
-      return;
-    }
-
-    // Attempt to stream via the local desktop bridge only.
-    // If unavailable, fail closed or use native messaging; never fall back to hosted APIs.
-    let streamed = false;
-
-    const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    // Bridge-token attachment: read pairing token from session storage.
-    // This is set during the one-time popup pairing flow.
-    const bridgeToken = await new Promise<string | null>((res) => {
-      try {
-        chrome.storage.session.get('agi_bridge_token', (r) => {
-          if (chrome.runtime.lastError) {
-            res(null);
-            return;
-          }
-          const t = (r['agi_bridge_token'] as string | undefined)?.trim();
-          res(t ?? null);
-        });
-      } catch {
-        res(null);
-      }
-    });
-    if (bridgeToken) {
-      fetchHeaders['X-Bridge-Token'] = bridgeToken;
-    }
-
+    let systemPrompt: string | undefined;
     try {
-      const timeoutId = setTimeout(() => {
-        streamController.abort();
-      }, 60_000);
-      const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
-        method: 'POST',
-        headers: fetchHeaders,
-        body: JSON.stringify({ messages, stream: true }),
-        signal: streamController.signal,
-      }).finally(() => clearTimeout(timeoutId));
-
-      if (resp.ok && resp.body) {
-        streamed = true;
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        // Buffer incomplete lines across reader.read() calls so a JSON
-        // payload split across two TCP segments is not silently dropped.
-        let sseBuffer = '';
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if (streamController.signal.aborted) return;
-          sseBuffer += decoder.decode(value, { stream: true });
-          // Split on newlines — the last element may be an incomplete line,
-          // so we keep it in the buffer for the next iteration.
-          const lines = sseBuffer.split('\n');
-          sseBuffer = lines.pop() ?? '';
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed === 'data: [DONE]') continue;
-            const dataStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
-            try {
-              const parsed = JSON.parse(dataStr) as {
-                choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
-                content?: string;
-                done?: boolean;
-              };
-              const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
-              if (delta) {
-                broadcastChunk(delta, false);
-              }
-              if (parsed.done || parsed.choices?.[0]?.finish_reason === 'stop') {
-                broadcastChunk('', true);
-                return;
-              }
-            } catch {
-              // Non-JSON line — skip
-            }
-          }
-        }
-        // Flush any remaining buffered content after the stream ends.
-        const remaining = sseBuffer.trim();
-        if (remaining && remaining !== 'data: [DONE]') {
-          const dataStr = remaining.startsWith('data: ') ? remaining.slice(6) : remaining;
-          try {
-            const parsed = JSON.parse(dataStr) as {
-              choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
-              content?: string;
-              done?: boolean;
-            };
-            const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
-            if (delta) {
-              broadcastChunk(delta, false);
-            }
-          } catch {
-            // Final fragment is not valid JSON — discard
-          }
-        }
-        broadcastChunk('', true);
-        return;
-      }
-    } catch (fetchErr) {
-      if (streamController.signal.aborted) {
-        if (!activeStream.cancelRequested || !activeStream.cancelNotified) {
-          broadcastChunk(
-            '',
-            true,
-            activeStream.cancelRequested ? 'Cancelled.' : 'Bridge request timed out.',
-          );
-        }
-        return;
-      }
-      // Network error or local API unavailable — fall through to native.
-      // Log for diagnostics but don't surface to user.
-      logger.debug('Chat SSE fetch failed, falling back to native', fetchErr);
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
+    } catch {
+      // Platform context is optional; inference remains Managed Cloud only.
     }
 
-    if (!streamed) {
-      // Fall back: forward to native desktop app via existing QUEUE_MESSAGE path
-      if (state.isNativeConnected && state.nativePort) {
-        if (streamController.signal.aborted) {
-          if (!activeStream.cancelNotified) {
-            broadcastChunk('', true, 'Cancelled.');
-          }
-          return;
-        }
-        try {
-          const nativeResp = (await withTimeout(
-            sendNativeRequest({
-              type: 'chat_message',
-              id,
-              text: userContent,
-              conversationHistory,
-              timestamp: Date.now(),
-            }),
-            30000,
-          )) as unknown as { success?: boolean; reply?: string; error?: string };
+    const result = await executeChromeManagedChat(
+      {
+        id,
+        text: message.text,
+        modelSelection: message.modelSelection,
+        quickMode: message.quickMode,
+        pageContext: message.pageContext,
+        systemPrompt,
+        conversationHistory: message.conversationHistory,
+        attachments: message.attachments,
+        extendedThinking: message.extendedThinking,
+        currentModelKey: message.currentModelKey,
+        previousTaskType: message.previousTaskType,
+        signal: activeStream.controller.signal,
+      },
+      createChromeManagedChatDependencies((text) => broadcastChunk(text, false)),
+    );
 
-          if (nativeResp?.reply) {
-            broadcastChunk(nativeResp.reply, false);
-          }
-          if (streamController.signal.aborted) {
-            if (!activeStream.cancelNotified) {
-              broadcastChunk('', true, 'Cancelled.');
-            }
-            return;
-          }
-          broadcastChunk('', true);
-          return;
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : 'Native request failed';
-          broadcastChunk('', true, errMsg);
-          return;
-        }
+    if (result.status === 'success') {
+      if (!activeStream.cancelNotified) {
+        broadcastChunk('', true, undefined, result.routing);
       }
-
-      // Nothing available — surface as an error bubble so it renders in red,
-      // not as a normal assistant reply. The side panel already has an offline
-      // onboarding screen; this error is the fallback for in-session disconnects.
-      broadcastChunk(
-        '',
-        true,
-        'Desktop bridge not available. Start the AGI desktop app and try again.',
-      );
+      chrome.runtime.sendMessage({ type: 'FREE_PROMPTS_UPDATED' }).catch(() => {});
+      return result;
     }
+
+    if (!activeStream.cancelNotified) {
+      activeStream.cancelNotified = true;
+      const visibleError =
+        result.code === 'quota_exceeded'
+          ? '__QUOTA_EXCEEDED__'
+          : result.code === 'auth_required'
+            ? '__AUTH_REQUIRED__'
+            : result.message;
+      broadcastChunk('', true, visibleError, result.routing);
+    }
+    return result;
   } catch (error) {
+    const messageText = error instanceof Error ? error.message : 'Managed Cloud chat failed.';
+    const result = {
+      status: 'error',
+      code: 'server_error',
+      message: messageText,
+    } as const;
+    if (!activeStream.cancelNotified) {
+      activeStream.cancelNotified = true;
+      broadcastChunk('', true, messageText);
+    }
     logger.error('handleChatMessage error', error);
-    const errText = error instanceof Error ? error.message : 'Unknown error';
-    broadcastChunk('', true, errText);
-    showNotification('Chat Error', errText);
+    return result;
   } finally {
-    activeChatStreams.delete(id);
+    // A stale completion must never delete a newer stream that reused the id.
+    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
   }
 }
 
@@ -3174,54 +2816,33 @@ async function handleChatMessage(
  *  3. Offline message
  */
 async function handleInPagePrompt(prompt: string): Promise<string> {
-  const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
-    { role: 'user', content: prompt },
-  ];
-
-  // Path 1 — HTTP bridge
-  const AGI_API_BASE = await getAgiBridgeBaseUrl();
+  let systemPrompt: string | undefined;
   try {
-    const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, stream: false }),
-      signal: AbortSignal.timeout(45000),
-    });
-    if (resp.ok) {
-      const json = (await resp.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-        content?: string;
-      };
-      const text =
-        json.choices?.[0]?.message?.content ??
-        (typeof json.content === 'string' ? json.content : '');
-      if (text) return text;
-    }
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
   } catch {
-    logger.debug('In-page prompt: bridge fetch failed, trying native');
+    // Optional platform context must not change the Managed Cloud boundary.
   }
 
-  // Path 2 — native messaging
-  if (state.isNativeConnected && state.nativePort) {
-    try {
-      const nativeResp = (await withTimeout(
-        sendNativeRequest({
-          type: 'chat_message',
-          id: `in_page_${Date.now()}`,
-          text: prompt,
-          conversationHistory: [],
-          timestamp: Date.now(),
-        }),
-        30000,
-      )) as unknown as { success?: boolean; reply?: string; error?: string };
-      if (nativeResp?.reply) return nativeResp.reply;
-    } catch (err) {
-      logger.warn('In-page prompt: native fallback failed', err);
-    }
-  }
+  let responseText = '';
+  const result = await executeChromeManagedChat(
+    {
+      id: `in_page:${crypto.randomUUID()}`,
+      text: prompt,
+      modelSelection: 'auto',
+      systemPrompt,
+    },
+    createChromeManagedChatDependencies((chunk) => {
+      responseText += chunk;
+    }),
+  );
 
-  // Path 3 — offline
-  return 'The AGI Workforce desktop app is not running. Please start it and try again.';
+  if (result.status === 'success') {
+    return responseText || 'AGI Cloud completed the request without a text response.';
+  }
+  if (result.code === 'auth_required') return 'Sign in to use AGI Cloud chat.';
+  if (result.code === 'quota_exceeded') return 'Your AGI Cloud usage limit has been reached.';
+  return result.message;
 }
 
 function isValidMessage(message: unknown): message is ExtensionMessage {
@@ -3272,7 +2893,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             priority: 0,
           });
         }
-        void executeScheduledTask(task);
+        await executeScheduledTask(task);
       })
       .catch((err) => {
         logger.warn(`Failed to load/execute scheduled task ${taskId}`, err);
@@ -3281,18 +2902,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onSuspend.addListener(() => {
-  if (!state.nativePort || !state.isNativeConnected) {
+  _bgCtx.nativeSuspendInProgress = true;
+  clearNativeReconnectTimer();
+
+  if (!state.nativePort) {
     return;
   }
 
   try {
-    state.nativePort.postMessage({
-      id: createRequestId(),
-      message: {
-        type: 'disconnect',
-        reason: 'extension_service_worker_suspend',
-      },
-    });
+    // Closing the native port is the complete shutdown signal. Sending an
+    // unsigned ad-hoc "disconnect" envelope here would violate the authenticated
+    // session protocol and the native host correctly rejects it.
+    state.nativePort.disconnect();
   } catch (error) {
     logger.debug('Native disconnect on suspend failed', error);
   }

@@ -2,66 +2,14 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-// Verify cron secret to prevent unauthorized access
-//
-// WEB-NEW-010 fix (2026-05-04 audit): the prior implementation auto-allowed
-// when `NODE_ENV === 'development'` and `CRON_SECRET` was absent. That is
-// safe on a developer's laptop, but a misconfigured staging container
-// (NODE_ENV=development is a common copy-paste from dev profiles) silently
-// became an unauthenticated endpoint that resets credits for ALL active
-// subscriptions. We now require an explicit `CRON_DEV_BYPASS=1` co-flag
-// for the dev-mode shortcut so it cannot be triggered by a single
-// environment variable getting copied into the wrong place.
-function verifyCronSecret(request: NextRequest): boolean {
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env['CRON_SECRET'];
-  const nodeEnv = process.env['NODE_ENV'];
-  const devBypass = process.env['CRON_DEV_BYPASS'] === '1';
-
-  // CRON_SECRET is the only blessed way to authorize a cron call. Always
-  // accept it when present and matching, regardless of environment.
-  if (cronSecret) {
-    return authHeader === `Bearer ${cronSecret}`;
-  }
-
-  // No secret configured. Only allow when BOTH:
-  //   (a) NODE_ENV=development AND
-  //   (b) CRON_DEV_BYPASS=1 explicitly set in .env.local
-  // Any other environment denies; staging/preview/production will fail loud.
-  if (nodeEnv === 'development' && devBypass) {
-    // I-cron fix: also require the request to arrive on a loopback host.
-    // A misconfigured preview/staging container with NODE_ENV=development
-    // and CRON_DEV_BYPASS=1 (e.g. wrong .env file) previously turned this
-    // endpoint into an unauthenticated credit-reset for any caller. The
-    // loopback check makes the bypass un-triggerable from the public Internet.
-    const host = (request.headers.get('host') ?? '').toLowerCase();
-    const isLoopbackHost =
-      host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
-    if (!isLoopbackHost) {
-      logger.error({ nodeEnv, host }, 'CRON_DEV_BYPASS rejected · request not from loopback host');
-      return false;
-    }
-    logger.warn(
-      { nodeEnv, host },
-      'CRON_SECRET unset; CRON_DEV_BYPASS=1 + loopback host · allowing dev request',
-    );
-    return true;
-  }
-
-  logger.error(
-    { nodeEnv, vercelEnv: process.env['VERCEL_ENV'], devBypass },
-    'CRON_SECRET not set and CRON_DEV_BYPASS not enabled · denying request',
-  );
-  return false;
-}
-
 export async function GET(request: NextRequest) {
   // Verify cron secret
-  if (!verifyCronSecret(request)) {
+  if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

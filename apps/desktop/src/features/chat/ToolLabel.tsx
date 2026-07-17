@@ -28,7 +28,7 @@ import { cn } from '../../lib/utils';
 import type { ToolLabelEntry } from '@agiworkforce/types';
 import React, { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { codeEditing } from '@agiworkforce/api';
+import { codeEditing } from '@agiworkforce/desktop-command-client';
 import { useToolStore } from '../../stores/chat/toolStore';
 import { useIsMounted } from '../../hooks/useIsMounted';
 

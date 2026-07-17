@@ -19,7 +19,7 @@
  * Transport coverage: the shared package exposes stdio + SSE +
  * streamable-http today. The full 8-transport surface (ws, ws-ide, sdk,
  * sse-ide, claudeai-proxy) is reserved for follow-up sprints — those need
- * additional MCP-SDK plumbing not yet in `packages/mcp`. Callers MUST
+ * additional MCP-SDK plumbing not yet in `packages/tools/mcp`. Callers MUST
  * receive a typed "transport not supported in renderer" error rather than
  * a runtime crash.
  */

@@ -21,7 +21,7 @@ Criticality: high
 
 This service exposes HTTP/WebSocket routes from `src/`. It is not imported by apps or packages.
 
-Reusable schemas must live in `packages/types`; provider calls must go through provider packages; shared runtime behavior belongs in `packages/runtime` or `packages/llm-runtime`.
+Reusable schemas must live in `packages/contracts/types`; provider calls must go through provider packages; shared runtime behavior belongs in `packages/client/client-runtime` or `packages/ai/provider-runtime`.
 
 ## What Belongs Here
 
@@ -57,10 +57,12 @@ Reusable schemas must live in `packages/types`; provider calls must go through p
 
 Use `.env.example` as the template. Never commit JWT secrets, Neon service-role keys, provider keys, webhook secrets, managed compute tokens, or production URLs that imply secret access.
 
-`NEON_DATABASE_URL` now backs two separate connection strategies out of `src/lib/neonClients.ts`:
+`NEON_DATABASE_URL` backs two separate connection strategies out of `src/lib/neonClients.ts`:
 
-- `getServiceClient()` — the existing one-shot `@neondatabase/serverless` `neon()` HTTP client (service-role, `.eq()`-filtered).
-- `getUserScopedClient({ userId, token })` — a pooled `@neondatabase/serverless` `Pool` (WebSocket) via `@agiworkforce/data-layer`'s `NeonDatabaseAdapter`, which binds Postgres RLS per request (`SET LOCAL ROLE app_rls` + `request.jwt.claim.sub`). Use the **pooled** Neon connection string (dashboard → Connection Details → "Pooled connection"), not the direct one — same value works for both clients. This requires the `app_rls` role and RLS policies from `apps/web/db/neon/0037_rls_user_isolation.sql` to already exist on the target database; most gateway tables don't have a policy yet (see `SVC-GATEWAY-RLS-NOOP-01` / the Wave-4 coverage audit), so `getUserScopedClient` is only called for `subscriptions`, `token_credits`, and `credit_transactions` today — every other call site intentionally stays on `getServiceClient()` with an `// RLS-GAP:` comment.
+- `getSystemClient(purpose)` — the one-shot `@neondatabase/serverless` `neon()` HTTP client with privileged database rights. Callers must name an allowlisted system purpose. It is reserved for pre-auth device authorization, health checks, and compatibility access to tables whose schema is not owned by canonical migrations.
+- `getUserScopedClient({ userId, token })` — a pooled `@neondatabase/serverless` `Pool` via `@agiworkforce/data-layer`'s `NeonDatabaseAdapter`. It binds Postgres RLS per request (`SET LOCAL ROLE app_rls` plus `request.jwt.claim.sub`) and fails closed: token-binding, role, policy, connection, and query failures never retry through the system client. Use the **pooled** Neon connection string (dashboard → Connection Details → "Pooled connection"). This requires the role and policies from `0037_rls_user_isolation.sql` and `0054_gateway_user_scope_rls.sql` to exist on the target database.
+
+Gateway compatibility tables without a canonical migration remain explicit privileged operations with application ownership predicates. Current examples include `agent_approval_requests`, `chat_messages`, `conversations`, `messages`, `device_pairings`, and the enterprise extension tables. (The former `worker_registrations`/`work_units` examples were removed with the worker-control plane in W9, 2026-07-15.) Do not add RLS policies for these names until their schema owner and canonical migration are established.
 
 ## Security, Privacy, Data Boundaries
 

@@ -8,10 +8,10 @@
  *
  * Cloud memories arrive exclusively from the AGI Cloud API delta-sync endpoint
  * (`GET /api/memory/sync?since=<cursor>`). They are identified by UUIDv7 IDs
- * generated client-side and reconciled server-side by last-writer-wins (updatedAt).
+ * generated client-side and reconciled with server-version compare-and-swap.
  *
- * Shape matches the frozen web contract wire format (camelCase client side,
- * snake_case on the wire — handled by the sync engine).
+ * Shape maps to the versioned Managed Cloud wire contract (camelCase client
+ * side, snake_case on pull — handled by the sync engine).
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -28,9 +28,11 @@ export interface CloudMemoryEntry {
   source: 'mobile' | 'desktop' | 'web' | 'auto';
   /** Pinned facts are surfaced first and always injected into chat context. */
   pinned: boolean;
-  /** ISO 8601 string. LWW key: server accepts the latest updatedAt. */
+  /** Local display/audit timestamps; never used to resolve sync conflicts. */
   createdAt: string;
   updatedAt: string;
+  /** Last server-owned Managed Cloud sync revision. Missing legacy state means `0`. */
+  serverVersion?: string;
   /**
    * Tombstone flag. A deleted entry stays in the store with isDeleted:true
    * until its delete has been pushed and acked by the server. Only then is it
@@ -106,9 +108,8 @@ export const useCloudMemoryStore = create<CloudMemoryState>()(
         if (error) console.warn('[cloudMemoryStore] Hydration failed:', error);
       },
       partialize: (state) => ({
-        // Exclude un-pushed tombstones that are still dirty — they're in the dirty
-        // queue in memorySyncStateStore and will be persisted there. Keeping them
-        // here means they survive even if the dirty queue itself fails.
+        // Persist unpushed tombstones alongside the separate dirty queue so a
+        // relaunch cannot lose the payload needed to finish the delete.
         entries: state.entries,
       }),
     },

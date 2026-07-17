@@ -1,3 +1,5 @@
+import type { RoutingTaskType } from '@agiworkforce/types';
+
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
   | 'CAPTURE_SCREENSHOT'
@@ -19,6 +21,8 @@ export type NativeMessageType =
   | 'CONNECTION_STATUS_CHANGED'
   | 'TAB_READY'
   | 'SYNC_PAGE_CONTEXT'
+  | 'APPROVE_CONTEXT_HANDOFF'
+  | 'CANCEL_CONTEXT_HANDOFF'
   | 'RUN_PAGE_ACTIONS'
   | 'CAPTURE_ELEMENT'
   | 'GET_ELEMENT_INFO'
@@ -399,6 +403,23 @@ export interface SyncPageContextMessage extends BaseMessage {
   metadata?: import('./page-metadata').PageMetadata;
 }
 
+export interface ApproveContextHandoffMessage extends BaseMessage {
+  type: 'APPROVE_CONTEXT_HANDOFF';
+  handoffId: string;
+}
+
+export interface CancelContextHandoffMessage extends BaseMessage {
+  type: 'CANCEL_CONTEXT_HANDOFF';
+  handoffId: string;
+}
+
+export interface ContextHandoffResponse {
+  success: boolean;
+  error?: string;
+  consumed?: boolean;
+  destination?: 'AGI Desktop';
+}
+
 export interface RunPageAction {
   id: string;
   type: string;
@@ -449,6 +470,8 @@ export interface QueueMessageMessage extends BaseMessage {
 // Chat message — sent from side panel to background to stream an AI response
 export interface ChatMessageMessage extends BaseMessage {
   type: 'CHAT_MESSAGE';
+  /** Per-extension-view nonce used to prevent cross-panel stream delivery. */
+  clientInstanceId: string;
   id: string;
   text: string;
   pageContext?: string;
@@ -458,9 +481,9 @@ export interface ChatMessageMessage extends BaseMessage {
    * (paste-image, file picker). Round-2 audit P0 #3 (chrome-ext wire fix,
    * 2026-05-21) — the side panel previously cleared `pendingAttachments`
    * before constructing the CHAT_MESSAGE so the model never saw them.
-   * Background handler appends an annotation to the user content so the
-   * provider stream can recognise them; full multi-modal bridge wire-up
-   * remains a separate task.
+   * Managed cloud converts supported image data URLs into multimodal content
+   * blocks. The local desktop bridge does not yet expose a verified image
+   * contract, so that route fails visibly instead of discarding image bytes.
    */
   attachments?: string[];
   /**
@@ -470,20 +493,34 @@ export interface ChatMessageMessage extends BaseMessage {
    * Extended Thinking toggle.
    */
   extendedThinking?: boolean;
+  /** User-visible model selection. `auto` is resolved to a concrete model. */
+  modelSelection?: string;
+  /** Route this turn through Auto Economy without changing the saved picker selection. */
+  quickMode?: boolean;
+  /** Prior successful route for prompt-cache continuity in this conversation. */
+  currentModelKey?: string;
+  previousTaskType?: RoutingTaskType;
 }
 
 export interface CancelStreamMessage extends BaseMessage {
   type: 'CANCEL_STREAM';
+  clientInstanceId: string;
   id: string;
 }
 
 // Chat chunk — sent from background to side panel as streaming response arrives
 export interface ChatChunkMessage {
   type: 'CHAT_CHUNK';
+  clientInstanceId: string;
   id: string;
   text: string;
   done: boolean;
   error?: string;
+  routing?: {
+    modelKey: string;
+    taskType: RoutingTaskType;
+    reason: string;
+  };
 }
 
 /**
@@ -903,7 +940,7 @@ export interface GetActionModeResponse {
   error?: string;
 }
 
-/** Quick mode: when true, model resolution uses the fast-status slot for low-latency replies. */
+/** Quick mode: when true, the next turn uses the admitted Auto Economy routing profile. */
 export interface GetQuickModeMessage extends BaseMessage {
   type: 'GET_QUICK_MODE';
 }
@@ -1037,7 +1074,9 @@ export type ExtensionMessage =
   | SetQuickModeMessage
   | PermissionResponseMessage
   | RunAutofillMessage
-  | StartComputerUseMessage;
+  | StartComputerUseMessage
+  | ApproveContextHandoffMessage
+  | CancelContextHandoffMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
@@ -1077,7 +1116,8 @@ export type ExtensionResponse =
   | ShortcutResponse
   | ScheduledTaskResponse
   | GetActionModeResponse
-  | GetQuickModeResponse;
+  | GetQuickModeResponse
+  | ContextHandoffResponse;
 
 export interface PopupState {
   sessionStartTime: number;
