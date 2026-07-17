@@ -44,7 +44,7 @@ vi.mock('@/lib/hooks/useConversations', () => ({
   }),
 }));
 
-vi.mock('@/stores/chatStore', () => ({
+vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: (selector: (state: { updateConversation: () => void }) => unknown) =>
     selector({ updateConversation: vi.fn() }),
 }));
@@ -56,7 +56,7 @@ vi.mock('@shared/stores/authentication-store', () => ({
   }),
 }));
 
-vi.mock('@/stores/unified/auth', () => ({
+vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: { subscription: { tier: string } }) => unknown) =>
     selector({ subscription: { tier: 'free' } }),
 }));

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, Terminal } from 'lucide-react';
-import { useSettingsStore, type CustomCommand } from '@/stores/settingsStore';
+import { useSettingsStore, type CustomCommand } from '@shared/stores/web-settings-store';
 import {
   Label,
   Button,

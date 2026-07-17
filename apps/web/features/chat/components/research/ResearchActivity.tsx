@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react';
 import { Telescope, CircleAlert, CircleStop, CircleCheck } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import type { MessageResearchState } from '@/stores/chatStore';
+import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));

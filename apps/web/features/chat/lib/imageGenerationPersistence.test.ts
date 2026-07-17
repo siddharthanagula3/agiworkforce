@@ -18,7 +18,7 @@ import {
   persistImageGenerationAssistantMessage,
 } from './imageGenerationPersistence';
 import { EMPTY_ASSISTANT_CONTENT_PLACEHOLDER } from '@/lib/hooks/useChatStream';
-import type { MessageMetadata } from '@/stores/chatStore';
+import type { MessageMetadata } from '@shared/stores/web-chat-store';
 
 const TOK = async () => 'tok';
 const USER_MESSAGE_ID = '00000000-0000-4000-8000-000000000101';

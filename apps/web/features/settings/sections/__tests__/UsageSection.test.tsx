@@ -18,7 +18,7 @@ vi.mock('@agiworkforce/ui', () => ({
 }));
 
 // Billing store not hydrated → tier comes from /api/usage.plan_tier.
-vi.mock('@/stores/unified/auth', () => ({
+vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (s: unknown) => unknown) => selector({ subscription: undefined }),
 }));
 

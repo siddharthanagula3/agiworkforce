@@ -9,7 +9,7 @@
  *   2. Type-check against `DesktopStubsDefault` and see the empty shape.
  *
  * Each store hook still no-ops because the web bundle imports them through
- * `apps/web/stores/unified/index.ts` and the *callers* are runtime-gated
+ * this module (`apps/web/shared/stores/desktop-stubs.ts`) and the *callers* are runtime-gated
  * behind `isTauri()` / `isCloudWeb()` (see `packages/client/client-runtime/src/detect.ts`).
  * If a future call reaches a stub on the web, the dev-only warn surfaces
  * the mistake without crashing the render.

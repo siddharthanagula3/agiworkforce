@@ -2,7 +2,7 @@
 
 import { useMemo, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { useBillingUsageStore } from '@/stores/unified/billingUsage';
+import { useBillingUsageStore } from '@shared/stores/billing-usage-store';
 import { useChatStore, type ChatMessage } from '@agiworkforce/unified-chat';
 
 interface BudgetTrackerDisplayProps {

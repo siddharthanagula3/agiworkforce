@@ -1,7 +1,7 @@
 /**
  * Stale active-conversation detection for the web chat store.
  *
- * The chat store (`@/stores/chatStore`) holds a single `activeConversationId` +
+ * The chat store (`@shared/stores/web-chat-store`) holds a single `activeConversationId` +
  * `messages` pair. The page renders the *displayed* conversation off
  * `displayedConversationId = urlConversationId ?? bareChatSessionId`, and
  * `displayedMessages` is gated on `activeConversationId === displayedConversationId`

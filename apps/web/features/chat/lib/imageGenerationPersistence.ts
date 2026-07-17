@@ -3,7 +3,7 @@ import {
   notifyPersistenceFailure,
   EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
 } from '@/lib/hooks/useChatStream';
-import type { Message, MessageMetadata } from '@/stores/chatStore';
+import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 
 type AuthTokenProvider = () => Promise<string>;
 type UpdateMessageFn = (id: string, updates: Partial<Message>) => void;

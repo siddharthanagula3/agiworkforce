@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useChatStore, type Conversation } from '@/stores/chatStore';
+import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
 import { useConversations } from './useConversations';
 
 const authMocks = vi.hoisted(() => ({

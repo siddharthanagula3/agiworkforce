@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from '@agiworkforce/ui';
 import { assessModelSwitchCache } from '@agiworkforce/routing';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   EFFORT_LABEL,
   PROVIDER_DISPLAY,
@@ -30,7 +30,7 @@ import {
   type ModelEnvironment,
   type EnvironmentAvailability,
 } from '@agiworkforce/types';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   getAllowedAutoModesForTier,
   getBestAutoModeForTier,

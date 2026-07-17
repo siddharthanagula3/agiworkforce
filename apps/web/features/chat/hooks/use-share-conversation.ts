@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
 /**

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useUser } from '@clerk/nextjs';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
 import {

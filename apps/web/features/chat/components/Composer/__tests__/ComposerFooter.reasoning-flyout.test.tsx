@@ -85,7 +85,7 @@ vi.mock('@shared/stores/model-store', () => ({
   AVAILABLE_MODELS: MODELS,
 }));
 
-vi.mock('@/stores/unified/auth', () => ({
+vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ subscription: { tier: 'max' }, dailyUsage_cents: 0, dailyLimit_cents: 0 }),
 }));
@@ -129,7 +129,7 @@ vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({
   BudgetTrackerDisplay: () => <div />,
 }));
 vi.mock('../StyleSelector', () => ({ StyleSelector: () => <div /> }));
-vi.mock('@/stores/chatStore', () => ({
+vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ activeConversationId: null, messages: [] }),
 }));

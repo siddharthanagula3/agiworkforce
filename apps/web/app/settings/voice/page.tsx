@@ -1,6 +1,6 @@
 'use client';
 
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import Link from 'next/link';
 
