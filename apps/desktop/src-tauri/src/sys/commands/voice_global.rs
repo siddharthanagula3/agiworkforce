@@ -1,150 +1,295 @@
-//! Global fn-key Push-to-Talk (PTT) via OS-level keyboard hook.
+//! AGI Dictation lifecycle commands and the global hotkey bridge.
 //!
-//! This module adds a *system-wide* PTT trigger: the user holds the `fn` key
-//! anywhere on the machine (not just when the app is focused) and the Tauri
-//! frontend is notified so it can start/stop recording.
+//! Plan: `docs/plans/desktop-system-dictation.md` (phase 1-2). Flaw:
+//! `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`.
 //!
-//! # Architecture
-//! - `rdev::listen` is a **blocking** call that parks a thread until the OS
-//!   input stream closes.  We spawn it with `std::thread::spawn` so it never
-//!   blocks the async runtime.
-//! - A shared `Arc<AtomicBool>` (`PTT_RUNNING`) lets `voice_stop_global_ptt`
-//!   signal the listener thread to exit.
-//! - Text injection re-uses the existing `automation::input::lock_enigo` mutex
-//!   so we serialise all Enigo calls app-wide (prevents race conditions with
-//!   the computer-use automation path).
+//! # Single lifecycle owner
+//! Every dictation entry path routes through
+//! [`crate::features::speech::dictation::DICTATION_COORDINATOR`]:
+//! - The in-app path (webview hotkey/UI -> voice store) claims a session via
+//!   `dictation_session_begin` before capturing and reports transitions via
+//!   `dictation_session_advance` / `dictation_session_end`.
+//! - The global OS hotkey hook feeds the same coordinator. System-wide
+//!   dictation is NOT available yet, so the coordinator refuses
+//!   `global`-source sessions (fail closed) until the plan's release gates
+//!   pass; the hook then emits a versioned `refused` event instead of
+//!   pretending to record.
 //!
 //! # Events emitted to the frontend
-//! | Event               | Payload | Meaning                        |
-//! |---------------------|---------|-------------------------------|
-//! | `voice:ptt-start`   | `null`  | fn key pressed — start recording |
-//! | `voice:ptt-stop`    | `null`  | fn key released — stop recording |
+//! One versioned channel replaces the old free-floating
+//! `voice:ptt-start`/`voice:ptt-stop` events (which had zero subscribers):
+//!
+//! | Event             | Payload                                  |
+//! |-------------------|------------------------------------------|
+//! | `dictation:event` | `{ version, kind, sessionId?, source?, phase, detail? }` |
 
-use once_cell::sync::Lazy;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
-};
+use serde::Serialize;
 use tauri::Emitter;
 
+use crate::features::speech::dictation::{
+    start_os_hook, BeginError, DictationOutcome, DictationPhase, DictationSnapshot,
+    DictationSource, HotkeyEdge, SessionError, DICTATION_COORDINATOR, DICTATION_EVENT_VERSION,
+    GLOBAL_HOTKEY_HOOK,
+};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DictationEventPayload {
+    version: u32,
+    kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<DictationSource>,
+    phase: DictationPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+}
+
+fn emit_dictation_event(
+    app: &tauri::AppHandle,
+    kind: &'static str,
+    session_id: Option<String>,
+    source: Option<DictationSource>,
+    detail: Option<String>,
+) {
+    let payload = DictationEventPayload {
+        version: DICTATION_EVENT_VERSION,
+        kind,
+        session_id,
+        source,
+        phase: DICTATION_COORDINATOR.snapshot().phase,
+        detail,
+    };
+    if let Err(error) = app.emit("dictation:event", &payload) {
+        tracing::warn!("[dictation] failed to emit {}: {}", kind, error);
+    }
+}
+
+fn parse_source(source: &str) -> Result<DictationSource, String> {
+    match source {
+        "in_app" => Ok(DictationSource::InApp),
+        "global" => Ok(DictationSource::Global),
+        other => Err(format!("Unknown dictation source: {other}")),
+    }
+}
+
+fn parse_phase(phase: &str) -> Result<DictationPhase, String> {
+    match phase {
+        "transcribing" => Ok(DictationPhase::Transcribing),
+        "injecting" => Ok(DictationPhase::Injecting),
+        other => Err(format!("Unknown dictation phase: {other}")),
+    }
+}
+
+fn parse_outcome(outcome: &str) -> Result<DictationOutcome, String> {
+    match outcome {
+        "completed" => Ok(DictationOutcome::Completed),
+        "cancelled" => Ok(DictationOutcome::Cancelled),
+        "failed" => Ok(DictationOutcome::Failed),
+        other => Err(format!("Unknown dictation outcome: {other}")),
+    }
+}
+
+fn session_error_message(error: SessionError) -> String {
+    match error {
+        SessionError::StaleSession => "Stale dictation session ID (a newer session owns the pipeline)".to_string(),
+        SessionError::NoActiveSession => "No active dictation session".to_string(),
+        SessionError::IllegalTransition { from, to } => {
+            format!("Illegal dictation transition: {from:?} -> {to:?}")
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
-// Global state
+// Coordinator session commands (used by the in-app voice store)
 // ---------------------------------------------------------------------------
 
-/// Set to `true` while the global PTT listener thread is running.
-/// `voice_stop_global_ptt` flips it to `false` which causes the listener
-/// thread to exit at its next iteration.
-static PTT_RUNNING: Lazy<Arc<AtomicBool>> = Lazy::new(|| Arc::new(AtomicBool::new(false)));
-
-/// Join handle of the OS listener thread (if started).
-/// We keep it so we can detect double-starts cleanly.
-static PTT_THREAD: Lazy<Mutex<Option<std::thread::JoinHandle<()>>>> =
-    Lazy::new(|| Mutex::new(None));
-
-// ---------------------------------------------------------------------------
-// Tauri Commands
-// ---------------------------------------------------------------------------
-
-/// Start the global fn-key PTT listener.
-///
-/// Spawns a background OS thread that calls `rdev::listen`.  The thread
-/// emits `voice:ptt-start` when the fn key is pressed and `voice:ptt-stop`
-/// when it is released.
-///
-/// Calling this while a listener is already running is a no-op (returns `Ok`).
+/// Claim the dictation pipeline. Errors if another session is active or the
+/// source is not admitted in this build.
 #[tauri::command]
-pub async fn voice_start_global_ptt(app: tauri::AppHandle) -> Result<(), String> {
-    // Guard against double-start
-    if PTT_RUNNING.load(Ordering::SeqCst) {
-        tracing::debug!("[global-ptt] listener already running — ignoring start request");
-        return Ok(());
+pub async fn dictation_session_begin(
+    source: String,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let source = parse_source(&source)?;
+    match DICTATION_COORDINATOR.begin(source) {
+        Ok(session_id) => {
+            emit_dictation_event(
+                &app,
+                "session-started",
+                Some(session_id.clone()),
+                Some(source),
+                None,
+            );
+            Ok(session_id)
+        }
+        Err(BeginError::Busy { active_source }) => Err(format!(
+            "A dictation session is already active (source: {active_source:?})"
+        )),
+        Err(BeginError::SourceUnavailable) => {
+            Err("System-wide dictation is not available in this build".to_string())
+        }
     }
+}
 
-    PTT_RUNNING.store(true, Ordering::SeqCst);
-
-    let running = Arc::clone(&*PTT_RUNNING);
-    let app_handle = app.clone();
-
-    let handle = std::thread::Builder::new()
-        .name("voice-global-ptt".into())
-        .spawn(move || {
-            tracing::info!("[global-ptt] listener thread started");
-
-            // `rdev::listen` is blocking; the callback is called on every input event.
-            // We return `false` from inside the callback to break the listen loop
-            // when `running` is set to false.
-            let result = rdev::listen(move |event| {
-                if !running.load(Ordering::SeqCst) {
-                    // Signal rdev to stop by returning — note: rdev::listen
-                    // stops when the callback panics or when it receives a
-                    // "stop" signal via the return value on some platforms.
-                    // We use a flag + early return here; rdev will eventually
-                    // detect the thread should stop.
-                    return;
-                }
-
-                match event.event_type {
-                    rdev::EventType::KeyPress(rdev::Key::Function) => {
-                        tracing::debug!("[global-ptt] fn key pressed — emitting ptt-start");
-                        if let Err(e) = app_handle.emit("voice:ptt-start", ()) {
-                            tracing::warn!("[global-ptt] failed to emit ptt-start: {}", e);
-                        }
-                    }
-                    rdev::EventType::KeyRelease(rdev::Key::Function) => {
-                        tracing::debug!("[global-ptt] fn key released — emitting ptt-stop");
-                        if let Err(e) = app_handle.emit("voice:ptt-stop", ()) {
-                            tracing::warn!("[global-ptt] failed to emit ptt-stop: {}", e);
-                        }
-                    }
-                    _ => {}
-                }
-            });
-
-            if let Err(e) = result {
-                tracing::error!("[global-ptt] rdev::listen error: {:?}", e);
-            }
-
-            tracing::info!("[global-ptt] listener thread exited");
-        })
-        .map_err(|e| format!("Failed to spawn global PTT thread: {}", e))?;
-
-    // Store the join handle
-    if let Ok(mut guard) = PTT_THREAD.lock() {
-        *guard = Some(handle);
-    }
-
-    tracing::info!("[global-ptt] global fn-key PTT listener started");
+/// Advance the active session forward (`transcribing` or `injecting`).
+#[tauri::command]
+pub async fn dictation_session_advance(
+    session_id: String,
+    phase: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let phase = parse_phase(&phase)?;
+    DICTATION_COORDINATOR
+        .advance(&session_id, phase)
+        .map_err(session_error_message)?;
+    emit_dictation_event(&app, "phase-changed", Some(session_id), None, None);
     Ok(())
 }
 
-/// Stop the global PTT listener and clean up the OS hook thread.
-///
-/// Sets the `PTT_RUNNING` flag to `false`.  The background thread will notice
-/// on its next input event and exit.  On macOS, rdev's listener loop wakes up
-/// on every input event, so the thread exits quickly after the next keypress.
+/// End the active session (`completed`, `cancelled`, or `failed`).
 #[tauri::command]
-pub async fn voice_stop_global_ptt() -> Result<(), String> {
-    if !PTT_RUNNING.load(Ordering::SeqCst) {
-        tracing::debug!("[global-ptt] listener not running — ignoring stop request");
+pub async fn dictation_session_end(
+    session_id: String,
+    outcome: String,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let outcome = parse_outcome(&outcome)?;
+    DICTATION_COORDINATOR
+        .end(&session_id, outcome)
+        .map_err(session_error_message)?;
+    emit_dictation_event(
+        &app,
+        "session-ended",
+        Some(session_id),
+        None,
+        Some(format!("{outcome:?}").to_lowercase()),
+    );
+    Ok(())
+}
+
+/// Current coordinator snapshot for UIs and diagnostics.
+#[tauri::command]
+pub async fn dictation_session_snapshot() -> Result<DictationSnapshot, String> {
+    Ok(DICTATION_COORDINATOR.snapshot())
+}
+
+// ---------------------------------------------------------------------------
+// Global hotkey hook commands
+// ---------------------------------------------------------------------------
+
+/// Enable the global dictation hotkey hook.
+///
+/// The hook has a real start/stop lifecycle (a single OS listener per
+/// process; see `features/speech/dictation/hotkey.rs`) and routes edges into
+/// the coordinator. While `system_dictation_available()` is false the
+/// coordinator refuses global sessions, so enabling the hook only produces
+/// honest `refused` events — it never records or injects.
+#[tauri::command]
+pub async fn voice_start_global_ptt(app: tauri::AppHandle) -> Result<(), String> {
+    let app_for_sink = app.clone();
+    let newly_enabled = start_os_hook(
+        &GLOBAL_HOTKEY_HOOK,
+        Box::new(move |edge| match edge {
+            HotkeyEdge::Pressed => match DICTATION_COORDINATOR.begin(DictationSource::Global) {
+                Ok(session_id) => {
+                    emit_dictation_event(
+                        &app_for_sink,
+                        "session-started",
+                        Some(session_id),
+                        Some(DictationSource::Global),
+                        None,
+                    );
+                }
+                Err(BeginError::SourceUnavailable) => {
+                    tracing::debug!(
+                        "[dictation] global hotkey pressed but system dictation is unavailable"
+                    );
+                    emit_dictation_event(
+                        &app_for_sink,
+                        "refused",
+                        None,
+                        Some(DictationSource::Global),
+                        Some("system dictation unavailable in this build".to_string()),
+                    );
+                }
+                Err(BeginError::Busy { active_source }) => {
+                    emit_dictation_event(
+                        &app_for_sink,
+                        "refused",
+                        None,
+                        Some(DictationSource::Global),
+                        Some(format!("busy: {active_source:?} session active")),
+                    );
+                }
+            },
+            HotkeyEdge::Released => {
+                // Only a Global-source session may be ended by the global
+                // hotkey; an in-app session is owned by the webview path.
+                let snapshot = DICTATION_COORDINATOR.snapshot();
+                if snapshot.source == Some(DictationSource::Global) {
+                    if let Some(session_id) = snapshot.session_id {
+                        // No global capture pipeline exists yet (plan phase
+                        // 3+), so a release cancels rather than transcribes.
+                        let _ = DICTATION_COORDINATOR
+                            .end(&session_id, DictationOutcome::Cancelled);
+                        emit_dictation_event(
+                            &app_for_sink,
+                            "session-ended",
+                            Some(session_id),
+                            Some(DictationSource::Global),
+                            Some("cancelled".to_string()),
+                        );
+                    }
+                }
+            }
+        }),
+    )?;
+
+    if newly_enabled {
+        tracing::info!("[dictation] global hotkey hook enabled");
+    } else {
+        tracing::debug!("[dictation] global hotkey hook already enabled — sink refreshed");
+    }
+    Ok(())
+}
+
+/// Disable the global dictation hotkey hook. Emission stops immediately; a
+/// Global-source session in flight is cancelled.
+#[tauri::command]
+pub async fn voice_stop_global_ptt(app: tauri::AppHandle) -> Result<(), String> {
+    let was_enabled = GLOBAL_HOTKEY_HOOK.stop();
+    if !was_enabled {
+        tracing::debug!("[dictation] global hotkey hook not enabled — ignoring stop request");
         return Ok(());
     }
 
-    PTT_RUNNING.store(false, Ordering::SeqCst);
-
-    // Drop (and thereby detach) the thread handle — we don't block waiting for
-    // it because rdev::listen may park until the next event arrives.
-    if let Ok(mut guard) = PTT_THREAD.lock() {
-        let _ = guard.take(); // detach; the thread will exit on next event
+    let snapshot = DICTATION_COORDINATOR.snapshot();
+    if snapshot.source == Some(DictationSource::Global) {
+        if let Some(session_id) = snapshot.session_id {
+            let _ = DICTATION_COORDINATOR.end(&session_id, DictationOutcome::Cancelled);
+            emit_dictation_event(
+                &app,
+                "session-ended",
+                Some(session_id),
+                Some(DictationSource::Global),
+                Some("cancelled".to_string()),
+            );
+        }
     }
 
-    tracing::info!("[global-ptt] global fn-key PTT listener stopped");
+    tracing::info!("[dictation] global hotkey hook disabled");
     Ok(())
 }
 
 /// Inject `text` into the currently OS-focused window/field.
 ///
-/// Uses `enigo` (already a project dependency) with the shared `lock_enigo`
-/// mutex so we serialise all synthetic input events across the codebase.
+/// Uses `enigo` with the shared `lock_enigo` mutex so all synthetic input is
+/// serialised app-wide. NOTE (plan phase 4, not yet implemented): this is a
+/// bare typing call with no target pinning/revalidation, secure-field
+/// refusal, or clipboard transaction — it must not be wired into an automatic
+/// dictation flow until that stage lands.
 ///
 /// On macOS this requires the Accessibility permission ("control this computer").
 #[tauri::command]
@@ -168,7 +313,7 @@ pub async fn voice_inject_text(text: String) -> Result<(), String> {
             .text(&text)
             .map_err(|e| format!("Failed to inject text: {:?}", e))?;
 
-        tracing::debug!("[global-ptt] injected {} chars via enigo", text.len());
+        tracing::debug!("[dictation] injected {} chars via enigo", text.len());
         Ok(())
     })
     .await
