@@ -215,8 +215,11 @@ struct PushConflicts {
 struct ConversationDelta {
     id: String,
     title: Option<String>,
-    // model, project_id, and pinned are received from the server but not yet stored in
-    // the desktop SQLite schema (conversations table has no model/project_id/pinned columns).
+    // model and pinned are received from the server but not yet stored in the
+    // desktop SQLite schema (conversations table has no model/pinned columns).
+    // project_id: conversations.project_id exists since v75, but it holds
+    // LOCAL project ids ("AGI Work" scoping); cloud project linkage rides the
+    // web API's project param, so the server value is deliberately not applied.
     #[allow(dead_code)]
     model: Option<String>,
     #[allow(dead_code)]
@@ -503,8 +506,10 @@ fn gather_push_conversations(conn: &Connection, user_id: &str) -> SqlResult<Vec<
         Ok(PushConversation {
             id: cloud_id,
             title,
-            model: None,      // Desktop stores model per-message, not per-conversation
-            project_id: None, // Desktop does not track project_id in SQLite yet
+            model: None, // Desktop stores model per-message, not per-conversation
+            // conversations.project_id (v75) holds LOCAL project ids; pushing
+            // them would pollute cloud projects, so it is intentionally not sent.
+            project_id: None,
             pinned: None,
             base_version: server_version.unwrap_or_else(|| "0".to_string()),
             is_deleted: deleted_at_utc.is_some().then_some(true),

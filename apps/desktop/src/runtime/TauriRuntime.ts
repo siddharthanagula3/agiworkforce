@@ -392,11 +392,18 @@ export class TauriRuntime implements ChatRuntime {
       throw new Error('Please sign in to send messages.');
     }
 
+    // Carry the conversation's project scope ("AGI Work") into the backend
+    // row — the frontend-only projectId set via setConversationProject would
+    // otherwise be lost on the lazy first-send create.
+    const projectId =
+      useDesktopChatStore.getState().conversations.find((c) => c.id === frontendConversationId)
+        ?.projectId ?? null;
+
     const raw = await invoke<RawConversation>('chat_create_conversation', {
       request: {
         title: content.trim().slice(0, 50) || 'New Conversation',
         userId,
-        projectId: null,
+        projectId,
         executionMode,
       },
     });
