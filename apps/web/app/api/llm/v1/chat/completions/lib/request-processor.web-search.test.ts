@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  applyAgentMode,
   appendWebSearchTool,
   isFreeTierBlockedAddOn,
   shouldOfferGenericWebSearchTool,
@@ -8,6 +9,45 @@ import {
   WEB_SEARCH_INJECTION_PROVIDERS,
   providerInjectsWebSearchTool,
 } from '@/lib/web-search-support';
+
+describe('applyAgentMode', () => {
+  it('turns AGI Work into a real tool-using managed-cloud request', () => {
+    const request = {
+      model: 'test-model',
+      messages: [{ role: 'user' as const, content: 'Research this and build a report.' }],
+      stream: false,
+      agent_mode: 'agiwork' as const,
+    };
+
+    applyAgentMode(request);
+
+    expect(request).toMatchObject({
+      agent_mode: 'agiwork',
+      web_search: true,
+      web_fetch: true,
+      code_execution: true,
+      stream: true,
+    });
+  });
+
+  it('does not change ordinary chat requests', () => {
+    const request = {
+      model: 'test-model',
+      messages: [{ role: 'user' as const, content: 'Hello' }],
+      stream: false,
+      agent_mode: 'chat' as const,
+    };
+
+    applyAgentMode(request);
+
+    expect(request).toEqual({
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'Hello' }],
+      stream: false,
+      agent_mode: 'chat',
+    });
+  });
+});
 
 /**
  * Bug 2 (web search "still cosmetic") root-cause proof — test at the injection hop.
@@ -148,5 +188,10 @@ describe('isFreeTierBlockedAddOn', () => {
     ).toBe(true);
     expect(isFreeTierBlockedAddOn({ tool_choice: 'auto' })).toBe(true);
     expect(isFreeTierBlockedAddOn({ n: 2 })).toBe(true);
+  });
+
+  it('keeps the developer-level AGI Work agent on paid plans', () => {
+    expect(isFreeTierBlockedAddOn({ agent_mode: 'agiwork' })).toBe(true);
+    expect(isFreeTierBlockedAddOn({ agent_mode: 'chat' })).toBe(false);
   });
 });
