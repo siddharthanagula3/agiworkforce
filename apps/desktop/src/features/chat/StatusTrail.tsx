@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Search, Code, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { type ActionTrailEntry } from '../../stores/unifiedChatStore';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useReducedMotion } from '@agiworkforce/unified-chat';
 import { useMessageActionTrail } from './useMessageRuntimeActivity';
 
 interface StatusTrailProps {

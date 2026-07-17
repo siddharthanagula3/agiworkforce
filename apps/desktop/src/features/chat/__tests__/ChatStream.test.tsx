@@ -83,7 +83,8 @@ vi.mock('../../../stores/ui', () => ({
   selectIsSimpleMode: (state: typeof mockUiState) => state.mode === 'simple',
 }));
 
-vi.mock('../../../hooks/useReducedMotion', () => ({
+vi.mock('@agiworkforce/unified-chat', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useReducedMotion: () => true,
 }));
 

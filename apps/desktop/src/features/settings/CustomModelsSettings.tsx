@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import type { CustomModelConfig } from '../../types/customModel';
+import type { CustomModelConfig } from '@agiworkforce/types';
 import { useSettingsStore } from '../../stores/settingsStore';
 import {
   AlertDialog,

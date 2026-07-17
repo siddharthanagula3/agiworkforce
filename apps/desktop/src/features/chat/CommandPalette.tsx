@@ -16,7 +16,7 @@ import Fuse from 'fuse.js';
 import { useChatStore, dbIdToUuid, type ConversationSummary } from '../../stores/chat/chatStore';
 import { cn } from '../../lib/utils';
 import { invoke, isTauri } from '../../lib/tauri-mock';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useReducedMotion } from '@agiworkforce/unified-chat';
 import {
   formatLastUsed,
   getCommandStats,

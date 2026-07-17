@@ -18,6 +18,7 @@ import {
   User,
 } from 'lucide-react';
 import { useActionState, useEffect, useState, useTransition } from 'react';
+import { useReducedMotion } from '@agiworkforce/unified-chat';
 import { cn } from '../../lib/utils';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { useAuthStore } from '../../stores/auth';
@@ -69,21 +70,6 @@ type MotionVariant = Partial<
 function motionProps(reduced: boolean, normal: MotionVariant): MotionVariant {
   if (reduced) return {};
   return normal;
-}
-
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState<boolean>(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return reduced;
 }
 
 function GoogleIcon({ className }: { className?: string }) {
