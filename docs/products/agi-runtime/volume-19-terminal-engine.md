@@ -30,7 +30,7 @@ Requirement: run a single command as a tracked unit with a stable id, working di
 - 🟡 Partial — `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`: `TaskRegistry::create(TaskKind::LocalShell, command)` records a `Task { id, command, output_path, status, exit_code, error }` and enforces a legal status machine (`Pending → Running → {Completed|Failed|Stopped}`). **Gap:** the registry tracks the unit and its output file but does not itself `spawn` an OS process — the PTY/`tokio::process` spawner binding argv to this lifecycle is 🔭.
 - ✅ Built — `crates/agiworkforce-execpolicy` (`Policy`, `PolicyParser`, `Decision`, `blocking_append_allow_prefix_rule`): an allow/deny gate matching a candidate argv against per-program and network rules before execution — where "ask before acting" is decided.
 - ✅ Built — `crates/sandbox-policy/src/lib.rs`: `SandboxPolicy { ReadOnly, WorkspaceWrite { writable_roots }, ExternalSandbox, DangerFullAccess }`, defaulting to `WorkspaceWrite` for unrecognized modes — commands run inside a filesystem boundary.
-- ✅ Built — `crates/agiworkforce-app-server/src/lib.rs`: the local JSON-RPC-over-stdio + WebSocket tool host exposes a single `agiworkforce_exec` tool, is consumed **only by the CLI**, requires a non-empty WS auth token, and enforces an IP allowlist.
+- ✅ Built — `crates/agiworkforce-app-server/src/lib.rs`: typed developer-session stdio + authenticated WebSocket transport drives the full CLI agent host, including approval round-trips. 🟡 Partial — the separate `agi mcp-server` stdio command advertises no tools until its execution and approval path is wired.
 
 ## Process Monitoring
 
@@ -64,7 +64,7 @@ Requirement: capture the true process exit code (and timeout/kill distinction), 
 - `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `TaskKind::LocalShell`, `TaskRegistry`, `StallWatchdog`, `read_output`, `stop`.
 - `crates/agiworkforce-execpolicy/` — command allow/deny policy engine.
 - `crates/sandbox-policy/src/lib.rs` — filesystem sandbox modes.
-- `crates/agiworkforce-app-server/src/lib.rs` — CLI-only local `agiworkforce_exec` tool host (stdio + WS, token + IP allowlist).
+- `crates/agiworkforce-app-server/src/lib.rs` — typed developer-session stdio + authenticated WebSocket transport.
 - `crates/agiworkforce-command-registry/src/lib.rs` — shell-integration snippet command.
 - `services/signaling-server` — remote `dispatch`/`cancel` steering (compute stays on host).
 

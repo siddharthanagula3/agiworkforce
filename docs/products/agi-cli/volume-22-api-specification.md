@@ -74,7 +74,7 @@ No first-class named `llama.cpp` provider exists. It is reachable today via a us
 
 ## Repository map
 
-- `crates/agiworkforce-app-server/src/lib.rs` — JSON-RPC (`initialize`, `tools/list`, `tools/call`, `shutdown`) over stdio + WebSocket; consumed by `agi app-server` (`apps/cli/src/lib.rs:1624`, binds `127.0.0.1:8788`, refuses non-loopback without `--allow-public-listen`, auto-generates an auth token). ✅
+- `crates/agiworkforce-app-server/src/lib.rs` — typed developer sessions (`initialize`, thread/turn lifecycle, streaming, interruption, and approval responses) over JSONL stdio + authenticated WebSocket; consumed by `agi app-server` (`apps/cli/src/lib.rs`, binds `127.0.0.1:8788`, refuses non-loopback without `--allow-public-listen`, and requires `--auth-token` or `AGI_APP_SERVER_TOKEN`). The legacy direct-tool JSON-RPC API remains separately available to embedders. ✅
 - `apps/cli/src/agent/mod.rs` — sessions, `PrivacyMode`, boundary enforcement, thinking budget. ✅
 - `apps/cli/src/{auth.rs,auth_oauth.rs,oauth.rs}` — OAuth/PKCE + keyring token store. ✅
 - `apps/cli/src/models/provider_dispatch.rs`, `model_catalog.rs` — provider routing + catalog. ✅/🟡

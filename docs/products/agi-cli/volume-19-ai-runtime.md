@@ -32,7 +32,7 @@ Streaming is SSE-decoded in `apps/cli/src/models/sse_decoder.rs` and assembled i
 
 ## Tool Calling
 
-The tool catalog is built by `platform/runtime/tool_catalog.rs` and filtered per turn by `AgentSession::effective_tool_definitions` (allow/deny lists, team tools, MCP tools, and a plan-mode lock that hides mutating tools until a plan is approved). ✅ Built. Model tool-use blocks become `executor::ToolCall` (`apps/cli/src/agent/executor.rs`); `PreToolUse` hooks can rewrite args, block, or stop before execution. AGI can also _be_ a tool host via `crates/agiworkforce-app-server` (JSON-RPC/WS, ✅) and `agi mcp-server`. Requirement: unknown tools and schema-invalid args are rejected, not guessed; tool results are untrusted data, never instructions.
+The tool catalog is built by `platform/runtime/tool_catalog.rs` and filtered per turn by `AgentSession::effective_tool_definitions` (allow/deny lists, team tools, MCP tools, and a plan-mode lock that hides mutating tools until a plan is approved). ✅ Built. Model tool-use blocks become `executor::ToolCall` (`apps/cli/src/agent/executor.rs`); `PreToolUse` hooks can rewrite args, block, or stop before execution. AGI can also _be_ a full local agent host through the typed stdio/WebSocket developer session in `crates/agiworkforce-app-server`. Reverse MCP execution is not yet wired: `agi mcp-server` advertises an empty catalog. Requirement: unknown tools and schema-invalid args are rejected, not guessed; tool results are untrusted data, never instructions.
 
 ## Planning
 

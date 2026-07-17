@@ -10,9 +10,13 @@ use agiworkforce_protocol::developer_session::{
     TurnSteerParams, TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
 };
 use async_trait::async_trait;
+use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{broadcast, Mutex};
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::HeaderValue;
+use tokio_tungstenite::tungstenite::Message;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Call {
@@ -452,4 +456,118 @@ async fn stdio_transport_interleaves_responses_and_host_notifications_as_json_li
         .await
         .expect("server task")
         .expect("server exits cleanly");
+}
+
+#[tokio::test]
+async fn websocket_transport_carries_typed_approval_round_trips() {
+    use agiworkforce_protocol::protocol::ReviewDecision;
+
+    let host = Arc::new(FakeHost::new());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind test listener");
+    let addr = listener.local_addr().expect("test listener address");
+    let server_host = host.clone();
+    let server_task = tokio::spawn(async move {
+        agiworkforce_app_server::serve_developer_session_websocket(
+            listener,
+            agiworkforce_app_server::WebSocketSecurity {
+                auth_token: Some("test-secret".to_string()),
+                allowed_origins: Vec::new(),
+                allow_query_token: false,
+            },
+            server_host,
+            capabilities(),
+        )
+        .await
+    });
+
+    let mut websocket_request = format!("ws://{addr}/ws")
+        .into_client_request()
+        .expect("valid websocket request");
+    websocket_request.headers_mut().insert(
+        "authorization",
+        HeaderValue::from_static("Bearer test-secret"),
+    );
+    let (mut websocket, _) = tokio_tungstenite::connect_async(websocket_request)
+        .await
+        .expect("authenticated websocket connects");
+
+    websocket
+        .send(Message::Text(
+            serde_json::to_string(&initialize()).expect("serialize initialize"),
+        ))
+        .await
+        .expect("send initialize");
+    let initialize_response = websocket
+        .next()
+        .await
+        .expect("initialize response frame")
+        .expect("initialize response succeeds");
+    let initialize_response: agiworkforce_protocol::developer_session::AppServerResponse =
+        serde_json::from_str(initialize_response.to_text().expect("text response"))
+            .expect("typed initialize response");
+    assert!(initialize_response.error.is_none());
+
+    host.notifications
+        .send(
+            AppServerNotification::new(
+                "approval/requested",
+                serde_json::json!({
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "requestId": "approval-1",
+                    "kind": "Exec",
+                    "summary": "Run tests",
+                    "detail": "cargo test",
+                }),
+            )
+            .expect("approval notification"),
+        )
+        .expect("websocket subscriber is active");
+    let approval_notification = websocket
+        .next()
+        .await
+        .expect("approval notification frame")
+        .expect("approval notification succeeds");
+    let approval_notification: AppServerNotification =
+        serde_json::from_str(approval_notification.to_text().expect("text notification"))
+            .expect("typed approval notification");
+    assert_eq!(approval_notification.method, "approval/requested");
+
+    let approval = ApprovalResponseParams {
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        request_id: "approval-1".to_string(),
+        decision: ReviewDecision::ApprovedForSession,
+    };
+    websocket
+        .send(Message::Text(
+            serde_json::to_string(&request(2, method::APPROVAL_RESPOND, approval.clone()))
+                .expect("serialize approval response"),
+        ))
+        .await
+        .expect("send approval response");
+    let approval_response = websocket
+        .next()
+        .await
+        .expect("approval acknowledgement frame")
+        .expect("approval acknowledgement succeeds");
+    let approval_response: agiworkforce_protocol::developer_session::AppServerResponse =
+        serde_json::from_str(approval_response.to_text().expect("text response"))
+            .expect("typed approval acknowledgement");
+    let acknowledgement: AcknowledgedResponse = serde_json::from_value(
+        approval_response
+            .result
+            .expect("approval acknowledgement result"),
+    )
+    .expect("typed acknowledgement");
+    assert!(acknowledgement.acknowledged);
+    assert_eq!(
+        host.calls.lock().await.last(),
+        Some(&Call::Approval(approval))
+    );
+
+    websocket.close(None).await.expect("close websocket");
+    server_task.abort();
 }

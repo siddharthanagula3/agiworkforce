@@ -22,7 +22,7 @@ The local session loop already distinguishes transient from terminal provider er
 
 ## Session Corruption — recover sessions
 
-The app-server holds sessions in memory with a `max_sessions` cap and a `session_timeout_secs` idle expiry (`crates/agiworkforce-app-server/src/lib.rs`), so a crashed host currently loses in-flight session state. Durable session persistence is only sketched: `AppStateStore.ts` documents a `registerPersistenceHandler` hook (Desktop → `~/.agiworkforce/state.json`, Mobile → MMKV) whose full implementation is deferred.
+The app-server holds live connection processors in memory without an enforced connection cap or idle expiry (`crates/agiworkforce-app-server/src/lib.rs`), so resource admission remains a gap and a crashed host loses in-flight turn state. Durable session persistence is only sketched: `AppStateStore.ts` documents a `registerPersistenceHandler` hook (Desktop → `~/.agiworkforce/state.json`, Mobile → MMKV) whose full implementation is deferred.
 
 - A corrupt or unparseable persisted-state blob must fail closed to safe defaults, not crash the surface: the store falls back to documented defaults rather than propagating a parse error. **🟡 Partial** — `AppStateStore.ts` defines defaults, but the persistence/hydrate path and schema-version migration are the deferred follow-on (the gap).
 - Durable rollout/resume files with checksum validation and quarantine-on-corruption are **🔭 Planned** — no rollout-file recovery path exists in `agiworkforce-app-server`.

@@ -37,8 +37,10 @@ short and path-checked so it does not drift into stale reference material.
   persistence handled through `src/permissions.rs`.
 - Web fetch/search logic is in `src/features/exec/tools/web.rs`; fetched content is marked
   untrusted before it is returned to the model.
-- The app-server surface is deliberately read-only. Mutating tools require the TUI/REPL approval
-  path and are not silently approved over WebSocket.
+- Both app-server transports run the full `AgentSession`. Mutating tools emit a typed approval
+  request and remain paused until the connected client returns a `ReviewDecision`; no WebSocket
+  call is silently approved. The obsolete seven-tool CLI adapter was removed rather than left as
+  a second, divergent registry.
 
 ## TUI Layout
 

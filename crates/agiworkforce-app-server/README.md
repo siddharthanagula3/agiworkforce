@@ -2,22 +2,24 @@
 
 Status: Current
 Owner role: Rust platform
-Last updated: 2026-07-14
+Last updated: 2026-07-17
 Kind: rust-crate
 Criticality: high
 
 ## Purpose
 
 Own the transport and request-admission layer for AGI local programmatic
-clients. The typed JSONL stdio protocol serves local developer threads and
-turns; the legacy JSON-RPC/WebSocket path exposes its explicitly limited tool
-surface.
+clients. The typed developer-session protocol serves the same full local agent
+over JSONL stdio and authenticated WebSocket, including threads, turns,
+streaming, interruption, MCP state, and approval round-trips. A separate legacy
+direct-tool JSON-RPC API remains available to embedders with an explicitly
+limited dispatch supplied by its caller.
 
 ## Consumers
 
-The CLI hosts the runtime. AGI for VS Code is the shipping typed-protocol
-client. Other surfaces must define a reviewed trust boundary before adopting
-this transport.
+The CLI hosts the runtime. AGI for VS Code is the shipping stdio client;
+WebSocket is the GUI/Cowork seam. Other surfaces must define a reviewed trust
+boundary before adopting this transport.
 
 ## Public API / Exports
 
@@ -29,7 +31,8 @@ Rust crate `agiworkforce-app-server`; public API is defined by `src/lib.rs`.
 - Initialize/version negotiation and client identity.
 - Typed thread, turn, streaming, approval, cancellation, and MCP status
   request routing through the `DeveloperSessionHost` interface.
-- JSON-RPC and WebSocket server behavior.
+- Typed developer-session stdio and WebSocket behavior.
+- Legacy direct-tool JSON-RPC behavior.
 - Programmatic tool exposure that is reusable across surfaces.
 
 ## What Does Not Belong Here
@@ -57,13 +60,15 @@ No secrets belong in this crate.
 
 ## Security, Privacy, Data Boundaries
 
-Security/privacy review is required for authentication, transport admission, tool exposure, logging, and filesystem/network access.
+WebSocket admission requires a non-empty auth token and origin checks. The host
+retains trust-mode, workspace, tool-permission, and approval policy. Tokens must
+not be printed or written into synced state.
 
 ## Tests Required For Changes
 
 Add tests for initialization, protocol-version behavior, client identity,
-request validation, typed host routing, notification interleaving, error
-responses, and legacy tool exposure.
+request validation, typed host routing, notification interleaving, approval
+round-trips, error responses, and legacy tool exposure.
 
 ## Release / Deployment Notes
 
@@ -72,9 +77,9 @@ the protocol version and update generated TypeScript consumers.
 
 ## Known Caveats
 
-The default stdio protocol is version 2. Long-running host work must return
-control before streaming notifications so approvals and interruption remain
-responsive.
+The developer-session protocol is version 3 on both transports. Long-running
+host work must return control before streaming notifications so approvals and
+interruption remain responsive.
 
 ## CODEOWNERS
 
