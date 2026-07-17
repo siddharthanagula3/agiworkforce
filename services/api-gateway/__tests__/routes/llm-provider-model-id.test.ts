@@ -64,7 +64,7 @@ vi.mock('../../src/lib/neonClients', () => ({
         ? {
             select: () => ({
               eq: () => ({
-                maybeSingle: () => Promise.resolve({ data: { plan_tier: 'pro' }, error: null }),
+                maybeSingle: () => Promise.resolve({ data: { plan_tier: 'max' }, error: null }),
               }),
             }),
           }
@@ -87,9 +87,7 @@ vi.mock('../../src/lib/logger', () => ({
 }));
 
 vi.mock('../../src/services/managedUsageBilling', async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import('../../src/services/managedUsageBilling')
-  >();
+  const actual = await importOriginal<typeof import('../../src/services/managedUsageBilling')>();
   return {
     ...actual,
     parseManagedUsageIdempotencyKey: (header: string | string[] | undefined) => {

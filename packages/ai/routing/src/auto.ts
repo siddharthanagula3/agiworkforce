@@ -134,12 +134,7 @@ export interface SelectedAutoRoute {
    * receive a silent provider fallback.
    */
   fallbacks: AutoFallbackRoute[];
-  reason:
-    | 'explicit'
-    | 'continuity'
-    | 'preferred_slot'
-    | 'fallback_slot'
-    | 'capability_fallback';
+  reason: 'explicit' | 'continuity' | 'preferred_slot' | 'fallback_slot' | 'capability_fallback';
 }
 
 export interface UnavailableAutoRoute {
@@ -217,7 +212,9 @@ function applyRuntimeProfile(
   }
 
   const allowedHarnessIds = request.allowedHarnessIds
-    ? profile.allowedHarnessIds.filter((harnessId) => request.allowedHarnessIds?.includes(harnessId))
+    ? profile.allowedHarnessIds.filter((harnessId) =>
+        request.allowedHarnessIds?.includes(harnessId),
+      )
     : profile.allowedHarnessIds;
   return { request: { ...request, allowedHarnessIds } };
 }
@@ -225,9 +222,14 @@ function applyRuntimeProfile(
 function normalizeTier(
   tier: string | null | undefined,
 ): 'free' | 'pro' | 'max' | 'enterprise' | 'byok' {
+  // Basic shares Pro's routing admission (budget-differentiated tier);
+  // previously it fell through to 'free', collapsing a paying Basic
+  // subscriber's auto-routing to the free workhorse slot.
   switch ((tier ?? '').toLowerCase()) {
     case 'pro':
     case 'team':
+    case 'basic':
+    case 'hobby':
       return 'pro';
     case 'max':
       return 'max';
@@ -483,8 +485,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       (policy.continuity.preferCurrentRouteForCache &&
         preferredSlots.some(
           (slotId) =>
-            allowedSlots.has(slotId) &&
-            policy.slots[slotId]?.modelKey === request.currentModelKey,
+            allowedSlots.has(slotId) && policy.slots[slotId]?.modelKey === request.currentModelKey,
         )))
   ) {
     const eligibility = evaluateEligibility(request.currentModelKey, task, request);
