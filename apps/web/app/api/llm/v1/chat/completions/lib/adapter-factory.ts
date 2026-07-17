@@ -130,7 +130,20 @@ export async function startProviderStream(
   const iterator = adapter.stream(chatRequest, signal)[Symbol.asyncIterator]();
   const first = await iterator.next();
   if (!first.done && first.value.type === 'error') {
-    throw mapError(first.value);
+    const mapped = mapError(first.value);
+    // Carry the structured HTTP status (the error chunk's `code` is
+    // `String(res.status)` for HTTP failures) onto the thrown Error so the
+    // shared `classifyError` — which reads `.status`, never message text —
+    // can categorize it. Managed failover (managed-failover.ts) rotates only
+    // on availability-class categories, and without this a 503 would
+    // classify as 'unknown' and never rotate. Message text is untouched
+    // (buildUpstreamErrorResponse keyword-sniffs it — see this module's
+    // docstring).
+    const status = first.value.code ? Number(first.value.code) : Number.NaN;
+    if (Number.isInteger(status) && status >= 100 && status <= 599) {
+      (mapped as Error & { status?: number }).status = status;
+    }
+    throw mapped;
   }
   return {
     [Symbol.asyncIterator](): AsyncIterator<StreamChunk> {
