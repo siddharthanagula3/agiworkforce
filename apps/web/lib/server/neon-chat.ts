@@ -11,6 +11,8 @@ export type ChatConversationRow = {
   model: string | null;
   project_id: string | null;
   pinned: boolean;
+  starred: boolean;
+  archived: boolean;
   is_temporary: boolean;
   created_at: string;
   updated_at: string;

@@ -27,6 +27,8 @@ function toWebConversation(
     model: conversation.model ?? null,
     projectId: conversation.projectId,
     isPinned: conversation.pinned,
+    isStarred: conversation.starred,
+    isArchived: conversation.archived,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   };
@@ -52,7 +54,14 @@ interface UseConversationsReturn {
   loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (
     id: string,
-    updates: { title?: string; model?: string; projectId?: string | null; pinned?: boolean },
+    updates: {
+      title?: string;
+      model?: string;
+      projectId?: string | null;
+      pinned?: boolean;
+      starred?: boolean;
+      archived?: boolean;
+    },
   ) => Promise<boolean>;
   deleteConversation: (id: string) => Promise<boolean>;
   setActiveConversation: (id: string | null) => void;
@@ -285,7 +294,14 @@ export function useConversations(): UseConversationsReturn {
   const updateConversation = useCallback(
     async (
       id: string,
-      updates: { title?: string; model?: string; projectId?: string | null; pinned?: boolean },
+      updates: {
+        title?: string;
+        model?: string;
+        projectId?: string | null;
+        pinned?: boolean;
+        starred?: boolean;
+        archived?: boolean;
+      },
     ): Promise<boolean> => {
       try {
         const headers = await addCsrfHeaders(await getAuthHeaders());
@@ -306,6 +322,8 @@ export function useConversations(): UseConversationsReturn {
           model: data.conversation.model ?? undefined,
           projectId: data.conversation.project_id ?? null,
           isPinned: data.conversation.pinned ?? false,
+          isStarred: data.conversation.starred ?? false,
+          isArchived: data.conversation.archived ?? false,
           updatedAt: data.conversation.updated_at,
         });
         return true;

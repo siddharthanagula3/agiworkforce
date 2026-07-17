@@ -43,7 +43,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const db = getNeonChatDb();
   const [conversation] = await db.query<ChatConversationRow>(
     `
-      select id, title, model, project_id, pinned, is_temporary, created_at, updated_at
+      select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       from web_conversations
       where id = $1 and user_id = $2 and deleted_at is null
       limit 1
@@ -120,6 +120,10 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (hasProjectIdUpdate) updates['projectId'] = body['projectId'];
   const hasPinnedUpdate = Object.prototype.hasOwnProperty.call(body, 'pinned');
   if (hasPinnedUpdate) updates['pinned'] = body['pinned'];
+  const hasStarredUpdate = Object.prototype.hasOwnProperty.call(body, 'starred');
+  if (hasStarredUpdate) updates['starred'] = body['starred'];
+  const hasArchivedUpdate = Object.prototype.hasOwnProperty.call(body, 'archived');
+  if (hasArchivedUpdate) updates['archived'] = body['archived'];
 
   const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
     `
@@ -129,9 +133,11 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         model = coalesce($4, model),
         project_id = case when $5::boolean then $6::text else project_id end,
         pinned = case when $7::boolean then $8::boolean else pinned end,
+        starred = case when $9::boolean then $10::boolean else starred end,
+        archived = case when $11::boolean then $12::boolean else archived end,
         updated_at = now()
       where id = $1 and user_id = $2 and deleted_at is null
-      returning id, title, model, project_id, pinned, is_temporary, created_at, updated_at
+      returning id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
     `,
     [
       id,
@@ -142,6 +148,10 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       updates['projectId'] ?? null,
       hasPinnedUpdate,
       updates['pinned'] ?? false,
+      hasStarredUpdate,
+      updates['starred'] ?? false,
+      hasArchivedUpdate,
+      updates['archived'] ?? false,
     ],
   );
 

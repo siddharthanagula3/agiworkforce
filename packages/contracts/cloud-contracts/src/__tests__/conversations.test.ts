@@ -21,6 +21,8 @@ const conversation = {
   model: 'auto',
   project_id: 'project-1',
   pinned: true,
+  starred: true,
+  archived: false,
   is_temporary: false,
   created_at: '2026-07-14T00:00:00.000Z',
   updated_at: '2026-07-14T00:01:00.000Z',
@@ -83,6 +85,8 @@ describe('managed-cloud conversation wire contract', () => {
       model: 'auto',
       projectId: 'project-1',
       pinned: true,
+      starred: true,
+      archived: false,
       isTemporary: false,
       createdAt: conversation.created_at,
       updatedAt: conversation.updated_at,
@@ -117,6 +121,9 @@ describe('managed-cloud conversation wire contract', () => {
     expect(
       ManagedCloudUpdateConversationRequestSchema.parse({ title: 'Renamed', pinned: false }),
     ).toEqual({ title: 'Renamed', pinned: false });
+    expect(
+      ManagedCloudUpdateConversationRequestSchema.parse({ starred: true, archived: true }),
+    ).toEqual({ starred: true, archived: true });
     expect(
       ManagedCloudCreateMessageRequestSchema.parse({
         id: message.id,

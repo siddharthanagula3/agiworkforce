@@ -11,6 +11,8 @@ export const ManagedCloudConversationWireSchema = z.object({
   model: z.string().nullable(),
   project_id: z.string().nullable(),
   pinned: z.boolean(),
+  starred: z.boolean(),
+  archived: z.boolean(),
   is_temporary: z.boolean(),
   created_at: z.string().min(1),
   updated_at: z.string().min(1),
@@ -59,6 +61,8 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   model: z.string().min(1).optional(),
   projectId: z.string().max(200).nullable().optional(),
   pinned: z.boolean().optional(),
+  starred: z.boolean().optional(),
+  archived: z.boolean().optional(),
 });
 export type ManagedCloudUpdateConversationRequest = z.infer<
   typeof ManagedCloudUpdateConversationRequestSchema
@@ -156,6 +160,8 @@ export interface ManagedCloudConversation {
   model?: string;
   projectId: string | null;
   pinned: boolean;
+  starred: boolean;
+  archived: boolean;
   isTemporary: boolean;
   createdAt: string;
   updatedAt: string;
@@ -184,6 +190,8 @@ export function normalizeManagedCloudConversation(
     ...(wire.model ? { model: wire.model } : {}),
     projectId: wire.project_id,
     pinned: wire.pinned,
+    starred: wire.starred,
+    archived: wire.archived,
     isTemporary: wire.is_temporary,
     createdAt: wire.created_at,
     updatedAt: wire.updated_at,

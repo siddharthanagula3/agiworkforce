@@ -54,7 +54,7 @@ async function handleGetConversations(request: NextRequest) {
     if (q) {
       rows = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, project_id, pinned, is_temporary, created_at, updated_at
+          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null and title ilike $2
           order by pinned desc, updated_at desc
@@ -65,7 +65,7 @@ async function handleGetConversations(request: NextRequest) {
     } else {
       rows = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, project_id, pinned, is_temporary, created_at, updated_at
+          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null
           order by pinned desc, updated_at desc
@@ -126,7 +126,7 @@ async function handleCreateConversation(request: NextRequest) {
           project_id = excluded.project_id,
           updated_at = now()
         where web_conversations.user_id = $1
-        returning id, title, model, project_id, pinned, is_temporary, created_at, updated_at
+        returning id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       `,
       [
         userId,
