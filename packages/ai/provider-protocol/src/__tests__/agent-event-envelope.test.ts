@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
+import type { AgentEvent } from '@agiworkforce/types/protocol';
 
 import { agentEventToStreamChunk, streamChunkToAgentEvent } from '../agent-event-envelope';
 
@@ -103,6 +104,59 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
   it('AgentEvent lifecycle has no StreamChunk analog (app-server/desktop-only concept)', () => {
     expect(agentEventToStreamChunk({ type: 'lifecycle', phase: 'started' })).toBeNull();
     expect(agentEventToStreamChunk({ type: 'lifecycle', phase: 'heartbeat' })).toBeNull();
+  });
+
+  it('keeps user-surface run activity out of the provider StreamChunk dialect', () => {
+    const activityEvents: AgentEvent[] = [
+      {
+        type: 'progress-update',
+        progressId: 'plan',
+        summary: 'Planning the report',
+        status: 'running',
+      },
+      {
+        type: 'tool-execution-start',
+        toolCallId: 'call-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Searching official sources',
+        input: { query: 'release notes' },
+      },
+      {
+        type: 'tool-execution-end',
+        toolCallId: 'call-1',
+        name: 'web_search',
+        output: { resultCount: 3 },
+        isError: false,
+      },
+      {
+        type: 'source-list',
+        query: 'release notes',
+        sources: [{ url: 'https://example.com', title: 'Example' }],
+      },
+      {
+        type: 'approval-requested',
+        approvalId: 'approval-1',
+        toolCallId: 'call-2',
+        name: 'shell',
+        category: 'shell',
+        summary: 'Install a package',
+        input: { command: 'install package' },
+      },
+      { type: 'approval-resolved', approvalId: 'approval-1', decision: 'approved' },
+      {
+        type: 'artifact-produced',
+        artifactId: 'artifact-1',
+        name: 'report.pdf',
+        mimeType: 'application/pdf',
+        uri: '/files/artifact-1',
+      },
+      { type: 'context-compacted', summary: 'Context automatically compacted' },
+    ];
+
+    for (const event of activityEvents) {
+      expect(agentEventToStreamChunk(event)).toBeNull();
+    }
   });
 
   describe('stop reason round trip — the honest vocabulary is symmetric: every member round-trips losslessly', () => {

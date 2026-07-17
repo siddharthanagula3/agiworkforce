@@ -14,9 +14,10 @@
  * `StreamChunkCitation`, `StreamChunkVendorRaw`, and `StreamChunkResponseMeta`
  * map to `null`: `agent_events.rs`'s module doc documents why they are not
  * modeled in the shared envelope (legacy-wire-reconstruction concerns with
- * no app-server/desktop equivalent). `AgentEvent`'s `lifecycle` variant maps
- * to `null` in the reverse direction for the same reason: no `StreamChunk`
- * analog exists (it comes from the app-server/desktop dialects only).
+ * no app-server/desktop equivalent). User-surface run activity (`lifecycle`,
+ * progress, execution, approvals, sources, artifacts, and compaction) maps to
+ * `null` in the reverse direction because provider `StreamChunk` is only the
+ * model-streaming sub-dialect of the broader agent-run envelope.
  */
 
 import type { StreamChunk } from '@agiworkforce/types';
@@ -113,7 +114,7 @@ export function streamChunkToAgentEvent(chunk: StreamChunk): AgentEvent | null {
 }
 
 /** The shared envelope's `AgentEvent` -> web `StreamChunk`. Returns `null`
- * for `lifecycle` (no `StreamChunk` analog — see module doc). */
+ * for user-surface run activity with no provider `StreamChunk` analog. */
 export function agentEventToStreamChunk(event: AgentEvent): StreamChunk | null {
   switch (event.type) {
     case 'text-delta':
@@ -156,6 +157,14 @@ export function agentEventToStreamChunk(event: AgentEvent): StreamChunk | null {
     case 'stop':
       return { type: 'stop', reason: AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK[event.reason] };
     case 'lifecycle':
+    case 'progress-update':
+    case 'tool-execution-start':
+    case 'tool-execution-end':
+    case 'source-list':
+    case 'approval-requested':
+    case 'approval-resolved':
+    case 'artifact-produced':
+    case 'context-compacted':
       return null;
   }
 }
