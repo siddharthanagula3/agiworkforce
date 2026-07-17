@@ -371,6 +371,18 @@ agi-work-wiring teammate frees apps/web:
   discipline wave 1 lands.
 - Optimize for the 10–20 year horizon; no quick wins.
 
+## Gateway failover follow-ups (from the 2026-07-17 managed-failover landing)
+
+- CLIENT EMISSION: no surface emits `x-agi-fallback-models` yet — web/desktop/
+  mobile should forward `resolveAutoRoute().fallbacks` model keys (max 4) on
+  managed auto sends; until then the gateway failover path is inert-but-pinned.
+- LEDGER METADATA: the billing reservation row records the PLANNED primary
+  (reserve precedes attempts); settlement cost + usage_events reflect the
+  actual serving model. Cosmetic mismatch on rotated requests — decide if
+  ledger consumers care.
+- WEB TWIN ROUTE: apps/web's own /api/llm/v1 route needs the same failover
+  wiring or should delegate to the gateway (one-canonical-owner candidate).
+
 ## Ponytail dedup queue (one-canonical-owner, non-urgent)
 
 - web store roots overlap (flagged during the W12 manifest, 2026-07-17):

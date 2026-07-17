@@ -21,6 +21,7 @@ import {
   getAllowedModelsForTier,
   getModelMetadataById,
   type Provider as CatalogProvider,
+  type ProviderAdapter,
   type StreamChunk,
   type StreamChunkStop,
   type StreamChunkUsage,
@@ -41,6 +42,7 @@ import { buildProviderAdapter, type ProviderId } from '../lib/providerAdapters';
 import {
   incompleteStreamFailure,
   isCanonicalStreamChunk,
+  isFailoverEligibleFailure,
   malformedStreamFailure,
   toSafeProviderFailure,
   type SafeProviderFailure,
@@ -262,6 +264,61 @@ export async function enforcePlanTier(
   }
 }
 
+/**
+ * Ordered managed-failover plan header (AUTO-ROUTER-MIGRATION-01).
+ *
+ * The canonical resolver (`packages/ai/routing` resolveAutoRoute) runs on the
+ * client surface and emits registry-ordered, distinct-provider fallback routes
+ * for AUTO-PROFILE selections only — explicit user selections always resolve
+ * with an empty fallback list, because an explicit selection is a contract
+ * the gateway must never silently rewrite. Clients forward that plan as a
+ * comma-separated list of catalog model IDs in this header; its absence means
+ * "no failover is permitted for this request".
+ *
+ * The plan rides a header rather than the body so the OpenAI-compatible wire
+ * body stays byte-stable (see file docstring) and the billing request-hash /
+ * idempotency fingerprint is unaffected by resolver plan recomputation.
+ * Entries are advisory candidates: the gateway re-checks catalog membership,
+ * proxied-provider support, and tier admission per attempt before use, and
+ * never forwards upstream provider model IDs back to the client.
+ */
+export const MANAGED_FALLBACK_MODELS_HEADER = 'x-agi-fallback-models';
+
+/** Resolver plans hold at most a few distinct-provider routes; bound defensively. */
+const MAX_FALLBACK_PLAN_ROUTES = 4;
+const FALLBACK_MODEL_ID_PATTERN = /^[A-Za-z0-9._:/-]{1,100}$/;
+
+/**
+ * Parse and syntax-validate the fallback plan header. Malformed plans fail
+ * closed with a 400 before any billing reservation or provider work. Entries
+ * duplicating the primary model or an earlier entry are dropped so the
+ * attempt loop stays bounded by distinct routes.
+ *
+ * Exported for unit tests; not part of the route API.
+ */
+export function parseFallbackPlanHeader(
+  header: string | string[] | undefined,
+  primaryModel: string,
+): string[] {
+  if (header === undefined) return [];
+  if (Array.isArray(header)) {
+    throw new AppError(`${MANAGED_FALLBACK_MODELS_HEADER} header is invalid`, 400);
+  }
+  const entries = header.split(',').map((entry) => entry.trim());
+  if (entries.length > MAX_FALLBACK_PLAN_ROUTES) {
+    throw new AppError(`${MANAGED_FALLBACK_MODELS_HEADER} lists too many fallback routes`, 400);
+  }
+  const plan: string[] = [];
+  for (const entry of entries) {
+    if (!FALLBACK_MODEL_ID_PATTERN.test(entry)) {
+      throw new AppError(`${MANAGED_FALLBACK_MODELS_HEADER} header is invalid`, 400);
+    }
+    if (entry === primaryModel || plan.includes(entry)) continue;
+    plan.push(entry);
+  }
+  return plan;
+}
+
 // GW-2 (audit 2026-05-03): SECURITY GUARDRAIL — upstream requests are built
 // exclusively inside `packages/ai/providers` adapters from server env keys.
 // NEVER thread `req.headers` (or the user's `Authorization: Bearer <jwt>`)
@@ -305,6 +362,10 @@ router.post(
       }
       throw error;
     }
+    const fallbackModels = parseFallbackPlanHeader(
+      req.headers[MANAGED_FALLBACK_MODELS_HEADER],
+      body.model,
+    );
     const provider = resolveProvider(body.model);
     const tier = await enforcePlanTier(user.userId, user.token, body.model);
 
@@ -313,10 +374,11 @@ router.post(
       throw new AppError(`Server is not configured for ${provider} models`, 502);
     }
 
-    const chatRequest = openAIWireRequestToChatRequest({
-      ...(body as OpenAIWireChatRequest),
-      model: toProviderApiModelId(body.model),
-    });
+    const buildChatRequest = (model: string) =>
+      openAIWireRequestToChatRequest({
+        ...(body as OpenAIWireChatRequest),
+        model: toProviderApiModelId(model),
+      });
 
     const usageDb = getUserScopedClient(user);
     let reservation;
@@ -351,6 +413,12 @@ router.post(
     let providerSuccessObserved = false;
     let actualUsage: Omit<StreamChunkUsage, 'type'> = {};
 
+    // The route currently serving the request. Starts at the primary and
+    // advances only when managed failover rotates to a fallback attempt, so
+    // billing settlement, usage events, and response attribution always name
+    // the model that actually served (or last attempted) the request.
+    let served: { model: string; provider: Provider } = { model: body.model, provider };
+
     const captureUsage = (chunk: StreamChunkUsage): void => {
       actualUsage = {
         ...actualUsage,
@@ -372,7 +440,7 @@ router.post(
       await finalizeManagedUsage({
         ...billingIdentity,
         outcome,
-        model: body.model,
+        model: served.model,
         ...(outcome === 'completed' ? { usage: actualUsage } : {}),
         estimatedCostCents: reservation.estimatedCostCents,
       });
@@ -387,8 +455,8 @@ router.post(
         logger.error(
           {
             userId: user.userId,
-            provider,
-            model: body.model,
+            provider: served.provider,
+            model: served.model,
             reason,
             billingCode:
               error instanceof ManagedUsageBillingError ? error.code : 'BILLING_UNKNOWN_ERROR',
@@ -405,8 +473,8 @@ router.post(
         logger.error(
           {
             userId: user.userId,
-            provider,
-            model: body.model,
+            provider: served.provider,
+            model: served.model,
             billingCode:
               error instanceof ManagedUsageBillingError ? error.code : 'BILLING_UNKNOWN_ERROR',
           },
@@ -423,6 +491,7 @@ router.post(
         tier,
         stream: body.stream,
         messageCount: body.messages.length,
+        fallbackRoutes: fallbackModels.length,
       },
       'LLM proxy request',
     );
@@ -440,8 +509,8 @@ router.post(
         .from('usage_events')
         .insert({
           user_id: user.userId,
-          model: body.model,
-          provider,
+          model: served.model,
+          provider: served.provider,
           tier,
           event_type: eventType,
           ...(eventType === 'llm_completion'
@@ -462,9 +531,74 @@ router.post(
         );
     };
 
-    const assembler = new OpenAIWireAssembler({ model: body.model });
+    // One lifecycle (and one 10-minute deadline) spans the whole request,
+    // including every failover attempt: a client disconnect or expired
+    // deadline terminates the request, never a rotation.
     const lifecycle = createStreamLifecycle({ deadlineMs: LLM_PROVIDER_DEADLINE_MS });
     let responseComplete = false;
+
+    interface AttemptRoute {
+      model: string;
+      provider: Provider;
+      adapter: ProviderAdapter;
+    }
+
+    // Admission is re-checked per attempt at attempt time: a fallback entry
+    // that is catalog-unknown, non-proxied, tier-forbidden, or unconfigured is
+    // skipped (never served), and the original provider failure surfaces if no
+    // admitted candidate remains. Only AppError-class rejections skip — an
+    // infrastructure error (unexpected throw) still fails the request.
+    const remainingFallbackModels = [...fallbackModels];
+    const nextFallbackRoute = async (): Promise<AttemptRoute | null> => {
+      while (remainingFallbackModels.length > 0) {
+        const candidate = remainingFallbackModels.shift() as string;
+        try {
+          const candidateProvider = resolveProvider(candidate);
+          await enforcePlanTier(user.userId, user.token, candidate);
+          const candidateAdapter = buildProviderAdapter(candidateProvider);
+          if (!candidateAdapter) {
+            logger.warn(
+              { userId: user.userId, model: candidate, provider: candidateProvider },
+              'LLM managed failover candidate skipped: provider not configured',
+            );
+            continue;
+          }
+          return { model: candidate, provider: candidateProvider, adapter: candidateAdapter };
+        } catch (error) {
+          if (error instanceof AppError) {
+            logger.warn(
+              { userId: user.userId, model: candidate, statusCode: error.statusCode },
+              'LLM managed failover candidate skipped: admission re-check failed',
+            );
+            continue;
+          }
+          throw error;
+        }
+      }
+      return null;
+    };
+
+    const rotateAfterFailure = async (
+      failure: SafeProviderFailure,
+    ): Promise<AttemptRoute | null> => {
+      if (!isFailoverEligibleFailure(failure) || lifecycle.signal.aborted) return null;
+      const nextRoute = await nextFallbackRoute();
+      if (nextRoute) {
+        logger.warn(
+          {
+            userId: user.userId,
+            fromModel: served.model,
+            fromProvider: served.provider,
+            toModel: nextRoute.model,
+            toProvider: nextRoute.provider,
+            category: failure.category,
+            code: failure.chunk.code,
+          },
+          'LLM managed failover: rotating to fallback route',
+        );
+      }
+      return nextRoute;
+    };
 
     const abortForDisconnect = (): void => {
       if (!responseComplete) lifecycle.abortClient();
@@ -479,11 +613,8 @@ router.post(
 
     // Streaming response
     if (body.stream) {
-      let iterator: AsyncIterator<StreamChunk> | null = null;
       let routeError: AppError | null = null;
       let wroteClientEvent = false;
-      let terminalEmitted = false;
-      let pendingStop: StreamChunkStop | null = null;
 
       const prepareSseHeaders = (): void => {
         if (res.hasHeader('Content-Type')) return;
@@ -506,15 +637,11 @@ router.post(
         if (!accepted) await lifecycle.waitForDrain(res);
       };
 
-      const writeWireEvent = async (wire: Record<string, unknown>): Promise<void> => {
-        await writeSsePayload(`data: ${JSON.stringify(wire)}\n\n`);
-      };
-
       const logFailure = (failure: SafeProviderFailure, phase: string): void => {
         logger.error(
           {
-            provider,
-            model: body.model,
+            provider: served.provider,
+            model: served.model,
             phase,
             category: failure.category,
             code: failure.chunk.code,
@@ -525,106 +652,159 @@ router.post(
         );
       };
 
-      const emitFailureTerminal = async (failure: SafeProviderFailure): Promise<void> => {
-        if (terminalEmitted) return;
-        terminalEmitted = true;
-        for (const wire of assembler.sseChunks(failure.chunk)) {
-          await writeWireEvent(wire);
-        }
-      };
-
-      const handleFailure = async (failure: SafeProviderFailure, phase: string): Promise<void> => {
-        logFailure(failure, phase);
-        if (!wroteClientEvent && !res.headersSent) {
-          routeError = new AppError(failure.chunk.message, failure.statusCode);
-          return;
-        }
-        await emitFailureTerminal(failure);
-      };
+      let attempt: AttemptRoute | null = { model: body.model, provider, adapter };
 
       try {
-        iterator = adapter.stream(chatRequest, lifecycle.signal)[Symbol.asyncIterator]();
+        while (attempt) {
+          served = { model: attempt.model, provider: attempt.provider };
+          actualUsage = {};
+          // Per-attempt assembler so the wire stream attributes the model
+          // that is actually serving this attempt, never a failed primary.
+          const assembler = new OpenAIWireAssembler({ model: attempt.model });
+          const writeWireEvent = async (wire: Record<string, unknown>): Promise<void> => {
+            await writeSsePayload(`data: ${JSON.stringify(wire)}\n\n`);
+          };
 
-        while (!routeError && !terminalEmitted) {
-          const next = await lifecycle.next(iterator);
-          if (next.done) break;
+          let iterator: AsyncIterator<StreamChunk> | null = null;
+          let pendingStop: StreamChunkStop | null = null;
+          let attemptFailure: { failure: SafeProviderFailure; phase: string } | null = null;
+          let succeeded = false;
+          let clientGone = false;
 
-          if (!isCanonicalStreamChunk(next.value)) {
-            await handleFailure(malformedStreamFailure(), 'invalid-event');
-            break;
-          }
+          try {
+            iterator = attempt.adapter
+              .stream(buildChatRequest(attempt.model), lifecycle.signal)
+              [Symbol.asyncIterator]();
 
-          const chunk = next.value;
-          if (chunk.type === 'error') {
-            await handleFailure(toSafeProviderFailure(chunk, chunk), 'provider-error-event');
-            break;
-          }
+            while (!attemptFailure) {
+              const next: IteratorResult<StreamChunk> = await lifecycle.next(iterator);
+              if (next.done) break;
 
-          if (chunk.type === 'stop') {
-            if (chunk.reason === 'error' || chunk.reason === 'cancel') {
-              await handleFailure(incompleteStreamFailure(), `provider-stop-${chunk.reason}`);
-              break;
+              if (!isCanonicalStreamChunk(next.value)) {
+                attemptFailure = { failure: malformedStreamFailure(), phase: 'invalid-event' };
+                break;
+              }
+
+              const chunk: StreamChunk = next.value;
+              if (chunk.type === 'error') {
+                attemptFailure = {
+                  failure: toSafeProviderFailure(chunk, chunk),
+                  phase: 'provider-error-event',
+                };
+                break;
+              }
+
+              if (chunk.type === 'stop') {
+                if (chunk.reason === 'error' || chunk.reason === 'cancel') {
+                  attemptFailure = {
+                    failure: incompleteStreamFailure(),
+                    phase: `provider-stop-${chunk.reason}`,
+                  };
+                  break;
+                }
+                pendingStop ??= chunk;
+                continue;
+              }
+
+              if (chunk.type === 'usage') captureUsage(chunk);
+
+              // OpenAI-compatible providers may emit a usage-only event after
+              // their finish event. No other data is valid after a stop.
+              if (pendingStop && chunk.type !== 'usage') {
+                attemptFailure = { failure: malformedStreamFailure(), phase: 'event-after-stop' };
+                break;
+              }
+
+              for (const wire of assembler.sseChunks(chunk)) {
+                await writeWireEvent(wire);
+              }
             }
-            pendingStop ??= chunk;
+
+            if (!attemptFailure) {
+              if (!pendingStop) {
+                attemptFailure = { failure: incompleteStreamFailure(), phase: 'missing-stop' };
+              } else {
+                providerSuccessObserved = true;
+                await finalizeBilling('completed');
+                for (const wire of assembler.sseChunks(pendingStop)) {
+                  await writeWireEvent(wire);
+                }
+                await writeSsePayload('data: [DONE]\n\n');
+                await markClientDelivered();
+                succeeded = true;
+              }
+            }
+          } catch (err) {
+            if (
+              err instanceof StreamClientAbortError ||
+              lifecycle.signal.reason instanceof StreamClientAbortError ||
+              req.aborted ||
+              res.destroyed
+            ) {
+              logger.info(
+                { provider: served.provider, model: served.model },
+                'LLM stream client disconnected',
+              );
+              clientGone = true;
+            } else if (err instanceof AppError) {
+              routeError = err;
+            } else if (err instanceof ManagedUsageBillingError) {
+              attemptFailure = {
+                failure: {
+                  category: 'gateway',
+                  statusCode: err.statusCode,
+                  chunk: {
+                    type: 'error',
+                    message: 'Usage settlement is temporarily unavailable. Please retry.',
+                    code: err.code.toLowerCase(),
+                    retryable: err.statusCode >= 500,
+                  },
+                },
+                phase: 'billing-finalization',
+              };
+            } else {
+              attemptFailure = { failure: toSafeProviderFailure(err), phase: 'thrown-error' };
+            }
+          } finally {
+            if (iterator) lifecycle.release(iterator);
+          }
+
+          if (succeeded || clientGone || routeError) break;
+          if (!attemptFailure) break;
+
+          logFailure(attemptFailure.failure, attemptFailure.phase);
+
+          // Managed failover: only before the first byte reaches the client
+          // (a half-streamed response from provider A continued by provider B
+          // would be corruption), and only for eligible availability failures.
+          const nextRoute: AttemptRoute | null = wroteClientEvent
+            ? null
+            : await rotateAfterFailure(attemptFailure.failure);
+          if (nextRoute) {
+            attempt = nextRoute;
             continue;
           }
 
-          if (chunk.type === 'usage') captureUsage(chunk);
-
-          // OpenAI-compatible providers may emit a usage-only event after
-          // their finish event. No other data is valid after a stop.
-          if (pendingStop && chunk.type !== 'usage') {
-            await handleFailure(malformedStreamFailure(), 'event-after-stop');
-            break;
-          }
-
-          for (const wire of assembler.sseChunks(chunk)) {
-            await writeWireEvent(wire);
-          }
-        }
-
-        if (!routeError && !terminalEmitted) {
-          if (!pendingStop) {
-            await handleFailure(incompleteStreamFailure(), 'missing-stop');
+          if (!wroteClientEvent && !res.headersSent) {
+            routeError = new AppError(
+              attemptFailure.failure.chunk.message,
+              attemptFailure.failure.statusCode,
+            );
           } else {
-            providerSuccessObserved = true;
-            await finalizeBilling('completed');
-            terminalEmitted = true;
-            for (const wire of assembler.sseChunks(pendingStop)) {
-              await writeWireEvent(wire);
+            try {
+              for (const wire of assembler.sseChunks(attemptFailure.failure.chunk)) {
+                await writeWireEvent(wire);
+              }
+            } catch {
+              // The failure terminal could not be delivered (client gone or
+              // deadline expired mid-write); the reservation release below
+              // still records the failed outcome durably.
             }
-            await writeSsePayload('data: [DONE]\n\n');
-            await markClientDelivered();
           }
-        }
-      } catch (err) {
-        if (
-          err instanceof StreamClientAbortError ||
-          lifecycle.signal.reason instanceof StreamClientAbortError ||
-          req.aborted ||
-          res.destroyed
-        ) {
-          logger.info({ provider, model: body.model }, 'LLM stream client disconnected');
-        } else if (err instanceof AppError) {
-          routeError = err;
-        } else if (err instanceof ManagedUsageBillingError) {
-          const billingFailure: SafeProviderFailure = {
-            category: 'gateway',
-            statusCode: err.statusCode,
-            chunk: {
-              type: 'error',
-              message: 'Usage settlement is temporarily unavailable. Please retry.',
-              code: err.code.toLowerCase(),
-              retryable: err.statusCode >= 500,
-            },
-          };
-          await handleFailure(billingFailure, 'billing-finalization');
-        } else {
-          await handleFailure(toSafeProviderFailure(err), 'thrown-error');
+          break;
         }
       } finally {
         await releaseFailedReservation('stream_not_completed');
-        if (iterator) lifecycle.release(iterator);
         lifecycle.cleanup();
         responseComplete = true;
         detachConnectionListeners();
@@ -640,113 +820,152 @@ router.post(
     }
 
     // Non-streaming response
-    let iterator: AsyncIterator<StreamChunk> | null = null;
     let routeError: AppError | null = null;
-    let sawStop = false;
+    let servedAssembler: OpenAIWireAssembler | null = null;
+
+    const logNonStreamFailure = (failure: SafeProviderFailure, phase: string): void => {
+      logger.error(
+        {
+          provider: served.provider,
+          model: served.model,
+          phase,
+          category: failure.category,
+          code: failure.chunk.code,
+          retryable: failure.chunk.retryable,
+          statusCode: failure.statusCode,
+        },
+        'Upstream provider request failed',
+      );
+    };
+
+    let attempt: AttemptRoute | null = { model: body.model, provider, adapter };
 
     try {
-      iterator = adapter.stream(chatRequest, lifecycle.signal)[Symbol.asyncIterator]();
+      while (attempt) {
+        served = { model: attempt.model, provider: attempt.provider };
+        actualUsage = {};
+        const assembler = new OpenAIWireAssembler({ model: attempt.model });
 
-      while (!routeError) {
-        const next = await lifecycle.next(iterator);
-        if (next.done) break;
+        let iterator: AsyncIterator<StreamChunk> | null = null;
+        let sawStop = false;
+        let attemptFailure: { failure: SafeProviderFailure; phase: string } | null = null;
+        let succeeded = false;
+        let clientGone = false;
 
-        if (!isCanonicalStreamChunk(next.value)) {
-          const failure = malformedStreamFailure();
-          routeError = new AppError(failure.chunk.message, failure.statusCode);
-          break;
-        }
+        try {
+          iterator = attempt.adapter
+            .stream(buildChatRequest(attempt.model), lifecycle.signal)
+            [Symbol.asyncIterator]();
 
-        const chunk = next.value;
-        if (chunk.type === 'error') {
-          const failure = toSafeProviderFailure(chunk, chunk);
-          logger.error(
-            {
-              provider,
-              model: body.model,
-              category: failure.category,
-              code: failure.chunk.code,
-              retryable: failure.chunk.retryable,
-              statusCode: failure.statusCode,
-            },
-            'Upstream provider request failed',
-          );
-          routeError = new AppError(failure.chunk.message, failure.statusCode);
-          break;
-        }
+          while (!attemptFailure) {
+            const next = await lifecycle.next(iterator);
+            if (next.done) break;
 
-        if (chunk.type === 'stop') {
-          if (chunk.reason === 'error' || chunk.reason === 'cancel') {
-            const failure = incompleteStreamFailure();
-            routeError = new AppError(failure.chunk.message, failure.statusCode);
-            break;
-          }
-          if (!sawStop) {
+            if (!isCanonicalStreamChunk(next.value)) {
+              attemptFailure = { failure: malformedStreamFailure(), phase: 'invalid-event' };
+              break;
+            }
+
+            const chunk = next.value;
+            if (chunk.type === 'error') {
+              attemptFailure = {
+                failure: toSafeProviderFailure(chunk, chunk),
+                phase: 'provider-error-event',
+              };
+              break;
+            }
+
+            if (chunk.type === 'stop') {
+              if (chunk.reason === 'error' || chunk.reason === 'cancel') {
+                attemptFailure = {
+                  failure: incompleteStreamFailure(),
+                  phase: `provider-stop-${chunk.reason}`,
+                };
+                break;
+              }
+              if (!sawStop) {
+                assembler.ingest(chunk);
+                sawStop = true;
+              }
+              continue;
+            }
+
+            if (chunk.type === 'usage') captureUsage(chunk);
+
+            if (sawStop && chunk.type !== 'usage') {
+              attemptFailure = { failure: malformedStreamFailure(), phase: 'event-after-stop' };
+              break;
+            }
+
             assembler.ingest(chunk);
-            sawStop = true;
           }
+
+          if (!attemptFailure) {
+            if (!sawStop) {
+              attemptFailure = { failure: incompleteStreamFailure(), phase: 'missing-stop' };
+            } else {
+              providerSuccessObserved = true;
+              await finalizeBilling('completed');
+              servedAssembler = assembler;
+              succeeded = true;
+            }
+          }
+        } catch (err) {
+          if (
+            err instanceof StreamClientAbortError ||
+            lifecycle.signal.reason instanceof StreamClientAbortError ||
+            req.aborted ||
+            res.destroyed
+          ) {
+            logger.info(
+              { provider: served.provider, model: served.model },
+              'LLM request client disconnected',
+            );
+            clientGone = true;
+          } else if (err instanceof AppError) {
+            routeError = err;
+          } else if (err instanceof ManagedUsageBillingError) {
+            routeError = new AppError(err.message, err.statusCode);
+          } else {
+            attemptFailure = { failure: toSafeProviderFailure(err), phase: 'thrown-error' };
+          }
+        } finally {
+          if (iterator) lifecycle.release(iterator);
+        }
+
+        if (succeeded || clientGone || routeError) break;
+        if (!attemptFailure) break;
+
+        logNonStreamFailure(attemptFailure.failure, attemptFailure.phase);
+
+        // Managed failover: nothing has been written to the client on this
+        // path (the JSON body is sent only after success), so an eligible
+        // availability failure may rotate even after partial provider output —
+        // the per-attempt assembler and usage reset discard that output.
+        const nextRoute = await rotateAfterFailure(attemptFailure.failure);
+        if (nextRoute) {
+          attempt = nextRoute;
           continue;
         }
 
-        if (chunk.type === 'usage') captureUsage(chunk);
-
-        if (sawStop && chunk.type !== 'usage') {
-          const failure = malformedStreamFailure();
-          routeError = new AppError(failure.chunk.message, failure.statusCode);
-          break;
-        }
-
-        assembler.ingest(chunk);
-      }
-
-      if (!routeError && !sawStop) {
-        const failure = incompleteStreamFailure();
-        routeError = new AppError(failure.chunk.message, failure.statusCode);
-      }
-      if (!routeError && sawStop) {
-        providerSuccessObserved = true;
-        await finalizeBilling('completed');
-      }
-    } catch (err) {
-      if (
-        err instanceof StreamClientAbortError ||
-        lifecycle.signal.reason instanceof StreamClientAbortError ||
-        req.aborted ||
-        res.destroyed
-      ) {
-        logger.info({ provider, model: body.model }, 'LLM request client disconnected');
-      } else if (err instanceof AppError) {
-        routeError = err;
-      } else if (err instanceof ManagedUsageBillingError) {
-        routeError = new AppError(err.message, err.statusCode);
-      } else {
-        const failure = toSafeProviderFailure(err);
-        logger.error(
-          {
-            provider,
-            model: body.model,
-            category: failure.category,
-            code: failure.chunk.code,
-            retryable: failure.chunk.retryable,
-            statusCode: failure.statusCode,
-          },
-          'Upstream provider request failed',
+        routeError = new AppError(
+          attemptFailure.failure.chunk.message,
+          attemptFailure.failure.statusCode,
         );
-        routeError = new AppError(failure.chunk.message, failure.statusCode);
+        break;
       }
     } finally {
       await releaseFailedReservation('completion_not_completed');
-      if (iterator) lifecycle.release(iterator);
       lifecycle.cleanup();
       responseComplete = true;
       detachConnectionListeners();
     }
 
     if (routeError) throw routeError;
-    if (req.aborted || res.destroyed) return;
+    if (req.aborted || res.destroyed || !servedAssembler) return;
 
-    const openaiResponse = assembler.response();
-    recordUsage('llm_completion', assembler.usageOrNull());
+    const openaiResponse = servedAssembler.response();
+    recordUsage('llm_completion', servedAssembler.usageOrNull());
 
     res.json(openaiResponse);
     await markClientDelivered();
