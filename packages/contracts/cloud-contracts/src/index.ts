@@ -18,6 +18,7 @@ export * from './managed-cloud-projects-client';
 export * from './conversations';
 export * from './managed-cloud-chat-client';
 export * from './tool-events';
+export * from './agent-events';
 export * from './tool-approval-resume';
 export * from './connectors';
 export * from './capability-handshake';

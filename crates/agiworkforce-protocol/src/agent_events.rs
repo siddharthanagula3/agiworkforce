@@ -4,17 +4,20 @@
 //!
 //! Web SSE chat streaming, the local developer-session app-server's
 //! `turn/*` JSON-RPC notifications, and Desktop's Tauri stream events are
-//! three independently-evolved dialects for the same underlying thing: a
-//! model response streaming to a UI. [`AgentEventEnvelope`] is the one
-//! shape all three can express; adapters translate at the edges (an
+//! three independently-evolved dialects for the same underlying thing: an
+//! agent run streaming to a UI. [`AgentEventEnvelope`] is the one shape all
+//! three can express; adapters translate at the edges (an
 //! `agiworkforce-llm`/`packages/ai/provider-protocol`/desktop `sse_parser`
 //! concern), not by inventing a fourth dialect.
 //!
 //! This module is deliberately separate from [`crate::protocol::EventMsg`],
 //! which is the CLI agent-loop's much larger internal event taxonomy (MCP
 //! startup, hooks, patch-apply, undo, collab agents, exec approval, ...).
-//! `AgentEvent` only covers the narrower model-response-streaming slice the
-//! three dialects actually share; every payload struct is prefixed
+//! `AgentEvent` is the stable, user-surface projection of that internal
+//! taxonomy: model output plus execution progress, caller tools, approvals,
+//! sources, artifacts, and context compaction. Internal diagnostics that are
+//! not safe or useful to show a user stay in `EventMsg`; every payload struct
+//! is prefixed
 //! `AgentEvent*` so it never collides with (or gets mistaken for one of)
 //! `protocol.rs`'s ~80 similarly-named `*Event` types.
 //!
@@ -52,7 +55,7 @@ use ts_rs::TS;
 /// backward-incompatible change to the envelope or [`AgentEvent`] shape,
 /// mirroring `developer_session::DEVELOPER_SESSION_PROTOCOL_VERSION`'s
 /// precedent for a crate-level protocol version constant.
-pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 1;
+pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 2;
 
 /// The one envelope web SSE chunks, app-server `turn/*` notifications, and
 /// desktop stream events all translate into. Mirrors this crate's existing
@@ -176,6 +179,31 @@ pub enum AgentEvent {
     /// A stream-lifecycle signal that is neither content nor a terminal
     /// stop. See [`AgentEventLifecyclePhase`].
     Lifecycle(AgentEventLifecycle),
+    /// A concise, user-displayable description of what the agent is doing.
+    /// This is NOT private model chain-of-thought: emitters must provide a
+    /// deliberately authored progress summary suitable for an inline,
+    /// expandable activity timeline.
+    ProgressUpdate(AgentEventProgressUpdate),
+    /// Caller-managed tool execution began after the model's arguments were
+    /// assembled (and, when required, approved). Unlike `ToolUseStart`, which
+    /// describes the model constructing a tool call, this event represents
+    /// the real execution lifecycle shown to the user.
+    ToolExecutionStart(AgentEventToolExecutionStart),
+    /// Caller-managed tool execution ended with its structured result.
+    ToolExecutionEnd(AgentEventToolExecutionEnd),
+    /// Web or document sources discovered by a tool invocation.
+    SourceList(AgentEventSourceList),
+    /// A privileged, destructive, external, or expensive action is suspended
+    /// awaiting an explicit user decision.
+    ApprovalRequested(AgentEventApprovalRequested),
+    /// The explicit decision for a prior approval request.
+    ApprovalResolved(AgentEventApprovalResolved),
+    /// A durable file or rich artifact was produced and is ready to preview or
+    /// download.
+    ArtifactProduced(AgentEventArtifactProduced),
+    /// Long-running context was summarized and compacted without ending the
+    /// run.
+    ContextCompacted(AgentEventContextCompacted),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
@@ -366,6 +394,177 @@ pub enum AgentEventLifecyclePhase {
     /// image generation). Analog of desktop's `StreamChunk.keepalive: bool`
     /// (`sse_parser.rs`), which documents exactly this purpose.
     Heartbeat,
+    /// Execution is intentionally suspended, normally for user input or an
+    /// approval decision. The run remains resumable.
+    Paused,
+    /// A previously paused run resumed without replaying completed work.
+    Resumed,
+}
+
+/// A safe progress entry rendered on the inline run spine. `detail` may use
+/// Markdown, but it must be a user-facing work summary rather than hidden
+/// model reasoning or an unfiltered provider scratchpad.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventProgressUpdate {
+    /// Stable within one turn so a running entry can be updated in place.
+    pub progress_id: String,
+    pub summary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub detail: Option<String>,
+    pub status: AgentEventProgressStatus,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum AgentEventProgressStatus {
+    Running,
+    Completed,
+    Failed,
+}
+
+/// Cross-surface semantic tool category. Clients use this for stable icons,
+/// labels, and disclosure behavior instead of guessing from vendor-specific
+/// tool names.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum AgentEventToolCategory {
+    WebSearch,
+    WebFetch,
+    CodeExecution,
+    Filesystem,
+    Shell,
+    Skill,
+    Memory,
+    Connector,
+    Mcp,
+    ComputerUse,
+    Artifact,
+    Other,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventToolExecutionStart {
+    pub tool_call_id: String,
+    pub name: String,
+    pub category: AgentEventToolCategory,
+    /// A concise user-facing action label, such as "Searching official
+    /// sources". Raw command/request detail belongs in `input`.
+    pub summary: String,
+    pub input: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventToolExecutionEnd {
+    pub tool_call_id: String,
+    pub name: String,
+    pub output: serde_json::Value,
+    pub is_error: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub elapsed_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventSourceList {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub tool_call_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub query: Option<String>,
+    pub sources: Vec<AgentEventSource>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventSource {
+    pub url: String,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub snippet: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventApprovalRequested {
+    pub approval_id: String,
+    pub tool_call_id: String,
+    pub name: String,
+    pub category: AgentEventToolCategory,
+    pub summary: String,
+    pub input: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub risk_level: Option<AgentEventApprovalRiskLevel>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum AgentEventApprovalRiskLevel {
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventApprovalResolved {
+    pub approval_id: String,
+    pub decision: AgentEventApprovalDecision,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(rename_all = "kebab-case")]
+pub enum AgentEventApprovalDecision {
+    Approved,
+    ApprovedForSession,
+    Denied,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventArtifactProduced {
+    pub artifact_id: String,
+    pub name: String,
+    pub mime_type: String,
+    pub uri: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub size_bytes: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventContextCompacted {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub before_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub after_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub summary: Option<String>,
 }
 
 #[cfg(test)]
@@ -404,9 +603,11 @@ mod tests {
 
     #[test]
     fn text_delta_round_trips() {
-        assert_round_trips(&sample_envelope(AgentEvent::TextDelta(AgentEventTextDelta {
-            delta: "partial response".to_string(),
-        })));
+        assert_round_trips(&sample_envelope(AgentEvent::TextDelta(
+            AgentEventTextDelta {
+                delta: "partial response".to_string(),
+            },
+        )));
     }
 
     #[test]
@@ -439,9 +640,11 @@ mod tests {
                 delta_json: "{\"query\":".to_string(),
             },
         )));
-        assert_round_trips(&sample_envelope(AgentEvent::ToolUseEnd(AgentEventToolUseEnd {
-            tool_use_id: "tool-1".to_string(),
-        })));
+        assert_round_trips(&sample_envelope(AgentEvent::ToolUseEnd(
+            AgentEventToolUseEnd {
+                tool_use_id: "tool-1".to_string(),
+            },
+        )));
     }
 
     #[test]
@@ -512,18 +715,117 @@ mod tests {
             AgentEventStopReason::Cancelled,
             AgentEventStopReason::Error,
         ] {
-            assert_round_trips(&sample_envelope(AgentEvent::Stop(AgentEventStop { reason })));
+            assert_round_trips(&sample_envelope(AgentEvent::Stop(AgentEventStop {
+                reason,
+            })));
         }
     }
 
     #[test]
     fn lifecycle_started_and_heartbeat_round_trip() {
-        assert_round_trips(&sample_envelope(AgentEvent::Lifecycle(AgentEventLifecycle {
-            phase: AgentEventLifecyclePhase::Started,
-        })));
-        assert_round_trips(&sample_envelope(AgentEvent::Lifecycle(AgentEventLifecycle {
-            phase: AgentEventLifecyclePhase::Heartbeat,
-        })));
+        assert_round_trips(&sample_envelope(AgentEvent::Lifecycle(
+            AgentEventLifecycle {
+                phase: AgentEventLifecyclePhase::Started,
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::Lifecycle(
+            AgentEventLifecycle {
+                phase: AgentEventLifecyclePhase::Heartbeat,
+            },
+        )));
+    }
+
+    #[test]
+    fn user_visible_progress_round_trips_without_private_reasoning_semantics() {
+        assert_round_trips(&sample_envelope(AgentEvent::ProgressUpdate(
+            AgentEventProgressUpdate {
+                progress_id: "research-plan".to_string(),
+                summary: "Planning an exhaustive report".to_string(),
+                detail: Some(
+                    "I’ll reconcile the official sources and flag unresolved evidence gaps."
+                        .to_string(),
+                ),
+                status: AgentEventProgressStatus::Running,
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::ProgressUpdate(
+            AgentEventProgressUpdate {
+                progress_id: "research-plan".to_string(),
+                summary: "Planned an exhaustive report".to_string(),
+                detail: None,
+                status: AgentEventProgressStatus::Completed,
+            },
+        )));
+    }
+
+    #[test]
+    fn caller_tool_execution_round_trips_with_structured_request_and_response() {
+        assert_round_trips(&sample_envelope(AgentEvent::ToolExecutionStart(
+            AgentEventToolExecutionStart {
+                tool_call_id: "call-search-1".to_string(),
+                name: "web_search".to_string(),
+                category: AgentEventToolCategory::WebSearch,
+                summary: "Searching official release notes".to_string(),
+                input: serde_json::json!({ "query": "official release notes" }),
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::ToolExecutionEnd(
+            AgentEventToolExecutionEnd {
+                tool_call_id: "call-search-1".to_string(),
+                name: "web_search".to_string(),
+                output: serde_json::json!({ "resultCount": 8 }),
+                is_error: false,
+                elapsed_ms: Some(842),
+            },
+        )));
+    }
+
+    #[test]
+    fn sources_approvals_artifacts_and_compaction_round_trip() {
+        assert_round_trips(&sample_envelope(AgentEvent::SourceList(
+            AgentEventSourceList {
+                tool_call_id: Some("call-search-1".to_string()),
+                query: Some("official release notes".to_string()),
+                sources: vec![AgentEventSource {
+                    url: "https://example.com/release-notes".to_string(),
+                    title: "Release notes".to_string(),
+                    snippet: Some("Current product changes".to_string()),
+                }],
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::ApprovalRequested(
+            AgentEventApprovalRequested {
+                approval_id: "approval-1".to_string(),
+                tool_call_id: "call-shell-1".to_string(),
+                name: "shell".to_string(),
+                category: AgentEventToolCategory::Shell,
+                summary: "Install the document generation library".to_string(),
+                input: serde_json::json!({ "command": "install package" }),
+                risk_level: Some(AgentEventApprovalRiskLevel::Medium),
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::ApprovalResolved(
+            AgentEventApprovalResolved {
+                approval_id: "approval-1".to_string(),
+                decision: AgentEventApprovalDecision::Approved,
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::ArtifactProduced(
+            AgentEventArtifactProduced {
+                artifact_id: "artifact-1".to_string(),
+                name: "report.pdf".to_string(),
+                mime_type: "application/pdf".to_string(),
+                uri: "/api/files/artifact-1".to_string(),
+                size_bytes: Some(4096),
+            },
+        )));
+        assert_round_trips(&sample_envelope(AgentEvent::ContextCompacted(
+            AgentEventContextCompacted {
+                before_tokens: Some(180_000),
+                after_tokens: Some(42_000),
+                summary: Some("Context automatically compacted".to_string()),
+            },
+        )));
     }
 
     #[test]
