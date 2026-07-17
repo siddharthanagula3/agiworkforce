@@ -119,30 +119,7 @@ struct OllamaOptions {
 
 const OLLAMA_DEFAULT_NUM_CTX: u32 = 32768;
 
-/// Convert desktop tool definitions to the shared crate's wire type. Only
-/// `name`/`description`/`input_schema` ever reach a provider payload — the
-/// crate's serializers pick API-bound fields by name, so the executor
-/// metadata below stays client-side by construction.
-fn to_crate_tool_definitions(
-    tools: &[crate::core::llm::ToolDefinition],
-) -> Vec<agiworkforce_llm::ToolDefinition> {
-    tools
-        .iter()
-        .map(|tool| agiworkforce_llm::ToolDefinition {
-            name: tool.name.clone(),
-            description: tool.description.clone(),
-            input_schema: tool.parameters.clone(),
-            is_read_only: false,
-            is_concurrency_safe: false,
-            max_result_size_chars: None,
-            should_defer: false,
-            aliases: Vec::new(),
-            owner: String::new(),
-            permission_class: String::new(),
-            diagnostic_tags: Vec::new(),
-        })
-        .collect()
-}
+use crate::core::llm::provider_adapter::to_crate_tool_definitions;
 
 /// Convert desktop `ChatMessage`s into shared-crate wire messages.
 ///

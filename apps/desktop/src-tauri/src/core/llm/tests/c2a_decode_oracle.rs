@@ -43,15 +43,15 @@
 
 use std::collections::BTreeMap;
 
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as B64;
+use base64::Engine as _;
 use bytes::Bytes;
 use futures_util::StreamExt;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
-use crate::core::llm::Provider;
-use crate::core::llm::stream_engine::{Decoder, decode_bytes};
+use crate::core::llm::stream_engine::{decode_bytes, Decoder};
 use crate::core::llm::tests::c2a_old_parser::SseStreamParser;
+use crate::core::llm::Provider;
 
 // ---------------------------------------------------------------------------
 // Approved exceptions — the COMPLETE enumeration of intentional c2b deltas
@@ -220,10 +220,7 @@ enum Exception {
 /// not fire or an undeclared divergence remains.
 const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     // ---- anthropic ----
-    (
-        "anthropic_ping_is_keepalive",
-        &[Exception::SynthesizedEnd],
-    ),
+    ("anthropic_ping_is_keepalive", &[Exception::SynthesizedEnd]),
     (
         "anthropic_thinking_deltas_and_usage_override",
         &[
@@ -236,10 +233,7 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     ),
     (
         "anthropic_tool_call_block",
-        &[
-            Exception::SplitGranularity,
-            Exception::UsageFieldShape,
-        ],
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
     ),
     (
         "anthropic_multibyte_split_2_2",
@@ -257,22 +251,13 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     // ---- gemini ----
     (
         "gemini_text_usage_finish",
-        &[
-            Exception::SplitGranularity,
-            Exception::UsageFieldShape,
-        ],
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
     ),
     (
         "gemini_function_call_complete",
-        &[
-            Exception::SplitGranularity,
-            Exception::GeminiToolId,
-        ],
+        &[Exception::SplitGranularity, Exception::GeminiToolId],
     ),
-    (
-        "gemini_multibyte_split_2_1",
-        &[Exception::SynthesizedEnd],
-    ),
+    ("gemini_multibyte_split_2_1", &[Exception::SynthesizedEnd]),
     // ---- openai (chat completions) ----
     ("utf8_emoji_split_2_2", &[Exception::SynthesizedEnd]),
     ("utf8_accent_split_1_1", &[Exception::SynthesizedEnd]),
@@ -283,10 +268,7 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     ),
     (
         "crlf_framing",
-        &[
-            Exception::SplitGranularity,
-            Exception::SynthesizedEnd,
-        ],
+        &[Exception::SplitGranularity, Exception::SynthesizedEnd],
     ),
     (
         "interleaved_out_of_order_tool_indexes",
@@ -298,21 +280,11 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     ),
     (
         "non_object_tool_args_get_marker",
-        &[
-            Exception::SplitGranularity,
-        ],
+        &[Exception::SplitGranularity],
     ),
-    (
-        "usage_only_final_chunk",
-        &[
-            Exception::UsageFieldShape,
-        ],
-    ),
+    ("usage_only_final_chunk", &[Exception::UsageFieldShape]),
     ("done_marker_only", &[]),
-    (
-        "keepalive_comment_then_text",
-        &[],
-    ),
+    ("keepalive_comment_then_text", &[]),
     // ---- openai responses ----
     (
         "text_reasoning_tool_usage_completed",
@@ -344,10 +316,7 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     // ---- ollama ----
     (
         "ollama_ndjson_text_and_done",
-        &[
-            Exception::SplitGranularity,
-            Exception::UsageFieldShape,
-        ],
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
     ),
     (
         "ollama_tool_call_with_string_args",
@@ -360,10 +329,7 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     ),
     (
         "ollama_trailing_done_without_newline",
-        &[
-            Exception::SplitGranularity,
-            Exception::UsageFieldShape,
-        ],
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
     ),
     (
         "ollama_object_args_and_number_marker",
@@ -519,10 +485,7 @@ fn is_uuid_call_id(id: &str) -> bool {
     let Some(rest) = id.strip_prefix("call_") else {
         return false;
     };
-    rest.len() == 36
-        && rest
-            .chars()
-            .all(|c| c.is_ascii_hexdigit() || c == '-')
+    rest.len() == 36 && rest.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
 }
 
 /// Canonicalize tool-call ids on both sides per the declared id exceptions,
@@ -809,9 +772,9 @@ fn fold_chunk(acc: &mut Value, c: &Value) {
             .unwrap_or_default();
         for tc in tcs {
             let idx = tc["index"].as_u64().unwrap_or(0);
-            let entry = merged.entry(idx).or_insert_with(|| {
-                json!({"index": idx, "id": "", "name": "", "arguments": ""})
-            });
+            let entry = merged
+                .entry(idx)
+                .or_insert_with(|| json!({"index": idx, "id": "", "name": "", "arguments": ""}));
             if let Some(id) = tc["id"].as_str().filter(|s| !s.is_empty()) {
                 entry["id"] = json!(id);
             }
@@ -881,12 +844,7 @@ struct FixtureReport {
 /// The L2 aligned-identity check. Returns the report or panics with a precise
 /// residue description.
 #[allow(clippy::too_many_lines)]
-fn verify_aligned(
-    name: &str,
-    old_items: &[Item],
-    new_items: &[Item],
-    fired: &mut Fired,
-) {
+fn verify_aligned(name: &str, old_items: &[Item], new_items: &[Item], fired: &mut Fired) {
     // Keepalives are compared as counts (they carry no data and the consumer
     // skips them); everything else must align.
     let old_ka = old_items.iter().filter(|i| i.is_keepalive()).count();
@@ -1123,7 +1081,10 @@ fn verify_aligned(
         0 => {}
         1 => {
             let Item::Chunk(v) = &new[j] else {
-                panic!("[{name}] trailing new item is an error with no old counterpart: {:?}", new[j]);
+                panic!(
+                    "[{name}] trailing new item is an error with no old counterpart: {:?}",
+                    new[j]
+                );
             };
             assert!(
                 is_end_shape(v) && fired.allowed(Exception::SynthesizedEnd),
@@ -1238,9 +1199,9 @@ fn consume_fold(items: &[Item]) -> Outcome {
                 if let Some(tcs) = v["tool_calls"].as_array() {
                     for tc in tcs {
                         let idx = tc["index"].as_u64().unwrap_or(0);
-                        let entry = tools.entry(idx).or_insert_with(|| {
-                            json!({"index": idx, "id": "", "name": "", "arguments": ""})
-                        });
+                        let entry = tools.entry(idx).or_insert_with(
+                            || json!({"index": idx, "id": "", "name": "", "arguments": ""}),
+                        );
                         if let Some(id) = tc["id"].as_str().filter(|s| !s.is_empty()) {
                             entry["id"] = json!(id);
                         }
@@ -1411,15 +1372,22 @@ async fn c2a_old_vs_new_decode_identity() {
                     let g = |v: &Value, k: &str| v.get(k).and_then(Value::as_u64).unwrap_or(0);
                     let recover = match (old_outcome.usage.as_ref(), new_outcome.usage.as_ref()) {
                         (Some(ou), Some(nu)) => {
-                            let (np, nc, nt) =
-                                (g(nu, "prompt_tokens"), g(nu, "completion_tokens"), g(nu, "total_tokens"));
-                            let (op, oc, ot) =
-                                (g(ou, "prompt_tokens"), g(ou, "completion_tokens"), g(ou, "total_tokens"));
+                            let (np, nc, nt) = (
+                                g(nu, "prompt_tokens"),
+                                g(nu, "completion_tokens"),
+                                g(nu, "total_tokens"),
+                            );
+                            let (op, oc, ot) = (
+                                g(ou, "prompt_tokens"),
+                                g(ou, "completion_tokens"),
+                                g(ou, "total_tokens"),
+                            );
                             nt == np + nc
                                 && ot == op + oc
                                 && oc == nc
                                 && op <= np
-                                && g(ou, "cache_read_input_tokens") <= g(nu, "cache_read_input_tokens")
+                                && g(ou, "cache_read_input_tokens")
+                                    <= g(nu, "cache_read_input_tokens")
                                 && g(ou, "cache_creation_input_tokens")
                                     <= g(nu, "cache_creation_input_tokens")
                                 && (op < np
@@ -1548,7 +1516,11 @@ async fn c2a_old_vs_new_decode_identity() {
         eprintln!(
             "  {:<44} {}  old={:<3} new={:<3} {}",
             r.name,
-            if r.l1_identical { "IDENTICAL " } else { "EXCEPTIONS" },
+            if r.l1_identical {
+                "IDENTICAL "
+            } else {
+                "EXCEPTIONS"
+            },
             r.old_len,
             r.new_len,
             if r.l1_identical {
