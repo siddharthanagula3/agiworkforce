@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
+import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import type { KeyboardShortcut } from '../hooks/use-keyboard-shortcuts';
 import {
@@ -280,6 +281,8 @@ async function patchConversationMessageReaction(params: {
 }
 
 export default function WebChatPage() {
+  useArtifactCloudSync();
+
   // Core chat UI previously had zero i18n coverage — every string, including
   // the composer placeholder, was hardcoded English even though full
   // translation resources already exist (app/i18n/locales/*). Wire the most

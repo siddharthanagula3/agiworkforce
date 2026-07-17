@@ -208,10 +208,10 @@ describe('fixtures: pull-apply.json (TS apply outcome)', () => {
       ).toEqual(expectedMsgs.map((m) => ({ id: m.id, role: m.role, content: m.content })));
     }
     for (const liveId of c.expectedLiveArtifactIds ?? []) {
-      expect(cloudArtifacts.find((a) => a.id === liveId)).toBeDefined();
+      expect(cloudArtifacts.find((a) => a.id === liveId && !a.deletedAt)).toBeDefined();
     }
     for (const tombstonedId of c.expectedTombstonedArtifactIds ?? []) {
-      expect(cloudArtifacts.find((a) => a.id === tombstonedId)).toBeUndefined();
+      expect(cloudArtifacts.find((a) => a.id === tombstonedId)?.deletedAt).toBeTruthy();
     }
   });
 });
