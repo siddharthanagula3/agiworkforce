@@ -605,20 +605,26 @@ fn trust_mode_key(mode: TrustMode) -> &'static str {
     }
 }
 
+struct SelectedRoute<'registry, 'model> {
+    model_key: &'model str,
+    eligibility: Eligibility<'registry>,
+    reason: RouteReason,
+    fallbacks: Vec<AutoFallbackRoute>,
+}
+
 fn selected_decision(
     request: &AutoRoutingRequest<'_>,
     requested_selection: &str,
     requested_profile: Option<RoutingProfile>,
     effective_profile: Option<RoutingProfile>,
-    model_key: &str,
-    eligibility: Eligibility<'_>,
-    reason: RouteReason,
-    fallbacks: Vec<AutoFallbackRoute>,
+    selected: SelectedRoute<'_, '_>,
 ) -> AutoRouteDecision {
-    let route = eligibility
+    let route = selected
+        .eligibility
         .route
         .expect("selected_decision requires an eligible route");
-    let route_id = eligibility
+    let route_id = selected
+        .eligibility
         .route_id
         .expect("selected_decision requires an eligible route id");
     AutoRouteDecision::Selected(SelectedAutoRoute {
@@ -626,13 +632,13 @@ fn selected_decision(
         requested_profile,
         effective_profile,
         task_type: request.task_type,
-        model_key: model_key.to_owned(),
+        model_key: selected.model_key.to_owned(),
         provider: route.provider.clone(),
         provider_model_id: route.provider_model_id.clone(),
         route_id: route_id.to_owned(),
         harness_id: route.harness_id.clone(),
-        fallbacks,
-        reason,
+        fallbacks: selected.fallbacks,
+        reason: selected.reason,
     })
 }
 
@@ -779,10 +785,12 @@ pub fn resolve_auto_route(
                 &requested_selection,
                 None,
                 None,
-                &requested_selection,
-                eligibility,
-                RouteReason::Explicit,
-                Vec::new(),
+                SelectedRoute {
+                    model_key: &requested_selection,
+                    eligibility,
+                    reason: RouteReason::Explicit,
+                    fallbacks: Vec::new(),
+                },
             )
         } else {
             AutoRouteDecision::Unavailable(UnavailableAutoRoute {
@@ -831,12 +839,8 @@ pub fn resolve_auto_route(
     {
         let eligibility =
             evaluate_eligibility(registry, current_model_key, task, request, runtime_profile);
-        if eligibility.route.is_some() {
-            let selected_provider = eligibility
-                .route
-                .expect("eligible route must include provider")
-                .provider
-                .clone();
+        if let Some(route) = eligibility.route {
+            let selected_provider = route.provider.clone();
             let fallbacks = build_provider_fallbacks(
                 registry,
                 request,
@@ -853,10 +857,12 @@ pub fn resolve_auto_route(
                 &requested_selection,
                 Some(alias.profile),
                 Some(effective_profile),
-                current_model_key,
-                eligibility,
-                RouteReason::Continuity,
-                fallbacks,
+                SelectedRoute {
+                    model_key: current_model_key,
+                    eligibility,
+                    reason: RouteReason::Continuity,
+                    fallbacks,
+                },
             ));
         }
     }
@@ -878,12 +884,8 @@ pub fn resolve_auto_route(
             continue;
         };
         let eligibility = evaluate_eligibility(registry, model_key, task, request, runtime_profile);
-        if eligibility.route.is_some() {
-            let selected_provider = eligibility
-                .route
-                .expect("eligible route must include provider")
-                .provider
-                .clone();
+        if let Some(route) = eligibility.route {
+            let selected_provider = route.provider.clone();
             let fallbacks = build_provider_fallbacks(
                 registry,
                 request,
@@ -900,10 +902,12 @@ pub fn resolve_auto_route(
                 &requested_selection,
                 Some(alias.profile),
                 Some(effective_profile),
-                model_key,
-                eligibility,
-                RouteReason::PreferredSlot,
-                fallbacks,
+                SelectedRoute {
+                    model_key,
+                    eligibility,
+                    reason: RouteReason::PreferredSlot,
+                    fallbacks,
+                },
             ));
         }
         reasons.extend(eligibility.reasons);
@@ -917,12 +921,8 @@ pub fn resolve_auto_route(
             .map(|slot| slot.model_key.as_str())
     {
         let eligibility = evaluate_eligibility(registry, model_key, task, request, runtime_profile);
-        if eligibility.route.is_some() {
-            let selected_provider = eligibility
-                .route
-                .expect("eligible route must include provider")
-                .provider
-                .clone();
+        if let Some(route) = eligibility.route {
+            let selected_provider = route.provider.clone();
             let fallbacks = build_provider_fallbacks(
                 registry,
                 request,
@@ -939,10 +939,12 @@ pub fn resolve_auto_route(
                 &requested_selection,
                 Some(alias.profile),
                 Some(effective_profile),
-                model_key,
-                eligibility,
-                RouteReason::FallbackSlot,
-                fallbacks,
+                SelectedRoute {
+                    model_key,
+                    eligibility,
+                    reason: RouteReason::FallbackSlot,
+                    fallbacks,
+                },
             ));
         }
         reasons.extend(eligibility.reasons);

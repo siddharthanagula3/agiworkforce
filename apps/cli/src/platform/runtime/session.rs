@@ -140,7 +140,7 @@ enum ManagedSessionJsonlRecord {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         fallback_model_ids: Option<Vec<String>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        auto_routing: Option<ManagedSessionAutoRouting>,
+        auto_routing: Option<Box<ManagedSessionAutoRouting>>,
     },
     Message {
         message: Message,
@@ -351,7 +351,7 @@ impl ManagedSession {
                         fast_mode,
                         output_style,
                         fallback_model_ids,
-                        auto_routing,
+                        auto_routing: auto_routing.map(|routing| *routing),
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -408,7 +408,7 @@ impl ManagedSession {
             fast_mode: self.fast_mode,
             output_style: self.output_style.clone(),
             fallback_model_ids: self.fallback_model_ids.clone(),
-            auto_routing: self.auto_routing.clone(),
+            auto_routing: self.auto_routing.clone().map(Box::new),
         };
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
