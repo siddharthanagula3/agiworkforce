@@ -578,3 +578,71 @@ describe('ChatMessageList stream error notice', () => {
     expect(noticeText()).not.toBeInTheDocument();
   });
 });
+
+describe('ChatMessageList safety refusal notice', () => {
+  const refusalText = () => screen.queryByText(/declined to finish this response/i);
+  const retryButton = () => screen.queryByRole('button', { name: /regenerate this response/i });
+  const errorNoticeText = () => screen.queryByText(/response may be incomplete/i);
+
+  function refusalThread(finishReason: string, content = 'I can') {
+    return [
+      makeMessage({ id: 'u1', role: 'user', content: 'q' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content,
+        metadata: { finishReason },
+      }),
+    ];
+  }
+
+  it("shows the honest declined notice for finishReason 'refusal' (legacy web wire literal)", () => {
+    render(<ChatMessageList messages={refusalThread('refusal')} onRegenerate={vi.fn()} />);
+    expect(refusalText()).toBeInTheDocument();
+    expect(retryButton()).toBeInTheDocument();
+  });
+
+  it("shows the notice for finishReason 'content_filter' (OpenAI wire vocabulary)", () => {
+    render(<ChatMessageList messages={refusalThread('content_filter')} onRegenerate={vi.fn()} />);
+    expect(refusalText()).toBeInTheDocument();
+  });
+
+  it('a refusal is never rendered as the generic stream-error notice', () => {
+    render(<ChatMessageList messages={refusalThread('refusal')} onRegenerate={vi.fn()} />);
+    expect(errorNoticeText()).not.toBeInTheDocument();
+    expect(refusalText()).toBeInTheDocument();
+  });
+
+  it('a refusal is never a silent stop: the notice renders even without onRegenerate (Retry hidden)', () => {
+    render(<ChatMessageList messages={refusalThread('refusal')} />);
+    expect(refusalText()).toBeInTheDocument();
+    expect(retryButton()).not.toBeInTheDocument();
+  });
+
+  it('calls onRegenerate with the refused message id when Retry is clicked', () => {
+    const onRegenerate = vi.fn();
+    render(<ChatMessageList messages={refusalThread('refusal')} onRegenerate={onRegenerate} />);
+    fireEvent.click(retryButton()!);
+    expect(onRegenerate).toHaveBeenCalledWith('a1');
+  });
+
+  it('does NOT show the notice on a normal completion or while streaming', () => {
+    const { rerender } = render(
+      <ChatMessageList messages={refusalThread('stop')} onRegenerate={vi.fn()} />,
+    );
+    expect(refusalText()).not.toBeInTheDocument();
+
+    const streaming = [
+      makeMessage({ id: 'u1', role: 'user', content: 'q' }),
+      makeMessage({
+        id: 'a1',
+        role: 'assistant',
+        content: 'partial',
+        isStreaming: true,
+        metadata: { finishReason: 'refusal' },
+      }),
+    ];
+    rerender(<ChatMessageList messages={streaming} onRegenerate={vi.fn()} />);
+    expect(refusalText()).not.toBeInTheDocument();
+  });
+});

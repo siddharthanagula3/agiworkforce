@@ -280,6 +280,10 @@ function stopReasonToFinishReason(
       return 'tool_calls';
     case 'max_tokens':
       return 'length';
+    case 'refusal':
+      // The OpenAI wire's own safety-stop vocabulary — a refusal must reach
+      // wire clients as `content_filter`, never as a normal 'stop'.
+      return 'content_filter';
     case 'end_turn':
     case 'stop_sequence':
     case 'error':

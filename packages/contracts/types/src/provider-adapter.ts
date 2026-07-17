@@ -471,7 +471,16 @@ export interface StreamChunkError {
 
 export interface StreamChunkStop {
   type: 'stop';
-  reason: 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'error' | 'cancel';
+  /**
+   * `'refusal'` is the first-class safety-stop member (mirrors the agent
+   * event envelope's `AgentEventStopReason::Refusal`): the provider's safety
+   * layer stopped the response. It is the canonical target for BOTH
+   * Anthropic's `stop_reason: 'refusal'` and OpenAI's wire
+   * `finish_reason: 'content_filter'` — one honest concept, not two
+   * vendor-specific ones, and distinct from `'error'` (transport/provider
+   * failure) and from normal completion.
+   */
+  reason: 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel';
 }
 
 export type StreamChunk =

@@ -20,7 +20,8 @@ type AdapterMode =
   | 'close-before-success-terminal'
   | 'partial-without-stop'
   | 'malformed'
-  | 'duplicate-terminal';
+  | 'duplicate-terminal'
+  | 'refusal-stop';
 
 const state = vi.hoisted(() => ({
   capturedRequest: null as ChatRequest | null,
@@ -259,6 +260,10 @@ vi.mock('../../src/lib/providerAdapters', () => ({
           });
         }
         if (state.adapterMode === 'partial-without-stop') return;
+        if (state.adapterMode === 'refusal-stop') {
+          yield { type: 'stop', reason: 'refusal' };
+          return;
+        }
         if (state.adapterMode === 'duplicate-terminal') {
           yield { type: 'stop', reason: 'end_turn' };
           yield { type: 'stop', reason: 'end_turn' };
@@ -735,6 +740,30 @@ describe('Gateway OpenAI-compatible provider model IDs', () => {
     expect(events.filter((event) => event === '[DONE]')).toHaveLength(1);
     expect(streamErrorMarkers(events)).toEqual([]);
     expect(state.billingEvents.filter((event) => event === 'finalize-completed')).toHaveLength(1);
+  });
+
+  it('treats a refusal stop as a billable honest terminal, never a failed attempt', async () => {
+    state.adapterMode = 'refusal-stop';
+
+    const response = await request(createApp())
+      .post('/api/llm/v1/chat/completions')
+      .send({
+        model: 'claude-opus-4.8',
+        messages: [{ role: 'user', content: 'hello' }],
+        stream: true,
+      });
+    const events = sseData(response);
+
+    expect(response.status).toBe(200);
+    // Refusal survives stream validation (STOP_REASONS) and reaches the wire
+    // as OpenAI's safety vocabulary, not a generic error terminal.
+    expect(finishReasons(events)).toEqual(['content_filter']);
+    expect(streamErrorMarkers(events)).toEqual([]);
+    expect(events.filter((event) => event === '[DONE]')).toHaveLength(1);
+    // Billable honest stop: settle as completed; the refund/retry failure
+    // branches (reason error/cancel) must not fire.
+    expect(state.billingEvents.filter((event) => event === 'finalize-completed')).toHaveLength(1);
+    expect(state.billingEvents.filter((event) => event === 'finalize-failed')).toHaveLength(0);
   });
 
   it('keeps non-streaming provider errors as one safe HTTP failure', async () => {
