@@ -90,16 +90,18 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
     let forked = next_response(&mut lines).await;
     assert_eq!(forked["result"]["thread"]["createdBy"], "vscode");
 
-    let unavailable = tokio::time::timeout(
+    // The stalled server is bounded by the per-server initialize timeout
+    // (McpTimeouts.initialize, 30s), after which discovery skips it and still
+    // resolves to ready. The host-level MCP_LOAD_TIMEOUT_SECONDS backstop is
+    // deliberately longer, so `mcp/unavailable` is reserved for a hung
+    // discovery pipeline, not one bad server.
+    let ready = tokio::time::timeout(
         std::time::Duration::from_secs(35),
-        next_notification(&mut lines, "mcp/unavailable"),
+        next_notification(&mut lines, "mcp/ready"),
     )
     .await
-    .expect("stalled MCP discovery must time out");
-    assert_eq!(
-        unavailable["params"]["message"],
-        "MCP integration discovery timed out after 30 seconds"
-    );
+    .expect("discovery must resolve once the stalled server times out");
+    assert_eq!(ready["params"]["message"], Value::Null);
 
     send(
         &mut stdin,

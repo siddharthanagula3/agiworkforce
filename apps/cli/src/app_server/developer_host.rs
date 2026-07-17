@@ -31,7 +31,11 @@ use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
 const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
 const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
-const MCP_LOAD_TIMEOUT_SECONDS: u64 = 30;
+// Backstop for a hung discovery pipeline only. Must exceed the per-server
+// `McpTimeouts.initialize` (30s): a single stalled server is skipped by its
+// own timeout and discovery still resolves to `mcp/ready`. Equal values race
+// the two timers and make the emitted notification nondeterministic.
+const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
 const MAX_IMAGE_INPUT_BYTES: usize = 10_000_000;
 
@@ -289,12 +293,14 @@ impl CliDeveloperSessionHost {
                     eprintln!("MCP integration discovery failed: {error:#}");
                     (
                         "mcp/unavailable",
-                        Some("MCP integrations could not be loaded for this session"),
+                        Some("MCP integrations could not be loaded for this session".to_string()),
                     )
                 }
                 Err(_) => (
                     "mcp/unavailable",
-                    Some("MCP integration discovery timed out after 30 seconds"),
+                    Some(format!(
+                        "MCP integration discovery timed out after {MCP_LOAD_TIMEOUT_SECONDS} seconds"
+                    )),
                 ),
             };
             if let Ok(notification) = AppServerNotification::new(
