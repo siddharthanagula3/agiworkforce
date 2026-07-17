@@ -91,3 +91,50 @@ describe('MessageBubble heading rendering', () => {
     expect(html).toMatch(/<h2[^>]*><strong>Production<\/strong> architecture<\/h2>/);
   });
 });
+
+describe('MessageBubble canonical agent activity', () => {
+  it('renders the shared inline collapsed timeline and suppresses duplicate legacy tool rows', () => {
+    const html = renderToStaticMarkup(
+      <MessageBubble
+        message={{
+          id: 'assistant-activity',
+          role: 'assistant',
+          content: 'Finished.',
+          toolCalls: [
+            { id: 'legacy-tool', name: 'Legacy duplicate', args: {}, status: 'completed' },
+          ],
+          metadata: {
+            agentActivity: {
+              schemaVersion: 1,
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+              status: 'completed',
+              startedAtMs: 1_000,
+              updatedAtMs: 2_000,
+              completedAtMs: 2_000,
+              lastSequence: 2,
+              usage: {},
+              entries: [
+                {
+                  id: 'tool:canonical-tool',
+                  kind: 'tool',
+                  toolCallId: 'canonical-tool',
+                  name: 'web_search',
+                  category: 'web-search',
+                  summary: 'Searched official sources',
+                  status: 'completed',
+                  startedAtMs: 1_100,
+                  completedAtMs: 1_900,
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(html).toContain('Agent activity');
+    expect(html).toContain('Done in 1s');
+    expect(html).not.toContain('Legacy duplicate');
+  });
+});

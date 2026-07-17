@@ -153,6 +153,49 @@ describe('useChat — addMsg forwards the real fields on message creation', () =
     const msg = lastAssistantMessage();
     expect(msg?.artifacts?.[0]?.id).toBe('art_1');
   });
+
+  it('projects a canonical agent event into assistant metadata from the first event', () => {
+    const { runtime, emit } = makeFakeRuntime();
+    renderHook(() => useChat(runtime));
+
+    emit({
+      type: 'agent_event',
+      envelope: {
+        schemaVersion: 2,
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        sequence: 0,
+        emittedAtMs: 1_000,
+        event: { type: 'lifecycle', phase: 'started' },
+      },
+    });
+
+    expect(lastAssistantMessage()?.metadata?.['agentActivity']).toMatchObject({
+      turnId: 'turn-1',
+      status: 'running',
+      lastSequence: 0,
+    });
+  });
+
+  it('settles canonical activity as failed when the transport errors', () => {
+    const { runtime, emit } = makeFakeRuntime();
+    renderHook(() => useChat(runtime));
+
+    emit({
+      type: 'agent_event',
+      envelope: {
+        schemaVersion: 2,
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        sequence: 0,
+        emittedAtMs: 1_000,
+        event: { type: 'lifecycle', phase: 'started' },
+      },
+    });
+    emit({ type: 'error', error: 'Connection lost' });
+
+    expect(lastAssistantMessage()?.metadata?.['agentActivity']).toMatchObject({ status: 'failed' });
+  });
 });
 
 describe('useChat — writing style request contract', () => {
@@ -488,7 +531,15 @@ describe('useChat — registry-backed Auto routing', () => {
     };
     const { result } = renderHook(() => useChat(runtime, { surfaceId: 'web-research' }));
 
-    act(() => result.current.sendMessage('Investigate this thoroughly', undefined, undefined, undefined, true));
+    act(() =>
+      result.current.sendMessage(
+        'Investigate this thoroughly',
+        undefined,
+        undefined,
+        undefined,
+        true,
+      ),
+    );
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     expect(sendMessage).toHaveBeenCalledWith(
@@ -513,7 +564,15 @@ describe('useChat — registry-backed Auto routing', () => {
       useChat(runtime, { surfaceId: 'web-research-unsupported' }),
     );
 
-    act(() => result.current.sendMessage('Investigate this thoroughly', undefined, undefined, undefined, true));
+    act(() =>
+      result.current.sendMessage(
+        'Investigate this thoroughly',
+        undefined,
+        undefined,
+        undefined,
+        true,
+      ),
+    );
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     expect(sendMessage).toHaveBeenCalledWith(

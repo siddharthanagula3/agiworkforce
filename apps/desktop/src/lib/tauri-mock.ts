@@ -695,6 +695,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'analytics_track_event':
     case 'analytics_flush_events':
     case 'analytics_set_user_property':
+    case 'analytics_set_privacy_mode':
     case 'analytics_delete_all_data':
       return undefined as T;
 

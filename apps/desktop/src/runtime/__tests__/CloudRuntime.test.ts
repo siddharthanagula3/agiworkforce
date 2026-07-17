@@ -103,6 +103,76 @@ describe('CloudRuntime', () => {
       );
     });
 
+    it('persists canonical activity metadata for a tool-only cloud turn', async () => {
+      const runtime = new CloudRuntime();
+
+      sendCloudMessage.mockImplementation(
+        async (
+          _conversationId: string,
+          _content: string,
+          _model: string,
+          _onChunk: (text: string) => void,
+          onDone: () => void,
+          _onError: (err: Error) => void,
+          _signal: AbortSignal,
+          onEvent: (payload: Record<string, unknown>) => void,
+        ) => {
+          onEvent({
+            choices: [
+              {
+                delta: {
+                  x_agent_event: {
+                    schemaVersion: 2,
+                    sessionId: 'session-1',
+                    turnId: 'turn-1',
+                    sequence: 0,
+                    emittedAtMs: 1_000,
+                    event: { type: 'lifecycle', phase: 'started' },
+                  },
+                },
+              },
+            ],
+          });
+          onEvent({
+            choices: [
+              {
+                delta: {
+                  x_agent_event: {
+                    schemaVersion: 2,
+                    sessionId: 'session-1',
+                    turnId: 'turn-1',
+                    sequence: 1,
+                    emittedAtMs: 2_000,
+                    event: { type: 'stop', reason: 'end-turn' },
+                  },
+                },
+              },
+            ],
+          });
+          onDone();
+        },
+      );
+
+      await runtime.sendMessage('conv_activity', 'Run the task');
+
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledTimes(2));
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_activity',
+        expect.objectContaining({
+          role: 'assistant',
+          content: String.fromCharCode(0x200b),
+          metadata: {
+            agentActivity: expect.objectContaining({
+              turnId: 'turn-1',
+              status: 'completed',
+              lastSequence: 1,
+            }),
+          },
+        }),
+      );
+    });
+
     it('emits an error and does not call sendCloudMessage when the user-message save fails', async () => {
       saveMessage.mockRejectedValueOnce(new Error('network down'));
       const runtime = new CloudRuntime();
@@ -164,6 +234,57 @@ describe('CloudRuntime', () => {
 
       expect(events).toContainEqual({ type: 'error', error: 'stream broke' });
     });
+
+    it('persists canonical activity as failed when the stream promise rejects directly', async () => {
+      const runtime = new CloudRuntime();
+
+      sendCloudMessage.mockImplementation(
+        async (
+          _conversationId: string,
+          _content: string,
+          _model: string,
+          _onChunk: (text: string) => void,
+          _onDone: () => void,
+          _onError: (err: Error) => void,
+          _signal: AbortSignal,
+          onEvent: (payload: Record<string, unknown>) => void,
+        ) => {
+          onEvent({
+            choices: [
+              {
+                delta: {
+                  x_agent_event: {
+                    schemaVersion: 2,
+                    sessionId: 'session-reject',
+                    turnId: 'turn-reject',
+                    sequence: 0,
+                    emittedAtMs: 1_000,
+                    event: { type: 'lifecycle', phase: 'started' },
+                  },
+                },
+              },
+            ],
+          });
+          throw new Error('socket rejected');
+        },
+      );
+
+      await runtime.sendMessage('conv_reject', 'Start the task');
+
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledTimes(2));
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_reject',
+        expect.objectContaining({
+          metadata: {
+            agentActivity: expect.objectContaining({
+              turnId: 'turn-reject',
+              status: 'failed',
+            }),
+          },
+        }),
+      );
+    });
   });
 
   describe('stopGeneration', () => {
@@ -193,6 +314,61 @@ describe('CloudRuntime', () => {
       runtime.stopGeneration('conv_1');
 
       expect(capturedSignal?.aborted).toBe(true);
+    });
+
+    it('persists an in-flight canonical activity as cancelled when the user stops', async () => {
+      const runtime = new CloudRuntime();
+
+      sendCloudMessage.mockImplementation(
+        async (
+          _conversationId: string,
+          _content: string,
+          _model: string,
+          _onChunk: (text: string) => void,
+          _onDone: () => void,
+          _onError: (err: Error) => void,
+          _signal: AbortSignal,
+          onEvent: (payload: Record<string, unknown>) => void,
+        ) => {
+          onEvent({
+            choices: [
+              {
+                delta: {
+                  x_agent_event: {
+                    schemaVersion: 2,
+                    sessionId: 'session-cancel',
+                    turnId: 'turn-cancel',
+                    sequence: 0,
+                    emittedAtMs: 1_000,
+                    event: { type: 'lifecycle', phase: 'started' },
+                  },
+                },
+              },
+            ],
+          });
+          await new Promise(() => {});
+        },
+      );
+
+      void runtime.sendMessage('conv_cancel', 'Start a long task');
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledTimes(1));
+
+      runtime.stopGeneration('conv_cancel');
+
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledTimes(2));
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_cancel',
+        expect.objectContaining({
+          role: 'assistant',
+          metadata: {
+            agentActivity: expect.objectContaining({
+              turnId: 'turn-cancel',
+              status: 'cancelled',
+            }),
+          },
+        }),
+      );
     });
   });
 
@@ -298,6 +474,49 @@ describe('CloudRuntime', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         model: undefined,
       });
+    });
+
+    it('getMessages preserves persisted canonical activity metadata', async () => {
+      const agentActivity = {
+        schemaVersion: 1,
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        startedAtMs: 1_000,
+        updatedAtMs: 2_000,
+        completedAtMs: 2_000,
+        lastSequence: 1,
+        usage: {},
+        entries: [],
+      };
+      getConversation.mockResolvedValue({
+        conversation: {
+          id: 'conv_1',
+          title: 'Chat 1',
+          projectId: null,
+          pinned: false,
+          isTemporary: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        messages: [
+          {
+            id: 'm1',
+            conversationId: 'conv_1',
+            role: 'assistant',
+            content: String.fromCharCode(0x200b),
+            inputTokens: 0,
+            outputTokens: 0,
+            costCents: 0,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            metadata: { agentActivity },
+          },
+        ],
+      });
+
+      const messages = await new CloudRuntime().getMessages('conv_1');
+
+      expect(messages[0]?.metadata).toEqual({ agentActivity });
     });
 
     it('loadMessages is an alias for getMessages', async () => {

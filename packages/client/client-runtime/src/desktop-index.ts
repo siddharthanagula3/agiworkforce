@@ -13,6 +13,25 @@ export type { EventCallback, UnlistenFn } from './events';
 
 export { routeToCloud } from './http';
 
+// Canonical Cloud agent-run projection. Desktop aliases the package root to
+// this browser-safe entrypoint, so keep the portable reducer available here
+// as well as from index.ts. It has no Tauri or Node dependency.
+export { applyAgentActivityEvent, finishAgentActivityLocally } from './agentActivity';
+export type {
+  AgentActivityApproval,
+  AgentActivityArtifactEntry,
+  AgentActivityContextEntry,
+  AgentActivityEntry,
+  AgentActivityErrorEntry,
+  AgentActivityProgressEntry,
+  AgentActivityRunStatus,
+  AgentActivitySourcesEntry,
+  AgentActivityState,
+  AgentActivityStepStatus,
+  AgentActivityToolEntry,
+  FinishAgentActivityLocallyOptions,
+} from './agentActivity';
+
 // Per-surface priority send pipeline (messageQueueManager) — Task 1.4.
 // Mirrored from index.ts so the web/desktop bundle (which aliases
 // @agiworkforce/client-runtime -> desktop-index.ts via apps/desktop/vite.config.ts:293)

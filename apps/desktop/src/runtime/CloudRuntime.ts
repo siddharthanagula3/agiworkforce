@@ -59,6 +59,9 @@ import { getProviderDefaultModel, normalizeModelId } from '../constants/llm';
 import { getDefaultModelFor } from '@agiworkforce/types';
 import { createCloudStreamDeltaSink } from './cloudStreamDeltas';
 import { CloudToolApprovalRegistry } from './cloudToolApproval';
+import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
+
+const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
 
 // ---------------------------------------------------------------------------
 // Mapping helpers — the DCL-1/DCL-2 client's normalized DTOs -> ChatRuntime DTOs
@@ -85,6 +88,8 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
     content: raw.content,
     createdAt: raw.createdAt,
     model: raw.model,
+    ...(raw.provider ? { provider: raw.provider } : {}),
+    ...(raw.metadata ? { metadata: raw.metadata } : {}),
   };
 }
 
@@ -95,6 +100,15 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
 export class CloudRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
+  private readonly _activeTurns = new Map<
+    string,
+    {
+      assistantMessageId: string;
+      model: string;
+      sink: ReturnType<typeof createCloudStreamDeltaSink>;
+      settled: boolean;
+    }
+  >();
   private readonly _approvals = new CloudToolApprovalRegistry();
 
   /** The cloud SSE wire forwards `code_execution` — see `SendMessageOptions.codeExecution`. */
@@ -115,9 +129,22 @@ export class CloudRuntime implements ChatRuntime {
   }
 
   /** Persists a completed assistant turn, surfacing a save failure as a follow-up 'error' event without hiding 'done'. */
-  private persistAssistantTurn(conversationId: string, content: string, model: string): void {
+  private persistAssistantTurn(
+    conversationId: string,
+    assistantMessageId: string,
+    content: string,
+    model: string,
+    agentActivity?: AgentActivityState,
+  ): void {
+    if (!content && !agentActivity) return;
     void getDesktopCloudChatPersistenceClient()
-      .saveMessage(conversationId, { id: uuidv7(), role: 'assistant', content, model })
+      .saveMessage(conversationId, {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+        model,
+        ...(agentActivity ? { metadata: { agentActivity } } : {}),
+      })
       .catch((err: unknown) => {
         this.emit({
           type: 'error',
@@ -164,6 +191,9 @@ export class CloudRuntime implements ChatRuntime {
     }
 
     const sink = createCloudStreamDeltaSink((event) => this.emit(event), CLOUD_API_BASE_URL);
+    const assistantMessageId = uuidv7();
+    const activeTurn = { assistantMessageId, model, sink, settled: false };
+    this._activeTurns.set(conversationId, activeTurn);
     // The exact thread sent to the server — reused verbatim as `priorMessages`
     // if this turn suspends on a tool-approval request (see cloudApi.ts's
     // `sendCloudMessage`, which builds the identical fallback).
@@ -180,6 +210,9 @@ export class CloudRuntime implements ChatRuntime {
         sink.onChunk,
         // onDone
         () => {
+          if (activeTurn.settled) return;
+          activeTurn.settled = true;
+          this._activeTurns.delete(conversationId);
           this._approvals.recordTurnOutcome(conversationId, model, priorMessages, sink);
           if (sink.isSuspended()) {
             // The server suspended this turn on a tool-approval request and
@@ -196,7 +229,13 @@ export class CloudRuntime implements ChatRuntime {
             // persistence failure here must not hide a successful stream
             // from the UI, but is surfaced via a follow-up 'error' event so
             // the caller can retry the save.
-            this.persistAssistantTurn(conversationId, sink.getAccumulatedContent(), model);
+            this.persistAssistantTurn(
+              conversationId,
+              assistantMessageId,
+              sink.getAccumulatedContent(),
+              model,
+              sink.getAgentActivity(),
+            );
           }
           const finishReason = sink.getFinishReason();
           const streamError = sink.getStreamError();
@@ -208,6 +247,23 @@ export class CloudRuntime implements ChatRuntime {
         },
         // onError
         (err: Error) => {
+          if (activeTurn.settled) return;
+          activeTurn.settled = true;
+          this._activeTurns.delete(conversationId);
+          const activity = sink.getAgentActivity();
+          this.persistAssistantTurn(
+            conversationId,
+            assistantMessageId,
+            sink.getAccumulatedContent(),
+            model,
+            activity
+              ? finishAgentActivityLocally(activity, {
+                  status: 'failed',
+                  completedAtMs: Date.now(),
+                  error: err.message,
+                })
+              : undefined,
+          );
           this.emit({ type: 'error', error: err.message });
         },
         controller.signal,
@@ -226,7 +282,25 @@ export class CloudRuntime implements ChatRuntime {
     } catch (err) {
       if (!controller.signal.aborted) {
         const message = err instanceof Error ? err.message : String(err);
-        this.emit({ type: 'error', error: message });
+        if (!activeTurn.settled) {
+          activeTurn.settled = true;
+          this._activeTurns.delete(conversationId);
+          const activity = sink.getAgentActivity();
+          this.persistAssistantTurn(
+            conversationId,
+            assistantMessageId,
+            sink.getAccumulatedContent(),
+            model,
+            activity
+              ? finishAgentActivityLocally(activity, {
+                  status: 'failed',
+                  completedAtMs: Date.now(),
+                  error: message,
+                })
+              : undefined,
+          );
+          this.emit({ type: 'error', error: message });
+        }
       }
     } finally {
       this._abortControllers.delete(conversationId);
@@ -258,7 +332,13 @@ export class CloudRuntime implements ChatRuntime {
       // on a further approval request) — same persistence-trap rule as
       // sendMessage's onDone above.
       if (outcome && !outcome.suspended) {
-        this.persistAssistantTurn(conversationId, outcome.content, outcome.model);
+        this.persistAssistantTurn(
+          conversationId,
+          uuidv7(),
+          outcome.content,
+          outcome.model,
+          outcome.agentActivity,
+        );
       }
     } finally {
       this._abortControllers.delete(conversationId);
@@ -278,6 +358,24 @@ export class CloudRuntime implements ChatRuntime {
     if (controller) {
       controller.abort();
       this._abortControllers.delete(conversationId);
+    }
+    const activeTurn = this._activeTurns.get(conversationId);
+    if (activeTurn && !activeTurn.settled) {
+      activeTurn.settled = true;
+      this._activeTurns.delete(conversationId);
+      const activity = activeTurn.sink.getAgentActivity();
+      this.persistAssistantTurn(
+        conversationId,
+        activeTurn.assistantMessageId,
+        activeTurn.sink.getAccumulatedContent(),
+        activeTurn.model,
+        activity
+          ? finishAgentActivityLocally(activity, {
+              status: 'cancelled',
+              completedAtMs: Date.now(),
+            })
+          : undefined,
+      );
     }
   }
 

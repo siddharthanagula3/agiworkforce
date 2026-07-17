@@ -12,7 +12,7 @@ import {
   shouldPushSettings,
 } from '@agiworkforce/sync';
 import type { PrivacyMode } from '@agiworkforce/types';
-import { API_BASE_URL } from '../api/config';
+import { WEB_APP_URL } from '../api/config';
 import { getAuthHeaders } from '../api/cloudApi';
 import { guardedFetch } from '../lib/egressGuard';
 import { storageFallback } from '../lib/storageFallback';
@@ -514,13 +514,10 @@ function applyDesktopCloudSafeSettings(settings: CloudSafeSettings): void {
   }
 }
 
-/**
- * Bootstrap the Desktop adapter. The PA-3 gate remains untouched: while native
- * Desktop cannot enter Managed mode this stays wired but performs zero network I/O.
- */
+/** Bootstrap the Desktop adapter for authenticated Managed Cloud sessions. */
 export function initManagedCloudSettingsSync(): () => void {
   const client = createManagedCloudSettingsClient({
-    baseUrl: API_BASE_URL,
+    baseUrl: WEB_APP_URL,
     fetchImpl: (input, init) => guardedFetch(input, init),
     getHeaders: () => getAuthHeaders(),
   });
