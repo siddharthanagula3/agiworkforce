@@ -11,10 +11,26 @@ function cronEntries(path: string): Array<{ path: string; schedule: string }> {
 }
 
 describe('credit settlement recovery schedule', () => {
-  it.each(['../../vercel.json', 'vercel.json'])('%s runs reconciliation every minute', (path) => {
-    expect(cronEntries(path)).toContainEqual({
-      path: '/api/cron/reconcile-credits',
-      schedule: '* * * * *',
-    });
+  // The Vercel project's Root Directory is the repo root, so the ROOT
+  // vercel.json is the only cron registry (apps/web/vercel.json was dead
+  // config, deleted 2026-07-17 — WEB-API-HOST-REWRITES-INERT-01).
+  //
+  // Reconciliation is DAILY, not every minute: the Vercel Hobby plan rejects
+  // sub-daily crons at deploy time (PROD-VERCEL-DEPLOY-TOPOLOGY-01). Restore
+  // '* * * * *' here and in vercel.json when the founder upgrades to Pro.
+  it('root vercel.json schedules credit reconciliation', () => {
+    const entry = cronEntries('../../vercel.json').find(
+      (cron) => cron.path === '/api/cron/reconcile-credits',
+    );
+    expect(entry).toBeDefined();
+    expect(entry?.schedule).toBe('30 0 * * *');
+  });
+
+  it('root vercel.json schedules the user-schedules runner', () => {
+    const entry = cronEntries('../../vercel.json').find(
+      (cron) => cron.path === '/api/cron/run-schedules',
+    );
+    expect(entry).toBeDefined();
+    expect(entry?.schedule).toBe('15 0 * * *');
   });
 });
