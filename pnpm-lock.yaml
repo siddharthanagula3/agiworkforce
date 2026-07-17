@@ -567,6 +567,9 @@ importers:
 
   apps/extension-vscode:
     dependencies:
+      '@agiworkforce/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/ai/agent-core
       '@agiworkforce/client-runtime':
         specifier: workspace:*
         version: link:../../packages/client/client-runtime
@@ -661,6 +664,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@agiworkforce/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/ai/agent-core
       '@agiworkforce/artifacts':
         specifier: workspace:*
         version: link:../../packages/platform/artifacts
@@ -1358,6 +1364,12 @@ importers:
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.19.15)(@vitest/coverage-v8@4.1.8)(@vitest/ui@4.1.8)(jsdom@20.0.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(msw@2.12.14(@types/node@22.19.15)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.15)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
 
   infrastructure/sandbox: {}
+
+  packages/ai/agent-core:
+    devDependencies:
+      vitest:
+        specifier: ^4.1.8
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.19.15)(@vitest/coverage-v8@4.1.8)(@vitest/ui@4.1.8)(jsdom@20.0.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(msw@2.14.6(@types/node@22.19.15)(typescript@5.9.3))(vite@8.0.16(@types/node@22.19.15)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
 
   packages/ai/model-registry:
     devDependencies:

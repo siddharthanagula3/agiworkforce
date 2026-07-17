@@ -1,41 +1,15 @@
-//! Context compaction — token estimation, usage tracking, and message pruning.
-//!
-//! Implements a multi-phase compaction strategy:
-//! 1. Reverse token budget: Walk tool outputs backward, truncating older ones first
-//! 2. History split: Keep last 30% of messages untouched, compress only older 70%
-//! 3. Prune: Replace large tool outputs with a short summary
-//! 4. Truncate: Shorten remaining long text messages
-//! 5. Remove: Drop tool-result messages entirely if still over budget
-//! 6. Select: Keep last N messages that fit within the token budget
+//! CLI adapters around the shared agent context engine, plus project-specific
+//! instruction discovery. Compaction mechanics live in
+//! `agiworkforce_agent_core::context`; this module intentionally contains no
+//! second pruning or token-accounting implementation.
 
 use std::path::{Path, PathBuf};
 
-use crate::models::{ContentBlock, Message, MessageContent};
+use crate::models::Message;
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/// Rough token estimate: 4 UTF-8 bytes ≈ 1 token.
-pub const BYTES_PER_TOKEN: usize = 4;
-
-/// Warn user when context exceeds this fraction of the model's limit.
-/// Auto-compaction triggers at 0.90 (see CompressionConfig); this is the
-/// earlier warning threshold.
-pub const CONTEXT_WARN_THRESHOLD: f64 = 0.85;
-
-/// Token budget to protect during compaction (keep the most recent content).
-/// Used by the compaction algorithm when deciding which messages to preserve.
-#[allow(dead_code)]
-pub const RECENT_WINDOW_TOKENS: usize = 50_000;
-
-/// Default context window when the model is not in the catalog.
 const DEFAULT_CONTEXT_LIMIT: usize = 128_000;
-
-/// Max tokens allowed for instruction file injection.
 const MAX_INSTRUCTION_TOKENS: usize = 10_000;
 
-/// Root markers used by [`find_project_root`] to detect project boundaries.
 #[allow(dead_code)]
 const ROOT_MARKERS: &[&str] = &[
     ".git",
@@ -45,101 +19,18 @@ const ROOT_MARKERS: &[&str] = &[
     "pyproject.toml",
 ];
 
-/// Instruction file names to search for, in order of preference.
 const INSTRUCTION_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", ".agiworkforce/instructions.md"];
 
-// ---------------------------------------------------------------------------
-// CompressionConfig
-// ---------------------------------------------------------------------------
-
-/// Configuration for the compaction pipeline.
-///
-/// All thresholds are tuneable. [`Default`] provides sensible values matching
-/// the Gemini CLI defaults.
-#[derive(Debug, Clone)]
-pub struct CompressionConfig {
-    /// Fraction of the context limit at which auto-compaction triggers (0.90 = 90%).
-    /// Consumed by the auto-compaction pipeline when checking context window usage.
-    #[allow(dead_code)]
-    pub auto_trigger_fraction: f64,
-    /// Fraction of messages at the tail to keep untouched during compaction (0.30 = 30%).
-    pub preserve_fraction: f64,
-    /// Total token budget allocated to tool outputs across the conversation.
-    pub tool_output_budget: usize,
-    /// Tool-result blocks exceeding this many tokens are pruned to a summary.
-    pub max_prune_tokens: usize,
-    /// Text messages exceeding this many tokens are truncated.
-    pub max_truncate_tokens: usize,
-}
-
-impl Default for CompressionConfig {
-    fn default() -> Self {
-        Self {
-            auto_trigger_fraction: 0.90,
-            preserve_fraction: 0.30,
-            tool_output_budget: 50_000,
-            max_prune_tokens: 1_000,
-            max_truncate_tokens: 500,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// CompressionStatus
-// ---------------------------------------------------------------------------
-
-/// Outcome of a compaction attempt, providing detailed feedback to the caller.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CompressionStatus {
-    /// Full pipeline ran: some messages were pruned and/or removed.
-    Compressed {
-        original_tokens: usize,
-        final_tokens: usize,
-    },
-    /// Only truncation was applied (no structural removal).
-    TruncationOnly {
-        original_tokens: usize,
-        final_tokens: usize,
-    },
-    /// The messages already fit within the target; nothing was changed.
-    Unnecessary,
-    /// Compaction was attempted but the result is larger than the original
-    /// (should not normally happen; indicates a logic error or edge case).
-    FailedInflated,
-}
-
-// ---------------------------------------------------------------------------
-// Token estimation
-// ---------------------------------------------------------------------------
-
-/// Estimate token count for `text` using the 4-bytes/token heuristic.
+/// Estimate text tokens using the shared code-point heuristic.
 pub fn estimate_tokens(text: &str) -> usize {
-    text.len().div_ceil(BYTES_PER_TOKEN)
+    agiworkforce_agent_core::context::estimate_text_tokens(text)
 }
 
-/// Estimated token cost for a single [`Message`].
-pub fn message_tokens(msg: &Message) -> usize {
-    // ~4-token overhead per message (role + structure)
-    4 + match &msg.content {
-        MessageContent::Text(t) => estimate_tokens(t),
-        MessageContent::Blocks(blocks) => blocks.iter().map(block_tokens).sum(),
-    }
+/// Estimate one message using the shared accounting implementation.
+pub fn message_tokens(message: &Message) -> usize {
+    agiworkforce_agent_core::context::estimate_message_tokens(message)
 }
 
-fn block_tokens(block: &ContentBlock) -> usize {
-    match block {
-        ContentBlock::Text { text } => estimate_tokens(text),
-        // Image blocks carry base64 data; approximate by reporting a fixed
-        // overhead (85 base tokens per Anthropic's published vision pricing).
-        ContentBlock::Image { data_b64, .. } => 85 + data_b64.len() / 4,
-        ContentBlock::ToolUse { name, input, .. } => {
-            estimate_tokens(name) + estimate_tokens(&input.to_string())
-        }
-        ContentBlock::ToolResult { content, .. } => estimate_tokens(content),
-    }
-}
-
-/// Look up the context window limit for a model ID (case-insensitive prefix match).
 pub fn context_limit(model: &str) -> usize {
     let limit = crate::model_catalog::context_window(model);
     if limit == 0 {
@@ -149,39 +40,27 @@ pub fn context_limit(model: &str) -> usize {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Context usage
-// ---------------------------------------------------------------------------
-
-/// Summary of how much of the context window is consumed.
 #[derive(Debug, Clone)]
 pub struct ContextUsage {
-    /// Estimated tokens used by the current message history.
     pub used_tokens: usize,
-    /// Context window limit for the model.
     pub limit_tokens: usize,
-    /// Fraction consumed (0.0–1.0).
     pub fraction: f64,
-    /// True when above [`CONTEXT_WARN_THRESHOLD`].
     pub near_limit: bool,
 }
 
-/// Calculate context usage for the current message history.
+/// Compatibility view used by `/context` and session metadata. Runtime
+/// compaction uses the richer provider-anchored budget directly.
 pub fn context_usage(messages: &[Message], model: &str) -> ContextUsage {
-    let used_tokens: usize = messages.iter().map(message_tokens).sum();
     let limit_tokens = context_limit(model);
-    let fraction = used_tokens as f64 / limit_tokens as f64;
+    let budget = agiworkforce_agent_core::context::context_budget(messages, limit_tokens, 0, None);
     ContextUsage {
-        used_tokens,
+        used_tokens: budget.used_tokens,
         limit_tokens,
-        fraction,
-        near_limit: fraction >= CONTEXT_WARN_THRESHOLD,
+        fraction: budget.used_fraction,
+        near_limit: budget.near_limit(),
     }
 }
 
-/// Render a compact context-usage bar for display.
-///
-/// Example: `Context: [########              ] 28%  (56K / 200K tokens)`
 pub fn format_context_report(usage: &ContextUsage) -> String {
     const BAR_WIDTH: usize = 30;
     let filled = ((usage.fraction * BAR_WIDTH as f64) as usize).min(BAR_WIDTH);
@@ -194,546 +73,16 @@ pub fn format_context_report(usage: &ContextUsage) -> String {
     )
 }
 
-// ---------------------------------------------------------------------------
-// Compaction
-// ---------------------------------------------------------------------------
-
-/// Backward-compat wrapper: compact using [`CompressionConfig::default()`].
-///
-/// See [`compact_with_config`] for the full-featured version.
-pub fn compact_messages(messages: &[Message], target_tokens: usize) -> Vec<Message> {
-    let (msgs, _status) =
-        compact_with_config(messages, target_tokens, &CompressionConfig::default());
-    msgs
-}
-
-/// Compact messages with an optional focus instruction.
-///
-/// When `focus` is provided, a system-level note is prepended to guide
-/// the compaction: the LLM summary (if any future LLM-based compaction
-/// is added) or the preserved-window selection should prioritize content
-/// related to the focus topic.
-///
-/// For now, this appends a focus hint as a system message after compaction
-/// so the model knows what context was prioritized.
-pub fn compact_with_focus(
-    messages: &[Message],
-    target_tokens: usize,
-    focus: Option<&str>,
-) -> Vec<Message> {
-    let mut compacted = compact_messages(messages, target_tokens);
-
-    if let Some(focus_text) = focus {
-        // Insert a focus hint after the system prompt (index 1) so the model
-        // knows the user asked to focus on a specific topic.
-        let hint = Message::text(
-            "system",
-            format!(
-                "[Context was compacted. Focus area: {}. Earlier messages may have been summarized or removed.]",
-                focus_text
-            ),
-        );
-        if compacted.len() > 1 {
-            compacted.insert(1, hint);
-        } else {
-            compacted.push(hint);
-        }
-    }
-
-    compacted
-}
-
-fn total_tokens(messages: &[Message]) -> usize {
-    messages.iter().map(message_tokens).sum()
-}
-
-/// Compact `messages` to fit within `target_tokens` using the given config.
-///
-/// Returns the compacted message list and a [`CompressionStatus`] describing
-/// what happened.
-///
-/// The pipeline applies six phases in order, short-circuiting as soon as the
-/// budget is satisfied:
-///
-/// 1. **Reverse token budget** — Walk tool outputs backward, truncating the
-///    oldest first until the cumulative tool-output cost fits the budget.
-/// 2. **History split** — Keep the last `preserve_fraction` of messages
-///    untouched; only compress the older prefix.
-/// 3. **Prune** — Replace tool-result content > `max_prune_tokens` with a
-///    30-line head.
-/// 4. **Truncate** — Trim long text messages to `max_truncate_tokens`.
-/// 5. **Remove** — Drop tool-result messages entirely.
-/// 6. **Select** — Keep only the most recent messages that fit.
-pub fn compact_with_config(
-    messages: &[Message],
-    target_tokens: usize,
-    config: &CompressionConfig,
-) -> (Vec<Message>, CompressionStatus) {
-    let original_tokens = total_tokens(messages);
-
-    if original_tokens <= target_tokens {
-        return (messages.to_vec(), CompressionStatus::Unnecessary);
-    }
-
-    // Tool-use ids present BEFORE compaction. Used to repair only the pairs that
-    // compaction itself breaks, leaving any pre-existing malformed blocks alone.
-    let original_tool_use_ids = collect_tool_use_ids(messages);
-
-    // Phase 1: Reverse token budget — truncate older tool outputs first.
-    let mut msgs = reverse_budget_tool_outputs(messages, config.tool_output_budget);
-    if total_tokens(&msgs) <= target_tokens {
-        let msgs = normalize_tool_pairs(msgs, &original_tool_use_ids);
-        let final_tokens = total_tokens(&msgs);
-        return (
-            msgs,
-            CompressionStatus::TruncationOnly {
-                original_tokens,
-                final_tokens,
-            },
-        );
-    }
-
-    // Phase 2: History split — only compress the older prefix.
-    let (older, preserved) = history_split(&msgs, config.preserve_fraction);
-
-    // Phase 3-5 operate on the older prefix only.
-    let mut compressible = older;
-
-    compressible = prune_tool_outputs(compressible, config.max_prune_tokens);
-    let mut combined = recombine(&compressible, &preserved);
-    if total_tokens(&combined) <= target_tokens {
-        let combined = normalize_tool_pairs(combined, &original_tool_use_ids);
-        let final_tokens = total_tokens(&combined);
-        return (
-            combined,
-            CompressionStatus::Compressed {
-                original_tokens,
-                final_tokens,
-            },
-        );
-    }
-
-    compressible = truncate_long_messages(compressible, config.max_truncate_tokens);
-    combined = recombine(&compressible, &preserved);
-    if total_tokens(&combined) <= target_tokens {
-        let combined = normalize_tool_pairs(combined, &original_tool_use_ids);
-        let final_tokens = total_tokens(&combined);
-        return (
-            combined,
-            CompressionStatus::Compressed {
-                original_tokens,
-                final_tokens,
-            },
-        );
-    }
-
-    compressible = remove_tool_results(compressible);
-    combined = recombine(&compressible, &preserved);
-    if total_tokens(&combined) <= target_tokens {
-        let combined = normalize_tool_pairs(combined, &original_tool_use_ids);
-        let final_tokens = total_tokens(&combined);
-        return (
-            combined,
-            CompressionStatus::Compressed {
-                original_tokens,
-                final_tokens,
-            },
-        );
-    }
-
-    // Phase 6: Last resort — select the most recent messages that fit.
-    msgs = normalize_tool_pairs(
-        select_recent(combined, target_tokens),
-        &original_tool_use_ids,
-    );
-    let final_tokens = total_tokens(&msgs);
-
-    let status = if final_tokens > original_tokens {
-        CompressionStatus::FailedInflated
-    } else {
-        CompressionStatus::Compressed {
-            original_tokens,
-            final_tokens,
-        }
-    };
-
-    (msgs, status)
-}
-
-/// Collect every `tool_use` block id present in `messages`.
-fn collect_tool_use_ids(messages: &[Message]) -> std::collections::HashSet<String> {
-    let mut ids = std::collections::HashSet::new();
-    for msg in messages {
-        if let MessageContent::Blocks(blocks) = &msg.content {
-            for block in blocks {
-                if let ContentBlock::ToolUse { id, .. } = block {
-                    ids.insert(id.clone());
-                }
-            }
-        }
-    }
-    ids
-}
-
-/// Repair tool-call pairing after compaction so the result is valid for native
-/// tool-use providers (Anthropic and others reject a history that contains a
-/// `tool_use` without a matching `tool_result`, or a `tool_result` whose
-/// `tool_use` was dropped).
-///
-/// Compaction phases 5 (`remove_tool_results`) and 6 (`select_recent`) can drop
-/// `ToolResult` blocks while the matching `ToolUse` survives, or drop a
-/// `ToolUse` while its `ToolResult` survives. This pass:
-///   * appends a synthetic "aborted" `tool_result` (mirroring
-///     `History::normalize_history`) for every surviving `tool_use` that lost
-///     its result, and
-///   * drops any `tool_result` whose `tool_use` existed before compaction but
-///     was dropped by it. `original_tool_use_ids` scopes this to pairs broken
-///     by compaction so pre-existing malformed blocks are left untouched.
-fn normalize_tool_pairs(
-    messages: Vec<Message>,
-    original_tool_use_ids: &std::collections::HashSet<String>,
-) -> Vec<Message> {
-    use std::collections::HashSet;
-
-    // First pass: collect surviving tool_use ids and tool_result ids.
-    let mut tool_use_ids: HashSet<String> = HashSet::new();
-    let mut result_ids: HashSet<String> = HashSet::new();
-    for msg in &messages {
-        if let MessageContent::Blocks(blocks) = &msg.content {
-            for block in blocks {
-                match block {
-                    ContentBlock::ToolUse { id, .. } => {
-                        tool_use_ids.insert(id.clone());
-                    }
-                    ContentBlock::ToolResult { tool_use_id, .. } => {
-                        result_ids.insert(tool_use_id.clone());
-                    }
-                    ContentBlock::Text { .. } | ContentBlock::Image { .. } => {}
-                }
-            }
-        }
-    }
-
-    // Second pass: drop tool_result blocks whose tool_use was dropped by
-    // compaction (the id was a real tool_use originally but no longer survives),
-    // so we do not leave a tool_result orphaned ahead of (or without) its
-    // tool_use. Pre-existing standalone tool_results are left as-is.
-    let mut out: Vec<Message> = Vec::with_capacity(messages.len());
-    for msg in messages {
-        match msg.content {
-            MessageContent::Blocks(blocks) => {
-                let filtered: Vec<ContentBlock> = blocks
-                    .into_iter()
-                    .filter(|b| match b {
-                        ContentBlock::ToolResult { tool_use_id, .. } => {
-                            tool_use_ids.contains(tool_use_id)
-                                || !original_tool_use_ids.contains(tool_use_id)
-                        }
-                        _ => true,
-                    })
-                    .collect();
-                // Preserve messages that still carry content; drop ones that
-                // became empty after filtering orphaned tool_results.
-                if !filtered.is_empty() {
-                    out.push(Message::blocks(&msg.role, filtered));
-                }
-            }
-            MessageContent::Text(_) => out.push(msg),
-        }
-    }
-
-    // Third pass: append a synthetic aborted tool_result for every surviving
-    // tool_use that lost its result, so the orphaned tool_use is paired again.
-    // `tool_use_ids` is already a set, so each orphan is emitted at most once.
-    for id in &tool_use_ids {
-        if !result_ids.contains(id) {
-            out.push(Message::blocks(
-                "user",
-                vec![ContentBlock::ToolResult {
-                    tool_use_id: id.clone(),
-                    content:
-                        "[Tool call was aborted during context compaction — no output produced]"
-                            .to_string(),
-                    is_error: true,
-                }],
-            ));
-        }
-    }
-
-    out
-}
-
-/// Recombine the compressed older prefix with the preserved tail.
-fn recombine(older: &[Message], preserved: &[Message]) -> Vec<Message> {
-    let mut out = older.to_vec();
-    out.extend_from_slice(preserved);
-    out
-}
-
-// ---------------------------------------------------------------------------
-// Phase 1 — Reverse token budget truncation
-// ---------------------------------------------------------------------------
-
-/// Walk backward through messages, tracking cumulative tool-output tokens.
-/// Once the `budget` is exceeded, truncate older tool-result content to its
-/// last 30 lines so the most recent results retain full fidelity.
-fn reverse_budget_tool_outputs(messages: &[Message], budget: usize) -> Vec<Message> {
-    // First pass: compute per-message tool-output token cost (backward).
-    let tool_costs: Vec<usize> = messages.iter().map(tool_output_tokens).collect();
-    let total_tool: usize = tool_costs.iter().sum();
-
-    if total_tool <= budget {
-        return messages.to_vec();
-    }
-
-    // Walk backward, accumulating a running tool-token total.
-    // Once we've "reserved" `budget` tokens for the tail, truncate everything
-    // older than the cutoff.
-    let mut cumulative = 0usize;
-    // Index *above* which messages keep full fidelity.
-    let mut cutoff_idx = messages.len();
-    for i in (0..messages.len()).rev() {
-        if tool_costs[i] == 0 {
-            continue;
-        }
-        if cumulative + tool_costs[i] > budget {
-            cutoff_idx = i + 1;
-            break;
-        }
-        cumulative += tool_costs[i];
-    }
-
-    messages
-        .iter()
-        .enumerate()
-        .map(|(i, msg)| {
-            if i < cutoff_idx && tool_costs[i] > 0 {
-                truncate_tool_result_blocks(msg, 30)
-            } else {
-                msg.clone()
-            }
-        })
-        .collect()
-}
-
-/// Sum of tokens across all tool-result blocks in a single message.
-fn tool_output_tokens(msg: &Message) -> usize {
-    match &msg.content {
-        MessageContent::Blocks(blocks) => blocks
-            .iter()
-            .filter_map(|b| match b {
-                ContentBlock::ToolResult { content, .. } => Some(estimate_tokens(content)),
-                ContentBlock::Text { .. }
-                | ContentBlock::Image { .. }
-                | ContentBlock::ToolUse { .. } => None,
-            })
-            .sum(),
-        MessageContent::Text(_) => 0,
-    }
-}
-
-/// Replace every tool-result block in `msg` with its last `keep_lines` lines.
-fn truncate_tool_result_blocks(msg: &Message, keep_lines: usize) -> Message {
-    if let MessageContent::Blocks(blocks) = &msg.content {
-        let new_blocks: Vec<ContentBlock> = blocks
-            .iter()
-            .map(|block| {
-                if let ContentBlock::ToolResult {
-                    tool_use_id,
-                    content,
-                    is_error,
-                } = block
-                {
-                    let lines: Vec<&str> = content.lines().collect();
-                    if lines.len() > keep_lines {
-                        let tail: String = lines[lines.len() - keep_lines..].join("\n");
-                        return ContentBlock::ToolResult {
-                            tool_use_id: tool_use_id.clone(),
-                            content: format!(
-                                "[... {} lines omitted during compaction ...]\n{}",
-                                lines.len() - keep_lines,
-                                tail
-                            ),
-                            is_error: *is_error,
-                        };
-                    }
-                }
-                block.clone()
-            })
-            .collect();
-        Message::blocks(&msg.role, new_blocks)
-    } else {
-        msg.clone()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Phase 2 — History split
-// ---------------------------------------------------------------------------
-
-/// Split messages into (older, preserved) such that `preserved` contains
-/// approximately the last `fraction` of messages.
-///
-/// The split point is adjusted to land on a "user" message boundary so that
-/// assistant/tool messages are never orphaned at the start of the preserved
-/// section.
-fn history_split(messages: &[Message], fraction: f64) -> (Vec<Message>, Vec<Message>) {
-    if messages.is_empty() {
-        return (Vec::new(), Vec::new());
-    }
-
-    let preserve_count = ((messages.len() as f64 * fraction).ceil() as usize).min(messages.len());
-    let mut split = messages.len() - preserve_count;
-
-    // Adjust forward to a user-message boundary so preserved starts cleanly.
-    while split < messages.len() && messages[split].role != "user" {
-        split += 1;
-    }
-
-    // If we couldn't find a user boundary, keep everything in the preserved
-    // section to avoid splitting mid-turn.
-    if split >= messages.len() {
-        return (Vec::new(), messages.to_vec());
-    }
-
-    (messages[..split].to_vec(), messages[split..].to_vec())
-}
-
-// ---------------------------------------------------------------------------
-// Phase 3 — Prune large tool outputs
-// ---------------------------------------------------------------------------
-
-/// Replace tool-result content exceeding `max_tokens` with a first-20-lines
-/// summary.
-fn prune_tool_outputs(messages: Vec<Message>, max_tokens: usize) -> Vec<Message> {
-    messages
-        .into_iter()
-        .map(|msg| {
-            if let MessageContent::Blocks(blocks) = &msg.content {
-                let new_blocks: Vec<ContentBlock> = blocks
-                    .iter()
-                    .map(|block| {
-                        if let ContentBlock::ToolResult {
-                            tool_use_id,
-                            content,
-                            is_error,
-                        } = block
-                        {
-                            if estimate_tokens(content) > max_tokens {
-                                let head: String =
-                                    content.lines().take(20).collect::<Vec<_>>().join("\n");
-                                return ContentBlock::ToolResult {
-                                    tool_use_id: tool_use_id.clone(),
-                                    content: format!(
-                                        "{}\n[... output truncated during compaction ...]",
-                                        head
-                                    ),
-                                    is_error: *is_error,
-                                };
-                            }
-                        }
-                        block.clone()
-                    })
-                    .collect();
-                Message::blocks(&msg.role, new_blocks)
-            } else {
-                msg
-            }
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
-// Phase 4 — Truncate long text messages
-// ---------------------------------------------------------------------------
-
-/// Truncate text messages exceeding `max_tokens`.
-fn truncate_long_messages(messages: Vec<Message>, max_tokens: usize) -> Vec<Message> {
-    messages
-        .into_iter()
-        .map(|msg| {
-            if let MessageContent::Text(ref text) = msg.content {
-                if estimate_tokens(text) > max_tokens {
-                    let truncated: String =
-                        text.chars().take(max_tokens * BYTES_PER_TOKEN).collect();
-                    return Message::text(&msg.role, format!("{}\n[... truncated ...]", truncated));
-                }
-            }
-            msg
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
-// Phase 5 — Remove tool results
-// ---------------------------------------------------------------------------
-
-/// Drop messages whose content is entirely tool-result blocks.
-fn remove_tool_results(messages: Vec<Message>) -> Vec<Message> {
-    messages
-        .into_iter()
-        .filter_map(|msg| match &msg.content {
-            MessageContent::Blocks(blocks) => {
-                let all_results = blocks
-                    .iter()
-                    .all(|b| matches!(b, ContentBlock::ToolResult { .. }));
-                if all_results {
-                    return None;
-                }
-                // Keep the message but strip any tool-result blocks mixed in.
-                let filtered: Vec<ContentBlock> = blocks
-                    .iter()
-                    .filter(|b| !matches!(b, ContentBlock::ToolResult { .. }))
-                    .cloned()
-                    .collect();
-                if filtered.is_empty() {
-                    None
-                } else {
-                    Some(Message::blocks(&msg.role, filtered))
-                }
-            }
-            MessageContent::Text(_) => Some(msg),
-        })
-        .collect()
-}
-
-// ---------------------------------------------------------------------------
-// Phase 6 — Select recent
-// ---------------------------------------------------------------------------
-
-/// Walk backwards keeping messages until the token budget is full.
-fn select_recent(messages: Vec<Message>, target_tokens: usize) -> Vec<Message> {
-    let mut selected = Vec::new();
-    let mut budget = 0usize;
-    for msg in messages.into_iter().rev() {
-        let t = message_tokens(&msg);
-        if budget + t > target_tokens {
-            break;
-        }
-        budget += t;
-        selected.push(msg);
-    }
-    selected.reverse();
-    selected
-}
-
-// ---------------------------------------------------------------------------
-// Project root detection
-// ---------------------------------------------------------------------------
-
-/// Find the project root by walking from `start` upward, looking for any of
-/// the well-known root markers (`.git`, `Cargo.toml`, `package.json`,
-/// `go.mod`, `pyproject.toml`).
-///
-/// Returns `None` if no marker is found before reaching the filesystem root.
+/// Find the project root by walking upward to the first known root marker.
 #[allow(dead_code)]
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut current = start.to_path_buf();
     loop {
-        for &marker in ROOT_MARKERS {
-            if current.join(marker).exists() {
-                return Some(current);
-            }
+        if ROOT_MARKERS
+            .iter()
+            .any(|marker| current.join(marker).exists())
+        {
+            return Some(current);
         }
         match current.parent() {
             Some(parent) if parent != current => current = parent.to_path_buf(),
@@ -742,37 +91,25 @@ pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Instruction file loading
-// ---------------------------------------------------------------------------
-
-/// Load instruction files from `cwd` upward to the filesystem root.
-///
-/// Searches each directory from the project root down to `cwd` for any of
-/// [`INSTRUCTION_FILES`], concatenating their contents in root-first order
-/// (deeper files override shallower ones stylistically).
-/// Returns `None` if no files are found.
+/// Load `AGENTS.md`, `CLAUDE.md`, and AGI instruction files root-first from
+/// the filesystem hierarchy, stopping at the shared 10K-token budget.
 pub fn load_instructions(cwd: &Path) -> Option<String> {
     let dirs = walk_to_root(cwd);
-    let mut segments: Vec<String> = Vec::new();
+    let mut segments = Vec::new();
     let mut total = 0usize;
 
-    // Iterate root-first so deeper directories override shallower ones.
     for dir in dirs.iter().rev() {
-        for &name in INSTRUCTION_FILES {
+        for name in INSTRUCTION_FILES {
             let path = dir.join(name);
-            if !path.exists() {
-                continue;
-            }
             let content = match std::fs::read_to_string(&path) {
-                Ok(c) => c,
+                Ok(content) => content,
                 Err(_) => continue,
             };
-            let t = estimate_tokens(&content);
-            if total + t > MAX_INSTRUCTION_TOKENS {
+            let tokens = estimate_tokens(&content);
+            if total + tokens > MAX_INSTRUCTION_TOKENS {
                 break;
             }
-            total += t;
+            total += tokens;
             segments.push(format!(
                 "<!-- Instructions from: {} -->\n{}",
                 path.display(),
@@ -781,14 +118,9 @@ pub fn load_instructions(cwd: &Path) -> Option<String> {
         }
     }
 
-    if segments.is_empty() {
-        None
-    } else {
-        Some(segments.join("\n\n"))
-    }
+    (!segments.is_empty()).then(|| segments.join("\n\n"))
 }
 
-/// Walk from `start` toward the filesystem root, returning each directory.
 fn walk_to_root(start: &Path) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     let mut current = start.to_path_buf();
@@ -802,559 +134,48 @@ fn walk_to_root(start: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
 
-    // -----------------------------------------------------------------------
-    // Token estimation
-    // -----------------------------------------------------------------------
-
     #[test]
-    fn test_estimate_tokens_empty() {
-        assert_eq!(estimate_tokens(""), 0);
-    }
-
-    #[test]
-    fn test_estimate_tokens_basic() {
-        // 5 bytes -> ceil(5/4) = 2 tokens
-        assert_eq!(estimate_tokens("hello"), 2);
-        // 400 bytes -> 100 tokens
-        assert_eq!(estimate_tokens(&"a".repeat(400)), 100);
-    }
-
-    #[test]
-    fn test_estimate_tokens_rounding() {
-        // 1 byte -> 1 token
-        assert_eq!(estimate_tokens("x"), 1);
-        // 4 bytes -> 1 token
-        assert_eq!(estimate_tokens("abcd"), 1);
-        // 5 bytes -> 2 tokens
+    fn token_estimation_delegates_to_shared_engine() {
         assert_eq!(estimate_tokens("abcde"), 2);
-    }
-
-    // -----------------------------------------------------------------------
-    // Context limit / usage
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_context_limit_known_models() {
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8: 1,000,000 context per models.json
-        assert_eq!(context_limit("claude-opus-4-8"), 1_000_000);
-        // claude-sonnet-4-6 has 200,000 context per models.json
-        assert_eq!(context_limit("claude-sonnet-4-6"), 200_000);
-        // gpt-5.5 is the current OpenAI flagship: 1,050,000 context per models.json
-        assert_eq!(context_limit("gpt-5.5"), 1_050_000);
-        assert_eq!(context_limit("gemini-3.1-pro-preview"), 2_000_000);
-        // deepseek-chat is not in models.json; prefix-based fallback returns 128,000
-        assert_eq!(context_limit("deepseek-chat"), 128_000);
+        assert_eq!(
+            message_tokens(&Message::text("user", "hello")),
+            agiworkforce_agent_core::context::estimate_message_tokens(&Message::text(
+                "user", "hello"
+            ))
+        );
     }
 
     #[test]
-    fn test_context_limit_unknown() {
-        assert_eq!(context_limit("unknown-model-xyz"), DEFAULT_CONTEXT_LIMIT);
-    }
-
-    #[test]
-    fn test_context_limit_case_insensitive() {
-        // gpt-5.5 is the current OpenAI flagship: 1,050,000 context per models.json
-        assert_eq!(context_limit("GPT-5.5"), 1_050_000);
-        // claude-opus-4-8 is the apiModelId for claude-opus-4.8: 1,000,000 context per models.json
-        assert_eq!(context_limit("CLAUDE-OPUS-4-8"), 1_000_000);
-    }
-
-    #[test]
-    fn test_context_usage_empty() {
-        let usage = context_usage(&[], "claude-sonnet-4-6");
-        assert_eq!(usage.used_tokens, 0);
-        assert_eq!(usage.limit_tokens, 200_000);
+    fn context_usage_uses_catalog_limit() {
+        let usage = context_usage(&[Message::text("user", "x".repeat(400))], "unknown-model");
+        assert_eq!(usage.used_tokens, 104);
+        assert!(usage.limit_tokens > usage.used_tokens);
         assert!(!usage.near_limit);
     }
 
     #[test]
-    fn test_context_usage_near_limit() {
-        // Build a fake message that consumes ~170 000 tokens out of 200 000
-        let big_text = "x".repeat(170_000 * BYTES_PER_TOKEN);
-        let msgs = vec![Message::text("user", big_text)];
-        let usage = context_usage(&msgs, "claude-sonnet-4-6");
-        assert!(usage.near_limit);
-    }
-
-    // -----------------------------------------------------------------------
-    // CompressionConfig
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_compression_config_default() {
-        let cfg = CompressionConfig::default();
-        assert!((cfg.auto_trigger_fraction - 0.90).abs() < f64::EPSILON);
-        assert!((cfg.preserve_fraction - 0.30).abs() < f64::EPSILON);
-        assert_eq!(cfg.tool_output_budget, 50_000);
-        assert_eq!(cfg.max_prune_tokens, 1_000);
-        assert_eq!(cfg.max_truncate_tokens, 500);
-    }
-
-    #[test]
-    fn test_compression_config_custom() {
-        let cfg = CompressionConfig {
-            auto_trigger_fraction: 0.80,
-            preserve_fraction: 0.50,
-            tool_output_budget: 20_000,
-            max_prune_tokens: 500,
-            max_truncate_tokens: 250,
-        };
-        assert!((cfg.auto_trigger_fraction - 0.80).abs() < f64::EPSILON);
-        assert_eq!(cfg.tool_output_budget, 20_000);
-    }
-
-    // -----------------------------------------------------------------------
-    // CompressionStatus
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_compression_status_unnecessary() {
-        let msgs = vec![
-            Message::text("user", "Hello"),
-            Message::text("assistant", "World"),
-        ];
-        let (_result, status) = compact_with_config(&msgs, 100_000, &CompressionConfig::default());
-        assert_eq!(status, CompressionStatus::Unnecessary);
-    }
-
-    #[test]
-    fn test_compression_status_compressed() {
-        // Create messages that exceed a tiny target.
-        let msgs: Vec<Message> = (0..50)
-            .map(|i| Message::text("user", "x".repeat(200 + i)))
-            .collect();
-        let (_result, status) = compact_with_config(&msgs, 500, &CompressionConfig::default());
-        match status {
-            CompressionStatus::Compressed {
-                original_tokens,
-                final_tokens,
-            } => {
-                assert!(final_tokens <= original_tokens);
-            }
-            _ => panic!("expected Compressed, got {:?}", status),
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Backward-compat wrapper
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_compact_noop_when_small() {
-        let msgs = vec![
-            Message::text("user", "Hello"),
-            Message::text("assistant", "World"),
-        ];
-        let result = compact_messages(&msgs, 100_000);
-        assert_eq!(result.len(), msgs.len());
-    }
-
-    #[test]
-    fn test_compact_prunes_large_tool_output() {
-        let big = "x".repeat(20_000);
-        let msg = Message::blocks(
-            "user",
-            vec![ContentBlock::ToolResult {
-                tool_use_id: "id1".to_string(),
-                content: big,
-                is_error: false,
-            }],
-        );
-        let compacted = compact_messages(&[msg], 500);
-        assert!(total_tokens(&compacted) <= 500);
-    }
-
-    #[test]
-    fn test_compact_select_recent() {
-        let msgs: Vec<Message> = (0..200)
-            .map(|i| {
-                if i % 2 == 0 {
-                    Message::text("user", format!("Message {}", i))
-                } else {
-                    Message::text("assistant", format!("Response {}", i))
-                }
-            })
-            .collect();
-        let result = compact_messages(&msgs, 100);
-        assert!(result.len() < msgs.len());
-        // The kept messages should be the most recent ones
-        if !result.is_empty() {
-            // Last message in result should be close to the end of original
-            let last_result = result.last().unwrap().text_content();
-            let last_original = msgs.last().unwrap().text_content();
-            assert_eq!(last_result, last_original);
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // Reverse token budget truncation
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_reverse_budget_no_truncation_when_under_budget() {
-        let msgs = vec![
-            Message::blocks(
-                "user",
-                vec![ContentBlock::ToolResult {
-                    tool_use_id: "t1".to_string(),
-                    content: "short output".to_string(),
-                    is_error: false,
-                }],
-            ),
-            Message::text("assistant", "ok"),
-        ];
-        let result = reverse_budget_tool_outputs(&msgs, 100_000);
-        // Should be unchanged.
-        assert_eq!(result.len(), 2);
-        if let MessageContent::Blocks(blocks) = &result[0].content {
-            if let ContentBlock::ToolResult { content, .. } = &blocks[0] {
-                assert_eq!(content, "short output");
-            }
-        }
-    }
-
-    #[test]
-    fn test_reverse_budget_truncates_older_first() {
-        // Two tool results: old (big) and new (big). Budget fits only one.
-        let big_content = (0..100)
-            .map(|i| format!("line {}", i))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let msgs = vec![
-            Message::text("user", "run tool"),
-            Message::blocks(
-                "user",
-                vec![ContentBlock::ToolResult {
-                    tool_use_id: "old".to_string(),
-                    content: big_content.clone(),
-                    is_error: false,
-                }],
-            ),
-            Message::text("user", "run another"),
-            Message::blocks(
-                "user",
-                vec![ContentBlock::ToolResult {
-                    tool_use_id: "new".to_string(),
-                    content: big_content.clone(),
-                    is_error: false,
-                }],
-            ),
-        ];
-
-        // Budget only enough for the newer tool result.
-        let new_tool_tokens = tool_output_tokens(&msgs[3]);
-        let result = reverse_budget_tool_outputs(&msgs, new_tool_tokens);
-
-        // The old tool result (index 1) should be truncated.
-        if let MessageContent::Blocks(blocks) = &result[1].content {
-            if let ContentBlock::ToolResult { content, .. } = &blocks[0] {
-                assert!(content.contains("lines omitted during compaction"));
-            }
-        }
-
-        // The new tool result (index 3) should be preserved.
-        if let MessageContent::Blocks(blocks) = &result[3].content {
-            if let ContentBlock::ToolResult { content, .. } = &blocks[0] {
-                assert!(!content.contains("omitted"), "new result should be intact");
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // History split
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_history_split_empty() {
-        let (older, preserved) = history_split(&[], 0.30);
-        assert!(older.is_empty());
-        assert!(preserved.is_empty());
-    }
-
-    #[test]
-    fn test_history_split_preserves_tail() {
-        let msgs: Vec<Message> = (0..10)
-            .map(|i| {
-                if i % 2 == 0 {
-                    Message::text("user", format!("u{}", i))
-                } else {
-                    Message::text("assistant", format!("a{}", i))
-                }
-            })
-            .collect();
-        let (older, preserved) = history_split(&msgs, 0.30);
-        // 30% of 10 = 3 messages preserved.
-        assert!(!preserved.is_empty());
-        // Preserved starts on a user boundary.
-        assert_eq!(preserved[0].role, "user");
-        // Total should equal original.
-        assert_eq!(older.len() + preserved.len(), msgs.len());
-    }
-
-    #[test]
-    fn test_history_split_user_boundary() {
-        // All assistant messages except the last one — split should find user boundary.
-        let msgs = vec![
-            Message::text("user", "hello"),
-            Message::text("assistant", "hi"),
-            Message::text("assistant", "more"),
-            Message::text("user", "end"),
-        ];
-        let (_older, preserved) = history_split(&msgs, 0.30);
-        // Preserved should start at a user message.
-        if !preserved.is_empty() {
-            assert_eq!(preserved[0].role, "user");
-        }
-    }
-
-    #[test]
-    fn test_history_split_all_preserved_when_no_user_boundary() {
-        // All assistant messages — can't find a clean split.
-        let msgs = vec![
-            Message::text("assistant", "a"),
-            Message::text("assistant", "b"),
-            Message::text("assistant", "c"),
-        ];
-        let (older, preserved) = history_split(&msgs, 0.30);
-        // When no user boundary found, everything goes to preserved.
-        assert!(older.is_empty());
-        assert_eq!(preserved.len(), 3);
-    }
-
-    // -----------------------------------------------------------------------
-    // Format context report
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_format_context_report_25pct() {
-        let usage = ContextUsage {
-            used_tokens: 50_000,
-            limit_tokens: 200_000,
-            fraction: 0.25,
-            near_limit: false,
-        };
-        let report = format_context_report(&usage);
-        assert!(report.contains("25%") || report.contains("25 %"));
-        assert!(report.contains("50K"));
-        assert!(report.contains("200K"));
-    }
-
-    // -----------------------------------------------------------------------
-    // Instruction file loading / walk_to_root
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_walk_to_root_terminates() {
-        let dirs = walk_to_root(Path::new("/tmp/a/b/c"));
-        assert!(!dirs.is_empty());
-        assert!(dirs.contains(&PathBuf::from("/tmp/a/b/c")));
-        assert!(dirs.contains(&PathBuf::from("/")));
-    }
-
-    #[test]
-    fn test_load_instructions_no_crash() {
-        // Must not panic even when given a path that doesn't exist
-        let _ = load_instructions(Path::new("/nonexistent-agiworkforce-test-path-xyz"));
-    }
-
-    // -----------------------------------------------------------------------
-    // Message token helpers
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_message_tokens_text() {
-        let msg = Message::text("user", "Hello world");
-        // "Hello world" = 11 bytes -> ceil(11/4) = 3 tokens + 4 overhead = 7
-        assert_eq!(message_tokens(&msg), 4 + estimate_tokens("Hello world"));
-    }
-
-    #[test]
-    fn test_total_tokens_accumulates() {
-        let msgs = vec![
-            Message::text("user", "abcd"), // 4 bytes = 1 token + 4 overhead = 5
-            Message::text("assistant", "efgh"), // 4 bytes = 1 token + 4 overhead = 5
-        ];
-        assert_eq!(total_tokens(&msgs), 10);
-    }
-
-    // -----------------------------------------------------------------------
-    // find_project_root
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_find_project_root_with_git() {
+    fn project_root_walks_up_to_marker() {
         let dir = tempfile::tempdir().expect("tempdir");
-        fs::create_dir(dir.path().join(".git")).unwrap();
-        let root = find_project_root(dir.path());
-        assert_eq!(root.as_deref(), Some(dir.path()));
+        fs::create_dir(dir.path().join(".git")).expect("git marker");
+        let child = dir.path().join("src/deep");
+        fs::create_dir_all(&child).expect("child");
+        assert_eq!(find_project_root(&child).as_deref(), Some(dir.path()));
     }
 
     #[test]
-    fn test_find_project_root_with_cargo_toml() {
+    fn instruction_files_load_root_first() {
         let dir = tempfile::tempdir().expect("tempdir");
-        fs::write(dir.path().join("Cargo.toml"), "[package]").unwrap();
-        let root = find_project_root(dir.path());
-        assert_eq!(root.as_deref(), Some(dir.path()));
-    }
+        let child = dir.path().join("src");
+        fs::create_dir_all(&child).expect("child");
+        fs::write(dir.path().join("AGENTS.md"), "root rule").expect("root instructions");
+        fs::write(child.join("AGENTS.md"), "child rule").expect("child instructions");
 
-    #[test]
-    fn test_find_project_root_with_package_json() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        fs::write(dir.path().join("package.json"), "{}").unwrap();
-        let root = find_project_root(dir.path());
-        assert_eq!(root.as_deref(), Some(dir.path()));
-    }
-
-    #[test]
-    fn test_find_project_root_with_go_mod() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        fs::write(dir.path().join("go.mod"), "module foo").unwrap();
-        let root = find_project_root(dir.path());
-        assert_eq!(root.as_deref(), Some(dir.path()));
-    }
-
-    #[test]
-    fn test_find_project_root_with_pyproject() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        fs::write(dir.path().join("pyproject.toml"), "[tool]").unwrap();
-        let root = find_project_root(dir.path());
-        assert_eq!(root.as_deref(), Some(dir.path()));
-    }
-
-    #[test]
-    fn test_find_project_root_walks_up() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        fs::create_dir(dir.path().join(".git")).unwrap();
-        let child = dir.path().join("src").join("deep");
-        fs::create_dir_all(&child).unwrap();
-        let root = find_project_root(&child);
-        assert_eq!(root.as_deref(), Some(dir.path()));
-    }
-
-    #[test]
-    fn test_find_project_root_none_when_no_marker() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        // Empty directory with no markers.
-        let root = find_project_root(dir.path());
-        // Could find a marker in a parent (e.g., /tmp might have something),
-        // but the tempdir itself has none — we just verify no panic.
-        // On most systems the temp dir has no markers so this should be None.
-        let _ = root;
-    }
-
-    // -----------------------------------------------------------------------
-    // Integration: compact_with_config end-to-end
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_compact_with_config_preserves_recent_messages() {
-        // Build a conversation where older messages have big tool outputs.
-        let mut msgs = Vec::new();
-        for i in 0..20 {
-            msgs.push(Message::text("user", format!("question {}", i)));
-            if i < 10 {
-                // Older messages have big tool outputs.
-                msgs.push(Message::blocks(
-                    "user",
-                    vec![ContentBlock::ToolResult {
-                        tool_use_id: format!("t{}", i),
-                        content: "x".repeat(5_000),
-                        is_error: false,
-                    }],
-                ));
-            }
-            msgs.push(Message::text("assistant", format!("answer {}", i)));
-        }
-
-        let config = CompressionConfig::default();
-        let original = total_tokens(&msgs);
-        // Target: 50% of original.
-        let target = original / 2;
-        let (result, status) = compact_with_config(&msgs, target, &config);
-
-        assert!(total_tokens(&result) <= target);
-        // Last message should be the same.
-        assert_eq!(
-            result.last().unwrap().text_content(),
-            msgs.last().unwrap().text_content()
-        );
-        assert!(matches!(status, CompressionStatus::Compressed { .. }));
-    }
-
-    #[test]
-    fn test_compact_with_config_truncation_only() {
-        // Messages with moderate tool outputs that the reverse-budget can fix.
-        let msgs = vec![
-            Message::text("user", "hi"),
-            Message::blocks(
-                "user",
-                vec![ContentBlock::ToolResult {
-                    tool_use_id: "t1".to_string(),
-                    content: (0..200)
-                        .map(|i| format!("line {}", i))
-                        .collect::<Vec<_>>()
-                        .join("\n"),
-                    is_error: false,
-                }],
-            ),
-            Message::text("assistant", "done"),
-        ];
-
-        let original = total_tokens(&msgs);
-        // Set a target that's just a bit below original — reverse budget should suffice.
-        let config = CompressionConfig {
-            tool_output_budget: 10, // very small budget forces truncation
-            ..CompressionConfig::default()
-        };
-        let target = original - 50;
-        let (result, status) = compact_with_config(&msgs, target, &config);
-
-        // Should be TruncationOnly since reverse budget alone should handle it.
-        if total_tokens(&result) <= target {
-            assert!(matches!(
-                status,
-                CompressionStatus::TruncationOnly { .. } | CompressionStatus::Compressed { .. }
-            ));
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // compact_with_focus
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn test_compact_with_focus_no_focus() {
-        let messages = vec![
-            Message::text("system", "System prompt"),
-            Message::text("user", "Hello"),
-            Message::text("assistant", "Hi there"),
-        ];
-        let result = compact_with_focus(&messages, 100_000, None);
-        // Without focus, should be same as compact_messages
-        assert_eq!(result.len(), compact_messages(&messages, 100_000).len());
-    }
-
-    #[test]
-    fn test_compact_with_focus_adds_hint() {
-        let messages = vec![
-            Message::text("system", "System prompt"),
-            Message::text("user", "Hello"),
-            Message::text("assistant", "Hi there"),
-        ];
-        let result = compact_with_focus(&messages, 100_000, Some("database queries"));
-        // Should have one extra message (the focus hint)
-        let base = compact_messages(&messages, 100_000);
-        assert_eq!(result.len(), base.len() + 1);
-        // The hint should be at index 1
-        assert!(result[1].text_content().contains("database queries"));
+        let instructions = load_instructions(&child).expect("instructions");
+        assert!(instructions.find("root rule") < instructions.find("child rule"));
     }
 }

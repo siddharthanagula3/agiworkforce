@@ -614,12 +614,10 @@ async fn mid_turn_stream_error_propagates() {
     // The first dispatch completed and committed before the continuation failed.
     assert_eq!(host.committed.len(), 1);
     // No TurnComplete was emitted on the error path.
-    assert!(
-        !host
-            .events
-            .iter()
-            .any(|e| matches!(e, TurnEvent::TurnComplete { .. }))
-    );
+    assert!(!host
+        .events
+        .iter()
+        .any(|e| matches!(e, TurnEvent::TurnComplete { .. })));
 }
 
 #[tokio::test]
@@ -684,6 +682,7 @@ async fn usage_totals_accumulate_across_iterations() {
 
     assert_eq!(outcome.totals.input_tokens, 13);
     assert_eq!(outcome.totals.output_tokens, 12);
+    assert_eq!(outcome.last_input_tokens, 3);
     assert_eq!(outcome.response, "b");
 }
 

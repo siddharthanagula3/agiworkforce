@@ -945,7 +945,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
         .map_err(internal_error)?
         .map_err(not_found_error)?;
-        self.sessions.lock().await.remove(&id_for_event);
+        let removed = self.sessions.lock().await.remove(&id_for_event);
+        if let Some(session) = removed {
+            let session = session.lock().await;
+            if let Err(error) = session.finalize_memory(self.config.as_ref()).await {
+                crate::output::print_warn(&format!(
+                    "Archived thread memory extraction failed: {error:#}"
+                ));
+            }
+        }
         self.emit(
             "thread/archived",
             serde_json::json!({ "threadId": id_for_event }),

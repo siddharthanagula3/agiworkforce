@@ -9,7 +9,14 @@
  * pairs into a structured block which the model can follow as prior context.
  */
 
-import { estimateTokens, computeContextBudget } from './contextBudgeter';
+import {
+  compactContext,
+  deterministicContextSummary,
+  estimateTextTokens,
+  type AgentContextMessage,
+  type ContextSummarizer,
+} from '@agiworkforce/agent-core';
+import { getModelById, MODEL_LIST } from '@/lib/models';
 import type { ChatMessage } from '@/types/chat';
 
 export interface CompactionResult {
@@ -20,17 +27,19 @@ export interface CompactionResult {
   compacted: boolean;
 }
 
-function buildSummaryText(droppedMessages: ChatMessage[]): string {
-  const lines: string[] = ['[Earlier conversation summary]'];
-  for (const msg of droppedMessages) {
-    const role = msg.role === 'user' ? 'User' : 'Assistant';
-    const text = msg.content;
-    // Truncate individual entries to keep summary manageable
-    const truncated = text.length > 800 ? text.slice(0, 800) + '…' : text;
-    lines.push(`${role}: ${truncated}`);
-  }
-  lines.push('[End of summary]');
-  return lines.join('\n');
+function contextWindow(modelId: string): number {
+  const model = getModelById(modelId);
+  if (model?.contextWindow) return model.contextWindow;
+  return MODEL_LIST[0]?.contextWindow ?? 4096;
+}
+
+function toContextMessage(message: ChatMessage): AgentContextMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    kind: message.type === 'image' ? 'image' : 'text',
+  };
 }
 
 /**
@@ -42,57 +51,40 @@ function buildSummaryText(droppedMessages: ChatMessage[]): string {
  * @param messages - Full message history (oldest → newest)
  * @param systemPromptTokens - Tokens reserved for system prompt
  */
-export function compact(
+export async function compact(
   modelId: string,
   messages: ChatMessage[],
   systemPromptTokens = 0,
-): CompactionResult {
-  const budget = computeContextBudget(modelId, messages, systemPromptTokens);
+  summarize?: ContextSummarizer,
+): Promise<CompactionResult> {
+  const preserveRecentMessages = Math.max(1, Math.floor(messages.length / 2));
+  const result = await compactContext({
+    contextWindowTokens: contextWindow(modelId),
+    reservedOutputTokens: 0,
+    messages: messages.map(toContextMessage),
+    warningFraction: 0.7,
+    compactionFraction: 0.8,
+    targetFraction: 0.65,
+    preserveRecentMessages,
+    summarize,
+  });
+  if (!result.compacted) return { messages, droppedTurns: 0, compacted: false };
 
-  if (budget.status !== 'compact' || messages.length < 2) {
-    return { messages, droppedTurns: 0, compacted: false };
-  }
-
-  // Preserve the most recent 50% of turns verbatim, drop the rest
-  const keepCount = Math.max(1, Math.floor(messages.length / 2));
-  const dropCount = messages.length - keepCount;
-  const droppedMessages = messages.slice(0, dropCount);
-  const keptMessages = messages.slice(dropCount);
-
-  const summaryText = buildSummaryText(droppedMessages);
-  const summaryMessage: ChatMessage = {
-    id: `compacted_${Date.now()}`,
-    conversationId: droppedMessages[0]?.conversationId ?? '',
-    role: 'assistant',
-    content: summaryText,
-    createdAt: droppedMessages[0]?.createdAt ?? new Date().toISOString(),
-  };
-
-  // Verify compaction actually helped — if the kept + summary still exceeds
-  // the hard cap, drop more turns iteratively (rare edge case for tiny windows)
-  let result = [summaryMessage, ...keptMessages];
-  const afterBudget = computeContextBudget(modelId, result, systemPromptTokens);
-  if (afterBudget.status === 'compact' && keptMessages.length > 1) {
-    const emergencyKeep = Math.max(1, Math.floor(keptMessages.length / 2));
-    const emergencyDropped = [
-      ...droppedMessages,
-      ...keptMessages.slice(0, keptMessages.length - emergencyKeep),
-    ];
-    const emergencyKept = keptMessages.slice(keptMessages.length - emergencyKeep);
-    const emergencySummaryText = buildSummaryText(emergencyDropped);
-    const emergencySummary: ChatMessage = {
-      id: `compacted_${Date.now()}_emergency`,
-      conversationId: emergencyDropped[0]?.conversationId ?? '',
-      role: 'assistant',
-      content: emergencySummaryText,
-      createdAt: emergencyDropped[0]?.createdAt ?? new Date().toISOString(),
-    };
-    result = [emergencySummary, ...emergencyKept];
-  }
-
+  const originals = new Map(messages.map((message) => [message.id, message]));
+  const firstDropped = messages.find((message) => result.droppedMessageIds.includes(message.id));
   return {
-    messages: result,
-    droppedTurns: dropCount,
+    messages: result.messages.map((message) => {
+      const original = originals.get(message.id);
+      if (original) return original;
+      return {
+        id: message.id,
+        conversationId: firstDropped?.conversationId ?? '',
+        role: message.role === 'tool' ? 'assistant' : message.role,
+        content: message.content,
+        createdAt: firstDropped?.createdAt ?? new Date(0).toISOString(),
+      };
+    }),
+    droppedTurns: result.droppedMessageIds.length,
     compacted: true,
   };
 }
@@ -104,7 +96,6 @@ export function compact(
 export function estimateSummaryTokens(messages: ChatMessage[]): number {
   if (messages.length === 0) return 0;
   const dropCount = messages.length - Math.max(1, Math.floor(messages.length / 2));
-  const dropped = messages.slice(0, dropCount);
-  const summaryText = buildSummaryText(dropped);
-  return estimateTokens(summaryText);
+  const dropped = messages.slice(0, dropCount).map(toContextMessage);
+  return estimateTextTokens(deterministicContextSummary(dropped));
 }

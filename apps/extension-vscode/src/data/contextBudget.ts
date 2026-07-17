@@ -9,6 +9,7 @@
  */
 
 import * as vscode from 'vscode';
+import { estimateTextTokens } from '@agiworkforce/agent-core';
 import {
   MODEL_CONTEXT_LIMITS,
   DEFAULT_CONTEXT_LIMIT,
@@ -75,5 +76,5 @@ export function getContextBudget(mode: 'chat' | 'agent'): ContextBudget {
  * Estimate token count from a string using the 4-char heuristic.
  */
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_TOKEN);
+  return estimateTextTokens(text);
 }

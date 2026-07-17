@@ -12,9 +12,9 @@
 use futures_util::future::join_all;
 
 use crate::{
-    Completion, DispatchMode, LoopControl, Prepared, PreparedCall, ResultBlock, RunawayTracker,
-    StreamEvent, ToolClass, TurnEvent, TurnHost, TurnOutcome, TurnParams, TurnPhase, UsageTotals,
-    hash_tool_call,
+    hash_tool_call, Completion, DispatchMode, LoopControl, Prepared, PreparedCall, ResultBlock,
+    RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost, TurnOutcome, TurnParams,
+    TurnPhase, UsageTotals,
 };
 
 /// Zero-sized entry point matching the plan's `TurnEngine::run_turn(...)` sketch.
@@ -47,6 +47,7 @@ pub async fn run_turn(
 
     let mut totals = UsageTotals::default();
     totals.add(&first.outcome.usage);
+    let mut last_input_tokens = first.outcome.usage.input_tokens;
     let via_subscription = first.via_subscription;
     let mut final_response = first.outcome.text.clone();
     let mut current_tool_calls = first.outcome.tool_calls.clone();
@@ -195,6 +196,7 @@ pub async fn run_turn(
         let continuation = complete_and_emit(host, TurnPhase::Continuation).await?;
         host.record_assistant(&continuation);
         totals.add(&continuation.outcome.usage);
+        last_input_tokens = continuation.outcome.usage.input_tokens;
         final_response = continuation.outcome.text.clone();
         current_tool_calls = continuation.outcome.tool_calls.clone();
 
@@ -226,6 +228,7 @@ pub async fn run_turn(
     Ok(TurnOutcome {
         response: final_response,
         totals,
+        last_input_tokens,
         via_subscription,
     })
 }
