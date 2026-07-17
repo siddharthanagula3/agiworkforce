@@ -2,7 +2,7 @@ import { X, ZoomIn, ZoomOut, RotateCw, Download, Maximize2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { cn } from '../../lib/utils';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useReducedMotion } from '@agiworkforce/unified-chat';
 
 interface ImageLightboxProps {
   isOpen: boolean;

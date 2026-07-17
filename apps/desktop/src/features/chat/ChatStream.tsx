@@ -29,7 +29,7 @@ import React, {
 import { SidecarMode, useUnifiedChatStore } from '../../stores/unifiedChatStore';
 import { uuidToDbId } from '../../stores/chat/chatStore';
 import { useArtifactStore } from '../../stores/artifactStore';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useReducedMotion } from '@agiworkforce/unified-chat';
 import { getToolRenderer, hasInlineRenderer } from './InlineToolResults';
 import { Button } from '@/components/ui/Button';
 import { MessageBubble } from './MessageBubble';

@@ -25,7 +25,7 @@ import {
 } from '../constants/llm';
 
 import type { Provider } from '../types/provider';
-import type { CustomModelConfig } from '../types/customModel';
+import type { CustomModelConfig } from '@agiworkforce/types';
 import type { SubscriptionTier } from '../constants/planModels';
 export type { Provider };
 import { applyTheme, clearAppliedTheme, getThemeById } from '../themes/index';
