@@ -233,6 +233,11 @@ export { TaskPhaseSection } from './components/TaskPhaseSection';
 export type { TaskPhase, TaskPhaseSectionProps } from './components/TaskPhaseSection';
 export { ToolTimeline } from './components/ToolTimeline';
 export type { ToolTimelineProps } from './components/ToolTimeline';
+export {
+  AgentActivityTimeline,
+  buildAgentActivitySummary,
+} from './components/AgentActivityTimeline';
+export type { AgentActivityTimelineProps } from './components/AgentActivityTimeline';
 export { ToolCallCard, detectCodeBlock } from './components/ToolCallCard';
 export type { ToolCallCardProps, ToolCallStatus } from './components/ToolCallCard';
 export {

@@ -25,9 +25,15 @@ import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-cha
 import {
   createManagedCloudChatClient,
   ManagedCloudChatHttpError,
+  parseAgentEventDelta,
   parseGeneratedFilesDelta,
   type ManagedCloudSaveMessageOptions,
 } from '@agiworkforce/cloud-contracts';
+import {
+  applyAgentActivityEvent,
+  finishAgentActivityLocally,
+  type AgentActivityState,
+} from '@agiworkforce/client-runtime';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   buildFreeTrialPaywallSlot,
@@ -446,6 +452,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     ? { ...seedMetadata.research }
     : undefined;
   let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
+  let currentAgentActivity: AgentActivityState | undefined = seedMetadata?.agentActivity;
   /**
    * How this turn ended, from the OpenAI-wire `finish_reason` (last one seen —
    * server tool loops emit intermediate 'tool_calls' before the final reason).
@@ -631,6 +638,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (toolTimeline.length > 0) {
       metadata.tools = toolTimeline.map((tool) => ({ ...tool }));
     }
+    if (currentAgentActivity) {
+      metadata.agentActivity = currentAgentActivity;
+    }
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
     }
@@ -699,6 +709,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     const hasMeaningfulMetadata = Boolean(
       metadata &&
       ((metadata.tools?.length ?? 0) > 0 ||
+        metadata.agentActivity ||
         (metadata.generatedFiles?.length ?? 0) > 0 ||
         metadata.searchResults ||
         metadata.codeExecutionResult ||
@@ -842,6 +853,17 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
         try {
           const parsed = JSON.parse(data);
+
+          // Canonical Cloud activity stream. Runtime validation happens before
+          // projection, and the reducer enforces per-turn monotonic sequence so
+          // retries/reordered chunks cannot duplicate or rewrite visible work.
+          // Legacy x_tool_* parsing below remains during the emitter migration,
+          // but the message renderer prefers this canonical state when present.
+          const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
+          if (agentEnvelope) {
+            currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, agentEnvelope);
+            patchMessageMeta({ agentActivity: currentAgentActivity });
+          }
 
           let chunk: string | null = null;
           if (parsed.choices?.[0]?.delta?.content != null) {
@@ -1175,6 +1197,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       error !== null &&
       (error as { name?: unknown }).name === 'AbortError';
 
+    if (currentAgentActivity) {
+      const completedAtMs = Date.now();
+      currentAgentActivity = finishAgentActivityLocally(currentAgentActivity, {
+        status: isAbort ? 'cancelled' : 'failed',
+        completedAtMs,
+        ...(!isAbort ? { error: getVisibleErrorMessage(error) } : {}),
+      });
+      patchMessageMeta({ agentActivity: currentAgentActivity });
+    }
+
     // Flush the held-back content tail so an interrupted turn keeps (and
     // persists) exactly what streamed, not up-to-11 chars less.
     if (isAbort) {
@@ -1183,15 +1215,21 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
     const researchActive = currentResearch && currentResearch.phase !== 'complete';
 
-    if (isAbort && !researchActive && fullAssistantContent) {
+    if (isAbort && !researchActive) {
       // User stopped mid-generation with partial text already streamed: record
       // the client-only 'stopped' marker (drives the Continue affordance) and
       // persist the partial so it survives reload. Teardown (isStreaming
       // false, stopStreaming, setLoading) happens in the caller's abort
       // handling — rethrow below as before.
-      finishReason = 'stopped';
-      patchMessageMeta({ finishReason });
-      persistAssistant(fullAssistantContent);
+      if (fullAssistantContent) {
+        finishReason = 'stopped';
+        patchMessageMeta({ finishReason });
+      }
+      // A tool-only cancelled run still carries meaningful canonical metadata
+      // and must survive reload even when no answer token arrived.
+      if (fullAssistantContent || currentAgentActivity) {
+        persistAssistant(fullAssistantContent);
+      }
     }
 
     if (researchActive && isAbort) {
@@ -2004,6 +2042,9 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
   setError(errorMessage);
 
   if (!isTemporaryConversation) {
+    const metadata = useChatStore
+      .getState()
+      .messages.find((message) => message.id === assistantMessageId)?.metadata;
     saveMessageToDb(
       conversationId,
       {
@@ -2011,6 +2052,7 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
         role: 'assistant',
         content: errorContent,
         model,
+        metadata,
       },
       getAuthToken,
     )

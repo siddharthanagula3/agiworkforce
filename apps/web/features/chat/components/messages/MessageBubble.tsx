@@ -46,6 +46,8 @@ import {
 import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
+import { AgentActivityTimeline } from '@agiworkforce/unified-chat';
+import type { AgentActivityState } from '@agiworkforce/client-runtime';
 
 const MarkdownContent = dynamic(
   () => import('@agiworkforce/unified-chat').then((mod) => mod.MarkdownContent),
@@ -173,6 +175,8 @@ interface Message {
     searchResults?: SearchResponse | SearchResult[];
     isSearching?: boolean;
     tools?: ToolEntry[];
+    /** Canonical Cloud activity spine; preferred over legacy `tools`. */
+    agentActivity?: AgentActivityState;
     toolResult?: boolean;
     toolType?: string;
     imageUrl?: string;
@@ -596,7 +600,9 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.isMultiAgent &&
     message.metadata?.collaborationMessages &&
     message.metadata.collaborationMessages.length > 0;
-  const toolTimeline = !isUser && message.metadata?.tools ? message.metadata.tools : [];
+  const canonicalActivity = !isUser ? message.metadata?.agentActivity : undefined;
+  const toolTimeline =
+    !isUser && !canonicalActivity && message.metadata?.tools ? message.metadata.tools : [];
 
   // Collect web-search sources from metadata (searchResults and/or citations).
   // These are passed INTO the ToolTimeline so they render inside the web-search step box
@@ -716,11 +722,29 @@ const MessageBubbleComponent = function MessageBubble({
             />
           )}
 
+          {/* One canonical Cloud run spine. It is collapsed inline by default,
+              expands in place, and each tool then owns its own request/response
+              disclosure. Legacy tool events below are a migration fallback only. */}
+          {!isUser && canonicalActivity && (
+            <div className="mb-3">
+              <AgentActivityTimeline
+                activity={canonicalActivity}
+                onApprove={resolveToolApproval ? handleApproveTool : undefined}
+                onReject={resolveToolApproval ? handleRejectTool : undefined}
+                isApprovalExpired={() => approvalTurnExpired}
+                onResend={resolveToolApproval && onRegenerate ? handleResendTool : undefined}
+              />
+            </div>
+          )}
+
           {/* Interleaved reasoning + tool flow */}
           {!isUser &&
             (() => {
               const segments = message.metadata?.thinkingSegments;
-              const tools = !isUser && message.metadata?.tools ? message.metadata.tools : [];
+              const tools =
+                !isUser && !canonicalActivity && message.metadata?.tools
+                  ? message.metadata.tools
+                  : [];
 
               // Multi-segment interleaved path: thinking[0], tool[0], thinking[1], tool[1], ...
               if (segments && segments.length > 0) {
@@ -1022,9 +1046,12 @@ const MessageBubbleComponent = function MessageBubble({
               When a tool timeline is present, sources render inside the web-search step
               (via the searchSources prop). For non-tool paths (e.g. Perplexity answer-only
               responses), this fallback ensures sources are never silently lost. */}
-          {!isUser && searchSources.length > 0 && toolTimeline.length === 0 && (
-            <InlineSourcesList sources={searchSources} query={searchQuery} />
-          )}
+          {!isUser &&
+            !canonicalActivity &&
+            searchSources.length > 0 &&
+            toolTimeline.length === 0 && (
+              <InlineSourcesList sources={searchSources} query={searchQuery} />
+            )}
 
           {/* Tool timeline rendered above prose (moved before message content section). */}
 

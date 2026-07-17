@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-15
+Last updated: 2026-07-17
 
 ## Monorepo Restructure (2026-07)
 
@@ -88,7 +88,7 @@ Generated-file trust-boundary validation lives in `@agiworkforce/types`. It prov
 
 The active Web chat route mounts the artifact workbench sidecar next to the conversation. Assistant messages show compact artifact cards; detected code artifacts and generated-file manifests sync into the sidecar store for inspection instead of rendering duplicate full previews inline.
 
-The active Web chat route also renders server-tool activity through the shared compact tool timeline. Streaming tool status events update assistant-message metadata, and completed timelines are saved with the assistant message so reloaded conversations preserve tool provenance.
+The active Web chat route projects runtime-validated, monotonically sequenced `x_agent_event` envelopes into one durable activity state per assistant turn. The shared inline activity spine is collapsed by default, expands in bounded pages for long runs, exposes structured tool details and approvals, and carries sources, artifacts, context compaction, cancellation, and failure without exposing provider scratchpads. That projection is saved with the assistant message so reloaded conversations preserve the run; the older compact tool timeline remains only as a fallback while non-canonical emitters are migrated.
 
 Desktop/Web UI direction uses the latest Claude desktop modal references as the default baseline: common settings, connector, plugin, search, project edit, and file-preview flows should open as focused overlays before escalating users into full-screen workspaces. Full-screen/split-pane surfaces are for deep artifact viewing, code dashboards, project indexes, and long-running research or agent traces.
 

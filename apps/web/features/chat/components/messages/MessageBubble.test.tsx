@@ -132,6 +132,45 @@ describe('MessageBubble', () => {
         expect(screen.getByText('Web search')).toBeInTheDocument();
       });
     });
+
+    it('prefers one canonical inline agent spine over the duplicate legacy tool timeline', () => {
+      const msg = makeMessage({
+        role: 'assistant',
+        content: 'Verified answer.',
+        metadata: {
+          agentActivity: {
+            schemaVersion: 1,
+            sessionId: 'session-1',
+            turnId: 'turn-1',
+            lastSequence: 2,
+            status: 'running',
+            startedAtMs: 1_000,
+            updatedAtMs: 1_500,
+            entries: [
+              {
+                kind: 'tool',
+                id: 'tool:search-1',
+                toolCallId: 'search-1',
+                name: 'web_search',
+                category: 'web-search',
+                summary: 'Searching official sources',
+                status: 'running',
+                input: { query: 'official docs' },
+                startedAtMs: 1_100,
+              },
+            ],
+          },
+          tools: [{ id: 'legacy-search', name: 'web_search', status: 'completed' }],
+        },
+      });
+
+      render(<MessageBubble message={msg} />);
+
+      const activityTrigger = screen.getByRole('button', { name: /show agent activity/i });
+      expect(activityTrigger).toBeInTheDocument();
+      expect(activityTrigger.textContent).toContain('Searching official sources');
+      expect(screen.queryByRole('button', { name: /toggle tool timeline/i })).toBeNull();
+    });
   });
 
   describe('streaming state', () => {

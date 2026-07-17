@@ -28,6 +28,24 @@ export type { EventCallback, UnlistenFn } from './events';
 // HTTP transport (typically not used directly — command() handles routing)
 export { routeToCloud } from './http';
 
+// Canonical Cloud agent-event projection. Portable across Web, Desktop, and
+// React Native; rendered by each surface using its native UI primitives.
+export { applyAgentActivityEvent, finishAgentActivityLocally } from './agentActivity';
+export type {
+  AgentActivityApproval,
+  AgentActivityArtifactEntry,
+  AgentActivityContextEntry,
+  AgentActivityEntry,
+  AgentActivityErrorEntry,
+  AgentActivityProgressEntry,
+  AgentActivityRunStatus,
+  AgentActivitySourcesEntry,
+  AgentActivityState,
+  AgentActivityStepStatus,
+  AgentActivityToolEntry,
+  FinishAgentActivityLocallyOptions,
+} from './agentActivity';
+
 // NOTE: agentContext / AsyncLocalStorage have moved to the subpath barrel
 // `@agiworkforce/client-runtime/node` (see ./node.ts). They depend on node:async_hooks
 // and were previously transitively pulled into mobile/web bundles, requiring a
