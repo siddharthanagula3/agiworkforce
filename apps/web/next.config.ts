@@ -57,6 +57,34 @@ const nextConfig: NextConfig = {
       'class-variance-authority',
     ],
   },
+  // api.agiworkforce.com is this same Vercel project; the OpenAI-compatible
+  // /v1/* surface maps onto the web-twin API routes by Host header. These
+  // MUST live here, not in vercel.json — Vercel ignores vercel.json rewrites
+  // for Next.js projects, which left the api host serving /_not-found for
+  // every /v1 path in production (verified via x-matched-path, 2026-07-17).
+  async rewrites() {
+    const apiHost = [{ type: 'host' as const, value: 'api.agiworkforce.com' }];
+    return [
+      {
+        source: '/v1/chat/completions',
+        destination: '/api/llm/v1/chat/completions',
+        has: apiHost,
+      },
+      { source: '/v1/models', destination: '/api/llm/v1/models', has: apiHost },
+      {
+        source: '/v1/credits/balance',
+        destination: '/api/llm/v1/credits/balance',
+        has: apiHost,
+      },
+      {
+        source: '/v1/audio/transcriptions',
+        destination: '/api/llm/v1/audio/transcriptions',
+        has: apiHost,
+      },
+      { source: '/health', destination: '/api/health', has: apiHost },
+    ];
+  },
+
   // /chat is a native Next.js route (app/chat). The old static-SPA-from-public/chat
   // architecture was removed in restructure Wave 1 (2026-07-09).
   async redirects() {
