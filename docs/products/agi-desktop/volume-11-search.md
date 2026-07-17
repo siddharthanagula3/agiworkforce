@@ -66,5 +66,5 @@ Production-ready when local search is fully offline-capable, trust-labeled, and 
 - Blending Local, BYOK, and Cloud results in one list with no per-result trust label.
 - Making another device's Local/BYOK rows searchable via sync (only Cloud chats sync).
 - Faking a semantic/full-text index that is really title-only Fuse matching.
-- Hardcoding or inventing an LLM model ID for ranking/reranking (use `packages/types/src/models.json`).
+- Hardcoding or inventing an LLM model ID for ranking/reranking (use `packages/contracts/types/src/models.json`).
 - Referencing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups in search paywalls; referencing Supabase; renaming `proxy.ts` back to `middleware.ts`.

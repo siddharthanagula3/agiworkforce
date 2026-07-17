@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); the nearest `services/AGENTS.md` and `apps/desktop/AGENTS.md`; and the runtime sources grounded below — `crates/agiworkforce-protocol/src/{error,protocol,permissions,approvals,auth}.rs`, `packages/runtime/src/errors.ts`, `services/signaling-server/src/index.ts`, `services/api-gateway/src/routes/{mobile,pair}.ts`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/mobile/services/companion.ts`. Model IDs (where relevant) come only from `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); the nearest `services/AGENTS.md` and `apps/desktop/AGENTS.md`; and the runtime sources grounded below — `crates/agiworkforce-protocol/src/{error,protocol,permissions,approvals,auth}.rs`, `packages/client/client-runtime/src/errors.ts`, `services/signaling-server/src/index.ts`, `services/api-gateway/src/routes/{mobile,pair}.ts`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/mobile/services/companion.ts`. Model IDs (where relevant) come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -20,7 +20,7 @@ Provider/transport failures are first-class `AgiworkforceErr` variants — ✅ B
 
 ## Tool Errors
 
-Tool-execution failures are represented by `SandboxErr`, wrapped as `AgiworkforceErr::Sandbox(_)` → client code `sandbox_error` — ✅ Built (`error.rs`). Variants: `Denied { output, network_policy_decision }` (exit code + stdout/stderr + the network decision that blocked it), `Timeout { output }` (rendered as a plain "command timed out after N ms", not a scary sandbox error), `Signal(i32)`, `LandlockRestrict`, and Linux `Seccomp*` setup/backend failures — ✅ Built. `get_error_message_ui()` aggregates sandbox stdout/stderr into one bounded message — ✅ Built. Tool lifecycle errors stream over the desktop host as `emit_tool_error` alongside `emit_tool_started`/`emit_tool_completed` — ✅ Built (`apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`). Capability-dispatch failures use typed TS errors: `DesktopRequiredError` (a desktop-only command invoked from Web/Mobile → UI shows a "download desktop" CTA) and the non-throwing `DesktopPreferredWarning` — ✅ Built (`packages/runtime/src/errors.ts`). Requirement: a tool error must carry the tool name/`call_id`, be truncated, and never echo Local/BYOK secrets into a Cloud-visible payload. A unified per-tool error-code namespace across surfaces is 🔭.
+Tool-execution failures are represented by `SandboxErr`, wrapped as `AgiworkforceErr::Sandbox(_)` → client code `sandbox_error` — ✅ Built (`error.rs`). Variants: `Denied { output, network_policy_decision }` (exit code + stdout/stderr + the network decision that blocked it), `Timeout { output }` (rendered as a plain "command timed out after N ms", not a scary sandbox error), `Signal(i32)`, `LandlockRestrict`, and Linux `Seccomp*` setup/backend failures — ✅ Built. `get_error_message_ui()` aggregates sandbox stdout/stderr into one bounded message — ✅ Built. Tool lifecycle errors stream over the desktop host as `emit_tool_error` alongside `emit_tool_started`/`emit_tool_completed` — ✅ Built (`apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`). Capability-dispatch failures use typed TS errors: `DesktopRequiredError` (a desktop-only command invoked from Web/Mobile → UI shows a "download desktop" CTA) and the non-throwing `DesktopPreferredWarning` — ✅ Built (`packages/client/client-runtime/src/errors.ts`). Requirement: a tool error must carry the tool name/`call_id`, be truncated, and never echo Local/BYOK secrets into a Cloud-visible payload. A unified per-tool error-code namespace across surfaces is 🔭.
 
 ## Permission Errors — permission violations
 
@@ -35,7 +35,7 @@ Recovery is classification-driven. `AgiworkforceErr::is_retryable()` is the sing
 - `crates/agiworkforce-protocol/src/error.rs` — `AgiworkforceErr`, `SandboxErr`, `is_retryable`, UI truncation, provider/usage error structs.
 - `crates/agiworkforce-protocol/src/protocol.rs` — client `AgiworkforceErrorInfo`, `ErrorEvent`, `StreamErrorEvent`.
 - `crates/agiworkforce-protocol/src/{permissions,approvals,auth}.rs` — access modes, review/guardian decisions, refresh-token failures.
-- `packages/runtime/src/errors.ts` — capability-dispatch errors (`DesktopRequiredError`, `DesktopPreferredWarning`).
+- `packages/client/client-runtime/src/errors.ts` — capability-dispatch errors (`DesktopRequiredError`, `DesktopPreferredWarning`).
 - `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs` — local-host origin/token/lockout errors, `emit_tool_error`.
 - `services/signaling-server/src/index.ts` — pairing/control-verb codes, rate limits.
 - `services/api-gateway/src/routes/{mobile,pair}.ts` — `AppError` HTTP status mapping.
@@ -59,4 +59,4 @@ Production-ready when: every core failure maps to exactly one `AgiworkforceError
 - Emitting a Cloud entitlement error that references removed tiers ("Plus", `pro_plus`, "Hobby") or an INR price for Pro/Max — use only Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise; no top-ups.
 - Auto-retrying deterministic errors (JSON, invalid request, quota, permission) or silently falling back to another provider/Cloud on a BYOK failure.
 - Leaking secrets, full sandbox output, or Local/BYOK context into a Cloud-visible error; skipping the 2 KiB truncation.
-- Hardcoding model IDs in error strings (read `packages/types/src/models.json`), referencing Supabase, or renaming `proxy.ts` back to `middleware.ts`.
+- Hardcoding model IDs in error strings (read `packages/contracts/types/src/models.json`), referencing Supabase, or renaming `proxy.ts` back to `middleware.ts`.

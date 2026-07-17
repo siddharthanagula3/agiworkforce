@@ -8,7 +8,7 @@
 
 Where per-connector and per-tool permission config lives.
 
-- **Local-mode users** (Desktop, runtime detected via `packages/runtime/src/detect.ts:isTauri && local`): config stored at `~/.agiworkforce/connectors.json` encrypted with the existing master password vault (`master_password.rs:1-769`).
+- **Local-mode users** (Desktop, runtime detected via `packages/client-runtime/src/detect.ts:isTauri && local`): config stored at `~/.agiworkforce/connectors.json` encrypted with the existing master password vault (`master_password.rs:1-769`).
 - **Cloud-mode users** (Desktop / Web / Mobile signed into Supabase): config in the existing `connectorsStore` Supabase table with RLS.
 - **Sync rule:** when a Local user signs in, their local config uploads on first sync; conflicts resolve by `updatedAt` last-write-wins.
 

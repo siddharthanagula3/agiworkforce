@@ -15,7 +15,7 @@ Two designs were considered:
 
 ## Decision
 
-`createMessageQueue(options)` is the canonical factory (`packages/runtime/src/queue/messageQueueManager.ts`). Each surface calls it once with surface-specific options (storage adapter, lane caps, abort signal source) and gets an isolated `MessageQueue`. The queue's state lives inside a `createStore<readonly QueuedCommand[]>`, so it inherits `Object.is` short-circuiting and `useSyncExternalStore` compatibility from §2 for free.
+`createMessageQueue(options)` is the canonical factory (`packages/client-runtime/src/queue/messageQueueManager.ts`). Each surface calls it once with surface-specific options (storage adapter, lane caps, abort signal source) and gets an isolated `MessageQueue`. The queue's state lives inside a `createStore<readonly QueuedCommand[]>`, so it inherits `Object.is` short-circuiting and `useSyncExternalStore` compatibility from §2 for free.
 
 A `getSendQueue(surfaceId)` cache wrapper at `packages/unified-chat/src/queue/sendQueue.ts` looks up by `surfaceId` so callers do not need to thread the queue through every send.
 
@@ -37,5 +37,5 @@ A `getSendQueue(surfaceId)` cache wrapper at `packages/unified-chat/src/queue/se
 
 - `docs/architecture/foundation-2026.md` §3.4.
 - `tasks/research/exec/1.4-report.md` §3 item 1.
-- `packages/runtime/src/queue/messageQueueManager.ts`.
+- `packages/client-runtime/src/queue/messageQueueManager.ts`.
 - `packages/unified-chat/src/queue/sendQueue.ts`.

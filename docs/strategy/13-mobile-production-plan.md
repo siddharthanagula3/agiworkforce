@@ -12,7 +12,7 @@ Detailed plan to take **`apps/mobile` (Expo / React Native) to public-alpha → 
 
 ## 0. How we test mobile
 
-The repo already has the infra: **Expo + EAS** (`eas.json`, `app.config.js`), **Detox** e2e (`detox.config.js`), **Jest** unit (`jest.config.js`), a **screenshots pipeline** (`screenshots:ios`/`screenshots:android`), an **EAS signing runbook**, full **release scripts** (`release:ios:beta:submit`, `release:android:prod:submit`, …), and an **iOS Xcode workspace** (`ios/agiworkforce.xcworkspace`).
+The repo already has the infra: **Expo + EAS** (`eas.json`, `app.config.js`), **Detox** e2e (`detox.config.js`), **Jest** unit (`jest.config.js`), a **screenshots pipeline** (`screenshots:ios`/`screenshots:android`), an **EAS signing runbook**, full **release scripts** (`release:ios:beta:submit`, `release:android:prod:submit`, …), and an **iOS Xcode workspace** (prebuild-generated at `apps/mobile/ios/AGIWorkforce.xcworkspace`; the former tracked root `ios/` was deleted 2026-07-16).
 
 **Toolchain:**
 

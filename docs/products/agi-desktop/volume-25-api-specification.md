@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: grounds in `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and real repo paths: `apps/desktop/src-tauri/src/lib.rs` (`generate_handler!` registry), `apps/desktop/src-tauri/src/integrations/{realtime,native_messaging,sync}/`, `apps/web/app/api/{chat,memory,projects,settings,billing,search,media,llm}/`, `apps/web/lib/{api-auth.ts,server/rls-db.ts}`, `apps/web/proxy.ts`, `packages/types/src/models.json`, `packages/types/src/billing-catalog.ts`.
+Authority: grounds in `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and real repo paths: `apps/desktop/src-tauri/src/lib.rs` (`generate_handler!` registry), `apps/desktop/src-tauri/src/integrations/{realtime,native_messaging,sync}/`, `apps/web/app/api/{chat,memory,projects,settings,billing,search,media,llm}/`, `apps/web/lib/{api-auth.ts,server/rls-db.ts}`, `apps/web/proxy.ts`, `packages/contracts/types/src/models.json`, `packages/contracts/types/src/billing-catalog.ts`.
 
 ## Overview & stance
 
-Desktop is the full-trust surface (Local + BYOK + Managed Cloud) and the suite's local-private compute host. Its "API" is therefore two-sided. **Cloud APIs** are the Neon-backed HTTP routes under `apps/web/app/api/*` that Desktop calls only for Managed-Cloud data (chats, memory, projects, billing, sync). **Local IPC APIs** are Tauri v2 commands and native events served in-process by `src-tauri` — no network, no cloud. The trust boundary is the contract: Local rows never travel over Cloud routes; a Local→BYOK/Cloud move is an explicit, consented fork via dedicated commands (`transfer_local_to_cloud`), never an implicit fallthrough. Model IDs used by any surface come only from `packages/types/src/models.json`; this spec cites none literally.
+Desktop is the full-trust surface (Local + BYOK + Managed Cloud) and the suite's local-private compute host. Its "API" is therefore two-sided. **Cloud APIs** are the Neon-backed HTTP routes under `apps/web/app/api/*` that Desktop calls only for Managed-Cloud data (chats, memory, projects, billing, sync). **Local IPC APIs** are Tauri v2 commands and native events served in-process by `src-tauri` — no network, no cloud. The trust boundary is the contract: Local rows never travel over Cloud routes; a Local→BYOK/Cloud move is an explicit, consented fork via dedicated commands (`transfer_local_to_cloud`), never an implicit fallthrough. Model IDs used by any surface come only from `packages/contracts/types/src/models.json`; this spec cites none literally.
 
 ## Cloud APIs
 
@@ -34,7 +34,7 @@ Generation/status at `apps/web/app/api/media/image/generate/route.ts` and `media
 
 ### Projects — ✅ Built
 
-`apps/web/app/api/projects/route.ts`, `.../[id]/route.ts`, `projects/preview/`, and delta-sync at `apps/web/app/api/projects/sync/route.ts`. Managed-Cloud projects only.
+`apps/web/app/api/projects/route.ts`, `.../[id]/route.ts`, and delta-sync at `apps/web/app/api/projects/sync/route.ts`. Managed-Cloud projects only. Project-header presentation is derived locally from the shared `@agiworkforce/types` contract; Local or BYOK project metadata is never posted to a stateless Web preview route.
 
 ### Memory — ✅ Built
 
@@ -46,7 +46,7 @@ Routes under `apps/web/app/api/settings/{preferences,api-keys,2fa,activity,audit
 
 ### Billing — 🟡 Partial
 
-`apps/web/app/api/billing/{invoices,payment-methods,analytics}/route.ts`, checkout at `apps/web/app/api/checkout/route.ts`, and `apps/web/app/api/stripe-webhook/route.ts` (Stripe). Plans: Free $0; Basic $8/₹399; Pro $20; Max $100 and $200; Enterprise custom — Local and BYOK are free access modes, not plans. Gap: `apps/web/app/api/credit-topup/route.ts` and older tiers in `packages/types/src/billing-catalog.ts` must stay env-gated off and be reconciled (🟡 tracked separately) — no top-ups.
+`apps/web/app/api/billing/{invoices,payment-methods,analytics}/route.ts`, checkout at `apps/web/app/api/checkout/route.ts`, and `apps/web/app/api/stripe-webhook/route.ts` (Stripe). Plans: Free $0; Basic $8/₹399; Pro $20; Max $100 and $200; Enterprise custom — Local and BYOK are free access modes, not plans. Gap: `apps/web/app/api/credit-topup/route.ts` and older tiers in `packages/contracts/types/src/billing-catalog.ts` must stay env-gated off and be reconciled (🟡 tracked separately) — no top-ups.
 
 ### Responses — 🟡 Partial
 
@@ -85,7 +85,7 @@ Two streams. (1) Chat token streaming via the `chat:stream-*` events plus `chat-
 - `apps/desktop/src-tauri/src/integrations/{realtime,native_messaging,sync,cloud}/` — WS host, Chrome bridge, delta-sync, cloud CRUD
 - `apps/web/app/api/{chat,memory,projects,settings,billing,search,media,llm,checkout,stripe-webhook}/` — cloud routes
 - `apps/web/lib/{api-auth.ts,server/rls-db.ts}`, `apps/web/proxy.ts` — auth + RLS + edge routing
-- `packages/types/src/models.json` — model ID SSOT; `packages/types/src/billing-catalog.ts` — pricing (🟡 reconcile)
+- `packages/contracts/types/src/models.json` — model ID SSOT; `packages/contracts/types/src/billing-catalog.ts` — pricing (🟡 reconcile)
 
 ## Competitor notes
 

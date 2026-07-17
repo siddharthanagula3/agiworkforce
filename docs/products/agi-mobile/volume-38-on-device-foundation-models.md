@@ -3,7 +3,7 @@
 Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
-Authority: AGENTS.md, docs/current/source-of-truth.md, docs/products/README.md, apps/mobile/AGENTS.md, packages/local-llm/src/catalog.ts, apps/mobile/native/ios/AGIFoundationModels.swift, apps/mobile/native/android/withAGIAICore.cjs, Apple FoundationModels documentation (developer.apple.com/documentation/foundationmodels, doc-JSON verified 2026-07-01: iOS 26.0+, watchOS 27.0 beta), WWDC26 Apple Intelligence guide (developer.apple.com/wwdc26/guides/apple-intelligence/), Google ML Kit GenAI docs (developers.google.com/ml-kit/genai).
+Authority: AGENTS.md, docs/current/source-of-truth.md, docs/products/README.md, apps/mobile/AGENTS.md, packages/platform/local-llm/src/catalog.ts, apps/mobile/native/ios/AGIFoundationModels.swift, apps/mobile/native/android/withAGIAICore.cjs, Apple FoundationModels documentation (developer.apple.com/documentation/foundationmodels, doc-JSON verified 2026-07-01: iOS 26.0+, watchOS 27.0 beta), WWDC26 Apple Intelligence guide (developer.apple.com/wwdc26/guides/apple-intelligence/), Google ML Kit GenAI docs (developers.google.com/ml-kit/genai).
 
 ## Overview & stance
 
@@ -13,7 +13,7 @@ Platform facts verified from official sources (2026-07-01), superseding older as
 
 ## Apple FoundationModels framework (iOS 26+)
 
-🟡 Partial — the native module exists: `apps/mobile/native/ios/AGIFoundationModels.swift` + `.m`, wired by `apps/mobile/native/ios/withAGINativeModulesIOS.cjs`; the catalog entry `apple-foundation-models` (`packages/local-llm/src/catalog.ts`) is `shipsInV1: true` with visionIn + toolCalls + structuredOutput.
+🟡 Partial — the native module exists: `apps/mobile/native/ios/AGIFoundationModels.swift` + `.m`, wired by `apps/mobile/native/ios/withAGINativeModulesIOS.cjs`; the catalog entry `apple-foundation-models` (`packages/platform/local-llm/src/catalog.ts`) is `shipsInV1: true` with visionIn + toolCalls + structuredOutput.
 
 Verified framework facts (doc-JSON + WWDC26 guide):
 
@@ -50,13 +50,13 @@ Requirements: route `gemini-nano-aicore` through `AGIAICoreModule` using the Pro
 
 ## Catalog & routing integration
 
-🟡 Partial — `packages/local-llm/src/catalog.ts` models both entries as OS-resident (`fileSizeBytes: 0`), and the mobile picker consumes them via `apps/mobile/src/features/model-picker/{localModelRuntime,service,installStore}.ts` with onboarding/settings surfaces (`app/(public)/onboarding.tsx`, `app/(app)/settings/performance.tsx`).
+🟡 Partial — `packages/platform/local-llm/src/catalog.ts` models both entries as OS-resident (`fileSizeBytes: 0`), and the mobile picker consumes them via `apps/mobile/src/features/model-picker/{localModelRuntime,service,installStore}.ts` with onboarding/settings surfaces (`app/(public)/onboarding.tsx`, `app/(app)/settings/performance.tsx`).
 
-Requirements: OS-resident entries never show a download affordance; availability probes run per-launch and cache per-device; the catalog's Apple FM `contextWindow: 4_096` and capability flags must track the OS release (WWDC26 rebuilt model) — update from runtime introspection where the API exposes it instead of frozen constants. Non-LLM engine IDs here (OS model identifiers) are exempt from the models.json LLM-catalog SSOT but must stay grounded in `packages/local-llm/src/catalog.ts` (canon rule).
+Requirements: OS-resident entries never show a download affordance; availability probes run per-launch and cache per-device; the catalog's Apple FM `contextWindow: 4_096` and capability flags must track the OS release (WWDC26 rebuilt model) — update from runtime introspection where the API exposes it instead of frozen constants. Non-LLM engine IDs here (OS model identifiers) are exempt from the models.json LLM-catalog SSOT but must stay grounded in `packages/platform/local-llm/src/catalog.ts` (canon rule).
 
 ## Repository map
 
-- `packages/local-llm/src/catalog.ts` — OS-resident + downloadable on-device model catalog (✅).
+- `packages/platform/local-llm/src/catalog.ts` — OS-resident + downloadable on-device model catalog (✅).
 - `apps/mobile/native/ios/AGIFoundationModels.{swift,m}` + `withAGINativeModulesIOS.cjs` — Apple FM bridge (🟡).
 - `apps/mobile/native/android/withAGIAICore.cjs` — AICore/ML Kit wiring (🟡).
 - `apps/mobile/src/features/model-picker/` — runtime selection, availability, install store (✅/🟡).

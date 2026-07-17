@@ -2,9 +2,9 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-07-10
+Last updated: 2026-07-15
 
-The product goal (master plan) is to make the six surfaces behave as closely as possible to the *current* ChatGPT and Claude apps, **for features that already exist in the repo** — no new speculative features, just make existing ones production-ready. Claude reference images are the primary UI reference. This file maps AGI's architecture onto the competitor patterns it reverse-engineers, and states what is at parity vs in progress. Parity status is a moving target — the authoritative, per-row status is `docs/current/parity-implementation-matrix.md`; this file summarizes and cites it.
+The product goal (master plan) is to make the six surfaces behave as closely as possible to the _current_ ChatGPT and Claude apps, **for features that already exist in the repo** — no new speculative features, just make existing ones production-ready. Claude reference images are the primary UI reference. This file maps AGI's architecture onto the competitor patterns it reverse-engineers, and states what is at parity vs in progress. Parity status is a moving target — the authoritative, per-row status is `docs/current/parity-implementation-matrix.md`; this file summarizes and cites it.
 
 ## 9.1 Primary reverse-engineering sources
 
@@ -17,18 +17,18 @@ The product goal (master plan) is to make the six surfaces behave as closely as 
 
 ## 9.2 How AGI maps to the competitor shapes
 
-| Competitor pattern | AGI analog | Where it lives |
-| ------------------ | ---------- | -------------- |
-| ChatGPT/Claude single chat (files + tools + artifacts in one thread) | "One chat, not split file-chat vs normal-chat" (locked rule) | `unified-chat`, web `features/chat`, desktop `features/v3` |
-| Claude artifacts side panel | artifact workbench sidecar + cards + `Download all` | `packages/stores` artifact store, `unified-chat`, `apps/sandbox` |
-| ChatGPT/Claude model switcher + effort/thinking | capability-gated model picker (latest + Effort/More flyouts) | `unified-chat` `modelStore`, `packages/types` catalog |
-| ChatGPT plus-menu / Claude add-menu | composer `+` plus-menu (files/tools/connectors/skills) | composer (in flight) |
-| Claude/ChatGPT connectors + MCP | connector gallery + custom remote MCP + local stdio MCP | desktop `features/connectors`, `packages/mcp`, `agiworkforce-mcp` crate |
-| Claude Code / Codex CLI (slash, hooks, subagents, sessions) | CLI REPL/TUI + shared Rust engine crates | `apps/cli`, `crates/agiworkforce-*` |
-| Claude in Chrome (multi-tab, native nav) | Chrome extension side panel + native bridge | `apps/extension` |
-| ChatGPT Work / Claude Cowork (async agent) | Cowork/Dispatch surface | desktop Cowork pages (Partial; `DesktopShellV3` placeholder for cowork/code) |
-| ChatGPT Canvas | editable writing/code canvas | Partial/Missing per surface |
-| Server-side sandbox (code interpreter) | E2B cloud sandbox; on-device sandbox for Local | `apps/web/lib/e2b/*`, `execpolicy`/`sandbox-policy` crates |
+| Competitor pattern                                                   | AGI analog                                                   | Where it lives                                                                |
+| -------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| ChatGPT/Claude single chat (files + tools + artifacts in one thread) | "One chat, not split file-chat vs normal-chat" (locked rule) | `unified-chat`, web `features/chat`, desktop `features/v3`                    |
+| Claude artifacts side panel                                          | artifact workbench sidecar + cards + `Download all`          | `packages/platform/artifacts` store, `unified-chat`, `infrastructure/sandbox` |
+| ChatGPT/Claude model switcher + effort/thinking                      | capability-gated model picker (latest + Effort/More flyouts) | `unified-chat` `modelStore`, `packages/contracts/types` catalog               |
+| ChatGPT plus-menu / Claude add-menu                                  | composer `+` plus-menu (files/tools/connectors/skills)       | composer (in flight)                                                          |
+| Claude/ChatGPT connectors + MCP                                      | connector gallery + custom remote MCP + local stdio MCP      | desktop `features/connectors`, `packages/tools/mcp`, `agiworkforce-mcp` crate |
+| Claude Code / Codex CLI (slash, hooks, subagents, sessions)          | CLI REPL/TUI + shared Rust engine crates                     | `apps/cli`, `crates/agiworkforce-*`                                           |
+| Claude in Chrome (multi-tab, native nav)                             | Chrome extension side panel + native bridge                  | `apps/extension`                                                              |
+| ChatGPT Work / Claude Cowork (async agent)                           | Cowork/Dispatch surface                                      | desktop Cowork pages (Partial; `DesktopShellV3` placeholder for cowork/code)  |
+| ChatGPT Canvas                                                       | editable writing/code canvas                                 | Partial/Missing per surface                                                   |
+| Server-side sandbox (code interpreter)                               | E2B cloud sandbox; on-device sandbox for Local               | `apps/web/lib/e2b/*`, `execpolicy`/`sandbox-policy` crates                    |
 
 The **differentiators AGI adds** on top of the competitor shape (not reverse-engineered — AGI-owned): Local-first privacy, explicit BYOK (no markup), multi-provider routing, and the three-boundary trust model. Competitors route internally and silently; AGI makes routing explicit and never crosses a trust boundary without consent.
 
@@ -37,17 +37,20 @@ The **differentiators AGI adds** on top of the competitor shape (not reverse-eng
 Broad status from `docs/current/parity-implementation-matrix.md` (labels: Present/Partial/Missing/Gated):
 
 **Closest to parity / strongest:**
+
 - Desktop chat mode (Local/BYOK) — "strongest current desktop area."
 - CLI privacy modes (`Present/Partial`), hooks (strong — coverage check passes).
 - Provider/streaming path — one shared adapter layer, byte-stable v1 wire (this doc set areas 3–4).
 - Managed cloud — public alpha, open by default (Web + Mobile).
 
 **In progress (Partial):**
+
 - Composer/chat shell claude.ai parity (web), model picker, message actions, artifact viewer parity.
 - Streaming lifecycle unification (queued/running/tool_wait/completed/interrupted/failed) — landed: artifact live-stream + tool audit trail; to do: shared status enum + persisted interrupt/cancel/continue.
 - Web search (Perplexity path exists; live audit found it non-functional, being fixed), citations, projects/project-memory, connectors, settings IA, billing/usage surfaces.
 
 **Missing / Gated:**
+
 - Deep research (Partial/Missing), visual design workspace + AI-powered artifacts (Missing/Gated), import-memory-from-other-providers (Missing), desktop Cloud mode ("coming soon" — DCL-1…4), enterprise sharing/admin (Gated).
 
 ## 9.4 Competitor deltas to fold in (verified 2026-07-09/10)

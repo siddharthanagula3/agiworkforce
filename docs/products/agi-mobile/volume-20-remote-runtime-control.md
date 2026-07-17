@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`; grounded in `apps/mobile/services/companion.ts`, `apps/mobile/stores/connectionStore.ts`, `apps/mobile/stores/dispatchStore.ts`, `apps/mobile/services/dispatchRealtime.ts`, `apps/mobile/services/desktopStatus.ts`, `apps/mobile/services/companionNotifications.ts`, `apps/mobile/lib/dispatchHmac.ts`, `apps/mobile/lib/dispatchAgentValidator.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/services/remoteChatGate.ts`, `services/signaling-server/src/index.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`; grounded in `apps/mobile/services/companion.ts`, `apps/mobile/stores/connectionStore.ts`, `apps/mobile/stores/dispatchStore.ts`, `apps/mobile/services/dispatchRealtime.ts`, `apps/mobile/services/desktopStatus.ts`, `apps/mobile/services/companionNotifications.ts`, `apps/mobile/lib/dispatchHmac.ts`, `apps/mobile/lib/dispatchAgentValidator.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/services/remoteChatGate.ts`, `services/signaling-server/src/index.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -83,7 +83,7 @@ Target: show task lifecycle (`pending`/`working`/`completed`/`failed`) with prog
 
 ## Competitor notes
 
-ChatGPT and Claude mobile are primarily cloud chat clients; Claude Code Remote Control and Codex remote connections let a phone observe and approve a session that keeps running on a host — the model AGI mirrors here. AGI's deliberate divergence: per-surface trust (Desktop/CLI/VS Code stay local-private; the phone is an outbound-only window), multi-provider model selection sourced from `packages/types/src/models.json`, a free **on-device** Local mode, and **no BYOK on mobile** ever. Compute and keys stay on the host; the relay is zero-knowledge over signed payloads.
+ChatGPT and Claude mobile are primarily cloud chat clients; Claude Code Remote Control and Codex remote connections let a phone observe and approve a session that keeps running on a host — the model AGI mirrors here. AGI's deliberate divergence: per-surface trust (Desktop/CLI/VS Code stay local-private; the phone is an outbound-only window), multi-provider model selection sourced from `packages/contracts/types/src/models.json`, a free **on-device** Local mode, and **no BYOK on mobile** ever. Compute and keys stay on the host; the relay is zero-knowledge over signed payloads.
 
 ## Acceptance / Definition of Done
 
@@ -100,5 +100,5 @@ A session is production-ready only when pairing, transport, and the live host ex
 - Claiming Desktop/CLI/VS Code remote control is shipped — it is 🟡/🔭; never assert without a real repo path.
 - Faking discovery or a "connected" badge when no `surface_heartbeats`/host liveness exists.
 - Optimistically rendering task progress the host did not report.
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`); referencing Supabase (removed — Clerk + Neon + Stripe only).
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`); referencing Supabase (removed — Clerk + Neon + Stripe only).
 - Inventing INR prices for Pro/Max, or reintroducing "Plus"/`pro_plus`/"Hobby" tiers.

@@ -20,7 +20,7 @@ Auth sessions are **Clerk-managed and not stored in Neon** — Web never mints i
 
 ## Chats
 
-`public.web_conversations` (`0001_mvp_chat.sql`, ✅ Built): `id uuid`, `user_id text`, `title`, `model text` (a label, not authoritative — model IDs resolve from `packages/types/src/models.json`), `pinned`, `project_id`, `created_at/updated_at`, `deleted_at` tombstone. Sync columns `server_version bigint not null` + `deleted_at` added in `0038`; an `AFTER INSERT` trigger bumps `updated_at`, and the `assign_cloud_sync_version` trigger stamps every insert/update. `folder_id` FK added in `0022` alongside `chat_folders`, `conversation_branches`, and `conversation_tags` (`0016`). Indexes: `(user_id, updated_at desc) where deleted_at is null` for the list, `(server_version)` for delta pull. RLS enforces `user_id = current_app_user_id()`.
+`public.web_conversations` (`0001_mvp_chat.sql`, ✅ Built): `id uuid`, `user_id text`, `title`, `model text` (a label, not authoritative — model IDs resolve from `packages/contracts/types/src/models.json`), `pinned`, `project_id`, `created_at/updated_at`, `deleted_at` tombstone. Sync columns `server_version bigint not null` + `deleted_at` added in `0038`; an `AFTER INSERT` trigger bumps `updated_at`, and the `assign_cloud_sync_version` trigger stamps every insert/update. `folder_id` FK added in `0022` alongside `chat_folders`, `conversation_branches`, and `conversation_tags` (`0016`). Indexes: `(user_id, updated_at desc) where deleted_at is null` for the list, `(server_version)` for delta pull. RLS enforces `user_id = current_app_user_id()`.
 
 ## Messages
 
@@ -70,5 +70,5 @@ Production-ready when: every user-scoped table has RLS `ENABLE`+`FORCE` with `US
 - Reading `user_id` from a request body (IDOR); relying on app-layer filters while RLS is dormant on a legacy `getNeonDb()` path.
 - Adding a Local/BYOK column, key, or table to any Web schema; writing non-cloud rows into the sync store.
 - Hard-deleting a sync-eligible entity (breaks cross-device propagation — use a tombstone) or forgetting the full `(server_version)` index so tombstones don't pull.
-- Hardcoding model IDs in a column as authoritative (resolve from `packages/types/src/models.json`); inventing INR prices; reintroducing removed tiers (`hobby`/`Plus`/`pro_plus`) or enabling credit top-ups.
+- Hardcoding model IDs in a column as authoritative (resolve from `packages/contracts/types/src/models.json`); inventing INR prices; reintroducing removed tiers (`hobby`/`Plus`/`pro_plus`) or enabling credit top-ups.
 - Renaming `proxy.ts` → `middleware.ts`; referencing Supabase; re-granting blanket UPDATE/DELETE on `security_audit_logs` to `app_rls`.

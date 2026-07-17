@@ -16,7 +16,7 @@ Cloud/Local changes _which prompt fragments are allowed in, and which model the 
 3. **Assembly is deterministic.** Given the same system + project + user + tool + context inputs, the assembled prompt is byte-identical. No nondeterministic ordering, timestamps, or map iteration in the prefix.
 4. **Version every prompt asset.** System/agent/template prompts carry a version; changes are reviewable and rollback-able. A prompt change is a code change, gated by the same checks.
 5. **No inline magic strings.** Reusable prompt text lives in the asset, not scattered string literals in handlers (Vol 38/constants).
-6. **Model ids come from the catalog.** Prompts that name or shape for a model read its id/capabilities from `packages/types/src/models.json`; never hardcode.
+6. **Model ids come from the catalog.** Prompts that name or shape for a model read its id/capabilities from `packages/contracts/types/src/models.json`; never hardcode.
 7. **Variables are typed and validated.** Template variables have a declared schema; substitution validates inputs (Zod/serde) before assembly — no unvalidated interpolation (Vol 38).
 8. **Trust-scoped fragments only.** The assembler injects only fragments the active trust boundary permits; a Local project's instructions never enter a BYOK/Managed prompt without a reviewed fork.
 9. **Stable prefix, volatile suffix.** Order fragments so the cacheable, rarely-changing prefix (system + tool specs) precedes volatile content (retrieved context, latest user turn) to maximize cache reuse.
@@ -26,11 +26,11 @@ Cloud/Local changes _which prompt fragments are allowed in, and which model the 
 
 - Co-located agent prompt (Rust reference): `apps/cli/src/agent/prompt.rs`.
 - Tool prompts: co-located in each tool folder under `apps/cli/src/features/exec/tools/*` (CLI) and desktop tool executors (`apps/desktop/src/features/*`).
-- Shared contracts + constants for prompt schemas/variables: `packages/types/src/` (Vol 38).
-- Model catalog for prompt model-shaping: `packages/types/src/models.json`, `packages/types/src/model-catalog.ts`.
-- Provider prompt shaping: `packages/providers/` (auth shapes, system-block placement; see `docs/strategy/10-oss-corpus-port-plan.md` §2 RLLM/Portkey patterns).
-- Chat assembly entry: `packages/unified-chat/src/lib/` + `apps/web/features/chat/lib/`, `apps/web/features/chat/services/`.
-- Trust labels referenced by prompt-side UX: `packages/types/src/suite-contracts.ts`.
+- Shared contracts + constants for prompt schemas/variables: `packages/contracts/types/src/` (Vol 38).
+- Model catalog for prompt model-shaping: `packages/contracts/types/src/models.json`, `packages/contracts/types/src/model-catalog.ts`.
+- Provider prompt shaping: `packages/ai/providers/` (auth shapes, system-block placement; see `docs/strategy/10-oss-corpus-port-plan.md` §2 RLLM/Portkey patterns).
+- Chat assembly entry: `packages/ui/unified-chat/src/lib/` + `apps/web/features/chat/lib/`, `apps/web/features/chat/services/`.
+- Trust labels referenced by prompt-side UX: `packages/contracts/types/src/suite-contracts.ts`.
 
 ## Competitor notes
 

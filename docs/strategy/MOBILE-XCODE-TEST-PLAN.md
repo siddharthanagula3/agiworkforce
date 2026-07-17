@@ -1,6 +1,6 @@
 # AGI Mobile — XcodeBuildMCP UI/Feature Test Plan (agent prompt)
 
-Status: Active QA runbook · grounded in `apps/mobile` (expo-router, iOS workspace `ios/agiworkforce.xcworkspace`)
+Status: Active QA runbook · grounded in `apps/mobile` (expo-router; iOS workspace is the prebuild-generated `apps/mobile/ios/AGIWorkforce.xcworkspace` — run `expo prebuild --platform ios` from `apps/mobile/` first; the former root `ios/agiworkforce.xcworkspace` was deleted 2026-07-16)
 Owner: Mobile lead
 Parity bar: ChatGPT + Claude iOS apps (especially tool-calling UI, streaming, model switching). Parity = capability/workflow, never copied assets/branding.
 

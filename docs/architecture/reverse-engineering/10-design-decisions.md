@@ -20,7 +20,7 @@ These are the decisions that constrain everything else. Each is stated with its 
 
 **Rationale:** the product's locked differentiation is "your models, no markup, private, everywhere." Trust honesty is the wedge — a single silent cross-boundary route would break the core promise (and, for Local, leak private data). This is enforced in code (`check:boundaries`, mobile `guardedFetch`/`remoteChatGate` fail-closed, desktop `desktopCloudGate`, CLI privacy modes) and by policy tests, not just docs.
 
-**Ratified:** `AGENTS.md` non-negotiables, `CLAUDE.md` critical rules, `docs/current/source-of-truth.md`, `packages/types/src/suite-contracts.ts`; areas 1, 6, 7 here.
+**Ratified:** `AGENTS.md` non-negotiables, `CLAUDE.md` critical rules, `docs/current/source-of-truth.md`, `packages/contracts/types/src/suite-contracts.ts`; areas 1, 6, 7 here.
 
 ## D3. Managed cloud is public alpha, open by default
 
@@ -40,11 +40,11 @@ These are the decisions that constrain everything else. Each is stated with its 
 
 ## D5. Capability-first, catalog-owned model IDs
 
-**Decision:** controls are gated by capability metadata (function calling, vision, image gen, search, code exec, structured output, reasoning/effort), and model IDs are read from `packages/types/src/models.json` + capability metadata — never invented or hardcoded.
+**Decision:** controls are gated by capability metadata (function calling, vision, image gen, search, code exec, structured output, reasoning/effort), and model IDs are read from `packages/contracts/types/src/models.json` + capability metadata — never invented or hardcoded.
 
 **Rationale:** the product spans 12+ providers with different capabilities; hardcoding per surface guarantees drift, fake availability badges, and stale IDs (a repeated failure class — `WEB-PROVIDER-DRIFT-01`, `MODELS-CURATION-DRIFT-01` "Fixed, RECURRED once, re-fixed"). A single catalog + capability gating is the only way capability honesty scales across six surfaces.
 
-**Ratified:** `AGENTS.md`/`CLAUDE.md` locked rule; `packages/types` (`models.json`, `model-catalog.ts`, `suite-contracts.ts`); area 3 here.
+**Ratified:** `AGENTS.md`/`CLAUDE.md` locked rule; `packages/contracts/types` (`models.json`, `model-catalog.ts`, `suite-contracts.ts`); area 3 here.
 
 ## D6. Capability-first shared architecture, zero duplication
 
@@ -58,7 +58,7 @@ These are the decisions that constrain everything else. Each is stated with its 
 
 **Decision:** conversation persistence is deliberately per-surface (Neon / Tauri SQLite / expo-sqlite), joined by `cloud-contracts` (one Zod wire truth) + `sync-apply` (one pure apply engine), with desktop's Rust apply pinned to the TS golden fixtures. A cross-surface DAG store was explicitly **rejected** (decision log R3).
 
-**Rationale:** each surface has a native, offline-capable local store already working; re-platforming onto a shared cross-surface store re-platforms working persistence for no user-visible gain. The correct seam is the wire + apply logic, which *can* be single-sourced and cross-language-verified (fixtures). This is server-authoritative delta sync (the 0038 pattern), reused across chat/artifact/memory/projects/settings.
+**Rationale:** each surface has a native, offline-capable local store already working; re-platforming onto a shared cross-surface store re-platforms working persistence for no user-visible gain. The correct seam is the wire + apply logic, which _can_ be single-sourced and cross-language-verified (fixtures). This is server-authoritative delta sync (the 0038 pattern), reused across chat/artifact/memory/projects/settings.
 
 **Ratified:** decision log R3, `docs/plans/cross-device-cloud-sync-design-2026-06-20.md`; area 5 here.
 
@@ -72,7 +72,7 @@ These are the decisions that constrain everything else. Each is stated with its 
 
 ## D9. Cross-language via protocol crate + ts-rs (Strategy B, no WASM/uniffi)
 
-**Decision:** TS packages + Rust crates joined by `agiworkforce-protocol` as the seam; ts-rs codegen emits `@agiworkforce/types/protocol` (216 types, drift-guarded by `pnpm check:protocol-types`). No WASM/uniffi; the only C-candidate (apply-patch) dissolved when its dead Rust twin was deleted.
+**Decision:** TS packages + Rust crates joined by `agiworkforce-protocol` as the seam; ts-rs codegen emits `@agiworkforce/types/protocol`, with non-mutating staged drift verification through `pnpm check:protocol-types`. No WASM/uniffi; the only C-candidate (apply-patch) dissolved when its dead Rust twin was deleted.
 
 **Rationale:** the two runtimes (TS cloud/web/mobile, Rust CLI/desktop) need identical types without a fragile hand-mirrored copy or a heavyweight FFI. Codegen from one Rust source of truth + golden-fixture behavioral pinning (D7) gives type + behavior parity at low cost.
 
@@ -88,15 +88,15 @@ These are the decisions that constrain everything else. Each is stated with its 
 
 ## Decision cross-reference index
 
-| Decision | Primary source of truth |
-| -------- | ----------------------- |
-| D1 byte-stable v1 | `technical-architecture.md` P2 |
-| D2 three trust boundaries | `AGENTS.md`, `suite-contracts.ts` |
-| D3 managed public alpha | `AGENTS.md` (founder 2026-06-27) |
-| D4 no-markup BYOK | `byok-open-model-provider-strategy.md` |
-| D5 catalog-owned model IDs | `packages/types/src/models.json` |
-| D6 zero-duplication shared arch | `shared-packages-decision-log.md` |
-| D7 per-surface persistence + one wire/apply | decision log R3, cross-device-sync design |
-| D8 satellites ride web REST | desktop cloud-mode architecture (founder 2026-07-03) |
-| D9 protocol crate + ts-rs | decision log §7, rust-engine-extraction plan |
-| D10 single-window modal-first | desktop single-tab architecture |
+| Decision                                    | Primary source of truth                              |
+| ------------------------------------------- | ---------------------------------------------------- |
+| D1 byte-stable v1                           | `technical-architecture.md` P2                       |
+| D2 three trust boundaries                   | `AGENTS.md`, `suite-contracts.ts`                    |
+| D3 managed public alpha                     | `AGENTS.md` (founder 2026-06-27)                     |
+| D4 no-markup BYOK                           | `byok-open-model-provider-strategy.md`               |
+| D5 catalog-owned model IDs                  | `packages/contracts/types/src/models.json`           |
+| D6 zero-duplication shared arch             | `shared-packages-decision-log.md`                    |
+| D7 per-surface persistence + one wire/apply | decision log R3, cross-device-sync design            |
+| D8 satellites ride web REST                 | desktop cloud-mode architecture (founder 2026-07-03) |
+| D9 protocol crate + ts-rs                   | decision log §7, rust-engine-extraction plan         |
+| D10 single-window modal-first               | desktop single-tab architecture                      |

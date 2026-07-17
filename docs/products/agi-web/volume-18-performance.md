@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`. Grounded in real repo paths: `apps/web/next.config.ts`, `apps/web/proxy.ts`, `apps/web/instrumentation.ts`, `apps/web/app/loading.tsx`, `apps/web/lib/hooks/useChatStream.ts`, `apps/web/lib/providerStreamClient.ts`, `apps/web/app/api/v1/providers/[providerId]/stream/route.ts`, `apps/web/lib/prompt-cache-helper.ts`, `apps/web/features/chat/hooks/use-chat-queries.ts`, `apps/web/features/chat/components/messages/AdvancedMessageList.tsx`, `apps/web/features/chat/components/messages/EnhancedMarkdownRenderer.tsx`, `apps/web/app/api/chat/sync/route.ts`, `apps/web/lib/rate-limit.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`. Grounded in real repo paths: `apps/web/next.config.ts`, `apps/web/proxy.ts`, `apps/web/instrumentation.ts`, `apps/web/app/loading.tsx`, `apps/web/lib/hooks/useChatStream.ts`, `apps/web/lib/providerStreamClient.ts`, `apps/web/app/api/v1/providers/[providerId]/stream/route.ts`, `apps/web/lib/prompt-cache-helper.ts`, `apps/web/features/chat/hooks/use-chat-queries.ts`, `apps/web/features/chat/components/messages/AdvancedMessageList.tsx`, `apps/web/features/chat/components/messages/EnhancedMarkdownRenderer.tsx`, `apps/web/app/api/chat/sync/route.ts`, `apps/web/lib/rate-limit.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies the performance budget and mechanics of AGI Web: initial load, token streaming, caching, DOM rendering, memory, network efficiency, and long-conversation scale. AGI Web is the **cloud-only** surface — no Local runtime, no BYOK (never add either). Every byte rendered comes from a Managed-Cloud session tied to Neon/account state, so performance work never branches on trust mode, but it MUST respect the trust boundary: sync only pulls the caller's own Managed-Cloud rows, and no cache may cross-populate another user or leak Local/BYOK content (Web has none). Model IDs referenced by any perf heuristic come only from `packages/types/src/models.json` — never hardcoded. Performance is plan-agnostic: Free through Enterprise get the same client budget; entitlement gating lives upstream, not in the render path.
+This volume specifies the performance budget and mechanics of AGI Web: initial load, token streaming, caching, DOM rendering, memory, network efficiency, and long-conversation scale. AGI Web is the **cloud-only** surface — no Local runtime, no BYOK (never add either). Every byte rendered comes from a Managed-Cloud session tied to Neon/account state, so performance work never branches on trust mode, but it MUST respect the trust boundary: sync only pulls the caller's own Managed-Cloud rows, and no cache may cross-populate another user or leak Local/BYOK content (Web has none). Model IDs referenced by any perf heuristic come only from `packages/contracts/types/src/models.json` — never hardcoded. Performance is plan-agnostic: Free through Enterprise get the same client budget; entitlement gating lives upstream, not in the render path.
 
 ## Initial Load
 
@@ -71,5 +71,5 @@ Production-ready when the chat route loads within its JS budget, streams first t
 - Rendering an unvirtualized 1000-message list, or re-rendering completed messages on every incoming token.
 - Full-snapshot sync instead of cursor deltas; polling tighter than the documented interval; ignoring 429 backoff.
 - Adding any Local or BYOK optimization path, provider-key cache, or "run locally" affordance to AGI Web — Web is cloud-only.
-- Hardcoding or inventing a model ID in a perf heuristic instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID in a perf heuristic instead of reading `packages/contracts/types/src/models.json`.
 - Referencing removed tiers ("Plus"/`pro_plus`/"Hobby"), credit top-ups, or Supabase; using `middleware.ts` instead of `proxy.ts`.

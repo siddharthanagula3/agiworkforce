@@ -2,7 +2,13 @@
 
 > Version: 1.0 (Task 1.7, 2026-05-09)
 > Author: services-engineer@agi-foundation-sprint
-> Status: Implemented; 30-day backward-compat window with inbound bridge active.
+> Status: Retired (2026-07-15) — the worker-control plane this documented
+> (`services/api-gateway/src/worker/`: registration/assignment/heartbeat
+> routes and the heartbeat sweep) was deleted in restructure wave W9: its
+> `worker_registrations`/`work_units` tables never had migrations, no
+> producer ever inserted work, and no client called the routes. This
+> document is historical design context only; a future real
+> work-assignment system starts from a new plan, not from this one.
 
 ---
 

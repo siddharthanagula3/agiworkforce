@@ -41,20 +41,20 @@ The big shape of Wave 3 is **distribution, not engineering**. Most code is alrea
 
 ## 2. Chrome Web Store (Chrome extension)
 
-| Step                                                           | Tag         | Status     | Notes                                                                                      |
-| -------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------ |
-| MV3 manifest finalized                                         | 🟢 codeable | ✅ Done    | `apps/extension/manifest.json` v1.2.0                                                      |
-| `streamFromProvider` client                                    | 🟢 codeable | ✅ Done    | `apps/extension/src/providerStreamClient.ts`                                               |
-| Wire popup chat to `streamFromProvider`                        | 🟢 codeable | TODO       | Replace whatever the existing popup chat path uses with the new client.                    |
-| Bridge URL config (`agi_bridge_url` in `chrome.storage.local`) | 🟢 codeable | ✅ Done    | Defaults to `8787` for desktop bridge                                                      |
-| Production gateway URL fallback                                | 🟡 config   | —          | Add `https://api.agiworkforce.com` as second fallback when desktop bridge is unreachable   |
-| Promotional images (440×280, 920×680, 1400×560)                | 🔴 human    | —          | Required by Chrome Web Store                                                               |
-| Screenshots (1280×800 or 640×400, up to 5)                     | 🔴 human    | —          |                                                                                            |
-| Chrome Web Store Developer Dashboard ($5 one-time)             | 🔴 human    | —          | https://chrome.google.com/webstore/devconsole                                              |
-| Build `.zip` for upload                                        | 🟢 codeable | TODO       | Add `pnpm --filter @agiworkforce/extension package` script to produce `dist/extension.zip` |
-| Listing copy                                                   | 🟢 codeable | ✅ Drafted | `docs/launch/store-listings/chrome-web-store.md`                                           |
-| Privacy policy URL                                             | 🔴 human    | —          | Reuse `apps/web/app/privacy/page.tsx`                                                      |
-| Submit + review                                                | 🔴 human    | —          | Chrome Web Store review averages 2–7 days. Faster for MV3 than MV2.                        |
+| Step                                                           | Tag         | Status     | Notes                                                                                                              |
+| -------------------------------------------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------------ |
+| MV3 manifest finalized                                         | 🟢 codeable | ✅ Done    | `apps/extension/manifest.json` v1.2.0                                                                              |
+| Managed Cloud chat client + bounded SSE                        | 🟢 codeable | ✅ Done    | `apps/extension/src/features/cloud-bridge/freeTrialClient.ts`                                                      |
+| Side-panel Managed Cloud chat                                  | 🟢 codeable | ✅ Done    | Chrome owns browser-local chats; it never uses Desktop/provider fallback inference.                                |
+| Bridge URL config (`agi_bridge_url` in `chrome.storage.local`) | 🟢 codeable | ✅ Done    | Defaults to `8787` for desktop bridge                                                                              |
+| Clerk production Native API + stable CRX ID                    | 🔴 human    | —          | Enable Native API, configure exact origins, and add `chrome-extension://<id>` to allowed origins                   |
+| Promotional images (440×280, 920×680, 1400×560)                | 🔴 human    | —          | Required by Chrome Web Store                                                                                       |
+| Screenshots (1280×800 or 640×400, up to 5)                     | 🔴 human    | —          |                                                                                                                    |
+| Chrome Web Store Developer Dashboard ($5 one-time)             | 🔴 human    | —          | https://chrome.google.com/webstore/devconsole                                                                      |
+| Build `.zip` for upload                                        | 🟢 codeable | ✅ Done    | `pnpm --filter @agiworkforce/extension package` validates release auth/identity config and creates `extension.zip` |
+| Listing copy                                                   | 🟢 codeable | ✅ Drafted | `docs/launch/store-listings/chrome-web-store.md`                                                                   |
+| Privacy policy URL                                             | 🔴 human    | —          | Reuse `apps/web/app/privacy/page.tsx`                                                                              |
+| Submit + review                                                | 🔴 human    | —          | Chrome Web Store review averages 2–7 days. Faster for MV3 than MV2.                                                |
 
 ---
 

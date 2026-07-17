@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root), `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`; grounded in `apps/extension/manifest.json`, `apps/extension/src/background.ts`, `apps/extension/src/side_panel.ts`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/pairing.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`; grounded in `apps/extension/manifest.json`, `apps/extension/src/background.ts`, `apps/extension/src/side_panel.ts`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/pairing.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -34,7 +34,7 @@ The Clerk session token is stored in **`chrome.storage.session` (in-memory, clea
 
 ## Subscription Verification — server-side entitlements
 
-Entitlements are **verified server-side only**; the extension renders state from server responses. Over-quota returns **HTTP 429 with `{ kind:'paywall', feature, requiredTier, reason }`**, which the UI renders as a paywall/upgrade prompt (upgrade opens `.../pricing`). Free-trial quota (3 cloud prompts) is tracked via `getRemainingFreePrompts()`. Model-by-plan gating mirrors the catalog's `tierAllowedModels` in `packages/types/src/models.json` — the extension must not invent model IDs or grant models the server would refuse. **🟡 Partial** — 429 paywall handling exists (`providerStreamClient.ts` `PaywallPayload`) and quota UI exists (`side_panel.ts`, `freeTrialClient.ts`), **but** `PaywallRequiredTier` still encodes removed tiers `'hobby' | 'pro' | 'pro_plus' | 'max'`. Gap: reconcile to canon tiers (Free / Basic / Pro / Max / Enterprise; drop `hobby`/`pro_plus`) — tracked with the `billing-catalog.ts` reconciliation. Requirement: never client-side-elevate entitlements; the server is authoritative.
+Entitlements are **verified server-side only**; the extension renders state from server responses. Over-quota returns **HTTP 429 with `{ kind:'paywall', feature, requiredTier, reason }`**, which the UI renders as a paywall/upgrade prompt (upgrade opens `.../pricing`). Free-trial quota (3 cloud prompts) is tracked via `getRemainingFreePrompts()`. Model-by-plan gating mirrors the catalog's `tierAllowedModels` in `packages/contracts/types/src/models.json` — the extension must not invent model IDs or grant models the server would refuse. **🟡 Partial** — 429 paywall handling exists (`providerStreamClient.ts` `PaywallPayload`) and quota UI exists (`side_panel.ts`, `freeTrialClient.ts`), **but** `PaywallRequiredTier` still encodes removed tiers `'hobby' | 'pro' | 'pro_plus' | 'max'`. Gap: reconcile to canon tiers (Free / Basic / Pro / Max / Enterprise; drop `hobby`/`pro_plus`) — tracked with the `billing-catalog.ts` reconciliation. Requirement: never client-side-elevate entitlements; the server is authoritative.
 
 ## Device Registration
 
@@ -56,7 +56,7 @@ Logout clears the in-memory session token and the dev-only local token, then re-
 - `apps/extension/src/features/computer-use/cloudAgentClient.ts` — cloud agent client + EGRESS rule.
 - `apps/extension/src/pairing.ts` (+ `src/features/native-bridge/pairing.ts` re-export) — desktop pairing token/fingerprint validation.
 - `apps/extension/src/background.ts` — `X-Bridge-Token`, HMAC envelope, cookie blocklist, sync-rule compliance header.
-- `packages/types/src/models.json` — `tierAllowedModels`, model-by-plan gating.
+- `packages/contracts/types/src/models.json` — `tierAllowedModels`, model-by-plan gating.
 
 ## Competitor notes
 
@@ -76,7 +76,7 @@ Production-ready when: signed-out first run is safe and inert; sign-in/out round
 - Persisting the Clerk session token to `chrome.storage.local`/disk, or trusting a token posted by arbitrary page script.
 - Client-side entitlement elevation instead of honoring server 429/401.
 - Referencing removed tiers (`hobby`, `pro_plus`, "Plus", "Hobby") or inventing INR prices for Pro/Max.
-- Hardcoding model IDs instead of reading `packages/types/src/models.json` `tierAllowedModels`.
+- Hardcoding model IDs instead of reading `packages/contracts/types/src/models.json` `tierAllowedModels`.
 - Reading the user's `agiworkforce.com` auth cookies to impersonate a session, or syncing chat/memory off-device.
 - Any reference to Supabase, or renaming Next.js `proxy.ts` back to `middleware.ts` in cross-surface auth notes.
 - Treating a paired desktop as a fourth trust mode instead of an approval-gated remote window.

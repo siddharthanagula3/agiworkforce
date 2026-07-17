@@ -74,4 +74,4 @@ Claude Code CLI and OpenAI Codex CLI ship polished single-provider terminal UIs.
 - Emitting raw ANSI/escape sequences when `NO_COLOR` is set or output is piped; splitting an escape across stream chunks.
 - Printing raw provider JSON as an error instead of an actionable message.
 - Claiming the live-streaming, styled-diff, or theme-reroute work is shipped — they are 🟡/🔭.
-- Hardcoding or inventing model IDs in table/status examples (model IDs come only from `packages/types/src/models.json`); referencing removed tiers (Plus, `pro_plus`, Hobby) or credit top-ups; using `agiworkforce <cmd>` in examples instead of `agi`; referencing Supabase.
+- Hardcoding or inventing model IDs in table/status examples (model IDs come only from `packages/contracts/types/src/models.json`); referencing removed tiers (Plus, `pro_plus`, Hobby) or credit top-ups; using `agiworkforce <cmd>` in examples instead of `agi`; referencing Supabase.

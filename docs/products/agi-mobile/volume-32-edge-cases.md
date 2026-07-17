@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: grounds in `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and verified repo paths under `apps/mobile/` — `services/offlineQueue.ts`, `lib/sendQueue.ts`, `hooks/useNetworkStatus.ts`, `src/features/edge-cases/`, `services/authSession.ts`, `services/remoteChatGate.ts`, `lib/v1FeatureFlags.ts`, `services/companion.ts`, `services/heartbeat.ts`, `services/notifications.ts`, `services/backgroundFetch.ts`, `app/_layout.tsx`, `app/error.tsx`, plus `packages/types/src/models.json`.
+Authority: grounds in `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and verified repo paths under `apps/mobile/` — `services/offlineQueue.ts`, `lib/sendQueue.ts`, `hooks/useNetworkStatus.ts`, `src/features/edge-cases/`, `services/authSession.ts`, `services/remoteChatGate.ts`, `lib/v1FeatureFlags.ts`, `services/companion.ts`, `services/heartbeat.ts`, `services/notifications.ts`, `services/backgroundFetch.ts`, `app/_layout.tsx`, `app/error.tsx`, plus `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies how AGI Mobile behaves when the happy path breaks: no network, expired auth, a failed upload, a dropped companion link, a missed push, a backgrounded process, or an OS kill. Mobile exposes exactly two trust modes — **Local** (a small on-device LLM, free) and **Managed Cloud** (public alpha, open by default, gated by a real signed-in entitlement). **There is no BYOK on mobile and none may be added.** That split is the spine of every edge case here: a Local turn must never fail "open" into the cloud, and a Cloud turn must never silently degrade into a Local one without telling the user. Failures must preserve the trust boundary, never leak Local data off-device, and never fabricate availability. `remoteChatGate` fails closed when Cloud is disabled (`services/remoteChatGate.ts`). Model IDs come only from `packages/types/src/models.json`.
+This volume specifies how AGI Mobile behaves when the happy path breaks: no network, expired auth, a failed upload, a dropped companion link, a missed push, a backgrounded process, or an OS kill. Mobile exposes exactly two trust modes — **Local** (a small on-device LLM, free) and **Managed Cloud** (public alpha, open by default, gated by a real signed-in entitlement). **There is no BYOK on mobile and none may be added.** That split is the spine of every edge case here: a Local turn must never fail "open" into the cloud, and a Cloud turn must never silently degrade into a Local one without telling the user. Failures must preserve the trust boundary, never leak Local data off-device, and never fabricate availability. `remoteChatGate` fails closed when Cloud is disabled (`services/remoteChatGate.ts`). Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## No Internet — offline handling
 
@@ -75,7 +75,7 @@ This volume specifies how AGI Mobile behaves when the happy path breaks: no netw
 - `apps/mobile/lib/` — `sendQueue.ts`, `mmkv.ts`, `v1FeatureFlags.ts`, `secureStorage.ts`.
 - `apps/mobile/src/features/edge-cases/` — recovery modals + `MessageErrorScreen.tsx`, `OfflineBanner.tsx`, `copy.ts`.
 - `apps/mobile/hooks/useNetworkStatus.ts`; `apps/mobile/stores/connectionStore.ts`; `apps/mobile/storage/`; `apps/mobile/app/{_layout.tsx,error.tsx,(auth)/}`.
-- Shared: `packages/runtime` (message-queue manager), `packages/types/src/models.json` (model IDs), `services/signaling-server` (companion relay, host-side).
+- Shared: `packages/client/client-runtime` (message-queue manager), `packages/contracts/types/src/models.json` (model IDs), `services/signaling-server` (companion relay, host-side).
 
 ## Competitor notes
 
@@ -94,6 +94,6 @@ Production-ready when every edge case shows an honest state (queued/offline/reco
 - Adding any BYOK / API-key entry to mobile as an "offline" or "auth-failure" workaround.
 - Auto-routing a failed Local turn into Cloud, or silently downgrading Cloud to Local.
 - Faking success for a queued/offline send, or showing a "connected" companion badge while disconnected.
-- Hardcoding or inventing a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Holding durable state only in memory (lost on OS kill) or routing notification taps into authenticated UI before auth resolves.
 - Referencing Supabase, or making Mobile the first heavy local PDF/PPTX/DOCX/image-gen surface.

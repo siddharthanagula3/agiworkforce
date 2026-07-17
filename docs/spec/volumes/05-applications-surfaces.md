@@ -7,7 +7,7 @@ Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 5, `docs/current/source-of-tr
 
 AGI is one shared agent runtime under thin clients — never "seven apps." Both incumbents win by building the runtime once and re-skinning it (`docs/strategy/01` §1); AGI's monorepo already encodes that instinct (shared `packages/`, `crates/`, `services/`). A surface's only job is to render the runtime correctly for its OS, input model, and trust posture. The defensible work is the runtime, the trust enforcement, and the contracts — not the chrome.
 
-Cloud/Local stance is **per-surface and declared, not incidental.** Each surface inherits the same Local/BYOK/Managed boundaries but exposes a _different subset_ by product decision: Web and Mobile v1 expose **no BYOK**; Desktop is the full Local-private compute host (Local + BYOK + Managed); CLI/VS Code/Chrome are developer/task-scoped and never auto-sync into app chat. A surface that re-implements trust logic locally instead of consuming `packages/types/src/suite-contracts.ts` is a P0 — the moat lives in shared code, not in each client.
+Cloud/Local stance is **per-surface and declared, not incidental.** Each surface inherits the same Local/BYOK/Managed boundaries but exposes a _different subset_ by product decision: Web and Mobile v1 expose **no BYOK**; Desktop is the full Local-private compute host (Local + BYOK + Managed); CLI/VS Code/Chrome are developer/task-scoped and never auto-sync into app chat. A surface that re-implements trust logic locally instead of consuming `packages/contracts/types/src/suite-contracts.ts` is a P0 — the moat lives in shared code, not in each client.
 
 ## Binding rules
 
@@ -31,7 +31,7 @@ Cloud/Local stance is **per-surface and declared, not incidental.** Each surface
 | VS Code | `apps/extension-vscode`            | VS Code extension             | Workspace-scoped; explicit redacted handoff            |
 | Sandbox | `apps/sandbox`                     | Static HTML, postMessage-only | Isolated artifact renderer (Vol 14)                    |
 
-Shared: `packages/unified-chat`, `packages/ui`, `packages/types` (contracts), `packages/providers`, `packages/runtime`; Rust in `crates/agiworkforce-{protocol,command-registry,task-runtime,...}`; backend in `services/api-gateway`, `services/signaling-server`. Per-surface law: see `docs/strategy/12` (web), `13` (mobile), `14` (desktop) and the nearest `apps/*/AGENTS.md`.
+Shared: `packages/ui/unified-chat`, `packages/ui/ui`, `packages/contracts/types` (contracts), `packages/ai/providers`, `packages/client/client-runtime`; Rust in `crates/agiworkforce-{protocol,command-registry,task-runtime,...}`; backend in `services/api-gateway`, `services/signaling-server`. Per-surface law: see `docs/strategy/12` (web), `13` (mobile), `14` (desktop) and the nearest `apps/*/AGENTS.md`.
 
 ## Competitor notes
 
@@ -44,7 +44,7 @@ Anthropic runs every consumer surface off one account, one usage pool, one model
 - [ ] Surface declares its trust/sync boundary via `suite-contracts.ts`, not a local literal.
 - [ ] Surface consumes the shared agent loop + permission engine from `packages/`/`crates/`.
 - [ ] Empty chat state shows input, plus/add, file attach, model selector, mic, send/stop, and a visible trust/provider label.
-- [ ] Model selector reads IDs from `packages/types/src/models.json` only.
+- [ ] Model selector reads IDs from `packages/contracts/types/src/models.json` only.
 - [ ] Surface added to `docs/agent-context/repo-map.json` with owner + primary checks.
 - [ ] Nearest `AGENTS.md` written for the surface before non-trivial edits.
 
@@ -59,7 +59,7 @@ Anthropic runs every consumer surface off one account, one usage pool, one model
 
 ### Cross-surface consistency
 
-- [ ] One headless chat shell (`packages/unified-chat`/`packages/ui`) themed per surface; no forked shell.
+- [ ] One headless chat shell (`packages/ui/unified-chat`/`packages/ui/ui`) themed per surface; no forked shell.
 - [ ] Settings IA converges toward the locked sections (source-of-truth §UX Lock) per surface capability.
 - [ ] Brand renders as `AGI` (no `agi.workforce` drift) in headers/footers.
 - [ ] Capability that is unsupported on a surface is hidden, not faked (Operating Law 5).
@@ -68,7 +68,7 @@ Anthropic runs every consumer surface off one account, one usage pool, one model
 
 - [ ] Safari/Firefox/Edge extensions reuse the Chrome MV3 trust model + native bridge; no new sync path.
 - [ ] JetBrains plugin is a client of the shared runtime (mirror the VS Code contract), not a reimplementation.
-- [ ] Public API + SDK are first-party contracts in `packages/types`; never expose Managed without entitlement + metering.
+- [ ] Public API + SDK are first-party contracts in `packages/contracts/types`; never expose Managed without entitlement + metering.
 - [ ] MCP server surface scopes tools per-agent and passes the untrusted-remote boundary (Vol 19).
 - [ ] Founder decision recorded before implementation begins.
 

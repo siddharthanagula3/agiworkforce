@@ -28,4 +28,4 @@ Purpose: collect durable engineering workflow, review, and agent-native developm
 
 - Product requirements; use `PLAN.md`, `TODO.md`, and `docs/current/product-suite.md`.
 - Surface-specific runbooks; use `docs/surfaces/` or the owner README near the code.
-- Historical research; use `audit/`, `reports/`, or `docs/archive/`.
+- Historical research; use `docs/research/` or `docs/agent-context/known-flaws.md`. (The former `audit/`, `reports/`, and `docs/archive/` directories were removed repo-wide on 2026-06-28.)

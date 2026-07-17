@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` + `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `docs/surfaces/cli.md`; `docs/cli/COMMAND_SURFACE.md`. Grounded in `apps/cli/src/{lib.rs,agent/mod.rs,agent/chat.rs,repl/,tui/,claude_parity.rs,command_registry.rs}`, `crates/agiworkforce-{command-registry,app-server}/`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` + `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `docs/surfaces/cli.md`; `docs/cli/COMMAND_SURFACE.md`. Grounded in `apps/cli/src/{lib.rs,agent/mod.rs,agent/chat.rs,repl/,tui/,claude_parity.rs,command_registry.rs}`, `crates/agiworkforce-{command-registry,app-server}/`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -82,7 +82,7 @@ Ctrl-C during a stream cancels the current turn and preserves whatever streamed 
 
 ## Competitor notes
 
-Claude Code and Codex CLI ship polished single-vendor TUIs with slash commands, streaming, and (Claude Code) remote control. AGI diverges: **multi-provider** selection sourced only from `packages/types/src/models.json`; **BYOK** direct-key runs here (never Web/Mobile); **per-surface trust** with a visible `PrivacyMode` and explicit Local→BYOK fork; **local-first** default (Ollama/LMStudio) never silently upgraded to cloud. Remote control is a 🔭 parity target — a secure remote window, not a data migration.
+Claude Code and Codex CLI ship polished single-vendor TUIs with slash commands, streaming, and (Claude Code) remote control. AGI diverges: **multi-provider** selection sourced only from `packages/contracts/types/src/models.json`; **BYOK** direct-key runs here (never Web/Mobile); **per-surface trust** with a visible `PrivacyMode` and explicit Local→BYOK fork; **local-first** default (Ollama/LMStudio) never silently upgraded to cloud. Remote control is a 🔭 parity target — a secure remote window, not a data migration.
 
 ## Acceptance / Definition of Done
 
@@ -96,7 +96,7 @@ The interface is production-ready when every advertised command/flag has a real 
 
 - Using `agiworkforce <cmd>` in examples (alias-only; use `agi`).
 - Silently routing a Local session to BYOK/Managed, or auto-syncing CLI sessions into app chat.
-- Hardcoding model IDs instead of reading `packages/types/src/models.json`; inventing routes, flags, subcommands, or command counts (verify from source).
+- Hardcoding model IDs instead of reading `packages/contracts/types/src/models.json`; inventing routes, flags, subcommands, or command counts (verify from source).
 - Claiming remote control is shipped (it is 🔭; only the `/remote-control` stub exists).
 - Referencing removed tiers ("Plus"/`pro_plus`/"Hobby"), inventing Pro/Max INR prices, or adding credit top-ups.
 - Referencing Supabase, or renaming Next.js `proxy.ts` to `middleware.ts` in any cross-surface note.

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root); `apps/web/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/web/app/api/memory/route.ts`, `apps/web/app/api/memory/[id]/route.ts`, `apps/web/app/api/memory/search/route.ts`, `apps/web/app/api/memory/sync/route.ts`, `apps/web/db/neon/0010_memory.sql`, `apps/web/db/neon/0040_memory_cloud_sync.sql`, `apps/web/features/settings/sections/MemorySection.tsx`, `apps/web/app/settings/memory/page.tsx`, `apps/web/lib/runtime/memory-context.ts`, `packages/unified-chat/src/components/MemoryEditor.tsx`, `packages/unified-chat/src/stores/memoryStore.ts`.
+Authority: `AGENTS.md` (repo root); `apps/web/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/web/app/api/memory/route.ts`, `apps/web/app/api/memory/[id]/route.ts`, `apps/web/app/api/memory/search/route.ts`, `apps/web/app/api/memory/sync/route.ts`, `apps/web/db/neon/0010_memory.sql`, `apps/web/db/neon/0040_memory_cloud_sync.sql`, `apps/web/features/settings/sections/MemorySection.tsx`, `apps/web/app/settings/memory/page.tsx`, `apps/web/lib/runtime/memory-context.ts`, `packages/ui/unified-chat/src/components/MemoryEditor.tsx`, `packages/ui/unified-chat/src/stores/memoryStore.ts`.
 
 ## Overview & stance
 
@@ -14,11 +14,11 @@ A material split exists today and is called out per section: the **server memory
 
 ## Automatic Memories
 
-Facts inferred from conversation history rather than typed by hand. The data model reserves this: `POST /api/memory` accepts `source` and validates it against `['mobile','desktop','web','auto']` — `'auto'` is the automatic-memory slot (`apps/web/app/api/memory/route.ts:85`), and the shared `MemoryFact` carries `sourceConversationId` (`packages/unified-chat/src/stores/memoryStore.ts:23`). Saved facts already influence answers: `buildMemorySystemContent` injects up to 50 facts / 4,000 chars as a leading system message (`apps/web/lib/runtime/memory-context.ts`). **🟡 Partial** — the storage slot and injection path exist, but there is **no extraction pipeline** that reads chat history and proposes/writes `source='auto'` memories; that generator is 🔭. Requirement: auto-memories must be reviewable before persistence (propose → user confirm), never silently written, and always labeled by source in the UI.
+Facts inferred from conversation history rather than typed by hand. The data model reserves this: `POST /api/memory` accepts `source` and validates it against `['mobile','desktop','web','auto']` — `'auto'` is the automatic-memory slot (`apps/web/app/api/memory/route.ts:85`), and the shared `MemoryFact` carries `sourceConversationId` (`packages/ui/unified-chat/src/stores/memoryStore.ts:23`). Saved facts already influence answers: `buildMemorySystemContent` injects up to 50 facts / 4,000 chars as a leading system message (`apps/web/lib/runtime/memory-context.ts`). **🟡 Partial** — the storage slot and injection path exist, but there is **no extraction pipeline** that reads chat history and proposes/writes `source='auto'` memories; that generator is 🔭. Requirement: auto-memories must be reviewable before persistence (propose → user confirm), never silently written, and always labeled by source in the UI.
 
 ## Manual Memories
 
-User-authored facts. `POST /api/memory` inserts a trimmed `content` (required, ≤10,000 chars), optional `category`, `source` defaulting to `'web'`, under CSRF + rate-limit + Clerk auth (`apps/web/app/api/memory/route.ts`). The shared editor's `add()` trims, dedupes case-insensitively, and prepends newest-first (`packages/unified-chat/src/stores/memoryStore.ts:57`). **🟡 Partial** — the API is ✅ built and tested (`apps/web/__tests__/api/memory.test.ts`), but the rendered `MemoryEditor` writes to the local store, not `POST /api/memory`; a signed-in user's manual add does not yet become a synced Neon row. Requirement: the Web editor must call the account API so manual memories persist server-side and sync.
+User-authored facts. `POST /api/memory` inserts a trimmed `content` (required, ≤10,000 chars), optional `category`, `source` defaulting to `'web'`, under CSRF + rate-limit + Clerk auth (`apps/web/app/api/memory/route.ts`). The shared editor's `add()` trims, dedupes case-insensitively, and prepends newest-first (`packages/ui/unified-chat/src/stores/memoryStore.ts:57`). **🟡 Partial** — the API is ✅ built and tested (`apps/web/__tests__/api/memory.test.ts`), but the rendered `MemoryEditor` writes to the local store, not `POST /api/memory`; a signed-in user's manual add does not yet become a synced Neon row. Requirement: the Web editor must call the account API so manual memories persist server-side and sync.
 
 ## Categories
 
@@ -26,11 +26,11 @@ Optional grouping label per memory. `category` is a real column (`apps/web/db/ne
 
 ## Editing
 
-Change an existing memory. `PUT /api/memory/[id]` updates `content` (≤10,000 chars), re-stamps `updated_at`, and is user-scoped + CSRF-guarded (`apps/web/app/api/memory/[id]/route.ts:53`). The editor's `update()` re-stamps `updatedAt` locally (`packages/unified-chat/src/stores/memoryStore.ts:73`). **🟡 Partial** — content edit is ✅ built server-side; the gap is that `PUT` edits **content only, not `category`**, and the Web UI edits the local store rather than the route. Requirement: edits must go through `PUT /api/memory/[id]`, cover category, and (via the sync trigger) advance `server_version` so the change propagates.
+Change an existing memory. `PUT /api/memory/[id]` updates `content` (≤10,000 chars), re-stamps `updated_at`, and is user-scoped + CSRF-guarded (`apps/web/app/api/memory/[id]/route.ts:53`). The editor's `update()` re-stamps `updatedAt` locally (`packages/ui/unified-chat/src/stores/memoryStore.ts:73`). **🟡 Partial** — content edit is ✅ built server-side; the gap is that `PUT` edits **content only, not `category`**, and the Web UI edits the local store rather than the route. Requirement: edits must go through `PUT /api/memory/[id]`, cover category, and (via the sync trigger) advance `server_version` so the change propagates.
 
 ## Deletion
 
-Remove a memory. `DELETE /api/memory/[id]` is a **soft delete** (`is_deleted = true`, `updated_at = now()`), user-scoped and CSRF-guarded (`apps/web/app/api/memory/[id]/route.ts:104`). This is deliberate: the delta-sync pull returns tombstones (`is_deleted = true`) so deletes propagate to other devices instead of resurrecting (`apps/web/app/api/memory/sync/route.ts`, index note in `apps/web/db/neon/0040_memory_cloud_sync.sql`). `clear()` backs a "forget everything" affordance (`packages/unified-chat/src/stores/memoryStore.ts:86`). **✅ Built** (server soft-delete + tombstone sync). 🟡 gap: hard/purge delete for a true "erase from cloud" is not implemented; document retention/erase behavior before GA.
+Remove a memory. `DELETE /api/memory/[id]` is a **soft delete** (`is_deleted = true`, `updated_at = now()`), user-scoped and CSRF-guarded (`apps/web/app/api/memory/[id]/route.ts:104`). This is deliberate: the delta-sync pull returns tombstones (`is_deleted = true`) so deletes propagate to other devices instead of resurrecting (`apps/web/app/api/memory/sync/route.ts`, index note in `apps/web/db/neon/0040_memory_cloud_sync.sql`). `clear()` backs a "forget everything" affordance (`packages/ui/unified-chat/src/stores/memoryStore.ts:86`). **✅ Built** (server soft-delete + tombstone sync). 🟡 gap: hard/purge delete for a true "erase from cloud" is not implemented; document retention/erase behavior before GA.
 
 ## Privacy — view/manage, reference-chat search, generated memory, import (locked IA)
 
@@ -50,7 +50,7 @@ The locked Privacy information architecture, in order:
 - `apps/web/db/neon/0010_memory.sql`, `0040_memory_cloud_sync.sql` — `user_memories` table + `server_version` sync column/trigger/index.
 - `apps/web/app/settings/memory/page.tsx`, `apps/web/features/settings/sections/MemorySection.tsx` — settings entry.
 - `apps/web/lib/runtime/memory-context.ts` — prompt injection of saved facts.
-- `packages/unified-chat/src/components/MemoryEditor.tsx`, `packages/unified-chat/src/stores/memoryStore.ts` — shared editor + store.
+- `packages/ui/unified-chat/src/components/MemoryEditor.tsx`, `packages/ui/unified-chat/src/stores/memoryStore.ts` — shared editor + store.
 
 ## Competitor notes
 
@@ -71,5 +71,5 @@ Production-ready when the Web memory UI is backed by the account API (not localS
 - Do not add BYOK or Local memory affordances to Web — cloud-only surface.
 - Do not hard-delete when the sync contract expects tombstones; a non-tombstoned delete resurrects on the next pull.
 - Do not silently write generated/imported memories — review-gate and label by source.
-- Do not invent a category taxonomy, model IDs, routes, env vars, or INR prices in this spec; model IDs come only from `packages/types/src/models.json`.
+- Do not invent a category taxonomy, model IDs, routes, env vars, or INR prices in this spec; model IDs come only from `packages/contracts/types/src/models.json`.
 - Never reference Supabase; the stack is Clerk + Neon + Stripe. Never reintroduce removed tiers (Plus/`pro_plus`/Hobby) — note the stale compiled billing artifacts as the tracked reconciliation 🟡, do not treat them as current.

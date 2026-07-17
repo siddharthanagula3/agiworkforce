@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified mobile paths `apps/mobile/src/ui/theme/useTheme.ts`, `apps/mobile/src/ui/theme/tokens.ts`, `apps/mobile/src/features/edge-cases/components/OfflineBanner.tsx`, `apps/mobile/app/(app)/settings/performance.tsx`, and `apps/mobile/src/features/chat/components/ChatInput.tsx`. Model IDs come only from `packages/types/src/models.json`.
+Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified mobile paths `apps/mobile/src/ui/theme/useTheme.ts`, `apps/mobile/src/ui/theme/tokens.ts`, `apps/mobile/src/features/edge-cases/components/OfflineBanner.tsx`, `apps/mobile/app/(app)/settings/performance.tsx`, and `apps/mobile/src/features/chat/components/ChatInput.tsx`. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -66,7 +66,7 @@ When the OS Reduce Motion setting is on, animations must degrade to instant or s
 
 ## Competitor notes
 
-ChatGPT and Claude mobile apps ship mature VoiceOver/TalkBack labeling, Dynamic Type, and reduced-motion handling for a single cloud chat. AGI's deliberate divergence: accessibility must hold across **two trust modes** (Local on-device + Managed Cloud) and across more surfaces than a single chat — model management, approvals, capture, schedules. Where competitors expose one account-keyed cloud assistant, AGI must keep parity between a free on-device model and cloud chat without ever surfacing a BYOK key field (mobile has none) and without faking availability. Multi-provider model choice (IDs from `packages/types/src/models.json`) must itself be accessible: the picker announces provider/model and trust mode, never an invented or hardcoded ID. Assistive tech should make the Local-vs-Cloud boundary _more_ legible, not less.
+ChatGPT and Claude mobile apps ship mature VoiceOver/TalkBack labeling, Dynamic Type, and reduced-motion handling for a single cloud chat. AGI's deliberate divergence: accessibility must hold across **two trust modes** (Local on-device + Managed Cloud) and across more surfaces than a single chat — model management, approvals, capture, schedules. Where competitors expose one account-keyed cloud assistant, AGI must keep parity between a free on-device model and cloud chat without ever surfacing a BYOK key field (mobile has none) and without faking availability. Multi-provider model choice (IDs from `packages/contracts/types/src/models.json`) must itself be accessible: the picker announces provider/model and trust mode, never an invented or hardcoded ID. Assistive tech should make the Local-vs-Cloud boundary _more_ legible, not less.
 
 ## Acceptance / Definition of Done
 
@@ -83,5 +83,5 @@ Production-ready means: every interactive element is reachable and labeled under
 - Faking unsupported capability: announcing a feature (e.g. high-contrast mode, external-keyboard shortcuts) that is not implemented. Label it 🔭, do not ship a dead control.
 - `allowFontScaling={false}` to "fix" layout — clamp with `maxFontSizeMultiplier` and reflow instead.
 - Color-only status with no redundant icon/label; assuming a fixed light/dark contrast is enough without honoring the OS contrast flag.
-- Hardcoding or inventing a model ID in an accessible picker — read from `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID in an accessible picker — read from `packages/contracts/types/src/models.json`.
 - Referencing Supabase or any removed tier ("Plus", "Hobby", `pro_plus`) in accessible copy, paywall labels, or settings.

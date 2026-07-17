@@ -1,7 +1,7 @@
 # Volume 15 — Files & Ingestion
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 15)
-Authority: this manual, `docs/strategy/10-oss-corpus-port-plan.md` §7 (liteparse on-device ingestion), `docs/current/source-of-truth.md` (Surface Roles, one-chat), `docs/agent-context/repo-map.json`, `packages/types/src/suite-contracts.ts`, Vol 30 (secret scan).
+Authority: this manual, `docs/strategy/10-oss-corpus-port-plan.md` §7 (liteparse on-device ingestion), `docs/current/source-of-truth.md` (Surface Roles, one-chat), `docs/agent-context/repo-map.json`, `packages/contracts/types/src/suite-contracts.ts`, Vol 30 (secret scan).
 
 ## Philosophy & Cloud/Local stance
 
@@ -26,11 +26,11 @@ Cloud/Local sets the storage scope and where parsing/OCR/embedding run. On Local
 
 - Desktop file UI: `apps/desktop/src/features/file-upload/` — `FileDropZone.tsx`, `FileUploadButton.tsx`, `FilePreviewModal.tsx`, `PDFViewer.tsx`, `FileDownloadButton.tsx`.
 - Desktop filesystem/local files: `apps/desktop/src/features/filesystem/` (local-private host, source-of-truth).
-- Chat attachment plumbing: `apps/desktop/src/features/chat/AttachmentPreview.tsx`, `packages/unified-chat/src/`.
+- Chat attachment plumbing: `apps/desktop/src/features/chat/AttachmentPreview.tsx`, `packages/ui/unified-chat/src/`.
 - Mobile ingestion/capture: `apps/mobile/services/docParser.ts`, `apps/mobile/services/fileCreation.ts`.
 - On-device parser dependency: liteparse (`docs/strategy/10` §7 — Apache-2.0 + PDFium BSD + Tesseract Apache; keep AGPL out of the binary).
-- Secret scan / ingest safety: Vol 30 paths (Local→BYOK fork scan), `packages/compliance/`.
-- Attachment metadata + trust contracts: `packages/types/src/suite-contracts.ts` (`PrivacyMode`), `packages/types/src/` (Vol 38).
+- Secret scan / ingest safety: Vol 30 paths (Local→BYOK fork scan), `packages/contracts/compliance/`.
+- Attachment metadata + trust contracts: `packages/contracts/types/src/suite-contracts.ts` (`PrivacyMode`), `packages/contracts/types/src/` (Vol 38).
 - Storage scopes: `apps/web/db/neon` (account/managed), local SQLite/SecureStore/filesystem (Vol 25).
 - Sandbox preview rendering (untrusted file previews): `apps/sandbox` (Vol 14).
 

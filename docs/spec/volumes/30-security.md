@@ -22,10 +22,10 @@ Privacy is the product, so security is not a feature bolted on — it is the moa
 
 ## Repository map (real paths)
 
-- Trust contracts: `packages/types/src/suite-contracts.ts` (`PrivacyMode`, `ProviderMode`, `assertSurfaceCanSyncChats`).
+- Trust contracts: `packages/contracts/types/src/suite-contracts.ts` (`PrivacyMode`, `ProviderMode`, `assertSurfaceCanSyncChats`).
 - Exec/permission policy (Rust): `crates/agiworkforce-execpolicy/src/` (`decision.rs`, `execpolicycheck.rs`, `rule.rs`, `parser.rs`); sandbox `crates/sandbox-policy/src/lib.rs`.
 - Egress / SSRF (Rust): `crates/agiworkforce-network-proxy/src/` (`network_policy.rs`, `http_proxy.rs`, `proxy.rs`, `mitm_tests.rs`, `reasons.rs`); protocol `crates/agiworkforce-protocol/src/network_policy.rs`.
-- Web security: `apps/web/core/security/prompt-injection-detector.test.ts`; shared `packages/api/src/security.ts`, `packages/utils/src/crypto.ts`.
+- Web security: `apps/web/core/security/prompt-injection-detector.test.ts`; shared `packages/client/desktop-command-client/src/security.ts`, `packages/platform/utils/src/crypto.ts`.
 - DB security/RLS/audit: `apps/web/db/neon/0014_security.sql`, `0037_rls_user_isolation.sql`, `0032_security_severity_superset.sql`, `0043_audit_log_immutability.sql`.
 - Plugin/skill vetting: `crates/agiworkforce-plugin-runtime/` (manifest matrix, fixtures); skills catalog `services/api-gateway/src/services/skillsCatalog.ts`.
 - Mobile TLS pinning: `apps/mobile/lib/pinning.ts` (R2 — provision pins, enable enforcement).

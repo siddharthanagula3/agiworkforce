@@ -62,7 +62,7 @@ CI is **✅ Built** for build and guardrails, **🔭 Planned** for delivery. `.g
 
 ## Competitor notes
 
-Claude for Chrome and ChatGPT's browser extensions publish single-vendor bundles through CWS with vendor-hosted inference and telemetry; OpenAI Codex ships via CLI/IDE, not a browser store. AGI's divergence: (1) **local-first, no inference in the client** — the extension is a thin bridged window over the cloud gateway or Desktop host, so a store update never ships a model or key; (2) **per-surface trust** — no BYOK on Chrome, no data sync (device-scoped `chrome.storage.local` only), unlike competitors' account-wide history sync; (3) **entitlements server-side** via `429 {kind:'paywall'}`, no in-extension checkout; (4) **multi-provider** through the gateway, never naming a model ID (those live only in `packages/types/src/models.json`).
+Claude for Chrome and ChatGPT's browser extensions publish single-vendor bundles through CWS with vendor-hosted inference and telemetry; OpenAI Codex ships via CLI/IDE, not a browser store. AGI's divergence: (1) **local-first, no inference in the client** — the extension is a thin bridged window over the cloud gateway or Desktop host, so a store update never ships a model or key; (2) **per-surface trust** — no BYOK on Chrome, no data sync (device-scoped `chrome.storage.local` only), unlike competitors' account-wide history sync; (3) **entitlements server-side** via `429 {kind:'paywall'}`, no in-extension checkout; (4) **multi-provider** through the gateway, never naming a model ID (those live only in `packages/contracts/types/src/models.json`).
 
 ## Acceptance / Definition of Done
 
@@ -78,5 +78,5 @@ Production-ready when: a reproducible `dist/` builds via `build.ts`; the listing
 - Widening `connect-src`/`host_permissions` for logs/telemetry, or logging page content, cookies, autofill values, bridge tokens, or memory.
 - Client-side flags that unlock a paid tier, or a kill-switch that fails open or reroutes Local/Desktop sessions to Cloud.
 - Hand-editing the committed `manifest.json` per store instead of a build-time overlay; letting manifest/package versions drift.
-- Hardcoding model IDs (use `packages/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`), top-ups, invented Pro/Max INR, or Supabase.
+- Hardcoding model IDs (use `packages/contracts/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`), top-ups, invented Pro/Max INR, or Supabase.
 - Publishing without the full CI gate, or treating "build succeeded" as done without inspecting the artifact for secrets.

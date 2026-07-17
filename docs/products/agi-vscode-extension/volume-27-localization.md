@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/extension.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts`, `apps/extension-vscode/src/memory/memoryTreeProvider.ts`, `apps/extension-vscode/src/features/model-picker/modelMetrics.ts`, `apps/extension-vscode/src/core/subsystemHealth.ts`, `packages/design-tokens/src/index.ts`.
+Authority: grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/extension.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts`, `apps/extension-vscode/src/memory/memoryTreeProvider.ts`, `apps/extension-vscode/src/features/model-picker/modelMetrics.ts`, `apps/extension-vscode/src/core/subsystemHealth.ts`, `packages/ui/design-tokens/src/index.ts`.
 
 ## Overview & stance
 
@@ -22,7 +22,7 @@ Label: 🟡 Partial — UTF-8 transport and HTML-escape are shipped (`webviewCon
 
 ## Fonts
 
-The webview uses a system UI font stack `-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif` for body text ✅ (`webviewContent.ts:105`) and a monospace stack `'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace` for code and token readouts ✅ (`webviewContent.ts:570,828`). The Codicon icon font is bundled into the VSIX (`out/codicons/codicon.css`) and loaded under a `font-src ${cspSource}` CSP directive ✅ (`webviewContent.ts:59,80`). Shared font-family tokens are exported from `packages/design-tokens/src/index.ts` and mirrored as `--chat-font-*` CSS variables ✅.
+The webview uses a system UI font stack `-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif` for body text ✅ (`webviewContent.ts:105`) and a monospace stack `'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace` for code and token readouts ✅ (`webviewContent.ts:570,828`). The Codicon icon font is bundled into the VSIX (`out/codicons/codicon.css`) and loaded under a `font-src ${cspSource}` CSP directive ✅ (`webviewContent.ts:59,80`). Shared font-family tokens are exported from `packages/ui/design-tokens/src/index.ts` and mirrored as `--chat-font-*` CSS variables ✅.
 
 Requirements: for CJK, Arabic, Hebrew, Devanagari, and other scripts the extension must fall through to the OS/editor system font rather than force a Latin-only face; the current stacks already end in generic `sans-serif`/`monospace`, satisfying this. Editor-side rendering (inline completions, code lens, hover, inline diff) inherits the user's `editor.fontFamily` and must not be overridden. RTL bidi mirroring of the webview layout (`dir="rtl"` when the host locale is RTL) and self-hosted webfont bundling for offline Local mode are 🔭 Planned; today the webview hardcodes `lang="en"` and no `dir` attribute.
 
@@ -32,7 +32,7 @@ Label: ✅ Built for the font stacks and CSP-scoped icon font; 🔭 Planned for 
 
 The extension UI is **English-only** today. Command titles, chat-participant descriptions, configuration descriptions, and enum labels are hardcoded English strings in `apps/extension-vscode/package.json` (e.g. `"AGI Workforce: Open Chat"`, the `@agi` participant `sampleRequest` strings). There is **no** `package.nls.json`, no `package.nls.<locale>.json`, and no `l10n/` bundle (verified absent), and no `vscode.l10n.t(...)` calls in `src/` — so VS Code's display-language switch has no effect on AGI strings.
 
-Requirements for the target state: adopt VS Code's native l10n pipeline — externalize manifest strings to `package.nls.json` with `%key%` placeholders and runtime strings via `vscode.l10n.t()` with an `l10n/` bundle; resolve the active language from `vscode.env.language`. Model output, code, and user content are **never** machine-translated — only the extension's own chrome (menus, prompts, status bar, error toasts) is localized. Provider/model names and IDs stay verbatim (IDs come only from `packages/types/src/models.json`). Pricing/upgrade copy must use the canonical ladder — Free / Basic $8 (₹399) / Pro $20 / Max $100 and $200 / Enterprise — and must not print INR for Pro/Max (TBD). Translation memory and pluralization (ICU MessageFormat) are 🔭 Planned.
+Requirements for the target state: adopt VS Code's native l10n pipeline — externalize manifest strings to `package.nls.json` with `%key%` placeholders and runtime strings via `vscode.l10n.t()` with an `l10n/` bundle; resolve the active language from `vscode.env.language`. Model output, code, and user content are **never** machine-translated — only the extension's own chrome (menus, prompts, status bar, error toasts) is localized. Provider/model names and IDs stay verbatim (IDs come only from `packages/contracts/types/src/models.json`). Pricing/upgrade copy must use the canonical ladder — Free / Basic $8 (₹399) / Pro $20 / Max $100 and $200 / Enterprise — and must not print INR for Pro/Max (TBD). Translation memory and pluralization (ICU MessageFormat) are 🔭 Planned.
 
 Label: 🔭 Planned — no localization bundle exists; UI strings are hardcoded English in `package.json` and `src/`.
 
@@ -52,7 +52,7 @@ Label: 🟡 Partial — locale-aware formatting is shipped (`toLocaleString`/`to
 - `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts`, `src/memory/memoryTreeProvider.ts`, `src/core/subsystemHealth.ts` — locale date/time rendering.
 - `apps/extension-vscode/src/features/model-picker/modelMetrics.ts` — locale number formatting.
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — localhost bridge (locale/PII must not leak past the redacted handoff gate).
-- `packages/design-tokens/src/index.ts` — shared font-family tokens.
+- `packages/ui/design-tokens/src/index.ts` — shared font-family tokens.
 
 ## Competitor notes
 
@@ -74,4 +74,4 @@ Production-ready when the UI resolves its display language from the VS Code host
 - Claiming translation is shipped: there is no `package.nls`/`l10n` bundle — mark translation 🔭.
 - Splitting surrogate pairs / combining marks when truncating labels; comparing paths without NFC normalization.
 - Introducing removed tiers in upgrade/localization copy (no "Plus", `pro_plus`, "Hobby") — note the `package.json` `agiWorkforce.tier` enum still lists the retired `hobby`/`pro_plus` (`max` is a valid canon tier; the enum also lacks `free`/`basic`/`enterprise` — 🟡 gap, tracked in the billing-catalog reconciliation task); localized copy must use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise, no invented INR for Pro/Max, no top-ups.
-- Hardcoding or inventing model IDs in any localized string (IDs come only from `packages/types/src/models.json`); referencing Supabase (fully migrated to Clerk + Neon + Stripe).
+- Hardcoding or inventing model IDs in any localized string (IDs come only from `packages/contracts/types/src/models.json`); referencing Supabase (fully migrated to Clerk + Neon + Stripe).

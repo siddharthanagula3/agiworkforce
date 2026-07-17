@@ -70,7 +70,7 @@ pnpm lint
 - Settings must stay backed by Clerk and Neon, not local mock state, when the setting affects account, billing, privacy, usage, memory, or cloud capabilities.
 - Chat has to stay on a single canonical `/chat` route. Historical `/chats` and query-flag variants should redirect or be retired as implementation work lands.
 - Download and marketing claims must match actual release gates: public release is locked for July 12, 2026; managed cloud access is public alpha and open by default (2026-06-27, subscription/entitlement-gated), with operational controls keeping pace as GA-hardening rather than gating access.
-- Provider model IDs must be read from `packages/types/src/models.json`; do not hardcode weekly model releases in Web code.
+- Provider model IDs must be read from `packages/contracts/types/src/models.json`; do not hardcode weekly model releases in Web code.
 
 ## References
 

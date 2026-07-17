@@ -14,7 +14,7 @@ Two boundaries govern everything below. First, **execution stays local**: sendin
 
 ## Shared Terminal Sessions
 
-- 🟡 Partial — The extension maintains **one reusable named terminal**, `AGI Workforce`, via `TerminalProvider.getOrCreateTerminal()` (`src/providers/terminalProvider.ts`): it reuses a live instance, adopts an existing same-named terminal, or creates one rooted at the active workspace folder, and clears its handle on `onDidCloseTerminal`. This is a session shared _across the extension's own commands_ (run, suggest, explain). What is **not** built: a terminal session **shared with the CLI** (`agi`) or the desktop host. Cross-surface shared developer sessions are a target direction only — mark 🔭. Requirement: any future shared session must keep VS Code sessions workspace/task-scoped per `apps/extension-vscode/AGENTS.md`, never streaming IDE terminal context into Web/Mobile/Desktop app chat, and must carry the shared session schema in `packages/types`, not extension-only files.
+- 🟡 Partial — The extension maintains **one reusable named terminal**, `AGI Workforce`, via `TerminalProvider.getOrCreateTerminal()` (`src/providers/terminalProvider.ts`): it reuses a live instance, adopts an existing same-named terminal, or creates one rooted at the active workspace folder, and clears its handle on `onDidCloseTerminal`. This is a session shared _across the extension's own commands_ (run, suggest, explain). What is **not** built: a terminal session **shared with the CLI** (`agi`) or the desktop host. Cross-surface shared developer sessions are a target direction only — mark 🔭. Requirement: any future shared session must keep VS Code sessions workspace/task-scoped per `apps/extension-vscode/AGENTS.md`, never streaming IDE terminal context into Web/Mobile/Desktop app chat, and must carry the shared session schema in `packages/contracts/types`, not extension-only files.
 
 ## Execute Commands
 
@@ -63,6 +63,6 @@ The domain is production-ready when execution is trust-gated, AI-suggested comma
 - Sending captured terminal output to a BYOK/Cloud provider from a Local session without the explicit fork (secret scan, payload preview, consent, visible label).
 - Auto-syncing terminal sessions or output into Web/Mobile/Desktop app chat history.
 - Reintroducing `terminal.sendText` for structured commands where `execFile` already removes shell interpretation.
-- Hardcoding a model ID for explanation or suggestion — model IDs come only from `packages/types/src/models.json`.
+- Hardcoding a model ID for explanation or suggestion — model IDs come only from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (`Plus`, `pro_plus`, `Hobby`) or credit top-ups; note the `agiWorkforce.tier` enum in `package.json` still lists `hobby`/`pro_plus` (🟡 gap — the correct ladder is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise).
 - Referencing Supabase (fully migrated away) or renaming Next.js `proxy.ts` back to `middleware.ts`.

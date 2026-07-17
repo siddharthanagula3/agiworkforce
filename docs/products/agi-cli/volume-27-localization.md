@@ -63,5 +63,5 @@ Production-ready when: text is UTF-8 end to end; every truncation site is displa
 - Measuring truncation by byte length or `chars().count()` and clipping a wide glyph or grapheme cluster mid-cell.
 - Sending UI strings to a cloud/BYOK provider for translation from a Local session without the explicit fork (context selection, secret scan, payload preview, provider label, consent).
 - Inventing INR numbers for Pro/Max, or reviving "Plus"/"Hobby"/`pro_plus`/top-ups in any numeric or pricing UI.
-- Hardcoding a model ID for a "translation model" — model IDs come only from `packages/types/src/models.json`.
+- Hardcoding a model ID for a "translation model" — model IDs come only from `packages/contracts/types/src/models.json`.
 - Referencing Supabase, renaming `proxy.ts` to `middleware.ts`, or showing `agiworkforce <cmd>` in examples (use the `agi` binary).

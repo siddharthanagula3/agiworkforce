@@ -99,6 +99,6 @@ Security:
 - Showing a stale or fake provider/model or a "connected" bridge status that is not real.
 - Auto-syncing side-bar History/Memory/Context to Web/Mobile/Desktop app chat, or routing a Local session to BYOK/Cloud without consent, a payload preview, and a visible label.
 - Firing an LLM request on hover, CodeLens render, or Explorer expansion before an explicit user action.
-- Hardcoding or inventing model IDs; all LLM IDs come from `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs; all LLM IDs come from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers. `package.json` `agiWorkforce.tier` still enumerates `hobby`/`pro_plus` — a known 🟡 reconciliation gap; specs use only Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise, with no top-ups.
 - Referencing Supabase (fully migrated away) or renaming `proxy.ts` to `middleware.ts`.

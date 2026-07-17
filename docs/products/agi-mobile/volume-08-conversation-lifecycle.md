@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/mobile/stores/chat/chatMessageStore.ts`, `apps/mobile/stores/chat/chatViewStore.ts`, `apps/mobile/stores/chat/chatCloudMessageStore.ts`, `apps/mobile/stores/chatStore.ts`, `apps/mobile/storage/conversations.ts`, `apps/mobile/storage/migrations.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/dsarExport.ts`, `apps/mobile/services/fileCreation.ts`, `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx`, `apps/mobile/src/features/sidebar/components/ConversationItem.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/mobile/stores/chat/chatMessageStore.ts`, `apps/mobile/stores/chat/chatViewStore.ts`, `apps/mobile/stores/chat/chatCloudMessageStore.ts`, `apps/mobile/stores/chatStore.ts`, `apps/mobile/storage/conversations.ts`, `apps/mobile/storage/migrations.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/dsarExport.ts`, `apps/mobile/services/fileCreation.ts`, `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx`, `apps/mobile/src/features/sidebar/components/ConversationItem.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -52,7 +52,7 @@ The split is physical, not cosmetic. Local conversations live in their own MMKV 
 - `apps/mobile/services/{remoteChatGate,cloudSyncEngine,dsarExport,fileCreation}.ts` — cloud gate, delta-sync, exports.
 - `apps/mobile/src/features/chat/components/ConversationExportSheet.tsx`, `apps/mobile/src/features/sidebar/components/ConversationItem.tsx` — export + list-item actions.
 - `apps/mobile/lib/v1FeatureFlags.ts` — `cloudChat`, `crossDeviceSync`, `byokKeys:false`.
-- Shared: `packages/types/src/models.json` (model ids), `apps/web/app/api/{chat,search}` (cloud endpoints), Neon delta-sync.
+- Shared: `packages/contracts/types/src/models.json` (model ids), `apps/web/app/api/{chat,search}` (cloud endpoints), Neon delta-sync.
 
 ## Competitor notes
 
@@ -72,6 +72,6 @@ A lifecycle verb is production-ready only when it routes to the owning namespace
 - Auto-routing or auto-sending a Local conversation to Managed Cloud, or merging Local and Cloud threads into one namespace.
 - Optimistically hiding a Cloud conversation before the server confirms the delete.
 - Claiming auto-title, branch UI, or store-level archive as shipped — they are 🔭/🟡 until wired.
-- Hardcoding or inventing a model id instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model id instead of reading `packages/contracts/types/src/models.json`.
 - Referencing Supabase, or any removed tier (Plus / pro_plus / Hobby) in lifecycle copy.
 - Making Mobile the first heavy local PDF/DOCX export engine instead of delegating large jobs.

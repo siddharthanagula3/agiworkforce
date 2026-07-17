@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/cli.md`, `docs/cli/COMMAND_SURFACE.md`, and real repo paths: `apps/cli/src/agent/mod.rs`, `apps/cli/Cargo.toml`, `crates/agiworkforce-app-server/src/lib.rs`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/cli.md`, `docs/cli/COMMAND_SURFACE.md`, and real repo paths: `apps/cli/src/agent/mod.rs`, `apps/cli/Cargo.toml`, `crates/agiworkforce-app-server/src/lib.rs`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -37,7 +37,7 @@ Give developers a fast, scriptable, provider-agnostic coding agent that runs Loc
 ## User stories
 
 - Stay Local; picking a cloud model makes the session **refuse** until I explicitly fork to BYOK. ✅ Built (`local_privacy_blocks_cloud_provider_until_explicit_byok` test, `apps/cli/src/agent/mod.rs`).
-- Run `agi login`, choose a provider from `packages/types/src/models.json`, see the provider label every turn. 🟡 Partial (auth + catalog exist; label UX per `apps/cli/src/tui/`).
+- Run `agi login`, choose a provider from `packages/contracts/types/src/models.json`, see the provider label every turn. 🟡 Partial (auth + catalog exist; label UX per `apps/cli/src/tui/`).
 - Run `agi exec` with JSON output and parse `MessageDelta` events. ✅ Built (`json_events`, `apps/cli/src/agent/mod.rs`).
 - Steer a running local `agi` session from my phone via QR pairing. 🔭 Planned.
 
@@ -50,7 +50,7 @@ Give developers a fast, scriptable, provider-agnostic coding agent that runs Loc
 
 ## Business goals
 
-Drive the freemium wedge: free **Local + BYOK** (access modes, not plans) convert developers into paid **Managed Cloud**. Subscription ladder (founder decision 2026-06-30): **Free $0**, **Basic $8/mo (₹399)**, **Pro $20/mo**, **Max $100/mo and $200/mo**, **Enterprise custom**. Local + BYOK stay free; no credit top-ups. 🟡 Partial (`packages/types/src/billing-catalog.ts` still encodes older tiers — reconciliation is a separate tracked task).
+Drive the freemium wedge: free **Local + BYOK** (access modes, not plans) convert developers into paid **Managed Cloud**. Subscription ladder (founder decision 2026-06-30): **Free $0**, **Basic $8/mo (₹399)**, **Pro $20/mo**, **Max $100/mo and $200/mo**, **Enterprise custom**. Local + BYOK stay free; no credit top-ups. 🟡 Partial (`packages/contracts/types/src/billing-catalog.ts` still encodes older tiers — reconciliation is a separate tracked task).
 
 ## Competitive analysis — vs Claude Code CLI and Codex CLI
 
@@ -62,7 +62,7 @@ AGI's edge is **multi-provider + per-surface trust + local-first**, not frontier
 
 - Local is the default and is never silently escaped. ✅ Built.
 - Every provider hop is labeled and consented. ✅ Built.
-- Model IDs come only from `packages/types/src/models.json` — never hardcoded. 🟡 Partial (ghost/hardcoded IDs flagged in `docs/surfaces/cli.md` as fixes).
+- Model IDs come only from `packages/contracts/types/src/models.json` — never hardcoded. 🟡 Partial (ghost/hardcoded IDs flagged in `docs/surfaces/cli.md` as fixes).
 - Examples use the `agi` binary; `agiworkforce` is a compatibility alias only. ✅ Built (`apps/cli/Cargo.toml` `default-run = "agi"`).
 
 ## CLI architecture — Rust + Ratatui
@@ -79,7 +79,7 @@ The CLI **consumes** internal AGI Runtime crates rather than reimplementing them
 - **BYOK:** user-supplied keys, direct to provider; Local→BYOK is an explicit fork (context selection, secret scan, payload preview, provider label, consent). ✅ Built (handoff arming/consume in `apps/cli/src/agent/mod.rs`).
 - **Managed Cloud:** AGI-hosted access via `agi cloud`; public alpha, open for signed-in users. 🟡 Partial (`apps/cli/src/cloud.rs` per `docs/surfaces/cli.md`).
 
-Provider capabilities and IDs are read from `packages/types/src/models.json`; the CLI never invents an ID.
+Provider capabilities and IDs are read from `packages/contracts/types/src/models.json`; the CLI never invents an ID.
 
 ## Constraints
 
@@ -90,7 +90,7 @@ Provider capabilities and IDs are read from `packages/types/src/models.json`; th
 ## Assumptions
 
 - Users install via Homebrew/npm/curl/Cargo and run on macOS/Linux primarily. 🟡 Partial.
-- `packages/types/src/models.json` stays the single source of model IDs. ✅ Built.
+- `packages/contracts/types/src/models.json` stays the single source of model IDs. ✅ Built.
 - Clerk + Neon + Stripe back auth/data/billing (never Supabase). ✅ Built (canon).
 
 ## Risks
@@ -107,7 +107,7 @@ Provider capabilities and IDs are read from `packages/types/src/models.json`; th
 - `apps/cli/src/{tui/,mcp/,hooks.rs,models/,cloud.rs,sandbox.rs}` — TUI, MCP, hooks, providers (`models/mod.rs`), cloud, sandbox.
 - `apps/cli/Cargo.toml` — binaries (`agi`, `agiworkforce` alias), crate deps.
 - `crates/agiworkforce-{app-server,protocol,command-registry,execpolicy,sandbox-policy,utils-image}`.
-- `packages/types/src/models.json` — model/provider SSOT.
+- `packages/contracts/types/src/models.json` — model/provider SSOT.
 
 ## Competitor notes
 
@@ -129,7 +129,7 @@ Production-ready when trust boundaries are provably enforced, providers resolve 
 
 **Security**
 
-- [ ] No hardcoded/ghost model IDs; all IDs sourced from `packages/types/src/models.json`.
+- [ ] No hardcoded/ghost model IDs; all IDs sourced from `packages/contracts/types/src/models.json`.
 - [ ] Sandbox posture stated; no silent fallthrough on unsupported platforms.
 
 ## Anti-patterns

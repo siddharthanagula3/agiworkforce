@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/extension/AGENTS.md`, and repo paths cited inline below (manifest, computer-use, content, native-bridge, background, memory-bridge). Model IDs via `packages/types/src/models.json` only.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/extension/AGENTS.md`, and repo paths cited inline below (manifest, computer-use, content, native-bridge, background, memory-bridge). Model IDs via `packages/contracts/types/src/models.json` only.
 
 ## Overview & stance
 
@@ -85,7 +85,7 @@ Automation MUST scale predictably across tabs.
 
 - `apps/extension/manifest.json` — MV3 manifest, permissions, content-script timing, min Chrome version.
 - `apps/extension/src/features/computer-use/{agentLoop,cdpDriver,cloudAgentClient,escalationEngine}.ts` — loop caps, CDP attach lifecycle, gateway egress.
-- `apps/extension/src/features/content/{page-metadata,browserTool,nlweb,webmcp}.ts` — DOM/metadata parsing bounds.
+- `apps/extension/src/{page-metadata,nlweb,webmcp}.ts` (top-level, not `features/content/` — that path held a duplicate fork deleted 2026-07-03 for missing security fixes), `apps/extension/src/features/content/browserTool.ts` — DOM/metadata parsing bounds.
 - `apps/extension/src/features/native-bridge/providerStreamClient.ts` — SSE streaming parser.
 - `apps/extension/src/features/background/{conversation-history,tasks}.ts` — history caps, alarm scheduling.
 - `apps/extension/src/background/memory-bridge.ts` — device-scoped memory caps.
@@ -93,7 +93,7 @@ Automation MUST scale predictably across tabs.
 
 ## Competitor notes
 
-Claude for Chrome and ChatGPT's browser agents run inference server-side and stream results; Codex remote connections steer a host from a paired client. AGI diverges: (1) **no in-extension inference or provider keys** — all compute leaves via the gateway (`cloudAgentClient.ts`), so the browser only captures, acts, and renders; (2) **per-surface trust** — task-scoped with `chrome.storage.local`-only history/memory (never synced), unlike globally-synced consumer assistants; (3) **local-first host** — heavy sessions can bridge to Desktop over native messaging (`com.agiworkforce.browser`) / localhost 8787. Model selection and gating come from `packages/types/src/models.json` and server-side entitlements, not hardcoded catalogs.
+Claude for Chrome and ChatGPT's browser agents run inference server-side and stream results; Codex remote connections steer a host from a paired client. AGI diverges: (1) **no in-extension inference or provider keys** — all compute leaves via the gateway (`cloudAgentClient.ts`), so the browser only captures, acts, and renders; (2) **per-surface trust** — task-scoped with `chrome.storage.local`-only history/memory (never synced), unlike globally-synced consumer assistants; (3) **local-first host** — heavy sessions can bridge to Desktop over native messaging (`com.agiworkforce.browser`) / localhost 8787. Model selection and gating come from `packages/contracts/types/src/models.json` and server-side entitlements, not hardcoded catalogs.
 
 ## Acceptance / Definition of Done
 
@@ -109,6 +109,6 @@ Production-ready when startup is lazy, the worker survives eviction, all reads a
 - Do NOT rely on `setInterval` for recurring tasks — use `chrome.alarms` (MV3 evicts the worker).
 - Do NOT leave the CDP debugger attached between actions or across idle tabs.
 - Do NOT raise history/memory caps without incremental storage; do NOT sync history or memory to Neon or any cloud table.
-- Do NOT hardcode or invent model IDs — read `packages/types/src/models.json`.
+- Do NOT hardcode or invent model IDs — read `packages/contracts/types/src/models.json`.
 - Do NOT reintroduce removed tiers (`Plus`, `pro_plus`, `Hobby`) or credit top-ups; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise (Pro/Max INR TBD).
 - Do NOT reference Supabase; the stack is Clerk + Neon + Stripe. Do NOT rename `proxy.ts` to `middleware.ts`.

@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/mobile/AGENTS.md` (active surface). Grounded in `apps/cli/src/safety/approval.rs`, `apps/cli/src/safety/dangerous_commands.rs`, `apps/cli/src/init.rs`, `crates/agiworkforce-command-registry/src/lib.rs`, `crates/agiworkforce-apply-patch/src/{lib,parser}.rs`, `crates/agiworkforce-protocol/src/prompts/base_instructions/default.md`, `crates/agiworkforce-task-runtime/src/lib.rs`, `packages/runtime/src/registry.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/mobile/AGENTS.md` (active surface). Grounded in `apps/cli/src/safety/approval.rs`, `apps/cli/src/safety/dangerous_commands.rs`, `apps/cli/src/init.rs`, `crates/agiworkforce-command-registry/src/lib.rs`, `crates/agiworkforce-apply-patch/src/{lib,parser}.rs`, `crates/agiworkforce-protocol/src/prompts/base_instructions/default.md`, `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`, `packages/client/client-runtime/src/registry.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 The Git Engine is the internal capability that lets an agent read, reason about, and (with approval) mutate a Git working tree. It is not a surface and not a daemon; it is shared runtime plumbing that the **workspace-scoped** surfaces compile in. A Git repository is a filesystem artifact, so this engine exists **only** where there is a local workspace: **Desktop, CLI, and VS Code**. Web and Mobile have no repository, no shell, and no Git Engine — they never receive git output and never issue git commands.
 
-Trust framing is strict. Every git _operation_ (read or write) runs as a local shell command on the host — a `LocalShell` task under **Local** trust (`crates/agiworkforce-task-runtime/src/lib.rs`); compute and repository contents stay on-device and are never silently routed to BYOK or Cloud. The only step that reaches a model is _inference over_ git artifacts (summarizing a diff, drafting a commit message, analyzing a PR). That inference inherits the surface's allowed modes — **BYOK** on Desktop/CLI/VS Code via an explicit Local→BYOK fork (context selection, secret scan, payload preview, visible provider label, consent), or **Managed Cloud** for signed-in users — and reads model IDs only from `packages/types/src/models.json`. Remote control adds no mode: a paired phone/web window may _approve_ a commit or branch action, but the git command executes on the host, outbound-only and approval-gated. Mutating git actions are approval-gated by the safety classifier; the destructive ones are hard-flagged.
+Trust framing is strict. Every git _operation_ (read or write) runs as a local shell command on the host — a `LocalShell` task under **Local** trust (`crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`); compute and repository contents stay on-device and are never silently routed to BYOK or Cloud. The only step that reaches a model is _inference over_ git artifacts (summarizing a diff, drafting a commit message, analyzing a PR). That inference inherits the surface's allowed modes — **BYOK** on Desktop/CLI/VS Code via an explicit Local→BYOK fork (context selection, secret scan, payload preview, visible provider label, consent), or **Managed Cloud** for signed-in users — and reads model IDs only from `packages/contracts/types/src/models.json`. Remote control adds no mode: a paired phone/web window may _approve_ a commit or branch action, but the git command executes on the host, outbound-only and approval-gated. Mutating git actions are approval-gated by the safety classifier; the destructive ones are hard-flagged.
 
 ## Repository Detection
 
@@ -34,7 +34,7 @@ Requirement: help the user integrate branches and resolve conflicts without ever
 
 ## PR Analysis
 
-Requirement: inspect and reason about pull requests, and (later) draft them. Inspection entry points are ✅ Built: `/pr-comments` "Inspect pull request review comments" and `/install-github-app` "Install or connect the GitHub app" are registered commands (`crates/agiworkforce-command-registry/src/lib.rs`), and `/review` provides change review. There is a declared `git_` tool tier gated `desktop-only` under feature group `Git` (🟡 `packages/runtime/src/registry.ts` — a capability gate, not an engine). PR _summarization_, review-comment triage, and PR/description _generation_ are 🔭 Planned inference steps. Any handoff of PR context into app chat must be explicit and redacted — never automatic (canon: CLI/VS Code/Chrome stay workspace/task-scoped).
+Requirement: inspect and reason about pull requests, and (later) draft them. Inspection entry points are ✅ Built: `/pr-comments` "Inspect pull request review comments" and `/install-github-app` "Install or connect the GitHub app" are registered commands (`crates/agiworkforce-command-registry/src/lib.rs`), and `/review` provides change review. There is a declared `git_` tool tier gated `desktop-only` under feature group `Git` (🟡 `packages/client/client-runtime/src/registry.ts` — a capability gate, not an engine). PR _summarization_, review-comment triage, and PR/description _generation_ are 🔭 Planned inference steps. Any handoff of PR context into app chat must be explicit and redacted — never automatic (canon: CLI/VS Code/Chrome stay workspace/task-scoped).
 
 ## Repository map
 
@@ -44,12 +44,12 @@ Requirement: inspect and reason about pull requests, and (later) draft them. Ins
 - `crates/agiworkforce-command-registry/src/lib.rs` — `/diff`, `/review`, `/pr-comments`, `/install-github-app`.
 - `crates/agiworkforce-apply-patch/src/{lib,parser}.rs` — unified-diff parse/apply.
 - `crates/agiworkforce-protocol/src/prompts/base_instructions/default.md` — commit/branch guardrail.
-- `crates/agiworkforce-task-runtime/src/lib.rs` — `LocalShell` execution host.
-- `packages/runtime/src/registry.ts` — `git_` desktop-only capability tier.
+- `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `LocalShell` execution host.
+- `packages/client/client-runtime/src/registry.ts` — `git_` desktop-only capability tier.
 
 ## Competitor notes
 
-Claude Code, ChatGPT/Codex, and Codex CLI all bundle single-provider git helpers (auto commit messages, PR summaries, conflict help) tied to one vendor model and one cloud identity. AGI diverges deliberately: git operations are **local-first** and workspace-scoped, the inference that reasons over diffs is **multi-provider** (model IDs from `packages/types/src/models.json`) and runs under **BYOK where allowed** (Desktop/CLI/VS Code) or Managed Cloud, and **per-surface trust** removes the engine entirely on Web/Mobile. Destructive git actions are classifier-gated rather than silently executed. Managed-Cloud usage of the generation features is metered against the plan ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise); Local and BYOK are free access modes, no top-ups.
+Claude Code, ChatGPT/Codex, and Codex CLI all bundle single-provider git helpers (auto commit messages, PR summaries, conflict help) tied to one vendor model and one cloud identity. AGI diverges deliberately: git operations are **local-first** and workspace-scoped, the inference that reasons over diffs is **multi-provider** (model IDs from `packages/contracts/types/src/models.json`) and runs under **BYOK where allowed** (Desktop/CLI/VS Code) or Managed Cloud, and **per-surface trust** removes the engine entirely on Web/Mobile. Destructive git actions are classifier-gated rather than silently executed. Managed-Cloud usage of the generation features is metered against the plan ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise); Local and BYOK are free access modes, no top-ups.
 
 ## Acceptance / Definition of Done
 
@@ -64,7 +64,7 @@ The Git Engine is production-ready when repository state is detected determinist
 - Do not expose any Git Engine surface on Web or Mobile (no local repo; no shell).
 - Do not auto-commit, auto-branch, or auto-push without an explicit request and approval — the base-instruction guardrail is binding.
 - Do not send a diff or PR body to a model without a secret scan, payload preview, and visible provider label; never silently route Local repo data to BYOK/Cloud.
-- Do not hardcode or invent a model ID for commit/PR generation — read `packages/types/src/models.json`.
+- Do not hardcode or invent a model ID for commit/PR generation — read `packages/contracts/types/src/models.json`.
 - Do not downgrade `push --force`, `reset --hard`, or `git -c` classifications, or bypass the approval gate.
 - Do not claim merge assistance, PR generation, or a repo detector as shipped — they are 🔭.
 - Do not reference removed tiers (Plus, pro_plus, Hobby), invent INR prices, add credit top-ups, or reference Supabase; auth/DB/billing is Clerk + Neon + Stripe.

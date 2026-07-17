@@ -22,7 +22,7 @@ Cloud/Local stance is the whole point of this volume. **Local outputs stay local
 ## Repository map / authority docs
 
 - Per-surface output paths: `docs/strategy/12`/`13`/`14` (each surface's plan declares output, scratch, cache, and model-download locations).
-- Manifest/contract shape: `packages/types` (artifact + attachment manifest contracts — Vol 38).
+- Manifest/contract shape: `packages/contracts/types` (artifact + attachment manifest contracts — Vol 38).
 - Storage backends: Cloud blob/object + CDN (Vol 25); Local filesystem/cache/temp per OS; secrets never go in output paths (Vol 25/30).
 - Desktop local generated files: under the app's OS data dir, not the repo (`strategy/14`). Mobile: app sandbox (Documents/Caches) per `strategy/13`. Web: Neon-backed object storage with manifests, no client-tree writes.
 - This session's own working outputs live under the session scratch/outputs dir — not in the repo source (mirrors the same rule).

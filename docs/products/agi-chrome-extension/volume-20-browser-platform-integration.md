@@ -64,7 +64,7 @@ Primary and only fully verified target. ✅ Built — `apps/extension/manifest.j
 
 ## Competitor notes
 
-Claude for Chrome and ChatGPT's browser features ship Chrome-first on a single first-party model; OpenAI Codex remote connections pair a phone to a host. AGI's deliberate divergence: (1) **per-surface trust** — Chrome is task-scoped, never syncs consumer chat/memory, and excludes BYOK; (2) **no in-extension inference or keys** — chat streams via the gateway, so browser support never leaks credentials into a fork; (3) **local-first bridge** — native messaging + loopback pairing keep compute on the Desktop host across whichever Chromium browser runs; (4) **multi-provider** upstream (model IDs from `packages/types/src/models.json`, model-by-plan gating). We support the Chromium family by packaging + host paths, not by cloning a per-browser build.
+Claude for Chrome and ChatGPT's browser features ship Chrome-first on a single first-party model; OpenAI Codex remote connections pair a phone to a host. AGI's deliberate divergence: (1) **per-surface trust** — Chrome is task-scoped, never syncs consumer chat/memory, and excludes BYOK; (2) **no in-extension inference or keys** — chat streams via the gateway, so browser support never leaks credentials into a fork; (3) **local-first bridge** — native messaging + loopback pairing keep compute on the Desktop host across whichever Chromium browser runs; (4) **multi-provider** upstream (model IDs from `packages/contracts/types/src/models.json`, model-by-plan gating). We support the Chromium family by packaging + host paths, not by cloning a per-browser build.
 
 ## Acceptance / Definition of Done
 
@@ -81,4 +81,4 @@ A browser is "supported" only when: the extension installs, pairing + site appro
 - Routing chat through any provider host directly from a fork — egress must stay on the gateway allowlist; the extension holds no keys.
 - Enabling BYOK or consumer chat/memory sync on any browser (violates the Chrome trust boundary).
 - Suppressing the CDP debug banner or leaving the debugger attached after a task.
-- Hardcoding model IDs (use `packages/types/src/models.json`), referencing Supabase (fully migrated; use Clerk + Neon + Stripe), or surfacing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups in any browser build. Never invent INR prices beyond Basic ₹399.
+- Hardcoding model IDs (use `packages/contracts/types/src/models.json`), referencing Supabase (fully migrated; use Clerk + Neon + Stripe), or surfacing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups in any browser build. Never invent INR prices beyond Basic ₹399.

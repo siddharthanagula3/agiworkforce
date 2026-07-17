@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`; grounded in `apps/mobile/services/performanceMonitor.ts`, `apps/mobile/services/streaming.ts`, `apps/mobile/services/modelDownload.ts`, `apps/mobile/services/offlineQueue.ts`, `apps/mobile/src/features/chat/components/MessageList.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/lib/constants.ts`, `apps/mobile/lib/egressGuard.ts`, `apps/mobile/app.config.js`, `packages/local-llm/src/capabilities.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`; grounded in `apps/mobile/services/performanceMonitor.ts`, `apps/mobile/services/streaming.ts`, `apps/mobile/services/modelDownload.ts`, `apps/mobile/services/offlineQueue.ts`, `apps/mobile/src/features/chat/components/MessageList.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/lib/constants.ts`, `apps/mobile/lib/egressGuard.ts`, `apps/mobile/app.config.js`, `packages/platform/local-llm/src/capabilities.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -28,7 +28,7 @@ Warm start = resume from background to interactive. The token cache (Clerk Secur
 
 ## Memory usage
 
-Memory is the hard ceiling for Local mode. Tier selection is RAM-gated: `packages/local-llm/src/capabilities.ts` requires `TIER2_MIN_RAM_MB = 3500` for the ExecuTorch tier, falls back to the universal llama.rn tier otherwise, and uses platform foundation models / AICore when available. Lists recycle: `MessageList.tsx` uses FlashList v2 (`@shopify/flash-list`) with a stable `keyExtractor`, so long conversations do not retain off-screen views. Telemetry is capped — `MAX_EVENTS = 500`, `MAX_BENCHMARKS = 50` in `performanceMonitor.ts`.
+Memory is the hard ceiling for Local mode. Tier selection is RAM-gated: `packages/platform/local-llm/src/capabilities.ts` requires `TIER2_MIN_RAM_MB = 3500` for the ExecuTorch tier, falls back to the universal llama.rn tier otherwise, and uses platform foundation models / AICore when available. Lists recycle: `MessageList.tsx` uses FlashList v2 (`@shopify/flash-list`) with a stable `keyExtractor`, so long conversations do not retain off-screen views. Telemetry is capped — `MAX_EVENTS = 500`, `MAX_BENCHMARKS = 50` in `performanceMonitor.ts`.
 
 ✅ Built — RAM-tiered model selection (`capabilities.ts`) and recycled message list (`MessageList.tsx`).
 🟡 Partial — `PerfEvent.peakMemoryMB` exists as a field but is recorded as `0`/heuristic until a native module surfaces RSS (`performanceMonitor.ts`). Requirement: a low-RAM device must refuse to load a model that exceeds headroom rather than OOM; image gen stays cloud-backed so the phone never holds large image buffers locally.
@@ -70,8 +70,8 @@ Cloud replies render token-by-token via `expo/fetch`'s real `ReadableStream` (`g
 - `apps/mobile/src/features/chat/components/MessageList.tsx` — FlashList transcript (recycling, scroll restoration).
 - `apps/mobile/lib/egressGuard.ts` — fail-closed egress chokepoint over TLS-pinned `secureFetch`.
 - `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/lib/constants.ts`, `apps/mobile/app.config.js` — flags, timeouts, New-Arch/updates config.
-- `packages/local-llm/src/capabilities.ts` (+ `tier1/2/3.ts`, `selector.ts`) — RAM/thermal-tiered on-device runtime selection.
-- `packages/types/src/models.json` — model metadata SSOT (never hardcode IDs).
+- `packages/platform/local-llm/src/capabilities.ts` (+ `tier1/2/3.ts`, `selector.ts`) — RAM/thermal-tiered on-device runtime selection.
+- `packages/contracts/types/src/models.json` — model metadata SSOT (never hardcode IDs).
 
 ## Competitor notes
 
@@ -92,5 +92,5 @@ Production-ready means start/resume, memory, battery, network, render, and strea
 - Loading on-device model weights on the cold-start path, or loading a model that exceeds device RAM headroom instead of refusing it.
 - Claiming a cold/warm/render/streaming budget without an instrumented, asserted measurement.
 - Reporting fake `peakMemoryMB` or a "connected"/"streaming" state that no longer reflects reality.
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`); referencing Supabase (removed — Clerk + Neon + Stripe only).
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`); referencing Supabase (removed — Clerk + Neon + Stripe only).
 - Inventing INR prices for Pro/Max, or reintroducing "Plus"/`pro_plus`/"Hobby" tiers.

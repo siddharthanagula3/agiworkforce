@@ -75,7 +75,7 @@ Production-ready when memory respects the trust boundary in every path, never bl
 
 - Adding a BYOK / API-key affordance anywhere in memory — mobile has none.
 - Auto-promoting Local memory into Cloud, or reading SQLite during a Cloud turn.
-- Hardcoding or inventing a model ID for embeddings/extraction (read `packages/types/src/models.json`; cite code for the on-device embedder).
+- Hardcoding or inventing a model ID for embeddings/extraction (read `packages/contracts/types/src/models.json`; cite code for the on-device embedder).
 - Claiming a category taxonomy ships — it does not; only `All`/`Pinned` are real today.
 - Hard-deleting a cloud fact before the server acks, or letting consolidation throw and break a chat turn.
 - Referencing Supabase — the stack is Clerk + Neon + Stripe.

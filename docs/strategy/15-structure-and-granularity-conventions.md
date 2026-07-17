@@ -26,7 +26,7 @@ You want AGI's surfaces to have the clean, deeply-modular structure of the best-
 
 This is the highest-leverage change and the one your codebase is furthest from. A tool is a folder containing its logic, prompt, UI, constants, and validators.
 
-**TS tools** (`packages/unified-chat`, web, desktop):
+**TS tools** (`packages/ui/unified-chat`, web, desktop):
 
 ```
 tools/<Name>Tool/

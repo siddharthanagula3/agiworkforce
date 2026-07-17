@@ -8,7 +8,7 @@ Authority: `AGENTS.md` (root), `docs/current/source-of-truth.md`, `docs/products
 
 ## Overview & stance
 
-This volume covers the AGI Web chat surface: composing a turn, streaming a response, and the per-message and per-conversation operations around it. AGI Web is **cloud-only**: no Local mode, no BYOK. Every chat is a **Managed Cloud** session, subscription-backed via Clerk identity + Neon account state; there is no free env-key chat. Because Web carries only one trust mode, the composer must **never** render a Local or BYOK affordance, a "fork to BYOK" control, or a provider-key input — those belong to Desktop/CLI/VS Code only. Cross-device continuity uses the Neon delta-sync APIs Web hosts (only Managed-Cloud rows sync). Models come only from `packages/types/src/models.json`; this volume introduces no model IDs.
+This volume covers the AGI Web chat surface: composing a turn, streaming a response, and the per-message and per-conversation operations around it. AGI Web is **cloud-only**: no Local mode, no BYOK. Every chat is a **Managed Cloud** session, subscription-backed via Clerk identity + Neon account state; there is no free env-key chat. Because Web carries only one trust mode, the composer must **never** render a Local or BYOK affordance, a "fork to BYOK" control, or a provider-key input — those belong to Desktop/CLI/VS Code only. Cross-device continuity uses the Neon delta-sync APIs Web hosts (only Managed-Cloud rows sync). Models come only from `packages/contracts/types/src/models.json`; this volume introduces no model IDs.
 
 ## Conversation Lifecycle
 

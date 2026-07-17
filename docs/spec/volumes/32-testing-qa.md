@@ -26,7 +26,7 @@ A feature is not done because it builds (Operating Law 4). It is done when the p
 - Web tests: co-located `*.test.ts(x)` (e.g., `apps/web/core/security/prompt-injection-detector.test.ts`, `apps/web/features/settings/services/totp-2fa.test.ts`); a11y `apps/web/scripts/a11y-audit.mjs`; perf `apps/web/scripts/perf-profile.js`.
 - Services tests: `services/api-gateway/__tests__/` (`middleware/auth.test.ts`, `lib/rlsTenantIsolation.test.ts`, `routes/{cloudChat,enterprise}.test.ts`, `providerStream.live.test.ts`); `services/signaling-server/__tests__/`.
 - Rust contract/unit: `crates/agiworkforce-execpolicy/`, `crates/agiworkforce-network-proxy/src/mitm_tests.rs`, `crates/agiworkforce-plugin-runtime/tests/manifest_matrix.rs`, `crates/agiworkforce-apply-patch/tests/`.
-- Trust contracts under test: `packages/types/src/suite-contracts.ts`; `packages/types/vitest.config.ts`.
+- Trust contracts under test: `packages/contracts/types/src/suite-contracts.ts`; `packages/contracts/types/vitest.config.ts`.
 
 ## Competitor notes (`docs/strategy/01`, `02`)
 

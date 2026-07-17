@@ -7,7 +7,7 @@ Last verified against implementation: 2026-06-25
 Audience: Every human and AI agent; the authoritative source for all AGI terminology
 Layer: docs/00-foundation
 Document ID: AGI-DOC-0004
-Related: [architecture-manifest.md](architecture-manifest.md), [requirement-id-system.md](requirement-id-system.md), `packages/types/src/suite-contracts.ts`, `docs/current/trust-mode-surface-matrix.md`
+Related: [architecture-manifest.md](architecture-manifest.md), [requirement-id-system.md](requirement-id-system.md), `packages/contracts/types/src/suite-contracts.ts`, `docs/current/trust-mode-surface-matrix.md`
 
 ---
 
@@ -22,7 +22,7 @@ This is the single authoritative definition of every load-bearing AGI term. Othe
 
 ## Surfaces (the six first-class clients + sandbox)
 
-The canonical `SourceSurface` set is `'web' | 'desktop' | 'mobile' | 'cli' | 'vscode' | 'chrome'` (`packages/types/src/suite-contracts.ts`).
+The canonical `SourceSurface` set is `'web' | 'desktop' | 'mobile' | 'cli' | 'vscode' | 'chrome'` (`packages/contracts/types/src/suite-contracts.ts`).
 
 - **AGI Web** — Next.js 16 surface (`apps/web`): account, synced chat, projects, artifacts, billing/waitlist, admin, OpenAI-compatible API. Cloud-only.
 - **AGI Desktop** — Tauri 2 surface (`apps/desktop`): local-private compute host and native bridge; the deepest surface.
@@ -34,7 +34,7 @@ The canonical `SourceSurface` set is `'web' | 'desktop' | 'mobile' | 'cli' | 'vs
 
 ## Trust modes (the core product axis)
 
-The canonical machine vocabulary lives in `packages/types/src/suite-contracts.ts`.
+The canonical machine vocabulary lives in `packages/contracts/types/src/suite-contracts.ts`.
 
 - **Local Mode** — `PrivacyMode = 'local'`. Runs on the local device/host; data never leaves the device; fails closed. Free; no account required. Requirement: `AGI-TRUST-0001`.
 - **BYOK** (Bring Your Own Key) — `PrivacyMode = 'byok'`; `ProviderMode = 'DirectByok'`. Requests go **directly to the user's provider**, never through AGI cloud; provider is labeled. Available only on Desktop/CLI/VS Code. Requirement: `AGI-TRUST-0002`, `AGI-TRUST-0004`.
@@ -58,28 +58,28 @@ The canonical machine vocabulary lives in `packages/types/src/suite-contracts.ts
 
 ## AI runtime primitives
 
-- **Model catalog (SSOT)** — `packages/types/src/models.json`: the single source of truth for model IDs and capability metadata (57 model entries / 15 populated providers as of 2026-06-23). Model IDs are never hardcoded elsewhere. Requirement: `AGI-AI-0001`.
+- **Model catalog (SSOT)** — `packages/contracts/types/src/models.json`: the single source of truth for model IDs and capability metadata (57 model entries / 15 populated providers as of 2026-06-23). Model IDs are never hardcoded elsewhere. Requirement: `AGI-AI-0001`.
 - **Route object** — `provider + endpoint class + model id + capability metadata + pricing + privacy/retention claim + runtime health`; a model name alone is insufficient. Source: `docs/current/byok-open-model-provider-strategy.md`.
-- **Provider adapter** — An AGI-owned adapter wrapping a provider SDK/endpoint into the canonical request/stream contract. "SDKs are adapters, not architecture." Source: `packages/providers/*`, `CURRENT_DECISIONS.md` #7. Requirement: `AGI-ARCH-0001`.
-- **`llm-normalize`** — The canonical cross-provider normalization contract. Source: `packages/llm-normalize`, `CURRENT_DECISIONS.md` #12.
-- **Suite spine** — `packages/unified-chat`: the shared chat engine/state/UI that every surface composes via an injected runtime. Source: `docs/decisions/2026-05-21-unified-chat-as-suite-spine.md`.
-- **Auto-routing** — Explainable task→model selection (`packages/routing`); silent model substitution is rejected. Requirement: `AGI-AI-0002`.
+- **Provider adapter** — An AGI-owned adapter wrapping a provider SDK/endpoint into the canonical request/stream contract. "SDKs are adapters, not architecture." Source: `packages/ai/providers/*`, `CURRENT_DECISIONS.md` #7. Requirement: `AGI-ARCH-0001`.
+- **`provider-protocol`** — The canonical cross-provider normalization contract. Source: `packages/ai/provider-protocol`, `CURRENT_DECISIONS.md` #12.
+- **Suite spine** — `packages/ui/unified-chat`: the shared chat engine/state/UI that every surface composes via an injected runtime. Source: `docs/decisions/2026-05-21-unified-chat-as-suite-spine.md`.
+- **Auto-routing** — Explainable task→model selection (`packages/ai/routing`); silent model substitution is rejected. Requirement: `AGI-AI-0002`.
 
 ## Work primitives
 
 - **One chat** — A single conversation that also handles files, references, images, artifacts, tools, and connectors; file work is a _state_ of a conversation, not a separate surface. Requirement: `AGI-PROD-0001`.
 - **Artifact** — A first-class generated output (html/react/svg/mermaid/markdown/code) rendered in the isolated sandbox; versioned and shareable.
-- **Generated file / Compute session** — A produced native file (`GeneratedFile`) with a manifest (owner, source session, privacy mode, checksum, storage, TTL); produced inside a `ComputeSession`. Source: `packages/types`, `PLAN.md` §4A.
+- **Generated file / Compute session** — A produced native file (`GeneratedFile`) with a manifest (owner, source session, privacy mode, checksum, storage, TTL); produced inside a `ComputeSession`. Source: `packages/contracts/types`, `PLAN.md` §4A.
 - **Project** — A grouping of instructions, knowledge files, sources, memory, and provider defaults. Source: `apps/web/db/neon/0006`, `0035`.
 - **Memory** — Saved/reference/project memory; dual-stack (local SQLite FTS5+vector; cloud Neon `user_memories`). Source: `apps/desktop/src-tauri/.../memory_manager.rs`, `0010`/`0040`.
-- **Connector / MCP server** — An external capability integration via Model Context Protocol; allowlist-gated. Source: `packages/mcp`.
-- **Skill / Plugin / Subagent** — Prompt-context skill loaders, manifest-discovered plugins, and tool-scoped delegated agents. Source: `packages/skills`, `crates/agiworkforce-plugin-runtime`, CLI subagents.
+- **Connector / MCP server** — An external capability integration via Model Context Protocol; allowlist-gated. Source: `packages/tools/mcp`.
+- **Skill / Plugin / Subagent** — Prompt-context skill loaders, manifest-discovered plugins, and tool-scoped delegated agents. Source: `packages/tools/skills`, `crates/agiworkforce-plugin-runtime`, CLI subagents.
 - **Dispatch / Cowork / Scheduled** — Cross-surface task handoff, collaborative task surfaces, and scheduled/automation runs. Source: desktop AgiWork panels.
-- **Computer use / Browser use** — Screenshot/action loop over a desktop or browser session, behind an AGI-owned action protocol. Source: `packages/browser-tool`, `apps/extension` CDP driver.
+- **Computer use / Browser use** — Screenshot/action loop over a desktop or browser session, behind an AGI-owned action protocol. Source: `packages/tools/browser-tool`, `apps/extension` CDP driver.
 
 ## Commercial
 
-- **Billing plan tier** — Canonical set `'local-only' | 'byok' | 'free' | 'pro' | 'max' | 'team' | 'enterprise'` (`packages/types/src/billing-catalog.ts`). Note: a separate desktop UI list adds `hobby`/`pro_plus`; this divergence is tracked in [documentation-status-inventory.md](documentation-status-inventory.md).
+- **Billing plan tier** — Canonical set `'local-only' | 'byok' | 'free' | 'pro' | 'max' | 'team' | 'enterprise'` (`packages/contracts/types/src/billing-catalog.ts`). Note: a separate desktop UI list adds `hobby`/`pro_plus`; this divergence is tracked in [documentation-status-inventory.md](documentation-status-inventory.md).
 - **Managed credits / waitlist** — Metered cloud usage and its access flow. Managed cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta/waitlist launch gate has been removed, and the `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains only as an incident-response kill-switch. Commercial controls (metering/fraud/refund/retention/deletion) must keep pace with public usage but no longer gate access. The waitlist UX persists only for genuinely unavailable hosted capacity. Requirement: `AGI-BILL-0001`.
 
 ## Documentation meta-terms

@@ -14,7 +14,7 @@ Scale-out must never dissolve the trust boundaries. The three modes are fixed: *
 
 ## Multi-agent orchestration 🔭
 
-Planned: a scheduler that fans one goal across sub-agents (planner / worker / reviewer) over the existing task-execution and command surfaces (`crates/agiworkforce-task-runtime/src/lib.rs`, `crates/agiworkforce-command-registry`), with tool/permission gating inherited from `crates/agiworkforce-protocol/src/{approvals.rs,permissions.rs,dynamic_tools.rs}`. Requirements: every sub-agent runs under **one** trust mode for its lifetime — a graph may not mix a Local worker with a Cloud worker in a silent DAG. Each sub-agent gets a `thread_id` (`crates/agiworkforce-protocol/src/thread_id.rs`) and surfaces approvals individually; a cross-mode edge must produce a visible fork prompt with provider label before it executes.
+Planned: a scheduler that fans one goal across sub-agents (planner / worker / reviewer) over the existing task-execution and command surfaces (`crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`, `crates/agiworkforce-command-registry`), with tool/permission gating inherited from `crates/agiworkforce-protocol/src/{approvals.rs,permissions.rs,dynamic_tools.rs}`. Requirements: every sub-agent runs under **one** trust mode for its lifetime — a graph may not mix a Local worker with a Cloud worker in a silent DAG. Each sub-agent gets a `thread_id` (`crates/agiworkforce-protocol/src/thread_id.rs`) and surfaces approvals individually; a cross-mode edge must produce a visible fork prompt with provider label before it executes.
 
 ## Distributed execution 🔭
 
@@ -30,7 +30,7 @@ Planned: pooling several hosts under one addressable runtime for parallel long-r
 
 ## Enterprise policy engine 🔭
 
-Planned: an org-scoped policy layer that constrains which modes, providers, tools, and destinations each seat may use, evaluated before every tool call. The seed exists in `services/api-gateway/src/routes/enterprise.ts` (`DEFAULT_ENTERPRISE_ADMIN_POLICY`, org-role checks, support cases carrying a `privacyLabel` enum `local_only|byok|managed|security_sensitive`) and in `crates/agiworkforce-protocol/src/permissions.rs`. Requirements: decisions are auditable; a policy may **tighten** but never silently loosen a boundary (it cannot force a Local session into Cloud); model gating reads IDs **only** from `packages/types/src/models.json`. Served by **Enterprise (custom)** — no consumer "Team" plan. Engine evaluation is 🔭; the admin/policy scaffold is 🟡.
+Planned: an org-scoped policy layer that constrains which modes, providers, tools, and destinations each seat may use, evaluated before every tool call. The seed exists in `services/api-gateway/src/routes/enterprise.ts` (`DEFAULT_ENTERPRISE_ADMIN_POLICY`, org-role checks, support cases carrying a `privacyLabel` enum `local_only|byok|managed|security_sensitive`) and in `crates/agiworkforce-protocol/src/permissions.rs`. Requirements: decisions are auditable; a policy may **tighten** but never silently loosen a boundary (it cannot force a Local session into Cloud); model gating reads IDs **only** from `packages/contracts/types/src/models.json`. Served by **Enterprise (custom)** — no consumer "Team" plan. Engine evaluation is 🔭; the admin/policy scaffold is 🟡.
 
 ## Federated runtimes 🔭
 
@@ -52,7 +52,7 @@ Planned: running the Runtime unattended (CI, servers, scheduled jobs) with no in
 
 - `crates/agiworkforce-{protocol,task-runtime,plugin-runtime,command-registry,app-server}` — protocol, task execution, plugins, commands, CLI-only stdio/WS host.
 - `crates/{agiworkforce-execpolicy,sandbox-policy,agiworkforce-network-proxy}` — exec/sandbox/network enforcement.
-- `packages/runtime/src` — shared TS runtime.
+- `packages/client/client-runtime/src` — shared TS runtime.
 - `apps/desktop/src-tauri/src/integrations/realtime/{websocket_server,presence,collaboration}.rs` — 127.0.0.1 host.
 - `apps/desktop/src-tauri/src/bin/native_messaging_host.rs` — Chrome `com.agiworkforce.browser` host + port-8787 bridge.
 - `services/signaling-server/src/index.ts` — WebRTC pairing/relay.
@@ -67,7 +67,7 @@ Claude Code Remote Control (research preview) and OpenAI Codex remote connection
 
 ## Acceptance / Definition of Done
 
-A capability is production-ready only when it is re-labeled from 🔭 with a real merged repo path; preserves the three trust modes end-to-end; makes every cross-mode transition an explicit consented fork (context selection, secret scan, payload preview, provider label); enforces policy and sandbox/network identically on every host; and reads model IDs only from `packages/types/src/models.json`.
+A capability is production-ready only when it is re-labeled from 🔭 with a real merged repo path; preserves the three trust modes end-to-end; makes every cross-mode transition an explicit consented fork (context selection, secret scan, payload preview, provider label); enforces policy and sandbox/network identically on every host; and reads model IDs only from `packages/contracts/types/src/models.json`.
 
 - [ ] **Build:** cited repo path; passes `pnpm check:boundaries`, `pnpm check:service-layer`, `pnpm check:llm-failures`.
 - [ ] **Trust:** no Local/BYOK row or session routes to Cloud without a logged, consented fork; remote/cluster/federation hops are approval-gated.
@@ -77,6 +77,6 @@ A capability is production-ready only when it is re-labeled from 🔭 with a rea
 
 - Claiming any Volume 39 item is shipped, or citing a path as ✅ when the feature is 🔭 (e.g. presenting `surface_heartbeats` reads as working presence).
 - Inventing a monolithic runtime daemon, treating remote workers / clusters as a fourth trust mode, or silently routing a Local/BYOK session into Cloud clustering, federation, or a shared workspace.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`; inventing routes, env vars, command names, or INR prices.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`; inventing routes, env vars, command names, or INR prices.
 - Reintroducing removed tiers ("Plus", `pro_plus`, "Hobby"), credit top-ups, or a consumer "Team" plan (use Enterprise).
 - Referencing Supabase, renaming Next.js `proxy.ts` back to `middleware.ts`, or using `agiworkforce <cmd>` instead of the `agi` binary.

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), grounded in real repo code: `apps/web/features/chat/v3/**`, `apps/web/features/chat/components/{GreetingBanner,dialogs/GlobalSearchDialog,messages,Sidebar}`, `apps/web/features/chat/{hooks,services}/**`, `apps/web/features/projects/**`, `apps/web/app/{projects,gallery,settings}/**`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/proxy.ts`, and model facts from `packages/types/src/models.json` (via `@agiworkforce/types`).
+Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), grounded in real repo code: `apps/web/features/chat/v3/**`, `apps/web/features/chat/components/{GreetingBanner,dialogs/GlobalSearchDialog,messages,Sidebar}`, `apps/web/features/chat/{hooks,services}/**`, `apps/web/features/projects/**`, `apps/web/app/{projects,gallery,settings}/**`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/proxy.ts`, and model facts from `packages/contracts/types/src/models.json` (via `@agiworkforce/types`).
 
 ## Overview & stance
 
@@ -32,7 +32,7 @@ Projects is a first-class Home destination for grouping conversations, sources, 
 
 ## New Chat
 
-The New chat action starts a fresh conversation from anywhere in Home. ✅ Built — `handleNewChat` in `WebShellV3.tsx` calls `hostBridge.createConversation('New Conversation')` (falling back to `runtime.createConversation`) then selects it; the label switches to "New session" only in code mode. A new conversation is a user-scoped Neon row in the Managed-Cloud boundary; the composer's model selector reads the catalog from `@agiworkforce/types` (backed by `packages/types/src/models.json`) — **never a hardcoded model ID**.
+The New chat action starts a fresh conversation from anywhere in Home. ✅ Built — `handleNewChat` in `WebShellV3.tsx` calls `hostBridge.createConversation('New Conversation')` (falling back to `runtime.createConversation`) then selects it; the label switches to "New session" only in code mode. A new conversation is a user-scoped Neon row in the Managed-Cloud boundary; the composer's model selector reads the catalog from `@agiworkforce/types` (backed by `packages/contracts/types/src/models.json`) — **never a hardcoded model ID**.
 
 ## Profile Menu
 
@@ -61,7 +61,7 @@ History, gallery, and chat views show skeletons rather than blank frames while d
 
 ## Competitor notes
 
-Claude, ChatGPT, and Codex all ship a left-rail Home with search, recents, projects, and an account menu. AGI Web's deliberate divergence: (1) **per-surface trust** — Home is Managed-Cloud-only with **no BYOK/Local** entry point, unlike Desktop/CLI/VS Code; (2) **multi-provider by catalog** — new chats read models from `packages/types/src/models.json`, not one vendor; (3) **local-first suite posture** — Home is fed by the Neon delta-sync Web hosts for Mobile/Desktop, and Local/BYOK data is structurally excluded, not optionally hidden. We match the table-stakes shell and win on trust clarity and provider neutrality.
+Claude, ChatGPT, and Codex all ship a left-rail Home with search, recents, projects, and an account menu. AGI Web's deliberate divergence: (1) **per-surface trust** — Home is Managed-Cloud-only with **no BYOK/Local** entry point, unlike Desktop/CLI/VS Code; (2) **multi-provider by catalog** — new chats read models from `packages/contracts/types/src/models.json`, not one vendor; (3) **local-first suite posture** — Home is fed by the Neon delta-sync Web hosts for Mobile/Desktop, and Local/BYOK data is structurally excluded, not optionally hidden. We match the table-stakes shell and win on trust clarity and provider neutrality.
 
 ## Acceptance / Definition of Done
 

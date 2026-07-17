@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `apps/desktop/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; grounded in `apps/desktop/src-tauri/src/core/llm/**`, `apps/desktop/src-tauri/src/core/embeddings/**`, `apps/desktop/src-tauri/src/core/research/**`, `apps/desktop/src-tauri/src/sys/commands/chat/**`, `apps/desktop/src/features/chat/LocalByokHandoffDialog.tsx`, and `packages/types/src/models.json` (model-ID SSOT).
+Authority: `AGENTS.md`; `apps/desktop/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; grounded in `apps/desktop/src-tauri/src/core/llm/**`, `apps/desktop/src-tauri/src/core/embeddings/**`, `apps/desktop/src-tauri/src/core/research/**`, `apps/desktop/src-tauri/src/sys/commands/chat/**`, `apps/desktop/src/features/chat/LocalByokHandoffDialog.tsx`, and `packages/contracts/types/src/models.json` (model-ID SSOT).
 
 ## Overview & stance
 
-This volume specifies the two AI backend pipelines that power AGI Desktop chat and agent work. Desktop is the full-trust surface — Local + BYOK + Managed Cloud, each selectable with a correct visible label — so the backend is split into two clearly separated pipelines that map to the trust boundaries. The **Cloud pipeline** covers Managed Cloud and BYOK (both remote provider calls; BYOK is direct with the user's key, Cloud goes through the AGI gateway); the **Local pipeline** covers on-device inference. A Local session is never silently routed to a remote provider: crossing Local→BYOK is an explicit fork (`LocalByokHandoffDialog.tsx`) with context selection, secret scan, payload preview, provider label, and consent. All LLM model IDs come only from `packages/types/src/models.json`; non-LLM engine IDs (Whisper, `nomic-embed-text`) are grounded in code and referenced, not re-listed.
+This volume specifies the two AI backend pipelines that power AGI Desktop chat and agent work. Desktop is the full-trust surface — Local + BYOK + Managed Cloud, each selectable with a correct visible label — so the backend is split into two clearly separated pipelines that map to the trust boundaries. The **Cloud pipeline** covers Managed Cloud and BYOK (both remote provider calls; BYOK is direct with the user's key, Cloud goes through the AGI gateway); the **Local pipeline** covers on-device inference. A Local session is never silently routed to a remote provider: crossing Local→BYOK is an explicit fork (`LocalByokHandoffDialog.tsx`) with context selection, secret scan, payload preview, provider label, and consent. All LLM model IDs come only from `packages/contracts/types/src/models.json`; non-LLM engine IDs (Whisper, `nomic-embed-text`) are grounded in code and referenced, not re-listed.
 
 ## Cloud Mode (Managed Cloud + BYOK)
 
@@ -98,7 +98,7 @@ Ollama chat plus feature-gated local Whisper STT and local TTS run with no netwo
 - `apps/desktop/src-tauri/src/sys/commands/chat/` — send_message, provider_access, stream_runtime, memory integration.
 - `apps/desktop/src-tauri/src/sys/security/secret_manager.rs` — BYOK key storage (machine-derived AES-256-GCM primary; OS keychain is the 🟡 target — Volume 19).
 - `apps/desktop/src/features/chat/LocalByokHandoffDialog.tsx` — Local→BYOK fork UI.
-- `packages/types/src/models.json` — model-ID and provider catalog (SSOT).
+- `packages/contracts/types/src/models.json` — model-ID and provider catalog (SSOT).
 
 ## Competitor notes
 
@@ -115,7 +115,7 @@ Backend is production-ready when both pipelines run with correct, visible trust 
 ## Anti-patterns
 
 - Silently routing a Local chat/file/session to BYOK or Managed Cloud, or skipping the fork's secret scan / payload preview / consent.
-- Hardcoding, inventing, or aliasing a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding, inventing, or aliasing a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Showing a stale or wrong provider/model label, or a fake availability badge.
 - Reintroducing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups in cost/billing paths; only Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise exist.
 - Referencing Supabase or renaming Next.js `proxy.ts` to `middleware.ts`.

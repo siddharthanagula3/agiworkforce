@@ -25,7 +25,7 @@ Priority tiers for sequencing (not effort estimates — see the production-timel
 
 ---
 
-## 1. Shared web+desktop UI (packages/unified-chat, packages/ui) — P1, the single biggest finding
+## 1. Shared web+desktop UI (packages/ui/unified-chat, packages/ui/ui) — P1, the single biggest finding
 
 **This is the most important section in the whole doc.** Every one of the 10 agents that touched chat/artifacts/reasoning UI independently converged on the same conclusion: `docs/products/agi-web/volume-05-ai-response-rendering.md`, `agi-desktop/volume-06-ai-response-rendering.md`, and `agi-mobile/volume-10-ai-response-rendering.md` all correctly **cite** the real components (`ArtifactBlock.tsx`, `ToolCallCard.tsx`, `ArtifactsPanel.tsx`, desktop's `ArtifactRenderer.tsx`/`MermaidArtifact.tsx`/`SvgArtifact.tsx`, mobile's `ArtifactFullScreen.tsx`) as built — but **none of the three volumes ever specifies what those components should render.** The code exists; the contract doesn't. Per the shared-packages mandate, this should be written **once**, in the shared-package spec, not three times.
 
@@ -65,7 +65,7 @@ Priority tiers for sequencing (not effort estimates — see the production-timel
 - Inline web-search pattern is two distinct UI moments, not one: a query-execution row (globe icon + literal query text + `N results`) during search, then citation chips/pills after the answer is written. Current spec only describes the latter. Source: 035, 096, 120, 381.
 - Deep-research side panel: a full timeline UI ("Research plan created" → "Gathered N sources" with a per-domain bar-chart breakdown → topic-clustered query groups each with a synthesized paragraph + source-count footer → "Done") is completely unspecced despite `ResearchPanel.tsx`/`research-panel-store.ts` being ✅ built per `volume-09-search.md`. This is a **tweak**, not a gap — the backend/store exists, only the UI contract is missing. Source: 096, 120.
 
-**Action:** write one new shared section — likely `packages/unified-chat`'s own spec doc, or a net-new `volume-05a-tool-call-and-reasoning-ui.md` referenced by all three product specs rather than repeated — covering 1.1–1.4. Mobile inherits the data model but renders its own RN views over it per the DOM-vs-RN reality already documented in memory.
+**Action:** write one new shared section — likely `packages/ui/unified-chat`'s own spec doc, or a net-new `volume-05a-tool-call-and-reasoning-ui.md` referenced by all three product specs rather than repeated — covering 1.1–1.4. Mobile inherits the data model but renders its own RN views over it per the DOM-vs-RN reality already documented in memory.
 
 ---
 

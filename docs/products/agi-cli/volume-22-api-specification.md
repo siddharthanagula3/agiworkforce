@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `docs/surfaces/cli.md`; and the real repo surfaces this volume grounds in — `crates/agiworkforce-app-server/src/lib.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/{auth.rs,auth_oauth.rs,oauth.rs,cloud.rs}`, `apps/cli/src/models/provider_dispatch.rs`, `apps/cli/src/lib.rs`, `apps/web/app/api/{llm,models,billing,usage,me,user,v1/providers,chat/sync}`, and the model-ID SSOT `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `docs/surfaces/cli.md`; and the real repo surfaces this volume grounds in — `crates/agiworkforce-app-server/src/lib.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/{auth.rs,auth_oauth.rs,oauth.rs,cloud.rs}`, `apps/cli/src/models/provider_dispatch.rs`, `apps/cli/src/lib.rs`, `apps/web/app/api/{llm,models,billing,usage,me,user,v1/providers,chat/sync}`, and the model-ID SSOT `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies the API contracts AGI CLI consumes and exposes: the hosted **AGI gateway** APIs (auth, models, chat, billing, usage, account), the **provider** wire formats it speaks (OpenAI-compatible, Anthropic, Google, xAI), and the **local runtime** endpoints it drives (Ollama, LM Studio, llama.cpp). AGI CLI is the pure-Rust (Ratatui) developer surface and carries all three trust modes — **Local + BYOK + Managed Cloud**. The trust boundary is load-bearing for every API call: `apps/cli/src/agent/mod.rs` (`PrivacyMode`, `validate_privacy_boundary`, `consume_byok_handoff`) is ✅ Built and **blocks a Local session from silently reaching any non-local provider**. BYOK is direct-to-provider with the user's own key; Managed Cloud routes through the AGI gateway. Sessions are workspace/session-scoped — there is **no automatic app-chat sync**; any handoff is explicit and redacted. Command examples use the `agi` binary only. Model IDs are never hardcoded; they come from `packages/types/src/models.json`.
+This volume specifies the API contracts AGI CLI consumes and exposes: the hosted **AGI gateway** APIs (auth, models, chat, billing, usage, account), the **provider** wire formats it speaks (OpenAI-compatible, Anthropic, Google, xAI), and the **local runtime** endpoints it drives (Ollama, LM Studio, llama.cpp). AGI CLI is the pure-Rust (Ratatui) developer surface and carries all three trust modes — **Local + BYOK + Managed Cloud**. The trust boundary is load-bearing for every API call: `apps/cli/src/agent/mod.rs` (`PrivacyMode`, `validate_privacy_boundary`, `consume_byok_handoff`) is ✅ Built and **blocks a Local session from silently reaching any non-local provider**. BYOK is direct-to-provider with the user's own key; Managed Cloud routes through the AGI gateway. Sessions are workspace/session-scoped — there is **no automatic app-chat sync**; any handoff is explicit and redacted. Command examples use the `agi` binary only. Model IDs are never hardcoded; they come from `packages/contracts/types/src/models.json`.
 
 ## AGI APIs
 
@@ -18,7 +18,7 @@ This volume specifies the API contracts AGI CLI consumes and exposes: the hosted
 
 ### Models ✅ Built (gateway) / 🟡 Partial (CLI catalog source)
 
-Managed model listing is served by `apps/web/app/api/llm/v1/models/route.ts` and `apps/web/app/api/models/route.ts`; the per-plan allow-list is `tierAllowedModels` in `packages/types/src/models.json`. `agi models list` shows catalog models; `agi models scan` discovers local models. 🟡 Gap: `apps/cli/src/model_catalog.rs` hydrates its catalog from `https://models.dev/api.json` at runtime, so CLI display can drift from the `models.json` SSOT — reconciliation to the SSOT feed is tracked. Requirement: never invent or hardcode a model ID; every catalog entry must resolve through `models.json` / the SSOT feed.
+Managed model listing is served by `apps/web/app/api/llm/v1/models/route.ts` and `apps/web/app/api/models/route.ts`; the per-plan allow-list is `tierAllowedModels` in `packages/contracts/types/src/models.json`. `agi models list` shows catalog models; `agi models scan` discovers local models. 🟡 Gap: `apps/cli/src/model_catalog.rs` hydrates its catalog from `https://models.dev/api.json` at runtime, so CLI display can drift from the `models.json` SSOT — reconciliation to the SSOT feed is tracked. Requirement: never invent or hardcode a model ID; every catalog entry must resolve through `models.json` / the SSOT feed.
 
 ### Chat ✅ Built
 
@@ -26,7 +26,7 @@ Managed and BYOK turns dispatch through `apps/cli/src/models/provider_dispatch.r
 
 ### Billing 🟡 Partial
 
-Billing lives on the gateway (`apps/web/app/api/billing/*`, `apps/web/app/api/checkout`, `apps/web/app/api/stripe-webhook`) on **Stripe**; there is no in-CLI checkout. Tiers (canon 2026-06-30): **Free $0 · Basic $8/₹399 · Pro $20 · Max $100 and $200 · Enterprise custom**. Local + BYOK are free access modes. No credit top-ups. 🟡 Gap: `packages/types/src/billing-catalog.ts` and older pricing UIs still encode retired tiers — reconciliation is a separate tracked task; this spec uses the canon ladder. INR is fixed only for Basic (₹399); Pro/Max INR are TBD — do not invent them.
+Billing lives on the gateway (`apps/web/app/api/billing/*`, `apps/web/app/api/checkout`, `apps/web/app/api/stripe-webhook`) on **Stripe**; there is no in-CLI checkout. Tiers (canon 2026-06-30): **Free $0 · Basic $8/₹399 · Pro $20 · Max $100 and $200 · Enterprise custom**. Local + BYOK are free access modes. No credit top-ups. 🟡 Gap: `packages/contracts/types/src/billing-catalog.ts` and older pricing UIs still encode retired tiers — reconciliation is a separate tracked task; this spec uses the canon ladder. INR is fixed only for Basic (₹399); Pro/Max INR are TBD — do not invent them.
 
 ### Usage ✅ Built
 
@@ -97,7 +97,7 @@ Production-ready when every API path above is either ✅ with a cited path or ex
 ## Anti-patterns
 
 - Silently routing a Local chat/file/session to BYOK or Managed Cloud, or auto-syncing CLI sessions to app chat.
-- Hardcoding a model ID or scraping one from training data instead of `packages/types/src/models.json`.
+- Hardcoding a model ID or scraping one from training data instead of `packages/contracts/types/src/models.json`.
 - Claiming a capability shipped without a real repo path, or presenting `cloud.rs` execution as live (it fails closed today).
 - Reintroducing removed tiers (Plus / pro_plus / Hobby) or inventing Pro/Max INR prices or credit top-ups.
 - Referencing Supabase, or renaming Next.js `proxy.ts` back to `middleware.ts`.

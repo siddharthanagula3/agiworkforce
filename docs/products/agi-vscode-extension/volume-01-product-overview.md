@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts`, `apps/extension-vscode/src/integrations/`, `apps/extension-vscode/src/providers/`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts`, `apps/extension-vscode/src/integrations/`, `apps/extension-vscode/src/providers/`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -23,7 +23,7 @@ Ship an IDE extension that brings AGI chat, edit, and agent workflows to the wor
 - **Trust-mode clarity**: every session shows its active mode (Local / BYOK / Managed Cloud) and provider label; switching Local→BYOK is an explicit fork. 🟡 A provider-switch guard exists (`apps/extension-vscode/src/integrations/providerSwitchGuard.ts`); the full fork ceremony (context selection, secret scan, payload preview, consent) is not yet fully wired — treat missing pieces as 🔭.
 - **Workspace-scoped, no silent sync**: IDE context never lands in Web/Mobile/Desktop app chat automatically. ✅ Enforced by scope rules in `apps/extension-vscode/AGENTS.md`; handoff commands are explicit (`agi-workforce.sendToDesktop`, `agi-workforce.syncContextToDesktop` in `package.json`).
 - **Reviewable edits**: all agent edits are diff-gated with accept/reject and checkpoints. ✅ `apps/extension-vscode/src/providers/diffDecorationProvider.ts`, `apps/extension-vscode/src/integrations/patchEngine.ts`, checkpoint commands in `package.json`.
-- **Correct model catalog**: model IDs resolve only from the SSOT. ✅ `packages/types/src/models.json`; never hardcoded.
+- **Correct model catalog**: model IDs resolve only from the SSOT. ✅ `packages/contracts/types/src/models.json`; never hardcoded.
 
 ## User Personas
 
@@ -41,7 +41,7 @@ Ship an IDE extension that brings AGI chat, edit, and agent workflows to the wor
 
 ## Shared Runtime Architecture — thin client over shared crates/packages
 
-The extension is a **thin client** over the internal AGI Runtime layer, not a standalone engine. It depends on shared workspace packages `@agiworkforce/runtime`, `@agiworkforce/types`, `@agiworkforce/utils`, and `@agiworkforce/design-tokens`. ✅ declared in `apps/extension-vscode/package.json` `dependencies`. Cross-surface protocol/session schemas live in `packages/types` and Rust crates, never in extension-only files (`apps/extension-vscode/AGENTS.md` Lane Contract). Shared developer sessions with the CLI are a **target direction** — 🔭 where unwired.
+The extension is a **thin client** over the internal AGI Runtime layer, not a standalone engine. It depends on shared workspace packages `@agiworkforce/client-runtime`, `@agiworkforce/types`, `@agiworkforce/utils`, and `@agiworkforce/design-tokens`. ✅ declared in `apps/extension-vscode/package.json` `dependencies`. Cross-surface protocol/session schemas live in `packages/contracts/types` and Rust crates, never in extension-only files (`apps/extension-vscode/AGENTS.md` Lane Contract). Shared developer sessions with the CLI are a **target direction** — 🔭 where unwired.
 
 ## VS Code Architecture
 
@@ -57,7 +57,7 @@ The extension is a **thin client** over the internal AGI Runtime layer, not a st
 
 - **Local**: on-device runtime (e.g. `ollama`, `lmstudio` in `agiWorkforce.providerStreamProvider`). 🟡 present; strict no-egress isolation still hardening.
 - **BYOK**: user keys, direct, no markup — Desktop/CLI/VS Code only. ✅ `agi-workforce.setApiKey`; Local→BYOK guarded by `providerSwitchGuard.ts` (fork ceremony partially 🔭).
-- **Managed Cloud**: public alpha, open by default for signed-in users. ✅ device auth (`deviceAuth.ts`); provider-stream path 🟡 — `agiWorkforce.useProviderStream` defaults `false` and account web auth is "not wired in the VS Code extension yet" (`package.json` description). Model IDs resolve only from `packages/types/src/models.json`.
+- **Managed Cloud**: public alpha, open by default for signed-in users. ✅ device auth (`deviceAuth.ts`); provider-stream path 🟡 — `agiWorkforce.useProviderStream` defaults `false` and account web auth is "not wired in the VS Code extension yet" (`package.json` description). Model IDs resolve only from `packages/contracts/types/src/models.json`.
 
 ## Constraints
 
@@ -81,7 +81,7 @@ The extension is a **thin client** over the internal AGI Runtime layer, not a st
 - `apps/extension-vscode/src/providers/` — agent mode, diff decoration, terminal, diagnostics, code action, error explainer, chat editor panel.
 - `apps/extension-vscode/src/integrations/` — `patchEngine.ts`, `providerStreamClient.ts`, `providerSwitchGuard.ts`, `tierResolver.ts`.
 - `apps/extension-vscode/src/{core,memory,platform,protocol}/`.
-- Shared: `packages/runtime`, `packages/types` (incl. `src/models.json`), `packages/utils`.
+- Shared: `packages/client/client-runtime`, `packages/contracts/types` (incl. `src/models.json`), `packages/platform/utils`.
 
 ## Competitor notes
 
@@ -98,7 +98,7 @@ Production-ready when the trust modes are explicit and labeled, no IDE context s
 ## Anti-patterns
 
 - Silently routing Local/BYOK chats, files, or sessions to Cloud, or auto-syncing IDE context into app chat.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Reintroducing removed tiers (`Plus`, `pro_plus`, `Hobby`) or adding credit top-ups; inventing Pro/Max INR prices.
 - Referencing Supabase, or renaming Next.js `proxy.ts` back to `middleware.ts`.
 - Claiming shipped state without a real repo path, or presenting `useProviderStream`/remote control as live.

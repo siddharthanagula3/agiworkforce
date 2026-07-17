@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in real source at `apps/cli/src/context.rs`, `apps/cli/src/path_security.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/agent/prompt.rs`, `apps/cli/src/features/exec/tools/dir_ops/mod.rs`, and the tool host in `crates/agiworkforce-app-server` (surfaced via `apps/cli/src/app_server.rs`). Model IDs, when referenced, come only from `packages/types/src/models.json`.
+Authority: `AGENTS.md` (root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in real source at `apps/cli/src/context.rs`, `apps/cli/src/path_security.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/agent/prompt.rs`, `apps/cli/src/features/exec/tools/dir_ops/mod.rs`, and the tool host in `crates/agiworkforce-app-server` (surfaced via `apps/cli/src/app_server.rs`). Model IDs, when referenced, come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -76,6 +76,6 @@ The domain is production-ready when detection is deterministic and non-panicking
 - Silently routing Local workspace context to BYOK or Managed Cloud, or auto-syncing CLI context to app chat.
 - Reading or searching outside registered workspace roots, or clamping instead of refusing out-of-bounds paths.
 - Claiming symbol extraction or incremental indexing as shipped — they are 🔭 Planned; cite no path you cannot show.
-- Hardcoding or inventing LLM model IDs for an embedding/index feature (use `packages/types/src/models.json`; on-device embedding engines must be real and referenced).
+- Hardcoding or inventing LLM model IDs for an embedding/index feature (use `packages/contracts/types/src/models.json`; on-device embedding engines must be real and referenced).
 - Referencing Supabase, `middleware.ts`, removed tiers ("Plus", `pro_plus`, "Hobby"), credit top-ups, or invented INR prices.
 - Using `agiworkforce <cmd>` in examples — the user-facing binary is `agi`.

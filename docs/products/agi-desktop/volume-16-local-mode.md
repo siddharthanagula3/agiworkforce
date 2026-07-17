@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md`; and repo paths — `apps/desktop/src/stores/appModeStore.ts`, `apps/desktop/src/features/v3/LocalCloudToggle.tsx`, `apps/desktop/src-tauri/src/core/llm/providers/{ollama,direct_api_provider,mod}.rs`, `apps/desktop/src-tauri/src/sys/commands/ollama.rs`, `apps/desktop/src-tauri/src/core/llm/models_config.rs`, `apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx`, `apps/desktop/src/features/chat/LocalByokHandoffDialog.tsx`, `apps/desktop/src-tauri/src/data/db/migrations.rs`, `apps/desktop/src-tauri/src/features/search/fts.rs`, `apps/desktop/src-tauri/src/sys/security/{storage,secret_manager}.rs`, `apps/desktop/src-tauri/Cargo.toml`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md`; and repo paths — `apps/desktop/src/stores/appModeStore.ts`, `apps/desktop/src/features/v3/LocalCloudToggle.tsx`, `apps/desktop/src-tauri/src/core/llm/providers/{ollama,direct_api_provider,mod}.rs`, `apps/desktop/src-tauri/src/sys/commands/ollama.rs`, `apps/desktop/src-tauri/src/core/llm/models_config.rs`, `apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx`, `apps/desktop/src/features/chat/LocalByokHandoffDialog.tsx`, `apps/desktop/src-tauri/src/data/db/migrations.rs`, `apps/desktop/src-tauri/src/features/search/fts.rs`, `apps/desktop/src-tauri/src/sys/security/{storage,secret_manager}.rs`, `apps/desktop/src-tauri/Cargo.toml`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -16,7 +16,7 @@ A Local workspace is fully self-contained: on-device model runtime, local SQLite
 
 ## BYOK Providers
 
-BYOK sends the user's own key straight to a provider via the direct adapter (**✅ Built** — `apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs`; UI `apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx`, `llm_check_provider_status`). Adapters exist for direct APIs plus Azure and Bedrock (`providers/{azure,bedrock}.rs`). Keys are stored locally, health-checked before use, and each response carries a visible provider label. Model IDs come only from `packages/types/src/models.json` — never hardcoded. **✅ Built.**
+BYOK sends the user's own key straight to a provider via the direct adapter (**✅ Built** — `apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs`; UI `apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx`, `llm_check_provider_status`). Adapters exist for direct APIs plus Azure and Bedrock (`providers/{azure,bedrock}.rs`). Keys are stored locally, health-checked before use, and each response carries a visible provider label. Model IDs come only from `packages/contracts/types/src/models.json` — never hardcoded. **✅ Built.**
 
 ## Local Models
 
@@ -32,7 +32,7 @@ Ollama is the primary local runtime: detect running instance, list installed mod
 
 ## LM Studio
 
-LM Studio is supported as an OpenAI-compatible server on loopback port 1234 via the direct adapter (**🟡 Partial** — `direct_api_provider.rs` port allow-list; `packages/providers/lmstudio/README.md`). Gap: no dedicated discovery command equivalent to Ollama's `/api/tags`, and no first-class LM Studio picker UI. **🟡 Partial.**
+LM Studio is supported as an OpenAI-compatible server on loopback port 1234 via the direct adapter (**🟡 Partial** — `direct_api_provider.rs` port allow-list; `packages/ai/providers/lmstudio/README.md`). Gap: no dedicated discovery command equivalent to Ollama's `/api/tags`, and no first-class LM Studio picker UI. **🟡 Partial.**
 
 ## llama.cpp
 
@@ -81,7 +81,7 @@ Storage is embedded SQLite via `rusqlite` with a connection pool and at-rest enc
 - `apps/desktop/src-tauri/src/core/llm/providers/{ollama,direct_api_provider,azure,bedrock,mod}.rs`; `core/llm/{models_config,prompt_tool_injection}.rs`; `core/llm/tool_executor/`
 - `apps/desktop/src-tauri/src/sys/commands/ollama.rs`; `sys/security/{storage,secret_manager,machine_key}.rs`
 - `apps/desktop/src-tauri/src/data/{database,db,memory_sync,projects_sync}` ; `features/search/{fts,conversation_search}.rs`; `core/agi/{memory_persistence, executors/media_executor}.rs`
-- `apps/desktop/src-tauri/Cargo.toml` (`local-llm` feature); `packages/providers/{ollama,lmstudio}`; `packages/types/src/models.json`
+- `apps/desktop/src-tauri/Cargo.toml` (`local-llm` feature); `packages/ai/providers/{ollama,lmstudio}`; `packages/contracts/types/src/models.json`
 
 ## Competitor notes
 
@@ -99,7 +99,7 @@ Local Mode is production-ready when on-device chat, local storage, and local sea
 
 - Silently routing Local chats/files to BYOK or Cloud, or forking to BYOK without the full consent flow.
 - Labeling cloud-routed image generation as "Local," or claiming embedded llama.cpp works when it is feature-gated off.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json` / dynamic Ollama discovery.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json` / dynamic Ollama discovery.
 - Allowing arbitrary localhost ports or non-loopback provider URLs; bypassing SSRF validation.
 - Referencing Supabase (migrated away), or removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups.
 - Renaming `proxy.ts`/`proxy` back to `middleware.ts` in any shared web build path.

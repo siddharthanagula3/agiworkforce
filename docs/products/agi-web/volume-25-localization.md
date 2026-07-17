@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/web/AGENTS.md`; grounded in real repo paths `apps/web/app/i18n/index.ts`, `apps/web/app/i18n/locales/{en,es,hi}/*.json`, `apps/web/features/settings/components/LanguageSelector.tsx`, `apps/web/app/providers.tsx`, `apps/web/app/layout.tsx`, `apps/web/features/billing/components/Billing/types.ts`, `apps/web/features/chat/components/tokens/TokenAnalyticsDashboard.tsx`, `apps/web/features/pages/legal/BusinessLegalPage.tsx`, `apps/web/lib/validations/chat.ts`, `apps/web/proxy.ts`. Model facts (unused here beyond policy): `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/web/AGENTS.md`; grounded in real repo paths `apps/web/app/i18n/index.ts`, `apps/web/app/i18n/locales/{en,es,hi}/*.json`, `apps/web/features/settings/components/LanguageSelector.tsx`, `apps/web/app/providers.tsx`, `apps/web/app/layout.tsx`, `apps/web/features/billing/components/Billing/types.ts`, `apps/web/features/chat/components/tokens/TokenAnalyticsDashboard.tsx`, `apps/web/features/pages/legal/BusinessLegalPage.tsx`, `apps/web/lib/validations/chat.ts`, `apps/web/proxy.ts`. Model facts (unused here beyond policy): `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -34,7 +34,7 @@ Today the surface ships a **client-side** i18n layer: i18next + `react-i18next` 
 
 ## Currency — INR only where canon fixes it (Basic ₹399)
 
-🟡 Partial. `apps/web/features/billing/components/Billing/types.ts` `formatCurrency(amount, currency)` correctly uses `Intl.NumberFormat` with `style:'currency'`, validates the code against `VALID_CURRENCY_RE`, and defaults to `USD`; USD subscription math flows from `getPlanPriceUsd` (`@agiworkforce/types`). Gaps: the formatter's locale is still `'en-US'`, and plan pricing UI encodes older tiers — `apps/web/features/billing/hooks/use-billing-queries.ts` still references `getPlanPriceUsd('hobby')` and a `team` plan, which the canon removed. That reconciliation (`packages/types/src/billing-catalog.ts` + pricing UIs) is a separate tracked task; flag it 🟡 here.
+🟡 Partial. `apps/web/features/billing/components/Billing/types.ts` `formatCurrency(amount, currency)` correctly uses `Intl.NumberFormat` with `style:'currency'`, validates the code against `VALID_CURRENCY_RE`, and defaults to `USD`; USD subscription math flows from `getPlanPriceUsd` (`@agiworkforce/types`). Gaps: the formatter's locale is still `'en-US'`, and plan pricing UI encodes older tiers — `apps/web/features/billing/hooks/use-billing-queries.ts` still references `getPlanPriceUsd('hobby')` and a `team` plan, which the canon removed. That reconciliation (`packages/contracts/types/src/billing-catalog.ts` + pricing UIs) is a separate tracked task; flag it 🟡 here.
 
 Canon tier model to display (no other tiers): **Free $0**; **Basic $8 / ₹399**; **Pro $20**; **Max $100 and $200** (two Max tiers); **Enterprise custom**. Local and BYOK are free access modes, not plans, and do not apply to Web. **INR is fixed only for Basic (₹399)** — Pro/Max INR are TBD; do **not** invent INR numbers. No credit top-ups. Requirement: currency selection is derived from account/geo billing config, never spoofable client input; INR display for Basic renders `₹399` via `Intl.NumberFormat('…','INR')`, and Pro/Max show USD until INR is set.
 
@@ -60,7 +60,7 @@ Canon tier model to display (no other tiers): **Free $0**; **Basic $8 / ₹399**
 
 ## Competitor notes
 
-Claude, ChatGPT, and Codex ship server-negotiated locales, RTL, and localized billing. AGI Web's deliberate divergence: locale is an **account-scoped, cloud-only** concern here — there is no Local/BYOK locale to merge, and translated model-catalog copy must never leak or hardcode a model ID (IDs come only from `packages/types/src/models.json`; provider/plan gating stays server-verified). Per-surface trust holds: Web localization never assumes BYOK or on-device state that only Desktop/CLI/VS Code carry. INR-first pricing for Basic (₹399) reflects the India entry-tier strategy competitors do not match at that price.
+Claude, ChatGPT, and Codex ship server-negotiated locales, RTL, and localized billing. AGI Web's deliberate divergence: locale is an **account-scoped, cloud-only** concern here — there is no Local/BYOK locale to merge, and translated model-catalog copy must never leak or hardcode a model ID (IDs come only from `packages/contracts/types/src/models.json`; provider/plan gating stays server-verified). Per-surface trust holds: Web localization never assumes BYOK or on-device state that only Desktop/CLI/VS Code carry. INR-first pricing for Basic (₹399) reflects the India entry-tier strategy competitors do not match at that price.
 
 ## Acceptance / Definition of Done
 
@@ -76,6 +76,6 @@ Production-ready when: root `lang`/`dir` reflect the resolved language; date/num
 - Claiming RTL, server-negotiated locale, or full `hi` coverage as shipped — they are 🔭/🟡; cite the gap.
 - Leaving `'en-US'` pinned in date/number/currency formatters while claiming locale support.
 - Inventing INR for Pro/Max, reintroducing Plus/`pro_plus`/Hobby/Team tiers, or adding credit top-ups.
-- Hardcoding a model ID in a translated catalog string instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID in a translated catalog string instead of reading `packages/contracts/types/src/models.json`.
 - Referencing Supabase (fully migrated away) or renaming `proxy.ts` to `middleware.ts`.
 - Byte/code-unit truncation that splits emoji or combining sequences; hand-rolled plural or thousands-separator logic instead of `Intl`/i18next.

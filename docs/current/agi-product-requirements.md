@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-06-27
+Last updated: 2026-07-11
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -72,7 +72,7 @@ The development order is locked:
 | Order | Surface           | Meaning                                                                             |
 | ----- | ----------------- | ----------------------------------------------------------------------------------- |
 | 1     | Mobile            | Active surface. Must reach public App Store release before normal work moves on.    |
-| 2     | Website           | Public site, download/waitlist/invite/account shell, launch support.                |
+| 2     | Website           | Public site, download/sign-in/account shell, launch support.                        |
 | 3     | Desktop           | Deepest Local/BYOK host, rich app shell, local files, MCP, artifacts, computer use. |
 | 4     | CLI               | Developer engine and terminal agent.                                                |
 | 5     | Chrome Extension  | Browser context, capture, native bridge, page automation.                           |
@@ -278,7 +278,7 @@ and BYOK workflows. CLI, Chrome, and VS Code will eventually carry the deepest
 developer workflows.
 
 Mobile v1 should prove AGI can ship a polished, privacy-clear, user-facing AI app
-with Local mode and Cloud waitlist/invite entry. It should not try to cram every
+with Local mode and public-alpha Cloud sign-in entry. It should not try to cram every
 Desktop developer workflow into the first mobile release.
 
 ## 5. Target Users
@@ -748,8 +748,7 @@ Mobile v1 must include:
 - Chat history local to the app.
 - Attachment-ready controls with honest unavailable states.
 - Mic/dictation-ready control with honest unavailable states if not fully live.
-- Cloud waitlist.
-- Invite-code entry.
+- Cloud sign-in entry (public alpha, open by default; no waitlist).
 - Profile/settings/privacy basics.
 - Support, privacy policy, and delete/export/account paths as required for
   release.
@@ -766,8 +765,8 @@ Mobile v1 should not publicly promise:
 - Full connector/app directory parity.
 
 Mobile BYOK is not part of Mobile v1. The public Mobile path is small on-device
-Local LLM chat plus Cloud waitlist/invite; Cloud requires invite/subscription
-state before any hosted model request is allowed.
+Local LLM chat plus public-alpha Cloud sign-in; Cloud requires signed-in
+subscription/entitlement state before any hosted model request is allowed.
 
 ### 10.3 Mobile V1 Non-Goals
 
@@ -802,17 +801,17 @@ Acceptance criteria:
 - The app handles no-model state with setup guidance.
 - The first chat does not call BYOK or Cloud routes.
 
-#### M-US-002: Cloud Waitlist User
+#### M-US-002: Cloud Sign-In User
 
-As a user, I can join the Cloud waitlist or enter an invite code without being
-misled that Cloud is broadly available.
+As a user, I can sign in to unlock Cloud without being misled that Cloud is
+anything beyond public alpha.
 
 Acceptance criteria:
 
-- Waitlist and invite entry are visible.
-- Cloud is labeled waitlist/private beta.
-- Invalid invite codes produce a helpful error.
-- Valid invite codes unlock only the allowed private-beta scope.
+- Sign-in entry is visible from the Cloud toggle/model picker.
+- Cloud is labeled public alpha, not general availability.
+- Failed sign-in attempts produce a helpful error.
+- A successful sign-in unlocks Cloud immediately — no separate invite code or waitlist step.
 - Cloud use is not silently mixed into Local chats.
 
 #### M-US-003: Returning Chat User
@@ -863,7 +862,7 @@ Acceptance criteria:
 
 - Privacy screen exists.
 - Local data behavior is explained.
-- Cloud waitlist/invite behavior is explained.
+- Cloud sign-in behavior (public alpha, no waitlist) is explained.
 - BYOK behavior, if present, is provider-labeled.
 - Data export/delete/account paths are present or clearly scoped.
 
@@ -877,7 +876,7 @@ Requirement IDs:
 | M-ONB-002 | Onboarding explains three modes: Local, BYOK, Cloud.                        | BYOK/Cloud unavailable states are honest and not presented as public if gated. |
 | M-ONB-003 | Local model readiness is checked.                                           | App shows installed/available/unavailable state.                               |
 | M-ONB-004 | User can enter main chat after onboarding.                                  | First chat opens to the unified composer.                                      |
-| M-ONB-005 | Cloud waitlist and invite code entry are reachable.                         | Waitlist/invite flows do not block Local use.                                  |
+| M-ONB-005 | Cloud sign-in entry is reachable.                                           | Sign-in flow does not block Local use.                                         |
 
 ### 10.6 Mobile Chat Requirements
 
@@ -912,7 +911,7 @@ dark and light appearance.
 | ----------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | M-MODEL-001 | Selector reads model/provider catalog or mobile route metadata. | No invented model IDs in UI.                                                  |
 | M-MODEL-002 | Local models show availability.                                 | Installed, downloadable, unavailable, or runtime-offline states are distinct. |
-| M-MODEL-003 | Gated Cloud models are labeled waitlist/invite.                 | User cannot accidentally start Cloud.                                         |
+| M-MODEL-003 | Locked Cloud models are labeled sign-in required.               | User cannot accidentally start Cloud.                                         |
 | M-MODEL-004 | BYOK routes, if shown, are provider-labeled and gated.          | Key/consent state is visible before use.                                      |
 | M-MODEL-005 | Unsupported capabilities are visible.                           | File/image/tool controls respond to selected model capability.                |
 
@@ -936,15 +935,15 @@ dark and light appearance.
 | M-VOICE-004 | Live voice mode is separate from dictation.    | If unavailable, UI labels it unavailable.            |
 | M-VOICE-005 | Voice privacy is documented.                   | User knows whether audio is local or provider/cloud. |
 
-### 10.11 Mobile Cloud Waitlist And Invite Requirements
+### 10.11 Mobile Cloud Sign-In Requirements
 
-| ID          | Requirement                             | Acceptance                                        |
-| ----------- | --------------------------------------- | ------------------------------------------------- |
-| M-CLOUD-001 | Waitlist screen exists.                 | User can submit interest.                         |
-| M-CLOUD-002 | Invite code entry exists.               | Valid/invalid/expired states are handled.         |
-| M-CLOUD-003 | Cloud is labeled private beta/waitlist. | No general availability claim.                    |
-| M-CLOUD-004 | Invite unlock is scoped.                | Cloud features remain gated to invite capability. |
-| M-CLOUD-005 | Cloud cannot hijack Local chats.        | Cloud continuation is a fork/branch.              |
+| ID          | Requirement                         | Acceptance                                              |
+| ----------- | ----------------------------------- | ------------------------------------------------------- |
+| M-CLOUD-001 | Sign-in screen exists.              | User can sign in to unlock Cloud.                       |
+| M-CLOUD-002 | Sign-in unlocks Cloud immediately.  | No separate invite code or waitlist step.               |
+| M-CLOUD-003 | Cloud is labeled public alpha.      | No general-availability/SLA over-claim.                 |
+| M-CLOUD-004 | Cloud access is entitlement-scoped. | Cloud features remain gated to the account's plan tier. |
+| M-CLOUD-005 | Cloud cannot hijack Local chats.    | Cloud continuation is a fork/branch.                    |
 
 ### 10.12 Mobile Settings Requirements
 
@@ -952,7 +951,7 @@ Mobile v1 settings must include at minimum:
 
 - Profile/account entry.
 - Local privacy explanation.
-- Cloud waitlist/invite status.
+- Cloud sign-in/subscription status.
 - Data controls.
 - Appearance.
 - Model/local runtime controls.
@@ -967,13 +966,13 @@ the suite-wide settings vocabulary.
 
 ### 10.13 Mobile Privacy Requirements
 
-| ID         | Requirement                                                     | Acceptance                                  |
-| ---------- | --------------------------------------------------------------- | ------------------------------------------- |
-| M-PRIV-001 | Local mode privacy statement is in onboarding/settings.         | User can find it after onboarding.          |
-| M-PRIV-002 | No account required for Local.                                  | App does not block Local chat behind login. |
-| M-PRIV-003 | Local chat data location is explained.                          | User understands local storage scope.       |
-| M-PRIV-004 | BYOK, if enabled, is not described as local.                    | Provider label appears.                     |
-| M-PRIV-005 | Cloud waitlist/invite explains data may leave device when used. | Consent before Cloud send.                  |
+| ID         | Requirement                                             | Acceptance                                  |
+| ---------- | ------------------------------------------------------- | ------------------------------------------- |
+| M-PRIV-001 | Local mode privacy statement is in onboarding/settings. | User can find it after onboarding.          |
+| M-PRIV-002 | No account required for Local.                          | App does not block Local chat behind login. |
+| M-PRIV-003 | Local chat data location is explained.                  | User understands local storage scope.       |
+| M-PRIV-004 | BYOK, if enabled, is not described as local.            | Provider label appears.                     |
+| M-PRIV-005 | Cloud sign-in explains data may leave device when used. | Consent before Cloud send.                  |
 
 ### 10.14 Mobile App Store Requirements
 
@@ -985,7 +984,7 @@ Before public release:
 - Login is not required for core Local functionality unless technically
   unavoidable and approved.
 - Any payments/subscriptions are either absent or compliant.
-- Cloud waitlist wording does not imply unavailable paid compute.
+- Cloud sign-in wording does not imply unavailable paid compute or waitlist gating.
 - App handles offline/no-model/no-permission states.
 - Crash-free QA threshold is acceptable.
 - TestFlight external testing has passed.
@@ -994,20 +993,20 @@ Before public release:
 
 Minimum QA scenarios:
 
-| Scenario                      | Expected result                                 |
-| ----------------------------- | ----------------------------------------------- |
-| Fresh install, no account     | User reaches Local chat.                        |
-| Fresh install, no local model | User sees setup/unavailable guidance.           |
-| Local text prompt             | Response uses Local route only.                 |
-| Stop generation               | Stream stops cleanly.                           |
-| Relaunch app                  | Recent local chat is visible.                   |
-| Attach unsupported file       | User sees capability error.                     |
-| Tap mic with no permission    | Permission prompt or unavailable state appears. |
-| Join waitlist                 | Submission success/failure states work.         |
-| Invalid invite                | Clear error.                                    |
-| Valid invite                  | Cloud beta scope unlocks only allowed features. |
-| Toggle dark/light             | UI remains legible.                             |
-| Offline mode                  | App fails gracefully.                           |
+| Scenario                      | Expected result                                  |
+| ----------------------------- | ------------------------------------------------ |
+| Fresh install, no account     | User reaches Local chat.                         |
+| Fresh install, no local model | User sees setup/unavailable guidance.            |
+| Local text prompt             | Response uses Local route only.                  |
+| Stop generation               | Stream stops cleanly.                            |
+| Relaunch app                  | Recent local chat is visible.                    |
+| Attach unsupported file       | User sees capability error.                      |
+| Tap mic with no permission    | Permission prompt or unavailable state appears.  |
+| Cloud sign-in                 | Sign-in success/failure states work.             |
+| Failed sign-in                | Clear error.                                     |
+| Successful sign-in            | Cloud unlocks immediately at the account's tier. |
+| Toggle dark/light             | UI remains legible.                              |
+| Offline mode                  | App fails gracefully.                            |
 
 ## 11. Website Requirements
 
@@ -1017,24 +1016,23 @@ Mobile is publicly released unless explicitly authorized during waiting time.
 Website's role:
 
 - Explain AGI.
-- Convert visitors to Mobile downloads and waitlist signups.
+- Convert visitors to Mobile downloads and Cloud sign-ups.
 - Provide privacy/support/legal links.
-- Provide invite-code entry/status.
-- Provide account shell for waitlist, future billing, and future Cloud.
+- Provide Cloud sign-in entry/status.
+- Provide account shell for Cloud sign-in, billing, and Cloud.
 - Provide docs and comparisons without overclaiming.
 
 Website v1 should include:
 
 - Home/product page.
 - Mobile download page.
-- Waitlist.
-- Invite-code entry.
+- Cloud sign-in entry.
 - Pricing/plan placeholder that does not sell unready Cloud.
 - Privacy policy.
 - Terms.
 - Support/help.
 - Blog/changelog or launch notes if useful.
-- Account shell when needed for waitlist/invite.
+- Account shell when needed for Cloud sign-in.
 
 Website must not launch a full Cloud chat product before the Cloud controls are
 proven.
@@ -1054,13 +1052,13 @@ Desktop's role:
 - Browser/computer use approvals.
 - AGI Code workflows.
 - Native bridge for Chrome and other surfaces.
-- Cloud waitlist/private-beta entry.
+- Cloud (public alpha) sign-in entry.
 
 Desktop must expose:
 
 - Local mode.
 - BYOK mode.
-- Cloud waitlist/private beta mode.
+- Cloud (public alpha) mode.
 - Sidebar with search, new chat, projects, artifacts, recents, account.
 - Full settings IA.
 - Model/provider selector with capability metadata.
@@ -1498,7 +1496,7 @@ subscription/entitlement-gated rather than waitlist-gated.
 Required concepts:
 
 - Local scheduled task.
-- Cloud routine/private beta.
+- Cloud routine (public alpha).
 - Thread automation.
 - Project automation.
 - Dispatch from mobile/web to Desktop.
@@ -1508,7 +1506,7 @@ Required concepts:
 - Permission review.
 - Worktree/session isolation when editing files.
 
-Mobile v1 only needs the pieces required for waitlist/invite and future Dispatch
+Mobile v1 only needs the pieces required for Cloud sign-in and future Dispatch
 readiness. Desktop and CLI carry the deeper automation workflows later.
 
 ## 21. Privacy, Security, And Safety

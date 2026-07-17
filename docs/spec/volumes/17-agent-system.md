@@ -27,8 +27,8 @@ Cloud/Local/Hybrid sets the agent's reach, not its safety contract. A Local agen
 - Agent-to-agent coordination: `apps/cli/src/features/a2a/` (`client.rs`, `server.rs`, `registry.rs`, `security.rs`, `protocol.rs`, `jsonrpc.rs`) — the delegation/transport substrate.
 - Sandboxing + policy (wire into the loop, `docs/strategy/10` C3): `crates/sandbox-policy/src/lib.rs`, `crates/agiworkforce-execpolicy/`, `apps/cli/src/platform/policy/`.
 - Permission/request protocol: `crates/agiworkforce-protocol/src/request_permissions.rs`, `request_user_input.rs`, `plan_tool.rs`, `dynamic_tools.rs`.
-- TS agent surfaces: `packages/api/src/agent.ts`, `packages/api/src/customAgents.ts`; UI: `apps/web/features/chat/components/agents/`.
-- Scheduling/background: `packages/api/src/scheduler.ts`, Desktop Scheduled/Dispatch subpanels (source-of-truth Desktop section).
+- TS agent surfaces: `packages/client/desktop-command-client/src/agent.ts`, `packages/client/desktop-command-client/src/customAgents.ts`; UI: `apps/web/features/chat/components/agents/`.
+- Scheduling/background: `packages/client/desktop-command-client/src/scheduler.ts`, Desktop Scheduled/Dispatch subpanels (source-of-truth Desktop section).
 
 ## Competitor notes
 

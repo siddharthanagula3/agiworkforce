@@ -23,7 +23,7 @@ The Cloud/Local stance _is_ the GTM. Local/BYOK push inference COGS toward ~$0 f
 - GTM/pricing/moat: `docs/strategy/05-gtm-pricing-business-model.md`.
 - Fundraising reality + raise plan + comparables: `docs/strategy/06-fundraising-and-financial-plan.md`.
 - Brand voice + positioning story: `docs/strategy/08-brand-and-narrative.md`; package framing: `docs/strategy/README.md`.
-- The assets the story rests on (cite these in diligence): the trust contracts (`packages/types/src/suite-contracts.ts`), the multi-provider catalog (`packages/types/src/models.json`), the self-auditing ledgers (`docs/agent-context/known-flaws.md`, `risk-map.json`), and the code-quality verdict (Vol 35 / `strategy/03`).
+- The assets the story rests on (cite these in diligence): the trust contracts (`packages/contracts/types/src/suite-contracts.ts`), the multi-provider catalog (`packages/contracts/types/src/models.json`), the self-auditing ledgers (`docs/agent-context/known-flaws.md`, `risk-map.json`), and the code-quality verdict (Vol 35 / `strategy/03`).
 
 ## Competitor notes
 

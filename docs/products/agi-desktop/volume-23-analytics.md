@@ -86,5 +86,5 @@ Production-ready when: no analytics/crash/perf payload leaves the device in Loca
 - Shipping funnel/retention dashboards that render stubbed `[]` data as if real.
 - Putting message text, file contents, keys, or account PII into event properties or logs.
 - Encoding removed tiers (`Plus`, `pro_plus`, `Hobby`) or credit top-ups in `plan_tier`/flags; the canon ladder is Free/Basic/Pro/Max/Enterprise.
-- Hardcoding model IDs into analytics enums — model identity comes only from `packages/types/src/models.json`.
+- Hardcoding model IDs into analytics enums — model identity comes only from `packages/contracts/types/src/models.json`.
 - Referencing Supabase or Next.js `middleware.ts`; the stack is Clerk + Neon + Stripe, and Web uses `proxy.ts`.

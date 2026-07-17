@@ -89,7 +89,7 @@ Several TODO items are already fixed or were over-stated — evidence your ledge
 
 ## 3. Genuine strengths (the diligence assets)
 
-1. **A real multi-provider LLM layer, three times over** — web (13 providers), desktop Rust (20+ endpoints + a 70KB SSE parser handling Anthropic ping keepalives and tool-call deltas), and shared `packages/providers`. Real prompt caching, retry/backoff, tool transformation.
+1. **A real multi-provider LLM layer, three times over** — web (13 providers), desktop Rust (20+ endpoints + a 70KB SSE parser handling Anthropic ping keepalives and tool-call deltas), and shared `packages/ai/providers`. Real prompt caching, retry/backoff, tool transformation.
 2. **The on-device mobile LLM** — a clean tier-1→2→3 native ladder with streaming callbacks, thermal checks, measured tok/s, and SHA-256-verified resumable downloads. The hard part, done right.
 3. **Real credit/billing metering** with reserve-then-refund-on-failure and idempotency keys.
 4. **A Claude-Code-class CLI** — LSP, worktrees, A2A, apply-patch, read-before-write freshness, approval gates.

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/app/(app)/camera.tsx`, `apps/mobile/app/(app)/scan.tsx`, `apps/mobile/src/features/image/services/{ocr,vision,imagegen}.ts`, `apps/mobile/src/features/media/photo-picker.ts`, `apps/mobile/src/features/companion/components/QRScanner.tsx`, `apps/mobile/native/ios/AGIVisionOCR.swift`, `apps/mobile/native/android/AGIVisionOCR.kt`, `apps/mobile/app.config.js`, and `packages/types/src/models.json`.
+Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/app/(app)/camera.tsx`, `apps/mobile/app/(app)/scan.tsx`, `apps/mobile/src/features/image/services/{ocr,vision,imagegen}.ts`, `apps/mobile/src/features/media/photo-picker.ts`, `apps/mobile/src/features/companion/components/QRScanner.tsx`, `apps/mobile/native/ios/AGIVisionOCR.swift`, `apps/mobile/native/android/AGIVisionOCR.kt`, `apps/mobile/app.config.js`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -30,7 +30,7 @@ Trust shapes everything here. Mobile exposes exactly two modes: **Local** (a sma
 
 ## Image Analysis — AI vision
 
-🟡 Partial — `apps/mobile/src/features/image/services/vision.ts`. The Local route is honest about its limits: `resolveVisionRoute()` returns an **OCR-fallback** route only — it runs native OCR, then reasons over the extracted _text_ with the on-device LLM (`@agiworkforce/local-llm`). It does **not** do true on-device visual-language understanding; the code explicitly forbids advertising on-device VL until a native image-input bridge exists. Real image reasoning is **Cloud**: camera/gallery attachments are sent into chat and answered by vision-capable Managed-Cloud models. Model IDs come **only** from `packages/types/src/models.json` (which marks vision-capable models) — never hardcode one. Requirements: the active route must be labeled to the user (Local OCR vs Cloud vision + model name); crossing to Cloud requires the auth gate; never claim on-device VL until the bridge ships.
+🟡 Partial — `apps/mobile/src/features/image/services/vision.ts`. The Local route is honest about its limits: `resolveVisionRoute()` returns an **OCR-fallback** route only — it runs native OCR, then reasons over the extracted _text_ with the on-device LLM (`@agiworkforce/local-llm`). It does **not** do true on-device visual-language understanding; the code explicitly forbids advertising on-device VL until a native image-input bridge exists. Real image reasoning is **Cloud**: camera/gallery attachments are sent into chat and answered by vision-capable Managed-Cloud models. Model IDs come **only** from `packages/contracts/types/src/models.json` (which marks vision-capable models) — never hardcode one. Requirements: the active route must be labeled to the user (Local OCR vs Cloud vision + model name); crossing to Cloud requires the auth gate; never claim on-device VL until the bridge ships.
 
 ## Barcode Detection
 
@@ -53,7 +53,7 @@ Trust shapes everything here. Mobile exposes exactly two modes: **Local** (a sma
 - `apps/mobile/services/docParser.ts` — document text extraction (reuse for scan exports).
 - `apps/mobile/lib/egressGuard.ts` — egress control point for metadata stripping.
 - `apps/mobile/app.config.js` — camera/photo permission strings and plugins.
-- `packages/types/src/models.json` — sole source of vision-capable model IDs.
+- `packages/contracts/types/src/models.json` — sole source of vision-capable model IDs.
 
 ## Competitor notes
 
@@ -72,7 +72,7 @@ Production-ready when: capture and import work with correct permission gating an
 - Adding any BYOK / API-key field to camera, scan, or vision settings — mobile has no BYOK.
 - Auto-sending Local captures, OCR text, or scans to Cloud without an explicit, labeled, auth-gated action.
 - Advertising on-device visual-language analysis while the route is OCR-fallback only.
-- Hardcoding or inventing a vision/image model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a vision/image model ID instead of reading `packages/contracts/types/src/models.json`.
 - Forwarding image attachments with EXIF/GPS intact, or skipping the egress sanitizer.
 - Referencing Supabase (fully removed) or using removed tiers (Plus, pro_plus, Hobby) in any upsell.
 - Spinning up a second camera stack for barcodes instead of reusing the `expo-camera` scanner.

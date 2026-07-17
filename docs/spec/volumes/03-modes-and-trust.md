@@ -1,7 +1,7 @@
 # Volume 03 — Modes & Trust (Cloud/Local/Hybrid, Privacy)
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 3)
-Authority: `docs/current/source-of-truth.md`, `docs/current/trust-mode-surface-matrix.md`, `packages/types/src/suite-contracts.ts`
+Authority: `docs/current/source-of-truth.md`, `docs/current/trust-mode-surface-matrix.md`, `packages/contracts/types/src/suite-contracts.ts`
 
 ## Philosophy & Cloud/Local stance
 
@@ -27,7 +27,7 @@ Three trust modes, each a distinct boundary that is never silently crossed:
 
 ## Repository map
 
-- `packages/types/src/suite-contracts.ts` — the source of truth: `PrivacyMode`, `ProviderMode`, `ChatExecutionMode`, `SourceSurface`, `SyncedAppSurface`, `DeveloperSessionSurface`, `StorageScope`, the `*_DISPLAY` copy maps, `assertSurfaceCanSyncChats`, generated-file manifest contracts, and explicit developer-session handoff types.
+- `packages/contracts/types/src/suite-contracts.ts` — the source of truth: `PrivacyMode`, `ProviderMode`, `ChatExecutionMode`, `SourceSurface`, `SyncedAppSurface`, `DeveloperSessionSurface`, `StorageScope`, the `*_DISPLAY` copy maps, `assertSurfaceCanSyncChats`, generated-file manifest contracts, and explicit developer-session handoff types.
 - `apps/cli/src/agent/mod.rs` — CLI Local/BYOK/Managed privacy modes; blocks Local sessions from silently using non-local provider modes.
 - `apps/mobile/services/remoteChatGate.ts` — fails closed when Cloud sends are disabled.
 - `apps/web/` — Neon-backed; structurally no BYOK/free-env-key chat.

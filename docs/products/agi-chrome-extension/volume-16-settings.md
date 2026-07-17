@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/AGENTS.md`; plus the real surface code cited per section (`manifest.json`, `src/options.ts`, `src/tokens.ts`, `packages/design-tokens/src/index.ts`, `src/features/background/conversation-history.ts`, `src/background/memory-bridge.ts`, `src/pairing.ts`, `src/background/policy.ts`, `src/features/native-bridge/`, `native-host/`).
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/AGENTS.md`; plus the real surface code cited per section (`manifest.json`, `src/options.ts`, `src/tokens.ts`, `packages/ui/design-tokens/src/index.ts`, `src/features/background/conversation-history.ts`, `src/background/memory-bridge.ts`, `src/pairing.ts`, `src/background/policy.ts`, `src/features/native-bridge/`, `native-host/`).
 
 ## Overview & stance
 
@@ -18,7 +18,7 @@ The options page renders sections for Permissions, Account, Autofill Profile, Co
 
 ## Appearance
 
-Appearance is driven by shared design tokens (`apps/extension/src/tokens.ts` → `@agiworkforce/design-tokens` `agiExtensionCssVars`). Both the options page and side panel currently inject the token CSS with a hardcoded `'dark'` mode. 🟡 Partial — light token maps exist (`packages/design-tokens/src/index.ts` exports dark + light `--agi-ext-*` vars) but no in-UI appearance switcher is wired; the gap is the toggle, not the tokens.
+Appearance is driven by shared design tokens (`apps/extension/src/tokens.ts` → `@agiworkforce/design-tokens` `agiExtensionCssVars`). Both the options page and side panel currently inject the token CSS with a hardcoded `'dark'` mode. 🟡 Partial — light token maps exist (`packages/ui/design-tokens/src/index.ts` exports dark + light `--agi-ext-*` vars) but no in-UI appearance switcher is wired; the gap is the toggle, not the tokens.
 
 ## Theme
 
@@ -26,7 +26,7 @@ Requirement: a Theme control offering System / Light / Dark, persisted to a devi
 
 ## Accent Color
 
-Requirement: let the user pick an accent applied via the `--agi-ext-accent` custom property (already consumed across the options CSS). 🔭 Planned — the accent token is defined in `packages/design-tokens/src/index.ts` (`--agi-ext-accent` from `agiPalette.{dark,light}.accent.primary`) and used in `apps/extension/src/options.ts`, but there is no picker; the accent is fixed by the token set. Any picker must write a device-scoped override only, never a synced preference.
+Requirement: let the user pick an accent applied via the `--agi-ext-accent` custom property (already consumed across the options CSS). 🔭 Planned — the accent token is defined in `packages/ui/design-tokens/src/index.ts` (`--agi-ext-accent` from `agiPalette.{dark,light}.accent.primary`) and used in `apps/extension/src/options.ts`, but there is no picker; the accent is fixed by the token set. Any picker must write a device-scoped override only, never a synced preference.
 
 ## Language
 
@@ -59,7 +59,7 @@ Desktop pairing is the second first-class control. The pairing state machine (`i
 ## Repository map
 
 - `apps/extension/src/options.ts`, `src/side_panel.ts`, `src/inPagePanel/` — settings UI (options page + panels).
-- `apps/extension/src/tokens.ts`, `packages/design-tokens/src/index.ts` — appearance/theme/accent tokens.
+- `apps/extension/src/tokens.ts`, `packages/ui/design-tokens/src/index.ts` — appearance/theme/accent tokens.
 - `apps/extension/src/features/background/conversation-history.ts`, `src/background/memory-bridge.ts` — device-scoped privacy stores.
 - `apps/extension/src/pairing.ts`, `src/features/native-bridge/`, `native-host/` — connected-services / desktop pairing.
 - `apps/extension/src/background/policy.ts`, `manifest.json` — permission + allowlist enforcement, CSP.
@@ -81,6 +81,6 @@ Production-ready when every setting persists to the correct device-scoped store,
 - Adding conversation sync, global memory sync, Projects, image generation, or in-extension checkout to Settings (removed scope).
 - Any provider-key field, BYOK toggle, or direct provider host in `connect-src` — the extension holds no keys and contacts no provider host.
 - Syncing appearance/theme/accent/language to Neon; all preferences stay device-scoped (Settings sync is allowlist-gated and out of Chrome scope).
-- Hardcoding model IDs (source only from `packages/types/src/models.json`), INR prices, routes, or env var names.
+- Hardcoding model IDs (source only from `packages/contracts/types/src/models.json`), INR prices, routes, or env var names.
 - Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups; use Free / Basic $8 (₹399) / Pro $20 / Max $100 & $200 / Enterprise. Referencing Supabase, or renaming `proxy.ts` to `middleware.ts`.
 - Weakening the allowlist or pairing-token validation, or bypassing the `allowlisted-tab` sender gate.

@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real surface paths this volume grounds in: `apps/mobile/src/features/image/services/imagegen.ts`, `apps/mobile/src/features/image/README.md`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/src/features/chat/components/GeneratedImage.tsx`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx`, `apps/mobile/services/contentReport.ts`, `apps/mobile/lib/contentFilter.ts`, `apps/web/app/api/media/image/generate/route.ts`, and the model catalog `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real surface paths this volume grounds in: `apps/mobile/src/features/image/services/imagegen.ts`, `apps/mobile/src/features/image/README.md`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/src/features/chat/components/GeneratedImage.tsx`, `apps/mobile/src/features/chat/components/ImageFullScreen.tsx`, `apps/mobile/services/contentReport.ts`, `apps/mobile/lib/contentFilter.ts`, `apps/web/app/api/media/image/generate/route.ts`, and the model catalog `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 Image generation on AGI Mobile is **Managed-Cloud only**. The phone never runs a heavy diffusion model on-device: per `apps/mobile/AGENTS.md` ("Mobile should not become the heavy compute surface first"), all pixels come back from the cloud gateway. The on-device Local LLM (small, free) handles text and routing; it does **not** generate images. There is therefore **no Local image-gen mode** and — because **Mobile has no BYOK** — there is no API-key affordance anywhere in this domain. "Provider configuration" on mobile means on-device model management for the Local LLM, never image-provider keys.
 
-Concretely, the mobile client submits a prompt to the cloud and renders the result; model selection and provider routing are owned server-side. The client deliberately **does not pin model IDs** (`imagegen.ts` header), so it can never drift from the canonical catalog in `packages/types/src/models.json`. Image-capable models in that catalog today include `imagen-4`, `imagen-4-fast`, `imagen-4-ultra`, `gpt-image-2`, `gemini-3.1-flash-image`, `ideogram-2`, and `stable-diffusion-xl` — but mobile passes at most an optional `model` override the gateway validates; it never hardcodes one. Access is gated by a real Clerk auth session plus plan tier, with `remoteChatGate` semantics failing closed when Cloud is disabled.
+Concretely, the mobile client submits a prompt to the cloud and renders the result; model selection and provider routing are owned server-side. The client deliberately **does not pin model IDs** (`imagegen.ts` header), so it can never drift from the canonical catalog in `packages/contracts/types/src/models.json`. Image-capable models in that catalog today include `imagen-4`, `imagen-4-fast`, `imagen-4-ultra`, `gpt-image-2`, `gemini-3.1-flash-image`, `ideogram-2`, and `stable-diffusion-xl` — but mobile passes at most an optional `model` override the gateway validates; it never hardcodes one. Access is gated by a real Clerk auth session plus plan tier, with `remoteChatGate` semantics failing closed when Cloud is disabled.
 
 ## Prompting
 
@@ -60,7 +60,7 @@ Gap: server-side image moderation (NSFW/abuse classification on output) is provi
 - `apps/mobile/lib/v1FeatureFlags.ts` — `imageGen` master switch.
 - `apps/mobile/lib/contentFilter.ts`, `apps/mobile/services/contentReport.ts` — minor-safe filter + flagging.
 - `apps/web/app/api/media/image/generate/route.ts` — Managed-Cloud generation + tier gate (cross-surface owner).
-- `packages/types/src/models.json` — canonical image model catalog (image IDs live here only).
+- `packages/contracts/types/src/models.json` — canonical image model catalog (image IDs live here only).
 
 ## Competitor notes
 
@@ -78,7 +78,7 @@ Production-ready when: image gen runs only through the authenticated Managed-Clo
 
 - Adding any BYOK or API-key field to mobile image gen — forbidden on this surface, forever.
 - Auto-sending a Local chat to the cloud to make an image; image gen is an explicit Cloud action.
-- Hardcoding a model ID in the client; read only from `packages/types/src/models.json` via the gateway.
+- Hardcoding a model ID in the client; read only from `packages/contracts/types/src/models.json` via the gateway.
 - Claiming Editing, Inpainting, save-to-Photos, a gallery, or AGI output moderation as shipped — they are 🔭/🟡; never fake an unbuilt capability in UI copy.
 - Running heavy diffusion/inpaint compositing on-device.
 - Presenting removed tiers (Plus/Hobby/pro_plus) or inventing Pro/Max INR prices.

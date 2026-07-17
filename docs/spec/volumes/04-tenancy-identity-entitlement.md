@@ -22,9 +22,9 @@ Cloud vs Local reshapes tenancy materially. In **Managed Cloud**, identity is th
 
 ## Repository map
 
-- `packages/types/src/enterprise/` and `packages/types/src/auth.ts`, `user.ts`, `workspace-analytics.ts` — org/team/workspace/user and entitlement contracts.
-- `packages/types/src/billing-catalog.ts` — subscription tiers and entitlement metadata (Free, Plus, Pro, Max, Enterprise).
-- `packages/compliance/` — compliance helpers feeding enterprise controls.
+- `packages/contracts/types/src/enterprise/` and `packages/contracts/types/src/auth.ts`, `user.ts`, `workspace-analytics.ts` — org/team/workspace/user and entitlement contracts.
+- `packages/contracts/types/src/billing-catalog.ts` — subscription tiers and entitlement metadata (Free, Plus, Pro, Max, Enterprise).
+- `packages/contracts/compliance/` — compliance helpers feeding enterprise controls.
 - `services/api-gateway` — server-side entitlement, quota, and spend-limit enforcement for managed compute; the only place managed access is gated.
 - `apps/web/db/neon` — canonical migrations; RLS policies and append-only audit tables live here.
 - `docs/enterprise/` — admin policy, identity, audit, support, usage-ledger docs (`repo-map.json` Enterprise Control Plane); managed access stays subscription/entitlement-gated.

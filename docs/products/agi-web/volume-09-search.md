@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`, and the real repo paths grounded below: `apps/web/app/api/search/route.ts`, `apps/web/app/api/memory/search/route.ts`, `apps/web/features/chat/services/global-search-service.ts`, `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx`, `apps/web/core/integrations/web-search-handler.ts`, `apps/web/db/neon/0020_functions.sql`, `apps/web/db/neon/0001_mvp_chat.sql`, `apps/web/db/neon/0035_project_knowledge_file_lifecycle.sql`, and provider facts from `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`, and the real repo paths grounded below: `apps/web/app/api/search/route.ts`, `apps/web/app/api/memory/search/route.ts`, `apps/web/features/chat/services/global-search-service.ts`, `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx`, `apps/web/core/integrations/web-search-handler.ts`, `apps/web/db/neon/0020_functions.sql`, `apps/web/db/neon/0001_mvp_chat.sql`, `apps/web/db/neon/0035_project_knowledge_file_lifecycle.sql`, and provider facts from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -14,7 +14,7 @@ Search on AGI Web spans two distinct axes: **internet search** (an in-chat tool 
 
 ## Web Search — internet search integration
 
-Live web search is a chat tool, not product navigation. `apps/web/core/integrations/web-search-handler.ts` implements a provider fallback chain — Perplexity → Google Custom Search → DuckDuckGo — behind authenticated proxies, returning normalized `{title, url, snippet, source, publishedDate, favicon}` results plus an optional cited answer. The Perplexity model is resolved via `requireProviderDefaultModel('perplexity')` from `packages/types/src/models.json` (never hardcoded). UI surfaces exist: `apps/web/features/chat/v3/WebSearchModalCmdK.tsx`, `features/chat/components/search/{SearchResults,SearchResultCard}.tsx`, `features/chat/components/InlineToolResults/InlineSearchResults.tsx`, and a deep-research panel (`features/chat/components/research/ResearchPanel.tsx`, `features/chat/stores/research-panel-store.ts`).
+Live web search is a chat tool, not product navigation. `apps/web/core/integrations/web-search-handler.ts` implements a provider fallback chain — Perplexity → Google Custom Search → DuckDuckGo — behind authenticated proxies, returning normalized `{title, url, snippet, source, publishedDate, favicon}` results plus an optional cited answer. The Perplexity model is resolved via `requireProviderDefaultModel('perplexity')` from `packages/contracts/types/src/models.json` (never hardcoded). UI surfaces exist: `apps/web/features/chat/v3/WebSearchModalCmdK.tsx`, `features/chat/components/search/{SearchResults,SearchResultCard}.tsx`, `features/chat/components/InlineToolResults/InlineSearchResults.tsx`, and a deep-research panel (`features/chat/components/research/ResearchPanel.tsx`, `features/chat/stores/research-panel-store.ts`).
 
 - 🟡 **Built, with a deployment gap.** The handler posts to `/.netlify/functions/llm-proxies/*`, but Web deploys on **Vercel** (`apps/web/vercel.json`). The Netlify proxy path is stale and must be repointed to Vercel-hosted route handlers before this is production-clean. Track as a reconciliation gap.
 - Requirement: internet search must require auth, redact nothing outbound beyond the query, label the provider used, and cite source URLs. No client-side keys — ever.
@@ -78,6 +78,6 @@ Production-ready when internet search runs through Vercel-hosted authenticated p
 
 - Do not surface a "search projects/artifacts/files/settings" control while those scopes are unimplemented — mark 🔭, don't fake availability.
 - Do not add a BYOK or Local search source to Web, or route internet-search keys to the client.
-- Do not hardcode the Perplexity (or any) model ID — resolve via `packages/types/src/models.json`.
+- Do not hardcode the Perplexity (or any) model ID — resolve via `packages/contracts/types/src/models.json`.
 - Do not reference Supabase, `middleware.ts`, removed tiers ("Plus"/`pro_plus`/"Hobby"), or credit top-ups.
 - Do not claim relevance ranking without a real FTS/vector index migration, and do not leave dead filters (`sessionIds`) wired to nothing.

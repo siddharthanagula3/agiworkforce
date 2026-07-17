@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real surface paths `apps/mobile/app/(app)/_layout.tsx`, `apps/mobile/app/(app)/index.tsx`, `apps/mobile/app/(app)/(tabs)/_layout.tsx`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx`, `apps/mobile/stores/chatStore.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real surface paths `apps/mobile/app/(app)/_layout.tsx`, `apps/mobile/app/(app)/index.tsx`, `apps/mobile/app/(app)/(tabs)/_layout.tsx`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx`, `apps/mobile/stores/chatStore.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -101,6 +101,6 @@ Home is production-ready when navigation, recents, search, projects, pins, profi
 - Auto-sending or auto-routing Local chats to Cloud, or merging Local and Cloud recents/projects.
 - Re-adding suggestion/starter cards to the new-chat home.
 - Faking notifications, badges, or availability the producers do not yet emit.
-- Hardcoding a model ID; read from `packages/types/src/models.json`.
+- Hardcoding a model ID; read from `packages/contracts/types/src/models.json`.
 - Referencing Supabase (removed) or any deprecated tier ("Plus", `pro_plus`, "Hobby"); use Free / Basic / Pro / Max / Enterprise.
 - Showing a blank pane instead of an explicit empty or loading state.

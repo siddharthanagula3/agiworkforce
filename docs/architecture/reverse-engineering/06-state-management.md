@@ -2,41 +2,41 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-10
+Last updated: 2026-07-15
 
-State is **Zustand** everywhere (with `immer` for complex updates, `persist` for durable slices). The architecture separates **shared chat/model/agent state** (owned by `packages/unified-chat`) from **surface-local state** (per-app stores for platform-specific concerns). This file maps the layers and the consolidation still in flight.
+State is **Zustand** everywhere (with `immer` for complex updates, `persist` for durable slices). The architecture separates **shared chat/model/agent state** (owned by `packages/ui/unified-chat`) from **surface-local state** (per-app stores for platform-specific concerns). This file maps the layers and the consolidation still in flight.
 
 ## 6.1 The layering principle
 
 ```
-packages/unified-chat/src/stores/*   ← shared chat experience state (all app surfaces)
-packages/stores/src/*                ← shared platform-agnostic stores w/ injected IO (artifact)
+packages/ui/unified-chat/src/stores/*   ← shared chat experience state (all app surfaces)
+packages/platform/artifacts/src/artifact-store.ts ← shared artifact state w/ injected IO
 apps/<surface>/stores/*              ← surface-local state (platform, device, IA, glue)
 ```
 
 Two rules keep it honest:
 
 1. Shared chat/model/agent concerns belong in `unified-chat` stores; a surface should consume them, not fork them.
-2. `packages/stores` holds truly platform-agnostic stores where **all IO is injected via adapters** (so the same store runs on web/desktop/mobile with different persistence).
+2. `packages/platform/artifacts` owns artifact-domain state where **all IO is injected via adapters** (so the same store runs on web/desktop/mobile with different persistence). The generic `packages/stores` compatibility facade was deleted at M8 (2026-07-15).
 
-## 6.2 Shared stores — `packages/unified-chat/src/stores`
+## 6.2 Shared stores — `packages/ui/unified-chat/src/stores`
 
 The shared chat experience state (consumed by web + desktop, logic-reused by mobile):
 
-| Store | Owns |
-| ----- | ---- |
-| `chatStore.ts` | conversation/message state (persist key `agi-web-chat`) |
-| `modelStore.ts` | selected model + effort + capability-derived controls |
-| `artifactStore.ts` | artifact workbench state |
-| `agentModeStore.ts`, `agentControlStore.ts`, `agentLoopStore.ts` | Chat vs AGI-Work mode, agent run control, tool loop |
-| `planModeStore.ts`, `budgetStore.ts`, `tierStore.ts` | plan/effort mode, budget, plan tier gating |
-| `memoryStore.ts`, `projectStore.ts` | memory + project context |
-| `checkpointStore.ts`, `promptStashStore.ts`, `mentionStore.ts` | checkpoints, stashed prompts, @-mentions |
-| `settingsStore.ts`, `uiStore.ts` | shared settings + shared chat UI state |
+| Store                                                            | Owns                                                    |
+| ---------------------------------------------------------------- | ------------------------------------------------------- |
+| `chatStore.ts`                                                   | conversation/message state (persist key `agi-web-chat`) |
+| `modelStore.ts`                                                  | selected model + effort + capability-derived controls   |
+| `artifactStore.ts`                                               | artifact workbench state                                |
+| `agentModeStore.ts`, `agentControlStore.ts`, `agentLoopStore.ts` | Chat vs AGI-Work mode, agent run control, tool loop     |
+| `planModeStore.ts`, `budgetStore.ts`, `tierStore.ts`             | plan/effort mode, budget, plan tier gating              |
+| `memoryStore.ts`, `projectStore.ts`                              | memory + project context                                |
+| `checkpointStore.ts`, `promptStashStore.ts`, `mentionStore.ts`   | checkpoints, stashed prompts, @-mentions                |
+| `settingsStore.ts`, `uiStore.ts`                                 | shared settings + shared chat UI state                  |
 
-## 6.3 Shared platform-agnostic store — `packages/stores`
+## 6.3 Shared platform-agnostic artifact store — `packages/platform/artifacts`
 
-`packages/stores` currently owns the **artifact store** (`src/artifacts/artifactStore.ts`) with IO injected via adapters, depending on `api`, `runtime`, `types`, `unified-chat`. Consumed by desktop/web/mobile so artifact persistence differs per surface (Tauri store vs cloud vs sqlite) while logic stays single-sourced.
+`packages/platform/artifacts` owns the **artifact store** (`src/artifact-store.ts`) with IO injected via adapters. It is consumed directly by Desktop/Web/Mobile so artifact persistence differs per surface (Tauri store vs cloud vs sqlite) while logic stays single-sourced. The former `packages/stores` re-export facade was deleted at M8 (2026-07-15); import from `@agiworkforce/artifacts` directly.
 
 ## 6.4 Web — `apps/web/stores`
 
@@ -65,7 +65,7 @@ The two trust-mode toggles (area 1) each drive a **guarded** mode store:
 - Desktop `appModeStore` — Local/Cloud, protected by `desktopCloudGate` tests.
 - Mobile `stores/chat` mode state — 4-layer enforcement, `remoteChatGate` fails closed.
 
-These stores are the state-level enforcement of "never silently route Local → Cloud." They are intentionally per-surface (they wrap platform trust primitives) but share the mode-state *contract/types* from `suite-contracts.ts`.
+These stores are the state-level enforcement of "never silently route Local → Cloud." They are intentionally per-surface (they wrap platform trust primitives) but share the mode-state _contract/types_ from `suite-contracts.ts`.
 
 ## 6.8 What's fully documented vs flagged
 

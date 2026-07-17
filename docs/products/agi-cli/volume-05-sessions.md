@@ -94,5 +94,5 @@ Security:
 - Do **not** let resume/fork silently switch trust mode; never route Local context to BYOK/Managed without the consent gate.
 - Do **not** treat a persisted "managed session" as Managed Cloud, or claim `agi cloud` execution works (it is not wired).
 - Do **not** invent commands (`agi session export/import/clean` do not exist as shipped), reference removed tiers (Plus/Hobby/pro_plus), add credit top-ups, or mention Supabase.
-- Do **not** hardcode model IDs — resolve from `packages/types/src/models.json`; use the `agi` binary in examples, never `agiworkforce`.
+- Do **not** hardcode model IDs — resolve from `packages/contracts/types/src/models.json`; use the `agi` binary in examples, never `agiworkforce`.
 - Do **not** present the remote window as a trust mode or ship it without QR + HMAC pairing, outbound-only transport, and per-action approval.

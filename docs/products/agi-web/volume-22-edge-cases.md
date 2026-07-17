@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon). Grounded in real repo paths: `apps/web/lib/{error-handler,errors,rate-limit,csrf}.ts`, `apps/web/proxy.ts`, `apps/web/lib/server/{rls-db,media-storage}.ts`, `apps/web/app/api/{chat/sync,llm/v2/chat,completion}/route.ts`, `apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts`, `apps/web/lib/runtime/WebChatRuntime.ts`, `apps/web/components/OfflineIndicator.tsx`, `apps/web/lib/offline/{offlineQueue,offlineSync}.ts`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, `apps/web/lib/services/credit-service.ts`, `apps/web/app/api/stripe-webhook/lib/idempotency.ts`, `packages/types/src/chat.ts`.
+Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon). Grounded in real repo paths: `apps/web/lib/{error-handler,errors,rate-limit,csrf}.ts`, `apps/web/proxy.ts`, `apps/web/lib/server/{rls-db,media-storage}.ts`, `apps/web/app/api/{chat/sync,llm/v2/chat,completion}/route.ts`, `apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts`, `apps/web/lib/runtime/WebChatRuntime.ts`, `apps/web/components/OfflineIndicator.tsx`, `apps/web/lib/offline/{offlineQueue,offlineSync}.ts`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, `apps/web/lib/services/credit-service.ts`, `apps/web/app/api/stripe-webhook/lib/idempotency.ts`, `packages/contracts/types/src/chat.ts`.
 
 ## Overview & stance
 
@@ -12,11 +12,11 @@ AGI Web is the **cloud-only** surface: no BYOK, no Local mode — never add eith
 
 ## No Internet
 
-✅ Built (core) / 🔭 Planned (live streaming offline). Web detects connectivity via `navigator.onLine` plus `window` online/offline events and an `/api/health` HEAD probe, surfaced by `apps/web/components/OfflineIndicator.tsx` (banner with status, queued count, sync state, retry). Mutations buffer in `apps/web/lib/offline/offlineQueue.ts` (localStorage key `agi_offline_queue`, backed by shared `@agiworkforce/runtime/offline-queue`) and drain through `apps/web/lib/offline/offlineSync.ts` on reconnect. Requirements: the offline banner MUST appear within one health-probe interval; queued writes MUST replay idempotently against the delta-sync endpoints (see Duplicate Requests) and never drop on reload. Live LLM **streaming** cannot proceed offline — the request MUST fail fast with a retryable, non-destructive error (resumable generation is 🔭).
+✅ Built (core) / 🔭 Planned (live streaming offline). Web detects connectivity via `navigator.onLine` plus `window` online/offline events and an `/api/health` HEAD probe, surfaced by `apps/web/components/OfflineIndicator.tsx` (banner with status, queued count, sync state, retry). Mutations buffer in `apps/web/lib/offline/offlineQueue.ts` (localStorage key `agi_offline_queue`, backed by shared `@agiworkforce/client-runtime/offline-queue`) and drain through `apps/web/lib/offline/offlineSync.ts` on reconnect. Requirements: the offline banner MUST appear within one health-probe interval; queued writes MUST replay idempotently against the delta-sync endpoints (see Duplicate Requests) and never drop on reload. Live LLM **streaming** cannot proceed offline — the request MUST fail fast with a retryable, non-destructive error (resumable generation is 🔭).
 
 ## Upload Failure
 
-🟡 Partial. The knowledge-file write (`apps/web/app/api/projects/[id]/knowledge-files/route.ts`) validates type/size, requires a non-empty `mimeType`, and is guarded by `requireCsrfToken` + `withRateLimit`; object bytes live in Vercel Blob (`apps/web/lib/server/media-storage.ts`). The gap: the route assumes `storageUri` **already exists** — the signed-upload contract (`SignedUploadRequest`/`SignedUploadResponse` in `packages/types/src/chat.ts`) has no Web endpoint, so a partial byte upload is not yet transactional with the metadata row. Requirements: on failure the UI MUST show a specific, retryable reason (network, too-large, unsupported, server); a failed upload MUST NOT leave an orphaned metadata row or orphaned bytes; retries MUST reuse the same checksum-addressed object key. No Local/BYOK fallback may appear when an upload fails.
+🟡 Partial. The knowledge-file write (`apps/web/app/api/projects/[id]/knowledge-files/route.ts`) validates type/size, requires a non-empty `mimeType`, and is guarded by `requireCsrfToken` + `withRateLimit`; object bytes live in Vercel Blob (`apps/web/lib/server/media-storage.ts`). The gap: the route assumes `storageUri` **already exists** — the signed-upload contract (`SignedUploadRequest`/`SignedUploadResponse` in `packages/contracts/types/src/chat.ts`) has no Web endpoint, so a partial byte upload is not yet transactional with the metadata row. Requirements: on failure the UI MUST show a specific, retryable reason (network, too-large, unsupported, server); a failed upload MUST NOT leave an orphaned metadata row or orphaned bytes; retries MUST reuse the same checksum-addressed object key. No Local/BYOK fallback may appear when an upload fails.
 
 ## Rate Limits
 
@@ -32,7 +32,7 @@ AGI Web is the **cloud-only** surface: no BYOK, no Local mode — never add eith
 
 ## Large Files
 
-✅ Built. A hard per-file cap `MAX_ATTACHMENT_BYTES = 25 MiB` lives in `packages/types/src/chat.ts`, enforced client-side by `validateAttachmentFile()` and server-side in the knowledge-file POST (MiB-accurate rejection message). Sync payloads are bounded independently: `apps/web/app/api/chat/sync/route.ts` caps push/pull rows (`MAX_MESSAGES_PUSH`, `MAX_CONVERSATIONS_PULL`, etc.) and zod-limits field sizes (message `content` ≤ 1,000,000 chars, artifact `content` ≤ 2,000,000). Requirements: oversized input MUST be rejected **before** transmit with a clear reason; the paginated pull cursor MUST NOT skip rows when a page saturates (`computePullCursor` invariant). Per-tier storage/volume quotas are 🔭.
+✅ Built. A hard per-file cap `MAX_ATTACHMENT_BYTES = 25 MiB` lives in `packages/contracts/types/src/chat.ts`, enforced client-side by `validateAttachmentFile()` and server-side in the knowledge-file POST (MiB-accurate rejection message). Sync payloads are bounded independently: `apps/web/app/api/chat/sync/route.ts` caps push/pull rows (`MAX_MESSAGES_PUSH`, `MAX_CONVERSATIONS_PULL`, etc.) and zod-limits field sizes (message `content` ≤ 1,000,000 chars, artifact `content` ≤ 2,000,000). Requirements: oversized input MUST be rejected **before** transmit with a clear reason; the paginated pull cursor MUST NOT skip rows when a page saturates (`computePullCursor` invariant). Per-tier storage/volume quotas are 🔭.
 
 ## Duplicate Requests
 
@@ -54,12 +54,12 @@ AGI Web is the **cloud-only** surface: no BYOK, no Local mode — never add eith
 - `apps/web/app/api/chat/sync/route.ts` — idempotent delta-sync UPSERT, payload caps, pull cursor.
 - `apps/web/app/api/{llm/v2/chat,completion}/route.ts`, `apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts`, `apps/web/lib/runtime/WebChatRuntime.ts` — streaming, timeout, credit refund, client SSE reader.
 - `apps/web/components/OfflineIndicator.tsx`, `apps/web/lib/offline/{offlineQueue,offlineSync}.ts` — offline queue.
-- `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, `apps/web/lib/server/media-storage.ts`, `packages/types/src/chat.ts` — upload validation, storage, size caps.
+- `apps/web/app/api/projects/[id]/knowledge-files/route.ts`, `apps/web/lib/server/media-storage.ts`, `packages/contracts/types/src/chat.ts` — upload validation, storage, size caps.
 - `apps/web/lib/services/credit-service.ts`, `apps/web/app/api/stripe-webhook/lib/idempotency.ts` — idempotency keys.
 
 ## Competitor notes
 
-Claude, ChatGPT, and Codex handle these edges with retryable errors, streaming reconnection, and rate-limit backoff. AGI's deliberate divergence is **per-surface trust**: on Web every failure resolves inside one Managed-Cloud boundary — no "fall back to Local" or "reroute via your key" escape hatch that Desktop/CLI/VS Code have. Provider-neutrality lives at the model layer (IDs only from `packages/types/src/models.json`), never by exposing user keys. The offline queue is a local **buffer** that flushes to AGI's own Neon delta-sync (Web ↔ Mobile ↔ Desktop), not a device trust mode.
+Claude, ChatGPT, and Codex handle these edges with retryable errors, streaming reconnection, and rate-limit backoff. AGI's deliberate divergence is **per-surface trust**: on Web every failure resolves inside one Managed-Cloud boundary — no "fall back to Local" or "reroute via your key" escape hatch that Desktop/CLI/VS Code have. Provider-neutrality lives at the model layer (IDs only from `packages/contracts/types/src/models.json`), never by exposing user keys. The offline queue is a local **buffer** that flushes to AGI's own Neon delta-sync (Web ↔ Mobile ↔ Desktop), not a device trust mode.
 
 ## Acceptance / Definition of Done
 

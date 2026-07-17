@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/src/features/settings/index.tsx`, `apps/mobile/stores/settings/{localSettingsStore,cloudSettingsStore,settingsSyncStateStore}.ts`, `apps/mobile/services/cloudSettingsMapping.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/lib/biometricFlagStore.ts`, `apps/mobile/stores/notificationPrefsStore.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/src/features/settings/index.tsx`, `apps/mobile/stores/settings/{localSettingsStore,cloudSettingsStore,settingsSyncStateStore}.ts`, `apps/mobile/services/cloudSettingsMapping.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/lib/biometricFlagStore.ts`, `apps/mobile/stores/notificationPrefsStore.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -14,7 +14,7 @@ The store layer enforces the split. `apps/mobile/stores/settings/localSettingsSt
 
 ## General — ✅ Built
 
-`apps/mobile/src/features/settings/general/index.tsx`. Device-scoped defaults: **Haptic Feedback** and **Temporary Chat** toggles (`stores/settingsStore.ts`), plus navigation rows to **Models**, **Performance**, and **Storage**. The hub's General row shows the active model short name from the model picker. Model IDs must come only from `packages/types/src/models.json` — never hardcoded here. Requirement: the info banner must state these controls are device-only and that Cloud settings are managed separately. No BYOK/provider-key row may ever appear.
+`apps/mobile/src/features/settings/general/index.tsx`. Device-scoped defaults: **Haptic Feedback** and **Temporary Chat** toggles (`stores/settingsStore.ts`), plus navigation rows to **Models**, **Performance**, and **Storage**. The hub's General row shows the active model short name from the model picker. Model IDs must come only from `packages/contracts/types/src/models.json` — never hardcoded here. Requirement: the info banner must state these controls are device-only and that Cloud settings are managed separately. No BYOK/provider-key row may ever appear.
 
 ### Temporary Chat — 🟡 Partial (approved scope addition, 2026-07-04)
 
@@ -67,7 +67,7 @@ Cloud privacy lives at `apps/mobile/src/features/settings/cloud-privacy/index.ts
 - `apps/mobile/stores/settings/` — `localSettingsStore.ts`, `cloudSettingsStore.ts`, `settingsSyncStateStore.ts`; plus `stores/settingsStore.ts`, `stores/notificationPrefsStore.ts`.
 - `apps/mobile/services/` — `cloudSettingsMapping.ts`, `dsarExport.ts`, `remoteChatGate.ts`.
 - `apps/mobile/lib/` — `v1FeatureFlags.ts`, `biometricFlagStore.ts`, `mmkv.ts`.
-- Shared SSOT: `packages/types/src/models.json` (model IDs). Cloud allowlist mirrors `apps/web/app/api/settings/sync/route.ts`.
+- Shared SSOT: `packages/contracts/types/src/models.json` (model IDs). Cloud allowlist mirrors `apps/web/app/api/settings/sync/route.ts`.
 
 ## Competitor notes
 
@@ -86,6 +86,6 @@ Production-ready when every shared screen routes by `appMode`, persistence survi
 - Adding any BYOK / provider-API-key field, or relabeling key entry as "Provider Configuration."
 - Spreading the full settings store into the cloud payload instead of the named allowlist; syncing device-only fields (voice hardware, biometrics, haptics, model paths).
 - Auto-syncing Local chats/memory/files, or syncing in the background — sync is manual and confirmed only.
-- Hardcoding a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Faking unbuilt Cloud Memory / cross-device sync as shipped, or referencing Supabase (the stack is Clerk + Neon + Stripe).
 - Reintroducing removed tiers ("Plus", `pro_plus`, "Hobby") or inventing INR prices beyond Basic (₹399) on any billing-linked row.

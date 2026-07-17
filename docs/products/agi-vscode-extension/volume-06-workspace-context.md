@@ -61,7 +61,7 @@ Production-ready when workspace context is discovered, budgeted, and assembled d
 
 - Auto-syncing workspace context, symbols, or the index into Web/Mobile/Desktop app chat, or into Neon (`apps/web/app/api/{chat,memory,projects}/sync`) — handoff must be explicit and redacted.
 - Silently routing a Local-mode request that carries workspace context to BYOK or Managed Cloud without the explicit fork (context selection, secret scan, payload preview, consent, visible label).
-- Hardcoding or inventing model IDs or context-window sizes — read from `packages/types/src/models.json` / `modelConstants`.
+- Hardcoding or inventing model IDs or context-window sizes — read from `packages/contracts/types/src/models.json` / `modelConstants`.
 - Sending git diffs or file bytes upstream without `redactSecrets`, or indexing `node_modules`/build output.
 - Claiming semantic/embedding retrieval, dependency-graph context, or workspace-symbol search as shipped — they are 🟡/🔭.
 - Referencing Supabase, or reintroducing removed tiers. Note: `package.json`'s `agiWorkforce.tier` enum still encodes `hobby`/`pro_plus` (🟡 — reconcile to Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise; no top-ups) as a separate tracked task.

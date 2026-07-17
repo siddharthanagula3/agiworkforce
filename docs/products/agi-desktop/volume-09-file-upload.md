@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and real repo paths: `apps/desktop/src/features/file-upload/*`, `apps/desktop/src/features/chat/hooks/{useAttachments,useDragAndDrop}.ts`, `apps/desktop/src/features/chat/{DragDropOverlay,AttachmentPreview,AudioPreview}.tsx`, `apps/desktop/src-tauri/src/core/agi/executors/{ocr_executor,file_executor,media_executor}.rs`, `apps/desktop/src-tauri/src/core/embeddings/*`, `packages/types/src/chat.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and real repo paths: `apps/desktop/src/features/file-upload/*`, `apps/desktop/src/features/chat/hooks/{useAttachments,useDragAndDrop}.ts`, `apps/desktop/src/features/chat/{DragDropOverlay,AttachmentPreview,AudioPreview}.tsx`, `apps/desktop/src-tauri/src/core/agi/executors/{ocr_executor,file_executor,media_executor}.rs`, `apps/desktop/src-tauri/src/core/embeddings/*`, `packages/contracts/types/src/chat.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies how AGI Desktop ingests files into a chat or task: the accepted formats, the drop/paste/picker entry points, preview, and the downstream extraction pipeline (OCR, chunking, embeddings). Desktop is the full-trust surface (Local + BYOK + Managed Cloud), so file upload is governed by one rule above all others: **local files stay on the host unless the user explicitly transfers them.** Attachments read client-side become part of the outbound payload only for the trust mode the user selected, and every attachment renders a per-file privacy label (`AttachmentPreview.tsx`, `privacyShortLabel`). A Local→BYOK fork surfaces attachments in the context-selection + payload-preview step so no local file crosses to a provider without consent. Native filesystem reads run through a path-validated Rust executor (`file_executor.rs`), never raw `fs` from the webview. Canonical limits live in `@agiworkforce/types` (`MAX_ATTACHMENT_BYTES = 25 MiB`, `packages/types/src/chat.ts`), keeping per-surface behavior aligned.
+This volume specifies how AGI Desktop ingests files into a chat or task: the accepted formats, the drop/paste/picker entry points, preview, and the downstream extraction pipeline (OCR, chunking, embeddings). Desktop is the full-trust surface (Local + BYOK + Managed Cloud), so file upload is governed by one rule above all others: **local files stay on the host unless the user explicitly transfers them.** Attachments read client-side become part of the outbound payload only for the trust mode the user selected, and every attachment renders a per-file privacy label (`AttachmentPreview.tsx`, `privacyShortLabel`). A Local→BYOK fork surfaces attachments in the context-selection + payload-preview step so no local file crosses to a provider without consent. Native filesystem reads run through a path-validated Rust executor (`file_executor.rs`), never raw `fs` from the webview. Canonical limits live in `@agiworkforce/types` (`MAX_ATTACHMENT_BYTES = 25 MiB`, `packages/contracts/types/src/chat.ts`), keeping per-surface behavior aligned.
 
 ## PDF
 
@@ -44,7 +44,7 @@ This volume specifies how AGI Desktop ingests files into a chat or task: the acc
 
 ## Images
 
-✅ Built. Images attach as base64 data URLs and preview inline (`AttachmentPreview.tsx`, image/screenshot branch). Vision is gated on model capability — `ChatInputArea.tsx` blocks image sends when `capabilities.supportsVision` is false, with capability sourced from `packages/types/src/models.json` (never hardcode an ID). Requirement: respect the 25 MiB per-file / 10-attachment caps and the selected trust mode's provider.
+✅ Built. Images attach as base64 data URLs and preview inline (`AttachmentPreview.tsx`, image/screenshot branch). Vision is gated on model capability — `ChatInputArea.tsx` blocks image sends when `capabilities.supportsVision` is false, with capability sourced from `packages/contracts/types/src/models.json` (never hardcode an ID). Requirement: respect the 25 MiB per-file / 10-attachment caps and the selected trust mode's provider.
 
 ## Videos
 
@@ -85,7 +85,7 @@ This volume specifies how AGI Desktop ingests files into a chat or task: the acc
 - `apps/desktop/src/features/chat/{DragDropOverlay,AttachmentPreview,AudioPreview,ChatInputArea}.tsx`, `MessageBubble/{MessageAttachments,PastedBadge}.tsx`
 - `apps/desktop/src-tauri/src/core/agi/executors/{ocr_executor,file_executor,media_executor}.rs`
 - `apps/desktop/src-tauri/src/core/embeddings/{chunker,generator,indexer,similarity,cache}.rs`, `core/agi/semantic_search.rs`
-- `packages/types/src/chat.ts` (`MAX_ATTACHMENT_BYTES`, attachment validation), `packages/types/src/models.json` (vision capability)
+- `packages/contracts/types/src/chat.ts` (`MAX_ATTACHMENT_BYTES`, attachment validation), `packages/contracts/types/src/models.json` (vision capability)
 
 ## Competitor notes
 
@@ -103,5 +103,5 @@ Claude, ChatGPT, and Codex upload files to the provider's cloud, extract server-
 - Reading files with raw webview `fs` instead of the path-validated Rust executor.
 - Loading the pdf.js worker (or any parser) from a remote CDN in a local-first build.
 - Claiming Word/Excel/PowerPoint/ZIP/video ingestion as shipped — they are 🔭 Planned with no parser dependency in the repo.
-- Hardcoding a model ID or vision capability instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID or vision capability instead of reading `packages/contracts/types/src/models.json`.
 - Introducing removed tiers (Plus/Hobby/`pro_plus`), credit top-ups, or Supabase; billing/tier language must match the canon (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise).

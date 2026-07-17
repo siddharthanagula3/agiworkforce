@@ -8,7 +8,7 @@ AGI Web is the CLOUD-ONLY surface of the platform: it has NO BYOK and NO Local m
 
 ## Pricing
 
-AGI Web uses the shared platform pricing model: Free, Basic ($8 · ₹399), Pro ($20), Max ($100 and $200), and Enterprise. There is no Plus or Hobby tier and no top-ups. Local and BYOK are free access modes on the surfaces where they are offered — on Web, which is cloud-only, neither applies, so paid managed cloud is the only path to chat.
+AGI Web uses the shared platform pricing model: Free, Basic ($7 · ₹399), Pro ($20), Max ($100 and $200), Team ($30/seat), and Enterprise. There is no Plus or Hobby tier; top-ups are enabled for paid tiers (capped, opt-in). Local and BYOK are free access modes on the surfaces where they are offered — on Web, which is cloud-only, neither applies, so paid managed cloud is the only path to chat.
 
 ## Spec Governance
 

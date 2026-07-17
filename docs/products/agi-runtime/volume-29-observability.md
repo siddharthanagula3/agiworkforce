@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/desktop/AGENTS.md` (nearest surface AGENTS.md — the desktop host owns most runtime telemetry). Grounded in real repo paths: `services/signaling-server/src/{logger,metrics,index}.ts`; `apps/desktop/src-tauri/src/sys/telemetry/{tracing,logging,metrics,correlation,redaction,analytics_metrics,collector,mod}.rs`; `apps/desktop/src-tauri/src/sys/commands/error_reporting.rs`; `apps/desktop/src-tauri/src/lib.rs` (panic hook); `apps/web/app/api/control-plane/status/route.ts`; `crates/agiworkforce-task-runtime/src/lib.rs`; `crates/agiworkforce-app-server/src/lib.rs`; `crates/agiworkforce-plugin-runtime/src/lib.rs`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/desktop/AGENTS.md` (nearest surface AGENTS.md — the desktop host owns most runtime telemetry). Grounded in real repo paths: `services/signaling-server/src/{logger,metrics,index}.ts`; `apps/desktop/src-tauri/src/sys/telemetry/{tracing,logging,metrics,correlation,redaction,analytics_metrics,collector,mod}.rs`; `apps/desktop/src-tauri/src/sys/commands/error_reporting.rs`; `apps/desktop/src-tauri/src/lib.rs` (panic hook); `apps/web/app/api/control-plane/status/route.ts`; `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`; `crates/agiworkforce-app-server/src/lib.rs`; `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`.
 
 ## Overview & stance
 
@@ -18,8 +18,8 @@ Structured, level-controlled, redaction-first logs per component with a shared f
 
 - ✅ Built — signaling relay uses `pino` structured logging (`services/signaling-server/src/logger.ts`): JSON in production, pretty in dev, `LOG_LEVEL`/`NODE_ENV`-driven levels, child loggers, and short correlation IDs.
 - ✅ Built — Desktop host emits JSON file logs plus a compact stdout layer via `tracing_subscriber` with `EnvFilter`, non-blocking appender, and daily rotation capped at 7 files (`apps/desktop/src-tauri/src/sys/telemetry/tracing.rs`, `logging.rs`); all file output passes through `RedactingWriter`.
-- 🟡 Partial — the shared crates log ad hoc with `eprintln!` and no levels/correlation (`crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-plugin-runtime/src/lib.rs`); gap: no structured logger, no redaction, not aggregatable.
-- 🔭 Planned — a unified runtime log schema across all six surfaces and the crates; `crates/agiworkforce-task-runtime/src/lib.rs` emits **no** logs today and must gain structured, redacted, correlation-tagged logging.
+- 🟡 Partial — the shared crates log ad hoc with `eprintln!` and no levels/correlation (`crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`); gap: no structured logger, no redaction, not aggregatable.
+- 🔭 Planned — a unified runtime log schema across all six surfaces and the crates; `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` emits **no** logs today and must gain structured, redacted, correlation-tagged logging.
 
 ## Diagnostics — runtime diagnostics
 
@@ -60,7 +60,7 @@ Capture panics/uncaught failures with symbolication, opt-in upload, and strict c
 - `apps/desktop/src-tauri/src/sys/commands/error_reporting.rs` — `error_report` command → Sentry store API.
 - `apps/desktop/src-tauri/src/lib.rs` — panic hook, telemetry init guard.
 - `apps/web/app/api/control-plane/status/route.ts` — cross-surface status aggregation (tables `🔭`).
-- `crates/agiworkforce-task-runtime/src/lib.rs`, `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-plugin-runtime/src/lib.rs` — runtime cores needing structured telemetry.
+- `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`, `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — runtime cores needing structured telemetry.
 
 ## Competitor notes
 
@@ -80,4 +80,4 @@ Production-ready when every runtime component emits structured, redacted, correl
 - Shipping Local chat content or BYOK provider keys into Sentry, signaling metrics, or cloud logs; enabling crash upload by default.
 - Silently routing Local/BYOK telemetry to Managed Cloud, or logging remote-control payloads that cross the outbound-only window.
 - Claiming `surface_heartbeats`/presence or distributed tracing as shipped — they are `🔭`.
-- Hardcoding or inventing model IDs in provider-health labels (read `packages/types/src/models.json`); referencing Supabase; or reintroducing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups in any usage/billing metric.
+- Hardcoding or inventing model IDs in provider-health labels (read `packages/contracts/types/src/models.json`); referencing Supabase; or reintroducing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups in any usage/billing metric.

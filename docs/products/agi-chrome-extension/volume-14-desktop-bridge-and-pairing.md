@@ -68,4 +68,4 @@ Production-ready when native + HTTP transports pair, handshake, stream, and reco
 - Do **not** send `agi_api_key` or unredacted page content over the bridge, or accept non-loopback bridge URLs (`0.0.0.0`, LAN IPs).
 - Do **not** downgrade the native channel to no-MAC once a session secret exists, or auto-execute host-supplied action plans without `validateShortcutActions` + approval gates.
 - Do **not** add Chrome-side memory/conversation/Projects sync, in-extension billing, or QR/WS transports without the THREAT_MODEL §6 checklist and supervisor sign-off.
-- Do **not** hardcode provider model IDs (Chrome runs no inference; IDs come only from `packages/types/src/models.json`), reference Supabase, or reintroduce removed tiers ("Plus", `pro_plus`, "Hobby"). Plans are Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
+- Do **not** hardcode provider model IDs (Chrome runs no inference; IDs come only from `packages/contracts/types/src/models.json`), reference Supabase, or reintroduce removed tiers ("Plus", `pro_plus`, "Hobby"). Plans are Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.

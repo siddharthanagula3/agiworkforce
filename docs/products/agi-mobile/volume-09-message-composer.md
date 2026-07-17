@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths cited inline below, chiefly `apps/mobile/src/features/chat/components/ChatInput.tsx`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx`, `apps/mobile/src/features/media/photo-picker.ts`, `apps/mobile/app/(app)/camera.tsx`, `apps/mobile/src/features/voice/services/voiceInput.ts`, `apps/mobile/lib/clipboard.ts`, `apps/mobile/stores/chat/chatExecutionStore.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths cited inline below, chiefly `apps/mobile/src/features/chat/components/ChatInput.tsx`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx`, `apps/mobile/src/features/media/photo-picker.ts`, `apps/mobile/app/(app)/camera.tsx`, `apps/mobile/src/features/voice/services/voiceInput.ts`, `apps/mobile/lib/clipboard.ts`, `apps/mobile/stores/chat/chatExecutionStore.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -55,7 +55,7 @@ UX Lock: the empty composer screen must always show the text input, add/plus but
 - `apps/mobile/src/features/media/photo-picker.ts`, `apps/mobile/app/(app)/camera.tsx` — image picker + camera capture.
 - `apps/mobile/src/features/voice/{services/voiceInput.ts,components/VoiceInputButton.tsx,components/RecordingOverlay.tsx}` — on-device dictation.
 - `apps/mobile/lib/{clipboard.ts,constants.ts,v1FeatureFlags.ts}` — clipboard, line caps, feature gates.
-- `apps/mobile/stores/chat/chatExecutionStore.ts` — send/stop/edit/retry. Shared: `packages/types/src/models.json` (model ids), `apps/web/app/api/{chat,media}` (Cloud endpoints).
+- `apps/mobile/stores/chat/chatExecutionStore.ts` — send/stop/edit/retry. Shared: `packages/contracts/types/src/models.json` (model ids), `apps/web/app/api/{chat,media}` (Cloud endpoints).
 
 ## Competitor notes
 
@@ -75,6 +75,6 @@ The composer is production-ready only when the empty state shows input + plus + 
 - Auto-sending Local input, or routing Local attachments/voice/camera to Cloud without explicit mode + consent.
 - Making Return send by default, or auto-reading the clipboard on focus.
 - Faking an unsupported capability (e.g. a File card in Local, a fake "uploaded" badge) instead of gating it honestly.
-- Hardcoding or inventing a model id rather than reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model id rather than reading `packages/contracts/types/src/models.json`.
 - Making Mobile the first heavy local PDF/DOCX/PPTX/image-gen engine instead of delegating to Desktop/Cloud.
 - Referencing Supabase, or any removed tier (Plus / pro_plus / Hobby) in composer copy.

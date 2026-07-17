@@ -33,7 +33,7 @@ The merge train is a separate Wave 5.5 task that rebases each branch onto main i
 
 To minimise conflicts:
 
-- Tasks deliberately touch disjoint paths where possible (1.2 → desktop services, 1.4 → packages/runtime/queue, 1.7 → services/api-gateway/worker, 1.8 → cross-surface adapters).
+- Tasks deliberately touch disjoint paths where possible (1.2 → desktop services, 1.4 → packages/client-runtime/queue, 1.7 → services/api-gateway/worker, 1.8 → cross-surface adapters).
 - Cross-cutting changes to `pnpm-lock.yaml` are accepted as "regenerate at merge time."
 - Branch 1.4 is explicitly off 1.3 because the queue is built on top of `createStore`. Other dependencies are noted in task descriptions.
 

@@ -67,4 +67,4 @@ Production-ready gate: every analytics sink is default-safe (off without explici
 - Enabling Sentry/GA4 by default, or emitting analytics scripts without the `proxy.ts` CSP nonce.
 - Anonymous feature-flag rolls that fail open or flicker per request (regression of the deterministic-bucketing fix in `gradual-rollout.ts`).
 - Claiming funnels/retention/RUM dashboards as shipped — they are 🔭 today.
-- Hardcoding or inventing model IDs (source only `packages/types/src/models.json`), referencing removed tiers (Plus/pro_plus/Hobby), inventing INR prices, adding credit top-ups, or referencing Supabase.
+- Hardcoding or inventing model IDs (source only `packages/contracts/types/src/models.json`), referencing removed tiers (Plus/pro_plus/Hobby), inventing INR prices, adding credit top-ups, or referencing Supabase.

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, the surface rules in `apps/desktop/AGENTS.md`, and the real capture stack: `apps/desktop/src-tauri/src/automation/screen/{mod.rs,capture.rs,dxgi.rs,ocr.rs}`, `apps/desktop/src-tauri/src/core/agent/vision.rs`, `apps/desktop/src-tauri/src/core/agi/executors/ocr_executor.rs`, `apps/desktop/src-tauri/src/sys/commands/{automation.rs,computer_use.rs,tool_confirmation.rs}`, `apps/desktop/src-tauri/Cargo.toml`, and the frontend under `apps/desktop/src/features/{settings,chat,tool-calling}/`. Model IDs are never hardcoded here; a vision model is resolved from `packages/types/src/models.json` per the active trust mode.
+Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, the surface rules in `apps/desktop/AGENTS.md`, and the real capture stack: `apps/desktop/src-tauri/src/automation/screen/{mod.rs,capture.rs,dxgi.rs,ocr.rs}`, `apps/desktop/src-tauri/src/core/agent/vision.rs`, `apps/desktop/src-tauri/src/core/agi/executors/ocr_executor.rs`, `apps/desktop/src-tauri/src/sys/commands/{automation.rs,computer_use.rs,tool_confirmation.rs}`, `apps/desktop/src-tauri/Cargo.toml`, and the frontend under `apps/desktop/src/features/{settings,chat,tool-calling}/`. Model IDs are never hardcoded here; a vision model is resolved from `packages/contracts/types/src/models.json` per the active trust mode.
 
 ## Overview & stance
 
@@ -40,7 +40,7 @@ Desktop Vision is the surface's ability to see the screen: capture pixels, read 
 
 ## Screen Analysis
 
-🟡 Partial (`apps/desktop/src-tauri/src/core/agent/vision.rs` `VisionAutomation`; computer-use loop in `apps/desktop/src-tauri/src/sys/commands/computer_use.rs`). `VisionAutomation` combines `capture_primary_screen`/`capture_region` with OCR to locate elements — `wait_for_element` polls with `MAX_WAIT_TIMEOUT` of 120s and gives up after `MAX_CAPTURE_FAILURES` (5) consecutive failures; `TextMatch` targets require the `ocr` feature, while `ImageMatch` needs only capture. Gap: full multimodal "describe/reason about this screenshot" through a vision LLM is trust-mode-dependent and not a general built path — the model is resolved from `packages/types/src/models.json` per mode (local model for Local, forked provider for BYOK, managed model for Cloud). Requirement: screen analysis never picks a remote model for a Local capture without an explicit fork; every analyzed frame carries its trust tag and confidence surfaced in the UI.
+🟡 Partial (`apps/desktop/src-tauri/src/core/agent/vision.rs` `VisionAutomation`; computer-use loop in `apps/desktop/src-tauri/src/sys/commands/computer_use.rs`). `VisionAutomation` combines `capture_primary_screen`/`capture_region` with OCR to locate elements — `wait_for_element` polls with `MAX_WAIT_TIMEOUT` of 120s and gives up after `MAX_CAPTURE_FAILURES` (5) consecutive failures; `TextMatch` targets require the `ocr` feature, while `ImageMatch` needs only capture. Gap: full multimodal "describe/reason about this screenshot" through a vision LLM is trust-mode-dependent and not a general built path — the model is resolved from `packages/contracts/types/src/models.json` per mode (local model for Local, forked provider for BYOK, managed model for Cloud). Requirement: screen analysis never picks a remote model for a Local capture without an explicit fork; every analyzed frame carries its trust tag and confidence surfaced in the UI.
 
 ## Repository map
 
@@ -68,5 +68,5 @@ Production-ready when every capture path is permission-gated, trust-tagged, and 
 - Capturing the screen without an approval turn, or letting a prompt-injected LLM trigger `computer_use_capture_screen` silently.
 - Auto-routing a Local screenshot, clipboard image, or OCR text to a BYOK or Managed-Cloud model without an explicit fork and payload preview.
 - Claiming OCR, annotation, or vision-LLM analysis is shipped without its real repo path, or marking the default (no-`ocr`-feature) build as full OCR.
-- Hardcoding a vision model ID instead of resolving from `packages/types/src/models.json`; referencing removed tiers (Plus/pro_plus/Hobby), inventing INR prices, or offering credit top-ups in any capture-related upsell.
+- Hardcoding a vision model ID instead of resolving from `packages/contracts/types/src/models.json`; referencing removed tiers (Plus/pro_plus/Hobby), inventing INR prices, or offering credit top-ups in any capture-related upsell.
 - Referencing Supabase; using `middleware.ts` instead of `proxy.ts`; treating redaction as a visual overlay that leaves the secret in the pixel data.

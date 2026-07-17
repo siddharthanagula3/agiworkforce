@@ -10,7 +10,7 @@ Authority: `AGENTS.md` (repo root), `apps/extension/AGENTS.md`, `docs/current/so
 
 This volume specifies the AGI Browser Companion's assistant surfaces: where the user reads and types, and where conversation state lives. The Chrome product is a permission-gated browser agent, not a standalone consumer assistant. Three consequences shape every requirement here.
 
-First, the extension is a **thin bridged client**: it holds no provider keys and runs no inference. All model traffic streams through the cloud gateway (`providerStreamClient.ts` → `/api/v1/providers/<id>/stream`) or the native/localhost bridge, with a hard EGRESS rule — no provider host (openai.com, anthropic.com, etc.) is ever contacted from the extension (`cloudAgentClient.ts`, enforced by `validateGatewayUrl`/`validateBridgeUrl` in `background/policy.ts`). Second, there is **no cloud conversation sync on this surface**: history is device-scoped `chrome.storage.local` by design (Web↔Mobile↔Desktop delta-sync explicitly excludes Chrome). Third, trust modes are constrained: Chrome exposes Managed Cloud (public alpha, signed-in) and the paired Desktop/localhost bridge only — **never BYOK**, and Local chats/files are never silently routed here. Model IDs shown in any picker come only from `packages/types/src/models.json`; model-by-plan gating mirrors Claude-in-Chrome plan gating, and paywalls render from server `429 {kind:'paywall', requiredTier}` responses.
+First, the extension is a **thin bridged client**: it holds no provider keys and runs no inference. All model traffic streams through the cloud gateway (`providerStreamClient.ts` → `/api/v1/providers/<id>/stream`) or the native/localhost bridge, with a hard EGRESS rule — no provider host (openai.com, anthropic.com, etc.) is ever contacted from the extension (`cloudAgentClient.ts`, enforced by `validateGatewayUrl`/`validateBridgeUrl` in `background/policy.ts`). Second, there is **no cloud conversation sync on this surface**: history is device-scoped `chrome.storage.local` by design (Web↔Mobile↔Desktop delta-sync explicitly excludes Chrome). Third, trust modes are constrained: Chrome exposes Managed Cloud (public alpha, signed-in) and the paired Desktop/localhost bridge only — **never BYOK**, and Local chats/files are never silently routed here. Model IDs shown in any picker come only from `packages/contracts/types/src/models.json`; model-by-plan gating mirrors Claude-in-Chrome plan gating, and paywalls render from server `429 {kind:'paywall', requiredTier}` responses.
 
 ## Side Panel Chat — thin bridged client ✅
 
@@ -82,7 +82,7 @@ Production-ready when: the docked side panel and floating in-page panel both str
 - Syncing extension conversation history or memory to Neon/account, or reusing `apps/web/app/api/chat/sync` from Chrome — history is device-scoped only.
 - Adding provider API-key entry, a direct provider fetch, or in-extension Stripe/checkout to any assistant view.
 - Exposing BYOK on Chrome, or silently routing Local/Desktop chats into the panel.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Surfacing removed tiers ("Plus", `pro_plus`, "Hobby") or inventing INR prices for Pro/Max; no credit top-ups.
 - Referencing Supabase (fully migrated away) or renaming Next.js `proxy.ts` back to `middleware.ts`.
 - Treating page/DOM content as instructions, injecting via `innerHTML`, or claiming a popup/search/pinned feature as shipped without a repo path.

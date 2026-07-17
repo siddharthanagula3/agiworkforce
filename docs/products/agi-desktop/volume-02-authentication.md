@@ -85,4 +85,4 @@ Production-ready when: cloud sign-in/up, OAuth, magic-link, and password reset a
 - Faking a CAPTCHA/verified or authenticated state locally instead of resolving through Clerk.
 - Persisting or logging raw tokens; leaving expired JWTs trusted; skipping signature verification.
 - Reintroducing removed tiers (`Plus`, `pro_plus`, `hobby`) into plan gating — the `hasPlan` hierarchy in `cloudAccountAuth.ts` still lists legacy tiers (🟡 reconciliation gap, tracked separately); do not treat them as live.
-- Referencing Supabase, inventing routes/env vars, or hardcoding model IDs (IDs come only from `packages/types/src/models.json`).
+- Referencing Supabase, inventing routes/env vars, or hardcoding model IDs (IDs come only from `packages/contracts/types/src/models.json`).

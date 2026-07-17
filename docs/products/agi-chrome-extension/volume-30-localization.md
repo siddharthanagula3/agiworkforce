@@ -2,13 +2,13 @@
 
 Status: Draft spec
 Owner: Founder + platform lead
-Last updated: 2026-07-01
+Last updated: 2026-07-11
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`, and the real surface paths `apps/extension/src/side_panel.ts`, `apps/extension/src/side_panel.html`, `apps/extension/src/options.ts`, `apps/extension/src/content.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/src/features/content/webmcp.ts`, `apps/extension/src/features/content/in-page-panel/`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, `apps/extension/MANIFEST_NOTES.md`, and the real surface paths `apps/extension/src/side_panel.ts`, `apps/extension/src/side_panel.html`, `apps/extension/src/options.ts`, `apps/extension/src/content.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/src/webmcp.ts`, `apps/extension/src/features/content/in-page-panel/`. (Corrected 2026-07-11: `webmcp.ts` lives at the top level of `apps/extension/src/`, not under `features/content/` — that path held a duplicate fork deleted by commit `59c8f4650` for missing security fixes.)
 
 ## Overview & stance
 
-This volume covers localization for the **AGI Browser Companion** — the permission-gated browser agent, not a consumer assistant. Two localization domains apply and must not be confused. **Chrome (extension) surface** = the extension's own UI (side panel, options, in-page panel): buttons, labels, dates, and number strings the extension renders. **Page content** = the untrusted, arbitrary-language text the agent reads from and acts on across sites. The product stance and trust boundary reshape both. The extension **holds no provider keys and runs no inference** (per `apps/extension/AGENTS.md`); any language work that needs a model — content translation, transliteration — must egress through the thin bridged chat (`providerStreamClient.ts` → `/api/v1/providers/<id>/stream`) or the desktop native bridge, never a provider host contacted directly. Model choice for such calls is server-gated by plan (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) and model IDs come only from `packages/types/src/models.json`. Localization must never become a covert exfiltration channel: page text sent for translation crosses the same allowlist + redaction gate as any other page capture. Today the extension ships **English-only UI** (`<html lang="en">` is hard-coded in `apps/extension/src/side_panel.html` and `options.html`); there is no `_locales/` directory and no `chrome.i18n` usage. Most parity here is therefore 🔭.
+This volume covers localization for the **AGI Browser Companion** — the permission-gated browser agent, not a consumer assistant. Two localization domains apply and must not be confused. **Chrome (extension) surface** = the extension's own UI (side panel, options, in-page panel): buttons, labels, dates, and number strings the extension renders. **Page content** = the untrusted, arbitrary-language text the agent reads from and acts on across sites. The product stance and trust boundary reshape both. The extension **holds no provider keys and runs no inference** (per `apps/extension/AGENTS.md`); any language work that needs a model — content translation, transliteration — must egress through the thin bridged chat (`providerStreamClient.ts` → `/api/v1/providers/<id>/stream`) or the desktop native bridge, never a provider host contacted directly. Model choice for such calls is server-gated by plan (Free / Basic $7·₹399 / Pro $20 / Max $100 & $200 / Team $30-seat / Enterprise) and model IDs come only from `packages/contracts/types/src/models.json`. Localization must never become a covert exfiltration channel: page text sent for translation crosses the same allowlist + redaction gate as any other page capture. Today the extension ships **English-only UI** (`<html lang="en">` is hard-coded in `apps/extension/src/side_panel.html` and `options.html`); there is no `_locales/` directory and no `chrome.i18n` usage. Most parity here is therefore 🔭.
 
 ## RTL
 
@@ -32,7 +32,7 @@ No `Intl.NumberFormat` usage exists in the extension source; numeric values (cou
 
 ## Unicode
 
-Unicode handling is the most mature area, driven by security rather than presentation. `sanitizePageText` strips invisible/deceptive Unicode via the single-source-of-truth `INVISIBLE_UNICODE_RE` (zero-width, bidi-override, and tag-block ranges `\u{E0000}-\u{E007F}`) then redacts secrets before any page text is sent to the model (`apps/extension/src/background/policy.ts` L437-449; applied in `apps/extension/src/content.ts` L107-111). WebMCP tool names are rejected if they carry visually deceptive Unicode or CSS metacharacters via `isValidToolName` (`apps/extension/src/features/content/webmcp.ts` L28, chrome-MED-5). Whitespace (including ` `) is collapsed in extraction paths (`content.ts` L108, `in-page-panel/pageActions.ts`). **✅ Built** for injection-defense sanitization. Gap 🔭: no NFC/NFKC normalization for _display_ consistency (composed vs decomposed forms) and no grapheme-cluster-aware truncation, so slicing (`.slice(0, TOOL_DESCRIPTION_MAX_CHARS)`) can split emoji/combining sequences.
+Unicode handling is the most mature area, driven by security rather than presentation. `sanitizePageText` strips invisible/deceptive Unicode via the single-source-of-truth `INVISIBLE_UNICODE_RE` (zero-width, bidi-override, and tag-block ranges `\u{E0000}-\u{E007F}`) then redacts secrets before any page text is sent to the model (`apps/extension/src/background/policy.ts` L437-449; applied in `apps/extension/src/content.ts` L107-111). WebMCP tool names are rejected if they carry visually deceptive Unicode or CSS metacharacters via `isValidToolName` (`apps/extension/src/webmcp.ts` L28, chrome-MED-5). Whitespace (including ` `) is collapsed in extraction paths (`content.ts` L108, `in-page-panel/pageActions.ts`). **✅ Built** for injection-defense sanitization. Gap 🔭: no NFC/NFKC normalization for _display_ consistency (composed vs decomposed forms) and no grapheme-cluster-aware truncation, so slicing (`.slice(0, TOOL_DESCRIPTION_MAX_CHARS)`) can split emoji/combining sequences.
 
 ## Fonts
 
@@ -49,7 +49,7 @@ The UI relies entirely on **OS-provided font stacks** — `-apple-system, BlinkM
 - `apps/extension/src/options.ts`, `apps/extension/src/features/content/in-page-panel/panelStyles.ts` — font stacks.
 - `apps/extension/src/background/policy.ts` — `INVISIBLE_UNICODE_RE`, `sanitizePageText`.
 - `apps/extension/src/content.ts`, `apps/extension/src/features/content/in-page-panel/pageActions.ts` — whitespace/Unicode normalization on capture.
-- `apps/extension/src/features/content/webmcp.ts` — `isValidToolName` (deceptive-Unicode rejection).
+- `apps/extension/src/webmcp.ts` — `isValidToolName` (deceptive-Unicode rejection).
 - `apps/extension/src/features/background/tasks.ts` — scheduled-task timing (host-local).
 - `apps/extension/manifest.json`, `apps/extension/MANIFEST_NOTES.md` — CSP blocking remote fonts.
 
@@ -69,7 +69,7 @@ Production-ready when: UI strings are externalized and locale-negotiated; dates/
 
 - Do not translate or run inference in the extension, or contact a provider host directly — bridge/gateway only.
 - Do not send page text to any translation model before the allowlist + redaction gate.
-- Do not invent model IDs, INR prices, routes, or env vars; no `Plus`/`pro_plus`/`Hobby` tiers; no credit top-ups; never reference Supabase.
+- Do not invent model IDs, INR prices, routes, or env vars; no `Plus`/`pro_plus`/`Hobby` tiers; never reference Supabase.
 - Do not hand-roll date/number strings when `Intl` exists; do not slice UTF-16 mid-grapheme.
 - Do not sync locale, time-zone, or history preferences; extension state stays device-scoped.
 - Do not weaken invisible-Unicode stripping for "prettier" display — it is a prompt-injection defense.

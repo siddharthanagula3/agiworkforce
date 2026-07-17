@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/extension-vscode/AGENTS.md`; and real repo paths: `apps/extension-vscode/package.json` (`contributes.configuration`, `contributes.keybindings`, `capabilities.untrustedWorkspaces`), `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/core/telemetry.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/scripts/check-vscode-theme-tokens.mjs`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/extension-vscode/AGENTS.md`; and real repo paths: `apps/extension-vscode/package.json` (`contributes.configuration`, `contributes.keybindings`, `capabilities.untrustedWorkspaces`), `apps/extension-vscode/src/utils/api.ts`, `apps/extension-vscode/src/core/telemetry.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/scripts/check-vscode-theme-tokens.mjs`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -12,7 +12,7 @@ This volume specifies the Settings domain for the AGI VS Code Extension: how a d
 
 ## General
 
-The extension contributes 26 configuration keys under `agiWorkforce.*` (`apps/extension-vscode/package.json` → `contributes.configuration.properties`) ✅. Core behavior settings: `agiWorkforce.model` (default `auto-economy`; resolved from `packages/types/src/models.json`, never a hardcoded ID), `agiWorkforce.streamingEnabled`, `agiWorkforce.contextLines`, `agiWorkforce.fallbackToVscodeLm`, `agiWorkforce.codeLensEnabled`, `agiWorkforce.hoverEnabled`, `agiWorkforce.inlineCompletions.{enabled,debounceMs,maxLength}`, `agiWorkforce.agent.{mode,effort,thinking,maxIterations}`, and `agiWorkforce.mcp.enabled` ✅. Requirements: every setting has a `default`, numeric ranges use `minimum`/`maximum`, and enum settings enumerate `enumDescriptions`. The `agiWorkforce.tier` enum still lists removed tiers (`hobby`, `pro_plus`) 🟡 — it must be reconciled to the canonical ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) as part of the tracked `packages/types/src/billing-catalog.ts` reconciliation. The `agiWorkforce.openInviteCodeModal` command ("Unlock Cloud Features") is a legacy invite gate 🟡 — Managed Cloud is public alpha, open by default for signed-in users, so this must not gate access. Cross-surface **settings sync is allowlist-gated and lands last** 🔭; until then extension settings are device/workspace-scoped.
+The extension contributes 26 configuration keys under `agiWorkforce.*` (`apps/extension-vscode/package.json` → `contributes.configuration.properties`) ✅. Core behavior settings: `agiWorkforce.model` (default `auto-economy`; resolved from `packages/contracts/types/src/models.json`, never a hardcoded ID), `agiWorkforce.streamingEnabled`, `agiWorkforce.contextLines`, `agiWorkforce.fallbackToVscodeLm`, `agiWorkforce.codeLensEnabled`, `agiWorkforce.hoverEnabled`, `agiWorkforce.inlineCompletions.{enabled,debounceMs,maxLength}`, `agiWorkforce.agent.{mode,effort,thinking,maxIterations}`, and `agiWorkforce.mcp.enabled` ✅. Requirements: every setting has a `default`, numeric ranges use `minimum`/`maximum`, and enum settings enumerate `enumDescriptions`. The `agiWorkforce.tier` enum still lists removed tiers (`hobby`, `pro_plus`) 🟡 — it must be reconciled to the canonical ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) as part of the tracked `packages/contracts/types/src/billing-catalog.ts` reconciliation. The `agiWorkforce.openInviteCodeModal` command ("Unlock Cloud Features") is a legacy invite gate 🟡 — Managed Cloud is public alpha, open by default for signed-in users, so this must not gate access. Cross-surface **settings sync is allowlist-gated and lands last** 🔭; until then extension settings are device/workspace-scoped.
 
 ## Theme
 
@@ -24,7 +24,7 @@ Keybindings are declared in `contributes.keybindings` (14 bindings) with mac/win
 
 ## Providers
 
-Provider/model selection is exposed through `agiWorkforce.model`, `agiWorkforce.providerStreamProvider` (enum: `auto`, `anthropic`, `openai`, `google`, `ollama`, `ollama-cloud`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`, `lmstudio`, `custom`), `agiWorkforce.apiEndpoint`, and `agiWorkforce.gatewayUrl` ✅, plus the model picker under `apps/extension-vscode/src/features/model-picker`. Model IDs must resolve from `packages/types/src/models.json` — settings store provider/model **selectors**, never invented IDs. BYOK keys are entered via the `AGI Workforce: Set API Key` command and stored in VS Code `SecretStorage`, never in settings JSON: `getApiKey`/`setApiKey`/`clearApiKey` in `apps/extension-vscode/src/utils/api.ts` take a `vscode.SecretStorage` handle ✅. BYOK is permitted on this surface (Desktop/CLI/VS Code only). Requirements: the active trust mode and provider are labeled visibly in-session; switching a Local session to a BYOK/Cloud provider is an explicit consent-gated fork. The provider-stream path (`agiWorkforce.useProviderStream` → `/api/v1/providers/:id/stream`) depends on AGI web auth that is **not yet wired** in the extension 🟡 (per the setting's own description).
+Provider/model selection is exposed through `agiWorkforce.model`, `agiWorkforce.providerStreamProvider` (enum: `auto`, `anthropic`, `openai`, `google`, `ollama`, `ollama-cloud`, `xai`, `deepseek`, `perplexity`, `qwen`, `moonshot`, `zhipu`, `lmstudio`, `custom`), `agiWorkforce.apiEndpoint`, and `agiWorkforce.gatewayUrl` ✅, plus the model picker under `apps/extension-vscode/src/features/model-picker`. Model IDs must resolve from `packages/contracts/types/src/models.json` — settings store provider/model **selectors**, never invented IDs. BYOK keys are entered via the `AGI Workforce: Set API Key` command and stored in VS Code `SecretStorage`, never in settings JSON: `getApiKey`/`setApiKey`/`clearApiKey` in `apps/extension-vscode/src/utils/api.ts` take a `vscode.SecretStorage` handle ✅. BYOK is permitted on this surface (Desktop/CLI/VS Code only). Requirements: the active trust mode and provider are labeled visibly in-session; switching a Local session to a BYOK/Cloud provider is an explicit consent-gated fork. The provider-stream path (`agiWorkforce.useProviderStream` → `/api/v1/providers/:id/stream`) depends on AGI web auth that is **not yet wired** in the extension 🟡 (per the setting's own description).
 
 ## Permissions
 
@@ -46,7 +46,7 @@ BYOK keys live only in VS Code `SecretStorage` (`src/utils/api.ts`) ✅. The des
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — bridge token + transport.
 - `apps/extension-vscode/src/features/model-picker/` — provider/model selection.
 - `apps/extension-vscode/scripts/check-vscode-theme-tokens.mjs` — theme-token guard.
-- `packages/types/src/models.json` — model ID source of truth.
+- `packages/contracts/types/src/models.json` — model ID source of truth.
 
 ## Competitor notes
 
@@ -63,7 +63,7 @@ Settings are production-ready when every key has a default, is scoped/restricted
 ## Anti-patterns
 
 - Storing API keys in settings JSON or `globalState` instead of `SecretStorage`.
-- Hardcoding a model ID instead of resolving from `packages/types/src/models.json`.
+- Hardcoding a model ID instead of resolving from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or inventing INR prices for Pro/Max; offering credit top-ups.
 - Auto-syncing IDE context into app chat, or routing Local/BYOK data into Neon delta-sync.
 - Enabling telemetry or `agent.mode: bypass` by default, or without a clear warning.

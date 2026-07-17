@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: Grounded in `AGENTS.md` (repo root), `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and the real extension paths cited per section (see Repository map). Model IDs are referenced from `packages/types/src/models.json`, never hardcoded.
+Authority: Grounded in `AGENTS.md` (repo root), `apps/extension/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and the real extension paths cited per section (see Repository map). Model IDs are referenced from `packages/contracts/types/src/models.json`, never hardcoded.
 
 ## Overview & stance
 
@@ -22,7 +22,7 @@ Files and images are **device-scoped**. Chrome history is `chrome.storage.local`
 
 ## Screenshot Analysis
 
-**✅ Built** (capture + agent-loop vision) / **🟡 Partial** (bridged-chat Q&A). The composer "Take a screenshot" item sends `CAPTURE_SCREENSHOT`, handled in `background.ts` via `chrome.tabs.captureVisibleTab`. The computer-use agent loop captures via CDP `Page.captureScreenshot` (`cdpDriver.ts` `screenshot()`) and feeds base64 PNGs to the vision model from the `computer_use` task-routing entry in `packages/types/src/models.json` (`cloudAgentClient.ts` `COMPUTER_USE_MODEL`) — loop analysis is built. Gap (🟡): attaching a captured screenshot to bridged chat for Q&A rides the same annotation path as images. Requirements: captures are subject to the site allowlist and the screenshot-cooldown rate limit (`utils.ts`); no capture on off-allowlist tabs; analysis never runs in-extension.
+**✅ Built** (capture + agent-loop vision) / **🟡 Partial** (bridged-chat Q&A). The composer "Take a screenshot" item sends `CAPTURE_SCREENSHOT`, handled in `background.ts` via `chrome.tabs.captureVisibleTab`. The computer-use agent loop captures via CDP `Page.captureScreenshot` (`cdpDriver.ts` `screenshot()`) and feeds base64 PNGs to the vision model from the `computer_use` task-routing entry in `packages/contracts/types/src/models.json` (`cloudAgentClient.ts` `COMPUTER_USE_MODEL`) — loop analysis is built. Gap (🟡): attaching a captured screenshot to bridged chat for Q&A rides the same annotation path as images. Requirements: captures are subject to the site allowlist and the screenshot-cooldown rate limit (`utils.ts`); no capture on off-allowlist tabs; analysis never runs in-extension.
 
 ## OCR
 
@@ -54,7 +54,7 @@ Files and images are **device-scoped**. Chrome history is `chrome.storage.local`
 - `apps/extension/src/features/native-bridge/providerStreamClient.ts` — gateway stream + 429 paywall.
 - `apps/extension/src/features/background/conversation-history.ts` — 100-conv / 30-day local history.
 - `apps/extension/src/background/memory-bridge.ts` — device-scoped memory, never synced.
-- `packages/types/src/models.json` — canonical model/task-routing IDs.
+- `packages/contracts/types/src/models.json` — canonical model/task-routing IDs.
 
 ## Competitor notes
 
@@ -73,7 +73,7 @@ Production-ready when uploaded images/screenshots are analyzed as real multimoda
 - Running OCR, PDF parsing, or any model **inside** the extension — analysis is server/desktop-side only.
 - Contacting a provider host directly or adding a provider key to Chrome (no BYOK, no Local here).
 - Syncing files, images, screenshots, history, or memory to Neon / cloud conversation store.
-- Hardcoding a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Adding the `downloads` permission (or auto-scanning the folder) without a threat-model update and review.
 - Treating page/document/attachment text as instructions instead of fenced untrusted data.
 - Referencing removed tiers (Plus, `pro_plus`, Hobby) or credit top-ups. The legacy `PaywallRequiredTier` in `providerStreamClient.ts` still lists `hobby`/`pro_plus` (🟡 — tracked reconciliation; do not propagate). Never reference Supabase.

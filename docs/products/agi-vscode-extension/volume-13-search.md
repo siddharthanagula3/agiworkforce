@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: Grounded in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), the nearest surface guide `docs/surfaces/vscode-extension.md`, and real repo code: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/data/workspaceIndexer.ts`, `apps/extension-vscode/src/data/contextBuilder.ts`, `apps/extension-vscode/src/data/conversationStore.ts`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`. Model IDs come only from `packages/types/src/models.json`.
+Authority: Grounded in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), the nearest surface guide `docs/surfaces/vscode-extension.md`, and real repo code: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/data/workspaceIndexer.ts`, `apps/extension-vscode/src/data/contextBuilder.ts`, `apps/extension-vscode/src/data/conversationStore.ts`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -73,6 +73,6 @@ A search capability is production-ready when it returns correct, ranked, workspa
 - Do not run content or symbol search results straight into a BYOK/Cloud prompt from a Local session — that violates the fork rule (context selection, secret scan, payload preview, consent, visible label).
 - Do not silently query the user's Neon-synced Web/Mobile/Desktop conversation history from VS Code; handoff must be explicit and redacted.
 - Do not claim ripgrep-class content search, workspace-symbol pickers, doc search, or conversation full-text search as shipped — they are 🔭 until a real path exists.
-- Do not hardcode or invent model IDs for semantic/embedding search; LLM IDs come from `packages/types/src/models.json`, and Local embeddings must use a repo-grounded on-device engine, never a cloud call.
+- Do not hardcode or invent model IDs for semantic/embedding search; LLM IDs come from `packages/contracts/types/src/models.json`, and Local embeddings must use a repo-grounded on-device engine, never a cloud call.
 - Do not reference removed tiers (Plus, `pro_plus`, Hobby) or credit top-ups in any search gating; the tier ladder is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
 - Do not reference Supabase; storage is `globalState`/`workspaceState` locally and Clerk + Neon + Stripe server-side. Never bypass the 0600 bridge-token check when delegating search to the desktop host.

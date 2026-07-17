@@ -4,29 +4,29 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root) and `apps/mobile/AGENTS.md` (active surface); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `Cargo.toml` (workspace), `crates/agiworkforce-app-server/tests/jsonrpc.rs`, `crates/agiworkforce-task-runtime/tests/lifecycle.rs`, `crates/agiworkforce-protocol/src/error_tests.rs`, `packages/runtime/src/__tests__/`, `services/signaling-server/__tests__/`, `services/api-gateway/vitest.config.ts`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, and `scripts/check-llm-failure-guardrails.mjs`.
+Authority: `AGENTS.md` (repo root) and `apps/mobile/AGENTS.md` (active surface); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `Cargo.toml` (workspace), `crates/agiworkforce-app-server/tests/jsonrpc.rs`, `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/tests/lifecycle.rs`, `crates/agiworkforce-protocol/src/error_tests.rs`, `packages/client/client-runtime/src/__tests__/`, `services/signaling-server/__tests__/`, `services/api-gateway/vitest.config.ts`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/app/api/control-plane/status/route.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, and `scripts/check-llm-failure-guardrails.mjs`.
 
 ## Overview & stance
 
-This volume defines how the **internal AGI Runtime layer** is tested — the shared Rust crates, `packages/runtime`, the Desktop `127.0.0.1` WS/IPC host, the Chrome native-messaging bridge, the `services/signaling-server` relay, and the Neon delta-sync APIs. AGI Runtime is not a user surface, so its tests live _inside_ the surfaces and services that compile it rather than in a standalone app. Because the Runtime spans **three trust modes** (Local, BYOK on Desktop/CLI/VS Code only, Managed Cloud), the highest-value tests are boundary tests: they assert that Local chats/files/sessions are **never** silently routed to BYOK or Cloud, that remote-control traffic is a window over a locally-running session (compute stays on the host), and that only Managed-Cloud rows enter Neon delta-sync. No fake tests: `pnpm check:llm-failures` (`scripts/check-llm-failure-guardrails.mjs`, plus `:staged`/`:changed`/`:strict`) guards against swallowed assertions, always-pass stubs, and mock-only "coverage." These are target/design requirements; writing them is not authorization to implement (serial-by-surface lock holds; Mobile is active).
+This volume defines how the **internal AGI Runtime layer** is tested — the shared Rust crates, `packages/client/client-runtime`, the Desktop `127.0.0.1` WS/IPC host, the Chrome native-messaging bridge, the `services/signaling-server` relay, and the Neon delta-sync APIs. AGI Runtime is not a user surface, so its tests live _inside_ the surfaces and services that compile it rather than in a standalone app. Because the Runtime spans **three trust modes** (Local, BYOK on Desktop/CLI/VS Code only, Managed Cloud), the highest-value tests are boundary tests: they assert that Local chats/files/sessions are **never** silently routed to BYOK or Cloud, that remote-control traffic is a window over a locally-running session (compute stays on the host), and that only Managed-Cloud rows enter Neon delta-sync. No fake tests: `pnpm check:llm-failures` (`scripts/check-llm-failure-guardrails.mjs`, plus `:staged`/`:changed`/`:strict`) guards against swallowed assertions, always-pass stubs, and mock-only "coverage." These are target/design requirements; writing them is not authorization to implement (serial-by-surface lock holds; Mobile is active).
 
 ## Unit Testing — individual components
 
 Every Runtime component ships table-driven unit tests for its pure logic. Rust crates use in-tree `#[cfg(test)]` modules and `#[tokio::test]` for async paths; TS packages use Vitest.
 
 - ✅ Built — Rust protocol/type units: `crates/agiworkforce-protocol/src/error_tests.rs` plus `#[test]` modules across `thread_id.rs`, `models.rs`, `approvals.rs`, `permissions.rs`. Run via `cargo test --workspace`.
-- ✅ Built — Runtime TS units: `packages/runtime/src/__tests__/`, `state/__tests__/`, `offline-queue/__tests__/`, `queue/__tests__/`, `context/__tests__/` (Vitest, `packages/runtime/vitest.config.ts`).
+- ✅ Built — Runtime TS units: `packages/client/client-runtime/src/__tests__/`, `state/__tests__/`, `offline-queue/__tests__/`, `queue/__tests__/`, `context/__tests__/` (Vitest, `packages/client/client-runtime/vitest.config.ts`).
 - ✅ Built — Companion pairing validators: `apps/mobile/services/companion.ts` QR/HMAC pattern parsing (`PAIRING_CODE_PATTERN`) is deterministic and must have unit coverage for malformed/oversized/wrong-role codes.
-- 🔭 Planned — `agiworkforce-command-registry` and `agiworkforce-plugin-runtime` need per-crate unit suites for command dispatch and sandbox-policy resolution beyond current coverage.
+- 🔭 Planned — `agiworkforce-command-registry` needs per-crate unit suites (the `agiworkforce-plugin-runtime` crate this used to also cite was removed 2026-07-08, zero dependents, no replacement crate exists yet) for command dispatch and sandbox-policy resolution beyond current coverage.
 
-Requirement: no unit test may assert only that a mock was called with no behavioral check; model IDs used in fixtures come from `packages/types/src/models.json`, never hardcoded.
+Requirement: no unit test may assert only that a mock was called with no behavioral check; model IDs used in fixtures come from `packages/contracts/types/src/models.json`, never hardcoded.
 
 ## Integration Testing — component interactions
 
 Integration tests exercise two or more Runtime components across a real transport (JSON-RPC-over-stdio, WebSocket, HTTP) with no network to third parties.
 
 - ✅ Built — app-server JSON-RPC lifecycle: `crates/agiworkforce-app-server/tests/jsonrpc.rs` drives `initialize → tools/list → tools/call → shutdown` through the public `ToolDispatch` trait, mirroring the CLI's production wiring (app-server is consumed **only** by `agi`).
-- ✅ Built — task-runtime lifecycle: `crates/agiworkforce-task-runtime/tests/lifecycle.rs`.
+- ✅ Built — task-runtime lifecycle: `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/tests/lifecycle.rs`.
 - ✅ Built — Desktop WS/IPC host: `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs` carries an in-file `mod tests` (IP lockout, IPC token) — assert Chrome-ext / VS Code-ext / Tauri-webview clients authenticate and unauthorized IPs are locked out.
 - ✅ Built — Signaling relay + pairing HTTP: `services/signaling-server/__tests__/` (`connection-manager`, `websocket/messages`, `http/pairings`, `http/health`) and gateway `services/api-gateway/src/routes/{pair,mobile}.ts` Zod `.strict()` validation (`vitest.config.ts`).
 - 🟡 Partial — Desktop↔Mobile companion round-trip: control verbs exist end-to-end at the relay, but `apps/mobile/lib/v1FeatureFlags.ts` keeps `companion:false`/`dispatch:false` and the desktop last mile re-emits control events as a window `CustomEvent 'mobile-companion:control'` with no listener, so a full dispatch integration test cannot yet pass. Track as gap.
@@ -55,7 +55,7 @@ End-to-end tests validate a whole path through the assembled Runtime, including 
 
 - `Cargo.toml` — workspace root; `cargo test --workspace`.
 - `crates/agiworkforce-{protocol,task-runtime,plugin-runtime,command-registry,app-server}/` — Rust units + `tests/`.
-- `packages/runtime/src/__tests__/` (and sub-suites) — Vitest.
+- `packages/client/client-runtime/src/__tests__/` (and sub-suites) — Vitest.
 - `services/signaling-server/__tests__/`, `services/api-gateway/` (`vitest.config.ts`).
 - `apps/desktop/src-tauri/src/integrations/realtime/` (`websocket_server.rs`, `presence.rs`), `apps/desktop/src-tauri/src/bin/native_messaging_host.rs`.
 - `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/app/api/control-plane/status/route.ts`.
@@ -78,7 +78,7 @@ Production-ready when `cargo test --workspace` and `pnpm -r test` are green in C
 
 - Do not write fake/always-pass tests, assert-only-that-a-mock-was-called, or mock-only "coverage" — `pnpm check:llm-failures` will flag them.
 - Do not test a monolithic runtime daemon as shipped; it does not exist.
-- Do not hardcode or invent model IDs in fixtures — read `packages/types/src/models.json`.
+- Do not hardcode or invent model IDs in fixtures — read `packages/contracts/types/src/models.json`.
 - Do not assert a companion/dispatch E2E as passing while `companion`/`dispatch` flags are `false` and the desktop listener is unwired; label 🟡.
 - Do not reference Supabase; the stack is Clerk + Neon + Stripe. Do not use `middleware.ts` in Next.js 16 (it is `proxy.ts`).
 - Do not encode removed tiers (Plus/Hobby/`pro_plus`) or invent INR prices in billing-adjacent fixtures; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise, no top-ups.

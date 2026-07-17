@@ -1,13 +1,18 @@
 # Enterprise Local Edition — Design (P7)
 
-Status: Design for review (implementation gated on founder pricing/edition decisions)
+Status: Superseded (2026-07-15) — the current P7 design is
+`docs/plans/enterprise-local-design-2026-07-15.md`, which re-grounds this
+scope in file:line evidence and verified test runs and corrects two factual
+claims made here. Pricing decisions remain in
+`docs/enterprise/enterprise-local-pricing-decisions.md` (unchanged founder
+surface).
 Owner: Platform lead
-Last updated: 2026-07-09
+Last updated: 2026-07-15
 Source requirement: founder, 2026-07-08 — "sell Local mode to teams/enterprises for private on-prem usage." Workstream defined in `docs/plans/monorepo-restructure-2026-07-08.md` §P7 (design doc before code).
 
 ## 1. Problem and positioning
 
-Everything enterprise-shaped in the repo today is cloud-oriented: `packages/types/src/enterprise/`, the Neon control-plane tables (`docs/enterprise/control-plane.md`), the gateway enterprise routes. None of it licenses or administers **Local** deployments — the mode where chats, files, and developer sessions never leave the machine. The product to sell is exactly that guarantee: _your models, no markup, private, everywhere_ (GTM wedge), made purchasable by orgs.
+Everything enterprise-shaped in the repo today is cloud-oriented: `packages/contracts/types/src/enterprise/`, the Neon control-plane tables (`docs/enterprise/control-plane.md`), the gateway enterprise routes. None of it licenses or administers **Local** deployments — the mode where chats, files, and developer sessions never leave the machine. The product to sell is exactly that guarantee: _your models, no markup, private, everywhere_ (GTM wedge), made purchasable by orgs.
 
 Selling surfaces per the trust-mode matrix: Desktop, CLI, VS Code extension (the three all-mode surfaces). Web/Chrome are cloud-only and out of scope; Mobile Local is consumer-first and follows later if pulled.
 
@@ -19,7 +24,7 @@ Design constraints (locked):
 
 ## 2. Components
 
-### 2.1 `packages/licensing` (new)
+### 2.1 `packages/contracts/licensing` (new)
 
 Offline-verifiable signed license files.
 
@@ -33,7 +38,7 @@ Offline-verifiable signed license files.
 
 A signed org policy document that admins distribute (file drop, MDM, or self-hosted gateway) and the apps enforce locally.
 
-- **Schema (new in `packages/types/src/suite-contracts.ts` + Zod mirror in `packages/services/cloud-contracts` conventions):** `OrgPolicy` = `{ policyId, orgId, version, issuedAt, allowedProviders[], allowedModels[] (ids from models.json | 'local:*'), byok: 'allowed' | 'forbidden' | 'allowlist', egress: { managedCloud: boolean, byokDomainsAllowlist[] }, retentionDays?, auditExport: { required: boolean, path? }, updateChannel? }`.
+- **Schema (`packages/contracts/licensing/src/org-policy.ts`, with shared trust enums in `packages/contracts/types/src/suite-contracts.ts`):** `OrgPolicy` = `{ policyId, orgId, version, issuedAt, allowedProviders[], allowedModels[] (ids from models.json | 'local:*'), byok: 'allowed' | 'forbidden' | 'allowlist', egress: { managedCloud: boolean, byokDomainsAllowlist[] }, retentionDays?, auditExport: { required: boolean, path? }, updateChannel? }`.
 - **Signature:** Ed25519 by a key listed in the license's `policyKeys[]` — the license is the root of trust for policy, so a forged policy can't loosen anything the license didn't authorize. Policy can only _restrict_ relative to product defaults, never grant (e.g. it cannot re-enable managed cloud on a build where the org forbade it — monotonic tightening keeps reasoning simple and auditable).
 - **Enforcement points (all existing guards, no new kernel):**
   - Desktop: runtime gates where Local→BYOK fork consent fires; a forbidden provider never reaches the consent dialog.
@@ -61,7 +66,7 @@ A deployment profile of the existing `services/api-gateway` (not a fork): org ru
 
 Order (each its own PR set, after the P2 provider consolidation which is now done):
 
-1. `packages/licensing` + `agiworkforce-licensing` crate + cross-language fixtures (M).
+1. `packages/contracts/licensing` + `agiworkforce-licensing` crate + cross-language fixtures (M).
 2. OrgPolicy schema + signature verify + fixture corpus (S–M).
 3. Enforcement wiring: Desktop → CLI → VS Code, one surface per PR, each with the policy replay tests (M).
 4. Audit log generalization + export (S–M).

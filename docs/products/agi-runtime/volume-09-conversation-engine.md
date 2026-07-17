@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/mobile/AGENTS.md` (active surface). Grounded in `crates/agiworkforce-protocol/src/{thread_id.rs,message_history.rs,items.rs,protocol.rs}`, `packages/runtime/src/events.ts`, `apps/web/app/api/chat/sync/route.ts`, `apps/web/app/api/chat/conversations/route.ts`, `apps/web/app/api/chat/conversations/[id]/messages/route.ts`, `apps/web/app/api/chat/branch/route.ts`, `apps/web/app/api/search/route.ts`, `apps/web/app/api/user/export/route.ts`, `services/api-gateway/src/routes/{providerStream,cloudChat}.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/mobile/AGENTS.md` (active surface). Grounded in `crates/agiworkforce-protocol/src/{thread_id.rs,message_history.rs,items.rs,protocol.rs}`, `packages/client/client-runtime/src/events.ts`, `apps/web/app/api/chat/sync/route.ts`, `apps/web/app/api/chat/conversations/route.ts`, `apps/web/app/api/chat/conversations/[id]/messages/route.ts`, `apps/web/app/api/chat/branch/route.ts`, `apps/web/app/api/search/route.ts`, `apps/web/app/api/user/export/route.ts`, `services/api-gateway/src/routes/{providerStream,cloudChat}.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 The Conversation Engine is the internal, shared data-and-event model for a chat: its identity, its ordered turns, how tokens stream in, and how it is branched, compressed, searched, and exported. It is not a surface and not a daemon. Its runtime core is the protocol crate — `ThreadId` (a UUID v7 conversation identity, ✅ `crates/agiworkforce-protocol/src/thread_id.rs`) and the `TurnItem` enum that types every message-shaped event — which all six surfaces compile in. The Managed-Cloud store and delta-sync (`apps/web/app/api/chat/*`) are the durable half.
 
-Trust modes govern where a conversation may live. **Local** and **BYOK** (Desktop/CLI/VS Code only) conversations stay on the host with no `cloud_id`; only **Managed-Cloud** conversations get `web_conversations`/`web_messages` rows and sync (Web ↔ Mobile ↔ Desktop). The sync route is explicit: "Local/BYOK conversations have no cloud_id and are never pushed/pulled" (✅ `apps/web/app/api/chat/sync/route.ts`). Remote control never changes this — a phone window reads a conversation that keeps living locally. Every model label reads only from `packages/types/src/models.json`.
+Trust modes govern where a conversation may live. **Local** and **BYOK** (Desktop/CLI/VS Code only) conversations stay on the host with no `cloud_id`; only **Managed-Cloud** conversations get `web_conversations`/`web_messages` rows and sync (Web ↔ Mobile ↔ Desktop). The sync route is explicit: "Local/BYOK conversations have no cloud_id and are never pushed/pulled" (✅ `apps/web/app/api/chat/sync/route.ts`). Remote control never changes this — a phone window reads a conversation that keeps living locally. Every model label reads only from `packages/contracts/types/src/models.json`.
 
 ## Conversations — manage conversations
 
@@ -22,7 +22,7 @@ A turn is a typed `TurnItem`: `UserMessage`, `HookPrompt`, `AgentMessage` (with 
 
 ## Streaming — stream responses incrementally
 
-Incremental output is modeled as delta events on the protocol `EventMsg` bus: `AgentMessageDeltaEvent` / `AgentMessageContentDeltaEvent`, `ReasoningContentDeltaEvent`, `ExecCommandOutputDeltaEvent`, `PlanDeltaEvent`, and `RealtimeTranscriptDelta`, with `HasLegacyEvent` bridging newer content deltas to legacy (✅ `crates/agiworkforce-protocol/src/protocol.rs`). The cross-runtime delivery layer is `packages/runtime/src/events.ts` — Tauri events on Desktop, an in-memory `EventTarget` on Web/test (✅). Managed-Cloud token streams ride the gateway SSE path (✅ `services/api-gateway/src/routes/providerStream.ts`, `cloudChat.ts`). Requirement: streaming is provider-neutral — the same delta events represent any provider's output, and the resolved model comes only from `packages/types/src/models.json`; a dropped stream surfaces a stream-error/disconnect event, never a silently truncated "complete" message. A unified streaming pipeline normalizing every surface and provider behind one interface is 🔭.
+Incremental output is modeled as delta events on the protocol `EventMsg` bus: `AgentMessageDeltaEvent` / `AgentMessageContentDeltaEvent`, `ReasoningContentDeltaEvent`, `ExecCommandOutputDeltaEvent`, `PlanDeltaEvent`, and `RealtimeTranscriptDelta`, with `HasLegacyEvent` bridging newer content deltas to legacy (✅ `crates/agiworkforce-protocol/src/protocol.rs`). The cross-runtime delivery layer is `packages/client/client-runtime/src/events.ts` — Tauri events on Desktop, an in-memory `EventTarget` on Web/test (✅). Managed-Cloud token streams ride the gateway SSE path (✅ `services/api-gateway/src/routes/providerStream.ts`, `cloudChat.ts`). Requirement: streaming is provider-neutral — the same delta events represent any provider's output, and the resolved model comes only from `packages/contracts/types/src/models.json`; a dropped stream surfaces a stream-error/disconnect event, never a silently truncated "complete" message. A unified streaming pipeline normalizing every surface and provider behind one interface is 🔭.
 
 ## Branching — alternate conversation paths
 
@@ -30,7 +30,7 @@ Branching from a chosen message into a new child conversation is ✅ Built on We
 
 ## Summarization — compress old context
 
-The compaction primitive exists: `ContextCompactionItem` (a turn item with an optional `saved_path` for the pre-compaction transcript) and the `ContextCompactedEvent` it emits (🟡 `crates/agiworkforce-protocol/src/items.rs`, `protocol.rs`). The gap: these are _marker_ types recording "context was compacted here" — the summarizer that selects old turns, produces the summary, and swaps it into context is not implemented. Requirement: compression is lossless-by-reference — original turns are retained (via `saved_path`) and the summary is a distinct labeled item, never a mutation of prior append-only messages; it runs under the conversation's own trust mode and picks its summarizer model only from `packages/types/src/models.json`. The compaction strategy, token-budget triggers, and per-surface policy are 🔭 Planned.
+The compaction primitive exists: `ContextCompactionItem` (a turn item with an optional `saved_path` for the pre-compaction transcript) and the `ContextCompactedEvent` it emits (🟡 `crates/agiworkforce-protocol/src/items.rs`, `protocol.rs`). The gap: these are _marker_ types recording "context was compacted here" — the summarizer that selects old turns, produces the summary, and swaps it into context is not implemented. Requirement: compression is lossless-by-reference — original turns are retained (via `saved_path`) and the summary is a distinct labeled item, never a mutation of prior append-only messages; it runs under the conversation's own trust mode and picks its summarizer model only from `packages/contracts/types/src/models.json`. The compaction strategy, token-budget triggers, and per-surface policy are 🔭 Planned.
 
 ## Search — search conversations
 
@@ -46,7 +46,7 @@ A GDPR Article 20 data-portability endpoint is ✅ Built (`GET /api/user/export`
 - `crates/agiworkforce-protocol/src/message_history.rs` — `HistoryEntry` local recents index.
 - `crates/agiworkforce-protocol/src/items.rs` — `TurnItem` enum; `ContextCompactionItem`.
 - `crates/agiworkforce-protocol/src/protocol.rs` — delta/stream events, `ContextCompactedEvent`, `EventMsg`.
-- `packages/runtime/src/events.ts` — cross-runtime event bus (Tauri + in-memory).
+- `packages/client/client-runtime/src/events.ts` — cross-runtime event bus (Tauri + in-memory).
 - `apps/web/app/api/chat/sync/route.ts` — Managed-Cloud delta sync (cursor + tombstones + idempotent upsert).
 - `apps/web/app/api/chat/conversations/route.ts`, `.../[id]/messages/route.ts` — Cloud conversation/message CRUD.
 - `apps/web/app/api/chat/branch/route.ts` — branch endpoint + `conversation_branches`.
@@ -56,12 +56,12 @@ A GDPR Article 20 data-portability endpoint is ✅ Built (`GET /api/user/export`
 
 ## Competitor notes
 
-Claude, ChatGPT, and Codex all provide threads, streaming, branching/edit-and-retry, auto-summarized long context, search, and export — but single-provider and cloud-anchored, with every conversation on their servers by default. AGI's divergence: the model is provider-neutral (IDs from `packages/types/src/models.json`); trust boundaries are first-class, so Local and BYOK conversations never touch the cloud store, search index, or sync while Managed-Cloud chats sync Web ↔ Mobile ↔ Desktop; messages are append-only with tombstone deletes; and remote control reads a locally-running conversation rather than lifting it into the cloud. Where a parity feature is not yet built (semantic search, a real summarizer, conversation export), it is labeled 🔭 rather than faked.
+Claude, ChatGPT, and Codex all provide threads, streaming, branching/edit-and-retry, auto-summarized long context, search, and export — but single-provider and cloud-anchored, with every conversation on their servers by default. AGI's divergence: the model is provider-neutral (IDs from `packages/contracts/types/src/models.json`); trust boundaries are first-class, so Local and BYOK conversations never touch the cloud store, search index, or sync while Managed-Cloud chats sync Web ↔ Mobile ↔ Desktop; messages are append-only with tombstone deletes; and remote control reads a locally-running conversation rather than lifting it into the cloud. Where a parity feature is not yet built (semantic search, a real summarizer, conversation export), it is labeled 🔭 rather than faked.
 
 ## Acceptance / Definition of Done
 
-- [ ] **Build:** `TurnItem` round-trips through the protocol; Cloud conversation/message CRUD, delta sync (cursor + tombstones + idempotent upsert), branch, and search endpoints have green tests; streaming delta events render incrementally on every surface via `packages/runtime/src/events.ts`.
-- [ ] **Trust:** no Local/BYOK conversation, message, or search result is written to or read from the Cloud store; only rows with a `cloud_id` sync; branches and exports inherit the parent conversation's trust mode; model labels resolve only from `packages/types/src/models.json`.
+- [ ] **Build:** `TurnItem` round-trips through the protocol; Cloud conversation/message CRUD, delta sync (cursor + tombstones + idempotent upsert), branch, and search endpoints have green tests; streaming delta events render incrementally on every surface via `packages/client/client-runtime/src/events.ts`.
+- [ ] **Trust:** no Local/BYOK conversation, message, or search result is written to or read from the Cloud store; only rows with a `cloud_id` sync; branches and exports inherit the parent conversation's trust mode; model labels resolve only from `packages/contracts/types/src/models.json`.
 - [ ] **Security:** all conversation reads/writes are user-scoped by RLS with server-set `user_id`; messages stay append-only (only `deleted_at` may change); CSRF + rate limits hold on mutating routes; a dropped stream emits an explicit error rather than a truncated "complete" message.
 
 ## Anti-patterns

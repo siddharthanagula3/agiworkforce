@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/src/features/model-picker/{service.ts,localModelRuntime.ts,installStore.ts}`, `apps/mobile/services/{modelDownload.ts,llmGate.ts,remoteChatGate.ts}`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/storage/{db.ts,migrations.ts,memory.ts,conversations.ts,installedModels.ts}`, `apps/mobile/stores/settings/localSettingsStore.ts`, `apps/mobile/src/features/projects/store.ts`, `apps/mobile/src/features/settings/data-controls/localCloudSyncService.ts`, `packages/local-llm/src/catalog.ts`.
+Authority: `AGENTS.md` (repo root), `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and verified repo paths: `apps/mobile/src/features/model-picker/{service.ts,localModelRuntime.ts,installStore.ts}`, `apps/mobile/services/{modelDownload.ts,llmGate.ts,remoteChatGate.ts}`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/storage/{db.ts,migrations.ts,memory.ts,conversations.ts,installedModels.ts}`, `apps/mobile/stores/settings/localSettingsStore.ts`, `apps/mobile/src/features/projects/store.ts`, `apps/mobile/src/features/settings/data-controls/localCloudSyncService.ts`, `packages/platform/local-llm/src/catalog.ts`.
 
 ## Overview & stance
 
@@ -16,7 +16,7 @@ The hard rule (founder, 2026-06-14, encoded in `localCloudSyncService.ts`): Loca
 
 Local Mode is a self-contained workspace: an on-device model runtime, an encrypted store, and per-mode state that does not depend on network or sign-in.
 
-- ✅ Built — Model resolution and runtime selection live in `apps/mobile/src/features/model-picker/localModelRuntime.ts` (`resolveLocalModelRef`) over the catalog in `packages/local-llm/src/catalog.ts`. The capabilities probe (`getCapabilities`) selects a system runtime (`apple-foundation-models`, `aicore`) or a downloadable ExecuTorch/`llama-rn`/`litert-lm` model.
+- ✅ Built — Model resolution and runtime selection live in `apps/mobile/src/features/model-picker/localModelRuntime.ts` (`resolveLocalModelRef`) over the catalog in `packages/platform/local-llm/src/catalog.ts`. The capabilities probe (`getCapabilities`) selects a system runtime (`apple-foundation-models`, `aicore`) or a downloadable ExecuTorch/`llama-rn`/`litert-lm` model.
 - ✅ Built — Local LLM requests bypass the cloud LLM gate entirely; `apps/mobile/services/llmGate.ts` documents that "Local-LLM requests … should never reach this path."
 - 🔭 Planned — Heavy on-device compute (PDF/PPTX/DOCX rendering, image generation) is out of scope for the local surface; per `apps/mobile/AGENTS.md`, mobile must not become the first heavy-compute surface, and image generation is cloud-backed.
 
@@ -45,7 +45,7 @@ Local Mode is a self-contained workspace: an on-device model runtime, an encrypt
 
 This screen manages which on-device models are installed and active. It is **not** an API-key screen and must never become one.
 
-- ✅ Built — The local catalog (`packages/local-llm/src/catalog.ts`) ships real on-device model ids such as `qwen3-4b-instruct-2507` (default, "AGI Standard"), `llama-3.2-1b-instruct-spinquant` ("AGI Lite"), `qwen2.5-vl-3b-instruct`, plus system runtimes `apple-foundation-models` and `gemini-nano-aicore`. The picker (`apps/mobile/src/features/model-picker/service.ts`) shows On-device vs AGI Cloud rows and never fetches `/api/models`. Model ids come only from the catalog/`packages/types/src/models.json` — never hardcode or invent one.
+- ✅ Built — The local catalog (`packages/platform/local-llm/src/catalog.ts`) ships real on-device model ids such as `qwen3-4b-instruct-2507` (default, "AGI Standard"), `llama-3.2-1b-instruct-spinquant` ("AGI Lite"), `qwen2.5-vl-3b-instruct`, plus system runtimes `apple-foundation-models` and `gemini-nano-aicore`. The picker (`apps/mobile/src/features/model-picker/service.ts`) shows On-device vs AGI Cloud rows and never fetches `/api/models`. Model ids come only from the catalog/`packages/contracts/types/src/models.json` — never hardcode or invent one.
 - ✅ Built — Install/download lifecycle (resumable, Wi-Fi-aware, cancellable) is handled by `services/modelDownload.ts` + `src/features/model-picker/installStore.ts`; records land in `apps/mobile/storage/installedModels.ts`.
 - 🟡 Partial — Per-model environment gating exists as a stub: `service.ts` `environmentAvailability()` returns `{ configured: false }` (Phase A); the real local-runtime readiness probe is Phase B and not yet wired.
 
@@ -69,7 +69,7 @@ This screen manages which on-device models are installed and active. It is **not
 - `apps/mobile/stores/{projects,memory,settings}/` and `apps/mobile/src/features/projects/store.ts` — per-mode local/cloud state.
 - `apps/mobile/src/features/settings/data-controls/` — the explicit Local→Cloud transfer.
 - `apps/mobile/lib/v1FeatureFlags.ts` — single source of truth for which modes/features are live.
-- `packages/local-llm/` — shared on-device model catalog, capabilities, selector.
+- `packages/platform/local-llm/` — shared on-device model catalog, capabilities, selector.
 
 ## Competitor notes
 
@@ -89,5 +89,5 @@ Local Mode is production-ready when an account-less, offline device can install 
 - Auto-sending or background-syncing Local chats, memory, projects, or files to Cloud.
 - Letting `remoteChatGate` "fail open" when Cloud is disabled.
 - Faking unsupported capability (heavy on-device PDF/PPTX/DOCX/image-gen) instead of marking 🔭 and delegating to Desktop/cloud.
-- Hardcoding or inventing model ids instead of reading the catalog / `packages/types/src/models.json`.
+- Hardcoding or inventing model ids instead of reading the catalog / `packages/contracts/types/src/models.json`.
 - Inventing INR prices or non-canon tiers (Plus/Hobby/pro_plus), or referencing Supabase (stack is Clerk + Neon + Stripe).

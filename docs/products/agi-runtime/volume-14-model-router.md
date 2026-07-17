@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/mobile/AGENTS.md` (active surface); grounded in `packages/types/src/models.json`, `packages/types/src/model-catalog.ts`, `packages/llm-runtime/src/fallback.ts`, `packages/llm-runtime/src/retry.ts`, `apps/web/app/api/llm/completion/route.ts`, `packages/unified-chat/src/stores/modelStore.ts`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/mobile/AGENTS.md` (active surface); grounded in `packages/contracts/types/src/models.json`, `packages/contracts/types/src/model-catalog.ts`, `packages/ai/provider-runtime/src/fallback.ts`, `packages/ai/provider-runtime/src/retry.ts`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, `packages/ui/unified-chat/src/stores/modelStore.ts`. (Corrected 2026-07-11: the real, live chat-completions route is `apps/web/app/api/llm/v1/chat/completions/route.ts`; `apps/web/app/api/llm/completion/route.ts` and `.../llm/v2/chat/route.ts` do not exist.)
 
 ## Overview & stance
 
-The Model Router is the AGI Runtime component that turns "run this request" into "run it on _this_ model, from _this_ provider, over _this_ trust boundary." It is not a user surface and not a daemon — it is shared TypeScript catalog logic (`packages/types/src/model-catalog.ts`) plus per-call resolution at each entry point (the Web LLM route today; Desktop/CLI hosts later). Its single source of routing metadata is `packages/types/src/models.json`: `capabilities`, `contextWindow`, `inputCost`/`outputCost`, `speed`, `qualityTier`, per-provider `taskRouting`, `providersInOrder`, and `tierAllowedModels`. Model IDs are never hardcoded — every decision reads the catalog.
+The Model Router is the AGI Runtime component that turns "run this request" into "run it on _this_ model, from _this_ provider, over _this_ trust boundary." It is not a user surface and not a daemon — it is shared TypeScript catalog logic (`packages/contracts/types/src/model-catalog.ts`) plus per-call resolution at each entry point (the Web LLM route today; Desktop/CLI hosts later). Its single source of routing metadata is `packages/contracts/types/src/models.json`: `capabilities`, `contextWindow`, `inputCost`/`outputCost`, `speed`, `qualityTier`, per-provider `taskRouting`, `providersInOrder`, and `tierAllowedModels`. Model IDs are never hardcoded — every decision reads the catalog.
 
 The trust boundary is the router's outer constraint, checked _before_ any capability, cost, or latency scoring:
 
@@ -23,8 +23,8 @@ Cross-boundary routing is a category error the router must refuse. Everything be
 
 The router filters candidates to those whose `capabilities` flags in `models.json` satisfy the request's demands: `tools`, `vision`, `json`, `thinking`, `computerUse`, `agentic`, `search`, `research`, `codeExecution`, `caching`. A tool-calling agent request must exclude models lacking `tools`; a screenshot request must require `vision`; a computer-use task must require `computerUse`.
 
-- ✅ Built: the capability schema and per-model flags exist (`packages/types/src/model-catalog.ts` `ModelCapabilities`; `packages/types/src/models.json`). Consumers already read them — `packages/unified-chat/src/stores/modelStore.ts` derives `supportsThinking`/`supportsVision`/`supportsTools` from `metadata.capabilities`.
-- 🟡 Partial: task→slot mapping exists via `SLOT_REGISTRY` and `getTaskModelForProvider` (per-provider `taskRouting`), but a general capability-predicate filter (`requireTools`, `requireVision`) is only wired into fallback selection (`packages/llm-runtime/src/fallback.ts` `FallbackChainOptions.requireTools`), not into first-choice resolution on every surface.
+- ✅ Built: the capability schema and per-model flags exist (`packages/contracts/types/src/model-catalog.ts` `ModelCapabilities`; `packages/contracts/types/src/models.json`). Consumers already read them — `packages/ui/unified-chat/src/stores/modelStore.ts` derives `supportsThinking`/`supportsVision`/`supportsTools` from `metadata.capabilities`.
+- 🟡 Partial: task→slot mapping exists via `SLOT_REGISTRY` and `getTaskModelForProvider` (per-provider `taskRouting`), but a general capability-predicate filter (`requireTools`, `requireVision`) is only wired into fallback selection (`packages/ai/provider-runtime/src/fallback.ts` `FallbackChainOptions.requireTools`), not into first-choice resolution on every surface.
 - 🔭 Planned: a single `selectCapableModel(request, boundary)` entry that all six surfaces call, rejecting incapable models before dispatch.
 
 Requirement: no request is dispatched to a model whose catalog `capabilities` do not cover its declared needs.
@@ -33,7 +33,7 @@ Requirement: no request is dispatched to a model whose catalog `capabilities` do
 
 Cost scoring reads `inputCost`/`outputCost` (USD per million tokens) from `models.json`, never a hardcoded price. The router prefers the cheapest candidate that still passes capability and context checks.
 
-- ✅ Built: `apps/web/app/api/llm/completion/route.ts` picks the cheapest economy fallback that is strictly cheaper than the current model, iterating `getEconomyFallbackModels()` and comparing `LLMCostCalculator.estimateCost`. `getModelCostRates` (`model-catalog.ts`) exposes per-model rates.
+- ✅ Built: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts` picks the cheapest economy fallback that is strictly cheaper than the current model, iterating `getEconomyFallbackModels()` and comparing `LLMCostCalculator.estimateCost`. `getModelCostRates` (`model-catalog.ts`) exposes per-model rates.
 - 🟡 Partial: cost optimization currently fires as a fallback/degrade step, not as the primary objective for a fresh request. The `tierAllowedModels.economy` list and `getEconomyFallbackModels` are the cost floor.
 - 🔭 Planned: budget-aware routing (per-request or per-plan spend ceiling) that selects the cheapest capable model up front and records projected spend against the metered usage system.
 
@@ -43,8 +43,8 @@ Requirement: given two capable candidates, the router never picks the costlier o
 
 The router must not route a request whose token estimate exceeds a model's `contextWindow`. Windows vary widely across the catalog (200K to ~1M+), read via `contextWindow` / `getModelContextLimits`.
 
-- ✅ Built: `contextWindow` per model and `getModelContextLimits(modelIds)` (`model-catalog.ts`) provide the data; `packages/unified-chat/src/stores/modelStore.ts` surfaces per-model `contextWindow`.
-- 🟡 Partial: overflow handling is **reactive** — `packages/llm-runtime/src/retry.ts` recovers from context-overflow by shrinking `maxTokensOverride`/disabling thinking on retry (`FLOOR_OUTPUT_TOKENS`), rather than pre-selecting a larger-window model.
+- ✅ Built: `contextWindow` per model and `getModelContextLimits(modelIds)` (`model-catalog.ts`) provide the data; `packages/ui/unified-chat/src/stores/modelStore.ts` surfaces per-model `contextWindow`.
+- 🟡 Partial: overflow handling is **reactive** — `packages/ai/provider-runtime/src/retry.ts` recovers from context-overflow by shrinking `maxTokensOverride`/disabling thinking on retry (`FLOOR_OUTPUT_TOKENS`), rather than pre-selecting a larger-window model.
 - 🔭 Planned: predictive context matching — estimate prompt tokens, filter candidates to `contextWindow >= estimate + headroom`, and prefer a larger-window sibling (e.g., long-context slot) before dispatch instead of after failure.
 
 Requirement: a request is never dispatched to a model whose `contextWindow` is provably too small for the assembled prompt.
@@ -62,7 +62,7 @@ Requirement: interactive requests default to a `fast`/`very-fast` capable model 
 
 When an attempt is classified `fallbackable` (consecutive overload/529s, capacity off-switch, model-specific safety refusal, invalid-model-after-redirect), the retry generator emits `FallbackTriggeredError(model, fallbackModel)` and the chain module chooses the target.
 
-- ✅ Built: `packages/llm-runtime/src/fallback.ts` builds an ordered chain via catalog helpers (`getModelMetadataById`, `getEconomyFallbackModels`, `getModelsForProvider`) with three strategies: `same-provider-cheaper` (drop a quality tier within the vendor), `economy-tier` (cheapest tools-capable economy model), `cross-provider` (another provider's flagship). Model IDs are **never** hardcoded. `packages/llm-runtime/src/retry.ts` runs exponential backoff with full jitter (`DEFAULT_MAX_RETRIES`, `MAX_OVERLOAD_RETRIES`, `BASE_DELAY_MS`, `MAX_BACKOFF_MS`).
+- ✅ Built: `packages/ai/provider-runtime/src/fallback.ts` builds an ordered chain via catalog helpers (`getModelMetadataById`, `getEconomyFallbackModels`, `getModelsForProvider`) with three strategies: `same-provider-cheaper` (drop a quality tier within the vendor), `economy-tier` (cheapest tools-capable economy model), `cross-provider` (another provider's flagship). Model IDs are **never** hardcoded. `packages/ai/provider-runtime/src/retry.ts` runs exponential backoff with full jitter (`DEFAULT_MAX_RETRIES`, `MAX_OVERLOAD_RETRIES`, `BASE_DELAY_MS`, `MAX_BACKOFF_MS`).
 - 🟡 Partial: `cross-provider` fallback lacks a live provider-health feed; candidate viability relies on `getProviderProbeModel` rather than real-time status.
 - 🔭 Planned: health-driven pre-emptive rerouting (skip a degraded provider before the first failure).
 
@@ -70,11 +70,11 @@ Requirement: fallback stays inside the same trust boundary; `exclude` prevents r
 
 ## Repository map
 
-- `packages/types/src/models.json` — routing metadata SSOT (capabilities, contextWindow, cost, speed, qualityTier, taskRouting, providersInOrder, tierAllowedModels).
-- `packages/types/src/model-catalog.ts` — catalog helpers, `SLOT_REGISTRY`, `TIER_POLICIES`, `getEconomyFallbackModels`, `getModelContextLimits`, `getModelCostRates`, `getAllowedModelsForTier`, `resolveAutoModeModel`.
-- `packages/llm-runtime/src/{fallback,retry,errors}.ts` — fallback chains, retry/backoff, classification.
-- `apps/web/app/api/llm/completion/route.ts`; `apps/web/app/api/llm/v2/chat/route.ts` — Web dispatch + cost-fallback.
-- `packages/unified-chat/src/stores/modelStore.ts` — surface-facing model selection.
+- `packages/contracts/types/src/models.json` — routing metadata SSOT (capabilities, contextWindow, cost, speed, qualityTier, taskRouting, providersInOrder, tierAllowedModels).
+- `packages/contracts/types/src/model-catalog.ts` — catalog helpers, `SLOT_REGISTRY`, `TIER_POLICIES`, `getEconomyFallbackModels`, `getModelContextLimits`, `getModelCostRates`, `getAllowedModelsForTier`, `resolveAutoModeModel`.
+- `packages/ai/provider-runtime/src/{fallback,retry,errors}.ts` — fallback chains, retry/backoff, classification.
+- `apps/web/app/api/llm/v1/chat/completions/route.ts` and `.../lib/request-processor.ts` — Web dispatch + cost-fallback (the real, live route; `.../llm/completion/route.ts` and `.../llm/v2/chat/route.ts` do not exist).
+- `packages/ui/unified-chat/src/stores/modelStore.ts` — surface-facing model selection.
 
 ## Competitor notes
 

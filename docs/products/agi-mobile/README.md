@@ -8,7 +8,7 @@ AGI Mobile is the Expo/React Native surface of the AGI workforce suite. Its trus
 
 ## Pricing
 
-The mobile surface follows the shared subscription model: a Free tier, Basic at $8 / ₹399, Pro at $20, Max at two ceilings of $100 and $200, and Enterprise. There is no Plus or Hobby tier and there are no usage top-ups. Pricing and entitlements are presented but enforced server-side; mobile never invents tiers or prices and reads them from the canonical source.
+The mobile surface follows the shared subscription model: a Free tier, Basic at $7 / ₹399 (IAP-first), Pro at $20, Max at two ceilings of $100 and $200, Team at $30/seat, and Enterprise. There is no Plus or Hobby tier; top-ups are enabled for paid tiers (capped, opt-in). Pricing and entitlements are presented but enforced server-side; mobile never invents tiers or prices and reads them from the canonical source.
 
 ## Remote-control framing
 

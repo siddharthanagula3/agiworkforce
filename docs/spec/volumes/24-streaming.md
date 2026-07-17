@@ -7,13 +7,13 @@ Authority: `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 24, `docs/strategy/04-scaling
 
 Streaming is the product's perceived speed and its hardest correctness surface. A stream is a _persisted lifecycle_, not a fire-and-forget pipe: every stream has a state, every chunk is recoverable, and an interruption is a first-class outcome — not an error. The gateway already does real SSE (`services/api-gateway/src/routes/providerStream.ts`); the work is making it exact, resumable, and UTF-8-safe under scale (thousands of concurrent streams — `docs/strategy/04` §3).
 
-Cloud and Local stream the _same_ lifecycle through the _same_ shell, but over different transports: Cloud streams SSE through the gateway (with metering attached to the stream); Local streams tokens straight from the on-device runtime (`packages/local-llm`) with no network and no account. The discriminated event taxonomy and the lifecycle state machine are identical so the UI never branches on trust mode — only the transport does. A Local stream must never tunnel through the cloud gateway.
+Cloud and Local stream the _same_ lifecycle through the _same_ shell, but over different transports: Cloud streams SSE through the gateway (with metering attached to the stream); Local streams tokens straight from the on-device runtime (`packages/platform/local-llm`) with no network and no account. The discriminated event taxonomy and the lifecycle state machine are identical so the UI never branches on trust mode — only the transport does. A Local stream must never tunnel through the cloud gateway.
 
 ## Binding rules
 
 1. Persist the stream lifecycle: `queued → running → tool_wait → completed | interrupted | failed`. The state is durable, not just in-memory, so a reconnect can resume.
 2. SSE parsing is UTF-8-safe: never split a multi-byte sequence across chunk boundaries; buffer partial bytes until a full codepoint is available (port the RLLM-style safe parser, `10` §1).
-3. Honor each provider's SSE delimiter from `packages/types/src/models.json` (`sseDelimiter`, e.g. `\n\n` for cloud providers, `\n` for Ollama). Never hardcode one delimiter.
+3. Honor each provider's SSE delimiter from `packages/contracts/types/src/models.json` (`sseDelimiter`, e.g. `\n\n` for cloud providers, `\n` for Ollama). Never hardcode one delimiter.
 4. Stop/cancel cancels both the upstream stream **and** any in-flight tool execution, and records the `interrupted` state with whatever was produced.
 5. On context-window overflow, **withhold-and-recover**: drain the partial output, compact history (summary-replaces-history, not truncation), and escalate/retry — never surface a raw overflow error.
 6. Stream typed events, not raw text only: token/markdown/code deltas, tool-call lifecycle (`InProgress → Executing → Complete`), artifact fill, and image/audio frames each carry their own event type.
@@ -23,11 +23,11 @@ Cloud and Local stream the _same_ lifecycle through the _same_ shell, but over d
 ## Repository map
 
 - **Cloud SSE gateway:** `services/api-gateway/src/routes/providerStream.ts` (+ `__tests__/providerStream.live.test.ts`).
-- **Runtime stream control:** `packages/llm-runtime/src/` — `gateway.ts`, `watchdog.ts` (stall detection), `retry.ts`/`retry-after-internal.ts`, `fallback.ts`, `errors.ts`, `history.ts` (compaction/recovery seam).
-- **Provider SSE config:** `packages/types/src/models.json` per-provider `sseDelimiter` + `tokenMultiplier`.
-- **Local token stream:** `packages/local-llm/src/{tier1,tier2,tier3}.ts`; mobile native streaming via `apps/mobile/services/llmGate.ts`.
+- **Runtime stream control:** `packages/ai/provider-runtime/src/` — `gateway.ts`, `watchdog.ts` (stall detection), `retry.ts`/`retry-after-internal.ts`, `fallback.ts`, `errors.ts`, `history.ts` (compaction/recovery seam).
+- **Provider SSE config:** `packages/contracts/types/src/models.json` per-provider `sseDelimiter` + `tokenMultiplier`.
+- **Local token stream:** `packages/platform/local-llm/src/{tier1,tier2,tier3}.ts`; mobile native streaming via `apps/mobile/services/llmGate.ts`.
 - **Desktop SSE:** the battle-tested ~70KB parser in `apps/desktop/src-tauri` (Vol 6 / `docs/strategy/14` §1) and Rust loop in `crates/agiworkforce-task-runtime`.
-- **UI render seam:** `packages/unified-chat`, `packages/ui` (stream → message/artifact rendering).
+- **UI render seam:** `packages/ui/unified-chat`, `packages/ui/ui` (stream → message/artifact rendering).
 
 ## Competitor notes
 

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`; `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/mobile/lib/v1FeatureFlags.ts`; `apps/mobile/stores/chat/chatViewStore.ts`; `apps/mobile/src/features/sidebar/components/SearchBar.tsx`; `apps/mobile/src/features/sidebar/components/ConversationList.tsx`; `apps/mobile/src/features/drawer/components/DrawerContent.tsx`; `apps/mobile/src/features/memory/services/memory.ts`; `apps/mobile/stores/chat/chatExecutionStore.ts`; `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts`; `apps/web/app/api/search/route.ts`; `apps/web/app/api/memory/search/route.ts`; `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md`; `apps/mobile/lib/v1FeatureFlags.ts`; `apps/mobile/stores/chat/chatViewStore.ts`; `apps/mobile/src/features/sidebar/components/SearchBar.tsx`; `apps/mobile/src/features/sidebar/components/ConversationList.tsx`; `apps/mobile/src/features/drawer/components/DrawerContent.tsx`; `apps/mobile/src/features/memory/services/memory.ts`; `apps/mobile/stores/chat/chatExecutionStore.ts`; `apps/mobile/src/features/chat/utils/toolCallAccumulator.ts`; `apps/web/app/api/search/route.ts`; `apps/web/app/api/memory/search/route.ts`; `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -79,7 +79,7 @@ Live internet retrieval folded into the chat stream — cloud-only, opt-in.
 ChatGPT and Claude mobile offer conversation search and (ChatGPT) web search/browsing as cloud-only features against a single account store. AGI's deliberate divergence:
 
 - **Per-surface trust** — Local-mode search is genuinely on-device with zero egress; competitors have no local search tier.
-- **Multi-provider Cloud** — Managed-Cloud search/results span whatever model the user selected from `packages/types/src/models.json`; AGI never hardcodes a vendor.
+- **Multi-provider Cloud** — Managed-Cloud search/results span whatever model the user selected from `packages/contracts/types/src/models.json`; AGI never hardcodes a vendor.
 - **No BYOK on mobile** — unlike Desktop/CLI/VS Code, mobile search never touches user provider keys; web search is the server's injected tool, not a user-key call.
 - **Explicit data boundary** — Local chats/memory/projects are searchable locally and are not silently synced or searched in the cloud.
 
@@ -96,7 +96,7 @@ The domain is production-ready when Local and Cloud search are provably isolated
 - Adding any BYOK / API-key field to mobile search or web search.
 - Auto-routing a Local-mode search to a server endpoint (silent Local→Cloud leak).
 - Faking result counts, snippets, citations, or a not-yet-built file-search index.
-- Hardcoding a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Enabling web search in Local mode or when Cloud is gated off.
 - Referencing Supabase or any retired tier ("Plus", `pro_plus`, "Hobby"); the stack is Clerk + Neon + Stripe.
 - Making mobile the first heavy local PDF/DOCX/PPTX indexing surface.
