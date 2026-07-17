@@ -399,6 +399,15 @@ agi-work-wiring teammate frees apps/web:
 - WEB TWIN ROUTE: apps/web's own /api/llm/v1 route needs the same failover
   wiring or should delegate to the gateway (one-canonical-owner candidate).
 
+## Mobile picker honesty follow-up (flagged 2026-07-17 during the RAM-gate wiring)
+
+- ExecuTorch TEXT rows (incl. the default AGI Standard model) are runtime-
+  RAM-gated (tier2Available blocks at generate time) but NOT picker-gated: a
+  sub-3.5GB device sees them as downloadable, downloads, then fails at
+  generate. Same dishonest-availability class the multimodal gate just fixed;
+  picker-locking them affects the DEFAULT model on low-RAM devices, so it is
+  a product decision (honest lock vs a lower-RAM text tier), not a drive-by.
+
 ## Ponytail dedup queue (one-canonical-owner, non-urgent)
 
 - web store roots overlap (flagged during the W12 manifest, 2026-07-17):
