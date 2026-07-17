@@ -785,6 +785,15 @@ impl LLMProvider for ManagedCloudProvider {
             }
         }
 
+        // c4 DECISION (2026-07-16): ManagedCloud deliberately STAYS on the
+        // desktop `parse_sse_stream` decoder instead of the shared
+        // `agiworkforce-llm` engine (which every direct provider now uses).
+        // The managed gateway's envelope is OpenAI-shaped PLUS a per-chunk
+        // `credits` billing object the crate cannot represent — migrating
+        // would silently drop live billing telemetry. Pinned by
+        // `c4_pin_managed_cloud_credits_extraction_from_openai_shaped_sse`
+        // in tests/sse_parser_tests.rs; unblock by adding a vendor-meta
+        // event to the crate first.
         use crate::core::llm::sse_parser::parse_sse_stream;
         Ok(Box::pin(parse_sse_stream(
             res,

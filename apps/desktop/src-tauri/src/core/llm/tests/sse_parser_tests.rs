@@ -2,6 +2,42 @@
 mod tests {
     use crate::core::llm::sse_parser::{StreamChunk, TokenUsage};
 
+    /// c4 PIN (2026-07-16): WHY ManagedCloud stays on `parse_sse_stream`
+    /// while every direct provider decodes through the shared
+    /// `agiworkforce-llm` engine — the managed gateway's SSE envelope is NOT
+    /// plain OpenAI-compatible: it carries a per-chunk `credits` billing
+    /// object (cost/remaining/daily caps) that the desktop billing UI
+    /// consumes via `StreamChunk.credits`. The crate decoder has no vendor-
+    /// extension channel, so migrating ManagedCloud onto it TODAY would
+    /// silently drop live billing telemetry. This test pins the extraction;
+    /// any future ManagedCloud decode migration must carry `credits` (or add
+    /// a vendor-meta event to the crate) and will trip here if it forgets.
+    #[test]
+    fn c4_pin_managed_cloud_credits_extraction_from_openai_shaped_sse() {
+        let event = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}],",
+            "\"credits\":{\"cost_cents\":0.42,\"remaining_cents\":991.3,",
+            "\"daily_limit\":500.0,\"daily_used\":8.7,\"daily_remaining\":491.3,",
+            "\"daily_reset_at\":\"2026-07-17T00:00:00Z\"}}"
+        );
+        let chunk = crate::core::llm::sse_parser::parse_sse_event(
+            event,
+            crate::core::llm::Provider::ManagedCloud,
+        )
+        .expect("managed SSE event parses");
+        assert_eq!(chunk.content, "Hi");
+        let credits = chunk
+            .credits
+            .expect("managed credits object must be extracted");
+        assert!((credits.cost_cents - 0.42).abs() < 1e-9);
+        assert!((credits.remaining_cents - 991.3).abs() < 1e-9);
+        assert_eq!(credits.daily_limit, Some(500.0));
+        assert_eq!(
+            credits.daily_reset_at.as_deref(),
+            Some("2026-07-17T00:00:00Z")
+        );
+    }
+
     #[test]
     fn test_stream_chunk_creation() {
         let chunk = StreamChunk {

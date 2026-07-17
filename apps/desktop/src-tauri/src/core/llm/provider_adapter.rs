@@ -213,7 +213,7 @@ pub trait ProviderAdapter: Send + Sync {
 
     /// Convert provider-specific response to unified LLMResponse.
     fn adapt_response(&self, response: &Value)
-    -> Result<LLMResponse, Box<dyn Error + Send + Sync>>;
+        -> Result<LLMResponse, Box<dyn Error + Send + Sync>>;
 
     /// Get the provider name.
     fn provider_name(&self) -> &str;
@@ -312,7 +312,7 @@ impl ProviderAdapterFactory {
 /// - Vision (image inputs with detail levels)
 /// - Audio (audio inputs/outputs)
 /// - Streaming (text, function calls, images with semantic events)
-struct OpenAIAdapter;
+pub(crate) struct OpenAIAdapter;
 
 impl ProviderAdapter for OpenAIAdapter {
     fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -320,7 +320,13 @@ impl ProviderAdapter for OpenAIAdapter {
         let use_responses_api = super::models_config::model_uses_responses_api(&request.model);
 
         if use_responses_api {
-            self.adapt_to_responses_api(request)
+            if Self::responses_crate_expressible(request) {
+                Self::adapt_responses_via_crate(request)
+            } else {
+                self.adapt_to_responses_api(request)
+            }
+        } else if Self::chat_crate_expressible(request) {
+            Self::adapt_chat_via_crate(request)
         } else {
             self.adapt_to_chat_completions_api(request)
         }
@@ -386,6 +392,322 @@ impl ProviderAdapter for OpenAIAdapter {
 }
 
 impl OpenAIAdapter {
+    /// c3 switch predicate for the CHAT COMPLETIONS arm (Responses routing is
+    /// untouched): can the shared crate serializer express this request
+    /// byte-faithfully? Fallbacks (no silent drops):
+    /// - structured outputs / response_format / audio have no crate shape;
+    /// - OpenAI SERVER tools (web_search, code_interpreter, ...) use typed
+    ///   builtin definitions the crate `ToolDefinition` cannot express;
+    /// - multimodal is crate-expressible only as Text/Image parts with the
+    ///   default `detail: auto` and at least one Image (the legacy arm sends
+    ///   `image_url.detail` and an always-array content; the crate omits
+    ///   `detail` — wire-equivalent for `auto` only — and downgrades a lone
+    ///   text part to a plain string).
+    fn chat_crate_expressible(request: &LLMRequest) -> bool {
+        let no_desktop_only_fields = request.output_config.is_none()
+            && request.response_format.is_none()
+            && request.audio_output.is_none();
+        let no_server_tools = request.tools.as_ref().map_or(true, |tools| {
+            tools
+                .iter()
+                .all(|tool| OpenAIServerTool::from_str(&tool.name).is_none())
+        });
+        let multimodal_expressible = request.messages.iter().all(|message| {
+            message.multimodal_content.as_ref().map_or(true, |parts| {
+                let simple = parts.iter().all(|part| match part {
+                    super::ContentPart::Text { .. } => true,
+                    super::ContentPart::Image { image } => image.detail == super::ImageDetail::Auto,
+                    _ => false,
+                });
+                let has_image = parts
+                    .iter()
+                    .any(|part| matches!(part, super::ContentPart::Image { .. }));
+                simple && has_image
+            })
+        });
+        no_desktop_only_fields && no_server_tools && multimodal_expressible
+    }
+
+    /// Convert the desktop request's system + messages into crate wire
+    /// messages for the OpenAI-compatible dialect. Unlike the legacy chat
+    /// arm — which DROPS assistant `tool_calls` and the tool message's
+    /// `tool_call_id` (a real bug: replayed tool conversations 400 on
+    /// OpenAI) — the crate serializer emits correct tool history; that fix
+    /// is pinned in `tests/c2c_request_oracle.rs`. Mirroring the legacy arm,
+    /// a multimodal message serializes its parts only (plain `content` is
+    /// not appended).
+    fn openai_wire_messages(request: &LLMRequest) -> Vec<agiworkforce_llm::Message> {
+        use agiworkforce_llm::{ContentBlock, Message};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+        let mut out = Vec::with_capacity(request.messages.len() + 1);
+        if let Some(system) = &request.system {
+            out.push(Message::text("system", system.clone()));
+        }
+        for msg in &request.messages {
+            if let Some(parts) = &msg.multimodal_content {
+                let blocks: Vec<ContentBlock> = parts
+                    .iter()
+                    .filter_map(|part| match part {
+                        super::ContentPart::Text { text } => {
+                            Some(ContentBlock::Text { text: text.clone() })
+                        }
+                        super::ContentPart::Image { image } => Some(ContentBlock::Image {
+                            mime: image.format.mime_type().to_string(),
+                            data_b64: STANDARD.encode(&image.data),
+                        }),
+                        _ => None,
+                    })
+                    .collect();
+                out.push(Message::blocks(&msg.role, blocks));
+            } else if msg.role == "tool" {
+                out.push(Message::blocks(
+                    "user",
+                    vec![ContentBlock::ToolResult {
+                        tool_use_id: msg.tool_call_id.clone().unwrap_or_default(),
+                        content: msg.content.clone(),
+                        is_error: false,
+                    }],
+                ));
+            } else if let Some(tool_calls) = &msg.tool_calls {
+                let mut blocks: Vec<ContentBlock> = Vec::new();
+                if !msg.content.is_empty() {
+                    blocks.push(ContentBlock::Text {
+                        text: msg.content.clone(),
+                    });
+                }
+                for tc in tool_calls {
+                    blocks.push(ContentBlock::ToolUse {
+                        id: tc.id.clone(),
+                        name: tc.name.clone(),
+                        input: serde_json::from_str(&tc.arguments)
+                            .unwrap_or_else(|_| serde_json::json!({})),
+                    });
+                }
+                out.push(Message::blocks("assistant", blocks));
+            } else {
+                out.push(Message::text(&msg.role, msg.content.clone()));
+            }
+        }
+        out
+    }
+
+    /// c3 (2026-07-16): build the Chat Completions body through the shared
+    /// `agiworkforce-llm` serializer. Desktop-side policy stays here: catalog
+    /// model-id mapping, the FIX-007 max-tokens clamp, and the catalog-based
+    /// `max_completion_tokens`-vs-`max_tokens` field choice (the crate's own
+    /// URL-based `OpenAiOpts::for_url` heuristic is not consulted — the
+    /// desktop knows the provider from its catalog).
+    pub(crate) fn adapt_chat_via_crate(
+        request: &LLMRequest,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let wire_model = super::models_config::get_api_model_id(&request.model);
+        let messages = Self::openai_wire_messages(request);
+        let tools = request.tools.as_deref().map(to_crate_tool_definitions);
+        let req = agiworkforce_llm::ChatRequest {
+            model: &wire_model,
+            messages: &messages,
+            // FIX-007 clamp; None → 0 → the crate omits the cap field.
+            max_tokens: clamp_max_tokens(request.max_tokens).0.unwrap_or(0),
+            temperature: request.temperature,
+            tools: tools.as_deref(),
+            tool_choice: request
+                .tool_choice
+                .as_ref()
+                .map(AnthropicAdapter::map_tool_choice),
+            thinking_budget: None,
+            anthropic_thinking: None,
+            effort: None,
+            top_p: request.top_p,
+            top_k: None,
+            metadata: None,
+            reasoning_effort: None,
+            gemini_thinking_budget: None,
+            num_ctx: None,
+            ollama_think: None,
+            idle_timeout: std::time::Duration::from_secs(0),
+        };
+        let opts = agiworkforce_llm::OpenAiOpts {
+            use_max_completion_tokens: super::models_config::get_provider_for_model(&request.model)
+                == Some(Provider::OpenAI),
+        };
+        let mut body = agiworkforce_llm::build_openai_compat_request_body(&req, &opts);
+        // The crate engine is streaming-only; the desktop's blocking send
+        // path omits `stream` — and `stream_options` is only valid WITH
+        // `stream` (OpenAI 400s it otherwise).
+        if !request.stream {
+            if let Some(obj) = body.as_object_mut() {
+                obj.remove("stream");
+                obj.remove("stream_options");
+            }
+        }
+        Ok(body)
+    }
+
+    /// Resolve the Responses `reasoning.effort` for thinking-capable OpenAI
+    /// models. Shared by the legacy Responses arm and the c3 crate path.
+    /// Checking capabilities.thinking on the catalog entry is sufficient —
+    /// every thinking-capable OpenAI model accepts the reasoning_effort
+    /// param; no hardcoded model-family prefixes per the locked rule.
+    /// temperature/top_p are ONLY allowed when the resolved effort is unset.
+    fn resolve_responses_reasoning_effort(request: &LLMRequest) -> Option<String> {
+        let codex_effort_override = Self::codex_model_effort_override(&request.model);
+        if !super::thinking::ThinkingConfig::model_supports_thinking(&request.model) {
+            return None;
+        }
+        use super::ThinkingParameter;
+        let raw_effort: Option<&str> = if let Some(thinking) = &request.thinking {
+            match thinking {
+                ThinkingParameter::Budget { budget_tokens, .. } => {
+                    let e = if *budget_tokens < 1000 {
+                        "low"
+                    } else if *budget_tokens < 5000 {
+                        "medium"
+                    } else {
+                        "high"
+                    };
+                    Some(e)
+                }
+                ThinkingParameter::Level { level, .. } => Some(match level.as_str() {
+                    "low" => "low",
+                    "medium" => "medium",
+                    "high" => "high",
+                    // xhigh is natively supported in GPT-5.4
+                    "extreme" | "xhigh" => "xhigh",
+                    _ => "medium",
+                }),
+                ThinkingParameter::Enabled(true) => Some("medium"),
+                // Disabled → leave unset so temperature/top_p are allowed
+                ThinkingParameter::Enabled(false) => None,
+                ThinkingParameter::Adaptive { .. } => Some("medium"),
+            }
+        } else {
+            None
+        };
+        raw_effort
+            .map(|e| codex_effort_override.unwrap_or(e).to_string())
+            .or_else(|| codex_effort_override.map(|e| e.to_string()))
+    }
+
+    /// c3 switch predicate for the RESPONSES arm: can the shared crate
+    /// serializer express this request byte-faithfully? Fallbacks (no silent
+    /// drops): structured outputs / response_format / audio / background /
+    /// conversation continuity have no crate shape; server tools and
+    /// per-tool `strict` cannot be expressed by the crate `ToolDefinition`;
+    /// multimodal input stays on the legacy arm entirely (its typed
+    /// input-part shapes have not been parity-audited yet).
+    fn responses_crate_expressible(request: &LLMRequest) -> bool {
+        let no_desktop_only_fields = request.output_config.is_none()
+            && request.response_format.is_none()
+            && request.audio_output.is_none()
+            && request.background.is_none()
+            && request.previous_response_id.is_none()
+            && request.conversation_id.is_none();
+        let tools_expressible = request.tools.as_ref().map_or(true, |tools| {
+            tools.iter().all(|tool| {
+                OpenAIServerTool::from_str(&tool.name).is_none() && tool.strict.is_none()
+            })
+        });
+        let no_multimodal = request
+            .messages
+            .iter()
+            .all(|message| message.multimodal_content.is_none());
+        no_desktop_only_fields && tools_expressible && no_multimodal
+    }
+
+    /// Convert the desktop request's system + messages into crate wire
+    /// messages for the Responses dialect. Assistant tool-call turns split
+    /// into a plain TEXT message (when content is non-empty) followed by a
+    /// ToolUse blocks message so the crate emits the legacy arm's exact item
+    /// shapes: a string-content assistant message plus flat `function_call`
+    /// items (typed `input_text` parts are for USER input, not assistant
+    /// history).
+    fn responses_wire_messages(request: &LLMRequest) -> Vec<agiworkforce_llm::Message> {
+        use agiworkforce_llm::{ContentBlock, Message};
+
+        let mut out = Vec::with_capacity(request.messages.len() + 1);
+        if let Some(system) = &request.system {
+            out.push(Message::text("system", system.clone()));
+        }
+        for msg in &request.messages {
+            if msg.role == "tool" {
+                out.push(Message::blocks(
+                    "user",
+                    vec![ContentBlock::ToolResult {
+                        tool_use_id: msg.tool_call_id.clone().unwrap_or_default(),
+                        content: msg.content.clone(),
+                        is_error: false,
+                    }],
+                ));
+            } else if let Some(tool_calls) = &msg.tool_calls {
+                if !msg.content.is_empty() {
+                    out.push(Message::text(&msg.role, msg.content.clone()));
+                }
+                let blocks: Vec<ContentBlock> = tool_calls
+                    .iter()
+                    .map(|tc| ContentBlock::ToolUse {
+                        id: tc.id.clone(),
+                        name: tc.name.clone(),
+                        input: serde_json::from_str(&tc.arguments)
+                            .unwrap_or_else(|_| serde_json::json!({})),
+                    })
+                    .collect();
+                out.push(Message::blocks(&msg.role, blocks));
+            } else {
+                out.push(Message::text(&msg.role, msg.content.clone()));
+            }
+        }
+        out
+    }
+
+    /// c3 (2026-07-16): build the Responses body through the shared
+    /// `agiworkforce-llm` serializer. Desktop-side policy stays here: model
+    /// canonicalization, the FIX-007 max-tokens clamp, and the catalog-driven
+    /// reasoning-effort resolution (thinking capability + codex suffix
+    /// override). Intentional delta vs the legacy arm (oracle-pinned): a
+    /// single text-only user turn is sent as one typed input item instead of
+    /// the compact string form — wire-equivalent per the Responses API.
+    pub(crate) fn adapt_responses_via_crate(
+        request: &LLMRequest,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let canonical_model = Self::canonicalize_model(&request.model);
+        let messages = Self::responses_wire_messages(request);
+        let tools = request.tools.as_deref().map(to_crate_tool_definitions);
+        let effort = Self::resolve_responses_reasoning_effort(request);
+        let req = agiworkforce_llm::ChatRequest {
+            model: &canonical_model,
+            messages: &messages,
+            // FIX-007 clamp; None → 0 → the crate omits max_output_tokens.
+            max_tokens: clamp_max_tokens(request.max_tokens).0.unwrap_or(0),
+            temperature: request.temperature,
+            tools: tools.as_deref(),
+            tool_choice: request
+                .tool_choice
+                .as_ref()
+                .map(AnthropicAdapter::map_tool_choice),
+            thinking_budget: None,
+            anthropic_thinking: None,
+            effort: None,
+            top_p: request.top_p,
+            top_k: None,
+            metadata: request.metadata.as_ref(),
+            reasoning_effort: effort.as_deref(),
+            gemini_thinking_budget: None,
+            num_ctx: None,
+            ollama_think: None,
+            idle_timeout: std::time::Duration::from_secs(0),
+        };
+        let mut body = agiworkforce_llm::build_openai_responses_body(&req);
+        // The crate engine is streaming-only; the desktop's blocking send
+        // path omits `stream`.
+        if !request.stream {
+            if let Some(obj) = body.as_object_mut() {
+                obj.remove("stream");
+            }
+        }
+        Ok(body)
+    }
+
     fn codex_model_effort_override(model: &str) -> Option<&'static str> {
         if model.ends_with("-low") {
             Some("low")
@@ -444,7 +766,7 @@ impl OpenAIAdapter {
         data: &[u8],
         format: super::ImageFormat,
     ) -> Result<String, Box<dyn Error + Send + Sync>> {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         let base64_data = STANDARD.encode(data);
         let mime_type = match format {
@@ -671,13 +993,19 @@ impl OpenAIAdapter {
         Ok((serde_json::json!(processed_parts), total_image_tokens))
     }
 
-    /// Adapt request to modern Responses API format (gpt-5+, o3, o4-mini)
-    fn adapt_to_responses_api(
+    /// Adapt request to modern Responses API format (gpt-5+, o3, o4-mini).
+    ///
+    /// LEGACY TWIN since c3 (2026-07-16) — the FALLBACK for request shapes
+    /// [`Self::responses_crate_expressible`] cannot route to the shared crate
+    /// serializer (structured outputs, server tools, per-tool `strict`,
+    /// multimodal input, audio/background/continuity). Slated for the
+    /// founder-gated twin-deletion; pub(crate) so the c2c oracle can call it
+    /// directly as its OLD side.
+    pub(crate) fn adapt_to_responses_api(
         &self,
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
         let canonical_model = Self::canonicalize_model(&request.model);
-        let codex_effort_override = Self::codex_model_effort_override(&request.model);
 
         let mut api_request = serde_json::json!({
             "model": canonical_model,
@@ -707,49 +1035,9 @@ impl OpenAIAdapter {
             api_request["instructions"] = serde_json::json!(system);
         }
 
-        // Determine reasoning effort for thinking-capable OpenAI models.
-        // We're already inside the OpenAIAdapter, so checking
-        // capabilities.thinking on the catalog entry is sufficient — every
-        // thinking-capable OpenAI model accepts the reasoning_effort param.
-        // No hardcoded model-family prefixes here per the locked rule.
-        // temperature, top_p, logprobs are ONLY allowed when effort is "none" (unset).
-        let resolved_reasoning_effort: Option<String> =
-            if super::thinking::ThinkingConfig::model_supports_thinking(&request.model) {
-                use super::ThinkingParameter;
-                let raw_effort: Option<&str> = if let Some(thinking) = &request.thinking {
-                    match thinking {
-                        ThinkingParameter::Budget { budget_tokens, .. } => {
-                            let e = if *budget_tokens < 1000 {
-                                "low"
-                            } else if *budget_tokens < 5000 {
-                                "medium"
-                            } else {
-                                "high"
-                            };
-                            Some(e)
-                        }
-                        ThinkingParameter::Level { level, .. } => Some(match level.as_str() {
-                            "low" => "low",
-                            "medium" => "medium",
-                            "high" => "high",
-                            // xhigh is natively supported in GPT-5.4
-                            "extreme" | "xhigh" => "xhigh",
-                            _ => "medium",
-                        }),
-                        ThinkingParameter::Enabled(true) => Some("medium"),
-                        // Disabled → leave unset so temperature/top_p are allowed
-                        ThinkingParameter::Enabled(false) => None,
-                        ThinkingParameter::Adaptive { .. } => Some("medium"),
-                    }
-                } else {
-                    None
-                };
-                raw_effort
-                    .map(|e| codex_effort_override.unwrap_or(e).to_string())
-                    .or_else(|| codex_effort_override.map(|e| e.to_string()))
-            } else {
-                None
-            };
+        // Determine reasoning effort for thinking-capable OpenAI models
+        // (shared with the c3 crate path — see the helper).
+        let resolved_reasoning_effort = Self::resolve_responses_reasoning_effort(request);
 
         if let Some(ref effort) = resolved_reasoning_effort {
             api_request["reasoning"] = serde_json::json!({ "effort": effort });
@@ -869,8 +1157,16 @@ impl OpenAIAdapter {
         Ok(api_request)
     }
 
-    /// Adapt request to legacy Chat Completions API format
-    fn adapt_to_chat_completions_api(
+    /// Adapt request to legacy Chat Completions API format.
+    ///
+    /// LEGACY TWIN since c3 (2026-07-16) — the FALLBACK for request shapes
+    /// [`Self::chat_crate_expressible`] cannot route to the shared crate
+    /// serializer (structured outputs, server tools, non-auto image detail,
+    /// audio). KNOWN BUGS preserved verbatim here (fixed on the crate path):
+    /// assistant `tool_calls` and tool `tool_call_id` are dropped. Slated for
+    /// the founder-gated twin-deletion; pub(crate) so the c2c oracle can call
+    /// it directly as its OLD side.
+    pub(crate) fn adapt_to_chat_completions_api(
         &self,
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -1260,7 +1556,7 @@ impl OpenAIAdapter {
         content_parts: &[super::ContentPart],
     ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
         use super::ContentPart;
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         let mut processed_parts = Vec::new();
 
@@ -1307,7 +1603,7 @@ impl OpenAIAdapter {
                     processed_parts.push(audio_part);
                 }
                 ContentPart::Image { image } => {
-                    use base64::{Engine as _, engine::general_purpose::STANDARD};
+                    use base64::{engine::general_purpose::STANDARD, Engine as _};
                     let base64_str = STANDARD.encode(&image.data);
                     let data_url =
                         format!("data:{};base64,{}", image.format.mime_type(), base64_str);
@@ -1321,7 +1617,7 @@ impl OpenAIAdapter {
                 }
                 ContentPart::Video { video } => {
                     use super::VideoData;
-                    use base64::{Engine as _, engine::general_purpose::STANDARD};
+                    use base64::{engine::general_purpose::STANDARD, Engine as _};
 
                     let video_url = match &video.data {
                         VideoData::Bytes(bytes) => {
@@ -1700,7 +1996,7 @@ impl OpenAIAdapter {
         &self,
         response: &Value,
     ) -> (Option<Vec<u8>>, Option<super::AudioFormat>, Option<String>) {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         // Check for audio in message content
         if let Some(audio_obj) = response["choices"][0]["message"]["audio"].as_object() {
@@ -1745,11 +2041,277 @@ impl OpenAIAdapter {
     }
 }
 
-/// Anthropic Claude adapter
-struct AnthropicAdapter;
+/// Convert desktop tool definitions to the shared crate's wire type. Only
+/// `name`/`description`/`input_schema` ever reach a provider payload — the
+/// crate's serializers pick API-bound fields by name, so the executor
+/// metadata stays client-side by construction. Shared by every c2c/c3
+/// crate-serializer switch (ollama, anthropic, ...).
+pub(crate) fn to_crate_tool_definitions(
+    tools: &[super::ToolDefinition],
+) -> Vec<agiworkforce_llm::ToolDefinition> {
+    tools
+        .iter()
+        .map(|tool| agiworkforce_llm::ToolDefinition {
+            name: tool.name.clone(),
+            description: tool.description.clone(),
+            input_schema: tool.parameters.clone(),
+            is_read_only: false,
+            is_concurrency_safe: false,
+            max_result_size_chars: None,
+            should_defer: false,
+            aliases: Vec::new(),
+            owner: String::new(),
+            permission_class: String::new(),
+            diagnostic_tags: Vec::new(),
+        })
+        .collect()
+}
 
-impl ProviderAdapter for AnthropicAdapter {
-    fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
+/// Anthropic Claude adapter
+pub(crate) struct AnthropicAdapter;
+
+impl AnthropicAdapter {
+    /// c3 switch predicate: can the shared crate serializer express this
+    /// request byte-faithfully? Anything outside this shape falls back to the
+    /// legacy adapter arm below (no silent field drops):
+    /// - structured outputs / response formats / audio / background /
+    ///   conversation continuity have no crate representation yet;
+    /// - `cache_control` requests the legacy single-block system caching,
+    ///   whose bytes differ from the crate's env-split caching;
+    /// - Anthropic SERVER tools use a typed definition format the crate
+    ///   `ToolDefinition` cannot express;
+    /// - multimodal parts beyond Text/Image/ToolUse/ToolResult (Document,
+    ///   Audio, Video) have no crate `ContentBlock`.
+    fn crate_expressible(request: &LLMRequest) -> bool {
+        use crate::core::llm::server_tools;
+
+        let no_desktop_only_fields = request.output_config.is_none()
+            && request.response_format.is_none()
+            && request.cache_control.is_none()
+            && request.audio_output.is_none()
+            && request.background.is_none()
+            && request.previous_response_id.is_none()
+            && request.conversation_id.is_none();
+        let no_server_tools = request.tools.as_ref().map_or(true, |tools| {
+            tools
+                .iter()
+                .all(|tool| !server_tools::is_anthropic_server_tool(&tool.name))
+        });
+        let multimodal_expressible = request.messages.iter().all(|message| {
+            message.multimodal_content.as_ref().map_or(true, |parts| {
+                parts.iter().all(|part| {
+                    matches!(
+                        part,
+                        super::ContentPart::Text { .. }
+                            | super::ContentPart::Image { .. }
+                            | super::ContentPart::ToolUse { .. }
+                            | super::ContentPart::ToolResult { .. }
+                    )
+                })
+            })
+        });
+        no_desktop_only_fields && no_server_tools && multimodal_expressible
+    }
+
+    /// Map the desktop thinking parameter onto the crate's Anthropic thinking
+    /// mode, mirroring the legacy adapter's mapping exactly (Enabled(true) →
+    /// 8192-token budget; Level → the same low/medium/high/extreme table).
+    fn map_thinking(
+        thinking: Option<&super::ThinkingParameter>,
+    ) -> Option<agiworkforce_llm::AnthropicThinking> {
+        use super::ThinkingParameter;
+        use agiworkforce_llm::AnthropicThinking;
+        thinking.map(|thinking| match thinking {
+            ThinkingParameter::Enabled(true) => AnthropicThinking::Enabled {
+                budget_tokens: 8192,
+            },
+            ThinkingParameter::Enabled(false) => AnthropicThinking::Disabled,
+            ThinkingParameter::Level {
+                level,
+                max_thinking_tokens,
+            } => AnthropicThinking::Enabled {
+                budget_tokens: max_thinking_tokens.unwrap_or(match level.as_str() {
+                    "low" => 2048,
+                    "medium" => 8192,
+                    "high" => 16384,
+                    "extreme" => 32768,
+                    _ => 8192,
+                }),
+            },
+            ThinkingParameter::Budget { budget_tokens, .. } => AnthropicThinking::Enabled {
+                budget_tokens: *budget_tokens,
+            },
+            ThinkingParameter::Adaptive { .. } => AnthropicThinking::Adaptive,
+        })
+    }
+
+    fn map_tool_choice(tool_choice: &super::ToolChoice) -> agiworkforce_llm::ToolChoice {
+        match tool_choice {
+            super::ToolChoice::Auto => agiworkforce_llm::ToolChoice::Auto,
+            super::ToolChoice::Required => agiworkforce_llm::ToolChoice::Required,
+            super::ToolChoice::None => agiworkforce_llm::ToolChoice::None,
+            super::ToolChoice::Specific(name) => {
+                agiworkforce_llm::ToolChoice::Specific(name.clone())
+            }
+        }
+    }
+
+    /// Convert the desktop request's system + messages into crate wire
+    /// messages, mirroring the legacy adapter's role normalization exactly:
+    /// tool-result turns become "user" turns with ToolResult blocks (Anthropic
+    /// rejects role="tool"), assistant tool_calls become ToolUse blocks, and a
+    /// multimodal message appends its plain `content` as a text block only
+    /// when the parts carried no Text part.
+    fn wire_messages(request: &LLMRequest) -> Vec<agiworkforce_llm::Message> {
+        use agiworkforce_llm::{ContentBlock, Message};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+        let mut out = Vec::with_capacity(request.messages.len() + 1);
+        if let Some(system) = &request.system {
+            out.push(Message::text("system", system.clone()));
+        }
+        for msg in &request.messages {
+            if let Some(parts) = &msg.multimodal_content {
+                let mut blocks: Vec<ContentBlock> = Vec::new();
+                let mut has_tool_result = false;
+                for part in parts {
+                    match part {
+                        super::ContentPart::Text { text } => {
+                            blocks.push(ContentBlock::Text { text: text.clone() })
+                        }
+                        super::ContentPart::Image { image } => blocks.push(ContentBlock::Image {
+                            mime: image.format.mime_type().to_string(),
+                            data_b64: STANDARD.encode(&image.data),
+                        }),
+                        super::ContentPart::ToolUse { tool_use } => {
+                            blocks.push(ContentBlock::ToolUse {
+                                id: tool_use.id.clone(),
+                                name: tool_use.name.clone(),
+                                input: tool_use.input.clone(),
+                            });
+                        }
+                        super::ContentPart::ToolResult { tool_result } => {
+                            has_tool_result = true;
+                            blocks.push(ContentBlock::ToolResult {
+                                tool_use_id: tool_result.tool_use_id.clone(),
+                                content: tool_result.content.clone(),
+                                is_error: tool_result.is_error,
+                            });
+                        }
+                        _ => unreachable!("crate_expressible excludes other part kinds"),
+                    }
+                }
+                if !msg.content.is_empty()
+                    && !blocks
+                        .iter()
+                        .any(|b| matches!(b, ContentBlock::Text { .. }))
+                {
+                    blocks.push(ContentBlock::Text {
+                        text: msg.content.clone(),
+                    });
+                }
+                let role = if has_tool_result || msg.role == "tool" {
+                    "user"
+                } else {
+                    &msg.role
+                };
+                out.push(Message::blocks(role, blocks));
+            } else if msg.role == "tool" {
+                out.push(Message::blocks(
+                    "user",
+                    vec![ContentBlock::ToolResult {
+                        tool_use_id: msg.tool_call_id.clone().unwrap_or_else(|| {
+                            tracing::warn!(
+                                "[Anthropic] Tool result message missing tool_call_id; \
+                                 falling back to 'unknown'."
+                            );
+                            "unknown".to_string()
+                        }),
+                        content: msg.content.clone(),
+                        is_error: false,
+                    }],
+                ));
+            } else if let Some(tool_calls) = &msg.tool_calls {
+                let mut blocks: Vec<ContentBlock> = Vec::new();
+                if !msg.content.is_empty() {
+                    blocks.push(ContentBlock::Text {
+                        text: msg.content.clone(),
+                    });
+                }
+                for tc in tool_calls {
+                    blocks.push(ContentBlock::ToolUse {
+                        id: tc.id.clone(),
+                        name: tc.name.clone(),
+                        input: serde_json::from_str(&tc.arguments)
+                            .unwrap_or_else(|_| serde_json::json!({})),
+                    });
+                }
+                out.push(Message::blocks("assistant", blocks));
+            } else {
+                out.push(Message::text(&msg.role, msg.content.clone()));
+            }
+        }
+        out
+    }
+
+    /// c3 (2026-07-16): build the Messages API body through the shared
+    /// `agiworkforce-llm` serializer. Desktop-side policy stays here: catalog
+    /// model-id mapping, the FIX-007 max-tokens clamp, and tool-message
+    /// pairing validation. Byte-parity with the legacy arm is proven by
+    /// `tests/c2c_request_oracle.rs` modulo the enumerated intentional deltas
+    /// (prompt-cache breakpoints on system/tools/last-message, explicit
+    /// `is_error: false` on plain-path tool results).
+    pub(crate) fn adapt_request_via_crate(
+        request: &LLMRequest,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let wire_model = super::models_config::get_api_model_id(&request.model);
+        Self::validate_tool_message_pairing(&request.messages)?;
+
+        let messages = Self::wire_messages(request);
+        let tools = request.tools.as_deref().map(to_crate_tool_definitions);
+        let req = agiworkforce_llm::ChatRequest {
+            model: &wire_model,
+            messages: &messages,
+            // FIX-007: clamp through PER_REQUEST_MAX_TOKENS_CEILING.
+            max_tokens: clamp_max_tokens(Some(request.max_tokens.unwrap_or(4096)))
+                .0
+                .unwrap_or(4096),
+            temperature: request.temperature,
+            tools: tools.as_deref(),
+            tool_choice: request.tool_choice.as_ref().map(Self::map_tool_choice),
+            thinking_budget: None,
+            anthropic_thinking: Self::map_thinking(request.thinking.as_ref()),
+            effort: request.effort.as_deref(),
+            top_p: request.top_p,
+            top_k: request.top_k,
+            metadata: request.metadata.as_ref(),
+            reasoning_effort: None,
+            gemini_thinking_budget: None,
+            num_ctx: None,
+            ollama_think: None,
+            idle_timeout: std::time::Duration::from_secs(0),
+        };
+        let mut body = agiworkforce_llm::build_anthropic_request_body(&req);
+        // The crate engine is streaming-only and hardcodes `stream: true`;
+        // the desktop's blocking send path omits the field.
+        if !request.stream {
+            if let Some(obj) = body.as_object_mut() {
+                obj.remove("stream");
+            }
+        }
+        Ok(body)
+    }
+
+    /// LEGACY TWIN — the pre-c3 request builder, now the FALLBACK for request
+    /// shapes [`Self::crate_expressible`] cannot route to the shared crate
+    /// serializer (structured outputs, server tools, documents, explicit
+    /// cache_control, audio/background/continuity). Slated for the
+    /// founder-gated twin-deletion once the crate expresses those shapes; the
+    /// c2c oracle vendors nothing from here — it calls this arm directly as
+    /// its OLD side.
+    pub(crate) fn adapt_request_legacy(
+        request: &LLMRequest,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
         // Resolve the wire API model ID: catalog keys carrying a dotted internal
         // id (e.g. "claude-haiku-4.5") must be translated to the real Anthropic
         // API string ("claude-haiku-4-5") before being sent in the request body.
@@ -1776,7 +2338,7 @@ impl ProviderAdapter for AnthropicAdapter {
         // "tool_result".  We detect tool-result-bearing messages in both
         // the multimodal and plain-text paths and always emit role="user".
         let messages: Vec<Value> = {
-            use base64::{Engine as _, engine::general_purpose::STANDARD};
+            use base64::{engine::general_purpose::STANDARD, Engine as _};
             let mut out = Vec::with_capacity(request.messages.len());
             for msg in &request.messages {
                 if let Some(parts) = &msg.multimodal_content {
@@ -2183,6 +2745,16 @@ impl ProviderAdapter for AnthropicAdapter {
 
         Ok(anthropic_request)
     }
+}
+
+impl ProviderAdapter for AnthropicAdapter {
+    fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        if Self::crate_expressible(request) {
+            Self::adapt_request_via_crate(request)
+        } else {
+            Self::adapt_request_legacy(request)
+        }
+    }
 
     fn adapt_response(
         &self,
@@ -2421,10 +2993,197 @@ impl AnthropicAdapter {
 }
 
 /// Google Gemini adapter
-struct GoogleAdapter;
+pub(crate) struct GoogleAdapter;
 
-impl ProviderAdapter for GoogleAdapter {
-    fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
+impl GoogleAdapter {
+    /// c3 switch predicate: can the shared crate serializer express this
+    /// request byte-faithfully? Fallbacks (no silent drops):
+    /// - tool schemas the legacy normalizer would CHANGE (or that require the
+    ///   `parametersJsonSchema` form) — the crate passes schemas verbatim;
+    /// - multimodal parts beyond Text/Image/ToolUse/ToolResult (Audio, Video,
+    ///   Document) have no crate `ContentBlock`.
+    /// (output_config/response_format/audio are NOT gated: the legacy gemini
+    /// arm never serialized them, so dropping them is exact legacy parity.)
+    fn crate_expressible(request: &LLMRequest) -> bool {
+        let tools_expressible = request.tools.as_ref().map_or(true, |tools| {
+            tools.iter().all(|tool| {
+                !Self::requires_google_json_schema(&tool.parameters)
+                    && Self::normalize_google_tool_schema(&tool.parameters) == tool.parameters
+            })
+        });
+        let multimodal_expressible = request.messages.iter().all(|message| {
+            message.multimodal_content.as_ref().map_or(true, |parts| {
+                parts.iter().all(|part| {
+                    matches!(
+                        part,
+                        super::ContentPart::Text { .. }
+                            | super::ContentPart::Image { .. }
+                            | super::ContentPart::ToolUse { .. }
+                            | super::ContentPart::ToolResult { .. }
+                    )
+                })
+            })
+        });
+        tools_expressible && multimodal_expressible
+    }
+
+    /// Resolve the Gemini thinking budget exactly as the legacy arm does:
+    /// catalog-gated (`model_supports_gemini_thinking`), then the
+    /// ThinkingParameter mapping, then the 0-4 `thinking_level` scale.
+    fn resolve_gemini_thinking_budget(request: &LLMRequest) -> Option<u32> {
+        if !super::models_config::model_supports_gemini_thinking(&request.model) {
+            return None;
+        }
+        use super::ThinkingParameter;
+        let budget = if let Some(thinking) = &request.thinking {
+            match thinking {
+                ThinkingParameter::Budget { budget_tokens, .. } => *budget_tokens,
+                ThinkingParameter::Level { level, .. } => match level.as_str() {
+                    "low" => 2048,
+                    "medium" => 8192,
+                    "high" => 16384,
+                    "extreme" => 32768,
+                    _ => 8192,
+                },
+                ThinkingParameter::Enabled(true) | ThinkingParameter::Adaptive { .. } => 8192,
+                ThinkingParameter::Enabled(false) => 0,
+            }
+        } else if let Some(level) = request.thinking_level {
+            match level {
+                0 => 0,
+                1 => 2048,
+                2 => 8192,
+                3 => 16384,
+                _ => 32768,
+            }
+        } else {
+            return None;
+        };
+        (budget > 0).then_some(budget)
+    }
+
+    /// Convert the desktop request's system + messages into crate wire
+    /// messages for the Gemini dialect. Tool-result turns become "user"
+    /// ToolResult blocks — the crate resolves the real FUNCTION NAME from the
+    /// originating ToolUse (the legacy arm sent role "function" with the CALL
+    /// ID as `functionResponse.name`, which Gemini cannot pair — a real bug
+    /// the switch fixes, pinned in the oracle). Mirroring the legacy arm, a
+    /// multimodal message serializes its parts only.
+    fn wire_messages(request: &LLMRequest) -> Vec<agiworkforce_llm::Message> {
+        use agiworkforce_llm::{ContentBlock, Message};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+        let mut out = Vec::with_capacity(request.messages.len() + 1);
+        if let Some(system) = &request.system {
+            out.push(Message::text("system", system.clone()));
+        }
+        for msg in &request.messages {
+            if let Some(parts) = &msg.multimodal_content {
+                let blocks: Vec<ContentBlock> = parts
+                    .iter()
+                    .filter_map(|part| match part {
+                        super::ContentPart::Text { text } => {
+                            Some(ContentBlock::Text { text: text.clone() })
+                        }
+                        super::ContentPart::Image { image } => Some(ContentBlock::Image {
+                            mime: image.format.mime_type().to_string(),
+                            data_b64: STANDARD.encode(&image.data),
+                        }),
+                        super::ContentPart::ToolUse { tool_use } => Some(ContentBlock::ToolUse {
+                            id: tool_use.id.clone(),
+                            name: tool_use.name.clone(),
+                            input: tool_use.input.clone(),
+                        }),
+                        super::ContentPart::ToolResult { tool_result } => {
+                            Some(ContentBlock::ToolResult {
+                                tool_use_id: tool_result.tool_use_id.clone(),
+                                content: tool_result.content.clone(),
+                                is_error: tool_result.is_error,
+                            })
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                out.push(Message::blocks(&msg.role, blocks));
+            } else if msg.role == "tool" {
+                out.push(Message::blocks(
+                    "user",
+                    vec![ContentBlock::ToolResult {
+                        tool_use_id: msg.tool_call_id.clone().unwrap_or_default(),
+                        content: msg.content.clone(),
+                        is_error: false,
+                    }],
+                ));
+            } else if let Some(tool_calls) = &msg.tool_calls {
+                let mut blocks: Vec<ContentBlock> = Vec::new();
+                if !msg.content.is_empty() {
+                    blocks.push(ContentBlock::Text {
+                        text: msg.content.clone(),
+                    });
+                }
+                for tc in tool_calls {
+                    blocks.push(ContentBlock::ToolUse {
+                        id: tc.id.clone(),
+                        name: tc.name.clone(),
+                        input: serde_json::from_str(&tc.arguments)
+                            .unwrap_or_else(|_| serde_json::json!({})),
+                    });
+                }
+                out.push(Message::blocks("assistant", blocks));
+            } else {
+                out.push(Message::text(&msg.role, msg.content.clone()));
+            }
+        }
+        out
+    }
+
+    /// c3 (2026-07-16): build the `generateContent` body through the shared
+    /// `agiworkforce-llm` serializer. Desktop-side policy stays here: the
+    /// catalog-gated thinking-budget resolution. The model is URL-embedded by
+    /// the HTTP layer, not body-carried, so no id mapping happens here
+    /// (mirrors the legacy arm). No FIX-007 clamp either — the legacy gemini
+    /// arm never clamped (legacy-parity; the clamp gap is pre-existing).
+    pub(crate) fn adapt_request_via_crate(
+        request: &LLMRequest,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let messages = Self::wire_messages(request);
+        let tools = request.tools.as_deref().map(to_crate_tool_definitions);
+        let req = agiworkforce_llm::ChatRequest {
+            model: &request.model,
+            messages: &messages,
+            max_tokens: request.max_tokens.unwrap_or(0),
+            temperature: request.temperature,
+            tools: tools.as_deref(),
+            tool_choice: request
+                .tool_choice
+                .as_ref()
+                .map(AnthropicAdapter::map_tool_choice),
+            thinking_budget: None,
+            anthropic_thinking: None,
+            effort: None,
+            top_p: request.top_p,
+            top_k: request.top_k,
+            metadata: None,
+            reasoning_effort: None,
+            gemini_thinking_budget: Self::resolve_gemini_thinking_budget(request),
+            num_ctx: None,
+            ollama_think: None,
+            idle_timeout: std::time::Duration::from_secs(0),
+        };
+        Ok(agiworkforce_llm::build_gemini_request_body(&req))
+    }
+}
+
+impl GoogleAdapter {
+    /// LEGACY TWIN since c3 (2026-07-16) — see [`Self::crate_expressible`];
+    /// the FALLBACK for exotic tool schemas and non-crate multimodal parts.
+    /// KNOWN BUG preserved verbatim here (fixed on the crate path): tool
+    /// results are sent as role "function" with the CALL ID in
+    /// `functionResponse.name`. Slated for the founder-gated twin-deletion;
+    /// pub(crate) so the c2c oracle can call it directly as its OLD side.
+    pub(crate) fn adapt_request_legacy(
+        request: &LLMRequest,
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
         // Google Gemini expects contents as [{role, parts: [{text}]}].
         // Role mapping: "assistant" -> "model", "system" is handled via systemInstruction.
         let contents: Vec<Value> = request
@@ -2720,6 +3479,16 @@ impl ProviderAdapter for GoogleAdapter {
         }
 
         Ok(google_request)
+    }
+}
+
+impl ProviderAdapter for GoogleAdapter {
+    fn adapt_request(&self, request: &LLMRequest) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        if Self::crate_expressible(request) {
+            Self::adapt_request_via_crate(request)
+        } else {
+            Self::adapt_request_legacy(request)
+        }
     }
 
     fn adapt_response(

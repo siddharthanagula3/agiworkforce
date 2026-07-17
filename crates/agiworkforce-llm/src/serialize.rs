@@ -372,6 +372,36 @@ pub fn anthropic_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
         .collect()
 }
 
+/// OpenAI-compatible tool schemas require `items` for any array schema; a
+/// bare `{"type": "array"}` is rejected with `invalid_function_parameters`.
+/// Insert an empty `items: {}` wherever it is missing (recursively), leaving
+/// every other shape untouched.
+pub fn normalize_array_items_in_schema(schema: &Value) -> Value {
+    fn walk(schema: &mut Value) {
+        match schema {
+            Value::Object(map) => {
+                if map.get("type").and_then(Value::as_str) == Some("array")
+                    && !map.contains_key("items")
+                {
+                    map.insert("items".to_string(), serde_json::json!({}));
+                }
+                for value in map.values_mut() {
+                    walk(value);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    walk(item);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut normalized = schema.clone();
+    walk(&mut normalized);
+    normalized
+}
+
 /// OpenAI-compatible `tools` array (`{"type":"function","function":{...}}`).
 pub fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
     tool_defs
@@ -382,7 +412,7 @@ pub fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
                 "function": {
                     "name": tool.name,
                     "description": tool.description,
-                    "parameters": tool.input_schema,
+                    "parameters": normalize_array_items_in_schema(&tool.input_schema),
                 }
             })
         })
@@ -399,7 +429,7 @@ pub fn openai_responses_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec
                 "type": "function",
                 "name": tool.name,
                 "description": tool.description,
-                "parameters": tool.input_schema,
+                "parameters": normalize_array_items_in_schema(&tool.input_schema),
             })
         })
         .collect()

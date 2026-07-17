@@ -102,7 +102,13 @@ mod tests {
 
         let adapted = result.unwrap();
         assert_eq!(adapted["model"], "gpt-5.5");
-        assert_eq!(adapted["input"], "Explain quantum computing");
+        // c3: the crate serializer sends a typed input item instead of the
+        // legacy compact string — wire-equivalent per the Responses API
+        // (pinned as CompactSingleTurnInput in the c2c oracle).
+        assert_eq!(
+            adapted["input"],
+            serde_json::json!([{"role": "user", "content": "Explain quantum computing"}])
+        );
         assert_eq!(adapted["instructions"], "You are a helpful assistant.");
         assert_eq!(adapted["reasoning"]["effort"], "medium");
     }
@@ -1078,12 +1084,10 @@ mod tests {
 
         // Check image part
         assert_eq!(content[1]["type"], "image_url");
-        assert!(
-            content[1]["image_url"]["url"]
-                .as_str()
-                .unwrap()
-                .starts_with("data:image/png;base64,")
-        );
+        assert!(content[1]["image_url"]["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
         assert_eq!(content[1]["image_url"]["detail"], "high");
     }
 
@@ -1169,12 +1173,10 @@ mod tests {
 
         // Check image input
         assert_eq!(content[1]["type"], "input_image");
-        assert!(
-            content[1]["image_url"]
-                .as_str()
-                .unwrap()
-                .starts_with("data:image/png;base64,")
-        );
+        assert!(content[1]["image_url"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,"));
         assert_eq!(content[1]["detail"], "low");
     }
 
@@ -3297,9 +3299,14 @@ mod tests {
             adapted.get("messages").is_none(),
             "OpenAI Responses body must not contain Chat Completions `messages`"
         );
+        // c3: typed input item instead of the legacy compact string (see the
+        // c2c oracle's CompactSingleTurnInput pin).
         assert_eq!(
             adapted["input"],
-            "Reply with a short one-sentence greeting."
+            serde_json::json!([{
+                "role": "user",
+                "content": "Reply with a short one-sentence greeting."
+            }])
         );
         // apiModelId for gpt-5.4-nano equals its internal id.
         assert_eq!(adapted["model"], "gpt-5.4-nano");

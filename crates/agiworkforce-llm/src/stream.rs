@@ -40,6 +40,36 @@ use crate::spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
 use crate::watchdog::IdleWatchdog;
 use crate::wire::{Message, ToolCall, ToolDefinition};
 
+/// Tool-choice constraint forwarded to dialects that support one. Only sent
+/// when `tools` is non-empty (mirrors provider requirements).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolChoice {
+    /// Model decides (provider default when tools are present).
+    Auto,
+    /// Model MUST call some tool (Anthropic `any`, OpenAI `required`).
+    Required,
+    /// Model must not call tools.
+    None,
+    /// Model must call the named tool.
+    Specific(String),
+}
+
+/// Anthropic extended-thinking mode. Richer than the legacy `thinking_budget`
+/// (which cannot express `adaptive`/`disabled`); supersedes it when set.
+///
+/// Wire constraints this crate enforces for `Enabled`/`Adaptive` (Anthropic
+/// 400s otherwise): `temperature` is omitted (must be unset/1 with thinking),
+/// and for `Enabled` `max_tokens` is floored to `budget_tokens + 1024` so the
+/// response has headroom beyond the thinking budget.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnthropicThinking {
+    Enabled { budget_tokens: u32 },
+    /// Claude Opus 4.6+ adaptive thinking — the model decides when/how much.
+    Adaptive,
+    /// Explicitly disabled (distinct from omitting the field).
+    Disabled,
+}
+
 /// One streamed chat completion request, dialect-agnostic.
 #[derive(Debug)]
 pub struct ChatRequest<'a> {
@@ -50,8 +80,29 @@ pub struct ChatRequest<'a> {
     pub max_tokens: u32,
     pub temperature: Option<f32>,
     pub tools: Option<&'a [ToolDefinition]>,
+    /// Tool-choice constraint; forwarded only when `tools` is present.
+    /// Currently serialized by the Anthropic dialect (others: pending c3).
+    pub tool_choice: Option<ToolChoice>,
     /// Anthropic extended-thinking budget; ignored by other dialects.
     pub thinking_budget: Option<u32>,
+    /// Anthropic thinking mode; supersedes `thinking_budget` when set.
+    pub anthropic_thinking: Option<AnthropicThinking>,
+    /// Anthropic `effort` parameter (Claude Opus 4.6+): "low"/"medium"/"high".
+    pub effort: Option<&'a str>,
+    /// Nucleus sampling; Anthropic dialect only (pending wider c3 wiring).
+    pub top_p: Option<f32>,
+    /// Top-k sampling; Anthropic dialect only.
+    pub top_k: Option<u32>,
+    /// Provider request metadata (e.g. Anthropic `metadata.user_id`);
+    /// serialized by the Anthropic and OpenAI Responses dialects.
+    pub metadata: Option<&'a Value>,
+    /// OpenAI Responses `reasoning.effort` ("low"/"medium"/"high"/"xhigh");
+    /// ignored by other dialects. When set, `temperature`/`top_p` are omitted
+    /// (OpenAI rejects sampling params alongside reasoning effort).
+    pub reasoning_effort: Option<&'a str>,
+    /// Gemini thinking budget (`generationConfig.thinkingConfig`); ignored by
+    /// other dialects. `None` or `Some(0)` omit the config.
+    pub gemini_thinking_budget: Option<u32>,
     /// Ollama total context window (`options.num_ctx`); ignored by other
     /// dialects. `None` omits the field (Ollama then defaults to 4096).
     pub num_ctx: Option<u32>,
@@ -201,9 +252,21 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
         ]))
     };
 
+    let thinking = resolved_anthropic_thinking(req);
+
+    // With thinking ENABLED, max_tokens must exceed the budget or the API
+    // rejects the request (no tokens left for output). Floor to budget + 1024
+    // so the response has real headroom (c3: mirrors the desktop adapter).
+    let mut max_tokens = req.max_tokens;
+    if let Some(AnthropicThinking::Enabled { budget_tokens }) = thinking {
+        if budget_tokens > 0 {
+            max_tokens = max_tokens.max(budget_tokens + 1024);
+        }
+    }
+
     let mut body = serde_json::json!({
         "model": req.model,
-        "max_tokens": req.max_tokens,
+        "max_tokens": max_tokens,
         "stream": true,
         "messages": api_messages,
     });
@@ -211,26 +274,81 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
         body["system"] = sys;
     }
 
-    if let Some(temp) = req.temperature {
-        body["temperature"] = serde_json::json!(temp);
+    // Anthropic requires temperature to be unset (i.e. the default 1) when
+    // thinking is active — any other value is a hard 400. Omit it for
+    // Enabled/Adaptive; Disabled/None keep the caller's temperature (c3 fix:
+    // this previously sent temperature alongside thinking).
+    let thinking_active = matches!(
+        thinking,
+        Some(AnthropicThinking::Enabled { .. } | AnthropicThinking::Adaptive)
+    );
+    if !thinking_active {
+        if let Some(temp) = req.temperature {
+            body["temperature"] = serde_json::json!(temp);
+        }
+    }
+    if let Some(top_p) = req.top_p {
+        body["top_p"] = serde_json::json!(top_p);
+    }
+    if let Some(top_k) = req.top_k {
+        body["top_k"] = serde_json::json!(top_k);
     }
 
     if let Some(tool_defs) = req.tools {
         // Mark the last tool with cache_control so the entire tools array is
         // cacheable. Tools rarely change mid-session, so this is pure win.
         body["tools"] = serde_json::json!(anthropic_tools_json(tool_defs));
+
+        // tool_choice is only meaningful alongside tools. "None" is expressed
+        // by omitting the field entirely (Anthropic then calls no tools).
+        match &req.tool_choice {
+            Some(ToolChoice::Auto) => {
+                body["tool_choice"] = serde_json::json!({"type": "auto"});
+            }
+            Some(ToolChoice::Required) => {
+                body["tool_choice"] = serde_json::json!({"type": "any"});
+            }
+            Some(ToolChoice::Specific(name)) => {
+                body["tool_choice"] = serde_json::json!({"type": "tool", "name": name});
+            }
+            Some(ToolChoice::None) | None => {}
+        }
     }
 
     // Extended thinking: inject a `thinking` block when the caller requests it.
     // Requires the interleaved-thinking-2025-05-14 beta header.
-    if let Some(budget) = req.thinking_budget {
-        body["thinking"] = serde_json::json!({
-            "type": "enabled",
-            "budget_tokens": budget
-        });
+    match thinking {
+        Some(AnthropicThinking::Enabled { budget_tokens }) => {
+            body["thinking"] = serde_json::json!({
+                "type": "enabled",
+                "budget_tokens": budget_tokens
+            });
+        }
+        Some(AnthropicThinking::Adaptive) => {
+            body["thinking"] = serde_json::json!({"type": "adaptive"});
+        }
+        Some(AnthropicThinking::Disabled) => {
+            body["thinking"] = serde_json::json!({"type": "disabled"});
+        }
+        None => {}
+    }
+
+    if let Some(effort) = req.effort {
+        body["effort"] = serde_json::json!(effort);
+    }
+    if let Some(metadata) = req.metadata {
+        body["metadata"] = metadata.clone();
     }
 
     body
+}
+
+/// The effective Anthropic thinking mode: the rich `anthropic_thinking` field
+/// when set, else the legacy `thinking_budget` mapped to `Enabled`.
+fn resolved_anthropic_thinking(req: &ChatRequest<'_>) -> Option<AnthropicThinking> {
+    req.anthropic_thinking.or(req
+        .thinking_budget
+        .map(|budget_tokens| AnthropicThinking::Enabled { budget_tokens }))
 }
 
 async fn stream_anthropic(
@@ -240,7 +358,10 @@ async fn stream_anthropic(
     on_event: OnEvent<'_>,
 ) -> Result<ChatOutcome, LlmError> {
     let body = build_anthropic_request_body(req);
-    let use_thinking = req.thinking_budget.is_some();
+    let use_thinking = matches!(
+        resolved_anthropic_thinking(req),
+        Some(AnthropicThinking::Enabled { .. } | AnthropicThinking::Adaptive)
+    );
 
     tracing::trace!(spec = ?spec, model = %req.model, "sending anthropic chat request");
 
@@ -539,14 +660,36 @@ pub fn build_openai_compat_request_body(req: &ChatRequest<'_>, opts: &OpenAiOpts
         "stream_options": { "include_usage": true },
         "messages": api_messages,
     });
-    set_openai_max_tokens(&mut body, opts, req.max_tokens);
+    // `0` means "no explicit limit": omit the cap field entirely (c3; the
+    // desktop's uncapped requests never carried one, and a literal 0 would
+    // cap generation at zero tokens).
+    if req.max_tokens > 0 {
+        set_openai_max_tokens(&mut body, opts, req.max_tokens);
+    }
 
     if let Some(temp) = req.temperature {
         body["temperature"] = serde_json::json!(temp);
     }
+    if let Some(top_p) = req.top_p {
+        body["top_p"] = serde_json::json!(top_p);
+    }
 
     if let Some(tool_defs) = req.tools {
         body["tools"] = serde_json::json!(openai_function_tools_json(tool_defs));
+
+        // tool_choice is only valid alongside tools (OpenAI 400s otherwise).
+        // Unlike Anthropic, an explicit "none" IS a wire value here.
+        if let Some(tc) = &req.tool_choice {
+            body["tool_choice"] = match tc {
+                ToolChoice::Auto => serde_json::json!("auto"),
+                ToolChoice::Required => serde_json::json!("required"),
+                ToolChoice::None => serde_json::json!("none"),
+                ToolChoice::Specific(name) => serde_json::json!({
+                    "type": "function",
+                    "function": { "name": name }
+                }),
+            };
+        }
     }
 
     body
@@ -782,11 +925,37 @@ pub fn build_openai_responses_body(req: &ChatRequest<'_>) -> Value {
     if req.max_tokens > 0 {
         body["max_output_tokens"] = serde_json::json!(req.max_tokens);
     }
-    if let Some(temperature) = req.temperature {
-        body["temperature"] = serde_json::json!(temperature);
+    // Reasoning effort and sampling params are mutually exclusive on
+    // GPT-5/o-series: with an effort set, temperature/top_p are rejected.
+    if let Some(effort) = req.reasoning_effort {
+        body["reasoning"] = serde_json::json!({ "effort": effort });
+    } else {
+        if let Some(temperature) = req.temperature {
+            body["temperature"] = serde_json::json!(temperature);
+        }
+        if let Some(top_p) = req.top_p {
+            body["top_p"] = serde_json::json!(top_p);
+        }
     }
     if let Some(tool_defs) = req.tools {
         body["tools"] = serde_json::json!(openai_responses_function_tools_json(tool_defs));
+
+        // Responses tool_choice: enum strings, or a FLAT function reference
+        // (nesting under `function` is a Chat Completions shape, rejected).
+        if let Some(tc) = &req.tool_choice {
+            body["tool_choice"] = match tc {
+                ToolChoice::Auto => serde_json::json!("auto"),
+                ToolChoice::Required => serde_json::json!("required"),
+                ToolChoice::None => serde_json::json!("none"),
+                ToolChoice::Specific(name) => serde_json::json!({
+                    "type": "function",
+                    "name": name,
+                }),
+            };
+        }
+    }
+    if let Some(metadata) = req.metadata {
+        body["metadata"] = metadata.clone();
     }
     body
 }
@@ -1162,13 +1331,31 @@ pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
 
     let mut body = serde_json::json!({
         "contents": contents,
-        "generationConfig": {
-            "maxOutputTokens": req.max_tokens,
-        },
+        "generationConfig": {},
     });
 
+    // `0` means "no explicit limit": omit the field (c3; a literal 0 is
+    // rejected/meaningless — Gemini requires a positive cap when present).
+    if req.max_tokens > 0 {
+        body["generationConfig"]["maxOutputTokens"] = serde_json::json!(req.max_tokens);
+    }
     if let Some(temp) = req.temperature {
         body["generationConfig"]["temperature"] = serde_json::json!(temp);
+    }
+    if let Some(top_p) = req.top_p {
+        body["generationConfig"]["topP"] = serde_json::json!(top_p);
+    }
+    if let Some(top_k) = req.top_k {
+        body["generationConfig"]["topK"] = serde_json::json!(top_k);
+    }
+    // Gemini thinking budget (REST API requires camelCase thinkingConfig /
+    // thinkingBudget; snake_case is silently ignored by Google's API).
+    if let Some(budget) = req.gemini_thinking_budget {
+        if budget > 0 {
+            body["generationConfig"]["thinkingConfig"] = serde_json::json!({
+                "thinkingBudget": budget
+            });
+        }
     }
 
     if let Some(si) = system_instruction {
@@ -1178,6 +1365,27 @@ pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
     if let Some(tool_defs) = req.tools {
         let declarations = gemini_function_declarations_json(tool_defs);
         body["tools"] = serde_json::json!([{ "functionDeclarations": declarations }]);
+
+        // toolConfig.functionCallingConfig; only meaningful alongside tools.
+        if let Some(tc) = &req.tool_choice {
+            body["toolConfig"] = match tc {
+                ToolChoice::Auto => serde_json::json!({
+                    "functionCallingConfig": { "mode": "AUTO" }
+                }),
+                ToolChoice::Required => serde_json::json!({
+                    "functionCallingConfig": { "mode": "ANY" }
+                }),
+                ToolChoice::None => serde_json::json!({
+                    "functionCallingConfig": { "mode": "NONE" }
+                }),
+                ToolChoice::Specific(name) => serde_json::json!({
+                    "functionCallingConfig": {
+                        "mode": "ANY",
+                        "allowedFunctionNames": [name]
+                    }
+                }),
+            };
+        }
     }
 
     body
@@ -1657,6 +1865,14 @@ mod responses_request_tests {
             temperature: None,
             tools: Some(&tools),
             thinking_budget: None,
+            tool_choice: None,
+            anthropic_thinking: None,
+            effort: None,
+            top_p: None,
+            top_k: None,
+            metadata: None,
+            reasoning_effort: None,
+            gemini_thinking_budget: None,
             num_ctx: None,
             ollama_think: None,
             idle_timeout: Duration::from_secs(5),
@@ -1689,5 +1905,189 @@ mod responses_request_tests {
         assert_eq!(function["name"], "read_file");
         assert_eq!(function["parameters"]["required"][0], "path");
         assert!(function.get("function").is_none());
+    }
+}
+
+#[cfg(test)]
+mod anthropic_request_tests {
+    use super::*;
+
+    fn base_request<'a>(messages: &'a [Message]) -> ChatRequest<'a> {
+        ChatRequest {
+            model: "claude-test",
+            messages,
+            max_tokens: 1024,
+            temperature: Some(0.5),
+            tools: None,
+            thinking_budget: None,
+            tool_choice: None,
+            anthropic_thinking: None,
+            effort: None,
+            top_p: None,
+            top_k: None,
+            metadata: None,
+            reasoning_effort: None,
+            gemini_thinking_budget: None,
+            num_ctx: None,
+            ollama_think: None,
+            idle_timeout: Duration::from_secs(5),
+        }
+    }
+
+    #[test]
+    fn thinking_omits_temperature_and_floors_max_tokens() {
+        let messages = vec![Message::text("user", "Think.")];
+        let mut req = base_request(&messages);
+        req.anthropic_thinking = Some(AnthropicThinking::Enabled {
+            budget_tokens: 8192,
+        });
+        let body = build_anthropic_request_body(&req);
+        // Anthropic 400s any temperature != 1 with thinking; the API also
+        // requires max_tokens headroom beyond the budget.
+        assert!(body.get("temperature").is_none());
+        assert_eq!(body["max_tokens"], 8192 + 1024);
+        assert_eq!(
+            body["thinking"],
+            serde_json::json!({"type": "enabled", "budget_tokens": 8192})
+        );
+
+        // A caller cap already above the floor is respected verbatim.
+        req.max_tokens = 32_000;
+        let body = build_anthropic_request_body(&req);
+        assert_eq!(body["max_tokens"], 32_000);
+
+        // The legacy thinking_budget maps to Enabled with the same rules.
+        req.anthropic_thinking = None;
+        req.thinking_budget = Some(2048);
+        req.max_tokens = 1024;
+        let body = build_anthropic_request_body(&req);
+        assert!(body.get("temperature").is_none());
+        assert_eq!(body["max_tokens"], 2048 + 1024);
+    }
+
+    #[test]
+    fn adaptive_and_disabled_thinking_shapes() {
+        let messages = vec![Message::text("user", "Plan.")];
+        let mut req = base_request(&messages);
+        req.anthropic_thinking = Some(AnthropicThinking::Adaptive);
+        let body = build_anthropic_request_body(&req);
+        assert_eq!(body["thinking"], serde_json::json!({"type": "adaptive"}));
+        assert!(body.get("temperature").is_none(), "adaptive omits temperature");
+        assert_eq!(body["max_tokens"], 1024, "adaptive has no budget floor");
+
+        req.anthropic_thinking = Some(AnthropicThinking::Disabled);
+        let body = build_anthropic_request_body(&req);
+        assert_eq!(body["thinking"], serde_json::json!({"type": "disabled"}));
+        // Disabled keeps the caller's temperature (only active thinking
+        // forbids it).
+        assert!((body["temperature"].as_f64().unwrap() - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn tool_choice_and_sampling_knobs_serialize() {
+        let messages = vec![Message::text("user", "Use tools.")];
+        let tools = vec![ToolDefinition {
+            name: "read_file".to_string(),
+            description: "Read a file".to_string(),
+            input_schema: serde_json::json!({"type": "object"}),
+            is_read_only: true,
+            is_concurrency_safe: true,
+            max_result_size_chars: None,
+            should_defer: false,
+            aliases: Vec::new(),
+            owner: String::new(),
+            permission_class: String::new(),
+            diagnostic_tags: Vec::new(),
+        }];
+        let mut req = base_request(&messages);
+        req.tools = Some(&tools);
+        req.tool_choice = Some(ToolChoice::Specific("read_file".to_string()));
+        req.effort = Some("high");
+        req.top_p = Some(0.9);
+        req.top_k = Some(40);
+        let metadata = serde_json::json!({"user_id": "u_1"});
+        req.metadata = Some(&metadata);
+
+        let body = build_anthropic_request_body(&req);
+        assert_eq!(
+            body["tool_choice"],
+            serde_json::json!({"type": "tool", "name": "read_file"})
+        );
+        assert_eq!(body["effort"], "high");
+        assert!(body.get("top_p").is_some());
+        assert_eq!(body["top_k"], 40);
+        assert_eq!(body["metadata"], metadata);
+
+        // ToolChoice::None and tool_choice-without-tools are both OMITTED.
+        req.tool_choice = Some(ToolChoice::None);
+        let body = build_anthropic_request_body(&req);
+        assert!(body.get("tool_choice").is_none());
+        req.tools = None;
+        req.tool_choice = Some(ToolChoice::Auto);
+        let body = build_anthropic_request_body(&req);
+        assert!(body.get("tool_choice").is_none());
+    }
+
+    #[test]
+    fn responses_reasoning_effort_suppresses_sampling_params() {
+        let messages = vec![Message::text("user", "Think.")];
+        let mut req = base_request(&messages);
+        req.top_p = Some(0.9);
+        req.reasoning_effort = Some("high");
+        let body = build_openai_responses_body(&req);
+        assert_eq!(body["reasoning"], serde_json::json!({"effort": "high"}));
+        // GPT-5/o-series reject sampling params alongside reasoning effort.
+        assert!(body.get("temperature").is_none());
+        assert!(body.get("top_p").is_none());
+
+        req.reasoning_effort = None;
+        let body = build_openai_responses_body(&req);
+        assert!(body.get("reasoning").is_none());
+        assert!(body.get("temperature").is_some());
+        assert!(body.get("top_p").is_some());
+    }
+
+    #[test]
+    fn gemini_thinking_config_tool_config_and_uncapped_tokens() {
+        let messages = vec![Message::text("user", "Plan.")];
+        let tools = vec![ToolDefinition {
+            name: "read_file".to_string(),
+            description: "Read a file".to_string(),
+            input_schema: serde_json::json!({"type": "object"}),
+            is_read_only: true,
+            is_concurrency_safe: true,
+            max_result_size_chars: None,
+            should_defer: false,
+            aliases: Vec::new(),
+            owner: String::new(),
+            permission_class: String::new(),
+            diagnostic_tags: Vec::new(),
+        }];
+        let mut req = base_request(&messages);
+        req.max_tokens = 0;
+        req.gemini_thinking_budget = Some(8192);
+        req.tools = Some(&tools);
+        req.tool_choice = Some(ToolChoice::Specific("read_file".to_string()));
+        let body = build_gemini_request_body(&req);
+        // 0 → maxOutputTokens omitted (Gemini requires a positive cap when present).
+        assert!(body.pointer("/generationConfig/maxOutputTokens").is_none());
+        assert_eq!(
+            body.pointer("/generationConfig/thinkingConfig/thinkingBudget"),
+            Some(&serde_json::json!(8192))
+        );
+        assert_eq!(
+            body["toolConfig"],
+            serde_json::json!({
+                "functionCallingConfig": {
+                    "mode": "ANY",
+                    "allowedFunctionNames": ["read_file"]
+                }
+            })
+        );
+
+        // A zero budget omits thinkingConfig entirely.
+        req.gemini_thinking_budget = Some(0);
+        let body = build_gemini_request_body(&req);
+        assert!(body.pointer("/generationConfig/thinkingConfig").is_none());
     }
 }

@@ -33,14 +33,14 @@ use std::error::Error;
 use std::time::Duration;
 
 use agiworkforce_llm::{
-    LlmError, StreamEvent, Usage as CrateUsage, run_anthropic_stream, run_gemini_stream,
-    run_ollama_stream, run_openai_compat_stream, run_openai_responses_stream,
+    run_anthropic_stream, run_gemini_stream, run_ollama_stream, run_openai_compat_stream,
+    run_openai_responses_stream, LlmError, StreamEvent, Usage as CrateUsage,
 };
 use futures_util::{Stream, StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
-use crate::core::llm::Provider;
 use crate::core::llm::sse_parser::{StreamChunk, StreamingToolCall, TokenUsage};
+use crate::core::llm::Provider;
 
 type ChunkResult = Result<StreamChunk, Box<dyn Error + Send + Sync>>;
 
@@ -255,7 +255,10 @@ pub(crate) fn project_stream_event(
 /// crate-runner integration can be regression-tested with canned byte fixtures
 /// (no network). Cancellation is preserved: when the consumer drops the
 /// receiver, byte pulling halts and the backing connection is released.
-pub(crate) fn decode_bytes<S>(byte_stream: S, decoder: Decoder) -> UnboundedReceiverStream<ChunkResult>
+pub(crate) fn decode_bytes<S>(
+    byte_stream: S,
+    decoder: Decoder,
+) -> UnboundedReceiverStream<ChunkResult>
 where
     S: Stream<Item = Result<bytes::Bytes, LlmError>> + Send + Unpin + 'static,
 {
