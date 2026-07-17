@@ -141,8 +141,14 @@ describe('canAccessModel — basic tier', () => {
     }
   });
 
-  it('allows max-only (flagship) models for basic users', () => {
+  it('rejects max-only (flagship) models for basic users (founder directive 2026-07-16: basic shares the PRO set, flagship is max/enterprise only)', () => {
     for (const model of MAX_ONLY_MODELS) {
+      expect(canAccessModel(model, 'basic')).toBe(false);
+    }
+  });
+
+  it('allows pro-tier models for basic users (budget-differentiated, same allowlist as pro)', () => {
+    for (const model of PRO_MODELS) {
       expect(canAccessModel(model, 'basic')).toBe(true);
     }
   });

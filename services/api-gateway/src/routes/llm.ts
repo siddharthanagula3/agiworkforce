@@ -87,6 +87,24 @@ export const HOBBY_ALLOWED_MODELS: ReadonlySet<string> = new Set(
   getAllowedModelsForTier('economy'),
 );
 
+/**
+ * Tier ladder (founder directive 2026-07-16: routing/access is tier-based —
+ * Pro must never reach flagship-priced models on managed credits):
+ * - basic/hobby/pro/team → economy + pro_additions (Basic matches Pro's model
+ *   set; the tiers differ by usage budget, not allowlist)
+ * - max/enterprise → everything the catalog admits, including
+ *   flagship_additions (Opus/Fable/Sol class)
+ */
+export const PRO_ALLOWED_MODELS: ReadonlySet<string> = new Set([
+  ...getAllowedModelsForTier('economy'),
+  ...getAllowedModelsForTier('pro_additions'),
+]);
+
+export const FLAGSHIP_ALLOWED_MODELS: ReadonlySet<string> = new Set([
+  ...PRO_ALLOWED_MODELS,
+  ...getAllowedModelsForTier('flagship_additions'),
+]);
+
 /** Hard upper bound for one managed-provider request, including streaming. */
 const LLM_PROVIDER_DEADLINE_MS = 10 * 60 * 1_000;
 
@@ -217,17 +235,24 @@ export async function enforcePlanTier(
       throw new AppError('Upgrade to a paid plan to use cloud models', 403);
     case 'hobby':
     case 'basic':
-      if (!HOBBY_ALLOWED_MODELS.has(model)) {
+    case 'team':
+    case 'pro':
+      // Pro-class tiers (Basic shares Pro's model set; they differ by usage
+      // budget) never reach flagship-priced models on managed credits.
+      if (!PRO_ALLOWED_MODELS.has(model)) {
         throw new AppError(
-          `Model "${model}" requires a Pro plan. Hobby/Basic tier allows: ${[...HOBBY_ALLOWED_MODELS].join(', ')}.`,
+          `Model "${model}" requires a Max or Enterprise plan on managed cloud.`,
           403,
         );
       }
       return tier;
-    case 'team':
-    case 'pro':
     case 'max':
     case 'enterprise':
+      // Full catalog-admitted set, including flagship — but still an
+      // allowlist so catalog-unknown models fail closed here too.
+      if (!FLAGSHIP_ALLOWED_MODELS.has(model)) {
+        throw new AppError(`Model "${model}" is not available on managed cloud.`, 403);
+      }
       return tier;
     default:
       // Unrecognized plan_tier value — fail closed like 'free', not an
@@ -338,9 +363,7 @@ router.post(
         ...(chunk.cacheWrite1hTokens !== undefined
           ? { cacheWrite1hTokens: chunk.cacheWrite1hTokens }
           : {}),
-        ...(chunk.reasoningTokens !== undefined
-          ? { reasoningTokens: chunk.reasoningTokens }
-          : {}),
+        ...(chunk.reasoningTokens !== undefined ? { reasoningTokens: chunk.reasoningTokens } : {}),
       };
     };
 

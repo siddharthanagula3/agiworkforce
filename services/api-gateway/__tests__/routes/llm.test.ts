@@ -43,8 +43,13 @@ vi.mock('../../src/lib/neonClients', () => ({
   })),
 }));
 
-const { HOBBY_ALLOWED_MODELS, resolveProvider, enforcePlanTier } =
-  await import('../../src/routes/llm');
+const {
+  HOBBY_ALLOWED_MODELS,
+  PRO_ALLOWED_MODELS,
+  FLAGSHIP_ALLOWED_MODELS,
+  resolveProvider,
+  enforcePlanTier,
+} = await import('../../src/routes/llm');
 
 describe('llm route — catalog-driven Hobby allow-list (P0-I)', () => {
   it('matches getAllowedModelsForTier("economy") from the shared catalog', () => {
@@ -246,25 +251,38 @@ describe('llm route — edge-case stress (Phase 4 hardening)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// enforcePlanTier — tier dispatch (round 3 fix)
+// enforcePlanTier — tier ladder (founder directive 2026-07-16)
 //
-// Before this fix, only 'free' and 'hobby' were checked explicitly; any
-// other plan_tier value (including 'basic'/'team', and any garbage string)
-// silently fell through to unrestricted, unbilled model access. These tests
-// pin the explicit allowlist: free blocked, hobby/basic restricted to the
-// economy set (unified — basic is the 2026-07-02 hobby rename), team gets
-// pro's unrestricted allowance, pro/max/enterprise unrestricted, and any
-// unrecognized tier fails closed exactly like free rather than falling
-// through.
+// Routing/access is tier-based: basic/hobby/pro/team share the Pro model set
+// (economy + pro_additions; the tiers differ by usage budget, not allowlist)
+// and must NEVER reach flagship-priced models (Opus/Fable/Sol class) on
+// managed credits; max/enterprise get the full catalog-admitted set but
+// still an allowlist so catalog-unknown IDs fail closed; free and any
+// unrecognized tier fail closed with 403.
 // ---------------------------------------------------------------------------
 
-describe('llm route — enforcePlanTier tier dispatch (round 3 fix)', () => {
+describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-16)', () => {
   const allowedHobbyModel = [...HOBBY_ALLOWED_MODELS][0]!;
-  const flagshipModel = 'claude-opus-4.8'; // excluded from HOBBY_ALLOWED_MODELS (see above)
+  const proAdditionModel = [...PRO_ALLOWED_MODELS].find((id) => !HOBBY_ALLOWED_MODELS.has(id))!;
+  const flagshipModel = [...FLAGSHIP_ALLOWED_MODELS].find((id) => !PRO_ALLOWED_MODELS.has(id))!;
 
   beforeEach(() => {
     tierState.planTier = null;
     tierState.hasRow = true;
+  });
+
+  it('derives the ladder from the catalog SSOT', () => {
+    expect(new Set(PRO_ALLOWED_MODELS)).toEqual(
+      new Set([...getAllowedModelsForTier('economy'), ...getAllowedModelsForTier('pro_additions')]),
+    );
+    expect(new Set(FLAGSHIP_ALLOWED_MODELS)).toEqual(
+      new Set([...PRO_ALLOWED_MODELS, ...getAllowedModelsForTier('flagship_additions')]),
+    );
+    // The directive's named models are flagship-gated.
+    for (const id of ['claude-opus-4.8', 'claude-fable-5', 'gpt-5.6-sol']) {
+      expect(PRO_ALLOWED_MODELS.has(id)).toBe(false);
+      expect(FLAGSHIP_ALLOWED_MODELS.has(id)).toBe(true);
+    }
   });
 
   it('free tier is blocked with 403', async () => {
@@ -281,49 +299,38 @@ describe('llm route — enforcePlanTier tier dispatch (round 3 fix)', () => {
     );
   });
 
-  it('hobby tier allows an economy model', async () => {
-    tierState.planTier = 'hobby';
-    await expect(enforcePlanTier('user-1', 'token', allowedHobbyModel)).resolves.toBe('hobby');
-  });
+  for (const tier of ['hobby', 'basic', 'team', 'pro'] as const) {
+    it(`${tier} tier allows an economy model`, async () => {
+      tierState.planTier = tier;
+      await expect(enforcePlanTier('user-1', 'token', allowedHobbyModel)).resolves.toBe(tier);
+    });
 
-  it('hobby tier rejects a flagship model with 403', async () => {
-    tierState.planTier = 'hobby';
-    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).rejects.toThrow(
-      /requires a Pro plan/,
-    );
-  });
+    it(`${tier} tier allows a pro_additions model`, async () => {
+      tierState.planTier = tier;
+      await expect(enforcePlanTier('user-1', 'token', proAdditionModel)).resolves.toBe(tier);
+    });
 
-  it('basic tier gets the identical restriction as hobby: allows an economy model', async () => {
-    tierState.planTier = 'basic';
-    await expect(enforcePlanTier('user-1', 'token', allowedHobbyModel)).resolves.toBe('basic');
-  });
+    it(`${tier} tier rejects a flagship model with 403`, async () => {
+      tierState.planTier = tier;
+      await expect(enforcePlanTier('user-1', 'token', flagshipModel)).rejects.toThrow(
+        /requires a Max or Enterprise plan/,
+      );
+    });
+  }
 
-  it('basic tier gets the identical restriction as hobby: rejects a flagship model with 403', async () => {
-    tierState.planTier = 'basic';
-    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).rejects.toThrow(
-      /requires a Pro plan/,
-    );
-  });
+  for (const tier of ['max', 'enterprise'] as const) {
+    it(`${tier} tier allows a flagship model`, async () => {
+      tierState.planTier = tier;
+      await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe(tier);
+    });
 
-  it('team tier gets the same unrestricted allowance as pro (flagship model allowed)', async () => {
-    tierState.planTier = 'team';
-    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('team');
-  });
-
-  it('pro tier is unrestricted (flagship model allowed)', async () => {
-    tierState.planTier = 'pro';
-    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('pro');
-  });
-
-  it('max tier is unrestricted (flagship model allowed)', async () => {
-    tierState.planTier = 'max';
-    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('max');
-  });
-
-  it('enterprise tier is unrestricted (flagship model allowed)', async () => {
-    tierState.planTier = 'enterprise';
-    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('enterprise');
-  });
+    it(`${tier} tier rejects a catalog-unknown model with 403`, async () => {
+      tierState.planTier = tier;
+      await expect(enforcePlanTier('user-1', 'token', 'gpt-99-invented-model')).rejects.toThrow(
+        /not available on managed cloud/,
+      );
+    });
+  }
 
   it('an unrecognized plan_tier string fails closed with the same 403 as free, not an unrestricted fallthrough', async () => {
     tierState.planTier = 'some-future-tier-nobody-added-yet';
