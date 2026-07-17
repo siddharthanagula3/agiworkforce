@@ -122,7 +122,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 2,
+                    schemaVersion: 3,
                     sessionId: 'session-1',
                     turnId: 'turn-1',
                     sequence: 0,
@@ -138,7 +138,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 2,
+                    schemaVersion: 3,
                     sessionId: 'session-1',
                     turnId: 'turn-1',
                     sequence: 1,
@@ -254,7 +254,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 2,
+                    schemaVersion: 3,
                     sessionId: 'session-reject',
                     turnId: 'turn-reject',
                     sequence: 0,
@@ -335,7 +335,7 @@ describe('CloudRuntime', () => {
               {
                 delta: {
                   x_agent_event: {
-                    schemaVersion: 2,
+                    schemaVersion: 3,
                     sessionId: 'session-cancel',
                     turnId: 'turn-cancel',
                     sequence: 0,

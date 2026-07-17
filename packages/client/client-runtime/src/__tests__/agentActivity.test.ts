@@ -4,7 +4,7 @@ import { applyAgentActivityEvent, finishAgentActivityLocally } from '../agentAct
 
 function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     sessionId: 'session-1',
     turnId: 'turn-1',
     sequence,
@@ -14,6 +14,33 @@ function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
 }
 
 describe('portable agent activity projection', () => {
+  it('projects canonical task states without inventing a surface-local enum', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(0, {
+        type: 'task-state-changed',
+        taskId: 'turn-1',
+        state: 'running',
+        summary: 'Agent started work.',
+      }),
+    );
+
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, {
+        type: 'task-state-changed',
+        taskId: 'turn-1',
+        previousState: 'running',
+        state: 'awaiting_input',
+        summary: 'Approval is required.',
+      }),
+    );
+
+    expect(state.taskId).toBe('turn-1');
+    expect(state.taskState).toBe('awaiting_input');
+    expect(state.status).toBe('awaiting-approval');
+  });
+
   it('projects a tool run, sources, approval, artifact, and compaction into one ordered state', () => {
     let state = applyAgentActivityEvent(
       undefined,

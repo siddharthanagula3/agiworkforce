@@ -37,7 +37,7 @@ describe('cloudStreamDeltas — every x_* delta key the wire can emit', () => {
     sink.onEvent(
       payload({
         x_agent_event: {
-          schemaVersion: 2,
+          schemaVersion: 3,
           sessionId: 'session-1',
           turnId: 'turn-1',
           sequence: 0,
@@ -60,7 +60,7 @@ describe('cloudStreamDeltas — every x_* delta key the wire can emit', () => {
 
   it('x_agent_event: rejects malformed envelopes instead of publishing untrusted activity', () => {
     const { sink, events } = makeSink();
-    sink.onEvent(payload({ x_agent_event: { schemaVersion: 2, event: { type: 'lifecycle' } } }));
+    sink.onEvent(payload({ x_agent_event: { schemaVersion: 3, event: { type: 'lifecycle' } } }));
 
     expect(events.some((event) => event.type === 'agent_event')).toBe(false);
     expect(sink.getAgentActivity()).toBeUndefined();

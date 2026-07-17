@@ -182,7 +182,7 @@ describe('completions stream fallback (RN null response.body)', () => {
   it('runtime-validates and forwards the canonical agent activity envelope', async () => {
     const { streamChat } = await loadStreamingService();
     const validEnvelope = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       sessionId: 'session-mobile-1',
       turnId: 'turn-mobile-1',
       sequence: 0,
@@ -232,7 +232,7 @@ describe('completions stream fallback (RN null response.body)', () => {
             delta: {
               content: 'Safe answer',
               x_agent_event: {
-                schemaVersion: 2,
+                schemaVersion: 3,
                 sessionId: 'session-mobile-1',
                 turnId: 'turn-mobile-1',
                 sequence: -1,

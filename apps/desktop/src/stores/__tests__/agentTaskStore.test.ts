@@ -10,7 +10,12 @@ vi.mock('sonner', () => ({
   },
 }));
 
-import { useAgentTaskStore } from '../agentTaskStore';
+import {
+  applyAgentTaskGoalError,
+  applyAgentTaskGoalExecutionStarted,
+  applyAgentTaskStateChanged,
+  useAgentTaskStore,
+} from '../agentTaskStore';
 import { invoke } from '../../lib/tauri-mock';
 import { toast } from 'sonner';
 
@@ -25,8 +30,65 @@ describe('agentTaskStore', () => {
     });
   });
 
+  describe('canonical lifecycle ownership', () => {
+    it('keeps lifecycle state engine-authored when a legacy goal error arrives', () => {
+      useAgentTaskStore.setState({
+        tasks: [
+          {
+            id: 'goal-error',
+            goal: 'Inspect the repository',
+            status: 'running',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+
+      applyAgentTaskGoalError({ goal_id: 'goal-error', error: 'Tool failed' });
+
+      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
+        expect.objectContaining({ status: 'running', error: 'Tool failed' }),
+      );
+    });
+
+    it('does not infer running before the engine emits a task-state event', () => {
+      applyAgentTaskGoalExecutionStarted(
+        { goal_id: 'goal-parallel', description: 'Inspect in parallel' },
+        'parallel',
+      );
+
+      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
+        expect.objectContaining({ id: 'goal-parallel', status: 'queued' }),
+      );
+    });
+
+    it('clears a review completion timestamp when the engine resumes work', () => {
+      useAgentTaskStore.setState({
+        tasks: [
+          {
+            id: 'goal-review',
+            goal: 'Revise the report',
+            status: 'ready_for_review',
+            createdAt: new Date().toISOString(),
+            completedAt: new Date().toISOString(),
+          },
+        ],
+      });
+
+      applyAgentTaskStateChanged({
+        taskId: 'goal-review',
+        state: 'running',
+        previousState: 'ready_for_review',
+        summary: 'Agent resumed working.',
+      });
+
+      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
+        expect.objectContaining({ status: 'running', completedAt: undefined }),
+      );
+    });
+  });
+
   describe('submitGoal', () => {
-    it('calls invoke with correct command and adds a pending task', async () => {
+    it('calls invoke with correct command and adds a queued task', async () => {
       mockInvoke.mockResolvedValueOnce({ goalId: 'goal-123' });
 
       const { submitGoal } = useAgentTaskStore.getState();
@@ -40,7 +102,7 @@ describe('agentTaskStore', () => {
       const { tasks } = useAgentTaskStore.getState();
       expect(tasks.length).toBe(1);
       expect(tasks[0]!.goal).toBe('Write a report');
-      expect(tasks[0]!.status).toBe('pending');
+      expect(tasks[0]!.status).toBe('queued');
       expect(tasks[0]!.id).toBe('goal-123');
     });
 
@@ -64,11 +126,11 @@ describe('agentTaskStore', () => {
       const { tasks } = useAgentTaskStore.getState();
       expect(tasks.length).toBe(1);
       expect(tasks[0]!.id).toBe('goal-parallel-123');
-      expect(tasks[0]!.status).toBe('completed');
+      expect(tasks[0]!.status).toBe('queued');
       expect(tasks[0]!.result).toContain('0.95');
     });
 
-    it('marks a parallel task failed when the engine result failed', async () => {
+    it('records a parallel result error without inferring lifecycle state', async () => {
       mockInvoke.mockResolvedValueOnce({
         goalId: 'goal-parallel-failed',
         bestResult: {
@@ -82,7 +144,7 @@ describe('agentTaskStore', () => {
       expect(useAgentTaskStore.getState().tasks).toEqual([
         expect.objectContaining({
           id: 'goal-parallel-failed',
-          status: 'failed',
+          status: 'queued',
           error: 'Tool execution failed',
         }),
       ]);
@@ -113,14 +175,18 @@ describe('agentTaskStore', () => {
       const { tasks } = useAgentTaskStore.getState();
       expect(tasks).toHaveLength(1);
       expect(tasks[0]).toEqual(
-        expect.objectContaining({ id: 'goal-parallel-existing', status: 'completed' }),
+        expect.objectContaining({ id: 'goal-parallel-existing', status: 'running' }),
       );
     });
   });
 
   describe('cancelTask', () => {
     it('marks a task as cancelled on success', async () => {
-      mockInvoke.mockResolvedValueOnce(undefined);
+      mockInvoke.mockResolvedValueOnce(undefined).mockResolvedValueOnce({
+        state: 'cancelled',
+        currentIteration: 0,
+        context: { toolResults: [] },
+      });
 
       useAgentTaskStore.setState({
         tasks: [
@@ -199,7 +265,9 @@ describe('agentTaskStore', () => {
   describe('getTaskStatus', () => {
     it('returns null for task not in state', async () => {
       mockInvoke.mockResolvedValueOnce({
-        context: { currentIteration: 0, status: 'pending' },
+        state: 'queued',
+        currentIteration: 0,
+        context: { toolResults: [] },
       });
 
       const { getTaskStatus } = useAgentTaskStore.getState();
@@ -209,7 +277,9 @@ describe('agentTaskStore', () => {
 
     it('updates task status from backend response', async () => {
       mockInvoke.mockResolvedValueOnce({
-        context: { currentIteration: 5, status: 'completed', result: 'Done!' },
+        state: 'completed',
+        currentIteration: 5,
+        context: { toolResults: [{ result: 'Done!', error: null }] },
       });
 
       useAgentTaskStore.setState({

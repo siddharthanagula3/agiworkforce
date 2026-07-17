@@ -3,7 +3,7 @@
  *
  * Shows a chronological audit trail for a single agent task run:
  *  - Tool calls with timestamp, status (approved/denied/timed-out), and duration
- *  - Recovery events (pause, resume, retry, abandon)
+ *  - Canonical task state alongside the tool audit trail
  *  - Structured so an operator can trace what happened in a failed run
  *
  * Reads from toolStore.actionLog (approval audit entries) and filters by the
@@ -18,9 +18,7 @@ import {
   Clock,
   Loader2,
   Pause,
-  Play,
   RefreshCw,
-  StopCircle,
   Terminal,
   XCircle,
 } from 'lucide-react';
@@ -32,7 +30,7 @@ import {
   type ActionLogStatus,
   type ActionLogEntryType,
 } from '../../stores/chat/toolStore';
-import type { AgentTask } from '../../stores/agentTaskStore';
+import type { AgentTask, AgentTaskStatus } from '../../stores/agentTaskStore';
 
 // ── Status icon map ───────────────────────────────────────────────────────────
 
@@ -70,19 +68,16 @@ const TYPE_ICONS: Record<ActionLogEntryType, React.ElementType> = {
   metrics: CheckCircle2,
 };
 
-// ── Recovery event helpers ────────────────────────────────────────────────────
+// ── Task-state helpers ────────────────────────────────────────────────────────
 
-function getRecoveryIcon(task: AgentTask): React.ElementType | null {
+function getTaskStateIcon(task: AgentTask): React.ElementType | null {
   switch (task.status) {
     case 'paused':
       return Pause;
-    case 'recovering':
-      return RefreshCw;
-    case 'cancelled':
-      if (task.recoverySummary) return StopCircle;
-      return null;
-    case 'expired':
+    case 'awaiting_input':
       return AlertCircle;
+    case 'ready_for_review':
+      return CheckCircle2;
     default:
       return null;
   }
@@ -138,8 +133,7 @@ export function ActionTimeline({ task, maxEntries = 100, className }: ActionTime
 
   return (
     <div className={cn('flex flex-col gap-0', className)}>
-      {/* Recovery event banner for failed/paused/recovering tasks */}
-      {task && renderRecoveryBanner(task)}
+      {task && renderTaskStateBanner(task)}
 
       {/* Timeline entries */}
       <div className="divide-y divide-white/[0.04]">
@@ -158,39 +152,34 @@ export function ActionTimeline({ task, maxEntries = 100, className }: ActionTime
   );
 }
 
-// ── Recovery banner ───────────────────────────────────────────────────────────
+// ── Task-state banner ─────────────────────────────────────────────────────────
 
-function renderRecoveryBanner(task: AgentTask) {
-  const RecoveryIcon = getRecoveryIcon(task);
-  if (!RecoveryIcon) return null;
+function renderTaskStateBanner(task: AgentTask) {
+  const TaskStateIcon = getTaskStateIcon(task);
+  if (!TaskStateIcon) return null;
 
-  const bannerConfig: Record<string, { bg: string; border: string; text: string; label: string }> =
-    {
-      paused: {
-        bg: 'bg-amber-500/10',
-        border: 'border-amber-500/30',
-        text: 'text-amber-400',
-        label: 'Task paused',
-      },
-      recovering: {
-        bg: 'bg-purple-500/10',
-        border: 'border-purple-500/30',
-        text: 'text-purple-400',
-        label: 'Recovering from checkpoint',
-      },
-      cancelled: {
-        bg: 'bg-slate-500/10',
-        border: 'border-slate-500/30',
-        text: 'text-slate-400',
-        label: 'Task abandoned',
-      },
-      expired: {
-        bg: 'bg-orange-500/10',
-        border: 'border-orange-500/30',
-        text: 'text-orange-400',
-        label: 'Task expired',
-      },
-    };
+  const bannerConfig: Partial<
+    Record<AgentTaskStatus, { bg: string; border: string; text: string; label: string }>
+  > = {
+    paused: {
+      bg: 'bg-amber-500/10',
+      border: 'border-amber-500/30',
+      text: 'text-amber-400',
+      label: 'Task paused',
+    },
+    awaiting_input: {
+      bg: 'bg-orange-500/10',
+      border: 'border-orange-500/30',
+      text: 'text-orange-400',
+      label: 'Awaiting input',
+    },
+    ready_for_review: {
+      bg: 'bg-emerald-500/10',
+      border: 'border-emerald-500/30',
+      text: 'text-emerald-400',
+      label: 'Ready for review',
+    },
+  };
 
   const config = bannerConfig[task.status];
   if (!config) return null;
@@ -204,25 +193,11 @@ function renderRecoveryBanner(task: AgentTask) {
       )}
     >
       <div className="flex items-center gap-2">
-        <RecoveryIcon className={cn('h-4 w-4 shrink-0', config.text)} />
+        <TaskStateIcon className={cn('h-4 w-4 shrink-0', config.text)} />
         <span className={cn('text-xs font-semibold', config.text)}>{config.label}</span>
-        {task.lastCheckpointAt && (
-          <span className="ml-auto text-[10px] text-muted-foreground">
-            checkpoint @ iter {task.lastCheckpointIteration ?? '?'}
-          </span>
-        )}
       </div>
       {task.pauseReason && (
         <p className="pl-6 text-[11px] text-muted-foreground">{task.pauseReason}</p>
-      )}
-      {task.recoverySummary && (
-        <p className="pl-6 text-[11px] text-muted-foreground">{task.recoverySummary}</p>
-      )}
-      {task.retryCount !== undefined && task.retryCount > 0 && (
-        <div className="flex items-center gap-1 pl-6">
-          <Play className="h-3 w-3 text-muted-foreground" />
-          <span className="text-[10px] text-muted-foreground">Retry #{task.retryCount}</span>
-        </div>
       )}
     </div>
   );

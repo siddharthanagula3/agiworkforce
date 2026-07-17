@@ -18,6 +18,7 @@ import type { AgentEventToolUseDelta } from './AgentEventToolUseDelta';
 import type { AgentEventToolUseEnd } from './AgentEventToolUseEnd';
 import type { AgentEventToolUseStart } from './AgentEventToolUseStart';
 import type { AgentEventUsage } from './AgentEventUsage';
+import type { AgentTaskStateChanged } from './AgentTaskStateChanged';
 
 /**
  * The discriminated event union. See the module doc for which three real
@@ -43,4 +44,5 @@ export type AgentEvent =
   | ({ type: 'approval-requested' } & AgentEventApprovalRequested)
   | ({ type: 'approval-resolved' } & AgentEventApprovalResolved)
   | ({ type: 'artifact-produced' } & AgentEventArtifactProduced)
-  | ({ type: 'context-compacted' } & AgentEventContextCompacted);
+  | ({ type: 'context-compacted' } & AgentEventContextCompacted)
+  | ({ type: 'task-state-changed' } & AgentTaskStateChanged);

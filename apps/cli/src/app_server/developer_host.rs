@@ -1,12 +1,13 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::developer_session::{
-    AppServerCapabilities, AppServerClientInfo, AppServerNotification, ApprovalResponseParams,
-    DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
-    DeveloperSessionSource, ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse,
-    ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary, TurnInterruptParams,
-    TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    task_state_notification, AppServerCapabilities, AppServerClientInfo, AppServerNotification,
+    ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort,
+    DeveloperRoutingTaskType, DeveloperSessionSource, ThreadForkParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus,
+    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
+use agiworkforce_protocol::task_state::AgentTaskState;
 use agiworkforce_protocol::user_input::UserInput;
 use async_trait::async_trait;
 use base64::Engine as _;
@@ -956,8 +957,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         }
         self.emit(
             "thread/archived",
-            serde_json::json!({ "threadId": id_for_event }),
+            serde_json::json!({ "threadId": id_for_event.clone() }),
         );
+        if let Ok(notification) = task_state_notification(
+            id_for_event,
+            AgentTaskState::Archived,
+            None,
+            Some("Thread archived.".to_string()),
+        ) {
+            let _ = self.notifications.send(notification);
+        }
         Ok(())
     }
 
@@ -1057,6 +1066,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut cumulative_input_tokens = 0u32;
             let mut cumulative_output_tokens = 0u32;
 
+            if let Ok(notification) = task_state_notification(
+                task_turn_id.clone(),
+                AgentTaskState::Running,
+                Some(AgentTaskState::Queued),
+                Some("Agent started working.".to_string()),
+            ) {
+                let _ = task_notifications.send(notification);
+            }
+
             while let Some(input) = next_input {
                 let mut agent = task_session.lock().await;
                 agent.pending_image_blocks = input.images;
@@ -1142,6 +1160,22 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             } else {
                 "turn/failed"
             };
+            let (state, summary) = if final_status == TurnStatus::Completed {
+                (
+                    AgentTaskState::ReadyForReview,
+                    "Agent work finished and is ready for review.",
+                )
+            } else {
+                (AgentTaskState::Failed, "Agent work ended with an error.")
+            };
+            if let Ok(notification) = task_state_notification(
+                task_turn_id.clone(),
+                state,
+                Some(AgentTaskState::Running),
+                Some(summary.to_string()),
+            ) {
+                let _ = task_notifications.send(notification);
+            }
             if let Ok(notification) = AppServerNotification::new(
                 method,
                 serde_json::json!({
@@ -1169,6 +1203,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             },
         );
         drop(running_turns);
+        if let Ok(notification) = task_state_notification(
+            turn_id.clone(),
+            AgentTaskState::Queued,
+            None,
+            Some("Task accepted by the agent engine.".to_string()),
+        ) {
+            let _ = self.notifications.send(notification);
+        }
         let _ = start_sender.send(());
         self.emit(
             "turn/started",
@@ -1246,6 +1288,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.steering.lock().await.remove(&params.thread_id);
         self.cancel_pending_approvals(&params.turn_id).await;
 
+        if let Ok(notification) = task_state_notification(
+            params.turn_id.clone(),
+            AgentTaskState::Cancelled,
+            Some(AgentTaskState::Running),
+            Some("Agent work was cancelled.".to_string()),
+        ) {
+            let _ = self.notifications.send(notification);
+        }
+
         if let Some(session) = self.sessions.lock().await.get(&params.thread_id).cloned() {
             let partial = match running.partial.lock() {
                 Ok(partial) => partial.clone(),
@@ -1322,6 +1373,14 @@ fn approval_callback(
                     responder: sender,
                 },
             );
+            if let Ok(notification) = task_state_notification(
+                turn_id.clone(),
+                AgentTaskState::AwaitingInput,
+                Some(AgentTaskState::Running),
+                Some("The agent needs approval before it can continue.".to_string()),
+            ) {
+                let _ = notifications.send(notification);
+            }
             if let Ok(notification) = AppServerNotification::new(
                 "approval/requested",
                 serde_json::json!({
@@ -1346,6 +1405,14 @@ fn approval_callback(
                 Err(_) => ApprovalDecision::Timeout,
             };
             pending.lock().await.remove(&request_id);
+            if let Ok(notification) = task_state_notification(
+                turn_id,
+                AgentTaskState::Running,
+                Some(AgentTaskState::AwaitingInput),
+                Some("Agent resumed after the approval decision.".to_string()),
+            ) {
+                let _ = notifications.send(notification);
+            }
             decision
         })
     })
@@ -1641,6 +1708,11 @@ mod tests {
         let request_id = request.id.to_string();
         let waiter = tokio::spawn(async move { callback(request).await });
 
+        let state = receiver.recv().await.expect("awaiting-input notification");
+        assert_eq!(state.method, "task/state_changed");
+        assert_eq!(state.params["taskId"], "turn-1");
+        assert_eq!(state.params["state"], "awaiting_input");
+
         let notification = receiver.recv().await.expect("approval notification");
         assert_eq!(notification.method, "approval/requested");
         assert_eq!(notification.params["requestId"], request_id);
@@ -1721,6 +1793,14 @@ mod tests {
         .await
         .expect("interrupt turn");
         assert!(host.running_turns.lock().await.get(&thread.id).is_none());
+        let cancelled = notifications
+            .recv()
+            .await
+            .expect("cancelled state notification");
+        assert_eq!(cancelled.method, "task/state_changed");
+        assert_eq!(cancelled.params["taskId"], turn_id);
+        assert_eq!(cancelled.params["state"], "cancelled");
+
         let interrupted = notifications.recv().await.expect("interrupt notification");
         assert_eq!(interrupted.method, "turn/interrupted");
         assert_eq!(interrupted.params["turnId"], turn_id);

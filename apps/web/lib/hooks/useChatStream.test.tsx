@@ -77,7 +77,7 @@ describe('useChatStream', () => {
   describe('canonical x_agent_event activity', () => {
     it('validates, reduces, and keeps canonical activity on the assistant message', async () => {
       const base = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         sessionId: TEMP_CONVERSATION.id,
         turnId: 'turn-activity-1',
       };
@@ -214,7 +214,7 @@ describe('useChatStream', () => {
       });
 
       const base = {
-        schemaVersion: 2,
+        schemaVersion: 3,
         sessionId: conversation.id,
         turnId: 'turn-persisted-activity',
       };
@@ -789,7 +789,7 @@ describe('useChatStream', () => {
               if (pulls === 0) {
                 pulls += 1;
                 const activityBase = {
-                  schemaVersion: 2,
+                  schemaVersion: 3,
                   sessionId: PERSISTED_CONV.id,
                   turnId: 'turn-user-stopped',
                 };

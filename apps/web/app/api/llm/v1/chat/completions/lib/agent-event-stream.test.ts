@@ -27,7 +27,7 @@ describe('createAgentEventStreamEmitter', () => {
     expect(payload['model']).toBe('gpt-test');
     expect(choices[0]?.index).toBe(0);
     expect(envelope).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       sessionId: 'conversation-1',
       turnId: 'request-1',
       sequence: 0,

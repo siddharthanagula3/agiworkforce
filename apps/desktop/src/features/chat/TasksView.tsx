@@ -36,8 +36,8 @@ const STATUS_CONFIG: Record<
   AgentTask['status'],
   { label: string; textColor: string; bgColor: string; dotClass: string }
 > = {
-  pending: {
-    label: 'Pending',
+  queued: {
+    label: 'Queued',
     textColor: 'text-yellow-400',
     bgColor: 'bg-yellow-400/10',
     dotClass: 'bg-yellow-400',
@@ -72,17 +72,23 @@ const STATUS_CONFIG: Record<
     bgColor: 'bg-amber-400/10',
     dotClass: 'bg-amber-400',
   },
-  expired: {
-    label: 'Expired',
+  awaiting_input: {
+    label: 'Awaiting input',
     textColor: 'text-orange-400',
     bgColor: 'bg-orange-400/10',
     dotClass: 'bg-orange-400',
   },
-  recovering: {
-    label: 'Recovering',
-    textColor: 'text-purple-400',
-    bgColor: 'bg-purple-400/10',
-    dotClass: 'bg-purple-400 animate-pulse',
+  ready_for_review: {
+    label: 'Ready for review',
+    textColor: 'text-emerald-400',
+    bgColor: 'bg-emerald-400/10',
+    dotClass: 'bg-emerald-400',
+  },
+  archived: {
+    label: 'Archived',
+    textColor: 'text-muted-foreground',
+    bgColor: 'bg-muted-foreground/10',
+    dotClass: 'bg-muted-foreground',
   },
 };
 
@@ -101,9 +107,13 @@ function formatElapsed(isoDate: string): string {
 function mapStatusToFilter(status: AgentTask['status']): FilterTab {
   switch (status) {
     case 'running':
-    case 'pending':
+    case 'queued':
+    case 'paused':
+    case 'awaiting_input':
       return 'active';
     case 'completed':
+    case 'ready_for_review':
+    case 'archived':
       return 'completed';
     case 'failed':
     case 'cancelled':
@@ -265,7 +275,10 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
         </div>
 
         {/* Action buttons — stop propagation so click doesn't expand */}
-        {(task.status === 'running' || task.status === 'pending') && (
+        {(task.status === 'queued' ||
+          task.status === 'running' ||
+          task.status === 'paused' ||
+          task.status === 'awaiting_input') && (
           <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
             {task.status === 'running' && (
               <button
@@ -277,7 +290,7 @@ function TaskCard({ task, liveSteps, liveStep, liveTotal }: TaskCardProps) {
                 <Pause className="h-3.5 w-3.5" />
               </button>
             )}
-            {task.status === 'pending' && (
+            {task.status === 'paused' && (
               <button
                 type="button"
                 onClick={handleResume}
@@ -419,13 +432,25 @@ export function TasksView() {
 
   // Poll running tasks every 5 s
   useEffect(() => {
-    const hasActive = tasks.some((t) => t.status === 'running' || t.status === 'pending');
+    const hasActive = tasks.some(
+      (task) =>
+        task.status === 'queued' ||
+        task.status === 'running' ||
+        task.status === 'paused' ||
+        task.status === 'awaiting_input',
+    );
 
     if (hasActive) {
       intervalRef.current = setInterval(() => {
         const activeTasks = useAgentTaskStore
           .getState()
-          .tasks.filter((t) => t.status === 'running' || t.status === 'pending');
+          .tasks.filter(
+            (task) =>
+              task.status === 'queued' ||
+              task.status === 'running' ||
+              task.status === 'paused' ||
+              task.status === 'awaiting_input',
+          );
         for (const t of activeTasks) {
           void getTaskStatus(t.id);
         }

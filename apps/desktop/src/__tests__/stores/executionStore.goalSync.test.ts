@@ -118,7 +118,7 @@ describe('executionStore goal sync', () => {
     initializeExecutionGoalSubscription();
 
     useAgentTaskStore.setState({
-      tasks: [createTask({ id: 'goal-2', goal: 'Prepare migration', status: 'pending' })],
+      tasks: [createTask({ id: 'goal-2', goal: 'Prepare migration', status: 'queued' })],
       loading: false,
       liveStepsByTask: {
         'goal-2': [

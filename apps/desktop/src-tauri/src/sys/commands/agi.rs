@@ -8,6 +8,7 @@ use crate::core::llm::{Provider, TaskType};
 use crate::sys::billing::BillingStateWrapper;
 use crate::sys::commands::llm::LLMState;
 use crate::sys::commands::AppDatabase;
+use agiworkforce_protocol::task_state::AgentTaskState;
 use anyhow::Result;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -35,6 +36,8 @@ pub struct SubmitGoalResponse {
 #[serde(rename_all = "camelCase")]
 pub struct GoalStatusResponse {
     pub context: ExecutionContext,
+    pub state: AgentTaskState,
+    pub current_iteration: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -118,6 +121,34 @@ pub async fn agi_cancel_goal(goal_id: String) -> Result<(), String> {
     } else {
         Err("AGI not initialized".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn agi_pause_goal(goal_id: String) -> Result<(), String> {
+    let agi = AGI_CORE
+        .lock()
+        .clone()
+        .ok_or_else(|| "AGI not initialized".to_string())?;
+    let result = agi
+        .lock()
+        .await
+        .pause_goal(&goal_id)
+        .map_err(|error| error.to_string());
+    result
+}
+
+#[tauri::command]
+pub async fn agi_resume_goal(goal_id: String) -> Result<(), String> {
+    let agi = AGI_CORE
+        .lock()
+        .clone()
+        .ok_or_else(|| "AGI not initialized".to_string())?;
+    let result = agi
+        .lock()
+        .await
+        .resume_goal(&goal_id)
+        .map_err(|error| error.to_string());
+    result
 }
 
 #[tauri::command]
@@ -228,8 +259,21 @@ pub async fn agi_get_goal_status(goal_id: String) -> Result<GoalStatusResponse, 
     let context = agi
         .get_goal_status(&goal_id)
         .ok_or_else(|| format!("Goal {} not found", goal_id))?;
+    let state = agi
+        .get_task_state(&goal_id)
+        .ok_or_else(|| format!("Goal {} has no task state", goal_id))?;
+    let current_iteration = context
+        .current_state
+        .get("current_iteration")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|iteration| usize::try_from(iteration).ok())
+        .unwrap_or_default();
 
-    Ok(GoalStatusResponse { context })
+    Ok(GoalStatusResponse {
+        context,
+        state,
+        current_iteration,
+    })
 }
 
 #[tauri::command]
