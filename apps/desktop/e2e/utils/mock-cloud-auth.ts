@@ -1,4 +1,9 @@
 import type { Page } from '@playwright/test';
+import type {
+  MeResponse,
+  SettingsSyncPullResponse,
+  SettingsSyncPushResponse,
+} from '@agiworkforce/cloud-contracts';
 
 export interface MockCloudAuthUser {
   id: string;
@@ -104,18 +109,67 @@ export async function mockCloudAccountEndpoints(
   const user = resolveMockUser(options.user);
   const planTier = options.planTier ?? 'max';
   const subscriptionStatus = options.subscriptionStatus ?? 'active';
+  const displayName = planTier === 'max' ? 'Max' : planTier;
+  const meResponse = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatar_url: null,
+    created_at: null,
+    updated_at: Math.floor(Date.now() / 1_000),
+    plan: {
+      tier: planTier,
+      display_name: displayName,
+      status: subscriptionStatus,
+      current_period_end: null,
+    },
+    feature_flags: {
+      beta_features: true,
+      advanced_model_access: planTier === 'max',
+      code_execution: true,
+    },
+    credits: null,
+    routing_preferences: {},
+  } satisfies MeResponse;
 
   await page.route('**/api/me', (route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        plan: { tier: planTier, status: subscriptionStatus },
-        feature_flags: {},
-      }),
+      body: JSON.stringify(meResponse),
+    });
+  });
+
+  await page.route('**/api/settings/sync**', (route) => {
+    const method = route.request().method();
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    };
+    if (method === 'OPTIONS') {
+      return route.fulfill({ status: 204, headers: corsHeaders });
+    }
+    if (method === 'POST') {
+      const response = { applied: true, cursor: '0' } satisfies SettingsSyncPushResponse;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: corsHeaders,
+        body: JSON.stringify(response),
+      });
+    }
+
+    const response = {
+      settings: {},
+      cursor: '0',
+      hasMore: false,
+    } satisfies SettingsSyncPullResponse;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: corsHeaders,
+      body: JSON.stringify(response),
     });
   });
 }

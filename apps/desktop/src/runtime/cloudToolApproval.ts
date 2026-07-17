@@ -20,6 +20,7 @@ import { sendCloudApprovalResume } from '../api/cloudApi';
 import { createCloudStreamDeltaSink, type CloudStreamDeltaSink } from './cloudStreamDeltas';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
+import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
 
 interface PendingApprovalCall {
   toolCallId: string;
@@ -37,6 +38,8 @@ interface PendingApprovalTurn {
   assistantContent: string;
   /** Set once the resume request has been dispatched, to prevent double-submit. */
   resolving: boolean;
+  /** Canonical activity accumulated before the approval suspension. */
+  agentActivity?: AgentActivityState;
 }
 
 export interface ResolveApprovalOutcome {
@@ -45,6 +48,7 @@ export interface ResolveApprovalOutcome {
   /** Full assistant text across the original turn + every resume so far. Only meaningful when `!suspended`. */
   content: string;
   model: string;
+  agentActivity?: AgentActivityState;
 }
 
 /**
@@ -55,7 +59,7 @@ export interface ResolveApprovalOutcome {
  */
 type SinkOutcome = Pick<
   CloudStreamDeltaSink,
-  'isSuspended' | 'getAccumulatedContent' | 'getPendingApprovalCalls'
+  'isSuspended' | 'getAccumulatedContent' | 'getPendingApprovalCalls' | 'getAgentActivity'
 >;
 
 export class CloudToolApprovalRegistry {
@@ -93,6 +97,7 @@ export class CloudToolApprovalRegistry {
         decisions: new Map(),
         assistantContent: sink.getAccumulatedContent(),
         resolving: false,
+        agentActivity: sink.getAgentActivity(),
       });
     } else {
       this.turns.delete(conversationId);
@@ -142,7 +147,7 @@ export class CloudToolApprovalRegistry {
       decision: turn.decisions.get(c.toolCallId) ?? ('rejected' as const),
     }));
 
-    const sink = createCloudStreamDeltaSink(emit, apiBaseUrl);
+    const sink = createCloudStreamDeltaSink(emit, apiBaseUrl, turn.agentActivity);
 
     return new Promise<ResolveApprovalOutcome>((resolvePromise) => {
       void sendCloudApprovalResume(
@@ -181,6 +186,7 @@ export class CloudToolApprovalRegistry {
               decisions: new Map(),
               assistantContent: fullContent,
               resolving: false,
+              agentActivity: sink.getAgentActivity(),
             });
           } else {
             this.turns.delete(conversationId);
@@ -193,12 +199,27 @@ export class CloudToolApprovalRegistry {
             suspended: sink.isSuspended(),
             content: fullContent,
             model: turn.model,
+            ...(sink.getAgentActivity() ? { agentActivity: sink.getAgentActivity() } : {}),
           });
         },
         (err) => {
           this.turns.delete(conversationId);
           onError(err);
-          resolvePromise({ suspended: false, content: '', model: turn.model });
+          const activity = sink.getAgentActivity();
+          resolvePromise({
+            suspended: false,
+            content: turn.assistantContent + sink.getAccumulatedContent(),
+            model: turn.model,
+            ...(activity
+              ? {
+                  agentActivity: finishAgentActivityLocally(activity, {
+                    status: 'failed',
+                    completedAtMs: Date.now(),
+                    error: err.message,
+                  }),
+                }
+              : {}),
+          });
         },
         signal,
         sink.onEvent,

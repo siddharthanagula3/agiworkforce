@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
-import { QueueFullError, type MessageQueue } from '@agiworkforce/client-runtime';
+import {
+  applyAgentActivityEvent,
+  finishAgentActivityLocally,
+  QueueFullError,
+  type AgentActivityState,
+  type MessageQueue,
+} from '@agiworkforce/client-runtime';
 import {
   classifyTaskLocally,
   resolveAutoRoute,
@@ -254,6 +260,38 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                 },
               });
             }
+          }
+          break;
+        }
+        case 'agent_event': {
+          const currentMessage = assistantMessageIdRef.current
+            ? store.messagesByConversation[convId]?.find(
+                (message) => message.id === assistantMessageIdRef.current,
+              )
+            : undefined;
+          const currentActivity = currentMessage?.metadata?.['agentActivity'] as
+            | AgentActivityState
+            | undefined;
+          const agentActivity = applyAgentActivityEvent(currentActivity, event.envelope);
+
+          if (!assistantMessageIdRef.current) {
+            const id = crypto.randomUUID();
+            assistantMessageIdRef.current = id;
+            addMsg(
+              {
+                id,
+                role: 'assistant',
+                content: '',
+                timestamp: new Date().toISOString(),
+                isStreaming: true,
+                metadata: { agentActivity },
+              },
+              convId,
+            );
+          } else if (currentMessage) {
+            store.updateMessage(convId, assistantMessageIdRef.current, {
+              metadata: { ...currentMessage.metadata, agentActivity },
+            });
           }
           break;
         }
@@ -577,6 +615,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (assistantMessageIdRef.current) {
             const failingId = assistantMessageIdRef.current;
             const current = store.messagesByConversation[convId]?.find((m) => m.id === failingId);
+            const currentActivity = current?.metadata?.['agentActivity'] as
+              | AgentActivityState
+              | undefined;
             // A tool call approved just before this error (e.g.
             // resolveToolApproval's resume itself failing outright) was
             // optimistically patched to 'running' and would otherwise stay
@@ -585,6 +626,18 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             const stillRunning = current?.toolCalls?.some((t) => t.status === 'running');
             store.updateMessage(convId, failingId, {
               isStreaming: false,
+              ...(currentActivity
+                ? {
+                    metadata: {
+                      ...current?.metadata,
+                      agentActivity: finishAgentActivityLocally(currentActivity, {
+                        status: 'failed',
+                        completedAtMs: Date.now(),
+                        error: event.error || 'Request failed',
+                      }),
+                    },
+                  }
+                : {}),
               ...(stillRunning
                 ? {
                     toolCalls: current!.toolCalls!.map((t) =>
@@ -870,11 +923,21 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         const store = useChatStore.getState();
         const msg = store.messagesByConversation[convId]?.find((m) => m.id === partialId);
         if (msg && msg.role === 'assistant') {
+          const currentActivity = msg.metadata?.['agentActivity'] as AgentActivityState | undefined;
           store.updateMessage(convId, partialId, {
             isStreaming: false,
-            ...(msg.content.trim()
-              ? { metadata: { ...msg.metadata, finishReason: 'stopped' } }
-              : {}),
+            metadata: {
+              ...msg.metadata,
+              ...(msg.content.trim() ? { finishReason: 'stopped' } : {}),
+              ...(currentActivity
+                ? {
+                    agentActivity: finishAgentActivityLocally(currentActivity, {
+                      status: 'cancelled',
+                      completedAtMs: Date.now(),
+                    }),
+                  }
+                : {}),
+            },
           });
         }
       }

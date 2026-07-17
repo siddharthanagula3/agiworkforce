@@ -5,6 +5,7 @@ import type {
   GeneratedFileEntry,
   WebSearchResult,
 } from './types';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 /**
  * ChatRuntime abstracts the transport layer between the chat UI and the backend.
@@ -259,6 +260,15 @@ export interface TauriAttachmentPayload {
 export type StreamEvent =
   | { type: 'content'; content: string }
   | { type: 'thinking'; content: string }
+  | {
+      /**
+       * Runtime-validated canonical Cloud activity envelope. Consumers project
+       * it into the portable `AgentActivityState`; raw provider reasoning is
+       * intentionally not represented by that projection.
+       */
+      type: 'agent_event';
+      envelope: AgentEventEnvelope;
+    }
   | { type: 'tool_call'; toolCall: { id: string; name: string; args: Record<string, unknown> } }
   | {
       type: 'tool_result';

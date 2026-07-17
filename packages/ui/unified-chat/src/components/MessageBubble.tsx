@@ -9,7 +9,9 @@ import { CitationPill } from './CitationPill';
 import { DownloadCard } from './DownloadCard';
 import { MessageGeneratedFiles, hasRunningExecutionTool } from './MessageGeneratedFiles';
 import { ToolCallCard } from './ToolCallCard';
+import { AgentActivityTimeline } from './AgentActivityTimeline';
 import type { ChatMessage, Artifact, ToolCall } from '../lib/types';
+import type { AgentActivityState } from '@agiworkforce/client-runtime';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -453,6 +455,7 @@ export function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isStreaming = Boolean(message.isStreaming);
+  const canonicalActivity = message.metadata?.['agentActivity'] as AgentActivityState | undefined;
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -533,13 +536,32 @@ export function MessageBubble({
   // Assistant message
   return (
     <div data-role="assistant" className="message-enter flex flex-col gap-1">
+      {canonicalActivity && (
+        <div className="mb-2">
+          <AgentActivityTimeline
+            activity={canonicalActivity}
+            onApprove={
+              onToolApprove ? (toolCallId) => onToolApprove(message.id, toolCallId) : undefined
+            }
+            onReject={
+              onToolReject ? (toolCallId) => onToolReject(message.id, toolCallId) : undefined
+            }
+            isApprovalExpired={() => Boolean(approvalTurnExpired)}
+            onResend={onResendApproval ? () => onResendApproval(message.id) : undefined}
+          />
+        </div>
+      )}
+
       {/* Thinking block — rendered above text content */}
-      {message.thinkingBlock && <ThinkingBlock block={message.thinkingBlock} />}
+      {!canonicalActivity && message.thinkingBlock && (
+        <ThinkingBlock block={message.thinkingBlock} />
+      )}
 
       {/* Web search results — rendered above text content */}
-      {message.webSearchResults?.map((search) => (
-        <LegacyWebSearchCard key={search.id} search={search} />
-      ))}
+      {!canonicalActivity &&
+        message.webSearchResults?.map((search) => (
+          <LegacyWebSearchCard key={search.id} search={search} />
+        ))}
 
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
         {isStreaming && !message.content.trim() ? (
@@ -574,7 +596,7 @@ export function MessageBubble({
         </div>
       )}
 
-      {message.toolCalls && message.toolCalls.length > 0 && (
+      {!canonicalActivity && message.toolCalls && message.toolCalls.length > 0 && (
         <div className="mt-2 space-y-2">
           {message.toolCalls.map((toolCall) =>
             // Awaiting-approval calls need the approve/reject affordance
