@@ -1,0 +1,51 @@
+import { isExecutionTool } from '@/lib/e2b/execution-tools';
+import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
+import { isWebSearchTool } from '@/lib/web-search/web-search-tool';
+
+export type ToolLoopApprovalMode = 'auto' | 'manual';
+
+export interface ToolLoopInputClassification {
+  hasMcpTools: boolean;
+  hasExecutionTools: boolean;
+  hasUrlFetchTools: boolean;
+  hasWebSearchTools: boolean;
+  shouldRun: boolean;
+  approvalMode: ToolLoopApprovalMode;
+}
+
+function functionToolName(tool: unknown): string {
+  if (!tool || typeof tool !== 'object') return '';
+  const candidate = tool as { function?: { name?: unknown } };
+  return typeof candidate.function?.name === 'string' ? candidate.function.name : '';
+}
+
+/**
+ * Classify the server-executed tools on one managed-cloud request.
+ *
+ * Provider-native tools are intentionally ignored: their provider owns those
+ * calls. MCP and AGI's platform tools must enter `runToolLoop`, otherwise the
+ * model can emit a function call that no runtime ever executes.
+ */
+export function classifyToolLoopInputs(
+  mcpTools: WebMcpToolDef[],
+  requestTools: unknown[] | undefined,
+): ToolLoopInputClassification {
+  const names = (requestTools ?? []).map(functionToolName).filter(Boolean);
+  const hasMcpTools = mcpTools.length > 0;
+  const hasExecutionTools = names.some(isExecutionTool);
+  const hasUrlFetchTools = names.some(isUrlFetchTool);
+  const hasWebSearchTools = names.some(isWebSearchTool);
+
+  return {
+    hasMcpTools,
+    hasExecutionTools,
+    hasUrlFetchTools,
+    hasWebSearchTools,
+    shouldRun: hasMcpTools || hasExecutionTools || hasUrlFetchTools || hasWebSearchTools,
+    // MCP tools may cross an external or mutating boundary and remain
+    // approval-gated. The built-in search/fetch/sandbox tools execute inside
+    // their existing read-only or isolated safety boundaries.
+    approvalMode: hasMcpTools ? 'manual' : 'auto',
+  };
+}

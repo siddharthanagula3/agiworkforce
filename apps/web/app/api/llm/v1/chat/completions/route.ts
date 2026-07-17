@@ -14,9 +14,8 @@ import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
 import { runResearchLoop } from './lib/research-loop';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
+import { classifyToolLoopInputs } from './lib/tool-loop-routing';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
-import { isExecutionTool } from '@/lib/e2b/execution-tools';
-import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
@@ -231,37 +230,18 @@ async function handleChatCompletions(request: NextRequest) {
       }),
     ]);
     const mcpTools = [...operatorTools, ...connectorTools];
-    const hasMcpTools = mcpTools.length > 0;
+    const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
 
-    // Detect E2B execution tools offered on this request (set by request-processor when
-    // AGI_E2B_EXECUTION=1 and the provider routes to E2B). Uses isExecutionTool() on the
-    // tool `function.name` field — the shape `e2bExecutionToolDefs()` returns is
-    // `{type:'function', function:{name,...}}`, while native tools use type-object shapes
-    // with no `function` key, so they never match.
-    const hasE2BTools = (processed.llmRequest.tools ?? []).some((t) =>
-      isExecutionTool((t as { function?: { name?: string } }).function?.name ?? ''),
-    );
-
-    // Platform url_fetch tool offered by request-processor (web_fetch on a
-    // non-Anthropic provider). Same detection seam as E2B: function-tool shape only.
-    const hasUrlFetchTool = (processed.llmRequest.tools ?? []).some((t) =>
-      isUrlFetchTool((t as { function?: { name?: string } }).function?.name ?? ''),
-    );
-
-    if (hasMcpTools || hasE2BTools || hasUrlFetchTool) {
+    if (loopInputs.shouldRun) {
       // Approval mode:
-      //   - E2B-only and/or url_fetch-only: 'auto' — E2B tools run in an isolated sandbox
-      //     (no real fs/secrets) and url_fetch is read-only + SSRF-guarded, so auto-run is
-      //     both safe and necessary (no user prompt needed for a page read). The loop uses
-      //     runMcpTool → routeExecutionTool / executeUrlFetch, fail-closed (explicit error
-      //     to model if E2B_API_KEY is absent, sandbox creation fails, or a fetch is
-      //     blocked/unreachable).
+      //   - Built-in platform tools only: 'auto' — E2B tools run in an isolated sandbox,
+      //     url_fetch is read-only + SSRF-guarded, and web_search uses the configured
+      //     server-owned search backend. These tools fail closed with an explicit result
+      //     if their backend is unavailable, so the model can recover inside the loop.
       //   - MCP tools present (with or without E2B/url_fetch): 'manual' — keep the existing
       //     fail-closed approval gate. If both MCP + E2B tools are present, MCP's manual
       //     gate takes precedence; E2B tool calls in that mix stall on approval (acceptable;
       //     mixed MCP+E2B is an edge case and the operator can enable the resume endpoint).
-      const approvalMode = hasMcpTools ? ('manual' as const) : ('auto' as const);
-
       // Build the agentic SSE stream from the tool-loop generator. The connector
       // executor is bound to the authenticated userId (only meaningful when the
       // user actually connected connectors; a no-op otherwise).
@@ -270,7 +250,7 @@ async function handleChatCompletions(request: NextRequest) {
       const toolLoopUsage = createObservedProviderUsage();
       const toolLoopGen = runToolLoop(processed, {
         mcpTools,
-        approvalMode,
+        approvalMode: loopInputs.approvalMode,
         userId,
         connectorExecutor,
         usage: toolLoopUsage,
