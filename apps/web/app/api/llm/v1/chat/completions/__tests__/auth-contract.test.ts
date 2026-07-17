@@ -47,7 +47,7 @@ vi.mock('@/lib/cors', () => ({
   getSecurityHeaders: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((k: string) => `mock-${k}`),
 }));
 

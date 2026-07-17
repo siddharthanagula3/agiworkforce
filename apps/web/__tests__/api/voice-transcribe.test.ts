@@ -34,7 +34,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 // Mock env utility
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
       OPENAI_API_KEY: 'sk-test-openai-key',

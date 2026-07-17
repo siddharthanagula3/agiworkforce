@@ -34,11 +34,11 @@ vi.mock('next/link', () => ({
 // ---------------------------------------------------------------------------
 // Layout components — stub out so tests are not layout-dependent
 // ---------------------------------------------------------------------------
-vi.mock('@/components/layout/Header', () => ({
+vi.mock('@shared/components/layout/Header', () => ({
   Header: () => React.createElement('header', null, 'Header'),
 }));
 
-vi.mock('@/components/marketing/MarketingFooter', () => ({
+vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => React.createElement('footer', null, 'Footer'),
 }));
 

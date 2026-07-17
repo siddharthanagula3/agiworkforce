@@ -1,8 +1,8 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@/components/seo/JsonLd';
+import { JsonLd } from '@shared/components/seo/JsonLd';
 import { breadcrumbSchema, collectionPageSchema } from '@/lib/seo/structured-data';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 export const metadata = buildMetadata({
   title: 'Writing',

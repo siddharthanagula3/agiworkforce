@@ -5,7 +5,7 @@ import {
   ManagedMediaImageGenerationRequestSchema,
   type ManagedMediaImageProvider,
 } from '@agiworkforce/cloud-contracts';
-import { getOptionalEnv, requireEnv } from '@/utils/env';
+import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';

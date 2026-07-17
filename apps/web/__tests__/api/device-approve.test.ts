@@ -26,7 +26,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 // Mock environment variables
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     if (key === 'DEVICE_TOKEN_ENCRYPTION_KEY') return 'a'.repeat(64); // 64 hex chars = 32 bytes
     return 'test-value';

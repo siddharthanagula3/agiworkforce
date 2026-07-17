@@ -36,7 +36,7 @@ import { Label } from '@agiworkforce/ui';
 import { Badge } from '@agiworkforce/ui';
 import { getTierPolicy, SLOT_REGISTRY } from '@agiworkforce/types';
 import type { RoutingSlot } from '@agiworkforce/types';
-import { getModelMetadata } from '@/constants/llm';
+import { getModelMetadata } from '@shared/config/llm';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 // ---------------------------------------------------------------------------

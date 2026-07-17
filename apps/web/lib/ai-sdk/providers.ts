@@ -13,7 +13,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
-import { getOptionalEnv } from '@/utils/env';
+import { getOptionalEnv } from '@shared/utils/env';
 
 // ---------------------------------------------------------------------------
 // Provider option interfaces

@@ -1,10 +1,10 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { FinalCta } from '../../components/marketing/FlagshipSections';
-import { ProductFrame } from '../../components/marketing/ProductFrame';
-import { Reveal } from '../../components/marketing/Reveal';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { FinalCta } from '@/features/marketing/components/FlagshipSections';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { Reveal } from '@/features/marketing/components/Reveal';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

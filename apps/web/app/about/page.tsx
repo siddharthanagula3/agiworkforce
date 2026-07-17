@@ -1,8 +1,8 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { FinalCta } from '../../components/marketing/FlagshipSections';
-import { AgiMark } from '../../components/agi/AgiMark';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { FinalCta } from '@/features/marketing/components/FlagshipSections';
+import { AgiMark } from '@shared/components/agi/AgiMark';
 import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

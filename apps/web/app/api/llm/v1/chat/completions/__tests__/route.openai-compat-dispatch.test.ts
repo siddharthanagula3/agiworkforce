@@ -51,7 +51,7 @@ vi.mock('@/lib/cors', () => ({
 
 // One env key per provider, all faked -- adapter-factory.ts's buildCompatAdapter
 // reads `${envKeyPrefix}_API_KEY` for each.
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));

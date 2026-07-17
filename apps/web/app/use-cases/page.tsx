@@ -1,8 +1,8 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { FeatureGrid, RouteMap } from '../../components/marketing/LandingSections';
-import { FinalCta, FlagshipHero } from '../../components/marketing/FlagshipSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { FeatureGrid, RouteMap } from '@/features/marketing/components/LandingSections';
+import { FinalCta, FlagshipHero } from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

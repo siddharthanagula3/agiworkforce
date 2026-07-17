@@ -41,7 +41,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 // Mock environment variables
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     if (key === 'NEON_DATABASE_URL') return 'https://localhost';
     if (key === 'CLERK_SECRET_KEY') return 'test-anon-key';

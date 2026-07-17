@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects, useProjectStore } from '@features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
-import { WebAppShell } from '@/components/layout/WebAppShell';
+import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toast } from 'sonner';
 
 /**

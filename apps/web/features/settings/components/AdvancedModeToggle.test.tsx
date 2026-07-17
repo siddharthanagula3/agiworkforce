@@ -133,7 +133,7 @@ vi.mock('@agiworkforce/types', () => {
 // Mock @/constants/llm · getModelMetadata
 // ---------------------------------------------------------------------------
 
-vi.mock('@/constants/llm', () => ({
+vi.mock('@shared/config/llm', () => ({
   getModelMetadata: (modelId: string) => {
     const names: Record<string, string> = {
       [modelFixtureIds.fast]: 'Fixture Fast Model',

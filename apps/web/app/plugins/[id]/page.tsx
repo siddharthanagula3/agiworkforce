@@ -3,8 +3,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { Header } from '../../../components/layout/Header';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
 import { ConnectorChecklist } from './ConnectorChecklist';
 

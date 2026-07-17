@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 export const metadata: Metadata = {
   title: 'Payment issue',

@@ -21,7 +21,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';
-import { WebAppShell } from '@/components/layout/WebAppShell';
+import { WebAppShell } from '@shared/components/layout/WebAppShell';
 
 /**
  * /projects/[id] - per-project detail view.

@@ -5,10 +5,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAuthStore } from './authentication-store';
-import type { AuthUser } from '@core/auth/authentication-manager';
+import type { AuthUser } from '@shared/services/authentication-manager';
 
 // Mock the auth service
-vi.mock('@core/auth/authentication-manager', () => ({
+vi.mock('@shared/services/authentication-manager', () => ({
   authService: {
     getCurrentUser: vi.fn(),
     login: vi.fn(),
@@ -85,7 +85,7 @@ const localStorageMock = {
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 describe('Authentication Store', () => {
-  let mockAuthService: typeof import('@core/auth/authentication-manager').authService;
+  let mockAuthService: typeof import('@shared/services/authentication-manager').authService;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -100,7 +100,7 @@ describe('Authentication Store', () => {
     document.cookie = '__client_uat=9999999999';
 
     // Import the mocked auth service
-    const authModule = await import('@core/auth/authentication-manager');
+    const authModule = await import('@shared/services/authentication-manager');
     mockAuthService = authModule.authService;
   });
 

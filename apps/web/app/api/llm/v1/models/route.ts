@@ -10,7 +10,7 @@ import {
   getAllowedAutoModesForTier,
   getAllowedModelsForTier,
   normalizeSubscriptionTier,
-} from '@/constants/llm';
+} from '@shared/config/llm';
 import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
 
 type OpenAiCompatibleModel = {

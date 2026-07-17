@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Header } from '../../../components/layout/Header';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 /**
  * /auth/update-password was the Supabase email-link callback for password

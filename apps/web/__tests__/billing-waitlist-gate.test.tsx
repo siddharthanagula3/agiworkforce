@@ -128,7 +128,7 @@ vi.mock('@/components/ui', () => ({
 // ---------------------------------------------------------------------------
 // Lazy-import after mocks
 // ---------------------------------------------------------------------------
-const { CreditAlertModal } = await import('@/components/modals/CreditAlertModal');
+const { CreditAlertModal } = await import('@shared/components/modals/CreditAlertModal');
 const BillingDashboard = (await import('@/features/billing/pages/BillingDashboard')).default;
 
 // ---------------------------------------------------------------------------

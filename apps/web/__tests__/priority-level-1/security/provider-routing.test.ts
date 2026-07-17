@@ -12,7 +12,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { classifyTaskLocally, resolveAutoRoute } from '@agiworkforce/routing';
-import { getAllModels, getModelMetadata, normalizeModelId, MODEL_METADATA } from '@/constants/llm';
+import { getAllModels, getModelMetadata, normalizeModelId, MODEL_METADATA } from '@shared/config/llm';
 
 describe('L1 Security - Provider Routing (No Hardcoding)', () => {
   test('SECURITY: model catalog is loaded from metadata (models.json), not empty/hardcoded', () => {

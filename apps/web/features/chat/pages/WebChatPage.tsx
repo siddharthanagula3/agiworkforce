@@ -17,7 +17,7 @@ import { useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { useBillingStore } from '@/stores/unified/auth';
-import { getBestAutoModeForTier } from '@/constants/llm';
+import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
   summarizeSendPreview,
@@ -73,7 +73,7 @@ import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcuts
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
-import { SidebarWordmark } from '@/components/agi/SidebarWordmark';
+import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';

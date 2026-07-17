@@ -18,10 +18,10 @@ import {
   upgradeToMaxPlan,
   upgradeToTeamPlan,
 } from '@features/billing/services/stripe-payments';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { Reveal } from '../../components/marketing/Reveal';
-import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { Reveal } from '@/features/marketing/components/Reveal';
+import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { WaitlistForm } from '../byok/WaitlistForm';
 
 // Paid-plan checkout (2026-07-04): open by default, matching the

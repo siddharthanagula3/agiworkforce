@@ -13,7 +13,7 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, isTauri } from '@/lib/tauri-mock';
-import { storageFallback } from '@/utils/localStorage';
+import { storageFallback } from '@shared/utils/localStorage';
 import type { ContextItem } from '@agiworkforce/types';
 
 export type FileOperationType = 'read' | 'write' | 'create' | 'delete' | 'move' | 'rename';

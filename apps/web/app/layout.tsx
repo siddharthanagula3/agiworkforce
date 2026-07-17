@@ -4,9 +4,9 @@ import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google'
 import { headers } from 'next/headers';
 import './globals.css';
 import Providers from './providers';
-import { GoogleAnalytics } from '@/components/GoogleAnalytics';
-import { SkipLinks } from '@/components/accessibility/SkipLinks';
-import { JsonLd } from '@/components/seo/JsonLd';
+import { GoogleAnalytics } from '@shared/components/GoogleAnalytics';
+import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
+import { JsonLd } from '@shared/components/seo/JsonLd';
 import { OG_IMAGE } from '@/lib/seo/site';
 import {
   organizationSchema,

@@ -1,12 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@/components/seo/JsonLd';
+import { JsonLd } from '@shared/components/seo/JsonLd';
 import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
-import { Header } from '../../../components/layout/Header';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import { ProductFrame } from '../../../components/marketing/ProductFrame';
-import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
-import { FinalCta } from '../../../components/marketing/FlagshipSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { FeatureGrid, LedgerSection } from '@/features/marketing/components/LandingSections';
+import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

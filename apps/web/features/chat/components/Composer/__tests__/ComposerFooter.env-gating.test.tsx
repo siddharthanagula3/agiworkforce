@@ -96,7 +96,7 @@ vi.mock('@/stores/unified/auth', () => ({
 }));
 
 // LLM constants: make both models pass the tier-selectable check.
-vi.mock('@/constants/llm', () => ({
+vi.mock('@shared/config/llm', () => ({
   getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
   getBestAutoModeForTier: () => 'auto-premium',
   getModelMetadata: (id: string) => {
@@ -175,7 +175,7 @@ vi.mock('@shared/components/ProviderMark', () => ({
   hasProviderMark: () => false,
 }));
 
-vi.mock('@/components/agi/AgiMark', () => ({
+vi.mock('@shared/components/agi/AgiMark', () => ({
   AgiMark: () => null,
 }));
 

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { AI_EMPLOYEES } from '@/data/marketplace-employees';
+import { AI_EMPLOYEES } from '@/features/library/data/marketplace-employees';
 
 /**
  * Marketplace API

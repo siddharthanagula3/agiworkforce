@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { GalleryClient } from './GalleryClient';
 
 export const metadata = buildMetadata({

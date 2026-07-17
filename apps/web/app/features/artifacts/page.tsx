@@ -1,10 +1,10 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@/components/seo/JsonLd';
+import { JsonLd } from '@shared/components/seo/JsonLd';
 import { breadcrumbSchema } from '@/lib/seo/structured-data';
-import { Header } from '../../../components/layout/Header';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
-import { FeatureGrid, LedgerSection } from '../../../components/marketing/LandingSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { CapabilityGrid, FinalCta } from '@/features/marketing/components/FlagshipSections';
+import { FeatureGrid, LedgerSection } from '@/features/marketing/components/LandingSections';
 
 export const metadata = buildMetadata({
   title: 'AGI Artifacts | Sandboxed Previews, Versions & Downloads',

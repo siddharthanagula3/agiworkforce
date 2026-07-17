@@ -14,7 +14,7 @@ vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ user: null, isLoaded: true }),
   useClerk: () => ({ signOut: vi.fn() }),
 }));
-vi.mock('@/components/marketing/Reveal', () => ({
+vi.mock('@/features/marketing/components/Reveal', () => ({
   Reveal: ({ children }: { children: React.ReactNode }) => children,
 }));
 

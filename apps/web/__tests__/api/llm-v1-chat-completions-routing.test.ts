@@ -65,7 +65,7 @@ vi.mock('@/lib/cors', () => ({
   getSecurityHeaders: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   // resolveAutoModel can pick a Claude model for coding-classified prompts
   // (see this file's docstring / Task #17 note) even though every test here

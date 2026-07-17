@@ -4,8 +4,8 @@ import { useAuth } from '@clerk/nextjs';
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Header } from '../../../components/layout/Header';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
 const inputStyle: React.CSSProperties = {
   background: 'var(--agi-bg-2)',

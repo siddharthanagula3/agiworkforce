@@ -1,11 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@/components/seo/JsonLd';
+import { JsonLd } from '@shared/components/seo/JsonLd';
 import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
-import { Header } from '../../../components/layout/Header';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import { CapabilityGrid, FinalCta } from '../../../components/marketing/FlagshipSections';
-import { Reveal } from '../../../components/marketing/Reveal';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { CapabilityGrid, FinalCta } from '@/features/marketing/components/FlagshipSections';
+import { Reveal } from '@/features/marketing/components/Reveal';
 
 export const metadata = buildMetadata({
   title: 'AGI Memory | Plain-Language Facts You Control',

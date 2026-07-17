@@ -13,7 +13,7 @@ vi.mock('@agiworkforce/providers-factory', () => ({
     createProviderAdapter(providerId, config),
 }));
 
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: (key: string) => getOptionalEnv(key),
 }));
 

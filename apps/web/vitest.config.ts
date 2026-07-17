@@ -48,7 +48,6 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './'),
       '@shared': path.resolve(__dirname, './shared'),
-      '@core': path.resolve(__dirname, './core'),
       '@features': path.resolve(__dirname, './features'),
       // Stub for packages not installed (browser-only, require special runtime env)
       '@webcontainer/api': path.resolve(__dirname, './test/__mocks__/webcontainer-api.ts'),
