@@ -54,6 +54,13 @@ struct OllamaMessage {
     tool_call_id: Option<String>,
 }
 
+/// RETIRED by c2c (2026-07-16): request bodies are now built through the
+/// shared `agiworkforce-llm` serializers (see [`build_ollama_chat_body`]);
+/// byte-parity with this struct's serialization is proven by
+/// `tests/c2c_request_oracle.rs` modulo the enumerated intentional deltas.
+/// Kept until the founder-gated twin-deletion pass (the oracle holds its own
+/// frozen verbatim copy of the old builder).
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 struct OllamaRequest {
     model: String,
@@ -87,6 +94,8 @@ fn resolve_ollama_think(thinking: Option<&crate::core::llm::ThinkingParameter>) 
     }
 }
 
+/// RETIRED by c2c (2026-07-16) — see [`OllamaRequest`].
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize)]
 struct OllamaOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -109,6 +118,134 @@ struct OllamaOptions {
 }
 
 const OLLAMA_DEFAULT_NUM_CTX: u32 = 32768;
+
+/// Convert desktop tool definitions to the shared crate's wire type. Only
+/// `name`/`description`/`input_schema` ever reach a provider payload — the
+/// crate's serializers pick API-bound fields by name, so the executor
+/// metadata below stays client-side by construction.
+fn to_crate_tool_definitions(
+    tools: &[crate::core::llm::ToolDefinition],
+) -> Vec<agiworkforce_llm::ToolDefinition> {
+    tools
+        .iter()
+        .map(|tool| agiworkforce_llm::ToolDefinition {
+            name: tool.name.clone(),
+            description: tool.description.clone(),
+            input_schema: tool.parameters.clone(),
+            is_read_only: false,
+            is_concurrency_safe: false,
+            max_result_size_chars: None,
+            should_defer: false,
+            aliases: Vec::new(),
+            owner: String::new(),
+            permission_class: String::new(),
+            diagnostic_tags: Vec::new(),
+        })
+        .collect()
+}
+
+/// Convert desktop `ChatMessage`s into shared-crate wire messages.
+///
+/// `images` (raw base64, already vision-gated by the caller) attach to the
+/// LAST user message as `ContentBlock::Image` so the crate's nativization
+/// emits them as that message's `images` array — Ollama's native `/api/chat`
+/// vision format. (The retired local builder sent a TOP-LEVEL `images` field,
+/// which `/api/chat` ignores; that placement fix is an enumerated c2c delta.)
+fn to_wire_messages(
+    messages: &[crate::core::llm::ChatMessage],
+    images: Option<&[String]>,
+) -> Vec<agiworkforce_llm::Message> {
+    use agiworkforce_llm::{ContentBlock, Message};
+
+    let last_user_idx = messages.iter().rposition(|m| m.role == "user");
+    messages
+        .iter()
+        .enumerate()
+        .map(|(idx, m)| {
+            if m.role == "tool" {
+                return Message::blocks(
+                    "tool",
+                    vec![ContentBlock::ToolResult {
+                        tool_use_id: m.tool_call_id.clone().unwrap_or_default(),
+                        content: m.content.clone(),
+                        is_error: false,
+                    }],
+                );
+            }
+            let message_images = images
+                .filter(|imgs| !imgs.is_empty() && Some(idx) == last_user_idx)
+                .map(<[String]>::to_vec)
+                .unwrap_or_default();
+            let tool_calls = m.tool_calls.as_deref().unwrap_or_default();
+            if message_images.is_empty() && tool_calls.is_empty() {
+                return Message::text(&m.role, m.content.clone());
+            }
+            let mut blocks: Vec<ContentBlock> = Vec::new();
+            if !m.content.is_empty() {
+                blocks.push(ContentBlock::Text {
+                    text: m.content.clone(),
+                });
+            }
+            for b64 in message_images {
+                blocks.push(ContentBlock::Image {
+                    // The MIME only shapes the intermediate `data:` URL, which
+                    // Ollama nativization strips back to the raw base64.
+                    mime: "image/png".to_string(),
+                    data_b64: b64,
+                });
+            }
+            for tc in tool_calls {
+                blocks.push(ContentBlock::ToolUse {
+                    id: tc.id.clone(),
+                    name: tc.name.clone(),
+                    input: serde_json::from_str(&tc.arguments)
+                        .unwrap_or_else(|_| serde_json::json!({})),
+                });
+            }
+            Message::blocks(&m.role, blocks)
+        })
+        .collect()
+}
+
+/// c2c (2026-07-16): build the native `/api/chat` request body through the
+/// shared `agiworkforce-llm` serializers instead of the retired local
+/// `OllamaRequest` twin. Deliberately does NOT apply the crate's
+/// `compact_ollama_message_values` system-prompt compaction — the desktop
+/// never compacted, and adopting compaction is a separate product decision.
+/// Byte-parity with the retired builder is proven by
+/// `tests/c2c_request_oracle.rs` modulo the enumerated intentional deltas.
+pub(crate) fn build_ollama_chat_body(
+    request: &LLMRequest,
+    effective_messages: &[crate::core::llm::ChatMessage],
+    tools: Option<&[crate::core::llm::ToolDefinition]>,
+    images: Option<&[String]>,
+    stream: bool,
+) -> serde_json::Value {
+    use agiworkforce_llm::serialize::{
+        convert_message_to_openai, ollama_chat_request_body, ollama_nativize_message_values,
+    };
+
+    let wire_messages = to_wire_messages(effective_messages, images);
+    let mut api_messages: Vec<serde_json::Value> = wire_messages
+        .iter()
+        .flat_map(convert_message_to_openai)
+        .collect();
+    ollama_nativize_message_values(&mut api_messages);
+
+    let crate_tools = tools.map(to_crate_tool_definitions);
+    ollama_chat_request_body(
+        &request.model,
+        api_messages,
+        crate_tools.as_deref(),
+        &agiworkforce_llm::OllamaRequestOpts {
+            max_tokens: request.max_tokens.unwrap_or(0),
+            temperature: request.temperature,
+            think: resolve_ollama_think(request.thinking.as_ref()),
+            num_ctx: Some(OLLAMA_DEFAULT_NUM_CTX),
+            stream,
+        },
+    )
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct OllamaResponse {
@@ -212,7 +349,10 @@ impl OllamaProvider {
             || m.contains("minicpm-v")
     }
 
-    /// Convert a list of `ChatMessage`s to `OllamaMessage`s.
+    /// RETIRED by c2c (2026-07-16) — see [`OllamaRequest`]. Message conversion
+    /// now flows through the shared crate serializers in
+    /// [`build_ollama_chat_body`].
+    #[allow(dead_code)]
     fn to_ollama_messages(messages: &[crate::core::llm::ChatMessage]) -> Vec<OllamaMessage> {
         messages
             .iter()
@@ -275,7 +415,7 @@ impl LLMProvider for OllamaProvider {
         // When the model lacks native tool support we inject tool descriptions into the
         // system prompt instead and will parse tool calls from the plain-text response.
         let mut prompt_injected_tool_nonce: Option<String> = None;
-        let (tools, effective_messages) = if let Some(req_tools) = &request.tools {
+        let (native_tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
                 let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
                     &self.client,
@@ -284,24 +424,7 @@ impl LLMProvider for OllamaProvider {
                 )
                 .await;
                 if caps.supports_tools {
-                    (
-                        Some(
-                            req_tools
-                                .iter()
-                                .map(|tool| {
-                                    serde_json::json!({
-                                        "type": "function",
-                                        "function": {
-                                            "name": tool.name,
-                                            "description": tool.description,
-                                            "parameters": tool.parameters
-                                        }
-                                    })
-                                })
-                                .collect::<Vec<_>>(),
-                        ),
-                        request.messages.clone(),
-                    )
+                    (Some(req_tools.as_slice()), request.messages.clone())
                 } else {
                     let capped_tools = cap_tools_for_prompt_injection(req_tools);
                     tracing::info!(
@@ -325,25 +448,19 @@ impl LLMProvider for OllamaProvider {
             (None, request.messages.clone())
         };
 
-        let ollama_request = OllamaRequest {
-            model: request.model.clone(),
-            messages: Self::to_ollama_messages(&effective_messages),
-            stream: Some(false),
-            options: Some(OllamaOptions {
-                temperature: request.temperature,
-                num_predict: request.max_tokens,
-                num_ctx: Some(OLLAMA_DEFAULT_NUM_CTX),
-            }),
-            images,
-            tools,
-            think: resolve_ollama_think(request.thinking.as_ref()),
-        };
+        let body = build_ollama_chat_body(
+            request,
+            &effective_messages,
+            native_tools,
+            images.as_deref(),
+            false,
+        );
 
         let response = self
             .client
             .post(format!("{}/api/chat", self.base_url))
             .header("Content-Type", "application/json")
-            .json(&ollama_request)
+            .json(&body)
             .send()
             .await
             .map_err(|e| {
@@ -505,7 +622,7 @@ impl LLMProvider for OllamaProvider {
         // When the model lacks native tool support we inject tool descriptions into the
         // system prompt and will parse tool calls from the accumulated text on the final chunk.
         let mut prompt_injected_tool_nonce: Option<String> = None;
-        let (tools, effective_messages) = if let Some(req_tools) = &request.tools {
+        let (native_tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
                 let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
                     &self.client,
@@ -514,24 +631,7 @@ impl LLMProvider for OllamaProvider {
                 )
                 .await;
                 if caps.supports_tools {
-                    (
-                        Some(
-                            req_tools
-                                .iter()
-                                .map(|tool| {
-                                    serde_json::json!({
-                                        "type": "function",
-                                        "function": {
-                                            "name": tool.name,
-                                            "description": tool.description,
-                                            "parameters": tool.parameters
-                                        }
-                                    })
-                                })
-                                .collect::<Vec<_>>(),
-                        ),
-                        request.messages.clone(),
-                    )
+                    (Some(req_tools.as_slice()), request.messages.clone())
                 } else {
                     let capped_tools = cap_tools_for_prompt_injection(req_tools);
                     tracing::info!(
@@ -555,19 +655,13 @@ impl LLMProvider for OllamaProvider {
             (None, request.messages.clone())
         };
 
-        let ollama_request = OllamaRequest {
-            model: request.model.clone(),
-            messages: Self::to_ollama_messages(&effective_messages),
-            stream: Some(true),
-            options: Some(OllamaOptions {
-                temperature: request.temperature,
-                num_predict: request.max_tokens,
-                num_ctx: Some(OLLAMA_DEFAULT_NUM_CTX),
-            }),
-            images,
-            tools,
-            think: resolve_ollama_think(request.thinking.as_ref()),
-        };
+        let body = build_ollama_chat_body(
+            request,
+            &effective_messages,
+            native_tools,
+            images.as_deref(),
+            true,
+        );
 
         tracing::debug!(
             "Starting Ollama streaming request for model: {}",
@@ -578,7 +672,7 @@ impl LLMProvider for OllamaProvider {
             .client
             .post(format!("{}/api/chat", self.base_url))
             .header("Content-Type", "application/json")
-            .json(&ollama_request)
+            .json(&body)
             .send()
             .await
             .map_err(|e| {
