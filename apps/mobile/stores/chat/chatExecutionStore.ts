@@ -782,6 +782,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         selection: requestedModel,
         message: content,
         subscriptionTier: useTierStore.getState().tier,
+        // PRIOR turns only: the current user message is not written to the
+        // store until after this dispatch (first setState below), so this is
+        // the same "history excludes the outgoing turn" contract the web
+        // router uses. Enables the shared sticky-pivot/long-context continuity.
+        history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
         attachments: attachments?.map((attachment) => ({
           mime: attachment.mimeType,
           type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',

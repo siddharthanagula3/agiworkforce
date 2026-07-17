@@ -49,4 +49,50 @@ describe('Mobile Managed Cloud dispatch routing', () => {
       harnessId: 'perplexity/chat-completions',
     });
   });
+
+  // Conversation continuity: mobile must apply the same 5-turn sticky pivot as
+  // the web server path (request-processor.ts) so a conversation routes to the
+  // same model on every surface. A low-signal turn inside a coding conversation
+  // snaps to `coding` — without the prior turns it would classify as `general`.
+  it('applies the sticky-pivot: a coding history changes a low-signal turn to coding', () => {
+    // Phrases confirmed by @agiworkforce/routing classify.test.ts: these each
+    // classify as `coding`, and the neutral phrase classifies as `general`.
+    const codingHistory = [
+      { role: 'user' as const, content: 'refactor this class' },
+      { role: 'user' as const, content: 'def hello(): pass' },
+      { role: 'user' as const, content: 'explain this function definition' },
+    ];
+    const lowSignalTurn =
+      'I would like to discuss something interesting that requires some neutral conversational handling without specific signals';
+
+    const withoutHistory = resolveMobileCloudDispatch({
+      selection: 'auto-premium',
+      message: lowSignalTurn,
+      subscriptionTier: 'max',
+    });
+    const withCodingHistory = resolveMobileCloudDispatch({
+      selection: 'auto-premium',
+      message: lowSignalTurn,
+      subscriptionTier: 'max',
+      history: codingHistory,
+    });
+
+    expect(withoutHistory).toMatchObject({ status: 'selected', taskType: 'general' });
+    expect(withCodingHistory).toMatchObject({ status: 'selected', taskType: 'coding' });
+  });
+
+  // The >50K-token long-context guard runs before the sticky pivot: a long
+  // conversation forces `long_context` regardless of the current turn's type.
+  it('applies the long-context guard once cumulative tokens exceed 50K', () => {
+    // ~57K estimated tokens (chars / 3.5) of prior context.
+    const longPriorTurn = { role: 'user' as const, content: 'a '.repeat(100_000) };
+    const decision = resolveMobileCloudDispatch({
+      selection: 'auto-premium',
+      message: 'and now summarize the key point',
+      subscriptionTier: 'max',
+      history: [longPriorTurn],
+    });
+
+    expect(decision).toMatchObject({ status: 'selected', taskType: 'long_context' });
+  });
 });
