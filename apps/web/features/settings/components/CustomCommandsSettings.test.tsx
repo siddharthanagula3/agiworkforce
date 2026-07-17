@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act } from '@testing-library/react';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 function getStore() {
   return useSettingsStore.getState();

@@ -13,7 +13,7 @@ import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '@agiworkforce/unified-chat';
 import type { ChatMessage, Conversation } from '@agiworkforce/unified-chat';
-import type { ToolExecution } from '@/stores/unified/chat/toolStore';
+import type { ToolExecution } from '@shared/stores/tool-store';
 import { useModelStore } from '@shared/stores/model-store';
 
 // ============================================================================

@@ -18,7 +18,7 @@ vi.mock('@/lib/client/csrf', () => ({
 }));
 
 import { useChatStream } from './useChatStream';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useChatStore, type Message } from '@/stores/chatStore';
+import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { isStaleActiveConversation } from '@features/chat/lib/staleActiveConversation';
 
 /**

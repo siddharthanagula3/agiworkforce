@@ -17,7 +17,7 @@ import {
 } from '@agiworkforce/types';
 import { ChatComposerNew } from '@/features/chat/components/Composer/ChatComposerNew';
 import { useProjectMetaStore } from '@/features/projects/stores/project-meta-store';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';

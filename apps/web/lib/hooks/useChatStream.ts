@@ -18,7 +18,7 @@ import {
   type MessageMetadata,
   type MessageResearchState,
   type MessageToolEntry,
-} from '@/stores/chatStore';
+} from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { Effort } from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';

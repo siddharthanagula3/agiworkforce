@@ -37,9 +37,9 @@ import {
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
 import { useConversations } from '@/lib/hooks/useConversations';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';

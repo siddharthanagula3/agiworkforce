@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/utils/cn';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
 import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';

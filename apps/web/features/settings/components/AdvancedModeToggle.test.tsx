@@ -146,7 +146,7 @@ vi.mock('@shared/config/llm', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock @/stores/settingsStore
+// Mock @shared/stores/web-settings-store
 // ---------------------------------------------------------------------------
 
 const mockSettingsState: {
@@ -161,7 +161,7 @@ const mockSettingsState: {
   setAdvancedModelId: vi.fn(),
 };
 
-vi.mock('@/stores/settingsStore', () => ({
+vi.mock('@shared/stores/web-settings-store', () => ({
   useSettingsStore: (selector: (s: typeof mockSettingsState) => unknown) =>
     selector(mockSettingsState),
 }));

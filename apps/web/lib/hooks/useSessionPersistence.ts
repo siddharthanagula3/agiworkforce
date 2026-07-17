@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import * as sessionStorage from '@/lib/session/sessionStorage';
-import type { EnhancedMessage } from '@/stores/unified/chat/types';
+import type { EnhancedMessage } from '@shared/stores/unified-chat-types';
 
 /**
  * Persisted session data structure

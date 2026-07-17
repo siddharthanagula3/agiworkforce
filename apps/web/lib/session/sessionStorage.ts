@@ -13,7 +13,7 @@
  */
 
 import { safeGetJSON, safeSetJSON } from '@shared/utils/localStorage';
-import type { EnhancedMessage } from '@/stores/unified/chat/types';
+import type { EnhancedMessage } from '@shared/stores/unified-chat-types';
 import type { StoredChatSession, StoredMessage, SessionStorageMetadata } from '@agiworkforce/types';
 
 // Session storage schema version for migrations

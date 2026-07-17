@@ -60,7 +60,7 @@ import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-det
 import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforce/artifacts';
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore } from '../../stores/artifacts-store';
-import { useChatStore, type GeneratedFileMetadataEntry } from '@/stores/chatStore';
+import { useChatStore, type GeneratedFileMetadataEntry } from '@shared/stores/web-chat-store';
 import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
@@ -71,7 +71,7 @@ import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
 import { ResearchActivity } from '../research/ResearchActivity';
-import type { MessageResearchState } from '@/stores/chatStore';
+import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { dedupeResearchSources } from '../../utils/research-sources';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';

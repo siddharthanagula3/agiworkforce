@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 
 // Real Stripe-backed shapes returned by the web billing routes.

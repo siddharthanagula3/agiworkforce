@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Switch } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
-import { useBillingStore } from '@/stores/unified/auth';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { setTelemetryConsentCache } from '@/lib/sentry-shared';
 import {
   fetchPreferenceNamespace,

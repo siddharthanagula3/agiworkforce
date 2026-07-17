@@ -22,7 +22,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { isCapabilityEnabled } from '@agiworkforce/types';
 import { usePlatform } from '@agiworkforce/unified-chat';
 import {

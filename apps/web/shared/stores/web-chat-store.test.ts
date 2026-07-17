@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useChatStore, selectIsActiveConversationStreaming } from './chatStore';
+import { useChatStore, selectIsActiveConversationStreaming } from './web-chat-store';
 
 /**
  * Regression coverage for the cross-conversation streaming-flag leak

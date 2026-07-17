@@ -78,7 +78,7 @@ vi.mock('@shared/stores/model-store', () => ({
 
 // Billing store: return 'max' tier so both models pass the TIER check.
 // The env-gated model must still be locked by the env check alone.
-vi.mock('@/stores/unified/auth', () => ({
+vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (
     selector: (s: {
       subscription: { tier: string } | null;

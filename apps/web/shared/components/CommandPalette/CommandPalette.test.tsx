@@ -46,7 +46,7 @@ vi.mock('next-themes', () => ({
 
 // ChatStore
 const mockToggleSidebar = vi.fn();
-vi.mock('@/stores/chatStore', () => ({
+vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: () => ({
     sidebarCollapsed: false,
     toggleSidebar: mockToggleSidebar,
