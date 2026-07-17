@@ -164,6 +164,8 @@ async fn trace_output_of_real_request_contains_no_key_material() {
         temperature: None,
         tools: None,
         thinking_budget: None,
+        num_ctx: None,
+        ollama_think: None,
         idle_timeout: Duration::from_secs(5),
     };
 

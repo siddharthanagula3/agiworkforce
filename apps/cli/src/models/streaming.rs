@@ -282,6 +282,8 @@ async fn run_spec(
         temperature,
         tools,
         thinking_budget,
+        num_ctx: None,
+        ollama_think: None,
         idle_timeout: STREAM_IDLE_TIMEOUT,
     };
     let mut on_event = |event: StreamEvent| {
