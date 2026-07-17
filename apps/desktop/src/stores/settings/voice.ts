@@ -988,6 +988,30 @@ interface VoiceTranscriptResult {
   isCommand: boolean;
 }
 
+// The Rust DictationCoordinator is the single lifecycle owner for every
+// dictation path (docs/plans/desktop-system-dictation.md). The in-app webview
+// path claims a session before capturing and reports transitions, so it can
+// never run concurrently with another dictation pipeline. Coordinator
+// transport failures are logged but non-fatal: an IPC hiccup must not brick
+// in-app dictation, only a genuine "another session is active" refusal does.
+async function advanceDictationSession(sessionId: string | null, phase: string): Promise<void> {
+  if (!sessionId) return;
+  try {
+    await invoke('dictation_session_advance', { sessionId, phase });
+  } catch (e) {
+    console.warn('dictation_session_advance failed:', e);
+  }
+}
+
+async function endDictationSession(sessionId: string | null, outcome: string): Promise<void> {
+  if (!sessionId) return;
+  try {
+    await invoke('dictation_session_end', { sessionId, outcome });
+  } catch (e) {
+    console.warn('dictation_session_end failed:', e);
+  }
+}
+
 interface VoiceInputState {
   voiceMode: VoiceInputMode;
   transcript: string;
@@ -1002,6 +1026,8 @@ interface VoiceInputState {
   _recorder: MediaRecorder | null;
   _audioChunks: Blob[];
   _startAborted: boolean;
+  /** Session ID issued by the Rust dictation coordinator for this capture. */
+  _dictationSessionId: string | null;
   startListening: () => Promise<void>;
   stopListening: () => Promise<void>;
   confirmTranscript: () => void;
@@ -1030,20 +1056,42 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         _recorder: null,
         _audioChunks: [],
         _startAborted: false,
+        _dictationSessionId: null,
 
         startListening: async () => {
+          // Claim the single dictation pipeline before touching the
+          // microphone; the coordinator refuses a second concurrent session.
+          let dictationSessionId: string | null = null;
+          try {
+            dictationSessionId = await invoke<string>('dictation_session_begin', {
+              source: 'in_app',
+            });
+          } catch (e) {
+            const message = String(e);
+            if (message.includes('already active')) {
+              set({
+                voiceMode: 'idle',
+                voiceError: 'Another dictation session is already active.',
+              });
+              return;
+            }
+            console.warn('dictation_session_begin failed:', e);
+          }
+
           set({
             voiceMode: 'listening',
             transcript: '',
             voiceError: null,
             lastTranscriptIsCommand: false,
             _startAborted: false,
+            _dictationSessionId: dictationSessionId,
           });
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             if (get()._startAborted) {
               stream.getTracks().forEach((t) => t.stop());
-              set({ voiceMode: 'idle', _startAborted: false });
+              set({ voiceMode: 'idle', _startAborted: false, _dictationSessionId: null });
+              await endDictationSession(dictationSessionId, 'cancelled');
               return;
             }
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -1066,18 +1114,21 @@ export const useVoiceInputStore = create<VoiceInputState>()(
                 : err.name === 'NotFoundError'
                   ? 'No microphone found.'
                   : String(e);
-            set({ voiceMode: 'idle', voiceError: msg });
+            set({ voiceMode: 'idle', voiceError: msg, _dictationSessionId: null });
+            await endDictationSession(dictationSessionId, 'failed');
           }
         },
 
         stopListening: async () => {
-          const { voiceMode, _recorder, _mediaStream } = get();
+          const { voiceMode, _recorder, _mediaStream, _dictationSessionId } = get();
           if (voiceMode !== 'listening') return;
           if (!_recorder) {
-            set({ _startAborted: true, voiceMode: 'idle' });
+            set({ _startAborted: true, voiceMode: 'idle', _dictationSessionId: null });
+            await endDictationSession(_dictationSessionId, 'cancelled');
             return;
           }
           set({ voiceMode: 'transcribing' });
+          await advanceDictationSession(_dictationSessionId, 'transcribing');
           await new Promise<void>((resolve) => {
             _recorder.onstop = () => resolve();
             _recorder.stop();
@@ -1093,7 +1144,9 @@ export const useVoiceInputStore = create<VoiceInputState>()(
                 _mediaStream: null,
                 _audioChunks: [],
                 _startAborted: false,
+                _dictationSessionId: null,
               });
+              await endDictationSession(_dictationSessionId, 'cancelled');
               return;
             }
             const arrayBuffer = await blob.arrayBuffer();
@@ -1114,7 +1167,9 @@ export const useVoiceInputStore = create<VoiceInputState>()(
                 _mediaStream: null,
                 _audioChunks: [],
                 _startAborted: false,
+                _dictationSessionId: null,
               });
+              await endDictationSession(_dictationSessionId, 'cancelled');
               return;
             }
             if (get().postProcessingMode === 'ai') set({ voiceMode: 'processing' });
@@ -1127,7 +1182,13 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               _mediaStream: null,
               _audioChunks: [],
               _startAborted: false,
+              _dictationSessionId: null,
             });
+            // The in-app pipeline's work ends at the editable preview; the
+            // user inserts into the composer manually (confirmTranscript), so
+            // the coordinator's injecting phase applies only to system-level
+            // injection (plan phase 4+).
+            await endDictationSession(_dictationSessionId, 'completed');
           } catch (e) {
             set({
               voiceMode: 'idle',
@@ -1136,7 +1197,9 @@ export const useVoiceInputStore = create<VoiceInputState>()(
               _mediaStream: null,
               _audioChunks: [],
               _startAborted: false,
+              _dictationSessionId: null,
             });
+            await endDictationSession(_dictationSessionId, 'failed');
           }
         },
 

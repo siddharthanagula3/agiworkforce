@@ -40,6 +40,13 @@ export interface VoiceCapabilities {
   localSttModel: string | null;
   localTtsAvailable: boolean;
   localTtsVoice: string | null;
+  /**
+   * Capability probe for system-wide (outside-the-app) dictation. Stays
+   * false until the release gates in docs/plans/desktop-system-dictation.md
+   * pass (DESKTOP-SYSTEM-DICTATION-UNWIRED-01); the settings UI must present
+   * the global control as unavailable while false.
+   */
+  systemDictationAvailable: boolean;
 }
 
 export interface TtsVoice {
@@ -565,7 +572,7 @@ export async function voiceStopBargeInMonitoring(): Promise<boolean> {
 }
 
 // =============================================================================
-// 11. Native Speech Recording — Wispr Flow (2)
+// 11. Native Speech Recording — AGI Dictation (2)
 // =============================================================================
 
 /** Start native audio recording via cpal (OS-level microphone capture). */

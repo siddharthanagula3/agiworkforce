@@ -2017,14 +2017,20 @@ pub fn run() {
             crate::sys::commands::messaging::messaging_get_status,
             crate::sys::commands::messaging::messaging_disconnect,
 
-            // Global fn-key Push-to-Talk (system-wide, works outside the app window)
+            // AGI Dictation lifecycle (coordinator sessions + global hotkey hook).
+            // System-wide dictation is NOT available yet; the coordinator
+            // fail-closes global sessions (DESKTOP-SYSTEM-DICTATION-UNWIRED-01).
+            crate::sys::commands::voice_global::dictation_session_begin,
+            crate::sys::commands::voice_global::dictation_session_advance,
+            crate::sys::commands::voice_global::dictation_session_end,
+            crate::sys::commands::voice_global::dictation_session_snapshot,
             crate::sys::commands::voice_global::voice_start_global_ptt,
             crate::sys::commands::voice_global::voice_stop_global_ptt,
             crate::sys::commands::voice_global::voice_inject_text,
 
             // Voice (TTS, Wake Word, PTT)
             crate::sys::commands::voice::voice_tts_speak,
-            // Wispr Flow speech recording stubs
+            // AGI Dictation in-app speech recording
             crate::sys::commands::voice::speech_start_recording,
             crate::sys::commands::voice::speech_stop_and_transcribe,
 

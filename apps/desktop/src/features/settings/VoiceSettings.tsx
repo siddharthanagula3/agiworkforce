@@ -191,6 +191,9 @@ export function VoiceSettings() {
   const isProcessing = mode === 'processing';
   const isBusy = isRecording || isTranscribing || isProcessing;
 
+  // Fail closed: null capabilities (probe not loaded) presents as unavailable.
+  const systemDictationAvailable = capabilities?.systemDictationAvailable === true;
+
   const selectedPostProcess = POST_PROCESSING_OPTIONS.find((o) => o.value === postProcessingMode);
 
   return (
@@ -198,8 +201,8 @@ export function VoiceSettings() {
       <div>
         <h3 className="text-lg font-semibold mb-1">Voice Dictation</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          Hold a hotkey anywhere in the app to dictate text — Wispr Flow style. The transcription is
-          automatically inserted into the chat composer.
+          Hold a hotkey anywhere in the app to dictate text. The transcription is automatically
+          inserted into the chat composer.
         </p>
 
         <div className="rounded-lg border border-border bg-card p-6 space-y-5">
@@ -470,18 +473,26 @@ export function VoiceSettings() {
             </div>
           </div>
 
-          {/* Global Push-to-Talk */}
+          {/* System-wide dictation — honest capability gate. The backend probe
+              (capabilities.systemDictationAvailable) stays false until the
+              release gates in docs/plans/desktop-system-dictation.md pass
+              (DESKTOP-SYSTEM-DICTATION-UNWIRED-01), so this control must not
+              advertise or enable a global hotkey that cannot record. */}
           <div className="space-y-2 pt-2 border-t border-border">
             <div className="flex items-center justify-between">
               <div>
-                <Label>Global Push-to-Talk (Fn key)</Label>
+                <Label>System-wide Dictation</Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Hold the Fn key system-wide to record and auto-inject text.
+                  {systemDictationAvailable
+                    ? 'Hold the Fn key system-wide to record and inject text.'
+                    : 'Not available in this build. Dictation works inside the AGI window using the hotkey above.'}
                 </p>
               </div>
               <button
                 type="button"
+                disabled={!systemDictationAvailable}
                 onClick={() => {
+                  if (!systemDictationAvailable) return;
                   if (globalPttActive) {
                     void stopGlobalPtt();
                   } else {
@@ -490,14 +501,19 @@ export function VoiceSettings() {
                 }}
                 className={[
                   'px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                  globalPttActive
+                  globalPttActive && systemDictationAvailable
                     ? 'bg-green-500/20 text-green-400 border border-green-500/50'
                     : 'bg-muted/40 text-foreground border border-border hover:bg-accent',
+                  !systemDictationAvailable ? 'opacity-50 cursor-not-allowed' : '',
                 ].join(' ')}
               >
                 <span className="flex items-center gap-1.5">
                   <Mic size={12} />
-                  {globalPttActive ? 'Active' : 'Enable'}
+                  {!systemDictationAvailable
+                    ? 'Unavailable'
+                    : globalPttActive
+                      ? 'Active'
+                      : 'Enable'}
                 </span>
               </button>
             </div>

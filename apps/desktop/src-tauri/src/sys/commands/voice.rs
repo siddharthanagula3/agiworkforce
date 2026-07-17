@@ -141,7 +141,7 @@ pub struct VoiceState {
     pub local_whisper: Arc<RwLock<LocalWhisperState>>,
     /// Local Piper TTS state
     pub local_piper: Arc<RwLock<LocalPiperState>>,
-    /// Active Wispr Flow recording session (if any).
+    /// Active AGI Dictation recording session (if any).
     /// Uses `std::sync::Mutex` because cpal::Stream is not Send.
     pub recording: Arc<std::sync::Mutex<Option<AudioRecordingState>>>,
 }
@@ -176,7 +176,13 @@ impl Default for VoiceState {
     }
 }
 
+// camelCase on the wire: the frontend `VoiceCapabilities` interface in
+// `apps/desktop/src/api/voice.ts` has always declared camelCase fields, but
+// this struct used to serialize snake_case, so every capability read as
+// `undefined` (TTS/VAD/local-model status permanently displayed as
+// unavailable). Keep the two in sync.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VoiceCapabilities {
     pub tts_available: bool,
     pub tts_provider: String,
@@ -195,6 +201,12 @@ pub struct VoiceCapabilities {
     pub local_tts_available: bool,
     /// Current local Piper voice ID
     pub local_tts_voice: Option<String>,
+    /// Capability probe for system-wide (outside-the-app) dictation.
+    /// Sourced from the dictation coordinator's single truth; stays `false`
+    /// until the release gates in `docs/plans/desktop-system-dictation.md`
+    /// pass (`DESKTOP-SYSTEM-DICTATION-UNWIRED-01`). The settings UI must
+    /// present the global control as unavailable while this is false.
+    pub system_dictation_available: bool,
 }
 
 // =============================================================================
@@ -737,6 +749,8 @@ pub async fn voice_get_capabilities(
         } else {
             None
         },
+        system_dictation_available: crate::features::speech::dictation::system_dictation_available(
+        ),
     })
 }
 
@@ -1886,10 +1900,10 @@ pub async fn voice_tts_is_playing(
 }
 
 // =============================================================================
-// Wispr Flow Speech Recording / Transcription
+// AGI Dictation Speech Recording / Transcription
 // =============================================================================
 
-/// Result of a speech-to-text transcription via Wispr Flow dictation
+/// Result of a speech-to-text transcription via AGI Dictation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpeechTranscriptResult {
     pub text: String,
@@ -1958,7 +1972,56 @@ fn resample_linear(samples: &[f32], src_rate: u32, target_rate: u32) -> Vec<f32>
     out
 }
 
-/// Start audio recording for Wispr Flow dictation.
+/// Build a cpal input stream for any sized sample type, converting to mono
+/// f32 into the shared buffer. The device's ACTUAL sample format decides `T`
+/// (see the dispatch in `speech_start_recording`); assuming f32 broke every
+/// device whose default input config is i16/u16 (common on Windows WASAPI
+/// and many USB microphones).
+fn build_dictation_input_stream<T>(
+    device: &cpal::Device,
+    config: &cpal::StreamConfig,
+    channels: usize,
+    stop_flag: Arc<std::sync::atomic::AtomicBool>,
+    samples: Arc<std::sync::Mutex<Vec<f32>>>,
+) -> Result<cpal::Stream, cpal::BuildStreamError>
+where
+    T: cpal::SizedSample,
+    f32: cpal::FromSample<T>,
+{
+    use cpal::Sample;
+
+    device.build_input_stream(
+        config,
+        move |data: &[T], _: &cpal::InputCallbackInfo| {
+            if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
+            // Convert to f32 and downmix to mono if multi-channel.
+            let mono: Vec<f32> = if channels > 1 {
+                data.chunks(channels)
+                    .map(|chunk| {
+                        chunk
+                            .iter()
+                            .map(|sample| f32::from_sample(*sample))
+                            .sum::<f32>()
+                            / channels as f32
+                    })
+                    .collect()
+            } else {
+                data.iter().map(|sample| f32::from_sample(*sample)).collect()
+            };
+            if let Ok(mut buf) = samples.lock() {
+                buf.extend_from_slice(&mono);
+            }
+        },
+        |err| {
+            tracing::error!("[dictation] Audio stream error: {}", err);
+        },
+        None,
+    )
+}
+
+/// Start audio recording for AGI Dictation.
 ///
 /// Opens the system default input device via cpal, spawns a dedicated OS thread
 /// (because `cpal::Stream` is not `Send`), and begins collecting mono f32 samples
@@ -1991,7 +2054,7 @@ pub async fn speech_start_recording(
         .ok_or_else(|| "No default audio input device found".to_string())?;
 
     let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
-    tracing::info!("[wispr] Using audio input device: {}", device_name);
+    tracing::info!("[dictation] Using audio input device: {}", device_name);
 
     let supported_config = device
         .default_input_config()
@@ -1999,10 +2062,12 @@ pub async fn speech_start_recording(
 
     let sample_rate = supported_config.sample_rate().0;
     let channels = supported_config.channels();
+    let sample_format = supported_config.sample_format();
     tracing::info!(
-        "[wispr] Audio config: {} Hz, {} channel(s)",
+        "[dictation] Audio config: {} Hz, {} channel(s), {:?} samples",
         sample_rate,
-        channels
+        channels,
+        sample_format
     );
 
     let stop_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -2016,54 +2081,82 @@ pub async fn speech_start_recording(
     // Spawn a dedicated OS thread for the cpal stream (not Send).
     let config_for_stream: cpal::StreamConfig = supported_config.into();
     let thread_handle = std::thread::spawn(move || {
-        let stream_result = device.build_input_stream(
-            &config_for_stream,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                if stop_flag_stream.load(std::sync::atomic::Ordering::Relaxed) {
-                    return;
-                }
-                // Convert to mono if multi-channel
-                let mono: Vec<f32> = if ch > 1 {
-                    data.chunks(ch)
-                        .map(|chunk| chunk.iter().sum::<f32>() / ch as f32)
-                        .collect()
-                } else {
-                    data.to_vec()
-                };
-                if let Ok(mut buf) = samples_cb.lock() {
-                    buf.extend_from_slice(&mono);
-                }
-            },
-            |err| {
-                tracing::error!("[wispr] Audio stream error: {}", err);
-            },
-            None,
-        );
+        // Dispatch on the device's actual sample format instead of assuming
+        // f32 — the previous f32-only build failed on i16/u16 devices.
+        let stream_result = match sample_format {
+            cpal::SampleFormat::F32 => build_dictation_input_stream::<f32>(
+                &device,
+                &config_for_stream,
+                ch,
+                stop_flag_stream,
+                samples_cb,
+            ),
+            cpal::SampleFormat::I16 => build_dictation_input_stream::<i16>(
+                &device,
+                &config_for_stream,
+                ch,
+                stop_flag_stream,
+                samples_cb,
+            ),
+            cpal::SampleFormat::U16 => build_dictation_input_stream::<u16>(
+                &device,
+                &config_for_stream,
+                ch,
+                stop_flag_stream,
+                samples_cb,
+            ),
+            cpal::SampleFormat::I32 => build_dictation_input_stream::<i32>(
+                &device,
+                &config_for_stream,
+                ch,
+                stop_flag_stream,
+                samples_cb,
+            ),
+            cpal::SampleFormat::U8 => build_dictation_input_stream::<u8>(
+                &device,
+                &config_for_stream,
+                ch,
+                stop_flag_stream,
+                samples_cb,
+            ),
+            cpal::SampleFormat::F64 => build_dictation_input_stream::<f64>(
+                &device,
+                &config_for_stream,
+                ch,
+                stop_flag_stream,
+                samples_cb,
+            ),
+            other => {
+                tracing::error!("[dictation] Unsupported input sample format: {:?}", other);
+                return;
+            }
+        };
 
         match stream_result {
             Ok(stream) => {
                 if let Err(e) = stream.play() {
-                    tracing::error!("[wispr] Failed to start audio stream: {}", e);
+                    tracing::error!("[dictation] Failed to start audio stream: {}", e);
                     return;
                 }
-                tracing::info!("[wispr] Audio recording stream started");
+                tracing::info!("[dictation] Audio recording stream started");
                 // Keep the thread (and hence the stream) alive until stop_flag is set.
                 // Poll at 50 ms intervals.
                 while !stop_flag_poll.load(std::sync::atomic::Ordering::Relaxed) {
                     std::thread::sleep(std::time::Duration::from_millis(50));
                 }
                 // Stream is dropped here when thread exits, stopping capture.
-                tracing::info!("[wispr] Audio recording stream stopped");
+                tracing::info!("[dictation] Audio recording stream stopped");
             }
             Err(e) => {
-                tracing::error!("[wispr] Failed to build input stream: {}", e);
+                tracing::error!("[dictation] Failed to build input stream: {}", e);
             }
         }
     });
 
-    // Wait briefly (up to ~200ms) for stream to begin capturing, so the caller
-    // doesn't get Ok before the thread has actually started. This is best-effort.
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    // Wait briefly for the stream to begin capturing, so the caller doesn't
+    // get Ok before the thread has actually started. Best-effort, and async
+    // so a Tokio worker thread is not blocked.
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // Store the recording state
     {
@@ -2084,7 +2177,10 @@ pub async fn speech_start_recording(
     }
 
     let _ = app_handle.emit("voice:recording:started", &_provider);
-    tracing::info!("[wispr] Recording session started (provider={})", _provider);
+    tracing::info!(
+        "[dictation] Recording session started (provider={})",
+        _provider
+    );
     Ok(())
 }
 
@@ -2121,9 +2217,23 @@ pub async fn speech_stop_and_transcribe(
         .stop_flag
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
-    // Join the recording thread (give it up to 2 seconds)
+    // Wait for the recording thread, bounded to 2 seconds. The capture thread
+    // polls the stop flag every 50 ms, so it normally finishes almost
+    // immediately — but a wedged audio driver must not be able to hold this
+    // command (and its Tokio worker) hostage with an unbounded join().
     if let Some(handle) = recording.thread_handle {
-        let _ = handle.join();
+        let mut waited_ms = 0u64;
+        while !handle.is_finished() && waited_ms < 2_000 {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            waited_ms += 25;
+        }
+        if handle.is_finished() {
+            let _ = handle.join();
+        } else {
+            tracing::warn!(
+                "[dictation] capture thread did not stop within 2s; detaching (samples captured so far are used)"
+            );
+        }
     }
 
     // Extract collected samples
@@ -2139,7 +2249,7 @@ pub async fn speech_stop_and_transcribe(
 
     let duration_secs = raw_samples.len() as f32 / recording.sample_rate as f32;
     tracing::info!(
-        "[wispr] Captured {} samples ({:.1}s at {} Hz)",
+        "[dictation] Captured {} samples ({:.1}s at {} Hz)",
         raw_samples.len(),
         duration_secs,
         recording.sample_rate
@@ -2154,12 +2264,12 @@ pub async fn speech_stop_and_transcribe(
 
     // Write to temp file
     let temp_dir = std::env::temp_dir();
-    let temp_file = temp_dir.join(format!("wispr_{}.wav", uuid::Uuid::new_v4()));
+    let temp_file = temp_dir.join(format!("agi_dictation_{}.wav", uuid::Uuid::new_v4()));
     std::fs::write(&temp_file, &wav_bytes)
         .map_err(|e| format!("Failed to write temp WAV file: {}", e))?;
 
     tracing::info!(
-        "[wispr] WAV written to {:?} ({} bytes)",
+        "[dictation] WAV written to {:?} ({} bytes)",
         temp_file,
         wav_bytes.len()
     );
@@ -2205,7 +2315,7 @@ pub async fn speech_stop_and_transcribe(
 
     match transcription {
         Ok(vt) => {
-            tracing::info!("[wispr] Transcription complete: {} chars", vt.text.len());
+            tracing::info!("[dictation] Transcription complete: {} chars", vt.text.len());
             let _ = app_handle.emit("voice:transcription:complete", &vt);
             Ok(SpeechTranscriptResult {
                 text: vt.text,
@@ -2214,7 +2324,7 @@ pub async fn speech_stop_and_transcribe(
             })
         }
         Err(e) => {
-            tracing::error!("[wispr] Transcription failed: {}", e);
+            tracing::error!("[dictation] Transcription failed: {}", e);
             Err(format!("Transcription failed: {}", e))
         }
     }

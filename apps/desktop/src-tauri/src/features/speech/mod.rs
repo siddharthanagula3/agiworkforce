@@ -1,5 +1,6 @@
 pub mod barge_in;
 pub mod deepgram;
+pub mod dictation;
 pub mod local_stt;
 pub mod local_tts;
 pub mod ptt;
