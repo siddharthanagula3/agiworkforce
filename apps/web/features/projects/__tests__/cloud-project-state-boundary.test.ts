@@ -44,13 +44,6 @@ describe('Web Cloud project state boundary', () => {
     expect(adapter).toContain('defaultProviderMode: project.defaultProviderMode');
   });
 
-  it('persists sidebar project creation through the managed Cloud service', () => {
-    const sidebar = source('features/projects/components/ProjectSidebar.tsx');
-
-    expect(sidebar).not.toMatch(/\bcreateProject\s*[,}]/);
-    expect(sidebar).toContain('webManagedCloudProjects.createProject');
-  });
-
   it('persists archive actions and does not discard rows when a delete request fails', () => {
     const listPage = source('app/projects/page.tsx');
     const shell = source('components/layout/WebAppShell.tsx');

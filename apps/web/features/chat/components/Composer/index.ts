@@ -7,7 +7,6 @@ export { ComposerFooter } from './ComposerFooter';
 export { InputFooter } from './InputFooter';
 export { GhostTextOverlay } from './GhostTextOverlay';
 export { StyleSelector } from './StyleSelector';
-export { FolderContextSelector } from './FolderContextSelector';
 export { AttachmentPreview } from './AttachmentPreview';
 export { VoiceInputButton as ComposerVoiceInput } from './VoiceInputButton';
 export { VoiceRecordingOverlay } from './VoiceRecordingOverlay';
