@@ -1,1 +1,0 @@
-export { PromptShortcuts } from './PromptShortcuts';

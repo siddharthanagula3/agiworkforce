@@ -1,18 +1,17 @@
 /**
- * Tenant-isolation regression tests (AUDIT CRITICAL #16 / #17).
- *
- * #16 (BOLA): POST /api/chat/sessions with a client-supplied id used
- * `on conflict (id) do update` with NO user_id guard — any authenticated
- * user could overwrite another user's conversation metadata by UUID.
+ * Tenant-isolation regression tests (AUDIT CRITICAL #17).
  *
  * #17 (IDOR): POST /api/chat/conversations/[id]/messages/bulk upserted by
  * global message PK with NO conversation guard — posting a victim's message
  * UUID overwrote the victim's row and leaked provider/token/cost fields via
  * RETURNING.
  *
- * Both upserts now carry a WHERE guard on the DO UPDATE; a foreign-row
+ * The upsert now carries a WHERE guard on the DO UPDATE; a foreign-row
  * conflict updates nothing and the missing RETURNING row is rejected
  * explicitly instead of silently swallowed (or crashed on).
+ *
+ * (#16, the /api/chat/sessions BOLA guard, was covered here until the
+ * sessions alias API was deleted as a dead stack.)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -48,7 +47,6 @@ vi.mock('@/lib/server/neon-chat', () => ({
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
-import { POST as postSession } from '@/app/api/chat/sessions/route';
 import { POST as postBulkMessages } from '@/app/api/chat/conversations/[id]/messages/bulk/route';
 
 const ATTACKER = 'user_attacker';
@@ -67,50 +65,6 @@ function makeJsonRequest(url: string, body: unknown): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mockRequireCurrentUserId.mockResolvedValue(ATTACKER);
-});
-
-describe('POST /api/chat/sessions — cross-tenant upsert guard (#16)', () => {
-  it('includes the user_id ownership guard in the upsert SQL', async () => {
-    mockQuery.mockResolvedValueOnce([
-      {
-        id: VICTIM_CONVERSATION_ID,
-        title: 't',
-        model: null,
-        pinned: false,
-        project_id: null,
-        created_at: 'now',
-        updated_at: 'now',
-        message_count: '0',
-        preview: null,
-      },
-    ]);
-
-    const res = await postSession(
-      makeJsonRequest('http://localhost/api/chat/sessions', {
-        id: VICTIM_CONVERSATION_ID,
-        title: 'hijacked',
-      }),
-    );
-
-    expect(res.status).toBe(201);
-    const [sql] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('on conflict (id) do update');
-    expect(sql).toContain('where web_conversations.user_id = excluded.user_id');
-  });
-
-  it('returns 404 (not 500, not success) when the guarded upsert touches no row', async () => {
-    // Foreign-owned conversation: guard filters the update, RETURNING is empty.
-    mockQuery.mockResolvedValueOnce([]);
-
-    const res = await postSession(
-      makeJsonRequest('http://localhost/api/chat/sessions', {
-        id: VICTIM_CONVERSATION_ID,
-        title: 'hijacked',
-      }),
-    );
-
-    expect(res.status).toBe(404);
-  });
 });
 
 describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)', () => {
