@@ -383,7 +383,7 @@ impl TfIdfIndex {
     /// When available, `search_with_embedding` will blend dense cosine similarity
     /// with TF-IDF scores for higher-quality retrieval.
     pub fn set_dense_embedding(&mut self, memory_id: i64, embedding: Vec<f32>) {
-        if !embedding.is_empty() && embedding.iter().any(|&v| v != 0.0) {
+        if agiworkforce_agent_core::memory::valid_embedding(&embedding) {
             self.dense_embeddings.insert(memory_id, embedding);
         }
     }
@@ -408,7 +408,12 @@ impl TfIdfIndex {
 
         // If no query embedding or no dense embeddings stored, return TF-IDF only
         let query_emb = match query_embedding {
-            Some(e) if !self.dense_embeddings.is_empty() && !e.is_empty() => e,
+            Some(e)
+                if !self.dense_embeddings.is_empty()
+                    && agiworkforce_agent_core::memory::valid_embedding(e) =>
+            {
+                e
+            }
             _ => {
                 let mut results = tfidf_results;
                 results.truncate(limit);
@@ -418,20 +423,12 @@ impl TfIdfIndex {
 
         // Compute dense cosine similarity for all documents that have embeddings
         let mut dense_scores: HashMap<i64, f32> = HashMap::new();
-        let query_norm = query_emb.iter().map(|v| v * v).sum::<f32>().sqrt();
-        if query_norm > 0.0 {
-            for (&doc_id, doc_emb) in &self.dense_embeddings {
-                let doc_norm = doc_emb.iter().map(|v| v * v).sum::<f32>().sqrt();
-                if doc_norm > 0.0 {
-                    let dot: f32 = query_emb
-                        .iter()
-                        .zip(doc_emb.iter())
-                        .map(|(a, b)| a * b)
-                        .sum();
-                    let similarity = dot / (query_norm * doc_norm);
-                    if similarity > 0.0 {
-                        dense_scores.insert(doc_id, similarity);
-                    }
+        for (&doc_id, doc_emb) in &self.dense_embeddings {
+            if let Some(similarity) =
+                agiworkforce_agent_core::memory::cosine_similarity(query_emb, doc_emb)
+            {
+                if similarity > 0.0 {
+                    dense_scores.insert(doc_id, similarity);
                 }
             }
         }

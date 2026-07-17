@@ -29,7 +29,7 @@ export class MemoryFactItem extends vscode.TreeItem {
         ? `\nUpdated: ${new Date(fact.updatedAt).toLocaleString()}`
         : '';
     const tooltip = new vscode.MarkdownString(
-      `**Memory fact**\n\n${fact.text}\n\n---\n${createdLabel}${updatedLabel}`,
+      `**${fact.category ?? 'fact'} memory**\n\n${fact.text}\n\n---\n${createdLabel}${updatedLabel}`,
     );
     tooltip.isTrusted = false;
     this.tooltip = tooltip;

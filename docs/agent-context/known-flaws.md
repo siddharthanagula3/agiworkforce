@@ -6,6 +6,22 @@ Last updated: 2026-07-17
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-17 Desktop optional-feature build gate: `cargo clippy -p
+agiworkforce-desktop --all-targets --all-features -- -D warnings` does not
+compile the `remote-databases` feature. The direct `bson = 3.1` dependency is
+incompatible with `mongodb = 3.5`'s BSON 2.x types in `nosql_client.rs`; the
+MySQL/Postgres validators still supply a second generic argument to the
+one-argument application `Result` alias; and `redis_client.rs` calls `get`
+with a key slice that Redis 1.1 no longer accepts. Default-feature Desktop
+builds and memory tests remain green. Fix the optional adapters together and
+restore the all-features lint gate before claiming remote database support.
+The default-feature all-targets strict lint is independently blocked by
+`tests/mcp_integration_test.rs`, which holds the process-wide `ENV_LOCK`
+standard mutex across three awaits; Rust 1.94 rejects that test under
+`-D clippy::await-holding-lock`. The supported library build and focused
+memory suites pass, but the repository must fix that test synchronization
+before treating Desktop all-targets clippy as green.
+
 2026-07-17 free-plan deploy gate: migration
 `apps/web/db/neon/0060_free_tier_token_budget.sql` must be applied to production
 Neon before deploying the dependent free-plan code. It replaces the public

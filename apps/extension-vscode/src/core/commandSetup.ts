@@ -13,7 +13,14 @@ import {
   ContextPanelProvider,
 } from '../features/trees';
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
-import { loadFacts, addFact, updateFact, deleteFact, clearFacts } from '../memory/memoryStore';
+import {
+  loadFacts,
+  addFact,
+  updateFact,
+  deleteFact,
+  clearFacts,
+  containsFact,
+} from '../memory/memoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
@@ -1202,7 +1209,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (!text) return;
       const trimmed = text.trim();
       const existing = loadFacts(context.globalState);
-      if (existing.some((f) => f.text.toLowerCase() === trimmed.toLowerCase())) {
+      if (containsFact(existing, trimmed)) {
         vscode.window.showInformationMessage('That fact is already in your memory.');
         return;
       }
