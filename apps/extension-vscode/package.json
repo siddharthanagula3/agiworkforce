@@ -922,6 +922,7 @@
     "check:vscode-theme-tokens": "node scripts/check-vscode-theme-tokens.mjs"
   },
   "dependencies": {
+    "@agiworkforce/agent-core": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",

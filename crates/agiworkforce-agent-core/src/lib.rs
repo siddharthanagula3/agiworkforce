@@ -41,14 +41,15 @@ use std::pin::Pin;
 
 use serde::Serialize;
 
+pub mod context;
 pub mod engine;
 pub mod runaway;
 
-pub use engine::{TurnEngine, run_turn};
+pub use engine::{run_turn, TurnEngine};
 pub use runaway::{
-    CONTENT_CHUNK_SIZE, CONTENT_LOOP_CHUNK_THRESHOLD, CONTENT_LOOP_DISTANCE,
-    LOOP_DETECTION_THRESHOLD, MAX_AGENTIC_ITERATIONS, RunawayTracker, detect_content_loop,
-    hash_tool_call,
+    detect_content_loop, hash_tool_call, RunawayTracker, CONTENT_CHUNK_SIZE,
+    CONTENT_LOOP_CHUNK_THRESHOLD, CONTENT_LOOP_DISTANCE, LOOP_DETECTION_THRESHOLD,
+    MAX_AGENTIC_ITERATIONS,
 };
 
 // Re-export the shared LLM surface the engine speaks in. (The plan's sketched
@@ -56,7 +57,7 @@ pub use runaway::{
 // note: the CLI's mutating/approval-gated dispatch cannot flow through
 // app-server's read-only `&self` `ToolDispatch`, so the e1 dispatch seam is
 // TurnHost's execute methods.)
-pub use agiworkforce_llm::{ChatOutcome, StreamEvent, ToolCall, Usage};
+pub use agiworkforce_llm::{ChatOutcome, ContentBlock, Message, StreamEvent, ToolCall, Usage};
 
 /// Which model call within a turn produced a stream event / completion. The CLI
 /// routes first-call text through the caller's `StreamCallback` and continuation
@@ -245,13 +246,15 @@ pub struct TurnParams {
     pub max_budget_usd: Option<f64>,
 }
 
-/// The result of one full turn: final assistant text, token totals, and the
-/// subscription flag from the first completion. The host records these into its
-/// session counters / ledger / post-turn pipeline.
+/// The result of one full turn: final assistant text, token totals, the most
+/// recent provider-observed input size, and the subscription flag from the
+/// first completion. Hosts use `last_input_tokens` to anchor future context
+/// estimates to the provider tokenizer without coupling the engine to a vendor.
 #[derive(Debug, Clone, Default)]
 pub struct TurnOutcome {
     pub response: String,
     pub totals: UsageTotals,
+    pub last_input_tokens: u32,
     pub via_subscription: bool,
 }
 

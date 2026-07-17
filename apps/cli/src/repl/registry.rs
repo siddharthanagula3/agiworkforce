@@ -523,26 +523,27 @@ pub(super) fn handle_migrate() {
 // Context / checkpoint commands
 // ---------------------------------------------------------------------------
 
-pub fn handle_compact(arg: &str, session: &mut AgentSession) {
-    let usage = crate::compaction::context_usage(&session.messages, &session.model);
-    let before_tokens = usage.used_tokens;
+pub async fn handle_compact(arg: &str, session: &mut AgentSession, config: &CliConfig) {
+    let before = agiworkforce_agent_core::context::context_budget(
+        &session.messages,
+        crate::model_catalog::context_window(&session.model),
+        config.default.max_tokens as usize,
+        session.context_usage_anchor,
+    );
+    let before_tokens = before.used_tokens;
 
     if before_tokens < 1000 {
         output::print_info("Context is small — nothing to compact.");
         return;
     }
 
-    let target = usage.limit_tokens * 50 / 100;
     let focus = if arg.is_empty() { None } else { Some(arg) };
-
-    session.messages = crate::compaction::compact_with_focus(&session.messages, target, focus);
-
-    let after = crate::compaction::context_usage(&session.messages, &session.model);
+    let result = session.compact_now(config, focus).await;
     output::print_info(&format!(
         "Compacted: ~{} -> ~{} tokens ({}% of limit){}",
         before_tokens,
-        after.used_tokens,
-        (after.fraction * 100.0) as u32,
+        result.after.used_tokens,
+        (result.after.used_fraction * 100.0) as u32,
         if focus.is_some() {
             format!(" [focus: {}]", arg)
         } else {
