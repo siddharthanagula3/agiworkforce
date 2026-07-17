@@ -9,7 +9,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from 'react';
-import { Mic, Plus } from 'lucide-react';
+import { Check, ChevronDown, Folder, FolderOpen, Mic, Plus, X } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
@@ -31,6 +31,32 @@ import {
   type ProviderId,
 } from '@agiworkforce/types';
 
+/** Composer work mode — mirrors web ChatComposerNew's ComposerWorkMode. */
+export type ChatWorkMode = 'chat' | 'agiwork';
+
+/** Scope stamped into the send callback when the host feeds `projectPicker`. */
+export interface ChatWorkScope {
+  workMode: ChatWorkMode;
+  /** Project scoping the send (threads into conversation creation). */
+  projectId: string | null;
+}
+
+/**
+ * "Project or folder" picker (web ChatComposerNew parity). Provided only by
+ * hosts with real project data (desktop feeds projectStore). Selecting a
+ * project scopes the conversation — the host owns the selection state and the
+ * scoping side effects. The folder half of the picker reuses the existing
+ * `onSelectFolder`/`currentFolderLabel` seam and renders only when the host
+ * feeds it (desktop-only, privacy-gated by the host). A chat is scoped to a
+ * project OR a folder, never both. Absent prop = no toggle, no picker.
+ */
+export interface ChatInputProjectPicker {
+  /** Real projects from the host's project store (id + display name). */
+  projects: Array<{ id: string; name: string }>;
+  activeProjectId: string | null;
+  onSelectProject: (projectId: string | null) => void;
+}
+
 export interface ChatInputProps {
   /**
    * `attachments` carries the raw `File` objects the user attached in the
@@ -45,6 +71,8 @@ export interface ChatInputProps {
     attachments?: File[],
     research?: boolean,
     writingStyle?: WritingStyle,
+    /** Present only when the host feeds `projectPicker` (workMode + projectId). */
+    workScope?: ChatWorkScope,
   ) => void;
   onStop: () => void;
   onPlusClick: () => void;
@@ -60,6 +88,15 @@ export interface ChatInputProps {
   onSelectFolder?: () => void;
   /** Display label for the currently scoped project folder, if any. */
   currentFolderLabel?: string | null;
+  /**
+   * Clears the host's scoped local folder. Hosts that feed both
+   * `onSelectFolder` and `projectPicker` must provide this so a project pick
+   * can displace the folder (project/folder mutual exclusion) and the scope
+   * chip can be cleared.
+   */
+  onClearFolder?: () => void;
+  /** Chat | AGI Work toggle + "Project or folder" picker. See the type doc. */
+  projectPicker?: ChatInputProjectPicker;
   hasMessages: boolean;
   className?: string;
   /**
@@ -98,6 +135,8 @@ export function ChatInput({
   onVoiceClick: _onVoiceClick,
   onSelectFolder,
   currentFolderLabel = null,
+  onClearFolder,
+  projectPicker,
   hasMessages,
   className,
   disabled = false,
@@ -126,6 +165,101 @@ export function ChatInput({
   const setWebSearchEnabled = useChatStore((s) => s.setWebSearchEnabled);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<WritingStyle | null>(null);
+
+  // Work-mode segmented toggle (Chat | AGI Work) — web ChatComposerNew parity.
+  // 'agiwork' reveals the "Project or folder" chip row below the composer and
+  // stamps workMode + projectId into the send callback. Rendered only when the
+  // host passes projectPicker (real project data) — hosts that don't feed it
+  // (mobile) see no toggle and an unchanged send signature.
+  const [workMode, setWorkMode] = useState<ChatWorkMode>('chat');
+  const [scopePickerOpen, setScopePickerOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState('');
+  const scopePickerRef = useRef<HTMLDivElement>(null);
+  const activeProjectId = projectPicker?.activeProjectId ?? null;
+
+  // Entering with a preselected project (sidebar "New chat in project") lands
+  // the composer in AGI Work mode so the scoping is visible, never silent.
+  useEffect(() => {
+    if (activeProjectId) setWorkMode('agiwork');
+  }, [activeProjectId]);
+
+  // Mutual exclusion, folder side: a NEWLY chosen folder (host dialog resolves
+  // asynchronously → currentFolderLabel transitions) displaces the project.
+  // The project side is handled synchronously in handlePickProject below.
+  const prevFolderLabelRef = useRef(currentFolderLabel);
+  useEffect(() => {
+    const prev = prevFolderLabelRef.current;
+    prevFolderLabelRef.current = currentFolderLabel;
+    if (currentFolderLabel && currentFolderLabel !== prev && activeProjectId) {
+      projectPicker?.onSelectProject(null);
+    }
+  }, [currentFolderLabel, activeProjectId, projectPicker]);
+
+  // Close the scope popover on outside click.
+  useEffect(() => {
+    if (!scopePickerOpen) return undefined;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!scopePickerRef.current?.contains(e.target as Node)) {
+        setScopePickerOpen(false);
+        setProjectQuery('');
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [scopePickerOpen]);
+
+  const activePickerProject = projectPicker
+    ? (projectPicker.projects.find((p) => p.id === activeProjectId) ?? null)
+    : null;
+  const scopeHasSelection = Boolean(activePickerProject || currentFolderLabel);
+  const scopeLabel = activePickerProject?.name ?? currentFolderLabel ?? 'Project or folder';
+  const filteredPickerProjects = projectPicker
+    ? projectPicker.projects.filter((p) =>
+        p.name.toLowerCase().includes(projectQuery.trim().toLowerCase()),
+      )
+    : [];
+
+  const closeScopePicker = useCallback(() => {
+    setScopePickerOpen(false);
+    setProjectQuery('');
+  }, []);
+
+  const handlePickProject = useCallback(
+    (id: string) => {
+      projectPicker?.onSelectProject(id);
+      // A chat is scoped to a project OR a local folder, never both.
+      onClearFolder?.();
+      closeScopePicker();
+    },
+    [projectPicker, onClearFolder, closeScopePicker],
+  );
+
+  const handleClearScopeSelection = useCallback(() => {
+    projectPicker?.onSelectProject(null);
+    onClearFolder?.();
+  }, [projectPicker, onClearFolder]);
+
+  const handlePickFolderFromScope = useCallback(() => {
+    closeScopePicker();
+    // The host's native dialog resolves async; the folder-transition effect
+    // above displaces the project once a folder was actually chosen.
+    onSelectFolder?.();
+  }, [closeScopePicker, onSelectFolder]);
+
+  // Switching back to Chat clears the scope selection: what the chip shows is
+  // exactly what the next send carries — no hidden project sticking to a
+  // "Chat"-labeled composer.
+  const handleWorkModeChange = useCallback(
+    (mode: ChatWorkMode) => {
+      setWorkMode(mode);
+      if (mode === 'chat') {
+        projectPicker?.onSelectProject(null);
+        onClearFolder?.();
+        closeScopePicker();
+      }
+    },
+    [projectPicker, onClearFolder, closeScopePicker],
+  );
 
   // Read the currently selected model's provider to determine effort visibility
   const selectedModelId = useModelStore((s) => s.selectedModelId);
@@ -343,7 +477,14 @@ export function ChatInput({
 
     const attachments = attachedFiles.length > 0 ? attachedFiles : undefined;
     const research = supportsResearch && researchEnabled;
-    if (activeStyle) {
+    if (projectPicker) {
+      // Hosts feeding the picker get the scope stamped into the send; the
+      // signature stays unchanged for hosts that don't (mobile).
+      onSend(content, agentMode, effort, attachments, research, activeStyle ?? undefined, {
+        workMode,
+        projectId: activeProjectId,
+      });
+    } else if (activeStyle) {
       onSend(content, agentMode, effort, attachments, research, activeStyle);
     } else {
       onSend(content, agentMode, effort, attachments, research);
@@ -367,6 +508,9 @@ export function ChatInput({
     researchEnabled,
     supportsResearch,
     activeStyle,
+    projectPicker,
+    workMode,
+    activeProjectId,
   ]);
 
   const handleKeyDown = useCallback(
@@ -547,6 +691,36 @@ export function ChatInput({
                 </AttachmentMenu>
               </div>
 
+              {/* Work-mode segmented toggle (Chat | AGI Work) — web parity,
+                  sitting immediately right of "+". Rendered only when the host
+                  feeds projectPicker. */}
+              {projectPicker && (
+                <div
+                  role="group"
+                  aria-label="Composer mode"
+                  className="flex shrink-0 items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)]/40 p-0.5 text-xs font-medium"
+                >
+                  {(['chat', 'agiwork'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => handleWorkModeChange(mode)}
+                      disabled={disabled}
+                      aria-pressed={workMode === mode}
+                      className={cn(
+                        'flex h-7 items-center rounded-full px-3 transition-colors',
+                        workMode === mode
+                          ? 'bg-[var(--chat-surface-elevated)] text-[var(--chat-text-primary)] shadow-sm'
+                          : 'text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
+                        disabled && 'cursor-not-allowed opacity-50',
+                      )}
+                    >
+                      {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Agent control chips stay visually attached to the plus button. */}
               {showAgentControl && conversationId && (
                 <AgentControl
@@ -607,6 +781,111 @@ export function ChatInput({
           </div>
         </div>
       </div>
+
+      {/* AGI Work scope row — "Project or folder ▾" chip DIRECTLY BELOW the
+          composer (web ChatComposerNew / claude.ai Cowork reference layout).
+          Rendered only in AGI Work mode with host-provided project data; the
+          local-folder action appears only when the host feeds the folder seam
+          (desktop, privacy-gated by the host). */}
+      {projectPicker && workMode === 'agiwork' && (
+        <div className="relative mt-2 flex items-center gap-2" ref={scopePickerRef}>
+          <div
+            className={cn(
+              'flex h-8 min-w-0 items-center rounded-full border transition-all',
+              scopeHasSelection
+                ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+                : 'border-[var(--chat-border)] bg-[var(--chat-surface-hover)]/40 text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setScopePickerOpen((prev) => !prev);
+                setProjectQuery('');
+              }}
+              disabled={disabled}
+              className={cn(
+                'flex h-full min-w-0 items-center gap-1.5 pl-2.5 text-xs font-medium',
+                scopeHasSelection ? 'pr-1' : 'pr-2.5',
+                disabled && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label="Project or folder"
+              aria-expanded={scopePickerOpen}
+              title={scopeHasSelection ? scopeLabel : undefined}
+            >
+              {currentFolderLabel ? (
+                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <Folder className="h-3.5 w-3.5 shrink-0" />
+              )}
+              <span className="max-w-[220px] truncate">{scopeLabel}</span>
+              <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+            </button>
+            {scopeHasSelection && (
+              <button
+                type="button"
+                onClick={handleClearScopeSelection}
+                className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
+                aria-label="Clear project or folder selection"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          {scopePickerOpen && (
+            <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl">
+              <input
+                type="text"
+                value={projectQuery}
+                onChange={(e) => setProjectQuery(e.target.value)}
+                placeholder="Search projects..."
+                aria-label="Search projects"
+                autoFocus
+                className="mb-1.5 w-full rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-hover)]/30 px-3 py-2 text-sm text-[var(--chat-text-primary)] outline-none placeholder:text-[var(--chat-text-placeholder)]"
+              />
+              <div className="max-h-56 overflow-y-auto">
+                {filteredPickerProjects.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-[var(--chat-text-secondary)]">
+                    {projectPicker.projects.length === 0 ? 'No projects yet' : 'No projects found'}
+                  </div>
+                )}
+                {filteredPickerProjects.map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => handlePickProject(project.id)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
+                    {activeProjectId === project.id && (
+                      <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* Local folder — rendered only when the host feeds the folder
+                  seam (desktop-only + privacy-gated at the host). */}
+              {onSelectFolder && (
+                <>
+                  <div className="my-1 border-t border-[var(--chat-border)]" />
+                  <button
+                    type="button"
+                    onClick={handlePickFolderFromScope}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+                  >
+                    <FolderOpen className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]" />
+                    <span className="flex-1 text-left">
+                      {currentFolderLabel ? 'Choose a different folder' : 'Choose a local folder'}
+                    </span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

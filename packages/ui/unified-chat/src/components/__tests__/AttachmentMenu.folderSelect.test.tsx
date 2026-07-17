@@ -48,13 +48,31 @@ describe('AttachmentMenu — Select folder', () => {
   it('shows the current folder label instead of the generic prompt when scoped', () => {
     render(
       <CapabilityProvider platform="desktop">
-        <AttachmentMenu {...baseProps} currentFolderLabel="~/Projects/agiworkforce">
+        <AttachmentMenu
+          {...baseProps}
+          onSelectFolder={vi.fn()}
+          currentFolderLabel="~/Projects/agiworkforce"
+        >
           <button type="button">Plus</button>
         </AttachmentMenu>
       </CapabilityProvider>,
     );
 
     expect(screen.getByText('Folder: ~/Projects/agiworkforce')).toBeTruthy();
+    expect(screen.queryByText('Select folder')).toBeNull();
+  });
+
+  it('hides the folder row when the host withholds onSelectFolder (privacy-gated hosts)', () => {
+    render(
+      <CapabilityProvider platform="desktop">
+        <AttachmentMenu {...baseProps} currentFolderLabel="~/Projects/agiworkforce">
+          <button type="button">Plus</button>
+        </AttachmentMenu>
+      </CapabilityProvider>,
+    );
+
+    // No handler → no row (never a dead control), even with a stale label.
+    expect(screen.queryByText(/Folder:/)).toBeNull();
     expect(screen.queryByText('Select folder')).toBeNull();
   });
 
@@ -87,10 +105,7 @@ describe('AttachmentMenu — Research capability honesty', () => {
   it('omits Research when the active runtime cannot transport research requests', () => {
     render(
       <CapabilityProvider platform="desktop">
-        <AttachmentMenu
-          {...baseProps}
-          supportsResearch={false}
-        >
+        <AttachmentMenu {...baseProps} supportsResearch={false}>
           <button type="button">Plus</button>
         </AttachmentMenu>
       </CapabilityProvider>,
@@ -102,10 +117,7 @@ describe('AttachmentMenu — Research capability honesty', () => {
   it('renders Research when the active runtime explicitly supports it', () => {
     render(
       <CapabilityProvider platform="web">
-        <AttachmentMenu
-          {...baseProps}
-          supportsResearch
-        >
+        <AttachmentMenu {...baseProps} supportsResearch>
           <button type="button">Plus</button>
         </AttachmentMenu>
       </CapabilityProvider>,
