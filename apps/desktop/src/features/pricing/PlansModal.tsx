@@ -8,9 +8,12 @@
  *   2. Settings → Billing tab (future — wire via openPlansModal() helper below)
  *
  * CTA routing:
- *   - Managed cloud is public alpha on Web & Mobile; desktop support is coming soon.
- *   - Paid-tier CTAs open the in-app Cloud Bridge modal, which explains that
- *     cloud is available on Web & Mobile today and desktop is on the way.
+ *   - Managed cloud is public alpha, open by default — no invite/waitlist gate.
+ *   - Web is the canonical billing surface: paid-tier CTAs open the web
+ *     pricing page (Stripe checkout lives there) in the default browser.
+ *   - Desktop managed-cloud persistence is still fail-closed (see
+ *     constants/cloudAvailability.ts); a subscription bought via the CTA is
+ *     usable on Web & Mobile today.
  */
 import { X } from 'lucide-react';
 import {
@@ -21,8 +24,10 @@ import {
   DialogDescription,
 } from '@/components/ui/Dialog';
 import { PlanCard } from './PlanCard';
-import { isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+import { isFreePlan, isPlanSelectableOnSurface, type UIPlanTier } from '@agiworkforce/types';
 import { selectPlan, useAuthStore } from '../../stores/auth';
+import { WEB_APP_URL } from '../../api/config';
+import { openExternalUrl } from '../../utils/navigation';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -31,7 +36,6 @@ import { selectPlan, useAuthStore } from '../../stores/auth';
 export interface PlansModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenCloudWaitlist?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,6 +43,11 @@ export interface PlansModalProps {
 // ---------------------------------------------------------------------------
 
 const TIER_ORDER: UIPlanTier[] = ['local', 'byok', 'basic', 'pro', 'max'];
+
+// The billing catalog names the local tier 'local-only'; the rest match.
+const VISIBLE_TIERS = TIER_ORDER.filter((tier) =>
+  isPlanSelectableOnSurface(tier === 'local' ? 'local-only' : tier, 'desktop'),
+);
 
 // ---------------------------------------------------------------------------
 // Map legacy PlanTier → UIPlanTier
@@ -60,34 +69,24 @@ function legacyToUIPlanTier(raw: string | null | undefined): UIPlanTier {
 // PlansModal
 // ---------------------------------------------------------------------------
 
-export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansModalProps) {
+export function PlansModal({ open, onOpenChange }: PlansModalProps) {
   const rawPlan = useAuthStore(selectPlan);
   const currentTier = legacyToUIPlanTier(rawPlan);
 
   function handleCtaClick(tier: UIPlanTier) {
-    if (tier === 'local' || tier === 'byok') {
+    if (isFreePlan(tier)) {
       // Already free — nothing to do (CTA should be disabled/current)
       return;
     }
 
-    if (tier === 'basic') {
-      if (isFreePlan(currentTier)) {
-        onOpenCloudWaitlist?.();
-      } else {
-        onOpenCloudWaitlist?.();
-      }
-    } else if (tier === 'pro' || tier === 'max') {
-      onOpenCloudWaitlist?.();
-    }
-
+    // Web is the canonical billing surface — checkout happens there.
+    void openExternalUrl(`${WEB_APP_URL}/pricing`);
     onOpenChange(false);
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-4xl w-full p-0 gap-0 overflow-hidden"
-      >
+      <DialogContent className="sm:max-w-4xl w-full p-0 gap-0 overflow-hidden">
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-start justify-between">
@@ -114,8 +113,8 @@ export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansMod
 
         {/* Tier grid */}
         <div className="p-6 overflow-y-auto max-h-[70vh]">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            {TIER_ORDER.map((tier) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {VISIBLE_TIERS.map((tier) => (
               <PlanCard
                 key={tier}
                 tier={tier}
@@ -128,7 +127,15 @@ export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansMod
           {/* Footer note */}
           <p className="mt-6 text-center text-[11px] text-muted-foreground">
             AGI Cloud is in public alpha on Web &amp; Mobile — no invite needed. Desktop cloud
-            support is coming soon; Local and BYOK work on desktop today.
+            support is coming soon; Local and BYOK work on desktop today. Upgrading opens the web
+            pricing page in your browser.{' '}
+            <button
+              type="button"
+              onClick={() => void openExternalUrl(`${WEB_APP_URL}/contact-sales`)}
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Enterprise? Contact sales
+            </button>
           </p>
         </div>
       </DialogContent>

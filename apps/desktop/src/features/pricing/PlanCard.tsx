@@ -1,6 +1,12 @@
-import { Check, Clock, Zap } from 'lucide-react';
+import { Check, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { PLAN_LABEL, PLAN_DESCRIPTION, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+import {
+  PLAN_LABEL,
+  PLAN_DESCRIPTION,
+  getPlanPriceUsd,
+  isFreePlan,
+  type UIPlanTier,
+} from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Per-tier static content
@@ -11,7 +17,7 @@ interface TierContent {
   priceNote?: string;
   bullets: string[];
   ctaLabel: string;
-  ctaVariant: 'primary' | 'outline' | 'waitlist' | 'stripe' | 'current';
+  ctaVariant: 'primary' | 'current';
 }
 
 const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
@@ -37,8 +43,10 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
     ctaLabel: 'Current plan',
     ctaVariant: 'current',
   },
+  // Basic is mobile-only (PLAN_SURFACE_VISIBILITY) — kept for type
+  // completeness; PlansModal filters it out of the desktop plan list.
   basic: {
-    price: '$8 / mo',
+    price: `$${getPlanPriceUsd('basic', 'monthly')} / mo`,
     bullets: [
       'Managed cloud entry tier',
       'Access to flagship models',
@@ -49,18 +57,19 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
     ctaVariant: 'primary',
   },
   pro: {
-    price: 'Coming soon',
+    price: `$${getPlanPriceUsd('pro', 'monthly')} / mo`,
+    priceNote: `$${getPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
     bullets: [
       'Higher token quota',
       'Advanced agent features',
       'Priority support',
       'Early access to new providers',
     ],
-    ctaLabel: 'Coming soon',
-    ctaVariant: 'waitlist',
+    ctaLabel: 'Upgrade to Pro',
+    ctaVariant: 'primary',
   },
   max: {
-    price: '$299.99 / mo',
+    price: `$${getPlanPriceUsd('max', 'monthly')} / mo`,
     bullets: [
       'Unlimited managed tokens',
       'Every flagship model included',
@@ -93,7 +102,6 @@ export function PlanCard({ tier, isCurrentPlan, onCtaClick }: PlanCardProps) {
   const label = PLAN_LABEL[tier];
   const description = PLAN_DESCRIPTION[tier];
   const isFree = isFreePlan(tier);
-  const isComingSoon = tier === 'pro' || tier === 'max';
 
   return (
     <div
@@ -120,12 +128,6 @@ export function PlanCard({ tier, isCurrentPlan, onCtaClick }: PlanCardProps) {
           {isFree && (
             <span className="inline-flex items-center rounded-full bg-green-500/12 px-2 py-0.5 text-[10px] font-semibold text-green-400">
               Always free
-            </span>
-          )}
-          {isComingSoon && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/12 px-2 py-0.5 text-[10px] font-semibold text-purple-400">
-              <Clock size={9} />
-              Coming soon
             </span>
           )}
         </div>
@@ -183,34 +185,7 @@ function PlanCardCta({ tier, variant, label, onCtaClick }: PlanCardCtaProps) {
     );
   }
 
-  if (variant === 'waitlist') {
-    return (
-      <button
-        type="button"
-        onClick={() => onCtaClick(tier)}
-        className={cn(
-          base,
-          'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
-        )}
-      >
-        {label}
-      </button>
-    );
-  }
-
-  if (variant === 'stripe') {
-    return (
-      <button
-        type="button"
-        onClick={() => onCtaClick(tier)}
-        className={cn(base, 'border border-border bg-background text-foreground hover:bg-accent')}
-      >
-        Manage in Stripe portal
-      </button>
-    );
-  }
-
-  // primary (Upgrade to Basic)
+  // primary (Upgrade to Pro / Max) — opens the web pricing page in the browser
   return (
     <button
       type="button"
