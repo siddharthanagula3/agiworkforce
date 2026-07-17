@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-15",
+  "lastUpdated": "2026-07-17",
   "verificationLog": [
+    {
+      "date": "2026-07-17",
+      "verifiedBy": "founder-tier-policy-and-official-openai-nano-docs",
+      "status": "CORRECTION",
+      "notes": "Applied the founder-confirmed cloud subscription roster: Basic includes GPT-5.4 Nano and excludes GPT-5.4 Mini and Claude Haiku 4.5; Haiku remains Pro+. Max+ intentionally inherits the Max model roster and differs through budget and product limits, not additional model names. GPT-5.4 Nano identity, context, modalities, endpoints, and pricing were rechecked against the official OpenAI model page and OpenRouter catalog on 2026-07-17. This changes admission only; runtime profiles and harness status still fail closed independently."
+    },
     {
       "date": "2026-07-15",
       "verifiedBy": "official-openai-anthropic-current-roster-live-probes",
@@ -781,7 +787,7 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 3,
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "basic" }
     },
     "claude-fable-5": {
       "id": "claude-fable-5",
@@ -1053,7 +1059,7 @@
           "budgetPath": "thinking.budget_tokens"
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "pro" }
     },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
@@ -2685,7 +2691,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "pro" }
     },
     "gpt-5.4-nano": {
       "id": "gpt-5.4-nano",
@@ -2735,7 +2741,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "basic" }
     },
     "gpt-4.1-nano": {
       "id": "gpt-4.1-nano",
@@ -3032,9 +3038,9 @@
   "tierAllowedModels": {
     "economy": [
       "gpt-5.6-luna",
+      "gpt-5.4-nano",
       "gemini-3.1-flash-lite",
       "deepseek-v4-flash",
-      "claude-haiku-4.5",
       "qwen-3.5-plus",
       "kimi-k2.6",
       "glm-5.2",
@@ -3043,6 +3049,7 @@
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",
+      "claude-haiku-4.5",
       "gemini-3.5-flash",
       "gemini-3.1-pro-preview",
       "deepseek-v4-pro",

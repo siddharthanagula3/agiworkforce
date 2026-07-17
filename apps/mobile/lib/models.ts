@@ -1,6 +1,6 @@
 import {
   getAutoRoutingProfiles,
-  getPickerModelsForRuntimeProfile,
+  getModelsForTierAndSurface,
   PROVIDER_DISPLAY,
   normalizeModelId,
   providerLabels,
@@ -69,12 +69,16 @@ const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>
   perplexity: { icon: 'Compass' },
 };
 
-const MOBILE_PICKER_MODELS = getPickerModelsForRuntimeProfile('mobile/cloud-chat', {
+const MOBILE_MODEL_OPTIONS = {
   // Some general-purpose, vision-capable models are cataloged as `code`
   // because coding is their primary strength (for example Claude Sonnet 5).
   // Mobile chat can still run them, so excluding the type hid a current model
   // even though the registry admitted it to this runtime profile.
-  modelTypes: ['chat', 'reasoning', 'multimodal', 'search', 'code'],
+  modelTypes: ['chat', 'reasoning', 'multimodal', 'search', 'code'] as const,
+};
+
+const MOBILE_PICKER_MODELS = getModelsForTierAndSurface('max', 'mobile/cloud-chat', {
+  modelTypes: [...MOBILE_MODEL_OPTIONS.modelTypes],
 });
 
 const MOBILE_PROVIDER_IDS = Array.from(
@@ -90,16 +94,27 @@ export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => 
     PROVIDER_DISPLAY['custom-openai-compatible'].brandColor,
 }));
 
-export const MODEL_LIST: ModelDef[] = MOBILE_PICKER_MODELS.map((model) => ({
-  id: model.id,
-  name: model.name,
-  provider: model.provider,
-  contextWindow: model.contextWindow,
-  maxOutput: model.maxOutput,
-  supportsVision: model.supportsVision,
-  supportsThinking: model.supportsThinking,
-  tier: model.tier,
-}));
+function toModelDef(model: (typeof MOBILE_PICKER_MODELS)[number]): ModelDef {
+  return {
+    id: model.id,
+    name: model.name,
+    provider: model.provider,
+    contextWindow: model.contextWindow,
+    maxOutput: model.maxOutput,
+    supportsVision: model.supportsVision,
+    supportsThinking: model.supportsThinking,
+    tier: model.tier,
+  };
+}
+
+export const MODEL_LIST: ModelDef[] = MOBILE_PICKER_MODELS.map(toModelDef);
+
+/** Canonical Mobile Cloud rows for one subscription tier. */
+export function getCloudModelsForTier(subscriptionTier: string): ModelDef[] {
+  return getModelsForTierAndSurface(subscriptionTier, 'mobile/cloud-chat', {
+    modelTypes: [...MOBILE_MODEL_OPTIONS.modelTypes],
+  }).map(toModelDef);
+}
 
 const modelMap = new Map<string, ModelDef>(MODEL_LIST.map((model) => [model.id, model]));
 const providerMap = new Map<string, ProviderDef>(

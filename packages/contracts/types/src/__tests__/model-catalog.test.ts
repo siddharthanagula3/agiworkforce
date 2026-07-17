@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
 import {
+  canAccessModelForSubscriptionTier,
   canAccessManualModelSelection,
   evaluateModelEnvironment,
   MODEL_ENVIRONMENTS,
@@ -19,6 +20,7 @@ import {
   getPickerModelTier,
   getPickerModels,
   getPickerModelsForRuntimeProfile,
+  getModelsForTierAndSurface,
   getProviderSurface,
   getProviderProbeModel,
   getProviderModelCatalog,
@@ -122,6 +124,29 @@ describe('model catalog helpers', () => {
     expect(getPickerModelsForRuntimeProfile('not-a-runtime-profile')).toEqual([]);
   });
 
+  it('composes subscription-tier and runtime-profile admission in one shared selector', () => {
+    const basicModels = getModelsForTierAndSurface('basic', 'mobile/cloud-chat');
+    const proModels = getModelsForTierAndSurface('pro', 'mobile/cloud-chat');
+    const maxModels = getModelsForTierAndSurface('max', 'mobile/cloud-chat');
+    const maxPlusModels = getModelsForTierAndSurface('max_plus', 'mobile/cloud-chat');
+
+    expect(basicModels.map((model) => model.id)).toContain('gpt-5.4-nano');
+    expect(basicModels.map((model) => model.id)).not.toContain('gpt-5.4-mini');
+    expect(basicModels.map((model) => model.id)).not.toContain('claude-haiku-4.5');
+    expect(proModels.map((model) => model.id)).toContain('claude-haiku-4.5');
+    expect(maxPlusModels).toEqual(maxModels);
+    expect(getModelsForTierAndSurface('basic', 'desktop/cloud-chat')).toEqual([]);
+    expect(getModelsForTierAndSurface('basic', 'not-a-runtime-profile')).toEqual([]);
+  });
+
+  it('keeps Basic on the economy roster while preserving higher-tier inheritance', () => {
+    expect(canAccessModelForSubscriptionTier('gpt-5.4-nano', 'basic')).toBe(true);
+    expect(canAccessModelForSubscriptionTier('gpt-5.4-mini', 'basic')).toBe(false);
+    expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'basic')).toBe(false);
+    expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'pro')).toBe(true);
+    expect(canAccessModelForSubscriptionTier('claude-opus-4.8', 'max_plus')).toBe(true);
+  });
+
   it('derives selectable Auto profiles and presentation from routing policy', () => {
     const profiles = getAutoRoutingProfiles();
 
@@ -212,18 +237,14 @@ describe('model catalog helpers', () => {
     expect(isAutoModeModelId(null)).toBe(false);
     expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
     expect(resolveAutoModeModel('auto-economy', 'free')).toBe('gemini-3.1-flash-lite');
-    // Basic/hobby resolve exactly like pro (2026-07-16 ladder).
-    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe(
-      resolveAutoModeModel('auto-balanced', 'pro'),
-    );
+    // Basic/hobby clamp every Auto alias to the economy routing profile.
+    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe('gemini-3.1-flash-lite');
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.6-terra');
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe(
       modelRegistry.policies.auto.slots.flagship_general.modelKey,
     );
     expect(resolveAutoModeModel('auto-premium', 'free')).toBe('gemini-3.1-flash-lite');
-    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe(
-      resolveAutoModeModel('auto-premium', 'pro'),
-    );
+    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.1-flash-lite');
   });
 
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
@@ -238,7 +259,7 @@ describe('model catalog helpers', () => {
     expect(fallbackIds.indexOf('qwen-3.5-plus')).toBeGreaterThanOrEqual(0);
     expect(fallbackIds).toContain('gpt-5.6-luna');
     expect(fallbackIds).not.toContain('gpt-5.4-mini');
-    expect(fallbackIds).not.toContain('gpt-5.4-nano');
+    expect(fallbackIds).toContain('gpt-5.4-nano');
 
     const coreOptions = getCoreManualModelOptions();
     expect(coreOptions.some((entry) => entry.id === requireProviderDefaultModel('openai'))).toBe(
@@ -529,19 +550,19 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
     expect(getDefaultModelFor('free', 'voice')).toBe(getRoutingSlotModel('voice_transcription'));
   });
 
-  it('hobby/basic chat mirrors pro (2026-07-16 ladder: budget-differentiated, same slots)', () => {
-    expect(getDefaultModelFor('hobby', 'chat')).toBe(getDefaultModelFor('pro', 'chat'));
-    expect(getDefaultModelFor('basic', 'chat')).toBe(getDefaultModelFor('pro', 'chat'));
+  it('hobby/basic chat stays on the economy workhorse', () => {
+    expect(getDefaultModelFor('hobby', 'chat')).toBe(getDefaultModelFor('free', 'chat'));
+    expect(getDefaultModelFor('basic', 'chat')).toBe(getDefaultModelFor('free', 'chat'));
   });
 
-  it('hobby fast-status mirrors pro fast-status', () => {
+  it('hobby fast-status stays on the economy workhorse', () => {
     expect(getDefaultModelFor('hobby', 'fast-status')).toBe(
-      getDefaultModelFor('pro', 'fast-status'),
+      getDefaultModelFor('free', 'fast-status'),
     );
   });
 
-  it('hobby reasoning mirrors pro reasoning', () => {
-    expect(getDefaultModelFor('hobby', 'reasoning')).toBe(getDefaultModelFor('pro', 'reasoning'));
+  it('hobby reasoning stays on the economy workhorse', () => {
+    expect(getDefaultModelFor('hobby', 'reasoning')).toBe(getDefaultModelFor('free', 'reasoning'));
   });
 
   it('pro chat resolves to general_balanced_pro (preferred Pro slot)', () => {

@@ -31,8 +31,6 @@ vi.mock('@/lib/csrf', () => ({
 // model IDs; tier gating is tested separately.
 vi.mock('@/lib/model-tiers', () => ({
   canAccessModel: () => true,
-  ECONOMY_MODELS: new Set<string>(),
-  MODEL_TIER_REQUIREMENTS: {},
 }));
 
 vi.mock('@/lib/logger', () => ({

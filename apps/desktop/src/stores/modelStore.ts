@@ -20,14 +20,17 @@ import {
   getBestAutoModeForTier as getBestAutoModeForSubscriptionTier,
   getModelMetadata,
   getModelVariantPartner,
-  getProviderDefaultModel,
-  getTaskModelForProvider,
   isModelAllowedForTier,
   normalizeSubscriptionTier,
   normalizeModelId,
-  PROVIDER_LABELS,
   PROVIDERS_IN_ORDER,
 } from '../constants/llm';
+import {
+  getMinimumRequiredTier,
+  getModelsForTierAndSurface,
+  providerLabels,
+  type PickerModelView,
+} from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import type { Provider } from '../types/provider';
@@ -40,115 +43,44 @@ import { useUIStore } from './ui';
 import { storageFallback } from '../lib/storageFallback';
 
 // ---------------------------------------------------------------------------
-// Managed cloud models — available in cloud mode without user API keys.
-// Tier: 'basic' models shown to all cloud users; 'pro' models require pro+.
+// Managed cloud rows are projected from the shared tier + runtime contract.
 // ---------------------------------------------------------------------------
 
-interface ManagedCloudModel {
+export interface ManagedCloudModel {
   id: string;
   displayName: string;
   provider: Provider;
   providerDisplayName: string;
-  tier: 'basic' | 'pro';
+  tier: 'basic' | 'pro' | 'max';
   category: 'instant' | 'latest' | 'thinking';
   contextWindow: number;
   maxOutput: number;
 }
 
-const MANAGED_CLOUD_CORE_PROVIDERS: Provider[] = ['anthropic', 'openai', 'google'];
-
-const MANAGED_CLOUD_FALLBACK_MAX_OUTPUT: Record<ManagedCloudModel['category'], number> = {
-  instant: 8192,
-  latest: 32768,
-  thinking: 65536,
-};
-
-const MANAGED_CLOUD_DEFAULT_CATEGORY: Record<Provider, ManagedCloudModel['category']> = {
-  anthropic: 'latest',
-  openai: 'latest',
-  google: 'thinking',
-  ollama: 'latest',
-  lmstudio: 'latest',
-  llamacpp: 'latest',
-  vllm: 'latest',
-  xai: 'latest',
-  deepseek: 'thinking',
-  qwen: 'thinking',
-  moonshot: 'latest',
-  perplexity: 'thinking',
-  zhipu: 'thinking',
-  managed_cloud: 'latest',
-  mistral: 'latest',
-  groq: 'instant',
-  together: 'latest',
-  fireworks: 'latest',
-  cerebras: 'instant',
-  deepinfra: 'latest',
-  nvidia_nim: 'latest',
-  open_router: 'latest',
-  cohere: 'latest',
-  ai21: 'latest',
-  sambanova: 'latest',
-  azure: 'latest',
-  bedrock: 'latest',
-};
-
-function buildManagedCloudModel(
-  modelId: string | null,
-  tier: ManagedCloudModel['tier'],
-  category: ManagedCloudModel['category'],
-): ManagedCloudModel | null {
-  const metadata = getModelMetadata(modelId ?? '');
-  if (!metadata) {
-    return null;
-  }
-
+function buildManagedCloudModel(model: PickerModelView): ManagedCloudModel {
+  const category: ManagedCloudModel['category'] =
+    model.tier === 'economy' ? 'instant' : model.tier === 'premium' ? 'thinking' : 'latest';
   return {
-    id: metadata.id,
-    displayName: metadata.name,
-    provider: metadata.provider,
-    providerDisplayName: PROVIDER_LABELS[metadata.provider] ?? metadata.provider,
-    tier,
+    id: model.id,
+    displayName: model.name,
+    provider: model.provider as Provider,
+    providerDisplayName: providerLabels[model.provider] ?? model.provider,
+    tier: getMinimumRequiredTier(model.id) ?? 'basic',
     category,
-    contextWindow: metadata.contextWindow,
-    maxOutput: metadata.maxOutputTokens ?? MANAGED_CLOUD_FALLBACK_MAX_OUTPUT[category],
+    contextWindow: model.contextWindow,
+    maxOutput: model.maxOutput,
   };
 }
 
-function getManagedCloudCatalogModels(): ManagedCloudModel[] {
-  const models: ManagedCloudModel[] = [];
-
-  for (const provider of MANAGED_CLOUD_CORE_PROVIDERS) {
-    const fastModel = buildManagedCloudModel(
-      getTaskModelForProvider(provider, 'fast_completion'),
-      'basic',
-      'instant',
-    );
-    if (fastModel) {
-      models.push(fastModel);
-    }
-
-    const defaultModel = buildManagedCloudModel(
-      getProviderDefaultModel(provider),
-      'pro',
-      MANAGED_CLOUD_DEFAULT_CATEGORY[provider],
-    );
-    if (defaultModel) {
-      models.push(defaultModel);
-    }
-  }
-
-  return Array.from(new Map(models.map((model) => [model.id, model])).values());
-}
-
 /**
- * Returns the managed cloud models available for the given plan tier.
- * basic/free: basic-tier models only
- * pro/max/enterprise: basic + pro-tier models
+ * Returns the managed cloud models admitted by both the subscription tier and
+ * the Desktop Cloud runtime profile. Until that profile is honestly marked
+ * implemented after live verification, this returns an empty list.
  */
 export function getManagedCloudModelsForTier(tier: PlanTier | string): ManagedCloudModel[] {
-  const isPro = tier === 'pro' || tier === 'max' || tier === 'enterprise';
-  return getManagedCloudCatalogModels().filter((model) => isPro || model.tier === 'basic');
+  return getModelsForTierAndSurface(tier, 'desktop/cloud-chat', {
+    modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+  }).map(buildManagedCloudModel);
 }
 
 export interface ProviderStatus {
@@ -1130,9 +1062,7 @@ if (typeof window !== 'undefined') {
     (plan) => {
       const normalizedPlan = plan ?? 'free';
       enforceModelTierRestriction(normalizedPlan);
-      useModelStore
-        .getState()
-        .loadModelsForMode(useAppModeStore.getState().mode, normalizedPlan);
+      useModelStore.getState().loadModelsForMode(useAppModeStore.getState().mode, normalizedPlan);
     },
   );
   const initialPlan = useAccountStore.getState().plan ?? 'free';

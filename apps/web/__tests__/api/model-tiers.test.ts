@@ -1,286 +1,62 @@
-/**
- * Tests for lib/model-tiers.ts
- *
- * Verifies that model tier enforcement is consistent and correct:
- * - economy tier users (hobby) can only access economy models
- * - pro tier can access pro + economy models
- * - max/enterprise can access all models
- * - free tier is denied access to everything
- * - unknown models are denied by default
- */
+import { describe, expect, it } from 'vitest';
+import { getAllowedModelsForTier } from '@agiworkforce/types';
 
-import { describe, it, expect } from 'vitest';
-import { getProviderDefaultModel } from '@agiworkforce/types';
+// model-tiers.ts uses 'server-only' — mocked globally in test/setup.ts.
+import { canAccessModel } from '@/lib/model-tiers';
 
-// model-tiers.ts uses 'server-only' — already mocked globally in test/setup.ts
-import { canAccessModel, ECONOMY_MODELS, MODEL_TIER_REQUIREMENTS } from '@/lib/model-tiers';
+const ECONOMY_MODELS = getAllowedModelsForTier('economy');
+const PRO_MODELS = getAllowedModelsForTier('pro_additions');
+const MAX_MODELS = getAllowedModelsForTier('flagship_additions');
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helper: get a sample of models from each tier category
-// ─────────────────────────────────────────────────────────────────────────────
-const ECONOMY_SAMPLE = [...ECONOMY_MODELS].slice(0, 5);
-const PRO_MODELS = Object.entries(MODEL_TIER_REQUIREMENTS)
-  .filter(([, tiers]) => tiers.includes('pro'))
-  .map(([model]) => model)
-  .slice(0, 5);
-const MAX_ONLY_MODELS = Object.entries(MODEL_TIER_REQUIREMENTS)
-  .filter(([, tiers]) => !tiers.includes('pro'))
-  .map(([model]) => model)
-  .slice(0, 3);
-
-function requireCatalogModel(model: string | null | undefined, role: string): string {
-  if (!model) {
-    throw new Error(`The model catalog must expose a model for ${role}`);
-  }
-  return model;
-}
-
-const CURRENT_ANTHROPIC_DEFAULT = requireCatalogModel(
-  getProviderDefaultModel('anthropic'),
-  'the Anthropic default',
-);
-const CURRENT_OPENAI_DEFAULT = requireCatalogModel(
-  getProviderDefaultModel('openai'),
-  'the OpenAI default',
-);
-const CURRENT_ECONOMY_MODEL = requireCatalogModel(ECONOMY_SAMPLE[0], 'the Economy tier');
-const CURRENT_MAX_ONLY_MODEL = requireCatalogModel(MAX_ONLY_MODELS[0], 'the flagship tier');
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — free tier', () => {
-  it('denies all economy models for free users', () => {
-    for (const model of ECONOMY_SAMPLE) {
+describe('shared subscription model gate', () => {
+  it('denies direct model selection for free and unknown tiers', () => {
+    for (const model of [...ECONOMY_MODELS, ...PRO_MODELS, ...MAX_MODELS]) {
       expect(canAccessModel(model, 'free')).toBe(false);
+      expect(canAccessModel(model, 'unknown-tier')).toBe(false);
     }
   });
 
-  it('denies pro-tier models for free users', () => {
-    for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'free')).toBe(false);
+  it('keeps Basic on the economy roster only', () => {
+    for (const model of ECONOMY_MODELS) {
+      expect(canAccessModel(model, 'basic')).toBe(true);
+      expect(canAccessModel(model, 'hobby')).toBe(true);
     }
+    for (const model of [...PRO_MODELS, ...MAX_MODELS]) {
+      expect(canAccessModel(model, 'basic')).toBe(false);
+    }
+
+    expect(canAccessModel('gpt-5.4-nano', 'basic')).toBe(true);
+    expect(canAccessModel('gpt-5.4-mini', 'basic')).toBe(false);
+    expect(canAccessModel('claude-haiku-4.5', 'basic')).toBe(false);
   });
 
-  it('denies max-only models for free users', () => {
-    for (const model of MAX_ONLY_MODELS) {
-      expect(canAccessModel(model, 'free')).toBe(false);
-    }
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — free tier (no model access)', () => {
-  it('denies all economy models for free/unknown tier users', () => {
-    for (const model of ECONOMY_SAMPLE) {
-      expect(canAccessModel(model, 'free')).toBe(false);
-    }
-  });
-
-  it('denies all economy models for unrecognized tier (maps to free)', () => {
-    for (const model of ECONOMY_SAMPLE) {
-      expect(canAccessModel(model, 'unknown-tier-xyz')).toBe(false);
-    }
-  });
-
-  it('denies pro-tier models for free users', () => {
-    for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'free')).toBe(false);
-    }
-  });
-
-  it('denies max-only models for free users', () => {
-    for (const model of MAX_ONLY_MODELS) {
-      expect(canAccessModel(model, 'free')).toBe(false);
-    }
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — pro tier', () => {
-  it('allows economy models for pro users', () => {
-    for (const model of ECONOMY_SAMPLE) {
+  it('gives Pro the inherited economy and Pro rosters, but not Max', () => {
+    for (const model of [...ECONOMY_MODELS, ...PRO_MODELS]) {
       expect(canAccessModel(model, 'pro')).toBe(true);
     }
-  });
-
-  it('allows pro-tier models for pro users', () => {
-    for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'pro')).toBe(true);
-    }
-  });
-
-  it('denies max-only models for pro users', () => {
-    for (const model of MAX_ONLY_MODELS) {
+    for (const model of MAX_MODELS) {
       expect(canAccessModel(model, 'pro')).toBe(false);
     }
   });
 
-  it('allows the current Anthropic default for pro users', () => {
-    expect(canAccessModel(CURRENT_ANTHROPIC_DEFAULT, 'pro')).toBe(true);
-  });
-
-  it('denies a current max-only model for pro users', () => {
-    expect(canAccessModel(CURRENT_MAX_ONLY_MODEL, 'pro')).toBe(false);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — basic tier', () => {
-  // Basic ($8/mo) has the same model/feature access as Pro/Max — the pricing
-  // page promises "multi-provider model routing" with no model-tier
-  // restriction, differentiated only by a lower usage budget (enforced via
-  // BILLING_PLAN_PRICING.basic.monthlyUsageBudgetUsd, not model gating).
-  it('allows economy models for basic users', () => {
-    for (const model of ECONOMY_SAMPLE) {
-      expect(canAccessModel(model, 'basic')).toBe(true);
-    }
-  });
-
-  it('allows pro-tier models for basic users', () => {
-    for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'basic')).toBe(true);
-    }
-  });
-
-  it('rejects max-only (flagship) models for basic users (founder directive 2026-07-16: basic shares the PRO set, flagship is max/enterprise only)', () => {
-    for (const model of MAX_ONLY_MODELS) {
-      expect(canAccessModel(model, 'basic')).toBe(false);
-    }
-  });
-
-  it('allows pro-tier models for basic users (budget-differentiated, same allowlist as pro)', () => {
-    for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'basic')).toBe(true);
-    }
-  });
-
-  it('is case-insensitive for the basic tier name', () => {
-    expect(canAccessModel(CURRENT_ECONOMY_MODEL, 'BASIC')).toBe(true);
-  });
-
-  it('also accepts the legacy "hobby" tier name as an alias for basic', () => {
-    expect(canAccessModel(CURRENT_ECONOMY_MODEL, 'hobby')).toBe(true);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — max tier', () => {
-  it('allows all economy models for max users', () => {
-    for (const model of ECONOMY_SAMPLE) {
+  it('gives Max, Max+, and Enterprise the same full model roster', () => {
+    for (const model of [...ECONOMY_MODELS, ...PRO_MODELS, ...MAX_MODELS]) {
       expect(canAccessModel(model, 'max')).toBe(true);
-    }
-  });
-
-  it('allows all pro-tier models for max users', () => {
-    for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'max')).toBe(true);
-    }
-  });
-
-  it('allows max-only models for max users', () => {
-    for (const model of MAX_ONLY_MODELS) {
-      expect(canAccessModel(model, 'max')).toBe(true);
-    }
-  });
-
-  it('allows a current max-only model for max users', () => {
-    expect(canAccessModel(CURRENT_MAX_ONLY_MODEL, 'max')).toBe(true);
-  });
-
-  it('allows the current OpenAI default for max users', () => {
-    expect(canAccessModel(CURRENT_OPENAI_DEFAULT, 'max')).toBe(true);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — enterprise tier', () => {
-  it('allows all economy models for enterprise users', () => {
-    for (const model of ECONOMY_SAMPLE) {
+      expect(canAccessModel(model, 'max_plus')).toBe(true);
       expect(canAccessModel(model, 'enterprise')).toBe(true);
     }
   });
 
-  it('allows pro-tier models for enterprise users', () => {
-    for (const model of PRO_MODELS) {
-      expect(canAccessModel(model, 'enterprise')).toBe(true);
-    }
-  });
-
-  it('allows max-only models for enterprise users', () => {
-    for (const model of MAX_ONLY_MODELS) {
-      expect(canAccessModel(model, 'enterprise')).toBe(true);
-    }
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — auto-model placeholders', () => {
-  it('allows auto-economy for any paid tier', () => {
-    expect(canAccessModel('auto-economy', 'pro')).toBe(true);
-    expect(canAccessModel('auto-economy', 'max')).toBe(true);
-    expect(canAccessModel('auto-economy', 'enterprise')).toBe(true);
-  });
-
-  it('allows auto-balanced for any paid tier', () => {
+  it('accepts Auto routing only for paid tiers', () => {
+    expect(canAccessModel('auto-economy', 'basic')).toBe(true);
     expect(canAccessModel('auto-balanced', 'pro')).toBe(true);
-    expect(canAccessModel('auto-balanced', 'max')).toBe(true);
-  });
-
-  it('allows auto-premium for any paid tier', () => {
-    expect(canAccessModel('auto-premium', 'enterprise')).toBe(true);
-  });
-
-  it('denies auto-models for free tier', () => {
+    expect(canAccessModel('auto-premium', 'max')).toBe(true);
     expect(canAccessModel('auto-economy', 'free')).toBe(false);
-    expect(canAccessModel('auto-balanced', 'free')).toBe(false);
   });
-});
 
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — unknown models', () => {
-  it('denies completely unknown models regardless of tier', () => {
-    expect(canAccessModel('nonexistent-model-xyz', 'pro')).toBe(false);
+  it('normalizes case and denies unknown model IDs', () => {
+    const economyModel = ECONOMY_MODELS[0]!;
+    expect(canAccessModel(economyModel.toUpperCase(), 'BASIC')).toBe(true);
     expect(canAccessModel('nonexistent-model-xyz', 'max')).toBe(false);
-    expect(canAccessModel('nonexistent-model-xyz', 'enterprise')).toBe(false);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('canAccessModel — case insensitivity', () => {
-  it('handles uppercase model names correctly', () => {
-    expect(canAccessModel(CURRENT_ECONOMY_MODEL.toUpperCase(), 'pro')).toBe(true);
-    expect(canAccessModel(CURRENT_ANTHROPIC_DEFAULT.toUpperCase(), 'pro')).toBe(true);
-  });
-
-  it('handles uppercase tier names correctly', () => {
-    expect(canAccessModel(CURRENT_ECONOMY_MODEL, 'PRO')).toBe(true);
-    expect(canAccessModel(CURRENT_ANTHROPIC_DEFAULT, 'PRO')).toBe(true);
-    expect(canAccessModel(CURRENT_MAX_ONLY_MODEL, 'MAX')).toBe(true);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-describe('MODEL_TIER_REQUIREMENTS consistency', () => {
-  it('every model in MODEL_TIER_REQUIREMENTS has at least one tier', () => {
-    for (const [model, tiers] of Object.entries(MODEL_TIER_REQUIREMENTS)) {
-      expect(tiers.length, `${model} should have at least one required tier`).toBeGreaterThan(0);
-    }
-  });
-
-  it('no model appears in both ECONOMY_MODELS and MODEL_TIER_REQUIREMENTS', () => {
-    for (const model of Object.keys(MODEL_TIER_REQUIREMENTS)) {
-      expect(
-        ECONOMY_MODELS.has(model),
-        `${model} should not appear in both ECONOMY_MODELS and MODEL_TIER_REQUIREMENTS`,
-      ).toBe(false);
-    }
-  });
-
-  it('all tiers in MODEL_TIER_REQUIREMENTS are valid', () => {
-    const validTiers = new Set(['pro', 'max', 'enterprise']);
-    for (const [model, tiers] of Object.entries(MODEL_TIER_REQUIREMENTS)) {
-      for (const tier of tiers) {
-        expect(validTiers.has(tier), `${model} has invalid tier: ${tier}`).toBe(true);
-      }
-    }
   });
 });

@@ -24,8 +24,6 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(nu
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/model-tiers', () => ({
   canAccessModel: () => true,
-  ECONOMY_MODELS: new Set<string>(),
-  MODEL_TIER_REQUIREMENTS: {},
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },

@@ -4,7 +4,6 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ModelAvailability, ModelEnvironment, RoutingTaskType } from '@agiworkforce/types';
 import {
-  MODEL_PRESETS,
   PROVIDER_LABELS,
   getDisplayModels,
   getModelMetadata,
@@ -12,7 +11,7 @@ import {
   normalizeModelId,
   type ModelMetadata,
 } from '@shared/config/llm';
-import { getAutoRoutingProfiles } from '@agiworkforce/types';
+import { getAutoRoutingProfiles, getModelsForTierAndSurface } from '@agiworkforce/types';
 
 export interface AIModel {
   id: string;
@@ -63,7 +62,7 @@ interface ModelState extends PersistedModelState {
   getAvailableModels: () => Promise<AIModel[]>;
 }
 
-const CHAT_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal']);
+const CHAT_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal', 'search']);
 function describeModel(metadata: ModelMetadata): string {
   const bestFor = metadata.bestFor?.slice(0, 2).join(' · ');
   if (bestFor) {
@@ -112,9 +111,9 @@ function buildAvailableModels(): AIModel[] {
     providerKey: 'managed_cloud',
     description: profile.description,
   }));
-  const orderedIds = Object.entries(MODEL_PRESETS)
-    .filter(([provider]) => provider !== 'managed_cloud')
-    .flatMap(([, entries]) => entries.map((entry) => entry.value));
+  const orderedIds = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+    modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+  }).map((model) => model.id);
 
   const manualEntries = orderedIds
     .filter((modelId) => {
@@ -143,8 +142,8 @@ function buildAvailableModels(): AIModel[] {
     }));
 
   // Coming-soon (announced-but-unprovisioned) chat models. These are DELIBERATELY
-  // absent from MODEL_PRESETS (kept out of every routable/tier set — the
-  // availability invariant), so they are sourced directly from the catalog and
+  // absent from every routable/tier set by the availability invariant, so they
+  // are sourced directly from the catalog and
   // rendered as grayed, NON-selectable rows. `getDisplayModels()` includes them;
   // `getSelectableModels()` (live-only) drives what can actually be picked/sent.
   const comingSoonEntries = getDisplayModels()

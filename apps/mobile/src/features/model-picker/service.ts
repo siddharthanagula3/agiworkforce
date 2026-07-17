@@ -17,7 +17,6 @@ import {
   evaluateModelEnvironment,
   getDefaultModelFor,
   getModelMetadataById,
-  canAccessModelForSubscriptionTier,
   getAllowedModelsForTier,
   getMinimumRequiredTier,
   normalizeBillingPlanTier,
@@ -28,6 +27,7 @@ import {
 import {
   AUTO_MODES as MOBILE_AUTO_MODES,
   MODEL_LIST as CLOUD_MODEL_LIST,
+  getCloudModelsForTier,
   getProviderById as getCloudProviderById,
   type AutoModeDef as MobileAutoModeDef,
   type ModelDef as CloudModelDef,
@@ -83,15 +83,17 @@ const FREE_TIER_ECONOMY_MODEL_IDS = new Set(getAllowedModelsForTier('economy'));
 /**
  * Subscription-tier gate for cloud models as the SERVER actually enforces it.
  *
- * `canAccessModelForSubscriptionTier` alone rejects every model for tier
- * 'free', but the server's free-trial path accepts economy-list models from
+ * The shared tier + Mobile runtime selector owns paid access. The server's
+ * free-trial path additionally accepts economy-list models from
  * free users (apps/web/lib/free-trial-config.ts FREE_TRIAL_MODELS =
  * getAllowedModelsForTier('economy')). Mirror that allowance so the picker
  * never locks a model the server would serve.
  */
 export function canAccessCloudModelForTier(modelId: string, subscriptionTier: string): boolean {
-  if (canAccessModelForSubscriptionTier(modelId, subscriptionTier)) return true;
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
+  if (subscriptionTier.toLowerCase() !== 'free') {
+    return getCloudModelsForTier(subscriptionTier).some((model) => model.id === canonicalModelId);
+  }
   return FREE_TIER_ECONOMY_MODEL_IDS.has(canonicalModelId);
 }
 
@@ -180,9 +182,7 @@ const DEFAULT_LOCAL_MODEL =
   SHIPPABLE_LOCAL_MODELS.find((model) => model.id === catalogDefaultLocalModel.id) ??
   SHIPPABLE_LOCAL_MODELS.find((model) => model.role === 'default') ??
   SHIPPABLE_LOCAL_MODELS[0]!;
-const CLOUD_MODEL_SOURCE = Array.isArray(CLOUD_MODEL_LIST)
-  ? CLOUD_MODEL_LIST
-  : [];
+const CLOUD_MODEL_SOURCE = Array.isArray(CLOUD_MODEL_LIST) ? CLOUD_MODEL_LIST : [];
 const MOBILE_CLOUD_PROVIDER_IDS = Array.from(
   new Set(CLOUD_MODEL_SOURCE.map((model) => model.provider)),
 );
