@@ -155,6 +155,12 @@ pub struct AgentSession {
     pub(crate) team_manager: Option<teams::TeamManager>,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
+    /// Subscription tier used when the interactive per-turn Auto re-resolution
+    /// re-queries the registry policy. Seeded by the `--auto` launch path from
+    /// the account-tier lookup; when absent (e.g. resumed sessions), the
+    /// re-resolution falls back conservatively (byok trust → "byok", else
+    /// "free"), matching the app-server host's semantics.
+    pub(crate) auto_routing_tier: Option<String>,
     /// Image blocks queued for the next `send()` call.  They are prepended to
     /// the user message as `ContentBlock::Image` parts so the model receives
     /// both the images and the text prompt in a single multipart user turn.
@@ -389,6 +395,7 @@ impl AgentSession {
             team_manager: None,
             managed_session: None,
             managed_session_path: None,
+            auto_routing_tier: None,
             pending_image_blocks: Vec::new(),
             json_events: false,
             json_session_id: String::new(),
