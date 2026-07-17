@@ -70,6 +70,8 @@ interface SendMessageOptions {
   skillName?: string;
   /** Deep Research mode: forces web_search and injects a research system prompt. */
   research?: boolean;
+  /** Validated product mode; AGI Work exposes the paid server-owned tool harness. */
+  agentMode?: 'chat' | 'agiwork';
 }
 
 const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
@@ -1452,6 +1454,7 @@ export function useChatStream(): UseChatStreamReturn {
             web_fetch: options.webFetch || undefined,
             research: options.research || undefined,
             code_execution: options.codeExecution || undefined,
+            agent_mode: options.agentMode,
             thinking_mode: thinkingEnabled || undefined,
             effort: thinkingEnabled ? thinkingEffort : undefined,
             use_prompt_cache: true,

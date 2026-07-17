@@ -135,6 +135,9 @@ export const ChatCompletionRequestSchema = z.object({
   web_fetch: z.boolean().optional(),
   research: z.boolean().optional(),
   code_execution: z.boolean().optional(),
+  // Product mode, not a provider hint. `agiwork` is paid managed-cloud work
+  // that exposes AGI's server-owned search/fetch/sandbox tools below.
+  agent_mode: z.enum(['chat', 'agiwork']).optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
     .object({
@@ -152,6 +155,16 @@ export const ChatCompletionRequestSchema = z.object({
 });
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
+
+/** Make the AGI Work composer mode operational at the server trust boundary. */
+export function applyAgentMode(chatRequest: ChatCompletionRequest): void {
+  if (chatRequest.agent_mode !== 'agiwork') return;
+
+  chatRequest.stream = true;
+  chatRequest.web_search = true;
+  chatRequest.web_fetch = true;
+  chatRequest.code_execution = true;
+}
 
 export type ProcessedRequest = {
   requestId: string;
@@ -460,9 +473,13 @@ export function shouldOfferGenericWebSearchTool({
  * server-owned connector tools and therefore do not pass through this check.
  */
 export function isFreeTierBlockedAddOn(
-  request: Pick<ChatCompletionRequest, 'research' | 'tools' | 'tool_choice' | 'n' | 'web_search'>,
+  request: Pick<
+    ChatCompletionRequest,
+    'research' | 'tools' | 'tool_choice' | 'n' | 'web_search' | 'agent_mode'
+  >,
 ): boolean {
   return (
+    request.agent_mode === 'agiwork' ||
     request.research === true ||
     (request.tools?.length ?? 0) > 0 ||
     (request.tool_choice !== undefined && request.tool_choice !== 'none') ||
@@ -819,7 +836,7 @@ export async function processRequest(
           {
             error: {
               message:
-                'Deep Research, custom API tool definitions, and multiple completions require a paid plan. Free chat still includes web search, skills, files, code execution, and extended thinking.',
+                'AGI Work, Deep Research, custom API tool definitions, and multiple completions require a paid plan. Free chat still includes web search, skills, files, code execution, and extended thinking.',
               type: 'invalid_request_error',
               code: 'free_trial_feature_unavailable',
             },
@@ -829,6 +846,8 @@ export async function processRequest(
       };
     }
   }
+
+  applyAgentMode(chatRequest);
 
   // WEB-MULTIMODAL-IMAGE-SSRF: validate every user-supplied image_url before forwarding.
   for (let mi = 0; mi < chatRequest.messages.length; mi++) {
