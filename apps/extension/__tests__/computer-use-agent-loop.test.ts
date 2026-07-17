@@ -318,8 +318,33 @@ describe('computer-use agent loop — one round-trip', () => {
     expect(toolResultMsg?.content).toContain('Hello World');
 
     // ── Bearer token is sent ──────────────────────────────────────────────────
-    const authHeader = (firstCallArgs[1].headers as Record<string, string>)['Authorization'];
-    expect(authHeader).toBe('Bearer test-bearer-token-for-vitest');
+    const firstHeaders = firstCallArgs[1].headers as Record<string, string>;
+    expect(firstHeaders['Authorization']).toBe('Bearer test-bearer-token-for-vitest');
+
+    // ── Gateway billing contract: Idempotency-Key is required on every send ──
+    // services/api-gateway rejects the request with 400 IDEMPOTENCY_KEY_REQUIRED
+    // before any provider work otherwise; the key must match the gateway's
+    // accepted charset/length.
+    expect(firstHeaders['Idempotency-Key']).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
+    const secondHeaders = (fetchMock.mock.calls[1] as [string, RequestInit])[1].headers as Record<
+      string,
+      string
+    >;
+    expect(secondHeaders['Idempotency-Key']).toMatch(/^[A-Za-z0-9._:-]{8,128}$/);
+    // Each send is its own billed request (no retry semantics in callCloud),
+    // so the durable-reservation identity must not be reused across sends.
+    expect(secondHeaders['Idempotency-Key']).not.toBe(firstHeaders['Idempotency-Key']);
+
+    // ── Explicit selection never carries a managed-failover plan ─────────────
+    // COMPUTER_USE_MODEL is a pinned catalog routing slot, not a
+    // resolveAutoRoute() auto plan: the x-agi-fallback-models header must be
+    // absent so the gateway treats this as an explicit selection it never
+    // rotates cross-provider.
+    for (const headers of [firstHeaders, secondHeaders]) {
+      expect(Object.keys(headers).map((name) => name.toLowerCase())).not.toContain(
+        'x-agi-fallback-models',
+      );
+    }
 
     // ── Final result ──────────────────────────────────────────────────────────
     expect(result.finalMessage).toContain('Task complete');
