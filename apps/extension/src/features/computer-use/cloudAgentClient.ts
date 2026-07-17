@@ -331,6 +331,15 @@ export async function callCloud(
       Authorization: `Bearer ${token}`,
       // Gateway validateCsrf requires this header on every POST (rejects 403 CSRF_ERROR otherwise).
       'X-Requested-With': 'XMLHttpRequest',
+      // The gateway's managed-usage billing hard-requires an Idempotency-Key
+      // on POST /api/llm/v1/chat/completions (400 IDEMPOTENCY_KEY_REQUIRED
+      // before any provider work). callCloud never retries a send, so a fresh
+      // key per call is the correct durable-reservation identity.
+      //
+      // Deliberately NO x-agi-fallback-models header: COMPUTER_USE_MODEL is a
+      // pinned catalog routing slot, not a resolveAutoRoute() auto plan, so
+      // this request is an explicit selection the gateway must never rotate.
+      'Idempotency-Key': `cu:${crypto.randomUUID()}`,
       // Legacy no-op: managed cloud is public alpha (open by default). The server gate
       // (apps/web/lib/managed-compute-gate.ts) is now purely env-based — it ignores this
       // header and only 403s when the AGI_MANAGED_COMPUTE_PRIVATE_BETA kill-switch is
