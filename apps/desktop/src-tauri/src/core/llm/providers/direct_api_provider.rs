@@ -5,7 +5,7 @@
 //! Anthropic, Google, DeepSeek, xAI, Mistral, Perplexity, Groq, Together,
 //! Fireworks, Cerebras, DeepInfra, Cohere, AI21, Sambanova, and Azure.
 
-use super::http_client_factory::{HttpClientConfig, create_http_client};
+use super::http_client_factory::{create_http_client, HttpClientConfig};
 use crate::core::llm::provider_adapter::ProviderAdapterFactory;
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::stream_engine::decode_direct_stream;
@@ -1014,11 +1014,9 @@ mod tests {
     fn validate_blocks_http_non_loopback() {
         let result = validate_provider_base_url("http://10.0.0.5:8080");
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .contains("HTTP (non-TLS) is only allowed for approved localhost ports")
-        );
+        assert!(result
+            .unwrap_err()
+            .contains("HTTP (non-TLS) is only allowed for approved localhost ports"));
     }
 
     #[test]

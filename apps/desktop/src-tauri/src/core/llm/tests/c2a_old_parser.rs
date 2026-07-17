@@ -46,7 +46,10 @@ pub(crate) struct SseStreamParser {
 impl Unpin for SseStreamParser {}
 
 impl SseStreamParser {
-    pub(crate) fn from_chunks(chunks: Vec<bytes::Bytes>, provider: crate::core::llm::Provider) -> Self {
+    pub(crate) fn from_chunks(
+        chunks: Vec<bytes::Bytes>,
+        provider: crate::core::llm::Provider,
+    ) -> Self {
         Self {
             inner: Box::pin(futures_util::stream::iter(chunks.into_iter().map(Ok))),
             buffer: Vec::new(),

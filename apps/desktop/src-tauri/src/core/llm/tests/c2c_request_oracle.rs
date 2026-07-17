@@ -27,18 +27,26 @@
 //!   compaction is deliberately NOT applied on the desktop path (the desktop
 //!   never compacted; adopting it is a separate product decision).
 //!
-//! - **anthropic / openai / openai-responses / gemini — DOCUMENTED, NOT
-//!   switched.** OLD side is the live production adapter
-//!   (`ProviderAdapterFactory::create_adapter(..).adapt_request(..)`); NEW
-//!   side is the crate's pure body builder. Byte-parity is proven here for
-//!   the covered common feature surface modulo the enumerated deltas, but the
-//!   desktop stays on its adapters because the two sides are not yet
-//!   feature-equivalent:
+//! - **anthropic — PROVEN + SWITCHED (c3, 2026-07-16).** Production
+//!   `AnthropicAdapter::adapt_request` routes crate-expressible requests
+//!   through the shared serializer (`adapt_request_via_crate`) and falls back
+//!   to the legacy arm for shapes the crate cannot express (structured
+//!   outputs, server tools, documents, explicit cache_control,
+//!   audio/background/continuity — pinned in
+//!   `anthropic_inexpressible_shapes_fall_back_to_legacy`). The former crate
+//!   gaps are FIXED: thinking omits `temperature` (was a live 400 risk — the
+//!   CLI can bundle an effort-preset temperature with a thinking budget) and
+//!   floors `max_tokens` to budget + 1024; tool_choice / effort / top_p /
+//!   top_k / metadata are crate-expressed. Intentional deltas the desktop
+//!   GAINS: prompt-cache breakpoints (system / tools / last message) and
+//!   explicit `is_error: false` on plain-path tool results.
+//!
+//! - **openai / openai-responses / gemini — DOCUMENTED, NOT switched.** OLD
+//!   side is the live production adapter; NEW side is the crate's pure body
+//!   builder. Byte-parity is proven here for the covered common feature
+//!   surface modulo the enumerated deltas, but these stay on their adapters
+//!   because the two sides are not yet feature-equivalent:
 //!     CRATE GAPS (must be fixed before any switch):
-//!       * anthropic: keeps `temperature` alongside `thinking` (Anthropic
-//!         400s any temperature != 1 with thinking) and has no
-//!         max_tokens-vs-thinking-budget floor (`ThinkingKeepsTemperature`,
-//!         `ThinkingMaxTokensFloor`);
 //!       * openai: no `items:{}` normalization for array tool schemas
 //!         (OpenAI rejects with `invalid_function_parameters`;
 //!         `ArrayItemsNormalized`) and no `image_url.detail` support;
@@ -47,18 +55,18 @@
 //!         a literal `0` when the caller has no cap (`AlwaysMaxOutputTokens`)
 //!         and has no `thinkingConfig` support
 //!       (pinned by `crate_builders_cannot_express_desktop_features`).
-//!     DESKTOP-ONLY FEATURES the crate cannot express (caller-level or
-//!     future crate API): tool_choice, output_config/response_format, effort,
-//!     top_p/top_k, metadata, server tools, audio, background,
+//!     DESKTOP-ONLY FEATURES the crate cannot express on these dialects:
+//!     tool_choice (crate type exists; not yet serialized for them),
+//!     output_config/response_format, server tools, audio, background,
 //!     previous_response_id, catalog model-id mapping (`get_api_model_id`),
-//!     and the FIX-007 max-tokens clamp.
-//!     CRATE-SIDE FIXES the desktop would GAIN by switching (pinned as
-//!     deltas/divergence tests): anthropic prompt-cache breakpoints (system /
-//!     tools / last-message), openai `stream_options.include_usage`, correct
-//!     openai chat-completions tool history (the desktop adapter DROPS
-//!     assistant `tool_calls` and `tool_call_id` — see
-//!     `openai_chat_tool_history_divergence`), and correct gemini
-//!     functionResponse role/name (see `gemini_tool_result_divergence`).
+//!     and the FIX-007 max-tokens clamp (the latter two stay desktop
+//!     caller-side by design, as the anthropic switch shows).
+//!     CRATE-SIDE FIXES the desktop would GAIN by switching: openai
+//!     `stream_options.include_usage`, correct openai chat-completions tool
+//!     history (the desktop adapter DROPS assistant `tool_calls` and
+//!     `tool_call_id` — see `openai_chat_tool_history_divergence`), and
+//!     correct gemini functionResponse role/name (see
+//!     `gemini_tool_result_divergence`).
 //!
 //! Model ids in fixtures are deliberately NON-CATALOG so the desktop's
 //! catalog model-id mapping (`get_api_model_id`, `get_canonicalized_id`) is
@@ -67,7 +75,7 @@
 //! expects wire ids from its caller (the CLI already passes them) — a caller
 //! contract, not serializer drift.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::core::llm::provider_adapter::ProviderAdapterFactory;
 use crate::core::llm::providers::ollama::build_ollama_chat_body;
@@ -258,6 +266,11 @@ enum Delta {
     /// through verbatim; new hardens them to `{}` (mirrors the c2a decode-side
     /// invalid-args policy — Ollama 400s non-object arguments).
     OllamaNonObjectToolArgs,
+    /// The crate normalizes bare array tool schemas (`items: {}` injection —
+    /// required by OpenAI-compatible servers, harmless for Ollama); the
+    /// retired desktop builder passed schemas verbatim. Validated by applying
+    /// the same rule to OLD's tools and requiring byte-equality with NEW's.
+    OllamaToolSchemaNormalized,
     // ---- anthropic (documented) ----
     /// New adds the crate's last-message prompt-cache breakpoint. Validated
     /// by applying the crate's own exported `add_message_cache_breakpoint` to
@@ -272,26 +285,11 @@ enum Delta {
     /// New serializes `is_error: false` on tool_result blocks; old's
     /// plain-text path omitted the field (Anthropic defaults it to false).
     ToolResultIsErrorField,
-    /// CRATE GAP: with `thinking` enabled the desktop removes `temperature`
-    /// (Anthropic 400s temperature != 1 with thinking); the crate keeps it.
-    ThinkingKeepsTemperature,
-    /// CRATE GAP: the desktop floors `max_tokens` to `budget + 1024` when
-    /// thinking is enabled (the API requires headroom); the crate sends the
-    /// caller's value verbatim.
-    ThinkingMaxTokensFloor,
-    // ---- shared ----
-    /// A desktop-only top-level key the crate cannot express (tool_choice,
-    /// top_p, ...). Removed from OLD after asserting NEW truly lacks it.
-    DesktopOnlyKey(&'static str),
     // ---- openai-compat (documented) ----
     /// New requests usage on the final SSE chunk
     /// (`stream_options: {include_usage: true}`); old never did (the old
     /// chat-completions stream simply carried no usage).
     StreamOptionsIncludeUsage,
-    /// CRATE GAP: old normalizes array tool schemas by inserting `items: {}`
-    /// (OpenAI rejects arrays without `items`); new passes schemas verbatim.
-    /// Validated by applying the same normalization rule to NEW's tools.
-    ArrayItemsNormalized,
     /// Old emits `image_url.detail` on vision parts; the crate has no detail
     /// support (OpenAI defaults to `auto`, the fixture's value).
     ImageDetailField,
@@ -299,13 +297,6 @@ enum Delta {
     /// Old collapses a single text-only user turn to the compact string
     /// `input`; new always sends typed input items.
     CompactSingleTurnInput,
-    /// New sends message text as typed `input_text` part arrays; old sends
-    /// the plain string. Validated by concatenating NEW's part texts.
-    TypedTextParts,
-    // ---- gemini (documented) ----
-    /// CRATE GAP: new always emits `generationConfig.maxOutputTokens`,
-    /// including a literal `0` when the caller has no cap; old omits it.
-    AlwaysMaxOutputTokens,
 }
 
 /// Apply one delta. Returns whether it fired; panics if the structural claim
@@ -350,7 +341,10 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
                  builder sent top-level"
             );
             old.as_object_mut().unwrap().remove("images");
-            new["messages"][idx].as_object_mut().unwrap().remove("images");
+            new["messages"][idx]
+                .as_object_mut()
+                .unwrap()
+                .remove("images");
             true
         }
         Delta::OllamaAssistantEmptyContent => {
@@ -383,7 +377,10 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
                 new.pointer("/options/num_predict").is_none(),
                 "[{name}] new must omit a zero num_predict, not send it"
             );
-            old["options"].as_object_mut().unwrap().remove("num_predict");
+            old["options"]
+                .as_object_mut()
+                .unwrap()
+                .remove("num_predict");
             true
         }
         Delta::OllamaNonObjectToolArgs => {
@@ -411,6 +408,35 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
             }
             fired
         }
+        Delta::OllamaToolSchemaNormalized => {
+            fn normalize(schema: &mut Value) -> bool {
+                let mut changed = false;
+                match schema {
+                    Value::Object(map) => {
+                        if map.get("type").and_then(Value::as_str) == Some("array")
+                            && !map.contains_key("items")
+                        {
+                            map.insert("items".to_string(), json!({}));
+                            changed = true;
+                        }
+                        for v in map.values_mut() {
+                            changed |= normalize(v);
+                        }
+                    }
+                    Value::Array(items) => {
+                        for v in items {
+                            changed |= normalize(v);
+                        }
+                    }
+                    _ => {}
+                }
+                changed
+            }
+            let Some(tools) = old.get_mut("tools") else {
+                return false;
+            };
+            normalize(tools)
+        }
         Delta::MessageCacheBreakpoint => {
             let mut transformed = old["messages"].as_array().cloned().unwrap_or_default();
             agiworkforce_llm::serialize::add_message_cache_breakpoint(&mut transformed);
@@ -426,7 +452,10 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
             fired
         }
         Delta::SystemPromptCached => {
-            let Some(old_sys) = old.get("system").and_then(Value::as_str).map(str::to_string)
+            let Some(old_sys) = old
+                .get("system")
+                .and_then(Value::as_str)
+                .map(str::to_string)
             else {
                 return false;
             };
@@ -495,50 +524,6 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
             }
             fired
         }
-        Delta::ThinkingKeepsTemperature => {
-            assert!(
-                old.get("thinking").is_some() && new.get("thinking").is_some(),
-                "[{name}] delta only applies to thinking requests"
-            );
-            assert!(
-                old.get("temperature").is_none(),
-                "[{name}] old must have removed temperature under thinking"
-            );
-            let removed = new.as_object_mut().unwrap().remove("temperature");
-            assert!(
-                removed.is_some(),
-                "[{name}] new was expected to (wrongly) keep temperature — crate gap \
-                 closed? delete this delta and re-evaluate the switch gate"
-            );
-            true
-        }
-        Delta::ThinkingMaxTokensFloor => {
-            let budget = new
-                .pointer("/thinking/budget_tokens")
-                .and_then(Value::as_u64)
-                .expect("thinking budget present");
-            let old_max = old["max_tokens"].as_u64().expect("old max_tokens");
-            let new_max = new["max_tokens"].as_u64().expect("new max_tokens");
-            assert_eq!(
-                old_max,
-                budget + 1024,
-                "[{name}] old must floor max_tokens to budget + 1024"
-            );
-            assert!(
-                new_max < old_max,
-                "[{name}] delta only fires when the caller's cap was below the floor"
-            );
-            old["max_tokens"] = new["max_tokens"].clone();
-            true
-        }
-        Delta::DesktopOnlyKey(key) => {
-            assert!(
-                new.get(key).is_none(),
-                "[{name}] {key} is declared desktop-only but new carries it — crate \
-                 support landed? delete this delta"
-            );
-            old.as_object_mut().unwrap().remove(key).is_some()
-        }
         Delta::StreamOptionsIncludeUsage => {
             let removed = new.as_object_mut().unwrap().remove("stream_options");
             assert_eq!(
@@ -551,35 +536,6 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
                 "[{name}] old never sent stream_options"
             );
             true
-        }
-        Delta::ArrayItemsNormalized => {
-            fn normalize(schema: &mut Value) -> bool {
-                let mut changed = false;
-                match schema {
-                    Value::Object(map) => {
-                        if map.get("type").and_then(Value::as_str) == Some("array")
-                            && !map.contains_key("items")
-                        {
-                            map.insert("items".to_string(), json!({}));
-                            changed = true;
-                        }
-                        for v in map.values_mut() {
-                            changed |= normalize(v);
-                        }
-                    }
-                    Value::Array(items) => {
-                        for v in items {
-                            changed |= normalize(v);
-                        }
-                    }
-                    _ => {}
-                }
-                changed
-            }
-            let Some(tools) = new.get_mut("tools") else {
-                return false;
-            };
-            normalize(tools)
         }
         Delta::ImageDetailField => {
             let mut fired = false;
@@ -615,47 +571,6 @@ fn apply_delta(name: &str, delta: Delta, old: &mut Value, new: &mut Value) -> bo
                 "[{name}] the typed item must carry the exact old compact string"
             );
             old["input"] = new["input"].clone();
-            true
-        }
-        Delta::TypedTextParts => {
-            let old_items = old["input"].as_array().cloned().unwrap_or_default();
-            let new_items = new["input"].as_array_mut().expect("input items");
-            assert_eq!(old_items.len(), new_items.len(), "[{name}] item counts");
-            let mut fired = false;
-            for (o, n) in old_items.iter().zip(new_items.iter_mut()) {
-                let (Some(old_text), Some(parts)) =
-                    (o.get("content").and_then(Value::as_str), n.get("content").and_then(Value::as_array))
-                else {
-                    continue;
-                };
-                let folded: String = parts
-                    .iter()
-                    .map(|p| {
-                        assert_eq!(p["type"], "input_text", "[{name}] typed text part");
-                        p["text"].as_str().unwrap_or_default().to_string()
-                    })
-                    .collect();
-                assert_eq!(
-                    folded, old_text,
-                    "[{name}] concatenated typed parts must equal old's plain string"
-                );
-                n["content"] = json!(old_text);
-                fired = true;
-            }
-            fired
-        }
-        Delta::AlwaysMaxOutputTokens => {
-            if new.pointer("/generationConfig/maxOutputTokens") != Some(&json!(0)) {
-                return false;
-            }
-            assert!(
-                old.pointer("/generationConfig/maxOutputTokens").is_none(),
-                "[{name}] old omits maxOutputTokens when the caller has no cap"
-            );
-            new["generationConfig"]
-                .as_object_mut()
-                .unwrap()
-                .remove("maxOutputTokens");
             true
         }
     }
@@ -747,7 +662,10 @@ fn crate_tool(name: &str, parameters: Value) -> agiworkforce_llm::ToolDefinition
 
 /// Map the desktop fixture shape (system field + ChatMessages) into the crate
 /// wire messages the CLI-style caller would pass for the same conversation.
-fn crate_messages(system: Option<&str>, messages: &[ChatMessage]) -> Vec<agiworkforce_llm::Message> {
+fn crate_messages(
+    system: Option<&str>,
+    messages: &[ChatMessage],
+) -> Vec<agiworkforce_llm::Message> {
     use agiworkforce_llm::{ContentBlock, Message};
     let mut out = Vec::new();
     if let Some(system) = system {
@@ -804,6 +722,14 @@ fn chat_request<'a>(
         temperature,
         tools,
         thinking_budget,
+        tool_choice: None,
+        anthropic_thinking: None,
+        effort: None,
+        top_p: None,
+        top_k: None,
+        metadata: None,
+        reasoning_effort: None,
+        gemini_thinking_budget: None,
         num_ctx: None,
         ollama_think: None,
         idle_timeout: std::time::Duration::from_secs(5),
@@ -814,6 +740,20 @@ fn adapt_old(provider: Provider, request: &LLMRequest) -> Value {
     ProviderAdapterFactory::create_adapter(provider)
         .adapt_request(request)
         .expect("desktop adapter builds the request")
+}
+
+/// A real decodable 1x1 PNG (the desktop adapters decode image bytes to
+/// compute vision token estimates) plus its base64 for the crate side.
+fn one_by_one_png() -> (Vec<u8>, String) {
+    let mut png = Vec::new();
+    image::DynamicImage::new_rgba8(1, 1)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("encode 1x1 png");
+    let b64 = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(&png)
+    };
+    (png, b64)
 }
 
 // ---------------------------------------------------------------------------
@@ -918,6 +858,31 @@ fn ollama_native_tools_and_tool_history() {
 }
 
 #[test]
+fn ollama_bare_array_tool_schema_is_normalized_by_the_crate() {
+    // c3 side effect on the ollama path: the shared openai_function_tools_json
+    // now injects `items: {}` into bare array schemas; the retired builder
+    // passed them verbatim. Harmless for Ollama, pinned as a delta.
+    let array_schema = json!({
+        "type": "object",
+        "properties": { "paths": { "type": "array" } }
+    });
+    let tools = vec![desktop_tool("read_many", array_schema)];
+    let request = ollama_request(vec![msg("user", "Read these files")]);
+    let old = old_ollama::build(&request, &request.messages, Some(&tools), None, true);
+    let new = build_ollama_chat_body(&request, &request.messages, Some(&tools), None, true);
+    assert_eq!(
+        new["tools"][0]["function"]["parameters"]["properties"]["paths"]["items"],
+        json!({})
+    );
+    verify_parity(
+        "ollama_array_schema",
+        old,
+        new,
+        &[Delta::OllamaToolSchemaNormalized],
+    );
+}
+
+#[test]
 fn ollama_non_object_tool_args_are_hardened() {
     let request = ollama_request(vec![
         msg("user", "Do the thing"),
@@ -939,7 +904,10 @@ fn ollama_images_move_from_top_level_to_last_user_message() {
     // Caller-level vision gating (extract from the last user message, only
     // for vision-capable models) is unchanged production code; the oracle
     // exercises the builder boundary with the already-gated payload.
-    let images = vec!["QUdJIFdPUktGT1JDRQ==".to_string(), "aW1hZ2UtMg==".to_string()];
+    let images = vec![
+        "QUdJIFdPUktGT1JDRQ==".to_string(),
+        "aW1hZ2UtMg==".to_string(),
+    ];
     let request = ollama_request(vec![
         msg("system", "You are AGI Workforce."),
         msg("user", "What is in these screenshots?"),
@@ -952,19 +920,25 @@ fn ollama_images_move_from_top_level_to_last_user_message() {
         true,
     );
     let new = build_ollama_chat_body(&request, &request.messages, None, Some(&images), true);
-    verify_parity(
-        "ollama_images",
-        old,
-        new,
-        &[Delta::OllamaImagesPerMessage],
-    );
+    verify_parity("ollama_images", old, new, &[Delta::OllamaImagesPerMessage]);
 }
 
 // ---------------------------------------------------------------------------
-// anthropic — DOCUMENTED (desktop stays on its adapter)
+// anthropic — PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production `AnthropicAdapter::adapt_request` now routes crate-expressible
+// requests through `adapt_request_via_crate` (the shared serializer) and
+// falls back to `adapt_request_legacy` for shapes the crate cannot express
+// (structured outputs, server tools, documents, explicit cache_control,
+// audio/background/continuity). OLD side below is the legacy arm called
+// directly; each parity test ALSO asserts that production adapt_request
+// byte-equals the crate body (the switch proof). The former crate gaps
+// (temperature-with-thinking, max-tokens floor) are FIXED in the crate, so
+// the ThinkingKeepsTemperature / ThinkingMaxTokensFloor deltas are gone.
 // ---------------------------------------------------------------------------
 
-const ANTHROPIC_SYSTEM: &str = "You are AGI Workforce. Be terse.\n\n<environment>\nWorking directory: /repo\n</environment>";
+const ANTHROPIC_SYSTEM: &str =
+    "You are AGI Workforce. Be terse.\n\n<environment>\nWorking directory: /repo\n</environment>";
 
 fn anthropic_request(messages: Vec<ChatMessage>) -> LLMRequest {
     LLMRequest {
@@ -978,6 +952,25 @@ fn anthropic_request(messages: Vec<ChatMessage>) -> LLMRequest {
     }
 }
 
+/// OLD side for anthropic: the pre-c3 legacy adapter arm (still in production
+/// as the fallback path, unchanged code — no vendoring needed until the
+/// founder-gated twin deletion removes it).
+fn anthropic_legacy(request: &LLMRequest) -> Value {
+    crate::core::llm::provider_adapter::AnthropicAdapter::adapt_request_legacy(request)
+        .expect("legacy anthropic adapter builds the request")
+}
+
+/// The switch proof: production `adapt_request` must byte-equal the crate
+/// builder's body for a crate-expressible request.
+fn assert_anthropic_production_routes_to_crate(name: &str, request: &LLMRequest, new: &Value) {
+    assert_eq!(
+        canonical_json(&adapt_old(Provider::Anthropic, request)),
+        canonical_json(new),
+        "[{name}] production adapt_request must route this expressible request \
+         to the crate serializer"
+    );
+}
+
 #[test]
 fn anthropic_minimal_parity_modulo_cache_breakpoints() {
     let request = anthropic_request(vec![
@@ -985,7 +978,7 @@ fn anthropic_minimal_parity_modulo_cache_breakpoints() {
         msg("assistant", "Hi!"),
         msg("user", "Summarize this repo."),
     ]);
-    let old = adapt_old(Provider::Anthropic, &request);
+    let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
     let new = agiworkforce_llm::build_anthropic_request_body(&chat_request(
         "claude-oracle-test",
@@ -995,6 +988,7 @@ fn anthropic_minimal_parity_modulo_cache_breakpoints() {
         None,
         None,
     ));
+    assert_anthropic_production_routes_to_crate("anthropic_minimal", &request, &new);
     verify_parity(
         "anthropic_minimal",
         old,
@@ -1004,7 +998,7 @@ fn anthropic_minimal_parity_modulo_cache_breakpoints() {
 }
 
 #[test]
-fn anthropic_tools_parity_modulo_cache_and_tool_choice() {
+fn anthropic_tools_and_tool_choice_parity() {
     let desktop_tools = vec![
         desktop_tool("read_file", simple_schema()),
         desktop_tool("run_command", simple_schema()),
@@ -1014,20 +1008,25 @@ fn anthropic_tools_parity_modulo_cache_and_tool_choice() {
         tool_choice: Some(ToolChoice::Auto),
         ..anthropic_request(vec![msg("user", "Read Cargo.toml")])
     };
-    let old = adapt_old(Provider::Anthropic, &request);
+    let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
     let tools = vec![
         crate_tool("read_file", simple_schema()),
         crate_tool("run_command", simple_schema()),
     ];
-    let new = agiworkforce_llm::build_anthropic_request_body(&chat_request(
+    let mut req = chat_request(
         "claude-oracle-test",
         &messages,
         1024,
         Some(0.5),
         Some(&tools),
         None,
-    ));
+    );
+    req.tool_choice = Some(agiworkforce_llm::ToolChoice::Auto);
+    let new = agiworkforce_llm::build_anthropic_request_body(&req);
+    // tool_choice is now crate-expressed — both sides must carry it.
+    assert_eq!(new["tool_choice"], json!({"type": "auto"}));
+    assert_anthropic_production_routes_to_crate("anthropic_tools", &request, &new);
     verify_parity(
         "anthropic_tools",
         old,
@@ -1036,7 +1035,6 @@ fn anthropic_tools_parity_modulo_cache_and_tool_choice() {
             Delta::SystemPromptCached,
             Delta::MessageCacheBreakpoint,
             Delta::ToolsCacheControl,
-            Delta::DesktopOnlyKey("tool_choice"),
         ],
     );
 }
@@ -1053,7 +1051,7 @@ fn anthropic_tool_history_parity_modulo_is_error_and_breakpoints() {
         ),
         tool_result_msg("toolu_1", "[package]\nname = \"demo\""),
     ]);
-    let old = adapt_old(Provider::Anthropic, &request);
+    let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
     let new = agiworkforce_llm::build_anthropic_request_body(&chat_request(
         "claude-oracle-test",
@@ -1063,6 +1061,7 @@ fn anthropic_tool_history_parity_modulo_is_error_and_breakpoints() {
         None,
         None,
     ));
+    assert_anthropic_production_routes_to_crate("anthropic_tool_history", &request, &new);
     verify_parity(
         "anthropic_tool_history",
         old,
@@ -1076,36 +1075,158 @@ fn anthropic_tool_history_parity_modulo_is_error_and_breakpoints() {
 }
 
 #[test]
-fn anthropic_thinking_pins_crate_temperature_and_floor_gaps() {
+fn anthropic_thinking_is_byte_identical_after_crate_fixes() {
+    // Enabled(true) maps to an 8192-token budget on both sides. The legacy
+    // arm removes temperature and floors max_tokens to budget + 1024; the
+    // crate now does the same (c3 gap closure) — NO thinking deltas remain.
     let request = LLMRequest {
-        thinking: Some(ThinkingParameter::Enabled(true)), // desktop budget: 8192
+        thinking: Some(ThinkingParameter::Enabled(true)),
         ..anthropic_request(vec![msg("user", "Think hard about this.")])
     };
-    let old = adapt_old(Provider::Anthropic, &request);
+    let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
+    let mut req = chat_request("claude-oracle-test", &messages, 1024, Some(0.5), None, None);
+    req.anthropic_thinking = Some(agiworkforce_llm::AnthropicThinking::Enabled {
+        budget_tokens: 8192,
+    });
+    let new = agiworkforce_llm::build_anthropic_request_body(&req);
+    assert!(
+        new.get("temperature").is_none(),
+        "temperature must be omitted with thinking enabled"
+    );
+    assert_eq!(new["max_tokens"], 8192 + 1024, "budget+1024 floor");
+    assert_anthropic_production_routes_to_crate("anthropic_thinking", &request, &new);
+    verify_parity(
+        "anthropic_thinking",
+        old,
+        new,
+        &[Delta::SystemPromptCached, Delta::MessageCacheBreakpoint],
+    );
+}
+
+#[test]
+fn anthropic_adaptive_thinking_is_byte_identical() {
+    // Adaptive: thinking {type: adaptive}, temperature omitted, NO max_tokens
+    // floor (no fixed budget) — both sides.
+    let request = LLMRequest {
+        thinking: Some(ThinkingParameter::Adaptive {
+            thinking_type: "adaptive".to_string(),
+        }),
+        ..anthropic_request(vec![msg("user", "Plan the refactor.")])
+    };
+    let old = anthropic_legacy(&request);
+    let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
+    let mut req = chat_request("claude-oracle-test", &messages, 1024, Some(0.5), None, None);
+    req.anthropic_thinking = Some(agiworkforce_llm::AnthropicThinking::Adaptive);
+    let new = agiworkforce_llm::build_anthropic_request_body(&req);
+    assert_eq!(new["thinking"], json!({"type": "adaptive"}));
+    assert!(new.get("temperature").is_none());
+    assert_eq!(new["max_tokens"], 1024, "adaptive has no budget floor");
+    assert_anthropic_production_routes_to_crate("anthropic_adaptive", &request, &new);
+    verify_parity(
+        "anthropic_adaptive",
+        old,
+        new,
+        &[Delta::SystemPromptCached, Delta::MessageCacheBreakpoint],
+    );
+}
+
+#[test]
+fn anthropic_vision_parity_modulo_cache_breakpoints() {
+    let (png, b64) = one_by_one_png();
+    let request = anthropic_request(vec![ChatMessage {
+        multimodal_content: Some(vec![
+            ContentPart::Text {
+                text: "Describe this".to_string(),
+            },
+            ContentPart::Image {
+                image: ImageInput {
+                    data: png,
+                    format: ImageFormat::Png,
+                    detail: ImageDetail::Auto,
+                },
+            },
+        ]),
+        ..msg("user", "Describe this")
+    }]);
+    let old = anthropic_legacy(&request);
+
+    use agiworkforce_llm::{ContentBlock, Message};
+    let messages = vec![
+        Message::text("system", ANTHROPIC_SYSTEM),
+        Message::blocks(
+            "user",
+            vec![
+                ContentBlock::Text {
+                    text: "Describe this".to_string(),
+                },
+                ContentBlock::Image {
+                    mime: "image/png".to_string(),
+                    data_b64: b64,
+                },
+            ],
+        ),
+    ];
     let new = agiworkforce_llm::build_anthropic_request_body(&chat_request(
         "claude-oracle-test",
         &messages,
         1024,
         Some(0.5),
         None,
-        Some(8192),
+        None,
     ));
+    assert_anthropic_production_routes_to_crate("anthropic_vision", &request, &new);
     verify_parity(
-        "anthropic_thinking",
+        "anthropic_vision",
         old,
         new,
-        &[
-            Delta::SystemPromptCached,
-            Delta::MessageCacheBreakpoint,
-            Delta::ThinkingKeepsTemperature,
-            Delta::ThinkingMaxTokensFloor,
-        ],
+        &[Delta::SystemPromptCached, Delta::MessageCacheBreakpoint],
+    );
+}
+
+/// FALLBACK PIN: request shapes the crate cannot express must still route to
+/// the legacy arm — no silent field drops through the switch.
+#[test]
+fn anthropic_inexpressible_shapes_fall_back_to_legacy() {
+    // Structured outputs: the crate has no output_config; production must
+    // emit the legacy body (which carries the field).
+    let structured = LLMRequest {
+        output_config: Some(crate::core::llm::OutputConfig {
+            format: crate::core::llm::OutputFormat::Text,
+        }),
+        ..anthropic_request(vec![msg("user", "Hello")])
+    };
+    let body = adapt_old(Provider::Anthropic, &structured);
+    assert_eq!(
+        body["output_config"],
+        json!({"format": {"type": "text"}}),
+        "output_config request must take the legacy arm"
+    );
+
+    // Anthropic SERVER tools use a typed definition the crate cannot express.
+    let server_tool = LLMRequest {
+        tools: Some(vec![desktop_tool("web_search", simple_schema())]),
+        ..anthropic_request(vec![msg("user", "Search the web")])
+    };
+    let body = adapt_old(Provider::Anthropic, &server_tool);
+    assert_eq!(
+        body["tools"][0]["type"], "web_search_20250305",
+        "server-tool request must take the legacy arm (typed definition)"
     );
 }
 
 // ---------------------------------------------------------------------------
-// openai (chat completions) — DOCUMENTED (desktop stays on its adapter)
+// openai (chat completions) — PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production `OpenAIAdapter::adapt_request` routes crate-expressible CHAT
+// COMPLETIONS requests through `adapt_chat_via_crate` (Responses-model
+// routing is untouched — stage 3) and falls back to the legacy arm for
+// shapes the crate cannot express (structured outputs, server tools,
+// non-auto image detail, audio). OLD side below is the legacy arm called
+// directly; parity tests also assert production adapt_request byte-equals
+// the crate body. The array-items normalization gap is FIXED in the crate,
+// so ArrayItemsNormalized is gone; the legacy arm's tool-history drop is
+// FIXED BY THE SWITCH (see the flipped divergence pin below).
 // ---------------------------------------------------------------------------
 
 /// Third-party OpenAI-compatible arm on both sides: a non-catalog model id
@@ -1115,6 +1236,25 @@ fn anthropic_thinking_pins_crate_temperature_and_floor_gaps() {
 /// URL match); both then emit `max_completion_tokens`.
 fn openai_compat_opts() -> agiworkforce_llm::OpenAiOpts {
     agiworkforce_llm::OpenAiOpts::for_url("https://api.deepseek.com/v1/chat/completions")
+}
+
+/// OLD side for openai chat: the pre-c3 legacy arm (still in production as
+/// the fallback path).
+fn openai_chat_legacy(request: &LLMRequest) -> Value {
+    crate::core::llm::provider_adapter::OpenAIAdapter
+        .adapt_to_chat_completions_api(request)
+        .expect("legacy openai chat adapter builds the request")
+}
+
+/// The switch proof: production `adapt_request` must byte-equal the crate
+/// builder's body for a crate-expressible chat request.
+fn assert_openai_production_routes_to_crate(name: &str, request: &LLMRequest, new: &Value) {
+    assert_eq!(
+        canonical_json(&adapt_old(Provider::OpenAI, request)),
+        canonical_json(new),
+        "[{name}] production adapt_request must route this expressible request \
+         to the crate serializer"
+    );
 }
 
 fn openai_request(messages: Vec<ChatMessage>) -> LLMRequest {
@@ -1131,13 +1271,18 @@ fn openai_request(messages: Vec<ChatMessage>) -> LLMRequest {
 
 #[test]
 fn openai_chat_minimal_parity_modulo_stream_options() {
-    let request = openai_request(vec![msg("user", "Hello"), msg("assistant", "Hi!"), msg("user", "More.")]);
-    let old = adapt_old(Provider::OpenAI, &request);
+    let request = openai_request(vec![
+        msg("user", "Hello"),
+        msg("assistant", "Hi!"),
+        msg("user", "More."),
+    ]);
+    let old = openai_chat_legacy(&request);
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let new = agiworkforce_llm::build_openai_compat_request_body(
         &chat_request("compat-oracle-test", &messages, 1024, Some(0.5), None, None),
         &openai_compat_opts(),
     );
+    assert_openai_production_routes_to_crate("openai_chat_minimal", &request, &new);
     verify_parity(
         "openai_chat_minimal",
         old,
@@ -1147,52 +1292,92 @@ fn openai_chat_minimal_parity_modulo_stream_options() {
 }
 
 #[test]
-fn openai_chat_array_schema_pins_crate_normalization_gap() {
-    // A tool schema with a bare `type: array` property: the desktop injects
-    // `items: {}` (OpenAI 400s without it); the crate passes it verbatim.
+fn openai_chat_array_schema_normalization_is_byte_identical() {
+    // A tool schema with a bare `type: array` property: BOTH sides now
+    // inject `items: {}` (OpenAI 400s without it) — the former crate gap is
+    // closed, so no delta. tool_choice is crate-expressed too.
     let array_schema = json!({
         "type": "object",
         "properties": { "paths": { "type": "array" } }
     });
     let request = LLMRequest {
         tools: Some(vec![desktop_tool("read_many", array_schema.clone())]),
+        tool_choice: Some(ToolChoice::Auto),
         ..openai_request(vec![msg("user", "Read these files")])
     };
-    let old = adapt_old(Provider::OpenAI, &request);
+    let old = openai_chat_legacy(&request);
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let tools = vec![crate_tool("read_many", array_schema)];
-    let new = agiworkforce_llm::build_openai_compat_request_body(
-        &chat_request(
-            "compat-oracle-test",
-            &messages,
-            1024,
-            Some(0.5),
-            Some(&tools),
-            None,
-        ),
-        &openai_compat_opts(),
+    let mut req = chat_request(
+        "compat-oracle-test",
+        &messages,
+        1024,
+        Some(0.5),
+        Some(&tools),
+        None,
     );
+    req.tool_choice = Some(agiworkforce_llm::ToolChoice::Auto);
+    let new = agiworkforce_llm::build_openai_compat_request_body(&req, &openai_compat_opts());
+    assert_eq!(
+        new["tools"][0]["function"]["parameters"]["properties"]["paths"]["items"],
+        json!({}),
+        "the crate must normalize the bare array schema"
+    );
+    assert_eq!(new["tool_choice"], "auto");
+    assert_openai_production_routes_to_crate("openai_chat_array_schema", &request, &new);
     verify_parity(
         "openai_chat_array_schema",
         old,
         new,
-        &[Delta::StreamOptionsIncludeUsage, Delta::ArrayItemsNormalized],
+        &[Delta::StreamOptionsIncludeUsage],
     );
 }
 
 #[test]
-fn openai_chat_vision_parity_modulo_detail_field() {
-    // A real decodable PNG: the desktop adapter decodes the bytes to compute
-    // vision token estimates before serializing.
-    let mut png = Vec::new();
-    image::DynamicImage::new_rgba8(1, 1)
-        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
-        .expect("encode 1x1 png");
-    let b64 = {
-        use base64::Engine as _;
-        base64::engine::general_purpose::STANDARD.encode(&png)
+fn openai_chat_uncapped_max_tokens_is_omitted_on_both_sides() {
+    let request = LLMRequest {
+        max_tokens: None,
+        ..openai_request(vec![msg("user", "Hello")])
     };
+    let old = openai_chat_legacy(&request);
+    assert!(old.get("max_tokens").is_none());
+    let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
+    let new = agiworkforce_llm::build_openai_compat_request_body(
+        &chat_request("compat-oracle-test", &messages, 0, Some(0.5), None, None),
+        &openai_compat_opts(),
+    );
+    assert!(
+        new.get("max_tokens").is_none() && new.get("max_completion_tokens").is_none(),
+        "0 must omit the cap field (c3 fix — a literal 0 caps at zero tokens)"
+    );
+    assert_openai_production_routes_to_crate("openai_chat_uncapped", &request, &new);
+    verify_parity(
+        "openai_chat_uncapped",
+        old,
+        new,
+        &[Delta::StreamOptionsIncludeUsage],
+    );
+}
 
+#[test]
+fn openai_chat_non_streaming_omits_stream_and_stream_options() {
+    // The blocking send path: production must strip both `stream` (legacy
+    // never sent it for stream:false) and `stream_options` (OpenAI 400s
+    // stream_options without stream).
+    let request = LLMRequest {
+        stream: false,
+        ..openai_request(vec![msg("user", "Hello")])
+    };
+    let body = adapt_old(Provider::OpenAI, &request);
+    assert!(body.get("stream").is_none());
+    assert!(body.get("stream_options").is_none());
+    let old = openai_chat_legacy(&request);
+    verify_parity("openai_chat_non_streaming", old, body, &[]);
+}
+
+#[test]
+fn openai_chat_vision_parity_modulo_detail_field() {
+    let (png, b64) = one_by_one_png();
     let request = openai_request(vec![ChatMessage {
         multimodal_content: Some(vec![
             ContentPart::Text {
@@ -1208,7 +1393,7 @@ fn openai_chat_vision_parity_modulo_detail_field() {
         ]),
         ..msg("user", "Describe this")
     }]);
-    let old = adapt_old(Provider::OpenAI, &request);
+    let old = openai_chat_legacy(&request);
 
     use agiworkforce_llm::{ContentBlock, Message};
     let messages = vec![
@@ -1230,6 +1415,7 @@ fn openai_chat_vision_parity_modulo_detail_field() {
         &chat_request("compat-oracle-test", &messages, 1024, Some(0.5), None, None),
         &openai_compat_opts(),
     );
+    assert_openai_production_routes_to_crate("openai_chat_vision", &request, &new);
     verify_parity(
         "openai_chat_vision",
         old,
@@ -1238,14 +1424,15 @@ fn openai_chat_vision_parity_modulo_detail_field() {
     );
 }
 
-/// DIVERGENCE PIN (no parity claim): the desktop chat-completions adapter
+/// DIVERGENCE PIN, FLIPPED BY THE c3 SWITCH: the LEGACY chat-completions arm
 /// DROPS tool history — assistant `tool_calls` never serialize (the message
 /// falls into the plain `{role, content}` arm) and tool-result messages lose
 /// `tool_call_id`, so a replayed tool conversation 400s on OpenAI ("messages
 /// with role 'tool' must be a response to a preceding message with
-/// 'tool_calls'"). The crate serializer emits the correct shapes. Pinned
-/// exactly on both sides so either side changing shape fails this test —
-/// switching openai to the crate serializer FIXES a real desktop bug.
+/// 'tool_calls'"). PRODUCTION now routes this shape through the crate
+/// serializer, which emits the CORRECT history — asserted below as the
+/// switch proof. Both shapes stay pinned exactly so either side changing
+/// fails this test.
 #[test]
 fn openai_chat_tool_history_divergence() {
     let request = openai_request(vec![
@@ -1253,7 +1440,7 @@ fn openai_chat_tool_history_divergence() {
         assistant_tool_call_msg("", "call_1", "read_file", r#"{"path":"Cargo.toml"}"#),
         tool_result_msg("call_1", "[package]"),
     ]);
-    let old = adapt_old(Provider::OpenAI, &request);
+    let old = openai_chat_legacy(&request);
     assert_eq!(
         canonical_json(&old["messages"]),
         canonical_json(&json!([
@@ -1286,28 +1473,53 @@ fn openai_chat_tool_history_divergence() {
         ])),
         "crate tool-history shape changed — re-derive this pin"
     );
+    // The switch proof: production emits the CORRECT (crate) history.
+    assert_openai_production_routes_to_crate("openai_chat_tool_history", &request, &new);
 }
 
 // ---------------------------------------------------------------------------
-// openai responses — DOCUMENTED (desktop stays on its adapter)
+// openai responses — PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production routes crate-expressible Responses requests through
+// `adapt_responses_via_crate`; fallback (legacy arm) for structured outputs,
+// server tools, per-tool `strict`, multimodal input, and
+// audio/background/continuity. Reasoning-effort resolution (catalog thinking
+// capability + codex suffix override) stays desktop-side and feeds the
+// crate's new `reasoning_effort` field — it cannot be exercised here without
+// catalog models (fixture ids are deliberately non-catalog), so its wire
+// shape is pinned by the crate's own unit tests. Assistant tool-call turns
+// split into a string-content assistant item + flat function_call items —
+// exactly the legacy shapes (typed input_text parts are user-input only).
 // ---------------------------------------------------------------------------
 
 /// Non-catalog o-series id: the desktop's version heuristic routes it to the
 /// Responses API without consulting the catalog.
 const RESPONSES_MODEL: &str = "o3-oracle-test";
 
-#[test]
-fn openai_responses_single_turn_parity_modulo_compact_input() {
-    let request = LLMRequest {
-        messages: vec![msg("user", "Hello")],
+/// OLD side for openai responses: the pre-c3 legacy arm (still in production
+/// as the fallback path).
+fn responses_legacy(request: &LLMRequest) -> Value {
+    crate::core::llm::provider_adapter::OpenAIAdapter
+        .adapt_to_responses_api(request)
+        .expect("legacy responses adapter builds the request")
+}
+
+fn responses_request(messages: Vec<ChatMessage>) -> LLMRequest {
+    LLMRequest {
+        messages,
         model: RESPONSES_MODEL.to_string(),
         temperature: Some(0.5),
         max_tokens: Some(1024),
         stream: true,
         system: Some("You are AGI Workforce.".to_string()),
         ..Default::default()
-    };
-    let old = adapt_old(Provider::OpenAI, &request);
+    }
+}
+
+#[test]
+fn openai_responses_single_turn_parity_modulo_compact_input() {
+    let request = responses_request(vec![msg("user", "Hello")]);
+    let old = responses_legacy(&request);
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let new = agiworkforce_llm::build_openai_responses_body(&chat_request(
         RESPONSES_MODEL,
@@ -1317,6 +1529,12 @@ fn openai_responses_single_turn_parity_modulo_compact_input() {
         None,
         None,
     ));
+    // Switch proof: production now emits the crate's typed-item form.
+    assert_eq!(
+        canonical_json(&adapt_old(Provider::OpenAI, &request)),
+        canonical_json(&new),
+        "production must route the expressible responses request to the crate"
+    );
     verify_parity(
         "responses_single_turn",
         old,
@@ -1326,10 +1544,12 @@ fn openai_responses_single_turn_parity_modulo_compact_input() {
 }
 
 #[test]
-fn openai_responses_tool_history_parity_modulo_typed_parts() {
+fn openai_responses_tool_history_is_byte_identical() {
     let tools = vec![desktop_tool("read_file", simple_schema())];
     let request = LLMRequest {
-        messages: vec![
+        tools: Some(tools),
+        tool_choice: Some(ToolChoice::Auto),
+        ..responses_request(vec![
             msg("user", "Read Cargo.toml"),
             assistant_tool_call_msg(
                 "Reading it.",
@@ -1339,37 +1559,108 @@ fn openai_responses_tool_history_parity_modulo_typed_parts() {
             ),
             tool_result_msg("call_1", "[package]"),
             msg("user", "Summarize it."),
-        ],
-        model: RESPONSES_MODEL.to_string(),
-        temperature: Some(0.5),
-        max_tokens: Some(1024),
-        stream: true,
-        system: Some("You are AGI Workforce.".to_string()),
-        tools: Some(tools),
-        tool_choice: Some(ToolChoice::Auto),
-        ..Default::default()
+        ])
     };
-    let old = adapt_old(Provider::OpenAI, &request);
-    let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
+    let old = responses_legacy(&request);
+
+    // Wrapper-shaped wire messages: the assistant tool-call turn SPLITS into
+    // a text message + a ToolUse blocks message (string assistant content +
+    // flat function_call item — the legacy arm's exact shapes).
+    use agiworkforce_llm::{ContentBlock, Message};
+    let messages = vec![
+        Message::text("system", "You are AGI Workforce."),
+        Message::text("user", "Read Cargo.toml"),
+        Message::text("assistant", "Reading it."),
+        Message::blocks(
+            "assistant",
+            vec![ContentBlock::ToolUse {
+                id: "call_1".to_string(),
+                name: "read_file".to_string(),
+                input: json!({"path": "Cargo.toml"}),
+            }],
+        ),
+        Message::blocks(
+            "user",
+            vec![ContentBlock::ToolResult {
+                tool_use_id: "call_1".to_string(),
+                content: "[package]".to_string(),
+                is_error: false,
+            }],
+        ),
+        Message::text("user", "Summarize it."),
+    ];
     let crate_tools = vec![crate_tool("read_file", simple_schema())];
-    let new = agiworkforce_llm::build_openai_responses_body(&chat_request(
+    let mut req = chat_request(
         RESPONSES_MODEL,
         &messages,
         1024,
         Some(0.5),
         Some(&crate_tools),
         None,
-    ));
-    verify_parity(
-        "responses_tool_history",
-        old,
-        new,
-        &[Delta::TypedTextParts, Delta::DesktopOnlyKey("tool_choice")],
+    );
+    req.tool_choice = Some(agiworkforce_llm::ToolChoice::Auto);
+    let new = agiworkforce_llm::build_openai_responses_body(&req);
+    assert_eq!(new["tool_choice"], "auto");
+    assert_eq!(
+        canonical_json(&adapt_old(Provider::OpenAI, &request)),
+        canonical_json(&new),
+        "production must route the expressible responses request to the crate"
+    );
+    verify_parity("responses_tool_history", old, new, &[]);
+}
+
+#[test]
+fn openai_responses_non_streaming_omits_stream() {
+    let request = LLMRequest {
+        stream: false,
+        ..responses_request(vec![msg("user", "Hello")])
+    };
+    let body = adapt_old(Provider::OpenAI, &request);
+    assert!(body.get("stream").is_none());
+}
+
+/// FALLBACK PIN: responses shapes the crate cannot express route to legacy.
+#[test]
+fn openai_responses_inexpressible_shapes_fall_back_to_legacy() {
+    // Per-tool `strict` is a Responses-only knob with no crate field.
+    let strict_tool = LLMRequest {
+        tools: Some(vec![ToolDefinition {
+            strict: Some(true),
+            ..desktop_tool("read_file", simple_schema())
+        }]),
+        ..responses_request(vec![msg("user", "Read Cargo.toml")])
+    };
+    let body = adapt_old(Provider::OpenAI, &strict_tool);
+    assert_eq!(
+        body["tools"][0]["strict"], true,
+        "strict-tool request must take the legacy arm"
+    );
+
+    // previous_response_id (conversation continuity) has no crate field.
+    let continuity = LLMRequest {
+        previous_response_id: Some("resp_123".to_string()),
+        ..responses_request(vec![msg("user", "Continue.")])
+    };
+    let body = adapt_old(Provider::OpenAI, &continuity);
+    assert_eq!(
+        body["previous_response_id"], "resp_123",
+        "continuity request must take the legacy arm"
     );
 }
 
 // ---------------------------------------------------------------------------
-// gemini — DOCUMENTED (desktop stays on its adapter)
+// gemini — PROVEN + SWITCHED (c3, 2026-07-16)
+//
+// Production `GoogleAdapter::adapt_request` routes crate-expressible
+// requests through the shared serializer; fallback (legacy arm) for tool
+// schemas the legacy normalizer would change (or that need
+// `parametersJsonSchema`) and for non-crate multimodal parts. The former
+// crate gaps are FIXED: maxOutputTokens is omitted when uncapped, and
+// toolConfig / topP / topK / thinkingConfig are crate-expressed
+// (thinking-budget resolution stays desktop-side, catalog-gated — not
+// exercisable with non-catalog fixture ids; the wire shape is pinned by the
+// crate's unit tests). The legacy functionResponse role/name bug is FIXED BY
+// THE SWITCH (flipped divergence pin below).
 // ---------------------------------------------------------------------------
 
 fn gemini_request(messages: Vec<ChatMessage>) -> LLMRequest {
@@ -1384,6 +1675,22 @@ fn gemini_request(messages: Vec<ChatMessage>) -> LLMRequest {
     }
 }
 
+/// OLD side for gemini: the pre-c3 legacy arm (still in production as the
+/// fallback path).
+fn gemini_legacy(request: &LLMRequest) -> Value {
+    crate::core::llm::provider_adapter::GoogleAdapter::adapt_request_legacy(request)
+        .expect("legacy gemini adapter builds the request")
+}
+
+fn assert_gemini_production_routes_to_crate(name: &str, request: &LLMRequest, new: &Value) {
+    assert_eq!(
+        canonical_json(&adapt_old(Provider::Google, request)),
+        canonical_json(new),
+        "[{name}] production adapt_request must route this expressible request \
+         to the crate serializer"
+    );
+}
+
 #[test]
 fn gemini_minimal_is_byte_identical() {
     let request = gemini_request(vec![
@@ -1391,7 +1698,7 @@ fn gemini_minimal_is_byte_identical() {
         msg("assistant", "Hi!"),
         msg("user", "Summarize this repo."),
     ]);
-    let old = adapt_old(Provider::Google, &request);
+    let old = gemini_legacy(&request);
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let new = agiworkforce_llm::build_gemini_request_body(&chat_request(
         "gemini-oracle-test",
@@ -1401,36 +1708,46 @@ fn gemini_minimal_is_byte_identical() {
         None,
         None,
     ));
+    assert_gemini_production_routes_to_crate("gemini_minimal", &request, &new);
     verify_parity("gemini_minimal", old, new, &[]);
 }
 
 #[test]
-fn gemini_tools_are_byte_identical_for_simple_schemas() {
+fn gemini_tools_and_tool_choice_are_byte_identical() {
     let request = LLMRequest {
         tools: Some(vec![desktop_tool("read_file", simple_schema())]),
+        tool_choice: Some(ToolChoice::Auto),
         ..gemini_request(vec![msg("user", "Read Cargo.toml")])
     };
-    let old = adapt_old(Provider::Google, &request);
+    let old = gemini_legacy(&request);
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let tools = vec![crate_tool("read_file", simple_schema())];
-    let new = agiworkforce_llm::build_gemini_request_body(&chat_request(
+    let mut req = chat_request(
         "gemini-oracle-test",
         &messages,
         1024,
         Some(0.5),
         Some(&tools),
         None,
-    ));
+    );
+    req.tool_choice = Some(agiworkforce_llm::ToolChoice::Auto);
+    let new = agiworkforce_llm::build_gemini_request_body(&req);
+    assert_eq!(
+        new["toolConfig"],
+        json!({"functionCallingConfig": {"mode": "AUTO"}})
+    );
+    assert_gemini_production_routes_to_crate("gemini_tools", &request, &new);
     verify_parity("gemini_tools", old, new, &[]);
 }
 
 #[test]
-fn gemini_unset_max_tokens_pins_crate_zero_gap() {
+fn gemini_unset_max_tokens_is_omitted_on_both_sides() {
     let request = LLMRequest {
         max_tokens: None,
         ..gemini_request(vec![msg("user", "Hello")])
     };
-    let old = adapt_old(Provider::Google, &request);
+    let old = gemini_legacy(&request);
+    assert!(old.pointer("/generationConfig/maxOutputTokens").is_none());
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let new = agiworkforce_llm::build_gemini_request_body(&chat_request(
         "gemini-oracle-test",
@@ -1440,20 +1757,21 @@ fn gemini_unset_max_tokens_pins_crate_zero_gap() {
         None,
         None,
     ));
-    verify_parity(
-        "gemini_unset_max_tokens",
-        old,
-        new,
-        &[Delta::AlwaysMaxOutputTokens],
+    assert!(
+        new.pointer("/generationConfig/maxOutputTokens").is_none(),
+        "0 must omit maxOutputTokens (c3 fix — the crate used to emit a literal 0)"
     );
+    assert_gemini_production_routes_to_crate("gemini_unset_max_tokens", &request, &new);
+    verify_parity("gemini_unset_max_tokens", old, new, &[]);
 }
 
-/// DIVERGENCE PIN (no parity claim): tool-result turns. The desktop sends
-/// role "function" and — a real bug — puts the tool CALL ID in
+/// DIVERGENCE PIN, FLIPPED BY THE c3 SWITCH: tool-result turns. The LEGACY
+/// arm sends role "function" and — a real bug — puts the tool CALL ID in
 /// `functionResponse.name`; Gemini matches responses to calls BY FUNCTION
-/// NAME, so the desktop's pairing silently fails. The crate resolves the real
-/// function name from the originating ToolUse and uses a "user" turn. Pinned
-/// exactly on both sides; switching gemini to the crate serializer fixes it.
+/// NAME, so that pairing silently fails. PRODUCTION now routes this shape
+/// through the crate serializer, which resolves the real function name from
+/// the originating ToolUse and uses a "user" turn — asserted below as the
+/// switch proof. Both shapes stay pinned exactly.
 #[test]
 fn gemini_tool_result_divergence() {
     let request = gemini_request(vec![
@@ -1461,7 +1779,7 @@ fn gemini_tool_result_divergence() {
         assistant_tool_call_msg("", "call_1", "read_file", r#"{"path":"Cargo.toml"}"#),
         tool_result_msg("call_1", "[package]"),
     ]);
-    let old = adapt_old(Provider::Google, &request);
+    let old = gemini_legacy(&request);
     assert_eq!(
         canonical_json(&old["contents"]),
         canonical_json(&json!([
@@ -1469,7 +1787,7 @@ fn gemini_tool_result_divergence() {
             {"role": "model", "parts": [{"functionCall": {"name": "read_file", "args": {"path": "Cargo.toml"}}}]},
             {"role": "function", "parts": [{"functionResponse": {"name": "call_1", "response": {"result": "[package]"}}}]}
         ])),
-        "desktop gemini tool-result shape changed — re-derive this pin"
+        "legacy gemini tool-result shape changed — re-derive this pin"
     );
 
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
@@ -1490,6 +1808,33 @@ fn gemini_tool_result_divergence() {
         ])),
         "crate gemini tool-result shape changed — re-derive this pin"
     );
+    // The switch proof: production emits the CORRECT (crate) pairing.
+    assert_gemini_production_routes_to_crate("gemini_tool_result", &request, &new);
+}
+
+/// FALLBACK PIN: a tool schema the legacy normalizer would CHANGE (here: a
+/// `$schema` key it strips) must route to the legacy arm.
+#[test]
+fn gemini_exotic_tool_schema_falls_back_to_legacy() {
+    let exotic = json!({
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": { "path": { "type": "string" } }
+    });
+    let request = LLMRequest {
+        tools: Some(vec![desktop_tool("read_file", exotic)]),
+        ..gemini_request(vec![msg("user", "Read Cargo.toml")])
+    };
+    let body = adapt_old(Provider::Google, &request);
+    // The legacy arm routes a `$schema`-carrying definition through its
+    // `parametersJsonSchema` form (with the `$schema` key stripped) — proof
+    // the request took the legacy arm, since the crate only ever emits
+    // verbatim `parameters`.
+    let params = &body["tools"][0]["functionDeclarations"][0]["parametersJsonSchema"];
+    assert!(
+        params.is_object() && params.get("$schema").is_none(),
+        "exotic-schema request must take the legacy arm (parametersJsonSchema): {body}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1504,32 +1849,48 @@ fn crate_builders_cannot_express_desktop_features() {
     let messages = vec![agiworkforce_llm::Message::text("user", "Hello")];
     let req = chat_request("gap-pin", &messages, 512, Some(0.5), None, Some(1024));
 
+    // Anthropic gaps CLOSED by c3 (tool_choice/effort/top_p/top_k/metadata
+    // are now crate-expressed; thinking omits temperature and floors
+    // max_tokens). Remaining anthropic non-crate shapes (output_config,
+    // server tools, documents, cache_control) are guarded by the production
+    // fallback — pinned in anthropic_inexpressible_shapes_fall_back_to_legacy.
     let anthropic = agiworkforce_llm::build_anthropic_request_body(&req);
-    for key in ["tool_choice", "output_config", "top_p", "top_k", "effort", "metadata"] {
-        assert!(anthropic.get(key).is_none(), "anthropic gained {key}");
-    }
-    // The crate keeps temperature alongside thinking — the exact gap
-    // ThinkingKeepsTemperature pins. If this starts failing the gap is fixed.
     assert!(
-        anthropic.get("temperature").is_some() && anthropic.get("thinking").is_some(),
-        "crate anthropic thinking/temperature gap closed — update the oracle deltas \
-         and re-evaluate the anthropic switch gate"
+        anthropic.get("output_config").is_none(),
+        "anthropic gained output_config — re-derive the fallback predicate"
+    );
+    assert!(
+        anthropic.get("temperature").is_none() && anthropic.get("thinking").is_some(),
+        "c3 pin: thinking must omit temperature"
+    );
+    assert_eq!(
+        anthropic["max_tokens"],
+        1024 + 1024,
+        "c3 pin: thinking floors max_tokens to budget + 1024"
     );
 
+    // responses: reasoning.effort and tool_choice are now crate-expressed
+    // (c3); the remaining non-crate shapes are guarded by the production
+    // fallback (responses_crate_expressible).
     let responses = agiworkforce_llm::build_openai_responses_body(&req);
-    for key in ["reasoning", "tool_choice", "text", "background", "previous_response_id"] {
+    for key in ["text", "background", "previous_response_id"] {
         assert!(responses.get(key).is_none(), "responses gained {key}");
     }
 
+    // gemini: toolConfig/topP/topK/thinkingConfig are now crate-expressed
+    // (c3, via gemini_thinking_budget — None here, so absent); exotic tool
+    // schemas are guarded by the production fallback.
     let gemini = agiworkforce_llm::build_gemini_request_body(&req);
     assert!(
         gemini.pointer("/generationConfig/thinkingConfig").is_none(),
-        "gemini gained thinkingConfig"
+        "gemini_thinking_budget is None — thinkingConfig must stay absent"
     );
-    assert!(gemini.get("toolConfig").is_none(), "gemini gained toolConfig");
 
+    // openai chat: tool_choice/top_p/array-schema normalization are now
+    // crate-expressed (c3); the remaining non-crate shapes are guarded by the
+    // production fallback (chat_crate_expressible).
     let openai = agiworkforce_llm::build_openai_compat_request_body(&req, &openai_compat_opts());
-    for key in ["tool_choice", "response_format", "top_p", "audio"] {
+    for key in ["response_format", "audio"] {
         assert!(openai.get(key).is_none(), "openai gained {key}");
     }
 }
