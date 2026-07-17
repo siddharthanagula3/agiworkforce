@@ -711,9 +711,11 @@ fn normalize_release_date(released: Option<&str>) -> String {
     if released.len() == 4 && released.chars().all(|c| c.is_ascii_digit()) {
         return format!("{released}-01");
     }
+    // Accepts both "April 2026" and "October 15, 2025" — the year is always
+    // the last whitespace token in the catalog's human-readable forms.
     let mut parts = released.split_whitespace();
     let month = parts.next().unwrap_or_default();
-    let year = parts.next().unwrap_or_default();
+    let year = parts.last().unwrap_or_default();
     let month_number = match month.to_ascii_lowercase().as_str() {
         "january" => Some("01"),
         "february" => Some("02"),
