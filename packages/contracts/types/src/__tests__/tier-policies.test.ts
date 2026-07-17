@@ -247,7 +247,10 @@ describe('getTierPolicy — public getter', () => {
   });
 
   it('unknown tier falls back to Free tier shape', () => {
-    expect(getTierPolicy('hobby')).toMatchObject<Partial<TierPolicy>>({
+    // 'plus' was removed by the 2026-06-30 pricing decision with no rename
+    // successor — a genuinely unknown tier. ('hobby' is NOT unknown: it is
+    // basic's pre-rename name still carried by subscription rows.)
+    expect(getTierPolicy('plus')).toMatchObject<Partial<TierPolicy>>({
       tier: 'free',
       tokenCapPerMonth: 100_000,
       allowedSlots: ['workhorse_general'],
@@ -271,10 +274,15 @@ describe('Task #26 — TierPolicy declaration consolidation', () => {
     expect(getTierPolicy('pro').allowManualSelection).toBe(true);
   });
 
-  it('keeps Free + Hobby Auto-only on both legacy and aliased fields', () => {
+  it('keeps Free Auto-only while basic/hobby get the pro policy (2026-07-16 ladder)', () => {
     expect(getTierPolicy('free').manualModelSelection).toBe(false);
     expect(getTierPolicy('free').allowManualSelection).toBe(false);
-    expect(getTierPolicy('hobby').manualModelSelection).toBe(false);
-    expect(getTierPolicy('hobby').allowManualSelection).toBe(false);
+    // Basic (and its pre-rename alias 'hobby') shares Pro's tier policy —
+    // budget-differentiated, not capability-differentiated.
+    for (const alias of ['basic', 'hobby']) {
+      expect(getTierPolicy(alias).tier).toBe('pro');
+      expect(getTierPolicy(alias).manualModelSelection).toBe(true);
+      expect(getTierPolicy(alias).allowManualSelection).toBe(true);
+    }
   });
 });

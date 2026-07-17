@@ -211,12 +211,19 @@ describe('model catalog helpers', () => {
     expect(isAutoModeModelId('gpt-5.4-mini')).toBe(false);
     expect(isAutoModeModelId(null)).toBe(false);
     expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
-    expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gemini-3.1-flash-lite');
+    expect(resolveAutoModeModel('auto-economy', 'free')).toBe('gemini-3.1-flash-lite');
+    // Basic/hobby resolve exactly like pro (2026-07-16 ladder).
+    expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe(
+      resolveAutoModeModel('auto-balanced', 'pro'),
+    );
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.6-terra');
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe(
       modelRegistry.policies.auto.slots.flagship_general.modelKey,
     );
-    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.1-flash-lite');
+    expect(resolveAutoModeModel('auto-premium', 'free')).toBe('gemini-3.1-flash-lite');
+    expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe(
+      resolveAutoModeModel('auto-premium', 'pro'),
+    );
   });
 
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
@@ -287,8 +294,9 @@ describe('model catalog helpers', () => {
 
     expect(canAccessManualModelSelection('free')).toBe(false);
     // Pro now exposes the manual picker behind the Advanced-mode toggle per
-    // Compatibility behavior: Free + Hobby remain Auto-only.
-    expect(canAccessManualModelSelection('hobby')).toBe(false);
+    // Basic/hobby carry pro's policy (2026-07-16 ladder): manual picker on.
+    expect(canAccessManualModelSelection('hobby')).toBe(true);
+    expect(canAccessManualModelSelection('basic')).toBe(true);
     expect(canAccessManualModelSelection('pro')).toBe(true);
     expect(canAccessManualModelSelection('max')).toBe(true);
     expect(canAccessManualModelSelection('enterprise')).toBe(true);
@@ -408,17 +416,17 @@ describe('resolveAutoModeModel — task-aware routing', () => {
 
   describe('Free tier task-aware routing fallback (all tasks → workhorse_general)', () => {
     it('coding → workhorse_general (escalation_coding not in free allowedSlots)', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'coding');
+      const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
       expect(result).toBe('gemini-3.1-flash-lite');
       expect(result).not.toBe('claude-sonnet-4.6');
     });
     it('reasoning → workhorse_general (reasoning_premium not in free allowedSlots)', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'reasoning');
+      const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
       expect(result).toBe('gemini-3.1-flash-lite');
       expect(result).not.toBe('kimi-k2.6');
     });
     it('multimodal → workhorse_general (Flash-Lite handles vision)', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'multimodal');
+      const result = resolveAutoModeModel('auto-balanced', 'free', 'multimodal');
       expect(result).toBe('gemini-3.1-flash-lite');
     });
   });
@@ -492,7 +500,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
 
     it('Free tier reasoning with usOnly=true is ignored (toggle not available)', () => {
-      const result = resolveAutoModeModel('auto-balanced', 'hobby', 'reasoning', { usOnly: true });
+      const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning', { usOnly: true });
       expect(result).toBe('gemini-3.1-flash-lite');
     });
 
@@ -521,18 +529,19 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
     expect(getDefaultModelFor('free', 'voice')).toBe(getRoutingSlotModel('workhorse_general'));
   });
 
-  it('hobby chat falls back through preference list to workhorse_general (no general_balanced* allowed)', () => {
-    expect(getDefaultModelFor('hobby', 'chat')).toBe(getRoutingSlotModel('workhorse_general'));
+  it('hobby/basic chat mirrors pro (2026-07-16 ladder: budget-differentiated, same slots)', () => {
+    expect(getDefaultModelFor('hobby', 'chat')).toBe(getDefaultModelFor('pro', 'chat'));
+    expect(getDefaultModelFor('basic', 'chat')).toBe(getDefaultModelFor('pro', 'chat'));
   });
 
-  it('hobby fast-status uses workhorse fallback (general_fast slot not in hobby allowedSlots)', () => {
+  it('hobby fast-status mirrors pro fast-status', () => {
     expect(getDefaultModelFor('hobby', 'fast-status')).toBe(
-      getRoutingSlotModel('workhorse_general'),
+      getDefaultModelFor('pro', 'fast-status'),
     );
   });
 
-  it('hobby reasoning resolves to workhorse_general (free-tier fallback — reasoning_premium not allowed)', () => {
-    expect(getDefaultModelFor('hobby', 'reasoning')).toBe(getRoutingSlotModel('workhorse_general'));
+  it('hobby reasoning mirrors pro reasoning', () => {
+    expect(getDefaultModelFor('hobby', 'reasoning')).toBe(getDefaultModelFor('pro', 'reasoning'));
   });
 
   it('pro chat resolves to general_balanced_pro (preferred Pro slot)', () => {
