@@ -190,7 +190,7 @@ describe('Me API', () => {
         expect(data.feature_flags.advanced_model_access).toBe(true);
       });
 
-      it('should set advanced_model_access false for hobby tier', async () => {
+      it('should set advanced_model_access true for hobby/basic tier (2026-07-16 ladder: basic carries pro policy)', async () => {
         mockMeGetSubscription.mockResolvedValueOnce({
           id: 'sub-test',
           user_id: 'user-123',
@@ -209,7 +209,7 @@ describe('Me API', () => {
         const response = await GET(request);
         const data = await response.json();
 
-        expect(data.feature_flags.advanced_model_access).toBe(false);
+        expect(data.feature_flags.advanced_model_access).toBe(true);
       });
 
       it('should enable advanced_model_access for max tier', async () => {

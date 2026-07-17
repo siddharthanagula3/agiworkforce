@@ -4,7 +4,6 @@ export { MessageBubble } from './MessageBubble';
 export { MessageBubbleSkeleton } from './MessageBubbleSkeleton';
 export { ChatLoadingState } from './ChatLoadingState';
 export { EditableMessage } from './EditableMessage';
-export { CollaborativeMessageDisplay } from './CollaborativeMessageDisplay';
 export { TypingIndicator } from './TypingIndicator';
 export { AudioVisualizer } from './AudioVisualizer';
 export { AudioPlayer } from './AudioPlayer';

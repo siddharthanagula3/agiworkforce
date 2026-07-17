@@ -4,6 +4,13 @@ import Script from 'next/script';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
+declare global {
+  interface Window {
+    gtag: (...args: unknown[]) => void;
+    dataLayer: unknown[];
+  }
+}
+
 interface GoogleAnalyticsProps {
   trackingId: string;
   nonce?: string;
