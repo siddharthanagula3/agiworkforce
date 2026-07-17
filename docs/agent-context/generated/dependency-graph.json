@@ -669,6 +669,10 @@
       },
       {
         "from": "@agiworkforce/web",
+        "to": "@agiworkforce/sync"
+      },
+      {
+        "from": "@agiworkforce/web",
         "to": "@agiworkforce/types"
       },
       {

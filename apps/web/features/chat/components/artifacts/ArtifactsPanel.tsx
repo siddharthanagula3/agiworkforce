@@ -122,6 +122,8 @@ export function ArtifactsPanel() {
     getArtifactVersions,
     selectedArtifactId,
     panelOpen,
+    cloudSyncStatus,
+    cloudSyncError,
     selectArtifact,
     setPanelOpen,
   } = useArtifactsStore();
@@ -185,6 +187,21 @@ export function ArtifactsPanel() {
             {artifacts.length > 0 && (
               <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                 {artifacts.length}
+              </span>
+            )}
+            {cloudSyncStatus !== 'idle' && (
+              <span
+                className={cn(
+                  'text-[10px]',
+                  cloudSyncStatus === 'error' ? 'text-destructive' : 'text-muted-foreground',
+                )}
+                title={cloudSyncStatus === 'error' ? (cloudSyncError ?? undefined) : undefined}
+              >
+                {cloudSyncStatus === 'syncing'
+                  ? 'Syncing…'
+                  : cloudSyncStatus === 'error'
+                    ? 'Sync retrying'
+                    : 'Synced'}
               </span>
             )}
           </div>

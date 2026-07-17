@@ -1,5 +1,26 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
 import { useArtifactsStore } from './artifacts-store';
+
+function cloudDelta(overrides: Partial<ArtifactWireDelta> = {}): ArtifactWireDelta {
+  return {
+    id: 'artifact-cloud',
+    conversation_id: 'conv-cloud',
+    message_id: 'msg-cloud',
+    title: 'Cloud artifact',
+    artifact_type: 'html',
+    language: 'html',
+    content: '<main>Cloud</main>',
+    current_version: 2,
+    pinned: false,
+    tags: [],
+    created_at: '2026-07-17T00:00:00.000Z',
+    updated_at: '2026-07-17T00:01:00.000Z',
+    deleted_at: null,
+    server_version: '12',
+    ...overrides,
+  };
+}
 
 describe('chat artifacts sidecar store', () => {
   beforeEach(() => {
@@ -161,5 +182,51 @@ describe('chat artifacts sidecar store', () => {
     const state = useArtifactsStore.getState();
     expect(state.artifacts[0]?.conversationId).toBe('conv-keep');
     expect(state.getConversationArtifacts('conv-keep')).toHaveLength(1);
+  });
+
+  it('overlays a pulled cloud edit on the matching locally derived artifact', () => {
+    const store = useArtifactsStore.getState();
+    store.addArtifactForMessage(
+      'msg-cloud',
+      {
+        id: 'artifact-cloud',
+        type: 'html',
+        title: 'Derived artifact',
+        language: 'html',
+        content: '<main>Derived</main>',
+      },
+      'conv-cloud',
+    );
+
+    store.applyCloudArtifactDeltas([cloudDelta()]);
+
+    expect(useArtifactsStore.getState().getConversationArtifacts('conv-cloud')).toEqual([
+      expect.objectContaining({
+        id: 'artifact-cloud',
+        title: 'Cloud artifact',
+        content: '<main>Cloud</main>',
+      }),
+    ]);
+  });
+
+  it('keeps a pulled tombstone so a derived artifact cannot reappear', () => {
+    const store = useArtifactsStore.getState();
+    store.addArtifactForMessage(
+      'msg-cloud',
+      {
+        id: 'artifact-cloud',
+        type: 'html',
+        title: 'Derived artifact',
+        language: 'html',
+        content: '<main>Derived</main>',
+      },
+      'conv-cloud',
+    );
+
+    store.applyCloudArtifactDeltas([
+      cloudDelta({ deleted_at: '2026-07-17T00:02:00.000Z', server_version: '13' }),
+    ]);
+
+    expect(useArtifactsStore.getState().getConversationArtifacts('conv-cloud')).toEqual([]);
   });
 });

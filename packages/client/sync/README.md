@@ -10,8 +10,9 @@ Criticality: high
 
 Canonical pure delta-apply and bigint-cursor mechanics for cross-device Managed
 Cloud synchronization. Mobile consumes the TypeScript implementation at
-runtime. Desktop's Rust implementation replays the same committed JSON fixture
-corpus to preserve cross-language behavior.
+runtime. Web consumes the cursor mechanics for its pull-only artifact overlay.
+Desktop's Rust implementation replays the same committed JSON fixture corpus to
+preserve cross-language behavior.
 
 ## Public API
 

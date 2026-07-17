@@ -6,7 +6,8 @@
  * Rust cannot import this module — it re-implements the same rules natively
  * and is kept in sync by replaying the golden fixtures under __fixtures__/
  * against both implementations (see cloud_sync.rs's `#[cfg(test)]` fixture
- * replay module). Web is the server; it has no apply side.
+ * replay module). Web also consumes the cursor mechanics for its pull-only
+ * artifact overlay; conversation and message persistence remain server-owned.
  *
  * See docs/plans/cross-device-cloud-sync-design-2026-06-20.md for the
  * original design and each module file for the specific extraction/scope
