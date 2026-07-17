@@ -2193,8 +2193,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_native_message_connect_without_app_handle() {
+        // Real Chrome extension ids are exactly 32 chars of a-p; connect now
+        // validates via is_valid_chrome_extension_id.
+        let ext_id = "abcdefghijklmnopabcdefghijklmnop";
         let result = RealtimeServer::execute_native_message(
-            json!({ "type": "connect", "extension_id": "ext_123" }),
+            json!({ "type": "connect", "extension_id": ext_id }),
             None,
         )
         .await;
@@ -2202,7 +2205,18 @@ mod tests {
         assert!(result.is_ok());
         let payload = result.unwrap_or_default();
         assert_eq!(payload.get("connected"), Some(&json!(true)));
-        assert_eq!(payload.get("extension_id"), Some(&json!("ext_123")));
+        assert_eq!(payload.get("extension_id"), Some(&json!(ext_id)));
+    }
+
+    #[tokio::test]
+    async fn test_execute_native_message_connect_rejects_invalid_extension_id() {
+        let result = RealtimeServer::execute_native_message(
+            json!({ "type": "connect", "extension_id": "ext_123" }),
+            None,
+        )
+        .await;
+
+        assert!(result.is_err(), "malformed extension ids must be rejected");
     }
 
     #[tokio::test]
