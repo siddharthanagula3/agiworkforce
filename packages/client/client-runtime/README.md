@@ -12,7 +12,7 @@ Criticality: high
 
 ## Consumers
 
-- Web, Desktop, Chrome extension, shared UI packages, and services where runtime helpers are appropriate.
+- Web, Desktop, Mobile, Chrome extension, shared UI packages, and services where runtime helpers are appropriate.
 - Future agent/session orchestration adapters when they are TypeScript-side and surface-neutral.
 
 ## Public API / Exports
@@ -47,6 +47,7 @@ entry before introducing a new public subpath.
 - `src/index.ts` - public browser-safe exports.
 - `src/node.ts` - Node-specific export.
 - `src/events.ts`, `src/command.ts`, `src/registry.ts` - runtime primitives.
+- `src/agentActivity.ts` - portable canonical agent-event projection and local terminal handling.
 - `src/state/` - shared state helpers.
 - `src/queue/` - shared queue helpers.
 
