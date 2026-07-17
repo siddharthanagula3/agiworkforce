@@ -21,6 +21,7 @@ import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
+import { createFailoverPlan } from './lib/managed-failover';
 import type { StreamChunk } from '@agiworkforce/types';
 import {
   ManagedUsageRequestError,
@@ -309,38 +310,61 @@ async function handleChatCompletions(request: NextRequest) {
       // would measure the peek's own wait, not the real time-to-first-token.
       // See buildAdapterStreamResponse's docstring.
       const streamStartedAt = Date.now();
-      let chunks: AsyncIterable<StreamChunk>;
-      try {
-        const adapter = adapterProvider.buildAdapter(processed);
-        const chatRequest = adapterProvider.buildChatRequest(processed);
-        chunks = await startProviderStream(
-          adapter,
-          chatRequest,
-          request.signal,
-          adapterProvider.mapError,
-        );
-      } catch (error) {
-        await refundFailedReservation(userId, processed, 'streaming_failure');
-        return buildUpstreamErrorResponse(
-          error,
-          processed.provider,
-          processed.chatRequest.model,
-          processed.requestedModel,
+
+      // Managed failover (AUTO-ROUTER-MIGRATION-01, web twin): the rotation
+      // point is startProviderStream's first-chunk peek — a rotated attempt
+      // has BY CONSTRUCTION delivered nothing to the client (the peek either
+      // throws before any chunk is consumable, or the attempt is committed
+      // and later failures keep today's mid-stream behavior). One managed-
+      // usage reservation spans all attempts; the attempt view swaps the
+      // serving model so attribution and settlement follow it.
+      const failover = createFailoverPlan(processed, {
+        signal: request.signal,
+        isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+      });
+      let attemptProcessed: ProcessedRequest = processed;
+      let attemptAdapterProvider = adapterProvider;
+      for (;;) {
+        let chunks: AsyncIterable<StreamChunk>;
+        try {
+          const adapter = attemptAdapterProvider.buildAdapter(attemptProcessed);
+          const chatRequest = attemptAdapterProvider.buildChatRequest(attemptProcessed);
+          chunks = await startProviderStream(
+            adapter,
+            chatRequest,
+            request.signal,
+            attemptAdapterProvider.mapError,
+          );
+        } catch (error) {
+          const nextAttempt = failover.next(error);
+          const nextAdapterProvider = nextAttempt ? ADAPTER_PROVIDERS[nextAttempt.provider] : null;
+          if (nextAttempt && nextAdapterProvider) {
+            attemptProcessed = nextAttempt.processed;
+            attemptAdapterProvider = nextAdapterProvider;
+            continue;
+          }
+          await refundFailedReservation(userId, attemptProcessed, 'streaming_failure');
+          return buildUpstreamErrorResponse(
+            error,
+            attemptProcessed.provider,
+            attemptProcessed.chatRequest.model,
+            attemptProcessed.requestedModel,
+            userId,
+            attemptProcessed.requestId,
+            'streaming',
+          );
+        }
+
+        return buildAdapterStreamResponse(
+          request,
+          chunks,
+          attemptProcessed,
           userId,
-          processed.requestId,
-          'streaming',
+          token,
+          streamStartedAt,
+          attemptAdapterProvider.wireMode,
         );
       }
-
-      return buildAdapterStreamResponse(
-        request,
-        chunks,
-        processed,
-        userId,
-        token,
-        streamStartedAt,
-        adapterProvider.wireMode,
-      );
     }
 
     // `processed.provider` is resolved via `getProviderFromModel`'s catalog
@@ -366,31 +390,50 @@ async function handleChatCompletions(request: NextRequest) {
   // Non-streaming path
   const nonStreamAdapterProvider = ADAPTER_PROVIDERS[processed.provider];
   if (nonStreamAdapterProvider) {
-    let llmResponse;
-    try {
-      const adapter = nonStreamAdapterProvider.buildAdapter(processed);
-      const chatRequest = nonStreamAdapterProvider.buildChatRequest(processed);
-      const chunks = adapter.stream(chatRequest, request.signal);
-      llmResponse = await drainToLlmResponse(
-        chunks,
-        processed.llmRequest.model,
-        nonStreamAdapterProvider.mapError,
-        nonStreamAdapterProvider.wireMode,
-      );
-    } catch (error) {
-      await refundFailedReservation(userId, processed, 'request_failure');
-      return buildUpstreamErrorResponse(
-        error,
-        processed.provider,
-        processed.chatRequest.model,
-        processed.requestedModel,
-        userId,
-        processed.requestId,
-        'non-streaming',
-      );
-    }
+    // Same managed-failover semantics as the streaming path. Non-streaming
+    // drains the ENTIRE provider response before anything reaches the
+    // client, so every failure here is pre-first-byte by construction and a
+    // failed attempt's partial content is discarded with its drain.
+    const failover = createFailoverPlan(processed, {
+      signal: request.signal,
+      isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
+    });
+    let attemptProcessed: ProcessedRequest = processed;
+    let attemptAdapterProvider = nonStreamAdapterProvider;
+    for (;;) {
+      let llmResponse;
+      try {
+        const adapter = attemptAdapterProvider.buildAdapter(attemptProcessed);
+        const chatRequest = attemptAdapterProvider.buildChatRequest(attemptProcessed);
+        const chunks = adapter.stream(chatRequest, request.signal);
+        llmResponse = await drainToLlmResponse(
+          chunks,
+          attemptProcessed.llmRequest.model,
+          attemptAdapterProvider.mapError,
+          attemptAdapterProvider.wireMode,
+        );
+      } catch (error) {
+        const nextAttempt = failover.next(error);
+        const nextAdapterProvider = nextAttempt ? ADAPTER_PROVIDERS[nextAttempt.provider] : null;
+        if (nextAttempt && nextAdapterProvider) {
+          attemptProcessed = nextAttempt.processed;
+          attemptAdapterProvider = nextAdapterProvider;
+          continue;
+        }
+        await refundFailedReservation(userId, attemptProcessed, 'request_failure');
+        return buildUpstreamErrorResponse(
+          error,
+          attemptProcessed.provider,
+          attemptProcessed.chatRequest.model,
+          attemptProcessed.requestedModel,
+          userId,
+          attemptProcessed.requestId,
+          'non-streaming',
+        );
+      }
 
-    return buildNonStreamResponse(request, llmResponse, processed, userId, token);
+      return buildNonStreamResponse(request, llmResponse, attemptProcessed, userId, token);
+    }
   }
 
   // See the streaming branch's identical comment above: `processed.provider`

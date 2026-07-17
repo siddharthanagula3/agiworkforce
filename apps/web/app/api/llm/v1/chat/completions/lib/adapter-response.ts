@@ -91,7 +91,15 @@ export async function drainToLlmResponse(
   }
 
   if (firstError) {
-    throw mapError(firstError);
+    const mapped = mapError(firstError);
+    // Same structured-status carry as startProviderStream (adapter-factory.ts):
+    // the shared classifyError reads `.status`, never message text, and
+    // managed failover rotates only on availability-class categories.
+    const status = firstError.code ? Number(firstError.code) : Number.NaN;
+    if (Number.isInteger(status) && status >= 100 && status <= 599) {
+      (mapped as Error & { status?: number }).status = status;
+    }
+    throw mapped;
   }
 
   const response = assembler.response();
