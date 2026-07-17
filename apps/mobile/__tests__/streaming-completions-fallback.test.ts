@@ -179,6 +179,96 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect(callbacks.onDone).toHaveBeenCalledTimes(1);
   });
 
+  it('runtime-validates and forwards the canonical agent activity envelope', async () => {
+    const { streamChat } = await loadStreamingService();
+    const validEnvelope = {
+      schemaVersion: 2,
+      sessionId: 'session-mobile-1',
+      turnId: 'turn-mobile-1',
+      sequence: 0,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'progress-update',
+        progressId: 'research',
+        summary: 'Searching official sources',
+        status: 'running',
+      },
+    } as const;
+    const activitySse = [
+      `data: ${JSON.stringify({ choices: [{ delta: { x_agent_event: validEnvelope } }] })}`,
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n');
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => activitySse,
+    } as unknown as Response);
+
+    const onDelta = jest.fn();
+    const callbacks = { onDelta, onDone: jest.fn(), onError: jest.fn() };
+    await streamChat(
+      {
+        model: 'gpt-5.4-mini',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000006',
+      },
+      callbacks,
+    );
+
+    expect(onDelta).toHaveBeenCalledWith({ x_agent_event: validEnvelope });
+    expect(callbacks.onError).not.toHaveBeenCalled();
+  });
+
+  it('drops an invalid canonical agent event instead of persisting untrusted activity', async () => {
+    const { streamChat } = await loadStreamingService();
+    const activitySse = [
+      `data: ${JSON.stringify({
+        choices: [
+          {
+            delta: {
+              content: 'Safe answer',
+              x_agent_event: {
+                schemaVersion: 2,
+                sessionId: 'session-mobile-1',
+                turnId: 'turn-mobile-1',
+                sequence: -1,
+                emittedAtMs: 1_000,
+                event: { type: 'private-chain-of-thought', text: 'must not render' },
+              },
+            },
+          },
+        ],
+      })}`,
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n');
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => activitySse,
+    } as unknown as Response);
+
+    const onDelta = jest.fn();
+    await streamChat(
+      {
+        model: 'gpt-5.4-mini',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000007',
+      },
+      { onDelta, onDone: jest.fn(), onError: jest.fn() },
+    );
+
+    expect(onDelta).toHaveBeenCalledWith({ content: 'Safe answer' });
+    expect(JSON.stringify(onDelta.mock.calls)).not.toContain('private-chain-of-thought');
+  });
+
   it('reuses one operation identity across automatic network retries', async () => {
     jest.useFakeTimers();
     try {
