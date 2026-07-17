@@ -14,6 +14,7 @@ import {
   clearFacts,
   MEMORY_STORE_KEY,
   onMemoryDidChange,
+  containsFact,
   type MemoryFact,
 } from '../memory/memoryStore';
 
@@ -86,6 +87,8 @@ describe('addFact', () => {
     expect(fact.id).toMatch(/^mem_/);
     expect(fact.createdAt).toBeTruthy();
     expect(fact.updatedAt).toBe(fact.createdAt);
+    expect(fact.category).toBe('preference');
+    expect(fact.importance).toBe(5);
   });
 
   it('trims whitespace from text', async () => {
@@ -107,6 +110,13 @@ describe('addFact', () => {
     const gs = makeGlobalState();
     await addFact(gs, 'hello');
     expect(gs.update).toHaveBeenCalled();
+  });
+});
+
+describe('containsFact', () => {
+  it('uses shared case and whitespace normalization', () => {
+    const facts: MemoryFact[] = [{ id: '1', text: 'User prefers Rust', createdAt: '2026-01-01' }];
+    expect(containsFact(facts, '  USER   PREFERS rust ')).toBe(true);
   });
 });
 

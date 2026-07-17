@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as Crypto from 'expo-crypto';
+import { memoryRelevanceScore, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
   insertMemoryFact,
@@ -436,21 +437,30 @@ const MEMORY_QUERY_STOPWORDS = new Set([
 ]);
 
 /**
- * True if `factLower` is relevant to `queryLower`. A prior version checked
+ * Score significant query-word overlap with a memory. A prior version checked
  * `fact.includes(query)` — the fact containing the ENTIRE query as a literal
  * substring — which only ever matched a verbatim repeat of the fact text.
  * Real chat questions ("what language do I prefer between rust and python")
  * never contain the short stored fact ("user prefers rust over python")
  * verbatim, so cloud memory retrieval silently returned nothing for every
- * realistic query. Match on significant word overlap instead.
+ * realistic query. This lexical signal feeds the shared cross-surface memory
+ * relevance scorer so Mobile and Desktop no longer rank memories differently.
  */
-function factMatchesQuery(factLower: string, queryLower: string): boolean {
-  if (!queryLower) return false;
-  if (factLower.includes(queryLower) || queryLower.includes(factLower)) return true;
-  const words = queryLower
-    .split(/[^a-z0-9]+/)
-    .filter((w) => w.length > 2 && !MEMORY_QUERY_STOPWORDS.has(w));
-  return words.some((w) => factLower.includes(w));
+function memoryLexicalSimilarity(fact: string, query: string): number {
+  const factKey = normalizeMemoryKey(fact);
+  const queryKey = normalizeMemoryKey(query);
+  if (!queryKey) return 0;
+  if (factKey.includes(queryKey) || queryKey.includes(factKey)) return 1;
+  const words = Array.from(
+    new Set(
+      queryKey
+        .split(/[^a-z0-9]+/)
+        .filter((word) => word.length > 2 && !MEMORY_QUERY_STOPWORDS.has(word)),
+    ),
+  );
+  if (words.length === 0) return 0;
+  const matchingWords = words.filter((word) => factKey.includes(word)).length;
+  return matchingWords / words.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -467,7 +477,7 @@ export async function retrieveMemoryContext(
   // cloud turn. In local mode, read on-device SQLite only (below). This mirrors
   // the mode split in fetchMemories / addMemory.
   if (useChatAppModeStore.getState().appMode === 'cloud') {
-    const q = query.trim().toLowerCase();
+    const queryKey = normalizeMemoryKey(query);
     const activeEntries = useCloudMemoryStore.getState().entries.filter((e) => !e.isDeleted);
     const toFact = (e: (typeof activeEntries)[number]): MemoryFact => ({
       id: e.id,
@@ -477,9 +487,28 @@ export async function retrieveMemoryContext(
       created_at: new Date(e.createdAt).getTime(),
     });
 
-    if (q) {
-      const matched = activeEntries.filter((e) => factMatchesQuery(e.content.toLowerCase(), q));
-      if (matched.length > 0) return matched.slice(0, k).map(toFact);
+    if (queryKey) {
+      const now = Date.now();
+      const ranked = activeEntries
+        .map((entry) => {
+          const lexicalSimilarity = memoryLexicalSimilarity(entry.content, queryKey);
+          const accessedAt = Date.parse(entry.updatedAt || entry.createdAt);
+          const daysSinceAccess = Number.isFinite(accessedAt)
+            ? Math.max(0, (now - accessedAt) / 86_400_000)
+            : 30;
+          return {
+            entry,
+            lexicalSimilarity,
+            score: memoryRelevanceScore({
+              lexicalSimilarity,
+              importance: entry.pinned ? 10 : 5,
+              daysSinceAccess,
+            }),
+          };
+        })
+        .filter(({ lexicalSimilarity }) => lexicalSimilarity > 0)
+        .sort((left, right) => right.score - left.score);
+      if (ranked.length > 0) return ranked.slice(0, k).map(({ entry }) => toFact(entry));
     }
 
     // Relevance gate: only inject pinned facts when no keyword match is found,

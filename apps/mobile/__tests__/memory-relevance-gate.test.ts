@@ -177,6 +177,15 @@ describe('retrieveMemoryContext — cloud mode', () => {
     expect(result.map((f) => f.id)).toContain('f1');
   });
 
+  it('ranks the memory with more significant query overlap first', async () => {
+    seedCloudEntry('rust-only', 'User writes Rust');
+    seedCloudEntry('both', 'User writes Rust and Python');
+
+    const result = await retrieveMemoryContext('compare Rust and Python');
+
+    expect(result.map((fact) => fact.id)).toEqual(['both', 'rust-only']);
+  });
+
   it('does not inject an unrelated unpinned cloud fact', async () => {
     seedCloudEntry('f1', 'User has a cat named Whiskers');
     const result = await retrieveMemoryContext('what language do I prefer, rust or python');

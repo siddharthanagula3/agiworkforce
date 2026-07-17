@@ -11,6 +11,7 @@
 //! All operations are best-effort: errors are logged to stderr and never
 //! block the main agent loop.
 
+use agiworkforce_agent_core::memory::normalize_memory_key;
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
@@ -502,7 +503,7 @@ fn deduplicate_lines(text: &str) -> String {
     let mut result = Vec::new();
 
     for line in text.lines() {
-        let normalized = line.trim().to_lowercase();
+        let normalized = normalize_memory_key(line);
         if normalized.is_empty() || normalized == "---" {
             // Always keep separators and blank lines
             result.push(line.to_string());
@@ -609,7 +610,8 @@ mod tests {
 
     #[test]
     fn test_deduplicate_lines() {
-        let text = "- Always use cargo check\n- Always use cargo check\n- Run tests after changes";
+        let text =
+            "- Always use cargo check\n-   ALWAYS   use cargo check\n- Run tests after changes";
         let result = deduplicate_lines(text);
         assert_eq!(
             result,

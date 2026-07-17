@@ -39,6 +39,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::sys::error::{Error, Result};
+pub use agiworkforce_agent_core::memory::MemoryCategory;
 
 // =============================================================================
 // CONSTANTS
@@ -69,52 +70,6 @@ pub const MAX_CONTENT_LENGTH_BEFORE_SUMMARY: usize = 10000;
 // =============================================================================
 // TYPES
 // =============================================================================
-
-/// Category for organizing persistent memories
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum MemoryCategory {
-    /// User preferences and settings
-    Preference,
-    /// Factual information about the user or their work
-    Fact,
-    /// Decisions made by the user
-    Decision,
-    /// Contextual information from conversations
-    #[default]
-    Context,
-    /// Summarized conversation content
-    Summary,
-    /// Learned patterns or skills
-    Skill,
-}
-
-impl MemoryCategory {
-    /// Convert to database string representation
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Preference => "preference",
-            Self::Fact => "fact",
-            Self::Decision => "decision",
-            Self::Context => "context",
-            Self::Summary => "summary",
-            Self::Skill => "skill",
-        }
-    }
-
-    /// Parse from database string
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "preference" => Some(Self::Preference),
-            "fact" => Some(Self::Fact),
-            "decision" => Some(Self::Decision),
-            "context" => Some(Self::Context),
-            "summary" => Some(Self::Summary),
-            "skill" => Some(Self::Skill),
-            _ => None,
-        }
-    }
-}
 
 /// A persistent memory entry with optional embedding
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -817,10 +772,8 @@ impl MemoryStore {
                     // different models and live in incompatible vector spaces.
                     // Comparing (or zero-padding) across dimensions gives incorrect
                     // cosine similarity scores.
-                    if emb.len() != query_embedding.len() {
-                        return None;
-                    }
-                    let similarity = cosine_similarity(query_embedding, emb);
+                    let similarity =
+                        agiworkforce_agent_core::memory::cosine_similarity(query_embedding, emb)?;
                     if similarity > 0.0 {
                         Some((memory, similarity))
                     } else {
@@ -1214,23 +1167,6 @@ fn deserialize_embedding(blob: &[u8]) -> Vec<f32> {
         .collect()
 }
 
-/// Compute cosine similarity between two vectors
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    if a.len() != b.len() || a.is_empty() {
-        return 0.0;
-    }
-
-    let dot_product: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 0.0;
-    }
-
-    dot_product / (norm_a * norm_b)
-}
-
 /// Escape special characters for FTS5 query
 fn escape_fts_query(query: &str) -> String {
     // Remove special FTS5 operators and wrap in quotes for phrase matching
@@ -1262,7 +1198,7 @@ fn map_memory_row(row: &Row<'_>) -> rusqlite::Result<PersistentMemory> {
         created_at: parse_datetime(&created_at_str),
         project_id: row.get(4)?,
         summary: row.get(5)?,
-        category: MemoryCategory::from_str(&category_str).unwrap_or(MemoryCategory::Context),
+        category: MemoryCategory::parse(&category_str).unwrap_or(MemoryCategory::Context),
         importance: row.get(7)?,
         topic: row.get(8)?,
         source: row.get(9)?,
@@ -1377,13 +1313,22 @@ mod tests {
     fn test_cosine_similarity() {
         let a = vec![1.0, 0.0, 0.0];
         let b = vec![1.0, 0.0, 0.0];
-        assert!((cosine_similarity(&a, &b) - 1.0).abs() < 0.001);
+        assert!(
+            (agiworkforce_agent_core::memory::cosine_similarity(&a, &b).unwrap_or_default() - 1.0)
+                .abs()
+                < 0.001
+        );
 
         let c = vec![0.0, 1.0, 0.0];
-        assert!((cosine_similarity(&a, &c)).abs() < 0.001);
+        assert!(
+            agiworkforce_agent_core::memory::cosine_similarity(&a, &c)
+                .unwrap_or_default()
+                .abs()
+                < 0.001
+        );
 
         let d = vec![0.707, 0.707, 0.0];
-        let sim = cosine_similarity(&a, &d);
+        let sim = agiworkforce_agent_core::memory::cosine_similarity(&a, &d).unwrap_or_default();
         assert!((sim - 0.707).abs() < 0.01);
     }
 
@@ -1438,9 +1383,9 @@ mod tests {
     fn test_memory_category() {
         assert_eq!(MemoryCategory::Preference.as_str(), "preference");
         assert_eq!(
-            MemoryCategory::from_str("preference"),
+            MemoryCategory::parse("preference"),
             Some(MemoryCategory::Preference)
         );
-        assert_eq!(MemoryCategory::from_str("invalid"), None);
+        assert_eq!(MemoryCategory::parse("invalid"), None);
     }
 }

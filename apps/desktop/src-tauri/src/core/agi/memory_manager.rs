@@ -25,6 +25,7 @@ use std::path::Path;
 use std::sync::{Mutex, RwLock};
 
 use crate::sys::error::{Error, Result};
+pub use agiworkforce_agent_core::memory::MemoryCategory;
 
 use super::semantic_search::{IndexStats, SemanticSearchConfig, SemanticSearchResult, TfIdfIndex};
 
@@ -55,6 +56,19 @@ impl Default for DecayConfig {
             decay_period_days: 7,
             min_importance: 1,
             access_boost: 1,
+        }
+    }
+}
+
+impl From<&DecayConfig> for agiworkforce_agent_core::memory::MemoryDecayConfig {
+    fn from(config: &DecayConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            decay_rate: config.decay_rate,
+            decay_period_days: i64::from(config.decay_period_days),
+            min_importance: config.min_importance,
+            max_importance: 10,
+            access_boost: config.access_boost,
         }
     }
 }
@@ -163,37 +177,6 @@ pub struct ExtractedMemory {
     pub importance: i32,
     /// Source information (e.g., "compacted from 2025-01-20 to 2025-01-27")
     pub source: String,
-}
-
-/// Categories for organizing memories
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum MemoryCategory {
-    Preference,
-    Fact,
-    Decision,
-    Context,
-}
-
-impl MemoryCategory {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            MemoryCategory::Preference => "Preference",
-            MemoryCategory::Fact => "Fact",
-            MemoryCategory::Decision => "Decision",
-            MemoryCategory::Context => "Context",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "Preference" => Some(MemoryCategory::Preference),
-            "Fact" => Some(MemoryCategory::Fact),
-            "Decision" => Some(MemoryCategory::Decision),
-            "Context" => Some(MemoryCategory::Context),
-            _ => None,
-        }
-    }
 }
 
 /// A single memory entry
@@ -451,21 +434,29 @@ impl MemoryManager {
         let importance = importance.unwrap_or(5).clamp(1, 10);
         let category_str = category.as_str();
 
-        conn.execute(
-            "INSERT INTO user_memory (category, topic, content, importance, source, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
-             ON CONFLICT(category, topic) DO UPDATE SET
-                content = excluded.content,
-                importance = excluded.importance,
-                source = excluded.source,
-                updated_at = datetime('now')",
-            params![category_str, topic, content, importance, source],
-        )
-        .map_err(|e| Error::Database(format!("Failed to store memory: {}", e)))?;
+        // Older Desktop builds persisted PascalCase categories. Update those
+        // rows in place before inserting the canonical lowercase wire value so
+        // a category-format migration never duplicates or loses user memory.
+        let updated = conn
+            .execute(
+                "UPDATE user_memory
+                 SET content = ?1, importance = ?2, source = ?3, updated_at = datetime('now')
+                 WHERE category = ?4 COLLATE NOCASE AND topic = ?5",
+                params![content, importance, source, category_str, topic],
+            )
+            .map_err(|e| Error::Database(format!("Failed to update memory: {}", e)))?;
+        if updated == 0 {
+            conn.execute(
+                "INSERT INTO user_memory (category, topic, content, importance, source, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+                params![category_str, topic, content, importance, source],
+            )
+            .map_err(|e| Error::Database(format!("Failed to store memory: {}", e)))?;
+        }
 
         let id: i64 = conn
             .query_row(
-                "SELECT id FROM user_memory WHERE category = ?1 AND topic = ?2",
+                "SELECT id FROM user_memory WHERE category = ?1 COLLATE NOCASE AND topic = ?2",
                 params![category_str, topic],
                 |row| row.get(0),
             )
@@ -493,7 +484,7 @@ impl MemoryManager {
             // BUG-08 fix: include last_accessed so map_memory_row column 8 is always valid
             "SELECT id, category, topic, content, importance, source, created_at, updated_at, last_accessed
              FROM user_memory
-             WHERE category = ?1 AND topic = ?2",
+             WHERE category = ?1 COLLATE NOCASE AND topic = ?2",
             params![category_str, topic],
             map_memory_row,
         );
@@ -565,7 +556,7 @@ impl MemoryManager {
                 // BUG-08 fix: include last_accessed
                 "SELECT id, category, topic, content, importance, source, created_at, updated_at, last_accessed
                  FROM user_memory
-                 WHERE category = ?1
+                 WHERE category = ?1 COLLATE NOCASE
                  ORDER BY importance DESC, updated_at DESC
                  LIMIT ?2",
             )
@@ -631,7 +622,7 @@ impl MemoryManager {
 
         let rows = conn
             .execute(
-                "DELETE FROM user_memory WHERE category = ?1 AND topic = ?2",
+                "DELETE FROM user_memory WHERE category = ?1 COLLATE NOCASE AND topic = ?2",
                 params![category_str, topic],
             )
             .map_err(|e| Error::Database(format!("Failed to delete memory: {}", e)))?;
@@ -802,11 +793,9 @@ impl MemoryManager {
             .map_err(|e| Error::Database(format!("Memory not found: {}", e)))?;
 
         // Calculate new importance (capped at 10)
-        let new_importance = if config.enabled {
-            (current_importance + config.access_boost).min(10)
-        } else {
-            current_importance
-        };
+        let shared_config = agiworkforce_agent_core::memory::MemoryDecayConfig::from(&config);
+        let new_importance =
+            agiworkforce_agent_core::memory::boosted_importance(current_importance, &shared_config);
 
         // Update importance and last_accessed
         if has_last_accessed {
@@ -841,7 +830,12 @@ impl MemoryManager {
         if let Some(ref memory) = entry {
             if config.enabled {
                 // Boost importance (but not above 10)
-                let new_importance = (memory.importance + config.access_boost).min(10);
+                let shared_config =
+                    agiworkforce_agent_core::memory::MemoryDecayConfig::from(&config);
+                let new_importance = agiworkforce_agent_core::memory::boosted_importance(
+                    memory.importance,
+                    &shared_config,
+                );
                 if new_importance != memory.importance {
                     let conn = self
                         .conn
@@ -955,19 +949,16 @@ impl MemoryManager {
         let mut at_minimum = 0;
         let mut total_decay = 0;
 
+        let shared_config = agiworkforce_agent_core::memory::MemoryDecayConfig::from(&config);
         for (id, importance, days_since) in memories {
-            let periods = days_since / i64::from(config.decay_period_days);
-            if periods <= 0 {
-                continue;
-            }
-
-            let max_decay = importance - config.min_importance;
-            let decay_amount = ((importance as f32 * config.decay_rate * periods as f32) as i32)
-                .min(max_decay)
-                .max(0);
+            let new_importance = agiworkforce_agent_core::memory::decayed_importance(
+                importance,
+                days_since,
+                &shared_config,
+            );
+            let decay_amount = importance.saturating_sub(new_importance);
 
             if decay_amount > 0 {
-                let new_importance = importance - decay_amount;
                 conn.execute(
                     "UPDATE user_memory SET importance = ?1 WHERE id = ?2",
                     params![new_importance, id],
@@ -1470,7 +1461,7 @@ Format your response as JSON with this structure:
                 params![memory_id],
                 |row| {
                     let category_str: String = row.get(1)?;
-                    let category = MemoryCategory::from_str(&category_str).unwrap_or(MemoryCategory::Context);
+                    let category = MemoryCategory::parse(&category_str).unwrap_or(MemoryCategory::Context);
                     Ok(MemoryEntry {
                         id: row.get(0)?,
                         category,
@@ -1585,6 +1576,18 @@ Format your response as JSON with this structure:
 
         // Sort by combined score and return top results
         let mut results: Vec<SemanticSearchResult> = merged.into_values().collect();
+        for result in &mut results {
+            result.combined_score = agiworkforce_agent_core::memory::memory_relevance_score(
+                agiworkforce_agent_core::memory::MemoryRelevanceInput {
+                    lexical_similarity: result.keyword_score,
+                    embedding_similarity: (result.similarity_score > 0.0)
+                        .then_some(result.similarity_score),
+                    lexical_weight: Some(config.keyword_weight),
+                    importance: result.memory.importance,
+                    days_since_access: memory_days_since_access(&result.memory),
+                },
+            );
+        }
         results.sort_by(|a, b| {
             b.combined_score
                 .partial_cmp(&a.combined_score)
@@ -1772,7 +1775,7 @@ Format your response as JSON with this structure:
 
         // Import memories
         for memory in export.memories {
-            let category = match MemoryCategory::from_str(memory.category.as_str()) {
+            let category = match MemoryCategory::parse(memory.category.as_str()) {
                 Some(c) => c,
                 None => {
                     result.errors.push(format!(
@@ -1900,7 +1903,7 @@ Format your response as JSON with this structure:
 
 fn map_memory_row(row: &Row<'_>) -> rusqlite::Result<MemoryEntry> {
     let category_str: String = row.get(1)?;
-    let category = MemoryCategory::from_str(&category_str).unwrap_or(MemoryCategory::Context);
+    let category = MemoryCategory::parse(&category_str).unwrap_or(MemoryCategory::Context);
 
     Ok(MemoryEntry {
         id: row.get(0)?,
@@ -1913,6 +1916,16 @@ fn map_memory_row(row: &Row<'_>) -> rusqlite::Result<MemoryEntry> {
         updated_at: row.get(7)?,
         last_accessed: row.get(8).ok(),
     })
+}
+
+fn memory_days_since_access(memory: &MemoryEntry) -> i64 {
+    let timestamp = memory
+        .last_accessed
+        .as_deref()
+        .unwrap_or(memory.updated_at.as_str());
+    chrono::NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M:%S")
+        .map(|then| (Utc::now().naive_utc() - then).num_days().max(0))
+        .unwrap_or(30)
 }
 
 #[cfg(test)]
@@ -1983,6 +1996,44 @@ mod tests {
             .unwrap();
         assert_eq!(memory.content, "blue");
         assert_eq!(memory.importance, 8);
+    }
+
+    #[test]
+    fn test_canonical_categories_update_legacy_rows_without_duplicates() {
+        let (_temp_dir, manager) = setup_test_db();
+        let legacy_id = {
+            let conn = manager.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO user_memory (category, topic, content, importance) VALUES ('Preference', 'editor', 'vim', 5)",
+                [],
+            )
+            .unwrap();
+            conn.last_insert_rowid()
+        };
+
+        let remembered_id = manager
+            .remember(
+                MemoryCategory::Preference,
+                "editor",
+                "zed",
+                Some(8),
+                None,
+            )
+            .unwrap();
+
+        assert_eq!(remembered_id, legacy_id);
+        let recalled = manager
+            .recall(MemoryCategory::Preference, "editor")
+            .unwrap()
+            .unwrap();
+        assert_eq!(recalled.content, "zed");
+        let row_count: i64 = manager
+            .conn
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM user_memory", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(row_count, 1);
     }
 
     #[test]

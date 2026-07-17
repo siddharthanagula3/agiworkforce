@@ -13,6 +13,7 @@
  *     facts, dedupes, and inserts. Never throws (memory must never break a turn).
  */
 import * as Crypto from 'expo-crypto';
+import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { insertMemoryFact, listMemoryFacts } from '@/storage/memory';
 import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
@@ -20,20 +21,15 @@ import { markMemoryForSync } from '@/services/cloudSyncEngine';
 import type { MemoryFact } from '@/storage/types';
 import { extractCandidateFacts } from './factExtractor';
 
-/** Normalize a fact string for duplicate comparison (case/space-insensitive). */
-function normalizeKey(fact: string): string {
-  return fact.trim().toLowerCase().replace(/\s+/gu, ' ');
-}
-
 /**
  * Return the subset of `candidates` not already represented in `existing`.
  * Pure: compares on a normalized key and also dedupes within `candidates`.
  */
 export function dedupeAgainstExisting(candidates: string[], existing: MemoryFact[]): string[] {
-  const seen = new Set(existing.map((f) => normalizeKey(f.fact)));
+  const seen = new Set(existing.map((f) => normalizeMemoryKey(f.fact)));
   const out: string[] = [];
   for (const c of candidates) {
-    const key = normalizeKey(c);
+    const key = normalizeMemoryKey(c);
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(c.trim());
@@ -99,7 +95,7 @@ export async function consolidateFactsFromTurn(params: {
           useCloudMemoryStore.getState().upsertCloudMemory({
             id,
             content: fact,
-            category: null,
+            category: classifyMemoryCategory(fact),
             source: 'mobile',
             pinned: false,
             createdAt: now,

@@ -459,9 +459,8 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
                 .flatten();
 
             // SECURITY: Filter zero vectors — cosine similarity is undefined for zero magnitude.
-            let embedding = embedding.filter(|v| {
-                !v.is_empty() && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
-            });
+            let embedding = embedding
+                .filter(|embedding| agiworkforce_agent_core::memory::valid_embedding(embedding));
 
             let memory = PersistentMemory::new(extracted.content, category, extracted.topic)
                 .with_importance(extracted.importance)
@@ -494,9 +493,8 @@ impl<L: SummaryLLM> ConversationSummarizer<L> {
                 .flatten();
 
             // SECURITY: Filter zero vectors for summary embedding.
-            let summary_embedding = summary_embedding.filter(|v| {
-                !v.is_empty() && v.iter().map(|x: &f32| x * x).sum::<f32>().sqrt() > 1e-8
-            });
+            let summary_embedding = summary_embedding
+                .filter(|embedding| agiworkforce_agent_core::memory::valid_embedding(embedding));
 
             self.store.store_conversation_summary(
                 conversation_id,
@@ -1230,23 +1228,20 @@ mod tests {
         // The summarization pipeline filters zero vectors before storing.
         // Verify the filter logic: magnitude must be > 1e-8.
         let zero_vec: Vec<f32> = vec![0.0; 768];
-        let magnitude: f32 = zero_vec.iter().map(|x| x * x).sum::<f32>().sqrt();
         assert!(
-            magnitude <= 1e-8,
+            !agiworkforce_agent_core::memory::valid_embedding(&zero_vec),
             "Zero vector magnitude should be filtered out"
         );
 
         let tiny_vec: Vec<f32> = vec![1e-10; 768];
-        let magnitude: f32 = tiny_vec.iter().map(|x| x * x).sum::<f32>().sqrt();
         assert!(
-            magnitude <= 1e-8,
+            !agiworkforce_agent_core::memory::valid_embedding(&tiny_vec),
             "Near-zero vector should also be filtered out"
         );
 
         let valid_vec: Vec<f32> = vec![0.1; 768];
-        let magnitude: f32 = valid_vec.iter().map(|x| x * x).sum::<f32>().sqrt();
         assert!(
-            magnitude > 1e-8,
+            agiworkforce_agent_core::memory::valid_embedding(&valid_vec),
             "Valid embedding should pass the magnitude filter"
         );
     }
