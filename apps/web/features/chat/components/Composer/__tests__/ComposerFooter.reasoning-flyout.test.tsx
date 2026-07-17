@@ -93,8 +93,8 @@ vi.mock('@/stores/unified/auth', () => ({
 // REAL @/constants/llm reasoning data — only tier gating is stubbed so every live
 // model is selectable at max tier. getModelReasoning/getModelMetadata are the
 // genuine catalog readers, so the flyout is driven by real models.json data.
-vi.mock('@/constants/llm', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/constants/llm')>();
+vi.mock('@shared/config/llm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shared/config/llm')>();
   return {
     ...actual,
     getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
@@ -165,7 +165,7 @@ vi.mock('@shared/components/ProviderMark', () => ({
   ProviderMark: () => null,
   hasProviderMark: () => false,
 }));
-vi.mock('@/components/agi/AgiMark', () => ({ AgiMark: () => null }));
+vi.mock('@shared/components/agi/AgiMark', () => ({ AgiMark: () => null }));
 vi.mock('zustand/middleware', async () => {
   const actual = await vi.importActual<typeof import('zustand/middleware')>('zustand/middleware');
   return { ...actual, persist: (config: (set: unknown) => unknown) => config };

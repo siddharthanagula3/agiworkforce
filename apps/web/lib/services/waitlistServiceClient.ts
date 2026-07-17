@@ -5,7 +5,7 @@
  * Routes through active Next.js API endpoints · direct browser database access removed.
  */
 
-import type { InviteCodeError } from '@/components/cloud-bridge/types';
+import type { InviteCodeError } from '@shared/components/cloud-bridge/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
 export interface RedeemInviteResult {

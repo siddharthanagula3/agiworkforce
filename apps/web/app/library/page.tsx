@@ -1,6 +1,6 @@
 'use client';
 
-import { WebAppShell } from '@/components/layout/WebAppShell';
+import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { LibraryView } from '@features/library/components/LibraryView';
 
 /**

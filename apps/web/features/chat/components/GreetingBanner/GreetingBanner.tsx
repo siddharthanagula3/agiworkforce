@@ -14,7 +14,7 @@
  */
 
 import { Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
-import { AgiMark } from '@/components/agi/AgiMark';
+import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useGreeting } from './useGreeting';
 
 interface SuggestionChip {

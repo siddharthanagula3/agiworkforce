@@ -1,11 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { formatProviderModeLabel, modelsCatalogJson } from '@agiworkforce/types';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { AgiChatDemo } from '../../components/agi/AgiChatDemo';
-import { ProductFrame } from '../../components/marketing/ProductFrame';
-import { FinalCta } from '../../components/marketing/FlagshipSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { AgiChatDemo } from '@shared/components/agi/AgiChatDemo';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

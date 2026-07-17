@@ -7,7 +7,7 @@ import {
   AuthResponse,
   LoginData,
   RegisterData,
-} from '@core/auth/authentication-manager';
+} from '@shared/services/authentication-manager';
 import { logger } from '@shared/lib/logger';
 import { hasClerkSessionCookie } from '@/lib/clerk-session';
 

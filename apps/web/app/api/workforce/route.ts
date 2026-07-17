@@ -7,7 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { AI_EMPLOYEES } from '@/data/marketplace-employees';
+import { AI_EMPLOYEES } from '@/features/library/data/marketplace-employees';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 /**

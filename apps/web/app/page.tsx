@@ -1,12 +1,12 @@
 import type { Metadata } from 'next';
-import { Header } from '../components/layout/Header';
-import { MarketingFooter } from '../components/marketing/MarketingFooter';
-import { HeroAppWindow } from '../components/marketing/HeroAppWindow';
-import { MobileHeroVisual } from '../components/marketing/MobileHeroVisual';
-import { MobileMockup, VSCodeMockup, ChromeMockup } from '../components/marketing/SurfaceMockups';
-import { RouteFlow } from '../components/marketing/RouteFlow';
-import { ProductFrame } from '../components/marketing/ProductFrame';
-import { ApprovalWindow, DiffWindow } from '../components/marketing/ShowcaseScenes';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { HeroAppWindow } from '@/features/marketing/components/HeroAppWindow';
+import { MobileHeroVisual } from '@/features/marketing/components/MobileHeroVisual';
+import { MobileMockup, VSCodeMockup, ChromeMockup } from '@/features/marketing/components/SurfaceMockups';
+import { RouteFlow } from '@/features/marketing/components/RouteFlow';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { ApprovalWindow, DiffWindow } from '@/features/marketing/components/ShowcaseScenes';
 import {
   CapabilityGrid,
   DevBand,
@@ -15,8 +15,8 @@ import {
   SurfaceIndex,
   SurfaceTicker,
   TrustTriptych,
-} from '../components/marketing/FlagshipSections';
-import { PublicWaitlistForm } from '../components/marketing/PublicWaitlistForm';
+} from '@/features/marketing/components/FlagshipSections';
+import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { LAUNCH, SURFACE_STATUS } from '../lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2Fchat';

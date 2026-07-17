@@ -12,19 +12,19 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { AuthShell } from '../../components/marketing/AuthShell';
+import { AuthShell } from '@/features/marketing/components/AuthShell';
 
-vi.mock('../../components/layout/Header', () => ({
+vi.mock('@shared/components/layout/Header', () => ({
   Header: ({ minimal }: { minimal?: boolean }) => (
     <header data-testid="header" data-minimal={String(minimal ?? false)} />
   ),
 }));
 
-vi.mock('../../components/marketing/MarketingFooter', () => ({
+vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => <footer data-testid="footer" />,
 }));
 
-vi.mock('../../components/agi/AgiMark', () => ({
+vi.mock('@shared/components/agi/AgiMark', () => ({
   AgiMark: ({ size }: { size?: number }) => <svg data-testid="agi-mark" data-size={size} />,
 }));
 

@@ -1,9 +1,9 @@
 import { getNeonDb } from '@/lib/server/neon-db';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { SharedSessionViewer } from '@/components/share/SharedSessionViewer';
-import type { SharedSession } from '@/components/share/SharedSessionViewer';
-import { ExpiredShareBanner } from '@/components/share/ExpiredShareBanner';
+import { SharedSessionViewer } from '@/features/chat/components/share/SharedSessionViewer';
+import type { SharedSession } from '@/features/chat/components/share/SharedSessionViewer';
+import { ExpiredShareBanner } from '@/features/chat/components/share/ExpiredShareBanner';
 
 interface Props {
   params: Promise<{ token: string }>;

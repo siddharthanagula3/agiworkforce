@@ -24,7 +24,7 @@ vi.mock('server-only', () => ({}));
 const mockGetOptionalEnv = vi.fn((key: string) =>
   key === 'OPENAI_API_KEY' ? 'mock-openai-key' : undefined,
 );
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: (...args: [string]) => mockGetOptionalEnv(...args),
 }));
 

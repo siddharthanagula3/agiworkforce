@@ -1,12 +1,12 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { RouteMap } from '../../components/marketing/LandingSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { RouteMap } from '@/features/marketing/components/LandingSections';
 import {
   CapabilityGrid,
   FinalCta,
   FlagshipHero,
-} from '../../components/marketing/FlagshipSections';
+} from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

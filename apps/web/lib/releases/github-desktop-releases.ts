@@ -2,7 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { getOptionalEnv } from '@/utils/env';
+import { getOptionalEnv } from '@shared/utils/env';
 
 export const DESKTOP_RELEASE_PLATFORMS = [
   'darwin-aarch64',

@@ -12,7 +12,7 @@
  * - Encryption support for sensitive data (future)
  */
 
-import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
+import { safeGetJSON, safeSetJSON } from '@shared/utils/localStorage';
 import type { EnhancedMessage } from '@/stores/unified/chat/types';
 import type { StoredChatSession, StoredMessage, SessionStorageMetadata } from '@agiworkforce/types';
 

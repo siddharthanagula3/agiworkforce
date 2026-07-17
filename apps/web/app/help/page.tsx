@@ -1,8 +1,8 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { CapabilityGrid } from '../../components/marketing/FlagshipSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { CapabilityGrid } from '@/features/marketing/components/FlagshipSections';
 import { MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

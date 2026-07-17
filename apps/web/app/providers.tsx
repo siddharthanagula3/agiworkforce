@@ -5,13 +5,13 @@ import { useEffect } from 'react';
 import { Toaster } from 'sonner';
 import i18n from './i18n';
 import { QueryProvider } from '@shared/stores/query-client';
-import { CommandPaletteProvider } from '@/components/CommandPalette/CommandPaletteProvider';
-import { WaitlistModalProvider } from '@/components/marketing/WaitlistModal';
+import { CommandPaletteProvider } from '@shared/components/CommandPalette/CommandPaletteProvider';
+import { WaitlistModalProvider } from '@/features/marketing/components/WaitlistModal';
 import { SettingsModalProvider } from '@/features/settings/components/SettingsModalProvider';
 import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
-import { OfflineIndicator } from '@/components/OfflineIndicator';
-import { seoService } from '@core/monitoring/seo-optimizer';
+import { OfflineIndicator } from '@shared/components/OfflineIndicator';
+import { seoService } from '@/lib/seo/seo-optimizer';
 
 // i18n is initialized synchronously at module import time (see app/i18n/index.ts).
 // No async gate needed · rendering immediately prevents the blank-screen flash

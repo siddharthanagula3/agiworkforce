@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow, ProfileRow } from '@/lib/server/neon-types';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
-import { requireEnv } from '@/utils/env';
+import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';

@@ -7,7 +7,7 @@
  * path was removed (had zero production callers).
  */
 
-import { SkillCategories } from '@core/ai/orchestration/intelligent-agent-router';
+import { SkillCategories } from './intelligent-agent-router';
 
 export interface SkillInfo {
   id: string;

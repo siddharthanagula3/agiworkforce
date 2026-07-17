@@ -3,7 +3,7 @@ import 'server-only';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEnv } from '@/utils/env';
+import { requireEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';

@@ -7,7 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getOptionalEnv } from '@/utils/env';
+import { getOptionalEnv } from '@shared/utils/env';
 import {
   compareSemanticVersions,
   DESKTOP_RELEASE_PLATFORMS,

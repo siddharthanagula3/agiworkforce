@@ -14,8 +14,8 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '@/lib/tauri-mock';
-import { getModelContextWindow } from '@/constants/llm';
-import { safeGetJSON, safeSetJSON, storageFallback } from '@/utils/localStorage';
+import { getModelContextWindow } from '@shared/config/llm';
+import { safeGetJSON, safeSetJSON, storageFallback } from '@shared/utils/localStorage';
 import type {
   EnhancedMessage,
   ConversationSummary,

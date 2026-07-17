@@ -14,7 +14,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import type { OrganizationRow, OrganizationMemberRow } from '@/lib/server/neon-types';
-import { Organization, OrganizationMember } from '@/types/saas';
+import { Organization, OrganizationMember } from '@shared/types/saas';
 
 interface OrgMemberWithProfile extends OrganizationMemberRow {
   profile_email: string | null;

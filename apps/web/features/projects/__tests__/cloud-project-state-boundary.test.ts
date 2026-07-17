@@ -10,7 +10,7 @@ describe('Web Cloud project state boundary', () => {
   it('does not merge server projects with unowned browser-only project rows', () => {
     for (const path of [
       'features/chat/pages/WebChatPage.tsx',
-      'components/layout/WebAppShell.tsx',
+      'shared/components/layout/WebAppShell.tsx',
       'app/projects/[id]/page.tsx',
     ]) {
       expect(source(path), path).not.toContain('localOnly');
@@ -20,7 +20,7 @@ describe('Web Cloud project state boundary', () => {
   it('uses the managed cloud project session on every Web project surface', () => {
     for (const path of [
       'features/chat/pages/WebChatPage.tsx',
-      'components/layout/WebAppShell.tsx',
+      'shared/components/layout/WebAppShell.tsx',
       'app/projects/page.tsx',
       'app/projects/[id]/page.tsx',
     ]) {
@@ -46,7 +46,7 @@ describe('Web Cloud project state boundary', () => {
 
   it('persists archive actions and does not discard rows when a delete request fails', () => {
     const listPage = source('app/projects/page.tsx');
-    const shell = source('components/layout/WebAppShell.tsx');
+    const shell = source('shared/components/layout/WebAppShell.tsx');
 
     expect(listPage).toContain('webManagedCloudProjects.updateProject');
     expect(listPage).not.toMatch(/finally\s*{\s*removeProject\(/);

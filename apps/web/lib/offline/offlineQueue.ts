@@ -12,7 +12,7 @@
  */
 
 import { createOfflineQueue } from '@agiworkforce/client-runtime/offline-queue';
-import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
+import { safeGetJSON, safeSetJSON } from '@shared/utils/localStorage';
 import { logger } from '@/lib/logger';
 
 const OFFLINE_QUEUE_KEY = 'agi_offline_queue';

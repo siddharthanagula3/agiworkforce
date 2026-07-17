@@ -1,10 +1,10 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@/components/seo/JsonLd';
+import { JsonLd } from '@shared/components/seo/JsonLd';
 import { breadcrumbSchema } from '@/lib/seo/structured-data';
-import { Header } from '../../../components/layout/Header';
-import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
-import { LedgerSection } from '../../../components/marketing/LandingSections';
-import { CapabilityGrid, DevBand, FinalCta } from '../../../components/marketing/FlagshipSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { LedgerSection } from '@/features/marketing/components/LandingSections';
+import { CapabilityGrid, DevBand, FinalCta } from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

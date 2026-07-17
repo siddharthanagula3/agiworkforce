@@ -1,6 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
+import { Header } from '@shared/components/layout/Header';
 import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

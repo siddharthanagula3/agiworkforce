@@ -3,8 +3,8 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { VerifyDeviceClient } from '@/app/verify/verify-client';
 
 function VerifyEmailBody({ email }: { email: string | null }) {

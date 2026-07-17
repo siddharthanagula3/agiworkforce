@@ -5,7 +5,7 @@
  * Extracted from unifiedChatStore for better modularity.
  */
 
-import type { Artifact } from '@/types/chat';
+import type { Artifact } from '@shared/types/chat';
 
 /**
  * Widget data type for embedded widgets (INT-001)

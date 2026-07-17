@@ -1,11 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { ProductFrame } from '../../components/marketing/ProductFrame';
-import { DevBand, FinalCta, SurfaceIndex } from '../../components/marketing/FlagshipSections';
-import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
-import { PublicWaitlistForm } from '../../components/marketing/PublicWaitlistForm';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { DevBand, FinalCta, SurfaceIndex } from '@/features/marketing/components/FlagshipSections';
+import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
+import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { COMING_SOON_LABEL, SURFACE_STATUS } from '../../lib/marketing-constants';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 

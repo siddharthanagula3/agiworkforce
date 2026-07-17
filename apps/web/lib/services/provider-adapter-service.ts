@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getOptionalEnv } from '@/utils/env';
+import { getOptionalEnv } from '@shared/utils/env';
 import { logger } from '@/lib/logger';
 import { toProviderApiModelId } from '@agiworkforce/provider-protocol';
 import { validateBaseUrl, ALLOWED_MANAGED_PROVIDER_HOSTS } from '@agiworkforce/provider-runtime';

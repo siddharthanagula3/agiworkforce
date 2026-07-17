@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/components/layout/WebAppShell', () => ({
+vi.mock('@shared/components/layout/WebAppShell', () => ({
   WebAppShell: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="managed-app-shell">{children}</div>
   ),

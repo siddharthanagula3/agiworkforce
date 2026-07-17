@@ -3,7 +3,7 @@ import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
-import { getEnv } from '@/utils/env';
+import { getEnv } from '@shared/utils/env';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { withRateLimit } from '@/lib/rate-limit';

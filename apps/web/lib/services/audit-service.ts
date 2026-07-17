@@ -17,7 +17,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
-import { AuditLog } from '@/types/saas';
+import { AuditLog } from '@shared/types/saas';
 
 interface AuditLogRow {
   id: string;

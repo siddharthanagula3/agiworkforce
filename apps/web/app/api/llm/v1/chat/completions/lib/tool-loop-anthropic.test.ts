@@ -22,7 +22,7 @@ vi.mock('server-only', () => ({}));
 const mockGetOptionalEnv = vi.fn((key: string) =>
   key === 'ANTHROPIC_API_KEY' ? 'mock-anthropic-key' : undefined,
 );
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: (...args: [string]) => mockGetOptionalEnv(...args),
 }));
 

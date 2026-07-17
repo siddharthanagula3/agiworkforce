@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { WebAppShell } from '@/components/layout/WebAppShell';
+import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { SchedulesPage } from '@/features/schedules';
 
 export const metadata: Metadata = {
