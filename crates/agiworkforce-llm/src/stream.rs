@@ -52,6 +52,14 @@ pub struct ChatRequest<'a> {
     pub tools: Option<&'a [ToolDefinition]>,
     /// Anthropic extended-thinking budget; ignored by other dialects.
     pub thinking_budget: Option<u32>,
+    /// Ollama total context window (`options.num_ctx`); ignored by other
+    /// dialects. `None` omits the field (Ollama then defaults to 4096).
+    pub num_ctx: Option<u32>,
+    /// Ollama extended-thinking toggle (`think`); ignored by other dialects.
+    /// NOT the same knob as `thinking_budget` (Anthropic-only). `None` keeps
+    /// this engine's legacy wire default (`think: false`) so existing callers'
+    /// request bytes are unchanged; `Some(v)` forwards `v`.
+    pub ollama_think: Option<bool>,
     /// Max silence between stream chunks before [`LlmError::IdleTimeout`].
     pub idle_timeout: Duration,
 }
@@ -132,12 +140,10 @@ fn llm_byte_stream(resp: reqwest::Response) -> impl Stream<Item = Result<Bytes, 
 // Anthropic Messages API (streaming)
 // ---------------------------------------------------------------------------
 
-async fn stream_anthropic(
-    client: &reqwest::Client,
-    spec: &ProviderSpec,
-    req: &ChatRequest<'_>,
-    on_event: OnEvent<'_>,
-) -> Result<ChatOutcome, LlmError> {
+/// Build the Anthropic Messages request body for `req`. Pure — exposed so
+/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket.
+pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
     let mut api_messages: Vec<Value> = req
         .messages
         .iter()
@@ -217,13 +223,24 @@ async fn stream_anthropic(
 
     // Extended thinking: inject a `thinking` block when the caller requests it.
     // Requires the interleaved-thinking-2025-05-14 beta header.
-    let use_thinking = req.thinking_budget.is_some();
     if let Some(budget) = req.thinking_budget {
         body["thinking"] = serde_json::json!({
             "type": "enabled",
             "budget_tokens": budget
         });
     }
+
+    body
+}
+
+async fn stream_anthropic(
+    client: &reqwest::Client,
+    spec: &ProviderSpec,
+    req: &ChatRequest<'_>,
+    on_event: OnEvent<'_>,
+) -> Result<ChatOutcome, LlmError> {
+    let body = build_anthropic_request_body(req);
+    let use_thinking = req.thinking_budget.is_some();
 
     tracing::trace!(spec = ?spec, model = %req.model, "sending anthropic chat request");
 
@@ -506,13 +523,10 @@ where
 // OpenAI-compatible Chat Completions API (streaming)
 // ---------------------------------------------------------------------------
 
-async fn stream_openai_compat(
-    client: &reqwest::Client,
-    spec: &ProviderSpec,
-    opts: &OpenAiOpts,
-    req: &ChatRequest<'_>,
-    on_event: OnEvent<'_>,
-) -> Result<ChatOutcome, LlmError> {
+/// Build the OpenAI-compatible Chat Completions request body for `req`. Pure —
+/// exposed so conformance/parity oracles (stage c2c) can byte-compare request
+/// bodies without a socket.
+pub fn build_openai_compat_request_body(req: &ChatRequest<'_>, opts: &OpenAiOpts) -> Value {
     let api_messages: Vec<Value> = req
         .messages
         .iter()
@@ -534,6 +548,18 @@ async fn stream_openai_compat(
     if let Some(tool_defs) = req.tools {
         body["tools"] = serde_json::json!(openai_function_tools_json(tool_defs));
     }
+
+    body
+}
+
+async fn stream_openai_compat(
+    client: &reqwest::Client,
+    spec: &ProviderSpec,
+    opts: &OpenAiOpts,
+    req: &ChatRequest<'_>,
+    on_event: OnEvent<'_>,
+) -> Result<ChatOutcome, LlmError> {
+    let body = build_openai_compat_request_body(req, opts);
 
     tracing::trace!(spec = ?spec, model = %req.model, "sending openai-compatible chat request");
 
@@ -726,7 +752,10 @@ where
 /// Build the canonical OpenAI Responses request body from the shared wire
 /// request. Kept pure so every Rust consumer can fixture-test request shape
 /// without opening a socket.
-fn build_openai_responses_body(req: &ChatRequest<'_>) -> Value {
+/// Build the OpenAI Responses request body for `req`. Pure — exposed so
+/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket.
+pub fn build_openai_responses_body(req: &ChatRequest<'_>) -> Value {
     let input: Vec<Value> = req
         .messages
         .iter()
@@ -1112,12 +1141,10 @@ where
 // Google Gemini API (streaming)
 // ---------------------------------------------------------------------------
 
-async fn stream_gemini(
-    client: &reqwest::Client,
-    spec: &ProviderSpec,
-    req: &ChatRequest<'_>,
-    on_event: OnEvent<'_>,
-) -> Result<ChatOutcome, LlmError> {
+/// Build the Gemini `generateContent` request body for `req`. Pure — exposed
+/// so conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket. (The model path/URL handling stays in the stream driver.)
+pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
     // Gemini uses a different message format: contents with parts
     let gemini_tool_names = build_gemini_tool_name_map(req.messages);
     let contents: Vec<Value> = req
@@ -1152,6 +1179,17 @@ async fn stream_gemini(
         let declarations = gemini_function_declarations_json(tool_defs);
         body["tools"] = serde_json::json!([{ "functionDeclarations": declarations }]);
     }
+
+    body
+}
+
+async fn stream_gemini(
+    client: &reqwest::Client,
+    spec: &ProviderSpec,
+    req: &ChatRequest<'_>,
+    on_event: OnEvent<'_>,
+) -> Result<ChatOutcome, LlmError> {
+    let body = build_gemini_request_body(req);
 
     // Normalize model name: strip "models/" prefix if user included it
     let model_path = if req.model.starts_with("models/") {
@@ -1332,12 +1370,11 @@ where
 // Ollama native API (streaming NDJSON)
 // ---------------------------------------------------------------------------
 
-async fn stream_ollama(
-    client: &reqwest::Client,
-    spec: &ProviderSpec,
-    req: &ChatRequest<'_>,
-    on_event: OnEvent<'_>,
-) -> Result<ChatOutcome, LlmError> {
+/// Build the Ollama-native `/api/chat` request body for `req` (message
+/// compaction + nativization + body shell). Pure — exposed so
+/// conformance/parity oracles (stage c2c) can byte-compare request bodies
+/// without a socket.
+pub fn build_ollama_request_body(req: &ChatRequest<'_>) -> Value {
     let mut api_messages: Vec<Value> = req
         .messages
         .iter()
@@ -1350,13 +1387,29 @@ async fn stream_ollama(
     // Map OpenAI content-part arrays (esp. images) into Ollama's native shape.
     ollama_nativize_message_values(&mut api_messages);
 
-    let body = ollama_chat_request_body(
+    ollama_chat_request_body(
         req.model,
         api_messages,
-        req.max_tokens,
-        req.temperature,
         req.tools,
-    );
+        &crate::serialize::OllamaRequestOpts {
+            max_tokens: req.max_tokens,
+            temperature: req.temperature,
+            // `None` keeps this engine's legacy wire default (`think: false`)
+            // so pre-c2c callers' request bytes are unchanged.
+            think: Some(req.ollama_think.unwrap_or(false)),
+            num_ctx: req.num_ctx,
+            stream: true,
+        },
+    )
+}
+
+async fn stream_ollama(
+    client: &reqwest::Client,
+    spec: &ProviderSpec,
+    req: &ChatRequest<'_>,
+    on_event: OnEvent<'_>,
+) -> Result<ChatOutcome, LlmError> {
+    let body = build_ollama_request_body(req);
     let base = spec.base_url.trim_end_matches('/');
     let url = format!("{base}/api/chat");
 
@@ -1604,6 +1657,8 @@ mod responses_request_tests {
             temperature: None,
             tools: Some(&tools),
             thinking_budget: None,
+            num_ctx: None,
+            ollama_think: None,
             idle_timeout: Duration::from_secs(5),
         };
 

@@ -610,31 +610,60 @@ pub fn ollama_nativize_message_values(messages: &mut [Value]) {
     }
 }
 
+/// Request knobs for [`ollama_chat_request_body`] beyond model/messages/tools.
+#[derive(Debug, Clone, Copy)]
+pub struct OllamaRequestOpts {
+    /// Output-token cap, mapped to `options.num_predict`. `0` means "no
+    /// explicit limit" and omits the field so Ollama applies its own default.
+    pub max_tokens: u32,
+    /// Sampling temperature, folded into `options.temperature` when set.
+    pub temperature: Option<f32>,
+    /// Ollama's extended-thinking toggle. `Some(v)` forwards `v`; `None`
+    /// OMITS the field entirely so the model's own default applies (newer
+    /// reasoning models default thinking ON at the API level, and some older
+    /// Ollama builds reject `think` for models without thinking support).
+    pub think: Option<bool>,
+    /// Total context window, mapped to `options.num_ctx`. `None` omits the
+    /// field (Ollama then silently defaults to 4096 regardless of the model's
+    /// real capability).
+    pub num_ctx: Option<u32>,
+    /// `stream` flag — `false` for non-streaming `/api/chat` calls (the
+    /// desktop's blocking send path); the shared engine always passes `true`.
+    pub stream: bool,
+}
+
 /// Build an Ollama-native `/api/chat` request body.
 pub fn ollama_chat_request_body(
     model: &str,
     messages: Vec<Value>,
-    max_tokens: u32,
-    temperature: Option<f32>,
     tools: Option<&[ToolDefinition]>,
+    opts: &OllamaRequestOpts,
 ) -> Value {
     let mut body = serde_json::json!({
         "model": model,
         "messages": messages,
-        "stream": true,
-        "think": false,
+        "stream": opts.stream,
     });
+    if let Some(think) = opts.think {
+        body["think"] = serde_json::json!(think);
+    }
 
     // Map the caller's output-token cap onto Ollama's `options.num_predict`
     // and fold the temperature into the same `options` object. Without this
     // the local path silently ignores the configured limit and can generate
     // unbounded output (runaway generations on small machines).
     let mut options = serde_json::Map::new();
-    if max_tokens > 0 {
-        options.insert("num_predict".to_string(), serde_json::json!(max_tokens));
+    if opts.max_tokens > 0 {
+        options.insert(
+            "num_predict".to_string(),
+            serde_json::json!(opts.max_tokens),
+        );
     }
-    if let Some(temp) = temperature {
+    if let Some(temp) = opts.temperature {
         options.insert("temperature".to_string(), serde_json::json!(temp));
+    }
+    if let Some(num_ctx) = opts.num_ctx {
+        options.insert("num_ctx".to_string(), serde_json::json!(num_ctx));
     }
     if !options.is_empty() {
         body["options"] = Value::Object(options);
@@ -943,13 +972,18 @@ mod tests {
     }
 
     #[test]
-    fn ollama_chat_request_body_disables_thinking_by_default() {
+    fn ollama_chat_request_body_forwards_explicit_think_false() {
         let body = ollama_chat_request_body(
             "qwen3.5:9b",
             vec![serde_json::json!({"role": "user", "content": "hi"})],
-            2048,
-            Some(0.2),
             Some(&[test_tool("read_file")]),
+            &OllamaRequestOpts {
+                max_tokens: 2048,
+                temperature: Some(0.2),
+                think: Some(false),
+                num_ctx: None,
+                stream: true,
+            },
         );
 
         assert_eq!(body["model"], "qwen3.5:9b");
@@ -965,6 +999,8 @@ mod tests {
         // The caller's output-token cap must reach Ollama as `num_predict`,
         // otherwise the local path generates unbounded output.
         assert_eq!(body["options"]["num_predict"], 2048);
+        // No num_ctx requested → the field must stay absent.
+        assert!(body["options"].get("num_ctx").is_none());
         assert_eq!(body["tools"][0]["function"]["name"], "read_file");
         assert_provider_tool_payload_omits_local_metadata(&body["tools"]);
     }
@@ -974,14 +1010,65 @@ mod tests {
         let body = ollama_chat_request_body(
             "qwen3.5:9b",
             vec![serde_json::json!({"role": "user", "content": "hi"})],
-            0,
             None,
-            None,
+            &OllamaRequestOpts {
+                max_tokens: 0,
+                temperature: None,
+                think: Some(false),
+                num_ctx: None,
+                stream: true,
+            },
         );
 
         // A zero cap means "no explicit limit": leave `num_predict` unset so
         // Ollama applies its own default rather than capping at zero tokens.
         assert!(body.get("options").is_none());
+    }
+
+    #[test]
+    fn ollama_chat_request_body_omits_think_when_unset_and_carries_num_ctx() {
+        // `think: None` must OMIT the field (model default applies; some Ollama
+        // builds reject `think` for non-thinking models), and a requested
+        // context window must land in `options.num_ctx`. `stream: false`
+        // covers the desktop's blocking send path.
+        let body = ollama_chat_request_body(
+            "qwen3.5:9b",
+            vec![serde_json::json!({"role": "user", "content": "hi"})],
+            None,
+            &OllamaRequestOpts {
+                max_tokens: 0,
+                temperature: None,
+                think: None,
+                num_ctx: Some(32768),
+                stream: false,
+            },
+        );
+
+        assert!(
+            body.get("think").is_none(),
+            "think must be omitted when the caller has no opinion: {body}"
+        );
+        assert_eq!(body["stream"], false);
+        assert_eq!(body["options"]["num_ctx"], 32768);
+        assert!(body["options"].get("num_predict").is_none());
+    }
+
+    #[test]
+    fn ollama_chat_request_body_forwards_think_true() {
+        let body = ollama_chat_request_body(
+            "qwen3.5:9b",
+            vec![serde_json::json!({"role": "user", "content": "hi"})],
+            None,
+            &OllamaRequestOpts {
+                max_tokens: 0,
+                temperature: None,
+                think: Some(true),
+                num_ctx: None,
+                stream: true,
+            },
+        );
+
+        assert_eq!(body["think"], true);
     }
 
     #[test]
