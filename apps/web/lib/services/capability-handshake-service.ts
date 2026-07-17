@@ -53,9 +53,12 @@ import 'server-only';
 import {
   ALL_PLATFORM_CAPABILITIES,
   buildEffectiveCapabilityDocument,
+  computeCapabilityDocumentVersion,
   getPlatformCapabilities,
   getTierPolicy,
+  isCapabilityDocumentStale,
   modelsCatalog,
+  type CapabilityDocumentRef,
   type CapabilityLayerGrant,
   type EffectiveCapabilityDocument,
   type ModelCapabilities,
@@ -125,23 +128,52 @@ export interface BuildMeCapabilityHandshakeInput {
   computedAt?: string;
 }
 
-/** `/api/me` capability-handshake document schema/logic version (bump when the layer-composition rules above change, not per-request). */
+/**
+ * `/api/me` capability-handshake SCHEMA version — the layer-composition
+ * rules above (bump when those rules change, not per-request). Since the W5
+ * versioning tail this is only the PREFIX of a document's `version`: the
+ * full value is `<schema>#<content-hash>` from
+ * `computeCapabilityDocumentVersion`, so any input-layer change (tier
+ * change, catalog change, surface, deployment flag flip) produces a new
+ * version and stale session snapshots become detectable — no more
+ * one-constant placeholder versions.
+ */
 export const ME_CAPABILITY_HANDSHAKE_VERSION = 'me-handshake-v1';
 
 export function buildMeCapabilityHandshake(
   input: BuildMeCapabilityHandshakeInput,
 ): EffectiveCapabilityDocument {
+  const layers = {
+    model: buildModelLayerGrant(input.cloudExecutionDeploymentEnabled),
+    tier: buildTierLayerGrant(input.tier),
+    surface: buildSurfaceLayerGrant(input.surface),
+    settings: buildSettingsLayerGrant(),
+  };
   return buildEffectiveCapabilityDocument({
     sessionId: input.userId,
-    version: ME_CAPABILITY_HANDSHAKE_VERSION,
+    version: computeCapabilityDocumentVersion({
+      schemaVersion: ME_CAPABILITY_HANDSHAKE_VERSION,
+      layers,
+    }),
     computedAt: input.computedAt,
-    layers: {
-      model: buildModelLayerGrant(input.cloudExecutionDeploymentEnabled),
-      tier: buildTierLayerGrant(input.tier),
-      surface: buildSurfaceLayerGrant(input.surface),
-      settings: buildSettingsLayerGrant(),
-    },
+    layers,
   });
+}
+
+/**
+ * True when a session's stored capability-document reference (its
+ * `SessionPolicySnapshot.capabilityDocument`) no longer matches `current`
+ * and the session must re-handshake before its next capability-gated
+ * action. Thin, named re-export of the contract's staleness rule so web
+ * consumers depend on this service, not on version-string internals; an
+ * `unresolved` placeholder reference (sessions labeled before any handshake
+ * existed) is always stale.
+ */
+export function isMeCapabilityHandshakeStale(
+  ref: Pick<CapabilityDocumentRef, 'version'>,
+  current: Pick<EffectiveCapabilityDocument, 'version'>,
+): boolean {
+  return isCapabilityDocumentStale(ref, current.version);
 }
 
 /**

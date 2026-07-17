@@ -19,7 +19,7 @@
  * route's EXISTING error path (`logger.error` + `createError.internal`),
  * not a new one.
  */
-import type { CloudChatSession } from '@agiworkforce/types';
+import { CAPABILITY_DOCUMENT_VERSION_UNRESOLVED, type CloudChatSession } from '@agiworkforce/types';
 
 export interface BuildCloudChatSessionLabelInput {
   conversationId: string;
@@ -55,9 +55,12 @@ export function buildCloudChatSessionLabel(
         // computed source — see `capability-handshake-service.ts`). This is
         // an honest placeholder reference, not a fabricated grant: no
         // `granted`/`deniedBy` payload is embedded, only the pointer shape
-        // `SessionPolicySnapshot` requires. A future pass can compute and
-        // attach a real per-conversation document at creation time.
-        version: 'unresolved',
+        // `SessionPolicySnapshot` requires. The contract sentinel is ALWAYS
+        // reported stale by `isCapabilityDocumentStale`, forcing a
+        // re-handshake before any capability-gated action trusts this
+        // snapshot. A future pass can compute and attach a real
+        // per-conversation document at creation time.
+        version: CAPABILITY_DOCUMENT_VERSION_UNRESOLVED,
         computedAt: input.createdAt,
       },
       permissionPolicyVersion: 'v1',

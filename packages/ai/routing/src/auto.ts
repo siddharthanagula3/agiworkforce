@@ -1,4 +1,9 @@
 import { modelRegistry } from '@agiworkforce/model-registry';
+import {
+  evaluateCapabilityAdmission,
+  type CapabilityRequirement,
+  type EffectiveCapabilityDocument,
+} from '@agiworkforce/types';
 import type { RoutingTaskType } from './types';
 
 export type RoutingTrustMode = 'local' | 'on_device' | 'byok' | 'managed_cloud';
@@ -102,6 +107,23 @@ export interface AutoRoutingRequest {
   runtimeProfileId?: string;
   usOnly?: boolean;
   /**
+   * Server-authoritative session capability truth (`@agiworkforce/types`
+   * `capability-handshake/`). Required whenever `capabilityRequirements`
+   * declares a MANDATORY requirement — declared-mandatory without a document
+   * fails closed (an absent document is never a grant).
+   */
+  capabilityDocument?: EffectiveCapabilityDocument | null;
+  /**
+   * Task-declared capability requirements over the shared
+   * `PlatformCapability` vocabulary, ALREADY translated by the
+   * session-owning caller (the handshake call site) per the
+   * capability-handshake evaluator module doc — routing never invents the
+   * intrinsic→platform mapping itself. A mandatory requirement the session
+   * document does not grant rejects the whole resolution; the model cannot
+   * weaken it.
+   */
+  capabilityRequirements?: readonly CapabilityRequirement[];
+  /**
    * Permit a specialist Auto route when an explicitly selected model lacks an
    * intrinsic capability required by the classified task. This never relaxes
    * trust-mode, runtime-profile, tier, lifecycle, or harness admission.
@@ -146,6 +168,7 @@ export interface UnavailableAutoRoute {
     | 'runtime_profile_unavailable'
     | 'runtime_profile_mismatch'
     | 'explicit_model_ineligible'
+    | 'mandatory_capability_unavailable'
     | 'no_eligible_route';
   requestedSelection: string;
   requestedProfile: RoutingProfile | null;
@@ -217,6 +240,66 @@ function applyRuntimeProfile(
       )
     : profile.allowedHarnessIds;
   return { request: { ...request, allowedHarnessIds } };
+}
+
+/**
+ * Session-level capability admission (capability-handshake integration —
+ * the wiring the evaluator module doc records as "stage 2"). Evaluates the
+ * request's task-declared requirements against the server-authoritative
+ * session document ONCE per resolution: the document is session-scoped (its
+ * model layer is fleet/deployment truth, its tier/surface/settings layers
+ * are session truth), so a mandatory denial cannot be cured by picking a
+ * different candidate model — the whole resolution is refused, exactly like
+ * a tier-inadmissible request, with the rejection detail folded into the
+ * existing `reasons` shape.
+ *
+ * Fail-closed: mandatory requirements WITHOUT a document reject (an absent
+ * or unreadable document is never a grant — `capability-handshake/types`
+ * module doc). No requirements → no check; optional-only requirements never
+ * block (the evaluator's contract).
+ */
+function evaluateSessionCapabilityAdmission(
+  request: AutoRoutingRequest,
+  requestedSelection: string,
+): UnavailableAutoRoute | null {
+  const requirements = request.capabilityRequirements ?? [];
+  if (requirements.length === 0) return null;
+
+  const mandatory = requirements.filter((requirement) => requirement.strength === 'mandatory');
+  const document = request.capabilityDocument;
+  if (!document) {
+    if (mandatory.length === 0) return null;
+    return {
+      status: 'unavailable',
+      code: 'mandatory_capability_unavailable',
+      requestedSelection,
+      requestedProfile: null,
+      effectiveProfile: null,
+      taskType: request.taskType,
+      reasons: mandatory.map(
+        (requirement) =>
+          `mandatory capability ${requirement.capabilityId} cannot be verified: no session capability document was provided`,
+      ),
+    };
+  }
+
+  const admission = evaluateCapabilityAdmission(document, requirements);
+  if (admission.admitted) return null;
+
+  return {
+    status: 'unavailable',
+    code: 'mandatory_capability_unavailable',
+    requestedSelection,
+    requestedProfile: null,
+    effectiveProfile: null,
+    taskType: request.taskType,
+    reasons: admission.rejected.map(
+      (rejection) =>
+        `mandatory capability ${rejection.capabilityId} is unavailable (denied by ${rejection.deniedByLayers.join(
+          ', ',
+        )})${rejection.reason ? `: ${rejection.reason}` : ''}`,
+    ),
+  };
 }
 
 function normalizeTier(
@@ -398,6 +481,8 @@ function buildProviderFallbacks(
 export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision {
   const policy = registry.policies.auto;
   const requestedSelection = (request.selection ?? policy.defaultAlias).toLowerCase();
+  const capabilityAdmission = evaluateSessionCapabilityAdmission(request, requestedSelection);
+  if (capabilityAdmission) return capabilityAdmission;
   const runtimeAdmission = applyRuntimeProfile(request, requestedSelection);
   if ('unavailable' in runtimeAdmission) return runtimeAdmission.unavailable;
   request = runtimeAdmission.request;
