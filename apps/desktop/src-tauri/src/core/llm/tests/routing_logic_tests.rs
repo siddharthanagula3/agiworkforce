@@ -410,8 +410,8 @@ mod tests {
 
     #[test]
     fn test_provider_default_model_spot_checks() {
-        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.5");
-        assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4.6");
+        assert_eq!(Provider::OpenAI.default_model(), "gpt-5.6-sol");
+        assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-5");
         assert_eq!(Provider::Google.default_model(), "gemini-3.5-flash");
         assert_eq!(Provider::DeepSeek.default_model(), "deepseek-v4-flash");
         assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
@@ -430,7 +430,7 @@ mod tests {
     #[test]
     fn test_get_model_for_task_openai_complex_reasoning() {
         let model = Provider::OpenAI.get_model_for_task(TaskType::ComplexReasoning);
-        assert_eq!(model, "gpt-5.5");
+        assert_eq!(model, "gpt-5.6-sol");
     }
 
     #[test]
@@ -447,10 +447,11 @@ mod tests {
     #[test]
     fn test_get_model_for_task_anthropic_complex_reasoning() {
         let model = Provider::Anthropic.get_model_for_task(TaskType::ComplexReasoning);
-        // Opus is the complex reasoning model
+        // Fable 5 is the registry's anthropic complex-reasoning route
+        // (catalog taskRouting.complex_reasoning, verified 2026-07-15).
         assert!(
-            model.contains("opus"),
-            "Anthropic ComplexReasoning should use Opus, got: {}",
+            model.contains("fable"),
+            "Anthropic ComplexReasoning should use Fable, got: {}",
             model
         );
     }
@@ -643,7 +644,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4-mini");
+        assert_eq!(suggestion.model, "gpt-5.6-luna");
     }
 
     // ------------------------------------------------------------------
@@ -921,7 +922,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4-mini");
+        assert_eq!(suggestion.model, "gpt-5.6-luna");
     }
 
     #[test]
@@ -965,7 +966,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4.6");
+        assert_eq!(suggestion.model, "claude-sonnet-5");
     }
 
     #[test]
@@ -1083,7 +1084,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4-mini");
+        assert_eq!(suggestion.model, "gpt-5.6-luna");
     }
 
     #[test]
@@ -1098,7 +1099,7 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.5");
+        assert_eq!(suggestion.model, "gpt-5.6-terra");
     }
 
     #[test]
@@ -1204,7 +1205,7 @@ mod tests {
         let context = intelligent_context("basic", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4-mini");
+        assert_eq!(suggestion.model, "gpt-5.6-luna");
     }
 
     #[test]
@@ -1213,7 +1214,7 @@ mod tests {
         let context = intelligent_context("pro", Some("coding"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4.6");
+        assert_eq!(suggestion.model, "claude-sonnet-5");
     }
 
     #[test]
@@ -1252,7 +1253,7 @@ mod tests {
         let context = intelligent_context("pro", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.5");
+        assert_eq!(suggestion.model, "gpt-5.6-sol");
     }
 
     #[test]
@@ -1273,7 +1274,7 @@ mod tests {
         let context = intelligent_context("pro", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        assert_eq!(suggestion.model, "claude-sonnet-4.6");
+        assert_eq!(suggestion.model, "claude-sonnet-5");
     }
 
     #[test]
