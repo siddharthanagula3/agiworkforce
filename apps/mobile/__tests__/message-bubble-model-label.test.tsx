@@ -29,7 +29,7 @@ jest.mock('@/components/ui/avatar', () => {
 jest.mock('@/src/features/chat/components/MessageContentRenderer', () => {
   const RN = require('react-native');
   return {
-    renderMarkdownContent: (content: string) => <RN.Text>{content}</RN.Text>,
+    renderMarkdownContent: (content: string) => [<RN.Text key="content">{content}</RN.Text>],
   };
 });
 
@@ -83,7 +83,22 @@ jest.mock('react-native-gesture-handler', () => {
 jest.mock('@/src/features/chat/components/StreamingIndicator', () => ({
   StreamingIndicator: () => null,
 }));
-jest.mock('@/src/features/chat/components/ThinkingChip', () => ({ ThinkingChip: () => null }));
+jest.mock('@/src/features/chat/components/ThinkingChip', () => {
+  const RN = require('react-native');
+  return { ThinkingChip: () => <RN.Text>Legacy thinking</RN.Text> };
+});
+jest.mock('@/src/features/chat/components/ToolCallTimeline', () => {
+  const RN = require('react-native');
+  return { ToolCallTimeline: () => <RN.Text>Legacy tool timeline</RN.Text> };
+});
+jest.mock('@/src/features/chat/components/AgentActivityTimeline', () => {
+  const RN = require('react-native');
+  return {
+    AgentActivityTimeline: ({ activity }: { activity: { status: string } }) => (
+      <RN.Text>Canonical activity: {activity.status}</RN.Text>
+    ),
+  };
+});
 jest.mock('@/src/features/chat/components/InlineArtifactCard', () => ({
   InlineArtifactCard: () => null,
 }));
@@ -91,7 +106,10 @@ jest.mock('@/src/features/chat/components/ArtifactFullScreen', () => ({
   ArtifactFullScreen: () => null,
 }));
 jest.mock('@/src/features/chat/components/ApprovalCard', () => ({ ApprovalCard: () => null }));
-jest.mock('@/src/features/chat/components/StatusStep', () => ({ StatusStep: () => null }));
+jest.mock('@/src/features/chat/components/StatusStep', () => {
+  const RN = require('react-native');
+  return { StatusStep: () => <RN.Text>Legacy status step</RN.Text> };
+});
 jest.mock('@/src/features/chat/components/GeneratedImage', () => ({ GeneratedImage: () => null }));
 jest.mock('@/src/features/chat/components/ImageGenProgress', () => ({
   ImageGenProgress: () => null,
@@ -141,5 +159,98 @@ describe('MessageBubble model label', () => {
     expect(getByText(/AGI Standard/)).toBeTruthy();
     expect(queryByText('qwen3-4b-instruct-2507')).toBeNull();
     expect(getByLabelText('AGI Standard message: Local AI runs on this device.')).toBeTruthy();
+  });
+
+  it('renders canonical Cloud activity once and suppresses duplicate legacy reasoning rows', () => {
+    const message: ChatMessage = {
+      id: 'm-cloud-1',
+      role: 'assistant',
+      content: 'Verified answer.',
+      createdAt: new Date().toISOString(),
+      model: 'gpt-5.4-mini',
+      reasoning: 'private provider scratchpad',
+      steps: [
+        {
+          id: 'step-1',
+          title: 'Legacy step',
+          status: 'completed',
+        },
+      ],
+      toolCalls: [
+        {
+          id: 'tool-1',
+          toolCallId: 'tool-1',
+          name: 'web_search',
+          status: 'completed',
+        },
+      ],
+      metadata: {
+        agentActivity: {
+          schemaVersion: 1,
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          lastSequence: 2,
+          status: 'completed',
+          startedAtMs: 1_000,
+          updatedAtMs: 2_000,
+          completedAtMs: 2_000,
+          entries: [
+            {
+              kind: 'progress',
+              id: 'progress:research',
+              progressId: 'research',
+              summary: 'Searched official sources',
+              status: 'completed',
+              startedAtMs: 1_100,
+              completedAtMs: 1_900,
+            },
+          ],
+        },
+      },
+    } as ChatMessage;
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(view.getByText('Canonical activity: completed')).toBeTruthy();
+    expect(view.queryByText('Legacy thinking')).toBeNull();
+    expect(view.queryByText('Legacy status step')).toBeNull();
+    expect(view.queryByText('Legacy tool timeline')).toBeNull();
+    expect(view.getByText('Verified answer.')).toBeTruthy();
+  });
+
+  it('rejects malformed synced activity metadata and preserves the legacy safe fallback', () => {
+    const message = {
+      id: 'm-cloud-malformed',
+      role: 'assistant',
+      content: 'Fallback answer.',
+      createdAt: new Date().toISOString(),
+      reasoning: 'Safe summarized thinking',
+      metadata: {
+        agentActivity: {
+          schemaVersion: 1,
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          lastSequence: 2,
+          status: 'completed',
+          startedAtMs: 1_000,
+          updatedAtMs: 2_000,
+          entries: [
+            {
+              kind: 'context',
+              id: 'context:1',
+              summary: 'Compacted context',
+              beforeTokens: 'not-a-number',
+              emittedAtMs: 1_500,
+            },
+          ],
+        },
+      },
+    } as unknown as ChatMessage;
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(view.queryByText(/Canonical activity/)).toBeNull();
+    expect(view.getByText('Legacy thinking')).toBeTruthy();
+    expect(view.getByText('Fallback answer.')).toBeTruthy();
   });
 });

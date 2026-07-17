@@ -186,3 +186,156 @@ describe('cloud send: x_stream_error capture (mid-stream provider failure)', () 
     expect(lastAssistantMessage()?.metadata?.streamError).toBeUndefined();
   });
 });
+
+describe('cloud send: canonical agent activity', () => {
+  it('projects the validated event stream into durable message metadata', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      const base = {
+        schemaVersion: 2 as const,
+        sessionId: 'session-mobile-activity',
+        turnId: 'turn-mobile-activity',
+      };
+      callbacks.onDelta({
+        x_agent_event: {
+          ...base,
+          sequence: 0,
+          emittedAtMs: 1_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...base,
+          sequence: 1,
+          emittedAtMs: 1_100,
+          event: {
+            type: 'tool-execution-start',
+            toolCallId: 'search-1',
+            name: 'web_search',
+            category: 'web-search',
+            summary: 'Searching official sources',
+            input: { query: 'official agent docs' },
+          },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...base,
+          sequence: 2,
+          emittedAtMs: 1_200,
+          event: {
+            type: 'source-list',
+            toolCallId: 'search-1',
+            query: 'official agent docs',
+            sources: [{ url: 'https://example.com/docs', title: 'Official docs' }],
+          },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...base,
+          sequence: 3,
+          emittedAtMs: 1_400,
+          event: {
+            type: 'tool-execution-end',
+            toolCallId: 'search-1',
+            name: 'web_search',
+            output: { resultCount: 1 },
+            isError: false,
+            elapsedMs: 300,
+          },
+        },
+      });
+      callbacks.onDelta({ content: 'Verified answer.' });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...base,
+          sequence: 4,
+          emittedAtMs: 1_500,
+          event: { type: 'stop', reason: 'end-turn' },
+        },
+      });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'research this', CLOUD_MODEL);
+
+    expect(lastAssistantMessage()?.metadata?.agentActivity).toMatchObject({
+      schemaVersion: 1,
+      status: 'completed',
+      sessionId: 'session-mobile-activity',
+      turnId: 'turn-mobile-activity',
+      lastSequence: 4,
+      entries: [
+        expect.objectContaining({
+          kind: 'tool',
+          toolCallId: 'search-1',
+          status: 'completed',
+          sources: [{ url: 'https://example.com/docs', title: 'Official docs' }],
+        }),
+      ],
+    });
+  });
+
+  it('settles a started activity as failed with safe UI copy on transport error', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_agent_event: {
+          schemaVersion: 2,
+          sessionId: 'session-mobile-failure',
+          turnId: 'turn-mobile-failure',
+          sequence: 0,
+          emittedAtMs: 2_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onError(new Error('provider-secret-diagnostic'));
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'research this', CLOUD_MODEL);
+
+    const activity = lastAssistantMessage()?.metadata?.agentActivity;
+    expect(activity).toMatchObject({ status: 'failed', stopReason: 'error' });
+    expect(JSON.stringify(activity)).toContain('Something went wrong. Please try again.');
+    expect(JSON.stringify(activity)).not.toContain('provider-secret-diagnostic');
+  });
+
+  it('settles and persists the current Cloud activity when the user taps Stop', async () => {
+    let activityStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      activityStarted = resolve;
+    });
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks, signal) => {
+      callbacks.onDelta({
+        x_agent_event: {
+          schemaVersion: 2,
+          sessionId: 'session-mobile-cancel',
+          turnId: 'turn-mobile-cancel',
+          sequence: 0,
+          emittedAtMs: 3_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      activityStarted();
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
+    });
+    useChatMessageStore.getState().setCurrentConversationId(CONV_ID);
+
+    const send = useChatExecutionStore
+      .getState()
+      .sendMessage(CONV_ID, 'research until stopped', CLOUD_MODEL);
+    await started;
+    useChatExecutionStore.getState().stopStreaming();
+    await send;
+
+    expect(lastAssistantMessage()).toMatchObject({
+      isStreaming: false,
+      metadata: {
+        agentActivity: expect.objectContaining({
+          status: 'cancelled',
+          stopReason: 'cancelled',
+        }),
+      },
+    });
+  });
+});
