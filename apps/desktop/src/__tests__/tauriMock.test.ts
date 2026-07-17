@@ -212,3 +212,31 @@ describe('Unregistered command guard', () => {
     );
   });
 });
+
+describe('Native agent execution honesty', () => {
+  it('rejects native execution fallbacks in cloud and desktop UI preview runtimes', async () => {
+    const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
+
+    expect(
+      mod.shouldRejectNativeExecutionFallback('agi_submit_goal_parallel', {
+        test: false,
+        cloudWeb: true,
+        desktopUiDev: false,
+      }),
+    ).toBe(true);
+    expect(
+      mod.shouldRejectNativeExecutionFallback('agi_submit_goal_swarm', {
+        test: false,
+        cloudWeb: false,
+        desktopUiDev: true,
+      }),
+    ).toBe(true);
+    expect(
+      mod.shouldRejectNativeExecutionFallback('agi_submit_goal', {
+        test: true,
+        cloudWeb: false,
+        desktopUiDev: false,
+      }),
+    ).toBe(false);
+  });
+});

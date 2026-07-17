@@ -138,6 +138,17 @@ interface SubmitGoalResponse {
   goalId: string;
 }
 
+interface SubmitParallelGoalResponse {
+  goalId: string;
+  bestResult: {
+    score: number;
+    result: {
+      success: boolean;
+      error?: string | null;
+    };
+  };
+}
+
 interface GoalStatusResponse {
   context: {
     currentIteration: number;
@@ -210,6 +221,17 @@ export interface AgiGoalErrorPayload {
   error: string;
 }
 
+export interface AgiGoalExecutionStartedPayload {
+  goal_id: string;
+  description: string;
+}
+
+export interface AgiGoalExecutionCompletedPayload {
+  goal_id: string;
+  success: boolean;
+  error?: string;
+}
+
 export const useAgentTaskStore = create<AgentTaskState>()(
   devtools(
     persist(
@@ -223,29 +245,26 @@ export const useAgentTaskStore = create<AgentTaskState>()(
           try {
             await ensureAgiInitialized();
             if (options.parallel) {
-              const result = await invoke<{ bestResult: { score: number } }>(
-                'agi_submit_goal_parallel',
-                {
-                  request: {
-                    description: goal,
-                    priority: 'medium',
-                    numAgents: options.maxIterations ?? 4,
-                  },
+              const result = await invoke<SubmitParallelGoalResponse>('agi_submit_goal_parallel', {
+                request: {
+                  description: goal,
+                  priority: 'medium',
+                  numAgents: options.maxIterations ?? 4,
                 },
-              );
-              const taskId = `parallel_${Date.now()}`;
+              });
+              const taskId = result.goalId;
+              const succeeded = result.bestResult.result.success;
               set((state) => ({
-                tasks: [
-                  ...state.tasks,
-                  {
-                    id: taskId,
-                    goal,
-                    status: 'completed' as const,
-                    createdAt: new Date().toISOString(),
-                    completedAt: new Date().toISOString(),
-                    result: `Parallel execution complete. Best score: ${result.bestResult.score}`,
-                  },
-                ],
+                tasks: upsertTerminalAgentTask(state.tasks, {
+                  id: taskId,
+                  goal,
+                  status: succeeded ? 'completed' : 'failed',
+                  createdAt: new Date().toISOString(),
+                  completedAt: new Date().toISOString(),
+                  result: `Parallel execution ${succeeded ? 'complete' : 'failed'}. Best score: ${result.bestResult.score}`,
+                  error: result.bestResult.result.error ?? undefined,
+                  executionMode: 'parallel',
+                }),
               }));
               return taskId;
             }
@@ -260,15 +279,13 @@ export const useAgentTaskStore = create<AgentTaskState>()(
             const taskId = result.goalId;
 
             set((state) => ({
-              tasks: [
-                ...state.tasks,
-                {
-                  id: taskId,
-                  goal,
-                  status: 'pending' as const,
-                  createdAt: new Date().toISOString(),
-                },
-              ],
+              tasks: upsertSubmittedAgentTask(state.tasks, {
+                id: taskId,
+                goal,
+                status: 'pending',
+                createdAt: new Date().toISOString(),
+                executionMode: 'sequential',
+              }),
             }));
 
             return taskId;
@@ -294,27 +311,24 @@ export const useAgentTaskStore = create<AgentTaskState>()(
 
             const taskId = result.goalId;
             set((state) => ({
-              tasks: [
-                ...state.tasks,
-                {
-                  id: taskId,
-                  goal,
-                  status: (result.success ? 'completed' : 'failed') as AgentTask['status'],
-                  createdAt: new Date().toISOString(),
-                  completedAt: new Date().toISOString(),
-                  result: result.summary,
-                  executionMode: 'swarm' as const,
-                  swarmMetrics: {
-                    succeeded: result.succeeded,
-                    failed: result.failed,
-                    wallTimeMs: result.wallTimeMs,
-                    speedupRatio: result.speedupRatio,
-                    criticalPathLength: result.criticalPathLength,
-                    maxParallelism: result.maxParallelism,
-                    summary: result.summary,
-                  },
+              tasks: upsertTerminalAgentTask(state.tasks, {
+                id: taskId,
+                goal,
+                status: result.success ? 'completed' : 'failed',
+                createdAt: new Date().toISOString(),
+                completedAt: new Date().toISOString(),
+                result: result.summary,
+                executionMode: 'swarm',
+                swarmMetrics: {
+                  succeeded: result.succeeded,
+                  failed: result.failed,
+                  wallTimeMs: result.wallTimeMs,
+                  speedupRatio: result.speedupRatio,
+                  criticalPathLength: result.criticalPathLength,
+                  maxParallelism: result.maxParallelism,
+                  summary: result.summary,
                 },
-              ],
+              }),
             }));
             return taskId;
           } catch (err) {
@@ -338,16 +352,13 @@ export const useAgentTaskStore = create<AgentTaskState>()(
 
             const taskId = result.goalId;
             set((state) => ({
-              tasks: [
-                ...state.tasks,
-                {
-                  id: taskId,
-                  goal,
-                  status: 'pending' as const,
-                  createdAt: new Date().toISOString(),
-                  executionMode: 'auto' as const,
-                },
-              ],
+              tasks: upsertSubmittedAgentTask(state.tasks, {
+                id: taskId,
+                goal,
+                status: 'pending',
+                createdAt: new Date().toISOString(),
+                executionMode: 'auto',
+              }),
             }));
             return taskId;
           } catch (err) {
@@ -744,15 +755,46 @@ export const useAgentTaskStore = create<AgentTaskState>()(
       {
         name: 'agiworkforce-agent-tasks',
         partialize: (state) => ({
-          tasks: state.tasks
-            .filter((t) => !t.id.startsWith('parallel_') && !t.id.startsWith('mock_swarm_'))
-            .slice(-500), // Cap at 500 most recent tasks to prevent unbounded localStorage growth
+          tasks: state.tasks.slice(-500), // Cap at 500 most recent tasks to prevent unbounded localStorage growth
         }),
       },
     ),
     { name: 'AgentTaskStore' },
   ),
 );
+
+function upsertSubmittedAgentTask(tasks: AgentTask[], submitted: AgentTask): AgentTask[] {
+  const existingIndex = tasks.findIndex((task) => task.id === submitted.id);
+  if (existingIndex === -1) {
+    return [...tasks, submitted];
+  }
+
+  const existing = tasks[existingIndex]!;
+  const nextTasks = [...tasks];
+  nextTasks[existingIndex] = {
+    ...submitted,
+    ...existing,
+    goal: existing.goal || submitted.goal,
+    executionMode: existing.executionMode ?? submitted.executionMode,
+  };
+  return nextTasks;
+}
+
+function upsertTerminalAgentTask(tasks: AgentTask[], terminal: AgentTask): AgentTask[] {
+  const existingIndex = tasks.findIndex((task) => task.id === terminal.id);
+  if (existingIndex === -1) {
+    return [...tasks, terminal];
+  }
+
+  const existing = tasks[existingIndex]!;
+  const nextTasks = [...tasks];
+  nextTasks[existingIndex] = {
+    ...existing,
+    ...terminal,
+    createdAt: existing.createdAt,
+  };
+  return nextTasks;
+}
 
 function upsertLiveStep(
   steps: AgentTaskLiveStep[],
@@ -1002,6 +1044,64 @@ export function applyAgentTaskGoalError(payload: AgiGoalErrorPayload): void {
   });
 }
 
+export function applyAgentTaskGoalExecutionStarted(
+  payload: AgiGoalExecutionStartedPayload,
+  executionMode: 'parallel' | 'swarm',
+): void {
+  useAgentTaskStore.setState((state) => {
+    const existingIndex = state.tasks.findIndex((task) => task.id === payload.goal_id);
+    if (existingIndex === -1) {
+      return {
+        tasks: [
+          ...state.tasks,
+          {
+            id: payload.goal_id,
+            goal: payload.description,
+            status: 'running',
+            createdAt: new Date().toISOString(),
+            executionMode,
+          },
+        ],
+      };
+    }
+
+    const existing = state.tasks[existingIndex]!;
+    if (isTerminalAgentTaskStatus(existing.status)) {
+      return state;
+    }
+
+    const tasks = [...state.tasks];
+    tasks[existingIndex] = {
+      ...existing,
+      goal: existing.goal || payload.description,
+      status: 'running',
+      executionMode,
+    };
+    return { tasks };
+  });
+}
+
+export function applyAgentTaskGoalExecutionCompleted(
+  payload: AgiGoalExecutionCompletedPayload,
+): void {
+  useAgentTaskStore.setState((state) => ({
+    tasks: state.tasks.map((task) =>
+      task.id === payload.goal_id
+        ? {
+            ...task,
+            status: payload.success ? 'completed' : 'failed',
+            completedAt: task.completedAt ?? new Date().toISOString(),
+            error: payload.error ?? task.error,
+          }
+        : task,
+    ),
+  }));
+}
+
+function isTerminalAgentTaskStatus(status: AgentTaskStatus): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled';
+}
+
 let agentTaskEventListenersInitialized = false;
 const agentTaskUnlistenFunctions: Array<() => void> = [];
 
@@ -1025,6 +1125,33 @@ export async function initializeAgentTaskEventListeners(): Promise<void> {
   agentTaskEventListenersInitialized = true;
 
   try {
+    agentTaskUnlistenFunctions.push(
+      await listen<AgiGoalExecutionStartedPayload>('agi:goal:parallel_submitted', ({ payload }) => {
+        applyAgentTaskGoalExecutionStarted(payload, 'parallel');
+      }),
+    );
+
+    agentTaskUnlistenFunctions.push(
+      await listen<AgiGoalExecutionCompletedPayload>(
+        'agi:goal:parallel_best_result',
+        ({ payload }) => {
+          applyAgentTaskGoalExecutionCompleted(payload);
+        },
+      ),
+    );
+
+    agentTaskUnlistenFunctions.push(
+      await listen<AgiGoalExecutionStartedPayload>('agi:goal:swarm_submitted', ({ payload }) => {
+        applyAgentTaskGoalExecutionStarted(payload, 'swarm');
+      }),
+    );
+
+    agentTaskUnlistenFunctions.push(
+      await listen<AgiGoalExecutionCompletedPayload>('agi:goal:swarm_completed', ({ payload }) => {
+        applyAgentTaskGoalExecutionCompleted(payload);
+      }),
+    );
+
     agentTaskUnlistenFunctions.push(
       await listen<AgiGoalSubmittedPayload>('agi:goal:submitted', ({ payload }) => {
         applyAgentTaskGoalSubmitted(payload);
