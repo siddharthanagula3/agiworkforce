@@ -221,6 +221,8 @@ export interface WebMcpToolDef {
   serverId: string;
   toolName: string;
   description: string;
+  /** Ownership used by the canonical activity stream for truthful UI labels. */
+  origin?: 'operator' | 'connector';
   /** JSON Schema for the tool's input. */
   inputSchema: Record<string, unknown>;
 }
@@ -234,6 +236,7 @@ export function catalogToToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
     serverId: t.serverName,
     toolName: t.toolName,
     description: t.description ?? t.fallbackDescription,
+    origin: 'operator',
     inputSchema: t.inputSchema,
   }));
 }
