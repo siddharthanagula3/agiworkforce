@@ -38,7 +38,7 @@ pub(super) enum SlashResult {
     AgentInvoke(String),
 }
 
-pub(super) fn handle_slash_command(
+pub(super) async fn handle_slash_command(
     input: &str,
     session: &mut AgentSession,
     config: &mut CliConfig,
@@ -208,7 +208,7 @@ pub(super) fn handle_slash_command(
             registry::handle_migrate();
         }
         "/compact" => {
-            registry::handle_compact(arg, session);
+            registry::handle_compact(arg, session, config).await;
         }
         "/btw" => {
             if arg.is_empty() {

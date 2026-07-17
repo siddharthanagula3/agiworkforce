@@ -221,7 +221,7 @@ pub async fn run_repl(
                 }
 
                 if input.starts_with('/') {
-                    let result = handle_slash_command(input, &mut session, config);
+                    let result = handle_slash_command(input, &mut session, config).await;
                     match result {
                         SlashResult::Exit => break,
                         SlashResult::Login => {
@@ -544,6 +544,10 @@ pub async fn run_repl(
 
     if let Some(ref path) = history_path {
         let _ = editor.save_history(path);
+    }
+
+    if let Err(error) = session.finalize_memory(config).await {
+        output::print_warn(&format!("Session memory extraction failed: {error:#}"));
     }
 
     crate::hooks::run_hooks(

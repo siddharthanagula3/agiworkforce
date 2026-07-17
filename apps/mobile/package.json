@@ -34,6 +34,7 @@
     "screenshots:composite": "tsx scripts/screenshots/compositor.ts --recompose-all"
   },
   "dependencies": {
+    "@agiworkforce/agent-core": "workspace:*",
     "@agiworkforce/artifacts": "workspace:*",
     "@agiworkforce/compliance": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",

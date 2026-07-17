@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Rust platform + CLI lead
-Last updated: 2026-07-09
+Last updated: 2026-07-17
 Kind: rust-crate
 Criticality: high
 
@@ -16,22 +16,23 @@ Shared agentic turn-loop mechanics for AGI's Rust surfaces (restructure Wave 5 s
 
 ## Public API / Exports
 
-Rust library `agiworkforce_agent_core`: `TurnEngine::run_turn`, the `TurnHost` trait (completion + tool dispatch + hooks + event seams), and types `TurnEvent`/`TurnParams`/`TurnOutcome`/`Prepared`/`ExecResult`/`Completion`/`LoopControl`, plus `RunawayTracker` + content-loop/runaway detection.
+Rust library `agiworkforce_agent_core`: `TurnEngine::run_turn`, the `TurnHost` trait (completion + tool dispatch + hooks + event seams), shared context accounting/compaction contracts, and the associated turn/runaway types.
 
 ## What Belongs Here
 
 - Drive the model stream, assemble tool calls, dispatch (sequential + parallel read-only batches with concurrency caps).
 - Iterate until end-turn/limits; runaway, iteration-limit, and budget guards; turn events.
+- Account for context with provider-usage anchors and run the host-neutral five-stage compaction reducer. Provider summarization remains an injected host callback.
 
 ## What Does Not Belong Here
 
-- The hooks engine, compaction, plan mode, privacy-boundary consent (trust-boundary code — stay in `Session::send`).
+- The hooks engine, plan mode, privacy-boundary consent, and provider selection (trust-boundary code — stay in host adapters).
 - Memory/skills/subagents policy, key/subscription-auth resolution, TUI/stderr routing, `CliError` mapping (all app-local via `TurnHost` impl).
 
 ## Key Files
 
-- `src/{lib,engine,runaway}.rs`
-- `tests/turn_loop.rs` (scripted-host fixtures: sequential/parallel/error/runaway/iteration/budget/malformed-args/mid-stream-error)
+- `src/{lib,engine,runaway,context}.rs`
+- `tests/{turn_loop,context_engine}.rs`
 - `Cargo.toml`
 
 ## Commands

@@ -10,6 +10,11 @@
  *   80% full → trigger auto-compaction (memoryCompactor)
  */
 
+import {
+  computeContextBudget as computeSharedContextBudget,
+  estimateTextTokens,
+  type AgentContextMessage,
+} from '@agiworkforce/agent-core';
 import { getModelById, MODEL_LIST } from '@/lib/models';
 import type { ModelDef } from '@/lib/models';
 import type { ChatMessage } from '@/types/chat';
@@ -31,13 +36,16 @@ export interface ContextBudget {
 
 /** Estimate token count using 4-chars-per-token approximation. */
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  return estimateTextTokens(text);
 }
 
-function estimateMessageTokens(msg: ChatMessage): number {
-  const roleOverhead = 4; // per-message framing overhead
-  const contentText = msg.content;
-  return roleOverhead + estimateTokens(contentText);
+function toContextMessage(msg: ChatMessage): AgentContextMessage {
+  return {
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    kind: msg.type === 'image' ? 'image' : 'text',
+  };
 }
 
 function getContextWindow(modelId: string): number {
@@ -61,11 +69,17 @@ export function computeContextBudget(
   systemPromptTokens = 0,
 ): ContextBudget {
   const contextWindow = getContextWindow(modelId);
-  const hardCapTokens = Math.floor(contextWindow * 0.8);
-  const warnThresholdTokens = Math.floor(contextWindow * 0.7);
-
-  const conversationTokens = messages.reduce((sum, msg) => sum + estimateMessageTokens(msg), 0);
-  const usedTokens = systemPromptTokens + conversationTokens;
+  const shared = computeSharedContextBudget({
+    contextWindowTokens: contextWindow,
+    reservedOutputTokens: 0,
+    messages: messages.map(toContextMessage),
+    warningFraction: 0.7,
+    compactionFraction: 0.8,
+    targetFraction: 0.65,
+  });
+  const hardCapTokens = shared.compactionTokens;
+  const warnThresholdTokens = shared.warningTokens;
+  const usedTokens = systemPromptTokens + shared.usedTokens;
   const usedFraction = hardCapTokens > 0 ? usedTokens / hardCapTokens : 0;
 
   let status: BudgetStatus = 'ok';

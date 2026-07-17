@@ -194,36 +194,36 @@ describe('memoryCompactor', () => {
   describe('compact — Apple FM (4K)', () => {
     const modelId = APPLE_FM_ID;
 
-    it('no-ops when budget is ok', () => {
+    it('no-ops when budget is ok', async () => {
       const messages = makeMessages(4, 50);
-      const result = compact(modelId, messages);
+      const result = await compact(modelId, messages);
       expect(result.compacted).toBe(false);
       expect(result.droppedTurns).toBe(0);
       expect(result.messages).toBe(messages); // same reference
     });
 
-    it('compacts when at 80% threshold', () => {
+    it('compacts when at 80% threshold', async () => {
       // Force a compact scenario: 5 messages × 2800 chars
       const messages = makeMessages(5, 2800);
-      const result = compact(modelId, messages);
+      const result = await compact(modelId, messages);
       expect(result.compacted).toBe(true);
       expect(result.droppedTurns).toBeGreaterThan(0);
       // Result has fewer messages than original (summary + kept)
       expect(result.messages.length).toBeLessThan(messages.length);
     });
 
-    it('first message in result is the summary', () => {
+    it('first message in result is the summary', async () => {
       const messages = makeMessages(6, 2800);
-      const result = compact(modelId, messages);
+      const result = await compact(modelId, messages);
       if (result.compacted) {
-        expect(result.messages[0].content).toContain('[Earlier conversation summary]');
-        expect(result.messages[0].content).toContain('[End of summary]');
+        expect(result.messages[0].content).toContain('UNTRUSTED HISTORICAL SUMMARY');
+        expect(result.messages[0].content).toContain('END UNTRUSTED HISTORICAL SUMMARY');
       }
     });
 
-    it('preserved messages are unchanged', () => {
+    it('preserved messages are unchanged', async () => {
       const messages = makeMessages(6, 2800);
-      const result = compact(modelId, messages);
+      const result = await compact(modelId, messages);
       if (result.compacted) {
         const keptCount = messages.length - result.droppedTurns;
         const keptOriginals = messages.slice(result.droppedTurns);
@@ -235,9 +235,9 @@ describe('memoryCompactor', () => {
       }
     });
 
-    it('does not compact when fewer than 2 messages', () => {
+    it('does not compact when fewer than 2 messages', async () => {
       const messages = makeMessages(1, 3000);
-      const result = compact(modelId, messages);
+      const result = await compact(modelId, messages);
       expect(result.compacted).toBe(false);
     });
   });

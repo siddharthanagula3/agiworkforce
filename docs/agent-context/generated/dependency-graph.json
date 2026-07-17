@@ -2,6 +2,7 @@
   "generatedFrom": "pnpm exec turbo run build --dry=json (typescript) + cargo metadata --no-deps (rust)",
   "typescript": {
     "nodes": [
+      "@agiworkforce/agent-core",
       "@agiworkforce/api-gateway",
       "@agiworkforce/apply-patch",
       "@agiworkforce/artifacts",
@@ -218,6 +219,10 @@
       {
         "from": "@agiworkforce/local-llm",
         "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/agent-core"
       },
       {
         "from": "@agiworkforce/mobile",
@@ -686,6 +691,10 @@
       {
         "from": "@agiworkforce/web",
         "to": "@agiworkforce/utils"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/agent-core"
       },
       {
         "from": "agi-workforce",

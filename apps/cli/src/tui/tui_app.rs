@@ -2276,6 +2276,7 @@ enum SlashResult {
     SendPrompt(String),
     SendMcpPrompt(String),
     RunAdvisor(String),
+    RunCompact(String),
     RunLogin,
     RunLogout,
 }
@@ -2552,14 +2553,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         // ── Session management ──
-        "/compact" => {
-            crate::repl::handle_compact(arg, &mut app.session);
-            app.sync_stats();
-            SlashResult::SystemMessage(format!(
-                "Context compacted. Now at {}% usage.",
-                app.context_percent()
-            ))
-        }
+        "/compact" => SlashResult::RunCompact(arg.to_string()),
 
         "/history" | "/sessions" => {
             crate::repl::handle_history();
@@ -3311,6 +3305,10 @@ pub async fn run(
 
     restore_terminal(&mut terminal)?;
 
+    if let Err(error) = app.session.finalize_memory(&app.config).await {
+        crate::output::print_warn(&format!("Session memory extraction failed: {error:#}"));
+    }
+
     // Session end hooks
     crate::hooks::run_hooks(
         &hooks_config,
@@ -3544,6 +3542,20 @@ async fn run_event_loop(
                                         });
                                     }
                                 }
+                            }
+                            SlashResult::RunCompact(focus) => {
+                                let focus = (!focus.trim().is_empty()).then_some(focus.as_str());
+                                let result = app.session.compact_now(&app.config, focus).await;
+                                app.sync_stats();
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: format!(
+                                        "Context compacted: ~{} -> ~{} tokens ({}% of limit).",
+                                        result.before.used_tokens,
+                                        result.after.used_tokens,
+                                        (result.after.used_fraction * 100.0) as u32
+                                    ),
+                                });
                             }
                             SlashResult::RunLogout => {
                                 let mut store = crate::auth::load_auth().unwrap_or_default();

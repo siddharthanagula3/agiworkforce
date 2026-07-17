@@ -97,6 +97,9 @@ pub struct AgentSession {
     /// Cumulative reasoning output tokens across all turns. 0 for non-reasoning
     /// models or when the provider does not report this field.
     pub total_reasoning_tokens: u32,
+    /// Provider-tokenizer calibration captured from the most recent completion.
+    /// The shared context engine applies this ratio to future local estimates.
+    pub(crate) context_usage_anchor: Option<agiworkforce_agent_core::context::ContextUsageAnchor>,
     pub turn_count: u32,
     pub cost_ledger: crate::cost_ledger::CostLedger,
     pub fallback_chain: Option<crate::routing::fallback::FallbackChain>,
@@ -136,6 +139,9 @@ pub struct AgentSession {
     pub(crate) checkpoints: Vec<Vec<Message>>,
     #[allow(dead_code)]
     pub session_name: Option<String>,
+    /// Stable, filesystem-safe identifier for this process-local session run.
+    /// Memory extraction uses it instead of user-controlled names or paths.
+    pub(crate) runtime_session_id: String,
     #[allow(dead_code)]
     pub fallback_model: Option<String>,
     pub allowed_tools: Option<Vec<String>>,
@@ -352,6 +358,7 @@ impl AgentSession {
             total_cache_read_tokens: 0,
             total_cache_creation_tokens: 0,
             total_reasoning_tokens: 0,
+            context_usage_anchor: None,
             turn_count: 0,
             cost_ledger: crate::cost_ledger::CostLedger::default(),
             fallback_chain: None,
@@ -382,6 +389,7 @@ impl AgentSession {
             original_model: None,
             checkpoints: Vec::new(),
             session_name: None,
+            runtime_session_id: session_id,
             fallback_model: None,
             allowed_tools: None,
             disallowed_tools: Vec::new(),
@@ -959,6 +967,25 @@ impl AgentSession {
 
     pub fn managed_session_id(&self) -> Option<&str> {
         self.managed_session.as_ref().map(|s| s.session_id.as_str())
+    }
+
+    /// Persist the session-end memory summary using the active model/provider
+    /// boundary. Local sessions always take the deterministic on-device path.
+    pub async fn finalize_memory(&self, config: &CliConfig) -> Result<()> {
+        if !self.messages.iter().any(|message| message.role != "system") {
+            return Ok(());
+        }
+        let home = CliConfig::config_dir()?;
+        crate::memory_pipeline::MemoryPipeline::extract_session_summary(
+            &home,
+            &self.runtime_session_id,
+            &self.messages,
+            config,
+            &self.provider,
+            &self.model,
+            self.privacy_mode == PrivacyMode::Local,
+        )
+        .await
     }
 
     pub(crate) fn managed_auto_routing(
