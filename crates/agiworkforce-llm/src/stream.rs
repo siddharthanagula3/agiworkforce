@@ -63,7 +63,9 @@ pub enum ToolChoice {
 /// response has headroom beyond the thinking budget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnthropicThinking {
-    Enabled { budget_tokens: u32 },
+    Enabled {
+        budget_tokens: u32,
+    },
     /// Claude Opus 4.6+ adaptive thinking — the model decides when/how much.
     Adaptive,
     /// Explicitly disabled (distinct from omitting the field).
@@ -258,10 +260,10 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
     // rejects the request (no tokens left for output). Floor to budget + 1024
     // so the response has real headroom (c3: mirrors the desktop adapter).
     let mut max_tokens = req.max_tokens;
-    if let Some(AnthropicThinking::Enabled { budget_tokens }) = thinking {
-        if budget_tokens > 0 {
-            max_tokens = max_tokens.max(budget_tokens + 1024);
-        }
+    if let Some(AnthropicThinking::Enabled { budget_tokens }) = thinking
+        && budget_tokens > 0
+    {
+        max_tokens = max_tokens.max(budget_tokens + 1024);
     }
 
     let mut body = serde_json::json!({
@@ -282,10 +284,8 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
         thinking,
         Some(AnthropicThinking::Enabled { .. } | AnthropicThinking::Adaptive)
     );
-    if !thinking_active {
-        if let Some(temp) = req.temperature {
-            body["temperature"] = serde_json::json!(temp);
-        }
+    if !thinking_active && let Some(temp) = req.temperature {
+        body["temperature"] = serde_json::json!(temp);
     }
     if let Some(top_p) = req.top_p {
         body["top_p"] = serde_json::json!(top_p);
@@ -1350,12 +1350,12 @@ pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
     }
     // Gemini thinking budget (REST API requires camelCase thinkingConfig /
     // thinkingBudget; snake_case is silently ignored by Google's API).
-    if let Some(budget) = req.gemini_thinking_budget {
-        if budget > 0 {
-            body["generationConfig"]["thinkingConfig"] = serde_json::json!({
-                "thinkingBudget": budget
-            });
-        }
+    if let Some(budget) = req.gemini_thinking_budget
+        && budget > 0
+    {
+        body["generationConfig"]["thinkingConfig"] = serde_json::json!({
+            "thinkingBudget": budget
+        });
     }
 
     if let Some(si) = system_instruction {
@@ -1972,7 +1972,10 @@ mod anthropic_request_tests {
         req.anthropic_thinking = Some(AnthropicThinking::Adaptive);
         let body = build_anthropic_request_body(&req);
         assert_eq!(body["thinking"], serde_json::json!({"type": "adaptive"}));
-        assert!(body.get("temperature").is_none(), "adaptive omits temperature");
+        assert!(
+            body.get("temperature").is_none(),
+            "adaptive omits temperature"
+        );
         assert_eq!(body["max_tokens"], 1024, "adaptive has no budget floor");
 
         req.anthropic_thinking = Some(AnthropicThinking::Disabled);
