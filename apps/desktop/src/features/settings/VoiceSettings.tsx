@@ -38,10 +38,17 @@ const HOTKEY_OPTIONS = [
   { value: 'ctrl+shift+v', label: 'Ctrl+Shift+V (hold to dictate)' },
 ] as const;
 
-const PROVIDER_OPTIONS = [
+/**
+ * Explicit dictation transcription modes only (fail-closed on the backend):
+ * recorded dictation is transcribed exactly where the user points it. There
+ * is deliberately NO Deepgram entry — Deepgram is streaming-only (voice
+ * mode), and the old option silently rerouted recorded audio to managed
+ * cloud. Exported for the honesty pins in VoiceSettings.test.tsx.
+ */
+export const PROVIDER_OPTIONS = [
   { value: 'local_whisper', label: 'Local Whisper (offline)' },
-  { value: 'deepgram', label: 'Deepgram (cloud)' },
-  { value: 'openai_whisper', label: 'OpenAI Whisper (cloud)' },
+  { value: 'openai_whisper', label: 'OpenAI Whisper (your API key)' },
+  { value: 'managed_cloud', label: 'AGI Cloud (managed)' },
 ] as const;
 
 const LANGUAGE_OPTIONS = [
@@ -88,8 +95,10 @@ export function VoiceSettings() {
   const language = useVoiceInputStore((s) => s.voiceLanguage);
   const mode = useVoiceInputStore((s) => s.voiceMode);
   const postProcessingMode = useVoiceInputStore((s) => s.postProcessingMode);
+  const inputDeviceId = useVoiceInputStore((s) => s.inputDeviceId);
   const setHotkey = useVoiceInputStore((s) => s.setHotkey);
   const setProvider = useVoiceInputStore((s) => s.setProvider);
+  const setInputDevice = useVoiceInputStore((s) => s.setInputDevice);
   const setLanguage = useVoiceInputStore((s) => s.setLanguage);
   const setPostProcessingMode = useVoiceInputStore((s) => s.setPostProcessingMode);
   const startListening = useVoiceInputStore((s) => s.startListening);
@@ -111,6 +120,7 @@ export function VoiceSettings() {
   const listPiperVoices = useVoiceModeStore((s) => s.listPiperVoices);
   const downloadPiperVoice = useVoiceModeStore((s) => s.downloadPiperVoice);
 
+  const [inputDevices, setInputDevices] = useState<Array<{ deviceId: string; label: string }>>([]);
   const [whisperModels, setWhisperModels] = useState<WhisperModelInfo[]>([]);
   const [piperVoices, setPiperVoices] = useState<PiperVoiceInfo[]>([]);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
@@ -140,6 +150,38 @@ export function VoiceSettings() {
         console.error('Failed to load Piper voices:', err);
       });
   }, [fetchCapabilities, listWhisperModels, listPiperVoices]);
+
+  // Microphone picker: browser device list (the in-app path captures via
+  // getUserMedia). Labels are only populated once mic permission has been
+  // granted; unlabeled devices get a stable positional name. Refreshes on
+  // plug/unplug via `devicechange`.
+  useEffect(() => {
+    let cancelled = false;
+    const refreshDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+        setInputDevices(
+          devices
+            .filter((device) => device.kind === 'audioinput' && device.deviceId)
+            .map((device, index) => ({
+              deviceId: device.deviceId,
+              label: device.label || `Microphone ${index + 1}`,
+            })),
+        );
+      } catch {
+        // Device enumeration unavailable (no permission API in this context);
+        // the picker keeps only the system-default entry.
+      }
+    };
+    void refreshDevices();
+    const listener = () => void refreshDevices();
+    navigator.mediaDevices?.addEventListener?.('devicechange', listener);
+    return () => {
+      cancelled = true;
+      navigator.mediaDevices?.removeEventListener?.('devicechange', listener);
+    };
+  }, []);
 
   const [testError, setTestError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -241,6 +283,37 @@ export function VoiceSettings() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Microphone selector */}
+          <div className="space-y-2">
+            <Label htmlFor="voiceMicrophone">Microphone</Label>
+            <Select
+              value={inputDeviceId ?? 'system-default'}
+              onValueChange={(value) => {
+                if (value === 'system-default') {
+                  setInputDevice(null, null);
+                  return;
+                }
+                const device = inputDevices.find((d) => d.deviceId === value);
+                setInputDevice(value, device?.label ?? null);
+              }}
+            >
+              <SelectTrigger id="voiceMicrophone">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="system-default">System default</SelectItem>
+                {inputDevices.map((device) => (
+                  <SelectItem key={device.deviceId} value={device.deviceId}>
+                    {device.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              If the selected microphone is unplugged, recording falls back to the system default.
+            </p>
           </div>
 
           {/* Language selector */}

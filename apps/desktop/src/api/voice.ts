@@ -576,11 +576,39 @@ export async function voiceStopBargeInMonitoring(): Promise<boolean> {
 // =============================================================================
 
 /** Start native audio recording via cpal (OS-level microphone capture). */
-export async function speechStartRecording(provider: string = 'cloud'): Promise<void> {
+export async function speechStartRecording(
+  provider: string = 'cloud',
+  device?: string | null,
+): Promise<void> {
   try {
-    await invoke('speech_start_recording', { provider });
+    await invoke('speech_start_recording', { provider, device: device ?? null });
   } catch (e) {
     throw new Error(`speechStartRecording failed: ${e}`);
+  }
+}
+
+/** Cancel native recording, discarding captured audio without transcription. */
+export async function speechCancelRecording(): Promise<void> {
+  try {
+    await invoke('speech_cancel_recording');
+  } catch (e) {
+    throw new Error(`speechCancelRecording failed: ${e}`);
+  }
+}
+
+export interface DictationInputDevice {
+  name: string;
+  isDefault: boolean;
+  sampleRate: number | null;
+  channels: number | null;
+}
+
+/** List audio input devices for the dictation microphone picker. */
+export async function dictationListInputDevices(): Promise<DictationInputDevice[]> {
+  try {
+    return await invoke<DictationInputDevice[]>('dictation_list_input_devices');
+  } catch (e) {
+    throw new Error(`dictationListInputDevices failed: ${e}`);
   }
 }
 

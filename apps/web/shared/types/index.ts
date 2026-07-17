@@ -75,7 +75,6 @@ export {
 
   // Orchestration types
   type CollaborationAgentCapability,
-  type ProtocolAgentCapability,
   type SelectionAgentCapability,
   type AgentStatus,
   type AgentCommunication,

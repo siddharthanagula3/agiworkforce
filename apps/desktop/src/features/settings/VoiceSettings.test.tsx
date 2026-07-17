@@ -15,11 +15,14 @@ const mocks = vi.hoisted(() => {
   const voiceInput = {
     hotkey: 'option',
     voiceProvider: 'local_whisper',
+    inputDeviceId: null as string | null,
+    inputDeviceLabel: null as string | null,
     voiceLanguage: 'en',
     voiceMode: 'idle',
     postProcessingMode: 'basic',
     setHotkey: vi.fn(),
     setProvider: vi.fn(),
+    setInputDevice: vi.fn(),
     setLanguage: vi.fn(),
     setPostProcessingMode: vi.fn(),
     startListening: vi.fn(),
@@ -55,7 +58,7 @@ vi.mock('./VoicePersonaSelector', () => ({
   VoicePersonaSelector: () => null,
 }));
 
-import { VoiceSettings } from './VoiceSettings';
+import { PROVIDER_OPTIONS, VoiceSettings } from './VoiceSettings';
 
 function capabilitiesWith(systemDictationAvailable: boolean): VoiceCapabilities {
   return {
@@ -123,5 +126,27 @@ describe('VoiceSettings — honest system dictation presentation', () => {
     mocks.voiceMode.capabilities = capabilitiesWith(false);
     const { container } = render(<VoiceSettings />);
     expect(container.textContent).not.toMatch(/wispr/i);
+  });
+
+  it('offers only the explicit fail-closed transcription modes', () => {
+    // No Deepgram: it is streaming-only, and the old option silently
+    // rerouted recorded dictation to managed cloud. The backend parser
+    // (features/speech/dictation/transcription.rs) accepts exactly these.
+    expect(PROVIDER_OPTIONS.map((option) => option.value)).toEqual([
+      'local_whisper',
+      'openai_whisper',
+      'managed_cloud',
+    ]);
+    expect(
+      PROVIDER_OPTIONS.every((option) => !/deepgram/i.test(`${option.value} ${option.label}`)),
+    ).toBe(true);
+  });
+
+  it('renders the microphone picker with a system-default fallback', () => {
+    mocks.voiceMode.capabilities = capabilitiesWith(false);
+    render(<VoiceSettings />);
+    expect(screen.getByText('Microphone')).toBeInTheDocument();
+    expect(screen.getByText('System default')).toBeInTheDocument();
+    expect(screen.getByText(/falls back to the system default/i)).toBeInTheDocument();
   });
 });
