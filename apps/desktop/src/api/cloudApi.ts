@@ -89,6 +89,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
+    'X-AGI-Surface': 'desktop',
   };
 
   // Desktop mode: add Bearer token from Tauri auth service

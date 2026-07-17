@@ -60,7 +60,7 @@ function mockSseStream(events: unknown[]) {
 describe('useChatStream', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
-    useFreeTrialStore.getState().resetUsage();
+    useFreeTrialStore.getState().clearLimitReached();
     useChatStore.setState({
       activeConversationId: TEMP_CONVERSATION.id,
       conversations: [TEMP_CONVERSATION],

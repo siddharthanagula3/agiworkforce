@@ -43,6 +43,9 @@ vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
+vi.mock('@/lib/services/free-trial-service', () => ({
+  recordFreeTrialTokens: vi.fn(() => Promise.resolve()),
+}));
 
 import { buildAdapterStreamResponse } from '../lib/stream-transform';
 import type { ProcessedRequest } from '../lib/request-processor';
@@ -51,11 +54,13 @@ import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { recordModelUsage } from '@/lib/cost-tracker';
 import { logger } from '@/lib/logger';
+import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
 
 const mockSettleCreditsDurably = CreditService.settleCreditsDurably as ReturnType<typeof vi.fn>;
 const mockCalculateCost = LLMCostCalculator.calculateCost as ReturnType<typeof vi.fn>;
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
 const mockLoggerInfo = logger.info as ReturnType<typeof vi.fn>;
+const mockRecordFreeTrialTokens = recordFreeTrialTokens as ReturnType<typeof vi.fn>;
 
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
@@ -209,7 +214,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
   });
 
-  it('skips reconciliation entirely for a free-trial request', async () => {
+  it('records actual tokens but skips paid reconciliation for a free-tier request', async () => {
     const chunks: StreamChunk[] = [
       { type: 'text-delta', delta: 'Hi' },
       { type: 'usage', inputTokens: 100, outputTokens: 50 },
@@ -221,7 +226,11 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({
         estimatedCostCents: 0,
-        freeTrial: { kind: 'website', promptCount: 1, promptLimit: 3 } as any,
+        freeTrial: {
+          kind: 'free_trial',
+          userId: 'user-004',
+          requestId: 'req-adapter-001',
+        } as any,
       }),
       'user-004',
       'token-004',
@@ -230,6 +239,13 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     await readAllText(response as any);
 
     expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
+    expect(mockRecordFreeTrialTokens).toHaveBeenCalledWith({
+      userId: 'user-004',
+      requestId: 'req-adapter-001',
+      tokens: 150,
+    });
+    expect(response.headers.has('x-agi-trial-tokens-used')).toBe(false);
+    expect(response.headers.has('x-agi-trial-tokens-budget')).toBe(false);
   });
 
   it('records cache/reasoning usage fields for cost tracking', async () => {

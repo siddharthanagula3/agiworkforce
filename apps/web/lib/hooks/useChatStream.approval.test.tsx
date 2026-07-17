@@ -71,7 +71,7 @@ function assistantMessage() {
 describe('useChatStream — tool approval → resume', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
-    useFreeTrialStore.getState().resetUsage();
+    useFreeTrialStore.getState().clearLimitReached();
     __resetPendingTurnsForTests();
     useChatStore.setState({
       activeConversationId: TEMP_CONVERSATION.id,
@@ -316,7 +316,7 @@ describe('useChatStream — tool approval → resume', () => {
 describe('isApprovalTurnLive', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
-    useFreeTrialStore.getState().resetUsage();
+    useFreeTrialStore.getState().clearLimitReached();
     __resetPendingTurnsForTests();
     useChatStore.setState({
       activeConversationId: TEMP_CONVERSATION.id,

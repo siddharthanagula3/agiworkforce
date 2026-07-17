@@ -39,14 +39,13 @@ import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 import { encryptConnectorToken } from '@/lib/custom-connector-crypto';
 import { evictCustomConnectorCaches } from '@/lib/user-connector-tools';
 import { getUserCustomConnectorSummaries } from '@/lib/user-connector-tools';
+import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  getCustomRemoteMcpLimit,
+  isUserResourceLimitError,
+} from '@/lib/services/free-plan-entitlements';
 
 export const runtime = 'nodejs';
-
-/** Hard cap on custom connectors per user — mirrors MAX_CONNECTOR_TOOLS_PER_USER's
- *  intent of bounding per-user footprint, but at the row level (a user could
- *  otherwise persist an unbounded number of rows even if most never surface
- *  tools because of the MAX_CONNECTOR_TOOLS_PER_USER cap downstream). */
-export const MAX_CUSTOM_CONNECTORS_PER_USER = 10;
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNIQUE_VIOLATION = '23505';
@@ -176,6 +175,8 @@ async function handlePost(request: NextRequest) {
   }
 
   const db = getNeonDb();
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const connectorLimit = getCustomRemoteMcpLimit(subscription?.plan_tier);
 
   // Enforce the per-user cap before doing any network work.
   let existingCount: { count: string }[];
@@ -191,9 +192,9 @@ async function handlePost(request: NextRequest) {
       throw error;
     }
   }
-  if (Number(existingCount[0]?.count ?? '0') >= MAX_CUSTOM_CONNECTORS_PER_USER) {
+  if (Number(existingCount[0]?.count ?? '0') >= connectorLimit) {
     throw createError.validation(
-      `You can add up to ${MAX_CUSTOM_CONNECTORS_PER_USER} custom connectors. Remove one before adding another.`,
+      `You can add up to ${connectorLimit} custom connector${connectorLimit === 1 ? '' : 's'}. Remove one before adding another.`,
     );
   }
 
@@ -227,10 +228,17 @@ async function handlePost(request: NextRequest) {
   let saved: CustomConnectorRow | undefined;
   try {
     [saved] = await db.query<CustomConnectorRow>(
-      `insert into user_custom_connectors (user_id, name, url, auth_header_enc, transport, short_id, created_at, updated_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $7)
-       returning id, short_id, name, url, transport, created_at, updated_at`,
-      [userId, name, parsedUrl.toString(), authHeaderEnc, transport, shortId, now],
+      `with inserted as materialized (
+         insert into user_custom_connectors
+           (user_id, name, url, auth_header_enc, transport, short_id, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $7)
+         returning id, short_id, name, url, transport, created_at, updated_at
+       ), quota_guard as materialized (
+         select public.assert_user_resource_limit('custom_connectors', $1, $8)
+           from (select count(*) from inserted) as dependency
+       )
+       select inserted.* from inserted cross join quota_guard`,
+      [userId, name, parsedUrl.toString(), authHeaderEnc, transport, shortId, now, connectorLimit],
     );
   } catch (error) {
     if (isUndefinedTable(error)) {
@@ -245,6 +253,11 @@ async function handlePost(request: NextRequest) {
         );
       }
       throw createError.conflict('You already have a custom connector for this URL.');
+    }
+    if (isUserResourceLimitError(error)) {
+      throw createError.validation(
+        `You can add up to ${connectorLimit} custom connector${connectorLimit === 1 ? '' : 's'}. Remove one before adding another.`,
+      );
     }
     throw error;
   }

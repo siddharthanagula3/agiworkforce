@@ -96,8 +96,12 @@ vi.mock('./ActiveModeTags', () => ({
   ActiveModeTags: () => null,
 }));
 
-vi.mock('@features/chat/components/VoiceInputButton', () => ({
-  VoiceInputButton: () => null,
+vi.mock('./VoiceInputButton', () => ({
+  VoiceInputButton: ({ disabled }: { disabled?: boolean }) => (
+    <button type="button" aria-label="Voice input" disabled={disabled}>
+      Voice
+    </button>
+  ),
 }));
 
 const mockUseApiPromptCompletion = vi.fn(() => ({
@@ -296,6 +300,78 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Web chat currently accepts images only. Other file types require Cloud file support.',
     );
+  });
+
+  it('keeps free chat image upload, voice, and skills available', async () => {
+    const visionModel = getSelectableModels().find((model) => model.capabilities.vision === true);
+    expect(visionModel, 'the canonical registry must expose a vision model').toBeDefined();
+    useModelStore.getState().setSelectedModelId(visionModel!.id);
+
+    const { container } = render(
+      <ChatComposerNew onSend={vi.fn()} freeTrial={{ enabled: true, limitReached: false }} />,
+    );
+
+    const fileInput = container.querySelector('input[type="file"]');
+    expect(fileInput).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Voice input' })).not.toBeDisabled();
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, '@back');
+    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    expect(screen.queryByText(/free web chat accepts plain text/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps Projects on free chat without exposing paid AGI Work mode', async () => {
+    const onSend = vi.fn();
+    render(
+      <ChatComposerNew
+        onSend={onSend}
+        freeTrial={{ enabled: true, limitReached: false }}
+        projectPicker={{
+          projects: [{ id: 'proj-free', name: 'Free Project' }],
+          activeProjectId: 'proj-free',
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'AGI Work' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Project' })).toHaveTextContent('Free Project');
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'Project chat');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith(
+        'Project chat',
+        undefined,
+        undefined,
+        expect.objectContaining({ workMode: 'chat', projectId: 'proj-free' }),
+      ),
+    );
+  });
+
+  it('shows a non-numeric upgrade gate only after the server reports usage exhaustion', async () => {
+    const onSend = vi.fn();
+    const onUpgradeRequest = vi.fn();
+    render(
+      <ChatComposerNew
+        onSend={onSend}
+        onUpgradeRequest={onUpgradeRequest}
+        freeTrial={{ enabled: true, limitReached: true }}
+      />,
+    );
+
+    expect(screen.getByText('Free usage limit reached. Upgrade to continue.')).toBeInTheDocument();
+    expect(screen.queryByText(/\d[\d,.]*\s*(tokens?|prompts?)/i)).not.toBeInTheDocument();
+
+    expect(screen.getByRole('textbox', { name: /message input/i })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
   });
 
   it('opens + menu and shows the backed Web search toggle row', async () => {

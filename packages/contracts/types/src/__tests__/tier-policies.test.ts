@@ -13,19 +13,21 @@ import {
   type TierPolicy,
 } from '../model-catalog';
 
-describe('TIER_POLICIES — Free tier (auto-routing-spec §1)', () => {
+describe('TIER_POLICIES — Free chat tier', () => {
   const policy = getTierPolicy('free');
 
-  it('caps monthly text tokens at 100K', () => {
-    expect(policy.tokenCapPerMonth).toBe(100_000);
+  it('does not publish the private dynamic usage ceiling', () => {
+    expect(policy.tokenCapPerMonth).toBeNull();
+    expect(policy.messagesPerDayCap).toBeNull();
+    expect(policy.capBehavior).toBeUndefined();
   });
 
-  it('caps daily messages at 5', () => {
-    expect(policy.messagesPerDayCap).toBe(5);
-  });
-
-  it('exposes only the workhorse_general slot — no escalation/reasoning/image', () => {
-    expect(policy.allowedSlots).toEqual(['workhorse_general']);
+  it('exposes the workhorse and voice slots — no escalation/reasoning/image', () => {
+    expect(policy.allowedSlots).toEqual([
+      'workhorse_general',
+      'voice_transcription',
+      'voice_rewrite',
+    ]);
   });
 
   it('blocks all media generation', () => {
@@ -34,25 +36,20 @@ describe('TIER_POLICIES — Free tier (auto-routing-spec §1)', () => {
     expect(policy.allowVideoGeneration).toBe(false);
   });
 
-  it('blocks tool use, MCP, computer use, and manual model selection', () => {
-    expect(policy.allowToolUse).toBe(false);
-    expect(policy.allowMCP).toBe(false);
+  it('allows free chat tools and one custom remote MCP, but not dev-level computer use', () => {
+    expect(policy.allowToolUse).toBe(true);
+    expect(policy.allowMCP).toBe('one_custom_remote');
+    expect(policy.allowSearch).toBe(true);
     expect(policy.allowComputerUse).toBe(false);
     expect(policy.allowManualSelection).toBe(false);
     expect(policy.manualModelSelection).toBe(false);
   });
 
-  it('blocks voice (Wispr-Flow-style is Hobby+ per Round 15-launch 2026-05-15)', () => {
-    expect(policy.allowVoice).toBeFalsy();
-    expect(policy.allowedSlots).not.toContain('voice_transcription');
-    expect(policy.allowedSlots).not.toContain('voice_rewrite');
-  });
-
-  it('warns at 80%, downgrades at 100%, hard-caps at 150%', () => {
-    const cap = policy.capBehavior as TierCapBehavior;
-    expect(cap.warnAt).toBe(0.8);
-    expect(cap.downgradeAt).toBe(1.0);
-    expect(cap.hardCapAt).toBe(1.5);
+  it('allows voice while keeping Deep Research paid', () => {
+    expect(policy.allowVoice).toBe(true);
+    expect(policy.allowedSlots).toContain('voice_transcription');
+    expect(policy.allowedSlots).toContain('voice_rewrite');
+    expect(policy.allowDeepResearch).toBe(false);
   });
 });
 
@@ -181,7 +178,7 @@ describe('TIER_POLICIES — freeze guarantees (Vercel server-no-shared-module-st
   it('freezes each tier capBehavior object', () => {
     const free = TIER_POLICIES.free;
     const pro = TIER_POLICIES.pro;
-    expect(Object.isFrozen(free.capBehavior)).toBe(true);
+    expect(free.capBehavior).toBeUndefined();
     expect(Object.isFrozen(pro.capBehavior)).toBe(true);
   });
 
@@ -230,19 +227,21 @@ describe('getTierPolicy — public getter', () => {
   it('matches the documented Free tier shape', () => {
     expect(getTierPolicy('free')).toMatchObject<Partial<TierPolicy>>({
       tier: 'free',
-      tokenCapPerMonth: 100_000,
-      messagesPerDayCap: 5,
-      allowedSlots: ['workhorse_general'],
+      tokenCapPerMonth: null,
+      messagesPerDayCap: null,
+      allowedSlots: ['workhorse_general', 'voice_transcription', 'voice_rewrite'],
       allowMediaGeneration: false,
       allowImageGeneration: false,
       allowVideoGeneration: false,
-      allowToolUse: false,
-      allowMCP: false,
+      allowToolUse: true,
+      allowMCP: 'one_custom_remote',
+      allowSearch: true,
+      allowVoice: true,
+      allowDeepResearch: false,
       allowComputerUse: false,
       allowManualSelection: false,
       manualModelSelection: false,
       surfacedUx: 'auto_only',
-      capBehavior: { warnAt: 0.8, downgradeAt: 1.0, hardCapAt: 1.5 },
     });
   });
 
@@ -252,8 +251,8 @@ describe('getTierPolicy — public getter', () => {
     // basic's pre-rename name still carried by subscription rows.)
     expect(getTierPolicy('plus')).toMatchObject<Partial<TierPolicy>>({
       tier: 'free',
-      tokenCapPerMonth: 100_000,
-      allowedSlots: ['workhorse_general'],
+      tokenCapPerMonth: null,
+      allowedSlots: ['workhorse_general', 'voice_transcription', 'voice_rewrite'],
       allowMediaGeneration: false,
       allowManualSelection: false,
       manualModelSelection: false,

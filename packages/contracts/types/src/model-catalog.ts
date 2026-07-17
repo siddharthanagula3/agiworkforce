@@ -1165,22 +1165,26 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
   free: {
     tier: 'free',
     surfacedUx: 'auto_only',
-    // Free tier exposes only the Pool B workhorse — no escalation/reasoning/image.
-    allowedSlots: ['workhorse_general'],
+    // Free chat exposes the workhorse plus voice. Dev-level agents, computer use,
+    // Deep Research, image generation, and premium escalation remain paid.
+    allowedSlots: ['workhorse_general', 'voice_transcription', 'voice_rewrite'],
     allowedProviderSurfaces: ['managed_cloud'],
     manualModelSelection: false,
     allowManualSelection: false,
     allowBrowserDom: false,
     allowComputerUse: false,
-    allowSearch: false,
+    allowSearch: true,
     allowMediaGeneration: false,
     allowImageGeneration: false,
     allowVideoGeneration: false,
-    allowToolUse: false,
-    allowMCP: false,
-    tokenCapPerMonth: 100_000,
-    messagesPerDayCap: 5,
-    capBehavior: STANDARD_CAP_BEHAVIOR,
+    allowToolUse: true,
+    allowMCP: 'one_custom_remote',
+    allowDeepResearch: false,
+    allowVoice: true,
+    // The free usage ceiling is intentionally private and dynamic. It lives in
+    // the server-only free-trial service, never this client-shared registry.
+    tokenCapPerMonth: null,
+    messagesPerDayCap: null,
   },
   pro: {
     tier: 'pro',

@@ -2,9 +2,17 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-07-15
+Last updated: 2026-07-17
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
+
+2026-07-17 free-plan deploy gate: migration
+`apps/web/db/neon/0060_free_tier_token_budget.sql` must be applied to production
+Neon before deploying the dependent free-plan code. It replaces the public
+three-prompt counter with private server-side token accounting and adds the
+transactional limits for five free Projects and one custom remote MCP. This is
+founder-gated production data-plane work; no agent should deploy this slice or
+run production-mutating QA until the founder confirms 0060 was applied.
 
 2026-07-15 billing ownership clarification for
 `GATEWAY-METERING-IDEMPOTENCY-01`: custom Web research, MCP/E2B tool loops,

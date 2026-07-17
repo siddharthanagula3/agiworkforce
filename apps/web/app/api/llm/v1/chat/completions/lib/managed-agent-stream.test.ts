@@ -9,11 +9,12 @@ const finalize = vi.fn(async (_input: unknown) => {
 const delivered = vi.fn(async (_input: unknown) => {
   events.push('delivered');
 });
+const recordFreeTrialTokens = vi.fn(async (_input: unknown) => {
+  events.push('free-recorded');
+});
 
 vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/lib/services/managed-usage-accounting-service')
-  >()),
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-accounting-service')>()),
   finalizeObservedManagedUsage: (input: unknown) => finalize(input),
 }));
 
@@ -21,11 +22,18 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   markManagedUsageClientDelivered: (input: unknown) => delivered(input),
 }));
 
+vi.mock('@/lib/services/free-trial-service', () => ({
+  recordFreeTrialTokens: (input: unknown) => recordFreeTrialTokens(input),
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import {
+  accumulateObservedProviderUsage,
+  createObservedProviderUsage,
+} from '@/lib/services/managed-usage-accounting-service';
 import { buildManagedAgentStream } from './managed-agent-stream';
 import type { ProcessedRequest } from './request-processor';
 
@@ -128,5 +136,38 @@ describe('managed agent stream', () => {
         cancelled: true,
       }),
     );
+  });
+
+  it('records all observed provider tokens for a free-tier tool loop before completion', async () => {
+    events.length = 0;
+    recordFreeTrialTokens.mockClear();
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 90, outputTokens: 30 });
+    const freeProcessed = {
+      ...processed,
+      managedUsage: undefined,
+      freeTrial: {
+        kind: 'free_trial',
+        userId: 'free-user',
+        requestId: 'free-request',
+      },
+    } as ProcessedRequest;
+
+    const stream = buildManagedAgentStream({
+      generator: completedGenerator(),
+      processed: freeProcessed,
+      usage,
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+    });
+
+    await readAll(stream);
+
+    expect(recordFreeTrialTokens).toHaveBeenCalledWith({
+      userId: 'free-user',
+      requestId: 'free-request',
+      tokens: 120,
+    });
+    expect(events).toEqual(['free-recorded', 'terminal-visible']);
   });
 });

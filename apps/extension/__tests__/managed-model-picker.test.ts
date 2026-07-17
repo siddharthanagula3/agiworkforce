@@ -44,7 +44,7 @@ describe('managed model picker', () => {
   it('derives labels and free-tier behavior without UI hardcoding', () => {
     expect(getManagedModelBadgeLabel(admittedModel)).not.toBe(admittedModel);
     expect(isFreeManagedTier('FREE')).toBe(true);
-    expect(isFreeManagedTier('hobby')).toBe(true);
+    expect(isFreeManagedTier('hobby')).toBe(false);
     expect(isFreeManagedTier('pro')).toBe(false);
     expect(formatManagedTierLabel('enterprise')).toBe('Enterprise plan');
   });

@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { CreditService } from '@/lib/services/credit-service';
 import { logger } from '@/lib/logger';
-import { refundFreeTrialPrompt } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest, getSecurityHeaders, getCorsHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { runAuthGate } from './lib/auth-gate';
@@ -28,6 +27,7 @@ import {
   finalizeManagedUsageRequest,
   markManagedUsageProviderStarted,
 } from '@/lib/services/managed-usage-request-service';
+import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -63,11 +63,9 @@ async function refundFailedReservation(
   reason: 'streaming_failure' | 'request_failure',
 ): Promise<void> {
   if (processed.freeTrial) {
-    await refundFreeTrialPrompt({
-      userId,
-      requestId: processed.requestId,
-      reason,
-    });
+    // Free usage is gated before dispatch and actual tokens are recorded only
+    // after provider usage is observed, so a pre-provider failure has nothing
+    // to release or refund.
     return;
   }
 
@@ -179,8 +177,9 @@ async function handleChatCompletions(request: NextRequest) {
   // 3. Dispatch to provider
   if (processed.chatRequest.stream) {
     // Deep Research path: bounded multi-turn research loop (plan -> search
-    // rounds -> cited synthesis). Gated to non-free-trial requests (a run is
-    // several provider turns) and non-Anthropic providers (their raw streams
+    // rounds -> cited synthesis). Free requests are rejected in processRequest;
+    // this defense-in-depth gate keeps the paid-only contract explicit. The
+    // path is also gated to non-Anthropic providers (their raw streams
     // are only normalized by buildStreamResponse; every other provider already
     // emits OpenAI-compatible SSE, which the research loop consumes). Free
     // trial and Anthropic keep the existing single-turn research behavior
@@ -227,29 +226,27 @@ async function handleChatCompletions(request: NextRequest) {
     // behaves exactly as before.
     const [operatorTools, connectorTools] = await Promise.all([
       loadMcpToolDefs(),
-      loadUserConnectorToolDefs(userId),
+      loadUserConnectorToolDefs(userId, {
+        customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier),
+      }),
     ]);
     const mcpTools = [...operatorTools, ...connectorTools];
-    const hasMcpTools = mcpTools.length > 0 && !processed.freeTrial;
+    const hasMcpTools = mcpTools.length > 0;
 
     // Detect E2B execution tools offered on this request (set by request-processor when
     // AGI_E2B_EXECUTION=1 and the provider routes to E2B). Uses isExecutionTool() on the
     // tool `function.name` field — the shape `e2bExecutionToolDefs()` returns is
     // `{type:'function', function:{name,...}}`, while native tools use type-object shapes
     // with no `function` key, so they never match.
-    const hasE2BTools =
-      !processed.freeTrial &&
-      (processed.llmRequest.tools ?? []).some((t) =>
-        isExecutionTool((t as { function?: { name?: string } }).function?.name ?? ''),
-      );
+    const hasE2BTools = (processed.llmRequest.tools ?? []).some((t) =>
+      isExecutionTool((t as { function?: { name?: string } }).function?.name ?? ''),
+    );
 
     // Platform url_fetch tool offered by request-processor (web_fetch on a
     // non-Anthropic provider). Same detection seam as E2B: function-tool shape only.
-    const hasUrlFetchTool =
-      !processed.freeTrial &&
-      (processed.llmRequest.tools ?? []).some((t) =>
-        isUrlFetchTool((t as { function?: { name?: string } }).function?.name ?? ''),
-      );
+    const hasUrlFetchTool = (processed.llmRequest.tools ?? []).some((t) =>
+      isUrlFetchTool((t as { function?: { name?: string } }).function?.name ?? ''),
+    );
 
     if (hasMcpTools || hasE2BTools || hasUrlFetchTool) {
       // Approval mode:

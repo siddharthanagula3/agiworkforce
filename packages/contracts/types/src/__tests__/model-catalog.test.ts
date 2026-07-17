@@ -304,7 +304,7 @@ describe('model catalog helpers', () => {
     expect(getTierPolicy('free')).toMatchObject({
       surfacedUx: 'auto_only',
       manualModelSelection: false,
-      allowSearch: false,
+      allowSearch: true,
       allowMediaGeneration: false,
     });
     expect(getTierPolicy('pro')).toMatchObject({
@@ -525,8 +525,8 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
     expect(getDefaultModelFor('free', 'reasoning')).toBe(workhorse);
   });
 
-  it('routes free tier voice through workhorse fallback (voice_transcription not allowed)', () => {
-    expect(getDefaultModelFor('free', 'voice')).toBe(getRoutingSlotModel('workhorse_general'));
+  it('routes free tier voice through the voice transcription slot', () => {
+    expect(getDefaultModelFor('free', 'voice')).toBe(getRoutingSlotModel('voice_transcription'));
   });
 
   it('hobby/basic chat mirrors pro (2026-07-16 ladder: budget-differentiated, same slots)', () => {

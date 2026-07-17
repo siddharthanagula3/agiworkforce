@@ -16,6 +16,7 @@ import {
   finalizeManagedUsageRequest,
   markManagedUsageProviderStarted,
 } from '@/lib/services/managed-usage-request-service';
+import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 
 /**
  * Tool-approval RESUME endpoint for the agentic chat loop.
@@ -219,7 +220,9 @@ async function handleToolApproval(request: NextRequest) {
   //    tools that were offered on the suspended turn.
   const [operatorTools, connectorTools] = await Promise.all([
     loadMcpToolDefs(),
-    loadUserConnectorToolDefs(userId),
+    loadUserConnectorToolDefs(userId, {
+      customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier),
+    }),
   ]);
   const mcpTools = [...operatorTools, ...connectorTools];
 

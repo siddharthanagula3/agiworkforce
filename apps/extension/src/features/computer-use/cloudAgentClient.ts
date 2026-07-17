@@ -331,6 +331,7 @@ export async function callCloud(
       Authorization: `Bearer ${token}`,
       // Gateway validateCsrf requires this header on every POST (rejects 403 CSRF_ERROR otherwise).
       'X-Requested-With': 'XMLHttpRequest',
+      'X-AGI-Surface': 'chrome',
       // The gateway's managed-usage billing hard-requires an Idempotency-Key
       // on POST /api/llm/v1/chat/completions (400 IDEMPOTENCY_KEY_REQUIRED
       // before any provider work). callCloud never retries a send, so a fresh

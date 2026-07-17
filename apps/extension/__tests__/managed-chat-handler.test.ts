@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getPickerModels } from '@agiworkforce/types';
 import {
   createChromeManagedStreamKey,
   executeChromeManagedChat,
@@ -8,6 +9,8 @@ import {
   FREE_TRIAL_MODEL,
   type FreeTrialChunk,
 } from '../src/features/cloud-bridge/freeTrialClient';
+
+const ADMITTED_MANAGED_MODEL_IDS = getPickerModels().map((model) => model.id);
 
 function stream(...chunks: FreeTrialChunk[]): AsyncGenerator<FreeTrialChunk> {
   return (async function* () {
@@ -21,8 +24,8 @@ function dependencies(
   return {
     getAuthToken: vi.fn(async () => 'token'),
     getModelAccess: vi.fn(async () => ({
-      subscriptionTier: 'free',
-      modelIds: [FREE_TRIAL_MODEL],
+      subscriptionTier: 'pro',
+      modelIds: ADMITTED_MANAGED_MODEL_IDS,
       allowedAutoModes: ['auto', 'auto-economy'],
     })),
     streamChat: vi.fn(() => stream({ type: 'text', text: 'hello' }, { type: 'done' })),
@@ -72,7 +75,6 @@ describe('executeChromeManagedChat', () => {
     expect(options.model).toBeTruthy();
     expect(options.model).not.toMatch(/^auto/);
     expect(options.extendedThinking).toBe(true);
-    expect(options.subscriptionTier).toBe('free');
     expect(deps.onText).toHaveBeenCalledWith('hello');
   });
 
@@ -91,6 +93,24 @@ describe('executeChromeManagedChat', () => {
     expect(deps.streamChat).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps Chrome paid and stops a free account before routing or inference', async () => {
+    const deps = dependencies({
+      getModelAccess: vi.fn(async () => ({
+        subscriptionTier: 'free',
+        modelIds: [FREE_TRIAL_MODEL],
+        allowedAutoModes: ['auto', 'auto-economy'],
+      })),
+    });
+
+    const result = await executeChromeManagedChat(
+      { id: 'stream-free', text: 'Hello', modelSelection: 'auto' },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'error', code: 'plan_required' });
+    expect(deps.streamChat).not.toHaveBeenCalled();
+  });
+
   it('rejects a model absent from authenticated server admission', async () => {
     const deps = dependencies();
     const result = await executeChromeManagedChat(
@@ -105,7 +125,7 @@ describe('executeChromeManagedChat', () => {
   it('rejects an Auto profile absent from authenticated server admission', async () => {
     const deps = dependencies({
       getModelAccess: vi.fn(async () => ({
-        subscriptionTier: 'free',
+        subscriptionTier: 'pro',
         modelIds: [FREE_TRIAL_MODEL],
         allowedAutoModes: ['auto-economy'],
       })),
@@ -122,7 +142,7 @@ describe('executeChromeManagedChat', () => {
   it('routes Quick turns through Auto Economy without changing the saved model selection', async () => {
     const deps = dependencies({
       getModelAccess: vi.fn(async () => ({
-        subscriptionTier: 'free',
+        subscriptionTier: 'pro',
         modelIds: [FREE_TRIAL_MODEL],
         allowedAutoModes: ['auto-economy'],
       })),

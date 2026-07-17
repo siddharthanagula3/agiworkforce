@@ -1390,6 +1390,7 @@ export function useChatStream(): UseChatStreamReturn {
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
+          'X-AGI-Surface': 'web',
           'Idempotency-Key': createManagedChatIdempotencyKey({
             surface: 'web',
             purpose: 'send',
@@ -1419,8 +1420,6 @@ export function useChatStream(): UseChatStreamReturn {
           }),
           signal: abortControllerRef.current?.signal,
         });
-
-        useFreeTrialStore.getState().applyHeaders(response.headers);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -1580,6 +1579,7 @@ export function useChatStream(): UseChatStreamReturn {
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
+          'X-AGI-Surface': 'web',
           'Idempotency-Key': createManagedChatIdempotencyKey({
             surface: 'web',
             purpose: 'continue',
@@ -1598,8 +1598,6 @@ export function useChatStream(): UseChatStreamReturn {
           }),
           signal: abortControllerRef.current?.signal,
         });
-
-        useFreeTrialStore.getState().applyHeaders(response.headers);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -1639,8 +1637,8 @@ export function useChatStream(): UseChatStreamReturn {
         if (isFreeTrialErrorCode(errorCode)) {
           // Nothing streamed; leave the partial turn exactly as it was
           // (marker restored so Continue re-offers once the gate clears).
-          if (errorCode === 'website_trial_prompt_limit_reached') {
-            useFreeTrialStore.getState().markExhausted();
+          if (errorCode === 'free_trial_token_budget_reached') {
+            useFreeTrialStore.getState().markLimitReached();
           }
           updateMessage(assistantMessageId, { isStreaming: false, metadata: priorMetadata });
           setError(errorMessage);
@@ -1818,6 +1816,7 @@ export function useResolveToolApproval(
         const headers = await addCsrfHeaders({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
+          'X-AGI-Surface': 'web',
           'Idempotency-Key': createManagedChatIdempotencyKey({
             surface: 'web',
             purpose: 'tool-resume',
@@ -1837,8 +1836,6 @@ export function useResolveToolApproval(
           }),
           signal: abortRef.current?.signal,
         });
-
-        useFreeTrialStore.getState().applyHeaders(response.headers);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -1981,8 +1978,8 @@ function handleStreamError(error: unknown, ctx: StreamErrorContext): void {
 
   const errorCode = error instanceof ChatApiError ? error.code : undefined;
   if (isFreeTrialErrorCode(errorCode)) {
-    if (errorCode === 'website_trial_prompt_limit_reached') {
-      useFreeTrialStore.getState().markExhausted();
+    if (errorCode === 'free_trial_token_budget_reached') {
+      useFreeTrialStore.getState().markLimitReached();
     }
     updateMessage(assistantMessageId, {
       isStreaming: false,

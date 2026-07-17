@@ -175,7 +175,16 @@ function makeCompletionsRequest(bearerToken: string): NextRequest {
 describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BLOCK-01)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSubscription.mockResolvedValue(null); // → runAuthGate falls back to buildFreeWebsiteSubscription
+    mockGetSubscription.mockResolvedValue({
+      id: 'sub-pro',
+      user_id: 'completions-user',
+      plan_tier: 'pro',
+      status: 'active',
+      current_period_start: new Date('2026-07-01T00:00:00Z'),
+      current_period_end: new Date('2026-08-01T00:00:00Z'),
+      stripe_subscription_id: null,
+      stripe_price_id: null,
+    });
   });
 
   it('a key issued through ApiKeyService clears the real completions auth gate end to end', async () => {
