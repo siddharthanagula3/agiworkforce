@@ -365,6 +365,13 @@ agi-work-wiring teammate frees apps/web:
 
 ## Ponytail dedup queue (one-canonical-owner, non-urgent)
 
+- web store roots overlap (flagged during the W12 manifest, 2026-07-17):
+  `apps/web/stores/` vs `apps/web/shared/stores/` carry semantically
+  overlapping but different modules (stores/chatStore.ts vs
+  shared/stores/chat-store.ts; two settingsStore variants). Collapsing to
+  one canonical store root is a BEHAVIOR dedup (module merge, not a move) —
+  run as its own slice after W12 lands.
+
 - retry-after: ALREADY DEDUPED (verified 2026-07-16). anthropic/openai index import parseRetryAfterFromError directly from @agiworkforce/provider-runtime; the ./retry-after.ts files are intentional 2-line public-API shims, not copies. Canonical owner = provider-runtime/retry-after-internal.ts. NO ACTION.
 - hash.ts (apps/web/lib + apps/desktop/src/lib, byte-identical md5 6e162cbd), useReducedMotion.ts (apps/web/hooks + apps/desktop/src/hooks identical 87158f62; unified-chat has a divergent third c78e1c0d) — real cross-surface dups → hoist to a shared package (packages/platform/utils or packages/client/\*), update both imports. BLOCKED: requires apps/web edits (held until web AGI Work lane fully lands).
 - ROOT CAUSE (2026-07-16 content-hash scan): the one-canonical-owner dedups are systematically gated on the RESTRUCTURE landing, not merely scattered co-dirty consumers — the canonical OWNERS are themselves untracked W4 artifacts. Proof: customModel.ts is byte-identical in apps/desktop/src/types/ (clean/committed) and packages/contracts/types/src/ (UNTRACKED, already `export * from './customModel'` in the contracts index), with only 2 clean desktop importers (features/settings/CustomModelsSettings.tsx, stores/settingsStore.ts) and desktop already imports @agiworkforce/types elsewhere — so the dedup is trivially feasible IN the working tree, but cannot be COMMITTED coherently because the canonical contracts copy is uncommitted W4 work; committing the dedup means committing a W4 chunk. Corollary: "eliminate duplicate code / one canonical owner" is a POST-restructure workstream — it unblocks wholesale once W4 (types→contracts) and the app-layer moves commit, and should be run then as a single tooled pass (knip for dead exports + a content-hash dedup sweep), not piecemeal.
