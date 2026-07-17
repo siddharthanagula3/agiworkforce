@@ -223,7 +223,15 @@ Decoder::OllamaNative`; (2) `providers/ollama.rs` streaming path swapped
    The confirmed implementation defects are tracked as
    `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`.
 
-## PRE-MERGE MIGRATION PASS (the one runbook; run before merging chore/repo-restructure-2026-07 to main)
+## PRE-MERGE MIGRATION PASS — EXECUTED 2026-07-17 (kept for the record)
+
+DONE: rehearsed green on a disposable Neon branch (copy-on-write clone),
+then applied to prod `production` branch in order: 0043, 0052, 0053, 0054,
+0055, 0056, 0057, 0058 (legacy teams verified 0 rows before drop), 0059.
+Post-state verified object-by-object (grants, tables, columns, policies).
+Merge-to-main is UNBLOCKED from the database side. Post-deploy verify list
+still applies after merge (star/archive reload, managed send on :3100,
+schedules CRUD). Original runbook below for provenance.
 
 Landed branch code selects/writes schema that prod Neon does not have yet.
 Vercel deploys from `main`, so the branch is inert in prod until merge — but
