@@ -1,7 +1,7 @@
 //! Live-provider streaming smoke for the Wave 5 c2 desktop→`agiworkforce-llm`
 //! decode swap (`docs/plans/rust-engine-extraction-2026-07-09.md`).
 //!
-//! Ignored by default (`#[ignore]`): it makes real, paid streaming calls. Run
+//! Ignored by default (`#[ignore = "makes real, paid provider streaming calls; run explicitly with --ignored"]`): it makes real, paid streaming calls. Run
 //! explicitly with keys present in `apps/web/.env.local`:
 //!
 //! ```bash
@@ -19,7 +19,7 @@
 //! it.
 //!
 //! Keys are read from the env file at runtime and NEVER printed. Model ids come
-//! from `packages/types/src/models.json` (SSOT) — never invented. Spend is kept
+//! from `packages/contracts/types/src/models.json` (SSOT) — never invented. Spend is kept
 //! trivial: `max_tokens = 32`, one request per provider, no retries.
 
 use std::collections::HashMap;
@@ -80,7 +80,7 @@ fn trivial_request(model: &str) -> LLMRequest {
         model: model.to_string(),
         // Spend is kept trivial, but the cap must leave headroom for models that
         // burn completion tokens on internal reasoning before emitting any
-        // visible text (gpt-5-nano, deepseek-v4-flash). At 32 tokens those models
+        // visible text (gpt-5.4-nano, deepseek-v4-flash). At 32 tokens those models
         // hit the length cap mid-reasoning and stream zero content deltas; 512 is
         // still a fraction of a cent and lets the one-sentence greeting through.
         max_tokens: Some(512),
@@ -100,7 +100,12 @@ struct Outcome {
     error: Option<String>,
 }
 
-async fn smoke_one(provider: Provider, label: &'static str, model: &'static str, key: &str) -> Outcome {
+async fn smoke_one(
+    provider: Provider,
+    label: &'static str,
+    model: &'static str,
+    key: &str,
+) -> Outcome {
     let mut outcome = Outcome {
         provider: label,
         model,
@@ -174,21 +179,60 @@ async fn live_provider_stream_smoke() {
     // a single canonical name; Google's key is written under several aliases
     // across env files (GOOGLE_API_KEY / GOOGLE_AI_API_KEY / GEMINI_API_KEY),
     // mirroring the web/gateway adapter fallback chain, so we accept all three.
-    let targets: &[(Provider, &'static str, &'static str, &'static [&'static str])] = &[
-        (Provider::Anthropic, "anthropic", "claude-haiku-4.5", &["ANTHROPIC_API_KEY"]),
-        (Provider::DeepSeek, "deepseek", "deepseek-v4-flash", &["DEEPSEEK_API_KEY"]),
-        (Provider::Google, "google", "gemini-3.1-flash-lite", &["GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"]),
-        (Provider::OpenAI, "openai", "gpt-5-nano", &["OPENAI_API_KEY"]),
+    let targets: &[(
+        Provider,
+        &'static str,
+        &'static str,
+        &'static [&'static str],
+    )] = &[
+        (
+            Provider::Anthropic,
+            "anthropic",
+            "claude-haiku-4.5",
+            &["ANTHROPIC_API_KEY"],
+        ),
+        (
+            Provider::DeepSeek,
+            "deepseek",
+            "deepseek-v4-flash",
+            &["DEEPSEEK_API_KEY"],
+        ),
+        (
+            Provider::Google,
+            "google",
+            "gemini-3.1-flash-lite",
+            &["GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"],
+        ),
+        // Renamed from gpt-5-nano 2026-07-11 (model-version bump). This live probe
+        // is the empirical check for whether gpt-5.4-nano is chat-tier (Chat
+        // Completions, like its predecessor) or reasoning-tier (Responses API,
+        // like sibling gpt-5.4-mini) — see known-flaws DESKTOP-OPENAI-REASONING-RESPONSES-01.
+        (
+            Provider::OpenAI,
+            "openai",
+            "gpt-5.4-nano",
+            &["OPENAI_API_KEY"],
+        ),
         // Moonshot is OpenAI-compatible (Chat Completions) — a second live
         // exercise of the crate's OpenAI-compat runner alongside DeepSeek.
-        (Provider::Moonshot, "moonshot", "kimi-k2.6", &["MOONSHOT_API_KEY"]),
+        (
+            Provider::Moonshot,
+            "moonshot",
+            "kimi-k2.6",
+            &["MOONSHOT_API_KEY"],
+        ),
         // Additional OpenAI-compatible providers present in the env file — any
         // one with a live key proves the crate's OpenAI-compat runner end to
         // end through the new desktop path.
         (Provider::XAI, "xai", "grok-4.3", &["XAI_API_KEY"]),
         (Provider::Qwen, "qwen", "qwen-flash", &["QWEN_API_KEY"]),
         (Provider::Zhipu, "zhipu", "glm-5.2", &["ZHIPU_API_KEY"]),
-        (Provider::Perplexity, "perplexity", "sonar", &["PERPLEXITY_API_KEY"]),
+        (
+            Provider::Perplexity,
+            "perplexity",
+            "sonar",
+            &["PERPLEXITY_API_KEY"],
+        ),
     ];
 
     let mut outcomes = Vec::new();

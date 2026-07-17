@@ -1,9 +1,10 @@
 //! TypeScript binding export for the protocol crate (restructure Wave 5 stage b).
 //!
 //! Run via `scripts/generate-protocol-types.mjs`, which sets
-//! `TS_RS_EXPORT_DIR` to `packages/types/src/generated/protocol` and then
-//! regenerates the barrel. `pnpm check:protocol-types` is the drift guard:
-//! it regenerates and fails on any git diff under the generated tree.
+//! `TS_RS_EXPORT_DIR` to an isolated staging directory and then generates the
+//! barrel. `pnpm check:protocol-types` compares that export with the committed
+//! working tree without mutating it; `pnpm generate:protocol-types` publishes
+//! an updated tree.
 //!
 //! `export_all_to` walks each root type's dependency graph recursively, so
 //! new types reachable from these roots are exported without touching this
@@ -28,4 +29,50 @@ fn export_typescript_bindings() {
     // MCP wire types (Tool etc.) — consumed by the agiworkforce-mcp crate
     // plan (stage d) and by TS surfaces via the generated barrel.
     agiworkforce_protocol::mcp::Tool::export_all_to(dir).expect("export mcp Tool graph");
+
+    // Local developer-session app-server envelopes. These are consumed by
+    // AGI for VS Code and must be generated from the Rust owner rather than
+    // copied into extension-only protocol files.
+    agiworkforce_protocol::developer_session::AppServerRequest::export_all_to(dir)
+        .expect("export developer-session request graph");
+    agiworkforce_protocol::developer_session::AppServerResponse::export_all_to(dir)
+        .expect("export developer-session response graph");
+    agiworkforce_protocol::developer_session::AppServerNotification::export_all_to(dir)
+        .expect("export developer-session notification graph");
+    agiworkforce_protocol::developer_session::InitializeParams::export_all_to(dir)
+        .expect("export developer-session initialize params graph");
+    agiworkforce_protocol::developer_session::InitializeResponse::export_all_to(dir)
+        .expect("export developer-session initialize graph");
+    agiworkforce_protocol::developer_session::ThreadStartParams::export_all_to(dir)
+        .expect("export developer-session thread start params graph");
+    agiworkforce_protocol::developer_session::ThreadStartResponse::export_all_to(dir)
+        .expect("export developer-session thread start graph");
+    agiworkforce_protocol::developer_session::ThreadListParams::export_all_to(dir)
+        .expect("export developer-session thread list params graph");
+    agiworkforce_protocol::developer_session::ThreadListResponse::export_all_to(dir)
+        .expect("export developer-session thread graph");
+    agiworkforce_protocol::developer_session::ThreadReadResponse::export_all_to(dir)
+        .expect("export developer-session thread history graph");
+    agiworkforce_protocol::developer_session::ThreadIdParams::export_all_to(dir)
+        .expect("export developer-session thread id graph");
+    agiworkforce_protocol::developer_session::ThreadForkParams::export_all_to(dir)
+        .expect("export developer-session thread fork graph");
+    agiworkforce_protocol::developer_session::TurnStartParams::export_all_to(dir)
+        .expect("export developer-session turn graph");
+    agiworkforce_protocol::developer_session::TurnSteerParams::export_all_to(dir)
+        .expect("export developer-session steer graph");
+    agiworkforce_protocol::developer_session::TurnStartResponse::export_all_to(dir)
+        .expect("export developer-session turn response graph");
+    agiworkforce_protocol::developer_session::TurnInterruptParams::export_all_to(dir)
+        .expect("export developer-session interrupt graph");
+    agiworkforce_protocol::developer_session::ApprovalResponseParams::export_all_to(dir)
+        .expect("export developer-session approval graph");
+    agiworkforce_protocol::developer_session::AcknowledgedResponse::export_all_to(dir)
+        .expect("export developer-session acknowledgement graph");
+
+    // One versioned agent event envelope (W5 discipline-wave item 4) — not
+    // reachable from any root above (a new, independent top-level type), so
+    // it needs its own root per this file's own doc comment.
+    agiworkforce_protocol::agent_events::AgentEventEnvelope::export_all_to(dir)
+        .expect("export agent event envelope graph");
 }

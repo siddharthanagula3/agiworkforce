@@ -8,6 +8,7 @@ pub struct Conversation {
     pub title: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub execution_mode: String,
 }
 
 impl Conversation {
@@ -19,6 +20,7 @@ impl Conversation {
             title,
             created_at: now,
             updated_at: now,
+            execution_mode: "local_only".to_string(),
         }
     }
 }
@@ -31,6 +33,7 @@ impl Default for Conversation {
             title: "New Conversation".to_string(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            execution_mode: "local_only".to_string(),
         }
     }
 }

@@ -117,6 +117,7 @@ pub async fn consult(req: AdvisorRequest) -> Result<AdvisorResponse> {
 
     // Validate the chosen provider has credentials before attempting a call.
     let has_key = match &provider {
+        Provider::ManagedCloud => crate::tier_cache::load_jwt().is_some(),
         Provider::Anthropic => provider_has_key("anthropic"),
         Provider::Google => provider_has_key("google"),
         Provider::Ollama(_) => true, // keyless

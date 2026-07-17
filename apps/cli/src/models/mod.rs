@@ -55,6 +55,13 @@ pub enum OllamaMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Provider {
+    /// AGI Workforce managed-cloud gateway.
+    ///
+    /// This is a trust and billing boundary, not an upstream model vendor.
+    /// The concrete catalog model still names OpenAI, Anthropic, Google, or
+    /// another upstream route, while this variant guarantees the request is
+    /// authenticated and sent only to the AGI-owned gateway.
+    ManagedCloud,
     Anthropic,
     Google,
     Ollama(OllamaMode),

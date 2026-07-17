@@ -46,8 +46,8 @@ mod transport;
 pub use client::McpClient;
 pub use config::{McpTimeouts, OAuthConfig, TransportConfig};
 pub use elicitation::{
-    AutoDeclineHandler, ElicitationAction, ElicitationHandler, ElicitationMode,
-    ElicitationRequest, ElicitationResponse, SharedElicitationHandler,
+    AutoDeclineHandler, ElicitationAction, ElicitationHandler, ElicitationMode, ElicitationRequest,
+    ElicitationResponse, SharedElicitationHandler,
 };
 pub use error::McpError;
 pub use hooks::{BrowserAuthorizer, ClientHooks, ClientInfo, OAuthToken, TokenStore};

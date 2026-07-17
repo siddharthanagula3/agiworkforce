@@ -144,14 +144,15 @@ impl ToolCallAssembler {
     /// index has no buffer.
     pub fn finalize_block(&mut self, index: usize) {
         if let Some((id, name, args)) = self.buffers.remove(&index)
-            && !name.is_empty() {
-                let arguments = parse_tool_arguments_json(&name, &args);
-                self.completed.push(ToolCall {
-                    id,
-                    name,
-                    arguments,
-                });
-            }
+            && !name.is_empty()
+        {
+            let arguments = parse_tool_arguments_json(&name, &args);
+            self.completed.push(ToolCall {
+                id,
+                name,
+                arguments,
+            });
+        }
     }
 
     /// Record a fully-formed call (Gemini / Ollama-native complete calls).
@@ -183,14 +184,15 @@ impl ToolCallAssembler {
         sorted_indices.sort_unstable();
         for idx in sorted_indices {
             if let Some((id, name, args_json)) = self.buffers.remove(&idx)
-                && !name.is_empty() {
-                    let arguments = parse_tool_arguments_json(&name, &args_json);
-                    self.completed.push(ToolCall {
-                        id,
-                        name,
-                        arguments,
-                    });
-                }
+                && !name.is_empty()
+            {
+                let arguments = parse_tool_arguments_json(&name, &args_json);
+                self.completed.push(ToolCall {
+                    id,
+                    name,
+                    arguments,
+                });
+            }
         }
         self.completed
     }

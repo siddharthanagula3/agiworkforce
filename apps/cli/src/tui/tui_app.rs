@@ -252,6 +252,8 @@ struct TuiApp {
     // Live tool-call rows for the in-flight turn, keyed by call_id. Cleared at
     // the start of each turn and on /clear.
     tool_cells: Vec<ToolCell>,
+    /// Interactive MCP elicitation queue installed only for the full-screen TUI.
+    mcp_elicitation_handler: Arc<crate::mcp::tui_handler::TuiElicitationHandler>,
 }
 
 /// Short-lived banner shown across the top of the chat area when the
@@ -383,6 +385,9 @@ impl TuiApp {
             active_overlay: None,
             overlay_scroll: 0,
             tool_cells: Vec::new(),
+            mcp_elicitation_handler: Arc::new(
+                crate::mcp::tui_handler::TuiElicitationHandler::new(),
+            ),
         }
     }
 
@@ -435,7 +440,11 @@ impl TuiApp {
     }
 
     fn context_percent(&self) -> u8 {
-        context_percent_for(&self.model_name, self.total_input_tokens, self.total_output_tokens)
+        context_percent_for(
+            &self.model_name,
+            self.total_input_tokens,
+            self.total_output_tokens,
+        )
     }
 
     pub fn open_overlay(
@@ -580,6 +589,89 @@ fn run_tui_approval_modal(
     }
 }
 
+fn mcp_elicitation_overlay(
+    pending: crate::mcp::tui_handler::PendingElicitation,
+) -> crate::tui::widgets::elicitation_overlay::ElicitationOverlayState {
+    let mut overlay = crate::tui::widgets::elicitation_overlay::ElicitationOverlayState::default();
+    overlay.open(pending.server_name, pending.request);
+    overlay
+}
+
+fn handle_mcp_elicitation_event(
+    overlay: &mut crate::tui::widgets::elicitation_overlay::ElicitationOverlayState,
+    event: Event,
+) -> Option<agiworkforce_mcp::ElicitationResponse> {
+    use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
+
+    let action = match event {
+        Event::Key(key) => overlay.handle_key(crossterm_to_keyaction(key)),
+        Event::Paste(text) => {
+            for character in text.chars() {
+                let _ = overlay.handle_key(KeyAction::Char(character));
+            }
+            ViewAction::Continue
+        }
+        _ => ViewAction::Continue,
+    };
+    match action {
+        ViewAction::Submit(_) | ViewAction::Close => Some(
+            overlay
+                .result
+                .take()
+                .unwrap_or_else(agiworkforce_mcp::ElicitationResponse::cancel),
+        ),
+        ViewAction::Continue | ViewAction::SideAction(_) => None,
+    }
+}
+
+/// Drive an out-of-band MCP elicitation while the TUI is idle.
+fn run_idle_mcp_elicitation_modal(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &TuiApp,
+    pending: crate::mcp::tui_handler::PendingElicitation,
+) -> Result<agiworkforce_mcp::ElicitationResponse> {
+    let mut overlay = mcp_elicitation_overlay(pending);
+    loop {
+        terminal.draw(|frame| {
+            let chat_area = draw_app_frame(frame, app);
+            render_overlay(frame, chat_area, &overlay, 0);
+        })?;
+        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+            if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
+                terminal.draw(|frame| {
+                    draw_app_frame(frame, app);
+                })?;
+                return Ok(response);
+            }
+        }
+    }
+}
+
+/// Drive an MCP elicitation while an agent turn is awaiting the server. This
+/// mirrors tool approvals: the model future remains parked while the terminal
+/// loop gathers the user's structured response.
+fn run_turn_mcp_elicitation_modal(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    ctx: &FrameCtx,
+    pending: crate::mcp::tui_handler::PendingElicitation,
+) -> Result<agiworkforce_mcp::ElicitationResponse> {
+    let mut overlay = mcp_elicitation_overlay(pending);
+    loop {
+        terminal.draw(|frame| {
+            let chat_area = draw_turn_chrome(frame, ctx);
+            render_overlay(frame, chat_area, &overlay, 0);
+        })?;
+        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+            if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
+                terminal.draw(|frame| {
+                    draw_turn_chrome(frame, ctx);
+                })?;
+                return Ok(response);
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Terminal setup
 // ---------------------------------------------------------------------------
@@ -610,69 +702,77 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result
 
 fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Result<()> {
     terminal.draw(|frame| {
-        let area = frame.area();
-
-        // Dynamic input height: border(2) + content rows (1..=8)
-        let input_height = 2 + composer_content_rows(&app.input);
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(3),            // header
-                Constraint::Min(5),               // chat area
-                Constraint::Length(input_height), // input (grows with content)
-                Constraint::Length(1),            // status bar
-            ])
-            .split(area);
-
-        let ctx = FrameCtx::from_app(app);
-        render_header(frame, chunks[0], &ctx);
-        render_chat(frame, chunks[1], &ctx);
-        render_input(frame, chunks[2], app);
-        render_status_bar(frame, chunks[3], &ctx);
-        render_fallback_banner(frame, chunks[1], app);
-
-        // Live cost HUD anchored to the top-right; sits on top of the header
-        // border so it never steals real-estate from the chat area.
-        let hud = super::cost_hud::CostHud {
-            in_tokens: app.total_input_tokens,
-            out_tokens: app.total_output_tokens,
-            cache_read: app.session.total_cache_read_tokens,
-            cache_creation: app.session.total_cache_creation_tokens,
-            reasoning_tokens: app.session.total_reasoning_tokens,
-            context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
-            context_window: crate::model_catalog::context_window(&app.model_name) as u64,
-        };
-        super::cost_hud::render(frame, area, &hud, &app.model_name);
-
-        // Mode-change banner (self-clears after MODE_BANNER_TTL)
-        render_mode_banner(frame, chunks[1], app);
-
-        // Popups (only one visible at a time; effort picker takes lowest priority)
-        if app.effort_picker.visible {
-            super::widgets::effort_picker::render(frame, chunks[1], &app.effort_picker);
-        }
-
-        if app.theme_picker.visible {
-            super::widgets::theme_picker::render(frame, chunks[1], &app.theme_picker);
-        }
-
-        if app.agent_picker.visible {
-            super::widgets::agent_picker::render(frame, chunks[1], &app.agent_picker);
-        } else if app.model_picker.visible {
-            super::widgets::model_picker::render(
-                frame,
-                chunks[1],
-                &app.model_picker,
-                &app.model_name,
-            );
-        }
-
-        // Modal overlay drawn last so it sits on top of everything.
-        if let Some(ref ov) = app.active_overlay {
-            render_overlay(frame, chunks[1], ov.as_ref(), app.overlay_scroll);
-        }
+        draw_app_frame(frame, app);
     })?;
     Ok(())
+}
+
+/// Draw the complete idle TUI frame and return its chat area so a modal can be
+/// composited over the exact same frame without blanking the transcript.
+fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
+    let area = frame.area();
+
+    // Dynamic input height: border(2) + content rows (1..=8)
+    let input_height = 2 + composer_content_rows(&app.input);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),            // header
+            Constraint::Min(5),               // chat area
+            Constraint::Length(input_height), // input (grows with content)
+            Constraint::Length(1),            // status bar
+        ])
+        .split(area);
+
+    let ctx = FrameCtx::from_app(app);
+    render_header(frame, chunks[0], &ctx);
+    render_chat(frame, chunks[1], &ctx);
+    render_input(frame, chunks[2], app);
+    render_status_bar(frame, chunks[3], &ctx);
+    render_fallback_banner(frame, chunks[1], app);
+
+    // Live cost HUD anchored to the top-right; sits on top of the header
+    // border so it never steals real-estate from the chat area.
+    let hud = super::cost_hud::CostHud {
+        in_tokens: app.total_input_tokens,
+        out_tokens: app.total_output_tokens,
+        cache_read: app.session.total_cache_read_tokens,
+        cache_creation: app.session.total_cache_creation_tokens,
+        reasoning_tokens: app.session.total_reasoning_tokens,
+        context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
+        context_window: crate::model_catalog::context_window(&app.model_name) as u64,
+    };
+    super::cost_hud::render(frame, area, &hud, &app.model_name);
+
+    // Mode-change banner (self-clears after MODE_BANNER_TTL)
+    render_mode_banner(frame, chunks[1], app);
+
+    // Popups (only one visible at a time; effort picker takes lowest priority)
+    if app.effort_picker.visible {
+        super::widgets::effort_picker::render(frame, chunks[1], &app.effort_picker);
+    }
+
+    if app.theme_picker.visible {
+        super::widgets::theme_picker::render(frame, chunks[1], &app.theme_picker);
+    }
+
+    if app.agent_picker.visible {
+        super::widgets::agent_picker::render(frame, chunks[1], &app.agent_picker);
+    } else if app.model_picker.visible {
+        super::widgets::model_picker::render(
+            frame,
+            chunks[1],
+            &app.model_picker,
+            &app.model_name,
+        );
+    }
+
+    // Modal overlay drawn last so it sits on top of everything.
+    if let Some(ref ov) = app.active_overlay {
+        render_overlay(frame, chunks[1], ov.as_ref(), app.overlay_scroll);
+    }
+
+    chunks[1]
 }
 
 /// Live in-turn frame. Drawn on each 80ms tick while the send future holds
@@ -1027,7 +1127,15 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // Live streamed output. During a turn this is redrawn each tick, so show
         // a generous tail (not just 5 lines) for a real streaming feel.
         if !ctx.stream_buffer.is_empty() {
-            for line in ctx.stream_buffer.lines().rev().take(40).collect::<Vec<_>>().into_iter().rev() {
+            for line in ctx
+                .stream_buffer
+                .lines()
+                .rev()
+                .take(40)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+            {
                 lines.push(Line::from(Span::styled(
                     format!("    {line}"),
                     Style::default(),
@@ -1177,8 +1285,7 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         let text_before = &app.input[..cursor_byte];
         let cursor_row = text_before.chars().filter(|&c| c == '\n').count();
         let line_start_byte = text_before.rfind('\n').map(|p| p + 1).unwrap_or(0);
-        let col_text_width =
-            Line::from(text_before[line_start_byte..].to_string()).width() as u16;
+        let col_text_width = Line::from(text_before[line_start_byte..].to_string()).width() as u16;
 
         // Continuation rows align under the first line's text, same as row 0.
         let indent_width = prompt_width;
@@ -1283,6 +1390,7 @@ fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_sys
     use crate::design_system::AccessMode;
     use crate::models::{OllamaMode, Provider};
     match provider {
+        Provider::ManagedCloud => AccessMode::Cloud,
         // Local Ollama is on-device; Ollama Cloud is a hosted service reached
         // with the user's key, so it is BYOK (data leaves the device).
         Provider::Ollama(OllamaMode::Local) => AccessMode::Local,
@@ -1358,7 +1466,9 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         if ctx.privacy_mode == PrivacyMode::Local && ctx.access_mode != AccessMode::Local {
             Span::styled(
                 format!("◉ local≠{tier}"),
-                Style::default().fg(ui_danger()).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(ui_danger())
+                    .add_modifier(Modifier::BOLD),
             )
         } else {
             let color = match ctx.access_mode {
@@ -1405,9 +1515,15 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // important indicators on the right.
     let optional: Vec<Span> = vec![
         Span::styled(cost_str, Style::default().fg(ui_muted())),
-        Span::styled(sandbox_label.to_string(), Style::default().fg(sandbox_color)),
+        Span::styled(
+            sandbox_label.to_string(),
+            Style::default().fg(sandbox_color),
+        ),
         Span::styled(effort_str, Style::default().fg(ui_muted())),
-        Span::styled("Shift+Tab: mode".to_string(), Style::default().fg(ui_muted())),
+        Span::styled(
+            "Shift+Tab: mode".to_string(),
+            Style::default().fg(ui_muted()),
+        ),
         Span::styled("/: commands".to_string(), Style::default().fg(ui_muted())),
         Span::styled("Esc: quit".to_string(), Style::default().fg(ui_muted())),
     ];
@@ -1573,13 +1689,10 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         // own affordance. Dismiss the dialog message first; only quit when
         // the last message isn't one of these fake dialogs.
         KeyCode::Esc
-            if app
-                .chat_messages
-                .last()
-                .is_some_and(|m| {
-                    m.role == ChatRole::System
-                        && super::widgets::screen_renderers::is_dialog_frame(&m.text)
-                }) =>
+            if app.chat_messages.last().is_some_and(|m| {
+                m.role == ChatRole::System
+                    && super::widgets::screen_renderers::is_dialog_frame(&m.text)
+            }) =>
         {
             app.chat_messages.pop();
             InputAction::None
@@ -1654,10 +1767,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         KeyCode::Home => {
             // Move to start of current line (not start of whole buffer).
             let cursor = floor_char_boundary(&app.input, app.cursor);
-            let line_start = app.input[..cursor]
-                .rfind('\n')
-                .map(|p| p + 1)
-                .unwrap_or(0);
+            let line_start = app.input[..cursor].rfind('\n').map(|p| p + 1).unwrap_or(0);
             app.cursor = line_start;
             InputAction::None
         }
@@ -1698,10 +1808,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 fn composer_move_up(app: &mut TuiApp) -> bool {
     let cursor = floor_char_boundary(&app.input, app.cursor);
     // Find start of current line
-    let line_start = app.input[..cursor]
-        .rfind('\n')
-        .map(|p| p + 1)
-        .unwrap_or(0);
+    let line_start = app.input[..cursor].rfind('\n').map(|p| p + 1).unwrap_or(0);
     if line_start == 0 {
         // Already on the first line — let the event fall through to scroll chat.
         return false;
@@ -1725,10 +1832,7 @@ fn composer_move_up(app: &mut TuiApp) -> bool {
 fn composer_move_down(app: &mut TuiApp) -> bool {
     let cursor = floor_char_boundary(&app.input, app.cursor);
     // Find end of current line (next '\n' or end of buffer)
-    let line_start = app.input[..cursor]
-        .rfind('\n')
-        .map(|p| p + 1)
-        .unwrap_or(0);
+    let line_start = app.input[..cursor].rfind('\n').map(|p| p + 1).unwrap_or(0);
     let col_offset = cursor - line_start;
     // Find start of next line
     let next_newline = app.input[cursor..].find('\n');
@@ -2149,7 +2253,7 @@ fn mode_description(mode: InteractionMode) -> &'static str {
             "Plan mode — read-only tools only, no file edits. Model will plan before acting."
         }
         InteractionMode::AcceptEdits => {
-            "AcceptEdits — file edits approved automatically, commands still prompt"
+            "Safe, read-only operations run automatically; writes and commands still require approval."
         }
         InteractionMode::BypassPermissions => {
             "Bypass — all tool prompts skipped. Use with caution!"
@@ -2900,7 +3004,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/extra-usage" | "/pricing" => {
             SlashResult::SystemMessage(
-                "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nPro/Max: managed cloud flat subscription (waitlist — agiworkforce.com).".into()
+                "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nManaged cloud: public alpha, open to signed-in users with metered plan usage.".into()
             )
         }
 
@@ -3042,7 +3146,10 @@ pub async fn run(
                 eprintln!("Agent '{}' loaded.", agent_def.name);
             }
             None => {
-                eprintln!("Warning: agent '{}' not found. Run /agents to list available agents.", name);
+                eprintln!(
+                    "Warning: agent '{}' not found. Run /agents to list available agents.",
+                    name
+                );
             }
         }
     }
@@ -3098,10 +3205,23 @@ pub async fn run(
     // up to OAUTH_INTERACTIVE_TIMEOUT at launch when a repo `.mcp.json` declares
     // an HTTP-OAuth server. Mirrors the REPL's P0-1 fix; until the manager is
     // ready, turns simply run without MCP tools.
+    let mcp_elicitation_handler =
+        Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new());
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
+        let privacy_mode = session.privacy_mode;
+        let elicitation: Arc<dyn agiworkforce_mcp::ElicitationHandler> =
+            Arc::clone(&mcp_elicitation_handler) as Arc<dyn agiworkforce_mcp::ElicitationHandler>;
         Some(tokio::spawn(async move {
-            match crate::build_mcp_manager(&opts, true, true).await {
+            match crate::build_mcp_manager_with_elicitation(
+                &opts,
+                true,
+                true,
+                privacy_mode,
+                elicitation,
+            )
+            .await
+            {
                 Ok(mgr) => mgr,
                 Err(e) => {
                     // Background task during a live TUI: a raw stderr warning
@@ -3150,6 +3270,7 @@ pub async fn run(
     .await;
 
     let mut app = TuiApp::new(session, config.clone(), sandbox_disabled);
+    app.mcp_elicitation_handler = mcp_elicitation_handler;
     app.wire_fallback_banner();
     // Populate the picker's Local section without blocking launch: probe Ollama
     // / LM Studio in the background (2.5s timeout) and cache the catalog-shaped
@@ -3241,6 +3362,18 @@ async fn run_event_loop(
                         register_mcp_prompt_commands(&mut app.command_registry, prompts);
                     }
                 }
+            }
+        }
+
+        // MCP servers may elicit input outside an active model turn. Never
+        // replace an overlay the user is already operating; the FIFO request
+        // stays queued until that overlay closes.
+        if app.active_overlay.is_none() {
+            let handler = Arc::clone(&app.mcp_elicitation_handler);
+            while let Some(pending) = handler.drain_pending().await {
+                let request_id = pending.id;
+                let response = run_idle_mcp_elicitation_modal(terminal, app, pending)?;
+                handler.complete(request_id, response).await;
             }
         }
 
@@ -3370,96 +3503,99 @@ async fn run_event_loop(
                     // handled above; skip slash/prompt dispatch (the loop still
                     // renders below).
                     if !handled_as_mode_command {
-                    match handle_slash(&text, app) {
-                        SlashResult::Quit => {
-                            app.should_quit = true;
-                        }
-                        SlashResult::SystemMessage(msg) => {
-                            if !msg.is_empty() {
+                        match handle_slash(&text, app) {
+                            SlashResult::Quit => {
+                                app.should_quit = true;
+                            }
+                            SlashResult::SystemMessage(msg) => {
+                                if !msg.is_empty() {
+                                    app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: msg,
+                                    });
+                                }
+                            }
+                            SlashResult::RunLogin => {
+                                // Leave TUI, run interactive login, re-enter TUI
+                                restore_terminal(terminal)?;
+                                let result =
+                                    crate::auth::interactive_login_for_provider(None).await;
+                                *terminal = setup_terminal()?;
+                                match result {
+                                    Ok(()) => {
+                                        app.chat_messages.push(ChatMessage {
+                                            role: ChatRole::System,
+                                            text: "Login complete. Credentials saved.".to_string(),
+                                        });
+                                    }
+                                    Err(e) => {
+                                        app.chat_messages.push(ChatMessage {
+                                            role: ChatRole::System,
+                                            text: format!("Login failed: {e}"),
+                                        });
+                                    }
+                                }
+                            }
+                            SlashResult::RunLogout => {
+                                let mut store = crate::auth::load_auth().unwrap_or_default();
+                                store.entries.clear();
+                                let _ = crate::auth::save_auth(&store);
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
-                                    text: msg,
+                                    text: "Logged out from all providers.".to_string(),
                                 });
                             }
-                        }
-                        SlashResult::RunLogin => {
-                            // Leave TUI, run interactive login, re-enter TUI
-                            restore_terminal(terminal)?;
-                            let result = crate::auth::interactive_login_for_provider(None).await;
-                            *terminal = setup_terminal()?;
-                            match result {
-                                Ok(()) => {
-                                    app.chat_messages.push(ChatMessage {
+                            SlashResult::NotSlash | SlashResult::SendAsPrompt => {
+                                send_message(terminal, app, &text).await?;
+                            }
+                            SlashResult::SendPrompt(prompt) => {
+                                send_message(terminal, app, &prompt).await?;
+                            }
+                            SlashResult::SendMcpPrompt(invocation) => {
+                                match app.session.expand_mcp_prompt_invocation(&invocation).await {
+                                    Ok(Some(prompt)) => {
+                                        send_message(terminal, app, &prompt).await?;
+                                    }
+                                    Ok(None) => app.chat_messages.push(ChatMessage {
                                         role: ChatRole::System,
-                                        text: "Login complete. Credentials saved.".to_string(),
-                                    });
-                                }
-                                Err(e) => {
-                                    app.chat_messages.push(ChatMessage {
+                                        text: "Unknown MCP prompt command.".to_string(),
+                                    }),
+                                    Err(e) => app.chat_messages.push(ChatMessage {
                                         role: ChatRole::System,
-                                        text: format!("Login failed: {e}"),
-                                    });
+                                        text: format!("MCP prompt failed: {e:#}"),
+                                    }),
                                 }
                             }
-                        }
-                        SlashResult::RunLogout => {
-                            let mut store = crate::auth::load_auth().unwrap_or_default();
-                            store.entries.clear();
-                            let _ = crate::auth::save_auth(&store);
-                            app.chat_messages.push(ChatMessage {
-                                role: ChatRole::System,
-                                text: "Logged out from all providers.".to_string(),
-                            });
-                        }
-                        SlashResult::NotSlash | SlashResult::SendAsPrompt => {
-                            send_message(terminal, app, &text).await?;
-                        }
-                        SlashResult::SendPrompt(prompt) => {
-                            send_message(terminal, app, &prompt).await?;
-                        }
-                        SlashResult::SendMcpPrompt(invocation) => {
-                            match app.session.expand_mcp_prompt_invocation(&invocation).await {
-                                Ok(Some(prompt)) => {
-                                    send_message(terminal, app, &prompt).await?;
-                                }
-                                Ok(None) => app.chat_messages.push(ChatMessage {
-                                    role: ChatRole::System,
-                                    text: "Unknown MCP prompt command.".to_string(),
-                                }),
-                                Err(e) => app.chat_messages.push(ChatMessage {
-                                    role: ChatRole::System,
-                                    text: format!("MCP prompt failed: {e:#}"),
-                                }),
-                            }
-                        }
-                        SlashResult::RunAdvisor(question) => {
-                            let call = crate::agent::ToolCall {
-                                name: "advisor".to_string(),
-                                args: std::collections::HashMap::from([(
-                                    "question".to_string(),
-                                    question,
-                                )]),
-                            };
-                            let opts = crate::tools::ToolExecOptions {
-                                require_confirmation: false,
-                                auto_approve_safe: true,
-                                quiet: true,
-                                approval_callback: None,
-                            };
-                            let text =
-                                match crate::tools::execute_tool_with_opts(&call, &opts).await {
+                            SlashResult::RunAdvisor(question) => {
+                                let call = crate::agent::ToolCall {
+                                    name: "advisor".to_string(),
+                                    args: std::collections::HashMap::from([(
+                                        "question".to_string(),
+                                        question,
+                                    )]),
+                                };
+                                let opts = crate::tools::ToolExecOptions {
+                                    require_confirmation: false,
+                                    auto_approve_safe: true,
+                                    quiet: true,
+                                    approval_callback: None,
+                                    privacy_mode: app.session.privacy_mode,
+                                };
+                                let text = match crate::tools::execute_tool_with_opts(&call, &opts)
+                                    .await
+                                {
                                     Ok(result) if result.success => {
                                         format_advisor_tool_output(&result.output)
                                     }
                                     Ok(result) => format!("Advisor failed: {}", result.output),
                                     Err(e) => format!("Advisor failed: {e:#}"),
                                 };
-                            app.chat_messages.push(ChatMessage {
-                                role: ChatRole::System,
-                                text,
-                            });
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
                         }
-                    }
                     }
                 }
 
@@ -3638,9 +3774,7 @@ async fn send_message(
     // Thread the current effort level's thinking budget into the session before
     // every send. Only Anthropic respects this field; other providers ignore it.
     // Low/Medium → None (standard inference), High/Max → Some(N tokens).
-    app.session.thinking_budget_tokens = app
-        .effort
-        .thinking_budget_for_anthropic();
+    app.session.thinking_budget_tokens = app.effort.thinking_budget_for_anthropic();
 
     // Snapshot the session-derived display bits before the send future takes a
     // `&mut app.session` borrow. These don't change during a turn (provider is
@@ -3930,7 +4064,10 @@ mod tests {
             output_preview: None,
         };
         let t = line0(&edit);
-        assert!(t.contains('✔') && t.contains('±') && t.contains("edit_file"), "got: {t}");
+        assert!(
+            t.contains('✔') && t.contains('±') && t.contains("edit_file"),
+            "got: {t}"
+        );
 
         // Shell tool → $ icon AND a `$ <command>` band.
         let cmd = ToolCell {
@@ -3940,7 +4077,11 @@ mod tests {
             state: TranscriptCellState::Running,
             output_preview: None,
         };
-        assert!(line0(&cmd).contains("$ ls -la"), "command band missing: {}", line0(&cmd));
+        assert!(
+            line0(&cmd).contains("$ ls -la"),
+            "command band missing: {}",
+            line0(&cmd)
+        );
 
         // Failed read → ✗ state glyph and ▤ read icon.
         let fail = ToolCell {
@@ -4067,6 +4208,14 @@ mod tests {
         assert!(approval_choice_to_decision(ApprovalChoice::AlwaysAllow).is_allowing());
         assert!(!approval_choice_to_decision(ApprovalChoice::No).is_allowing());
         assert!(!approval_choice_to_decision(ApprovalChoice::DenyAll).is_allowing());
+    }
+
+    #[test]
+    fn accept_edits_description_matches_safe_tool_approval_behavior() {
+        assert_eq!(
+            mode_description(InteractionMode::AcceptEdits),
+            "Safe, read-only operations run automatically; writes and commands still require approval."
+        );
     }
 
     #[test]
@@ -4226,6 +4375,7 @@ mod tests {
                 auto_approve_safe: false,
                 quiet: true,
                 approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Local,
             };
 
             let result = crate::tools::execute_tool_with_opts(&call, &opts)
@@ -4282,6 +4432,7 @@ mod tests {
                 auto_approve_safe: false,
                 quiet: true,
                 approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Local,
             };
 
             let result = crate::tools::execute_tool_with_opts(&call, &opts)
@@ -4377,6 +4528,7 @@ mod tests {
                 auto_approve_safe: false,
                 quiet: true,
                 approval_callback: Some(callback),
+                privacy_mode: crate::agent::PrivacyMode::Local,
             };
 
             // Run BOTH tools concurrently (mirrors `join_all` in chat.rs). Each

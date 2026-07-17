@@ -730,10 +730,7 @@ mod tests {
         // serviced turn: the second prompt must yield a max_turns Error, never a
         // second provider call / Response.
         let caller = Arc::new(MockLlmCaller {
-            responses: std::sync::Mutex::new(vec![
-                Ok("turn one".into()),
-                Ok("turn two".into()),
-            ]),
+            responses: std::sync::Mutex::new(vec![Ok("turn one".into()), Ok("turn two".into())]),
         });
         let runner = Arc::new(AgentSessionRunner {
             caller,

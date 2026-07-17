@@ -8,6 +8,8 @@ use crate::core::artifacts::{
     ArtifactVersion, CreateArtifactRequest, RenderedArtifact, SharedArtifactStore,
     UpdateArtifactRequest, VersionDiff,
 };
+use crate::data::db::repository;
+use crate::sys::commands::chat::AppDatabase;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -94,6 +96,7 @@ pub async fn artifact_create(
     let request = CreateArtifactRequest {
         title,
         artifact_type,
+        render_type: Some(artifact_type.to_string()),
         content,
         metadata,
         conversation_id,
@@ -442,6 +445,76 @@ pub async fn artifact_get_by_conversation(
 ) -> Result<ArtifactResponse<Vec<ArtifactSummary>>, String> {
     let summaries = state.0.get_by_conversation(conversation_id);
     Ok(ArtifactResponse::ok(summaries))
+}
+
+/// Load the full persisted artifact records required to reconstruct
+/// `message.artifacts` when a Desktop conversation is reopened.
+///
+/// The conversation ownership check is performed at the privileged native
+/// boundary. Local/BYOK/Managed storage selection remains governed by the
+/// conversation row; this command never syncs or changes execution planes.
+#[tauri::command]
+pub async fn artifact_get_conversation_snapshot(
+    state: State<'_, ArtifactState>,
+    db: State<'_, AppDatabase>,
+    conversation_id: i64,
+    user_id: String,
+) -> Result<ArtifactResponse<Vec<Artifact>>, String> {
+    if conversation_id <= 0 {
+        return Err("Conversation ID must be positive".to_string());
+    }
+    if user_id.trim().is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+
+    {
+        let conn = db.connection()?;
+        repository::get_conversation(&conn, conversation_id, &user_id)
+            .map_err(|error| format!("Access denied or conversation not found: {error}"))?;
+    }
+
+    state
+        .0
+        .load_conversation_from_db(&conversation_id.to_string())?;
+    Ok(ArtifactResponse::ok(
+        state.0.get_conversation_snapshot(conversation_id),
+    ))
+}
+
+/// Link artifacts emitted during a live tool loop to the assistant message
+/// persisted at stream completion. Repeating the same request is idempotent;
+/// cross-conversation and conflicting-message associations are rejected.
+#[tauri::command]
+pub async fn artifact_link_to_message(
+    state: State<'_, ArtifactState>,
+    db: State<'_, AppDatabase>,
+    conversation_id: i64,
+    message_id: i64,
+    artifact_ids: Vec<String>,
+    user_id: String,
+) -> Result<ArtifactResponse<usize>, String> {
+    if conversation_id <= 0 || message_id <= 0 {
+        return Err("Conversation and message IDs must be positive".to_string());
+    }
+    if user_id.trim().is_empty() {
+        return Err("User ID cannot be empty".to_string());
+    }
+
+    {
+        let conn = db.connection()?;
+        repository::get_conversation(&conn, conversation_id, &user_id)
+            .map_err(|error| format!("Access denied or conversation not found: {error}"))?;
+        let message = repository::get_message(&conn, message_id)
+            .map_err(|error| format!("Message not found: {error}"))?;
+        if message.conversation_id != conversation_id || message.user_id != user_id {
+            return Err("Message does not belong to the requested conversation".to_string());
+        }
+    }
+
+    let linked = state
+        .0
+        .link_to_message(conversation_id, message_id, &artifact_ids)?;
+    Ok(ArtifactResponse::ok(linked))
 }
 
 /// Get artifact version history

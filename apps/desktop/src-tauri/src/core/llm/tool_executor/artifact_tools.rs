@@ -13,19 +13,16 @@
 //!
 //! ## Type mapping
 //!
-//! The frontend's `ArtifactType` (packages/types/src/conversation.ts) is a
+//! The frontend's `ArtifactType` (packages/contracts/types/src/conversation.ts) is a
 //! richer superset (`react`, `svg`, `table`, `markdown` as distinct from
 //! `document`, etc.) than the backend's persistence-oriented `ArtifactType`
 //! (core/artifacts/types.rs: Code/Document/Spreadsheet/Diagram/Web/Chart/
-//! Presentation/Image). Rather than a lossy round trip, this tool accepts
-//! the frontend-shaped type string directly (so the model — and the emitted
-//! event — always uses the exact type the renderer expects) and maps it to
-//! the closest backend `ArtifactType` + metadata only for persistence via
-//! `ArtifactState` (so the artifact is still versionable/listable through
-//! the existing `artifact_*` Tauri commands). See `map_frontend_type` below
-//! for the table. `react` has no backend analog and is persisted as `Code`;
-//! this is a documented, intentional tradeoff (see known-flaws.md
-//! DESKTOP-ARTIFACTS-ENTIRELY-UNWIRED-01).
+//! Presentation/Image). This tool accepts the frontend-shaped type string
+//! directly and persists it as `Artifact::render_type`, while separately
+//! mapping it to the closest coarse native `ArtifactType` + metadata for
+//! native filtering/rendering. The exact `render_type` is also emitted on
+//! the live event and reconstructed after a conversation reload, so rich
+//! types such as `react` and `svg` round-trip without being downgraded.
 
 use super::*;
 use crate::core::artifacts::{
@@ -38,7 +35,7 @@ use tauri::{Emitter, Manager};
 /// Frontend-facing artifact types this tool accepts, in the exact casing the
 /// `@agiworkforce/unified-chat` `ArtifactType` union and `ArtifactRenderer`/
 /// `ArtifactPanel` dispatch on. Keep in sync with the allow-list in
-/// `packages/unified-chat/src/components/ArtifactRenderer.tsx` and
+/// `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx` and
 /// `ArtifactPanel.tsx` — types outside this list either aren't rendered at
 /// all (e.g. `chart`) or have no backend persistence mapping yet.
 const SUPPORTED_FRONTEND_TYPES: &[&str] = &[
@@ -70,9 +67,8 @@ fn map_frontend_type(
                 ..Default::default()
             }),
         )),
-        // React has no backend-native type; persist as Code (closest fit)
-        // while the emitted wire event still carries `type: "react"` so the
-        // frontend renders it with ReactPreview.
+        // React has no coarse native category; use Code for native filtering
+        // while `Artifact::render_type` remains `react` for lossless reload.
         "react" => Some((
             BackendArtifactType::Code,
             ArtifactMetadata::Code(CodeMetadata {
@@ -87,7 +83,10 @@ fn map_frontend_type(
                 ..Default::default()
             }),
         )),
-        "html" => Some((BackendArtifactType::Web, ArtifactMetadata::Web(WebMetadata::default()))),
+        "html" => Some((
+            BackendArtifactType::Web,
+            ArtifactMetadata::Web(WebMetadata::default()),
+        )),
         "mermaid" => Some((
             BackendArtifactType::Diagram,
             ArtifactMetadata::Diagram(DiagramMetadata {
@@ -95,8 +94,8 @@ fn map_frontend_type(
                 theme: None,
             }),
         )),
-        // SVG persists under Image (binary/markup visual content); the wire
-        // event still carries `type: "svg"` for the sanitized inline renderer.
+        // SVG uses Image as its coarse native category while the exact
+        // `Artifact::render_type` remains `svg` for the sanitized renderer.
         "svg" => Some((BackendArtifactType::Image, ArtifactMetadata::default())),
         // Tabular types (CSV/TSV or JSON array-of-objects content) all render
         // through the shared SpreadsheetArtifact and persist as Spreadsheet.
@@ -104,7 +103,10 @@ fn map_frontend_type(
             BackendArtifactType::Spreadsheet,
             ArtifactMetadata::Spreadsheet(SpreadsheetMetadata::default()),
         )),
-        "presentation" => Some((BackendArtifactType::Presentation, ArtifactMetadata::default())),
+        "presentation" => Some((
+            BackendArtifactType::Presentation,
+            ArtifactMetadata::default(),
+        )),
         // Email drafts have no backend-native type; persist as Document (plain
         // text with optional RFC-822-style headers) while the wire event keeps
         // `type: "email"` so the frontend renders it with EmailArtifact.
@@ -200,6 +202,7 @@ impl ToolExecutor {
         let request = CreateArtifactRequest {
             title: title.clone(),
             artifact_type: backend_type,
+            render_type: Some(frontend_type.clone()),
             content: content.clone(),
             metadata: Some(metadata),
             conversation_id: self.conversation_id,
@@ -207,7 +210,12 @@ impl ToolExecutor {
             tags: None,
         };
 
-        let artifact = match state.0.create(request) {
+        let create_result = if self.persist_internal_resources {
+            state.0.create(request)
+        } else {
+            state.0.create_ephemeral(request)
+        };
+        let artifact = match create_result {
             Ok(artifact) => artifact,
             Err(e) => {
                 let message = format!("Failed to create artifact: {}", e);
@@ -235,6 +243,9 @@ impl ToolExecutor {
                 "content": content,
                 "language": language,
                 "metadata": {},
+                "version": artifact.current_version,
+                "created_at": artifact.created_at,
+                "updated_at": artifact.updated_at,
             }
         });
         let _ = app.emit("chat:artifact", payload);

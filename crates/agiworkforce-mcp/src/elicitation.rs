@@ -200,8 +200,8 @@ mod tests {
         assert!(cancel.contains("\"action\":\"cancel\""));
         assert!(!cancel.contains("\"content\""));
 
-        let empty_accept =
-            serde_json::to_string(&ElicitationResponse::accept_without_content()).expect("serialize");
+        let empty_accept = serde_json::to_string(&ElicitationResponse::accept_without_content())
+            .expect("serialize");
         assert!(empty_accept.contains("\"action\":\"accept\""));
         assert!(!empty_accept.contains("\"content\""));
     }

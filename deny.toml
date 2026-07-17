@@ -1,0 +1,126 @@
+# cargo-deny config (schema: cargo-deny 0.20.2, generated starting point via
+# `cargo deny init` then hand-fit to this workspace's real dependency graph —
+# see comments below for the evidence behind each list). Run with:
+#   cargo deny check            # all four checks
+#   cargo deny check licenses   # single check
+#
+# CI wiring: not yet wired (this file lands ahead of the CI job as part of
+# the W5 guardrail batch; see the delta reported to the orchestrator for the
+# proposed `.github/workflows/ci.yml` job).
+
+[graph]
+# No target-triple pruning: the workspace ships macOS, Linux, and Windows
+# desktop/CLI binaries (see build-windows-release.yml, release-desktop.yml,
+# release-cli.yml matrix targets), so all platforms' dependency edges matter.
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+# https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
+# cargo-deny 0.20's advisories check has no separate unmaintained/vulnerability
+# lint-level knobs (removed from the config-v2 schema) — RUSTSEC vulnerability,
+# unmaintained, unsound, and yanked advisories are denied by default. This
+# section only needs an `ignore` list, which is empty: no advisory has been
+# triaged as an accepted risk yet.
+[advisories]
+ignore = []
+
+# https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
+[licenses]
+# Allow list derived from `cargo metadata --format-version=1` over the real
+# workspace graph (2026-07-16), keeping only SPDX atoms that are the SOLE or
+# AND-mandatory license for at least one crate actually in the graph — i.e.
+# every entry here is load-bearing, not padding. Atoms that only ever appear
+# behind a permissive OR (e.g. `LGPL-2.1-or-later` in r-efi's
+# `MIT OR Apache-2.0 OR LGPL-2.1-or-later`, `GPL-2.0-only` in self_cell's
+# `Apache-2.0 OR GPL-2.0-only`) are deliberately NOT allowed: the permissive
+# branch already satisfies the expression, and leaving the copyleft branch
+# off the allow list means a future dependency bump that drops the permissive
+# branch fails the gate instead of silently passing.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "0BSD",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+    "NCSA",
+    "Unicode-3.0",
+]
+confidence-threshold = 0.8
+
+# First-party workspace crates: five declare `license = "Proprietary"`
+# (agiworkforce-desktop, agiworkforce-cli, agiworkforce-app-server,
+# agiworkforce-command-registry, agiworkforce-sandbox-policy — matches this
+# repo's actual posture, a proprietary codebase per THIRD_PARTY_LICENSES.md);
+# ten more declare no `license` field at all (agiworkforce-agent-core,
+# agiworkforce-execpolicy, agiworkforce-licensing, agiworkforce-llm,
+# agiworkforce-mcp, agiworkforce-model-registry, agiworkforce-network-proxy,
+# agiworkforce-protocol, agiworkforce-utils-absolute-path,
+# agiworkforce-utils-image). "Proprietary" is not a valid SPDX identifier —
+# cargo-deny cannot even parse it as a license expression, so it can never
+# satisfy `allow` or `exceptions` (both require parseable SPDX; verified by
+# running `cargo deny check licenses` against a "Proprietary" exceptions
+# entry, which fails with `error[custom]: unknown term`, not an allow-list
+# rejection). `clarify` cannot help either — it matches license *text* in a
+# LICENSE file, and these crates carry none.
+#
+# GENUINE OPEN FINDING (see W5 guardrail-batch report): the only real fix is
+# `publish = false` on all fifteen manifests, which makes `private.ignore`
+# below actually skip them. Adding that is out of this file's scope (it edits
+# fifteen separate Cargo.toml package manifests, four of which are currently
+# co-dirty with the in-flight M6 crate-merge lane) — reported as a delta, not
+# silently suppressed. Until that lands, `cargo deny check licenses` fails on
+# these fifteen crates; that failure is expected and tracked, not a config
+# bug.
+exceptions = []
+
+[licenses.private]
+# Forward-compatible: currently a no-op because no manifest sets
+# `publish = false` yet (see the open finding above); flip this workspace to
+# skip-by-default once that follow-up lands, no config edit required then.
+ignore = true
+
+# This workspace has no crate publishing to a private registry today.
+registries = []
+
+# https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
+[bans]
+# Real duplicate-version families observed in the graph today (constant_time_eq,
+# notify, r-efi, webpki-roots, and similar transitive pairs from divergent
+# consumer requirements) — none is a bannable/unsafe issue on inspection, so
+# this stays a warn, not a deny, per the W5 guardrail-batch spec.
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow-workspace = false
+
+# https://embarkstudios.github.io/cargo-deny/checks/sources/cfg.html
+[sources]
+unknown-registry = "deny"
+# Deny by default (crates-io only, per the W5 guardrail-batch spec); the two
+# git-sourced crates below are an intentional, documented exception — see
+# root Cargo.toml's `[patch.crates-io]` (websocket-handshake-hardening fork
+# consumed by the network-proxy crate), not an unreviewed drive-by git dep.
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = [
+    "https://github.com/openai-oss-forks/tokio-tungstenite",
+    "https://github.com/openai-oss-forks/tungstenite-rs",
+]
+
+# No [sources.allow-org] entry: the exact allow-git URLs above already cover
+# both openai-oss-forks repos. An `allow-org` entry for the same org was
+# tried and dropped — it triggered `warning[unmatched-organization]` because
+# nothing needs the broader org-level allowance once the specific repos are
+# listed.

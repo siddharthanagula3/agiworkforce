@@ -13,8 +13,8 @@
 //! `false` in Local mode.
 //!
 //! Wire protocol is the live `/api/chat/sync` (Next.js route):
-//!   POST { conversations, messages, artifacts }
-//!        → { applied: { conversations, messages, artifacts }, cursor }
+//!   POST { protocolVersion: 2, conversations, messages, artifacts }
+//!        → { protocolVersion: 2, applied, conflicts, cursor }
 //!   GET  ?since=<cursor>
 //!        → { conversations, messages, artifacts, cursor, hasMore }
 //!
@@ -25,10 +25,6 @@
 //! `user_id` is NEVER sent in a push body — the server derives it from the
 //! verified session and RLS WITH CHECK is the DB-level backstop.
 //!
-//! Known gap: a pulled artifact whose parent conversation has not yet landed
-//! locally is silently skipped (not buffered). Cross-page artifact orphans can
-//! be recovered on the next pull cycle once the conversation appears.
-
 use chrono::{DateTime, SecondsFormat, Utc};
 use reqwest::Client;
 use rusqlite::{params, Connection, Result as SqlResult};
@@ -36,6 +32,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, warn};
 use uuid::Uuid;
+
+const MAX_PENDING_ARTIFACTS_PER_USER: usize = 2_000;
+const MAX_PENDING_ARTIFACT_CONTENT_BYTES_PER_USER: usize = 64 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Public result type (kept for the existing `sync_conversations_to_cloud`
@@ -98,25 +97,28 @@ impl CloudSyncClient {
 // ---------------------------------------------------------------------------
 
 /// Pushed conversation (camelCase, matching PushConversationSchema on server).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PushConversation {
-    id: String,           // cloud_id (UUIDv7)
+    id: String, // cloud_id (UUIDv7)
     title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     project_id: Option<String>,
-    pinned: bool,
-    created_at: Option<String>,
-    updated_at: String,
-    deleted_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pinned: Option<bool>,
+    base_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    is_deleted: Option<bool>,
 }
 
 /// Pushed message (camelCase, matching PushMessageSchema on server).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PushMessage {
-    id: String,               // cloud_id (UUIDv7)
-    conversation_id: String,  // conversation_cloud_id
+    id: String,              // cloud_id (UUIDv7)
+    conversation_id: String, // conversation_cloud_id
     role: String,
     content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -124,9 +126,7 @@ struct PushMessage {
     #[serde(skip_serializing_if = "Option::is_none")]
     provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    created_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    deleted_at: Option<String>,
+    is_deleted: Option<bool>,
 }
 
 /// Pushed artifact (camelCase, matching PushArtifactSchema on server).
@@ -134,14 +134,16 @@ struct PushMessage {
 /// Server Zod schema uses `.optional()` for all nullable fields, so absent keys
 /// (undefined) are accepted but JSON `null` is NOT — hence `skip_serializing_if`.
 /// `conversationId`, `artifactType`, `content`, `updatedAt`, and `id` are required.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PushArtifact {
-    id: String,               // cloud_id (UUIDv7)
-    conversation_id: String,  // parent conversation cloud_id
+    id: String,              // cloud_id (UUIDv7)
+    conversation_id: String, // parent conversation cloud_id
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message_id: Option<String>, // source message cloud_id; never the local INTEGER id
     artifact_type: String,
     content: String,
-    updated_at: String,
+    base_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     title: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -153,14 +155,14 @@ struct PushArtifact {
     #[serde(skip_serializing_if = "Option::is_none")]
     tags: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    created_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    deleted_at: Option<String>,
+    is_deleted: Option<bool>,
 }
 
 /// POST body — no user_id (server derives from session).
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PushBody {
+    protocol_version: u8,
     conversations: Vec<PushConversation>,
     messages: Vec<PushMessage>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -177,7 +179,10 @@ struct AckedRow {
 /// POST response.
 #[derive(Debug, Deserialize)]
 struct PushResponse {
+    #[serde(rename = "protocolVersion")]
+    protocol_version: u8,
     applied: PushApplied,
+    conflicts: PushConflicts,
     // cursor is present in the response but unused client-side for push (pull uses its own cursor).
     #[allow(dead_code)]
     cursor: Option<String>,
@@ -189,6 +194,20 @@ struct PushApplied {
     messages: Vec<AckedRow>,
     #[serde(default)]
     artifacts: Vec<AckedRow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SyncConflict<T> {
+    id: String,
+    current: Option<T>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PushConflicts {
+    conversations: Vec<SyncConflict<ConversationDelta>>,
+    messages: Vec<SyncConflict<MessageDelta>>,
+    #[serde(default)]
+    artifacts: Vec<SyncConflict<ArtifactDelta>>,
 }
 
 /// Pulled conversation delta (snake_case, matching server SELECT columns).
@@ -225,10 +244,10 @@ struct MessageDelta {
 }
 
 /// Pulled artifact delta (snake_case, matching server SELECT columns).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct ArtifactDelta {
-    id: String,               // cloud_id (UUIDv7)
-    conversation_id: String,  // parent conversation cloud_id
+    id: String,              // cloud_id (UUIDv7)
+    conversation_id: String, // parent conversation cloud_id
     message_id: Option<String>,
     title: Option<String>,
     artifact_type: String,
@@ -342,22 +361,23 @@ fn to_z_datetime(s: &str) -> String {
     }
     // 2. Try chrono's rfc3339 parse (handles +00:00 offsets).
     if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-        return dt.with_timezone(&Utc).to_rfc3339_opts(SecondsFormat::Millis, true);
+        return dt
+            .with_timezone(&Utc)
+            .to_rfc3339_opts(SecondsFormat::Millis, true);
     }
     // 3. Try SQLite CURRENT_TIMESTAMP format: "YYYY-MM-DD HH:MM:SS".
     if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-        return dt
-            .and_utc()
-            .to_rfc3339_opts(SecondsFormat::Millis, true);
+        return dt.and_utc().to_rfc3339_opts(SecondsFormat::Millis, true);
     }
     // 4. Try "YYYY-MM-DD HH:MM:SS.SSS" (SQLite with fractional seconds).
     if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S%.f") {
-        return dt
-            .and_utc()
-            .to_rfc3339_opts(SecondsFormat::Millis, true);
+        return dt.and_utc().to_rfc3339_opts(SecondsFormat::Millis, true);
     }
     // Fallback: shouldn't happen in practice; use current time.
-    warn!(raw_ts = s, "to_z_datetime: unparseable timestamp — using now_z() as fallback");
+    warn!(
+        raw_ts = s,
+        "to_z_datetime: unparseable timestamp — using now_z() as fallback"
+    );
     now_z()
 }
 
@@ -406,6 +426,26 @@ pub fn mark_message_for_push(conn: &Connection, msg_id: i64) -> SqlResult<()> {
            )",
         params![cloud_id, now, msg_id],
     )?;
+
+    // Artifacts are created before the assistant message has a local id. Once
+    // the message is persisted and receives its managed-cloud UUID, publish
+    // that portable identity onto every already-linked cloud artifact and
+    // dirty the artifact again. This also repairs the race where an artifact
+    // was pushed before stream-end linked it to the assistant message.
+    conn.execute(
+        "UPDATE artifacts \
+         SET message_cloud_id = (SELECT m.cloud_id FROM messages m WHERE m.id = ?1), \
+             needs_push = 1 \
+         WHERE message_id = ?1 AND app_mode = 'cloud' \
+           AND deleted_at_utc IS NULL \
+           AND EXISTS ( \
+               SELECT 1 FROM messages m \
+               JOIN conversations c ON c.id = m.conversation_id \
+               WHERE m.id = ?1 AND m.cloud_id IS NOT NULL \
+                 AND c.app_mode = 'cloud' \
+           )",
+        params![msg_id],
+    )?;
     Ok(())
 }
 
@@ -427,6 +467,11 @@ pub fn mark_artifact_for_push(conn: &Connection, artifact_id: &str) -> SqlResult
                  SELECT c.cloud_id FROM conversations c \
                  WHERE c.id = CAST(artifacts.conversation_id AS INTEGER) \
              ), \
+             message_cloud_id = ( \
+                 SELECT m.cloud_id FROM messages m \
+                 WHERE m.id = artifacts.message_id \
+                   AND m.conversation_id = CAST(artifacts.conversation_id AS INTEGER) \
+             ), \
              needs_push = 1 \
          WHERE id = ?2 AND app_mode = 'cloud'",
         params![cloud_id, artifact_id],
@@ -442,13 +487,10 @@ pub fn mark_artifact_for_push(conn: &Connection, artifact_id: &str) -> SqlResult
 /// connection can be dropped before the HTTP await.
 /// Note: the `conversations` table has no `model` column (model is per-message
 /// in the desktop schema). The server schema has `model` on conversations; we
-/// send null and the server's LWW update will preserve whatever value it has.
-fn gather_push_conversations(
-    conn: &Connection,
-    user_id: &str,
-) -> SqlResult<Vec<PushConversation>> {
+/// omit fields the desktop does not own so another surface's metadata is preserved.
+fn gather_push_conversations(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushConversation>> {
     let mut stmt = conn.prepare(
-        "SELECT cloud_id, title, updated_at, created_at_utc, deleted_at_utc \
+        "SELECT cloud_id, title, server_version, deleted_at_utc \
          FROM conversations \
          WHERE needs_push = 1 AND app_mode = 'cloud' AND user_id = ?1 \
            AND cloud_id IS NOT NULL",
@@ -456,23 +498,16 @@ fn gather_push_conversations(
     let rows = stmt.query_map(params![user_id], |row| {
         let cloud_id: String = row.get(0)?;
         let title: String = row.get(1)?;
-        let updated_at_raw: String = row.get(2)?;
-        let created_at_utc: Option<String> = row.get(3)?;
-        let deleted_at_utc: Option<String> = row.get(4)?;
-        // Zod z.string().datetime() requires a literal Z suffix; normalize here so
-        // CURRENT_TIMESTAMP ("YYYY-MM-DD HH:MM:SS") and to_rfc3339 ("+00:00") both pass.
-        let updated_at = to_z_datetime(&updated_at_raw);
-        let created_at = created_at_utc.as_deref().map(to_z_datetime);
-        let deleted_at = deleted_at_utc.as_deref().map(to_z_datetime);
+        let server_version: Option<String> = row.get(2)?;
+        let deleted_at_utc: Option<String> = row.get(3)?;
         Ok(PushConversation {
             id: cloud_id,
             title,
-            model: None, // Desktop stores model per-message, not per-conversation
+            model: None,      // Desktop stores model per-message, not per-conversation
             project_id: None, // Desktop does not track project_id in SQLite yet
-            pinned: false,
-            created_at,
-            updated_at,
-            deleted_at,
+            pinned: None,
+            base_version: server_version.unwrap_or_else(|| "0".to_string()),
+            is_deleted: deleted_at_utc.is_some().then_some(true),
         })
     })?;
     rows.collect()
@@ -483,7 +518,7 @@ fn gather_push_conversations(
 fn gather_push_messages(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushMessage>> {
     let mut stmt = conn.prepare(
         "SELECT m.cloud_id, m.conversation_cloud_id, m.role, m.content, \
-                m.model, m.provider, m.created_at_utc, m.deleted_at_utc \
+                m.model, m.provider, m.deleted_at_utc \
          FROM messages m \
          JOIN conversations c ON c.id = m.conversation_id \
          WHERE m.needs_push = 1 \
@@ -500,11 +535,7 @@ fn gather_push_messages(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushM
         let content: String = row.get(3)?;
         let model: Option<String> = row.get(4)?;
         let provider: Option<String> = row.get(5)?;
-        let created_at_utc: Option<String> = row.get(6)?;
-        let deleted_at_utc: Option<String> = row.get(7)?;
-        // Normalize to Zod-safe Z-suffix format.
-        let created_at = created_at_utc.as_deref().map(to_z_datetime);
-        let deleted_at = deleted_at_utc.as_deref().map(to_z_datetime);
+        let deleted_at_utc: Option<String> = row.get(6)?;
         Ok(PushMessage {
             id: cloud_id,
             conversation_id: conv_cloud_id,
@@ -512,49 +543,75 @@ fn gather_push_messages(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushM
             content,
             model,
             provider,
-            created_at,
-            deleted_at,
+            is_deleted: deleted_at_utc.is_some().then_some(true),
         })
     })?;
     rows.collect()
 }
 
-/// Ack-clear: mark acked conversations as needs_push=0 and store server_version.
-/// All attempted conversations are cleared (LWW, dependency-free).
-fn ack_clear_conversations(
-    conn: &Connection,
-    acked: &[AckedRow],
-    attempted_ids: &[String],
-) {
-    // For acked rows, set server_version + clear needs_push.
+fn conversation_sync_content_matches(conn: &Connection, sent: &PushConversation) -> bool {
+    conn.query_row(
+        "SELECT title, deleted_at_utc FROM conversations WHERE cloud_id = ?1",
+        params![sent.id],
+        |row| {
+            let title: String = row.get(0)?;
+            let deleted_at: Option<String> = row.get(1)?;
+            Ok(title == sent.title && deleted_at.is_some() == sent.is_deleted.unwrap_or(false))
+        },
+    )
+    .unwrap_or(false)
+}
+
+/// Store every acknowledged revision, but clear only the exact snapshot sent.
+fn ack_clear_conversations(conn: &Connection, acked: &[AckedRow], sent: &[PushConversation]) {
     for row in acked {
+        let unchanged = sent
+            .iter()
+            .find(|item| item.id == row.id)
+            .is_some_and(|item| conversation_sync_content_matches(conn, item));
         let _ = conn.execute(
-            "UPDATE conversations SET needs_push = 0, server_version = ?1 \
-             WHERE cloud_id = ?2",
-            params![row.server_version, row.id],
+            "UPDATE conversations SET server_version = ?1, \
+             needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END \
+             WHERE cloud_id = ?3",
+            params![row.server_version, unchanged, row.id],
         );
-    }
-    // For attempted-but-not-acked conversations (LWW: clear anyway).
-    let acked_ids: std::collections::HashSet<&str> =
-        acked.iter().map(|r| r.id.as_str()).collect();
-    for id in attempted_ids {
-        if !acked_ids.contains(id.as_str()) {
-            let _ = conn.execute(
-                "UPDATE conversations SET needs_push = 0 WHERE cloud_id = ?1",
-                params![id],
-            );
-        }
     }
 }
 
-/// Ack-clear: mark acked messages as needs_push=0. Unacked messages STAY
-/// needs_push=1 (their parent conversation may not yet be on the server).
-fn ack_clear_messages(conn: &Connection, acked: &[AckedRow]) {
+fn message_sync_content_matches(conn: &Connection, sent: &PushMessage) -> bool {
+    conn.query_row(
+        "SELECT conversation_cloud_id, role, content, model, provider, deleted_at_utc \
+         FROM messages WHERE cloud_id = ?1",
+        params![sent.id],
+        |row| {
+            let deleted_at: Option<String> = row.get(5)?;
+            Ok(
+                row.get::<_, Option<String>>(0)?.as_deref() == Some(sent.conversation_id.as_str())
+                    && row.get::<_, String>(1)? == sent.role
+                    && row.get::<_, String>(2)? == sent.content
+                    && row.get::<_, Option<String>>(3)? == sent.model
+                    && row.get::<_, Option<String>>(4)? == sent.provider
+                    && deleted_at.is_some() == sent.is_deleted.unwrap_or(false),
+            )
+        },
+    )
+    .unwrap_or(false)
+}
+
+/// Store every acknowledged revision, but clear only the exact message snapshot
+/// sent. Messages are append-only; the only supported in-flight mutation is a
+/// tombstone, which must remain dirty if it was created while the request ran.
+fn ack_clear_messages(conn: &Connection, acked: &[AckedRow], sent: &[PushMessage]) {
     for row in acked {
+        let unchanged = sent
+            .iter()
+            .find(|item| item.id == row.id)
+            .is_some_and(|item| message_sync_content_matches(conn, item));
         let _ = conn.execute(
-            "UPDATE messages SET needs_push = 0, server_version = ?1 \
-             WHERE cloud_id = ?2",
-            params![row.server_version, row.id],
+            "UPDATE messages SET server_version = ?1, \
+             needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END \
+             WHERE cloud_id = ?3",
+            params![row.server_version, unchanged, row.id],
         );
     }
 }
@@ -567,9 +624,10 @@ fn ack_clear_messages(conn: &Connection, acked: &[AckedRow]) {
 /// to produce a Vec<String> for the wire.
 fn gather_push_artifacts(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushArtifact>> {
     let mut stmt = conn.prepare(
-        "SELECT a.cloud_id, a.conversation_cloud_id, a.artifact_type, a.content, \
+        "SELECT a.cloud_id, a.conversation_cloud_id, a.message_cloud_id, \
+                a.artifact_type, a.content, \
                 a.title, a.language, a.version, a.is_pinned, a.tags, \
-                a.created_at, a.updated_at, a.deleted_at_utc \
+                a.server_version, a.deleted_at_utc \
          FROM artifacts a \
          JOIN conversations c ON c.id = CAST(a.conversation_id AS INTEGER) \
          WHERE a.needs_push = 1 AND a.app_mode = 'cloud' AND c.user_id = ?1 \
@@ -579,20 +637,18 @@ fn gather_push_artifacts(conn: &Connection, user_id: &str) -> SqlResult<Vec<Push
     let rows = stmt.query_map(params![user_id], |row| {
         let cloud_id: String = row.get(0)?;
         let conv_cloud_id: String = row.get(1)?;
-        let artifact_type: String = row.get(2)?;
-        let content: String = row.get(3)?;
-        let title: Option<String> = row.get(4)?;
-        let language: Option<String> = row.get(5)?;
-        let current_version: Option<i64> = row.get(6)?;
-        let is_pinned: Option<i64> = row.get(7)?;
-        let tags_json: Option<String> = row.get(8)?;
-        let created_at_raw: Option<String> = row.get(9)?;
-        let updated_at_raw: String = row.get(10)?;
+        let message_id: Option<String> = row
+            .get::<_, Option<String>>(2)?
+            .and_then(|value| normalize_cloud_uuid(&value));
+        let artifact_type: String = row.get(3)?;
+        let content: String = row.get(4)?;
+        let title: Option<String> = row.get(5)?;
+        let language: Option<String> = row.get(6)?;
+        let current_version: Option<i64> = row.get(7)?;
+        let is_pinned: Option<i64> = row.get(8)?;
+        let tags_json: Option<String> = row.get(9)?;
+        let server_version: Option<String> = row.get(10)?;
         let deleted_at_utc: Option<String> = row.get(11)?;
-
-        let created_at = created_at_raw.as_deref().map(to_z_datetime);
-        let updated_at = to_z_datetime(&updated_at_raw);
-        let deleted_at = deleted_at_utc.as_deref().map(to_z_datetime);
         let pinned = is_pinned.map(|v| v != 0);
         // Deserialize tags JSON array; fall back to empty vec on parse error.
         let tags: Vec<String> = tags_json
@@ -604,30 +660,271 @@ fn gather_push_artifacts(conn: &Connection, user_id: &str) -> SqlResult<Vec<Push
         Ok(PushArtifact {
             id: cloud_id,
             conversation_id: conv_cloud_id,
+            message_id,
             artifact_type,
             content,
-            updated_at,
+            base_version: server_version.unwrap_or_else(|| "0".to_string()),
             title,
             language,
             current_version,
             pinned,
             tags: tags_opt,
-            created_at,
-            deleted_at,
+            is_deleted: deleted_at_utc.is_some().then_some(true),
         })
     })?;
     rows.collect()
 }
 
-/// Ack-clear: mark acked artifacts as needs_push=0 and store server_version.
-/// Unacked artifacts STAY needs_push=1 (parent conversation may not be on server yet).
-fn ack_clear_artifacts(conn: &Connection, acked: &[AckedRow]) {
+fn artifact_sync_content_matches(conn: &Connection, sent: &PushArtifact) -> bool {
+    conn.query_row(
+        "SELECT conversation_cloud_id, message_cloud_id, artifact_type, content, title, language, \
+                version, is_pinned, tags, deleted_at_utc FROM artifacts WHERE cloud_id = ?1",
+        params![sent.id],
+        |row| {
+            let tags_json: Option<String> = row.get(8)?;
+            let tags: Vec<String> = tags_json
+                .as_deref()
+                .and_then(|value| serde_json::from_str(value).ok())
+                .unwrap_or_default();
+            let deleted_at: Option<String> = row.get(9)?;
+            let message_cloud_id = row
+                .get::<_, Option<String>>(1)?
+                .and_then(|value| normalize_cloud_uuid(&value));
+            Ok(
+                row.get::<_, Option<String>>(0)?.as_deref() == Some(sent.conversation_id.as_str())
+                    && message_cloud_id == sent.message_id
+                    && row.get::<_, String>(2)? == sent.artifact_type
+                    && row.get::<_, String>(3)? == sent.content
+                    && row.get::<_, Option<String>>(4)? == sent.title
+                    && row.get::<_, Option<String>>(5)? == sent.language
+                    && row.get::<_, Option<i64>>(6)? == sent.current_version
+                    && row.get::<_, Option<i64>>(7)?.map(|value| value != 0) == sent.pinned
+                    && tags == sent.tags.clone().unwrap_or_default()
+                    && deleted_at.is_some() == sent.is_deleted.unwrap_or(false),
+            )
+        },
+    )
+    .unwrap_or(false)
+}
+
+fn normalize_cloud_uuid(value: &str) -> Option<String> {
+    Uuid::parse_str(value).ok().map(|id| id.to_string())
+}
+
+fn resolve_local_artifact_message_id(
+    conn: &Connection,
+    user_id: &str,
+    conversation_cloud_id: &str,
+    message_cloud_id: &str,
+) -> Option<i64> {
+    conn.query_row(
+        "SELECT m.id FROM messages m \
+         JOIN conversations c ON c.id = m.conversation_id \
+         WHERE m.cloud_id = ?1 \
+           AND m.conversation_cloud_id = ?2 \
+           AND c.cloud_id = ?2 \
+           AND m.user_id = ?3 AND c.user_id = ?3 \
+           AND m.deleted_at_utc IS NULL \
+           AND c.deleted_at_utc IS NULL \
+         LIMIT 1",
+        params![message_cloud_id, conversation_cloud_id, user_id],
+        |row| row.get(0),
+    )
+    .ok()
+}
+
+/// Resolve portable artifact message UUIDs to this device's local INTEGER ids.
+///
+/// The ownership predicates are intentionally repeated in SQL: a cloud UUID is
+/// never sufficient by itself. The message and artifact must share the same
+/// cloud conversation and authenticated user. Tombstones stay detached.
+fn reconcile_artifact_message_links(conn: &Connection, user_id: &str) -> usize {
+    conn.execute(
+        "UPDATE artifacts AS a \
+         SET message_id = ( \
+             SELECT m.id FROM messages m \
+             JOIN conversations c ON c.id = m.conversation_id \
+             WHERE m.cloud_id = a.message_cloud_id \
+               AND m.conversation_cloud_id = a.conversation_cloud_id \
+               AND c.cloud_id = a.conversation_cloud_id \
+               AND m.user_id = ?1 AND c.user_id = ?1 \
+               AND m.deleted_at_utc IS NULL \
+               AND c.deleted_at_utc IS NULL \
+             LIMIT 1 \
+         ) \
+         WHERE a.app_mode = 'cloud' \
+           AND a.deleted_at_utc IS NULL \
+           AND a.message_id IS NULL \
+           AND a.message_cloud_id IS NOT NULL \
+           AND EXISTS ( \
+             SELECT 1 FROM messages m \
+             JOIN conversations c ON c.id = m.conversation_id \
+             WHERE m.cloud_id = a.message_cloud_id \
+               AND m.conversation_cloud_id = a.conversation_cloud_id \
+               AND c.cloud_id = a.conversation_cloud_id \
+               AND m.user_id = ?1 AND c.user_id = ?1 \
+               AND m.deleted_at_utc IS NULL \
+               AND c.deleted_at_utc IS NULL \
+           )",
+        params![user_id],
+    )
+    .unwrap_or(0)
+}
+
+/// Store every acknowledged revision, but clear only the exact snapshot sent.
+fn ack_clear_artifacts(conn: &Connection, acked: &[AckedRow], sent: &[PushArtifact]) {
     for row in acked {
+        let unchanged = sent
+            .iter()
+            .find(|item| item.id == row.id)
+            .is_some_and(|item| artifact_sync_content_matches(conn, item));
         let _ = conn.execute(
-            "UPDATE artifacts SET needs_push = 0, server_version = ?1 \
-             WHERE cloud_id = ?2",
-            params![row.server_version, row.id],
+            "UPDATE artifacts SET server_version = ?1, \
+             needs_push = CASE WHEN ?2 THEN 0 ELSE needs_push END \
+             WHERE cloud_id = ?3",
+            params![row.server_version, unchanged, row.id],
         );
+    }
+}
+
+fn resolve_conversation_conflicts(
+    conn: &Connection,
+    user_id: &str,
+    conflicts: &[SyncConflict<ConversationDelta>],
+    sent: &[PushConversation],
+) {
+    for conflict in conflicts {
+        let sent_item = sent.iter().find(|item| item.id == conflict.id);
+        match &conflict.current {
+            None => {
+                let _ = conn.execute(
+                    "UPDATE conversations SET deleted_at_utc = COALESCE(deleted_at_utc, ?1), \
+                     needs_push = 0 WHERE cloud_id = ?2",
+                    params![now_z(), conflict.id],
+                );
+            }
+            Some(current) if current.deleted_at.is_some() => {
+                apply_conversation_deltas(conn, user_id, std::slice::from_ref(current));
+            }
+            Some(current) => {
+                let preserve_local = sent_item.is_some_and(|item| {
+                    item.base_version == "0" || !conversation_sync_content_matches(conn, item)
+                });
+                if preserve_local {
+                    let _ = conn.execute(
+                        "UPDATE conversations SET server_version = ?1 WHERE cloud_id = ?2",
+                        params![current.server_version, conflict.id],
+                    );
+                } else {
+                    let _ = conn.execute(
+                        "UPDATE conversations SET needs_push = 0 WHERE cloud_id = ?1",
+                        params![conflict.id],
+                    );
+                    apply_conversation_deltas(conn, user_id, std::slice::from_ref(current));
+                }
+            }
+        }
+    }
+}
+
+fn resolve_message_conflicts(
+    conn: &Connection,
+    user_id: &str,
+    conflicts: &[SyncConflict<MessageDelta>],
+) {
+    for conflict in conflicts {
+        if let Some(current) = &conflict.current {
+            if current.deleted_at.is_some() {
+                apply_message_deltas(conn, user_id, std::slice::from_ref(current));
+                let _ = conn.execute(
+                    "UPDATE messages SET needs_push = 0, server_version = ?1 WHERE cloud_id = ?2",
+                    params![current.server_version, conflict.id],
+                );
+                continue;
+            }
+
+            // A live conflict means this UUID already identifies a different immutable
+            // message. Identity is the concurrency primitive, so the existing server
+            // row is the deterministic winner on every client.
+            let local_conversation_id: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM conversations WHERE cloud_id = ?1 AND user_id = ?2",
+                    params![current.conversation_id, user_id],
+                    |row| row.get(0),
+                )
+                .ok();
+            let role = current.role.as_deref().unwrap_or("user");
+            let content = current.content.as_deref().unwrap_or_default();
+            if let Some(local_conversation_id) = local_conversation_id {
+                let changed = conn
+                    .execute(
+                        "UPDATE messages SET conversation_id = ?1, conversation_cloud_id = ?2, \
+                         role = ?3, content = ?4, model = ?5, provider = ?6, \
+                         created_at = COALESCE(?7, created_at), \
+                         created_at_utc = COALESCE(?7, created_at_utc), \
+                         deleted_at_utc = NULL, server_version = ?8, needs_push = 0 \
+                         WHERE cloud_id = ?9 AND user_id = ?10",
+                        params![
+                            local_conversation_id,
+                            current.conversation_id,
+                            role,
+                            content,
+                            current.model.as_deref(),
+                            current.provider.as_deref(),
+                            current.created_at.as_deref(),
+                            current.server_version.as_str(),
+                            conflict.id.as_str(),
+                            user_id,
+                        ],
+                    )
+                    .unwrap_or(0);
+                if changed == 0 {
+                    apply_message_deltas(conn, user_id, std::slice::from_ref(current));
+                }
+            } else {
+                buffer_pending_message(conn, user_id, current);
+            }
+        }
+    }
+}
+
+fn resolve_artifact_conflicts(
+    conn: &Connection,
+    user_id: &str,
+    conflicts: &[SyncConflict<ArtifactDelta>],
+    sent: &[PushArtifact],
+) {
+    for conflict in conflicts {
+        let sent_item = sent.iter().find(|item| item.id == conflict.id);
+        match &conflict.current {
+            None => {
+                let _ = conn.execute(
+                    "UPDATE artifacts SET deleted_at_utc = COALESCE(deleted_at_utc, ?1), \
+                     needs_push = 0 WHERE cloud_id = ?2",
+                    params![now_z(), conflict.id],
+                );
+            }
+            Some(current) if current.deleted_at.is_some() => {
+                apply_artifact_deltas(conn, user_id, std::slice::from_ref(current));
+            }
+            Some(current) => {
+                let preserve_local = sent_item.is_some_and(|item| {
+                    item.base_version == "0" || !artifact_sync_content_matches(conn, item)
+                });
+                if preserve_local {
+                    let _ = conn.execute(
+                        "UPDATE artifacts SET server_version = ?1 WHERE cloud_id = ?2",
+                        params![current.server_version, conflict.id],
+                    );
+                } else {
+                    let _ = conn.execute(
+                        "UPDATE artifacts SET needs_push = 0 WHERE cloud_id = ?1",
+                        params![conflict.id],
+                    );
+                    apply_artifact_deltas(conn, user_id, std::slice::from_ref(current));
+                }
+            }
+        }
     }
 }
 
@@ -635,26 +932,257 @@ fn ack_clear_artifacts(conn: &Connection, acked: &[AckedRow]) {
 // DB-only pull helpers.
 // ---------------------------------------------------------------------------
 
+fn normalize_server_version(value: &str) -> Option<String> {
+    value
+        .parse::<i64>()
+        .ok()
+        .filter(|version| *version >= 0)
+        .map(|version| version.to_string())
+}
+
+/// Retain a parentless artifact delta until its managed-cloud conversation
+/// lands. The journal is keyed by artifact cloud UUID and accepts only a
+/// strictly newer server revision, so duplicate/reordered pages are idempotent.
+fn buffer_pending_artifact(conn: &Connection, user_id: &str, d: &ArtifactDelta) -> bool {
+    let Some(cloud_id) = normalize_cloud_uuid(&d.id) else {
+        debug!(cloud_id = %d.id, "artifact_sync: refusing malformed pending artifact id");
+        return false;
+    };
+    let Some(conversation_cloud_id) = normalize_cloud_uuid(&d.conversation_id) else {
+        debug!(cloud_id = %d.id, conversation_cloud_id = %d.conversation_id, "artifact_sync: refusing malformed pending conversation id");
+        return false;
+    };
+    let Some(server_version) = normalize_server_version(&d.server_version) else {
+        debug!(cloud_id = %d.id, server_version = %d.server_version, "artifact_sync: refusing malformed pending server version");
+        return false;
+    };
+    let message_cloud_id = d.message_id.as_deref().and_then(normalize_cloud_uuid);
+    let tags = serde_json::to_string(&d.tags).unwrap_or_else(|_| "[]".to_string());
+    let changed = conn
+        .execute(
+            "INSERT INTO cloud_sync_pending_artifacts ( \
+                cloud_id, conversation_cloud_id, user_id, message_cloud_id, title, \
+                artifact_type, language, content, current_version, pinned, tags, \
+                created_at, updated_at, deleted_at, server_version, buffered_at \
+             ) VALUES ( \
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16 \
+             ) \
+             ON CONFLICT(user_id, cloud_id) DO UPDATE SET \
+                conversation_cloud_id = excluded.conversation_cloud_id, \
+                message_cloud_id = excluded.message_cloud_id, \
+                title = excluded.title, \
+                artifact_type = excluded.artifact_type, \
+                language = excluded.language, \
+                content = excluded.content, \
+                current_version = excluded.current_version, \
+                pinned = excluded.pinned, \
+                tags = excluded.tags, \
+                created_at = excluded.created_at, \
+                updated_at = excluded.updated_at, \
+                deleted_at = excluded.deleted_at, \
+                server_version = excluded.server_version, \
+                buffered_at = excluded.buffered_at \
+             WHERE length(excluded.server_version) > length(cloud_sync_pending_artifacts.server_version) \
+                OR ( \
+                    length(excluded.server_version) = length(cloud_sync_pending_artifacts.server_version) \
+                    AND excluded.server_version > cloud_sync_pending_artifacts.server_version \
+                )",
+            params![
+                cloud_id,
+                conversation_cloud_id,
+                user_id,
+                message_cloud_id,
+                d.title.as_deref(),
+                d.artifact_type,
+                d.language.as_deref(),
+                d.content,
+                d.current_version,
+                d.pinned.map(|value| if value { 1i64 } else { 0i64 }),
+                tags,
+                d.created_at.as_deref(),
+                d.updated_at.as_deref(),
+                d.deleted_at.as_deref(),
+                server_version,
+                now_z(),
+            ],
+        )
+        .unwrap_or_else(|error| {
+            warn!(cloud_id = %d.id, error = %error, "artifact_sync: failed to buffer parentless artifact");
+            0
+        });
+
+    prune_pending_artifacts(
+        conn,
+        user_id,
+        MAX_PENDING_ARTIFACTS_PER_USER,
+        MAX_PENDING_ARTIFACT_CONTENT_BYTES_PER_USER,
+    );
+    changed > 0
+}
+
+/// Keep the newest prefix of the pending journal within both row and content
+/// byte budgets. Once either cap is crossed, all older revisions are pruned so
+/// a small old row cannot displace a newer one after a large row overflow.
+fn prune_pending_artifacts(
+    conn: &Connection,
+    user_id: &str,
+    max_rows: usize,
+    max_content_bytes: usize,
+) -> usize {
+    let mut rows = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        "SELECT cloud_id, length(CAST(content AS BLOB)) \
+         FROM cloud_sync_pending_artifacts \
+         WHERE user_id = ?1 \
+         ORDER BY length(server_version) DESC, server_version DESC, cloud_id DESC",
+    ) {
+        if let Ok(iter) = stmt.query_map(params![user_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<i64>>(1)?.unwrap_or(0).max(0) as usize,
+            ))
+        }) {
+            rows.extend(iter.flatten());
+        }
+    }
+
+    let mut kept_rows = 0usize;
+    let mut kept_bytes = 0usize;
+    let mut overflowed = false;
+    let mut pruned = 0usize;
+    for (cloud_id, content_bytes) in rows {
+        if !overflowed
+            && kept_rows < max_rows
+            && kept_bytes.saturating_add(content_bytes) <= max_content_bytes
+        {
+            kept_rows += 1;
+            kept_bytes = kept_bytes.saturating_add(content_bytes);
+            continue;
+        }
+        overflowed = true;
+        pruned += conn
+            .execute(
+                "DELETE FROM cloud_sync_pending_artifacts \
+                 WHERE cloud_id = ?1 AND user_id = ?2",
+                params![cloud_id, user_id],
+            )
+            .unwrap_or(0);
+    }
+    if pruned > 0 {
+        warn!(
+            user_id,
+            pruned,
+            max_rows,
+            max_content_bytes,
+            "artifact_sync: pruned pending artifact journal to bounded capacity"
+        );
+    }
+    pruned
+}
+
+#[derive(Debug)]
+struct PendingArtifact {
+    cloud_id: String,
+    conversation_cloud_id: String,
+    message_cloud_id: Option<String>,
+    title: Option<String>,
+    artifact_type: String,
+    language: Option<String>,
+    content: String,
+    current_version: Option<i64>,
+    pinned: Option<bool>,
+    tags: Vec<String>,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+    deleted_at: Option<String>,
+    server_version: String,
+}
+
+/// Replay every pending artifact whose parent conversation now exists for the
+/// same authenticated user. The row is removed only after the delta has been
+/// handed to the normal artifact apply path.
+fn drain_pending_artifacts(conn: &Connection, user_id: &str) -> usize {
+    let mut pending = Vec::new();
+    if let Ok(mut stmt) = conn.prepare(
+        "SELECT p.cloud_id, p.conversation_cloud_id, p.message_cloud_id, p.title, \
+                p.artifact_type, p.language, p.content, p.current_version, p.pinned, \
+                p.tags, p.created_at, p.updated_at, p.deleted_at, p.server_version \
+         FROM cloud_sync_pending_artifacts p \
+         JOIN conversations c \
+           ON c.cloud_id = p.conversation_cloud_id AND c.user_id = p.user_id \
+         WHERE p.user_id = ?1 AND c.user_id = ?1 \
+           AND c.app_mode = 'cloud' AND c.deleted_at_utc IS NULL \
+         ORDER BY length(p.server_version), p.server_version, p.cloud_id",
+    ) {
+        if let Ok(iter) = stmt.query_map(params![user_id], |row| {
+            let tags_json: String = row.get(9)?;
+            let tags = serde_json::from_str(&tags_json).unwrap_or_default();
+            Ok(PendingArtifact {
+                cloud_id: row.get(0)?,
+                conversation_cloud_id: row.get(1)?,
+                message_cloud_id: row.get(2)?,
+                title: row.get(3)?,
+                artifact_type: row.get(4)?,
+                language: row.get(5)?,
+                content: row.get(6)?,
+                current_version: row.get(7)?,
+                pinned: row.get::<_, Option<i64>>(8)?.map(|value| value != 0),
+                tags,
+                created_at: row.get(10)?,
+                updated_at: row.get(11)?,
+                deleted_at: row.get(12)?,
+                server_version: row.get(13)?,
+            })
+        }) {
+            pending.extend(iter.flatten());
+        }
+    }
+
+    let mut applied = 0usize;
+    for p in pending {
+        let delta = ArtifactDelta {
+            id: p.cloud_id.clone(),
+            conversation_id: p.conversation_cloud_id,
+            message_id: p.message_cloud_id,
+            title: p.title,
+            artifact_type: p.artifact_type,
+            language: p.language,
+            content: p.content,
+            current_version: p.current_version,
+            pinned: p.pinned,
+            tags: p.tags,
+            created_at: p.created_at,
+            updated_at: p.updated_at,
+            deleted_at: p.deleted_at,
+            server_version: p.server_version,
+        };
+        applied += apply_artifact_deltas(conn, user_id, std::slice::from_ref(&delta));
+        let _ = conn.execute(
+            "DELETE FROM cloud_sync_pending_artifacts \
+             WHERE cloud_id = ?1 AND user_id = ?2",
+            params![p.cloud_id, user_id],
+        );
+    }
+    applied
+}
+
 /// Apply pulled artifact deltas into the local SQLite DB.
 ///
 /// Dedup invariant: always SELECT id WHERE cloud_id=? before INSERT.
 /// FK-mapping: resolves cloud conversation_id → local INTEGER conversations.id.
-/// If the parent conversation is not present locally, the artifact is skipped
-/// (not buffered — see module-level known-gap note). The caller (apply_pull_page)
-/// applies conversations first, so within-page orphans are usually resolved; only
-/// cross-page orphans are lost until the next sync cycle.
-fn apply_artifact_deltas(
-    conn: &Connection,
-    user_id: &str,
-    deltas: &[ArtifactDelta],
-) -> usize {
+/// If the parent conversation is not present locally, the artifact is journaled
+/// durably and replayed after a later conversation page. The queue is user-scoped,
+/// version-collapsed, and capacity-bounded.
+fn apply_artifact_deltas(conn: &Connection, user_id: &str, deltas: &[ArtifactDelta]) -> usize {
     let mut applied = 0usize;
     for d in deltas {
         // FK-map: resolve cloud conversation_id → local INTEGER id.
         let local_conv_id: Option<i64> = conn
             .query_row(
-                "SELECT id FROM conversations WHERE cloud_id = ?1",
-                params![d.conversation_id],
+                "SELECT id FROM conversations \
+                 WHERE cloud_id = ?1 AND user_id = ?2 AND app_mode = 'cloud' \
+                   AND deleted_at_utc IS NULL",
+                params![d.conversation_id, user_id],
                 |row| row.get(0),
             )
             .ok();
@@ -662,38 +1190,53 @@ fn apply_artifact_deltas(
         let local_conv_id = match local_conv_id {
             Some(id) => id,
             None => {
-                // Parent conversation not present locally — skip (documented gap).
-                debug!(
-                    cloud_id = %d.id,
-                    conv_cloud_id = %d.conversation_id,
-                    "artifact_sync: parent conversation not found — skipping artifact (cross-page orphan)"
-                );
+                let buffered = buffer_pending_artifact(conn, user_id, d);
+                debug!(cloud_id = %d.id, conv_cloud_id = %d.conversation_id, buffered, "artifact_sync: parent conversation not found — journaled for replay");
                 continue;
             }
         };
 
+        // The wire `message_id` is a managed-cloud UUID. Never copy it into the
+        // device-local INTEGER `message_id` column and never retain malformed
+        // values from an unvalidated/native response.
+        let message_cloud_id = d.message_id.as_deref().and_then(normalize_cloud_uuid);
+        let local_message_id = message_cloud_id.as_deref().and_then(|cloud_id| {
+            resolve_local_artifact_message_id(conn, user_id, &d.conversation_id, cloud_id)
+        });
+
         // Dedup: find existing local row by cloud_id.
-        let existing_id: Option<String> = conn
+        let existing: Option<(String, i64)> = conn
             .query_row(
-                "SELECT id FROM artifacts WHERE cloud_id = ?1",
-                params![d.id],
-                |row| row.get(0),
+                "SELECT a.id, a.needs_push FROM artifacts a \
+                 JOIN conversations c ON c.id = CAST(a.conversation_id AS INTEGER) \
+                 WHERE a.cloud_id = ?1 AND c.user_id = ?2 \
+                   AND a.conversation_cloud_id = ?3",
+                params![d.id, user_id, d.conversation_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .ok();
 
         if let Some(deleted_at) = &d.deleted_at {
             // Tombstone: soft-delete only.
-            if let Some(ref local_id) = existing_id {
+            if let Some((ref local_id, _)) = existing {
                 let _ = conn.execute(
-                    "UPDATE artifacts SET deleted_at_utc = ?1, server_version = ?2 \
+                    "UPDATE artifacts SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
                 );
                 applied += 1;
             }
             // If not present locally, delete already propagated — no-op.
-        } else if let Some(ref local_id) = existing_id {
-            // LWW update: update mutable metadata fields (content, title, etc.).
+        } else if let Some((ref local_id, needs_push)) = existing {
+            if needs_push != 0 {
+                let _ = conn.execute(
+                    "UPDATE artifacts SET server_version = ?1 WHERE id = ?2",
+                    params![d.server_version, local_id],
+                );
+                applied += 1;
+                continue;
+            }
+            // Clean local row: apply the server winner.
             let tags_json = serde_json::to_string(&d.tags).unwrap_or_else(|_| "[]".to_string());
             let _ = conn.execute(
                 "UPDATE artifacts \
@@ -705,8 +1248,10 @@ fn apply_artifact_deltas(
                      is_pinned = COALESCE(?6, is_pinned), \
                      tags = ?7, \
                      server_version = ?8, \
+                     message_id = ?9, \
+                     message_cloud_id = ?10, \
                      needs_push = 0 \
-                 WHERE id = ?9",
+                 WHERE id = ?11",
                 params![
                     d.artifact_type,
                     d.content.as_str(),
@@ -716,6 +1261,8 @@ fn apply_artifact_deltas(
                     d.pinned.map(|p| if p { 1i64 } else { 0i64 }),
                     tags_json,
                     d.server_version,
+                    local_message_id,
+                    message_cloud_id,
                     local_id,
                 ],
             );
@@ -741,16 +1288,19 @@ fn apply_artifact_deltas(
 
             let r = conn.execute(
                 "INSERT INTO artifacts \
-                 (id, cloud_id, conversation_id, artifact_type, title, content, language, \
+                 (id, cloud_id, conversation_id, message_id, message_cloud_id, \
+                  artifact_type, title, content, language, \
                   version, is_pinned, tags, status, created_at, updated_at, \
                   conversation_cloud_id, server_version, needs_push, app_mode) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'complete', \
-                         ?11, ?12, ?13, ?14, 0, 'cloud')",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'complete', \
+                         ?13, ?14, ?15, ?16, 0, 'cloud')",
                 params![
                     // id = cloud_id (TEXT PK for pulled rows)
                     d.id,
                     d.id,
                     conv_id_str,
+                    local_message_id,
+                    message_cloud_id,
                     d.artifact_type,
                     d.title.as_deref().unwrap_or("Untitled"),
                     d.content,
@@ -767,10 +1317,6 @@ fn apply_artifact_deltas(
             match r {
                 Ok(_) => {
                     applied += 1;
-                    // Pulled artifact: if it has a message_id, note the gap.
-                    if d.message_id.is_some() {
-                        debug!(cloud_id = %d.id, "artifact_sync: pulled artifact has message_id (desktop has no message_id column — field ignored)");
-                    }
                 }
                 Err(e) => {
                     debug!(cloud_id = %d.id, error = %e, "artifact_sync: skipping duplicate pulled artifact");
@@ -785,11 +1331,7 @@ fn apply_artifact_deltas(
 }
 
 /// Apply pulled artifact deltas into the local SQLite DB.
-fn apply_artifact_deltas_in_page(
-    conn: &Connection,
-    user_id: &str,
-    page: &PullResponse,
-) -> usize {
+fn apply_artifact_deltas_in_page(conn: &Connection, user_id: &str, page: &PullResponse) -> usize {
     apply_artifact_deltas(conn, user_id, &page.artifacts)
 }
 
@@ -803,19 +1345,19 @@ fn apply_conversation_deltas(
     let mut applied = 0usize;
     for d in deltas {
         // Dedup: find existing local row.
-        let existing_id: Option<i64> = conn
+        let existing: Option<(i64, i64)> = conn
             .query_row(
-                "SELECT id FROM conversations WHERE cloud_id = ?1",
+                "SELECT id, needs_push FROM conversations WHERE cloud_id = ?1",
                 params![d.id],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .ok();
 
         if let Some(deleted_at) = &d.deleted_at {
             // Tombstone: soft-delete; never hard-delete (FK CASCADE would orphan children).
-            if let Some(local_id) = existing_id {
+            if let Some((local_id, _)) = existing {
                 let _ = conn.execute(
-                    "UPDATE conversations SET deleted_at_utc = ?1, server_version = ?2 \
+                    "UPDATE conversations SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
                 );
@@ -830,8 +1372,24 @@ fn apply_conversation_deltas(
                  WHERE conversation_cloud_id = ?1 AND user_id = ?2",
                 params![d.id, user_id],
             );
-        } else if let Some(local_id) = existing_id {
-            // Update metadata (LWW). Note: desktop conversations table has no `model`
+            // A tombstoned parent can never become a valid owner for buffered
+            // artifacts. Drop its journal rows so they cannot consume bounded
+            // capacity forever or attach if a stale parent is later replayed.
+            let _ = conn.execute(
+                "DELETE FROM cloud_sync_pending_artifacts \
+                 WHERE conversation_cloud_id = ?1 AND user_id = ?2",
+                params![d.id, user_id],
+            );
+        } else if let Some((local_id, needs_push)) = existing {
+            if needs_push != 0 {
+                let _ = conn.execute(
+                    "UPDATE conversations SET server_version = ?1 WHERE id = ?2",
+                    params![d.server_version, local_id],
+                );
+                applied += 1;
+                continue;
+            }
+            // Clean local row: apply the server winner. Note: desktop conversations table has no `model`
             // column (model is per-message); only title/updated_at/server_version are updated.
             let _ = conn.execute(
                 "UPDATE conversations \
@@ -884,11 +1442,7 @@ fn apply_conversation_deltas(
 
 /// Apply pulled message deltas. FK-maps the cloud conversation_id to the local
 /// INTEGER conversation_id. Orphans (unknown parent) are skipped/buffered.
-fn apply_message_deltas(
-    conn: &Connection,
-    user_id: &str,
-    deltas: &[MessageDelta],
-) -> usize {
+fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta]) -> usize {
     let mut applied = 0usize;
     for d in deltas {
         // FK-map: resolve cloud conversation_id → local INTEGER id.
@@ -928,6 +1482,14 @@ fn apply_message_deltas(
                     "UPDATE messages SET deleted_at_utc = ?1, server_version = ?2 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
+                );
+                // Keep the portable UUID for sync fidelity, but detach the
+                // device-local owner so a tombstoned message cannot render or
+                // regain artifacts on conversation reload.
+                let _ = conn.execute(
+                    "UPDATE artifacts SET message_id = NULL \
+                     WHERE message_id = ?1 AND app_mode = 'cloud'",
+                    params![local_id],
                 );
                 applied += 1;
             }
@@ -1124,19 +1686,24 @@ fn select_next_cursor(current: &str, resp_cursor: &Option<String>) -> String {
 
 /// Apply one pulled page in the load-bearing order:
 /// 1. Conversations FIRST (so message/artifact FK-mapping can resolve parents).
-/// 2. Drain buffered messages whose parent just landed.
+/// 2. Drain buffered messages and artifacts whose parent just landed.
 /// 3. Messages for this page (orphans buffered, never dropped).
-/// 4. Artifacts for this page (conversations applied first resolves within-page
-///    orphans; cross-page artifact orphans are skipped — documented gap).
+/// 4. Artifacts for this page (orphans buffered, never dropped).
+/// 5. Reconcile portable artifact message UUIDs after all message writes.
 ///
 /// Returns (conversations_applied, messages_applied, artifacts_applied).
 /// Extracted so the ordering invariant is testable without HTTP.
 fn apply_pull_page(conn: &Connection, user_id: &str, page: &PullResponse) -> (usize, usize, usize) {
     let convs = apply_conversation_deltas(conn, user_id, &page.conversations);
     let drained = drain_pending_messages(conn, user_id);
+    let drained_artifacts = drain_pending_artifacts(conn, user_id);
     let msgs = apply_message_deltas(conn, user_id, &page.messages);
     let arts = apply_artifact_deltas_in_page(conn, user_id, page);
-    (convs, drained + msgs, arts)
+    // An artifact and its source message are independently paginated. If the
+    // artifact landed on an earlier page, resolve its portable message UUID now
+    // that this page's messages are durable.
+    let _ = reconcile_artifact_message_links(conn, user_id);
+    (convs, drained + msgs, drained_artifacts + arts)
 }
 
 // ---------------------------------------------------------------------------
@@ -1219,13 +1786,13 @@ async fn sync_now_inner(
         (convs, msgs, arts)
     };
 
-    let n_conv_attempted: Vec<String> = push_convs.iter().map(|c| c.id.clone()).collect();
     let n_convs_pushed = push_convs.len();
     let n_msgs_pushed = push_msgs.len();
     let n_arts_pushed = push_arts.len();
 
     if n_convs_pushed > 0 || n_msgs_pushed > 0 || n_arts_pushed > 0 {
         let body = PushBody {
+            protocol_version: 2,
             conversations: push_convs,
             messages: push_msgs,
             artifacts: push_arts,
@@ -1250,17 +1817,32 @@ async fn sync_now_inner(
             .json()
             .await
             .map_err(|e| format!("Failed to parse push response: {e}"))?;
+        if push_resp.protocol_version != 2 {
+            return Err(format!(
+                "Unsupported chat sync protocol response: {}",
+                push_resp.protocol_version
+            ));
+        }
 
         // Ack-clear (re-acquire conn, do DB work, drop conn).
         {
             let conn = db.connection().map_err(|e| e.to_string())?;
-            ack_clear_conversations(
+            ack_clear_conversations(&conn, &push_resp.applied.conversations, &body.conversations);
+            ack_clear_messages(&conn, &push_resp.applied.messages, &body.messages);
+            ack_clear_artifacts(&conn, &push_resp.applied.artifacts, &body.artifacts);
+            resolve_conversation_conflicts(
                 &conn,
-                &push_resp.applied.conversations,
-                &n_conv_attempted,
+                user_id,
+                &push_resp.conflicts.conversations,
+                &body.conversations,
             );
-            ack_clear_messages(&conn, &push_resp.applied.messages);
-            ack_clear_artifacts(&conn, &push_resp.applied.artifacts);
+            resolve_message_conflicts(&conn, user_id, &push_resp.conflicts.messages);
+            resolve_artifact_conflicts(
+                &conn,
+                user_id,
+                &push_resp.conflicts.artifacts,
+                &body.artifacts,
+            );
         }
     }
 
@@ -1278,11 +1860,7 @@ async fn sync_now_inner(
     };
 
     for _page in 0..PULL_PAGE_GUARD {
-        let pull_url = format!(
-            "{}?since={}",
-            sync_url,
-            urlencoding::encode(&cursor)
-        );
+        let pull_url = format!("{}?since={}", sync_url, urlencoding::encode(&cursor));
 
         // HTTP GET (no conn held).
         let resp = client
@@ -1322,6 +1900,15 @@ async fn sync_now_inner(
         }
     }
 
+    // Final durable replay is deliberately separate from per-page replay. It
+    // covers a parent resolved by conflict handling or an earlier persisted
+    // page even when the current pull response is empty.
+    {
+        let conn = db.connection().map_err(|e| e.to_string())?;
+        total_arts_pulled += drain_pending_artifacts(&conn, user_id);
+        let _ = reconcile_artifact_message_links(&conn, user_id);
+    }
+
     Ok(SyncOutcome {
         conversations_pushed: n_convs_pushed,
         messages_pushed: n_msgs_pushed,
@@ -1331,7 +1918,6 @@ async fn sync_now_inner(
         artifacts_pulled: total_arts_pulled,
     })
 }
-
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -1349,6 +1935,58 @@ mod tests {
         conn
     }
 
+    fn cloud_conversation_delta(id: &str, server_version: &str) -> ConversationDelta {
+        ConversationDelta {
+            id: id.to_string(),
+            title: Some("Cloud conversation".to_string()),
+            model: None,
+            project_id: None,
+            pinned: Some(false),
+            created_at: Some("2026-07-15T00:00:00Z".to_string()),
+            updated_at: Some("2026-07-15T00:00:00Z".to_string()),
+            deleted_at: None,
+            server_version: server_version.to_string(),
+        }
+    }
+
+    fn cloud_message_delta(id: &str, conversation_id: &str, server_version: &str) -> MessageDelta {
+        MessageDelta {
+            id: id.to_string(),
+            conversation_id: conversation_id.to_string(),
+            role: Some("assistant".to_string()),
+            content: Some("answer".to_string()),
+            model: Some("model".to_string()),
+            provider: Some("provider".to_string()),
+            created_at: Some("2026-07-15T00:00:01Z".to_string()),
+            deleted_at: None,
+            server_version: server_version.to_string(),
+        }
+    }
+
+    fn cloud_artifact_delta(
+        id: &str,
+        conversation_id: &str,
+        message_id: Option<&str>,
+        server_version: &str,
+    ) -> ArtifactDelta {
+        ArtifactDelta {
+            id: id.to_string(),
+            conversation_id: conversation_id.to_string(),
+            message_id: message_id.map(str::to_string),
+            title: Some("Artifact".to_string()),
+            artifact_type: "react".to_string(),
+            language: Some("tsx".to_string()),
+            content: "export default function A() { return <div /> }".to_string(),
+            current_version: Some(3),
+            pinned: Some(false),
+            tags: vec![],
+            created_at: Some("2026-07-15T00:00:02Z".to_string()),
+            updated_at: Some("2026-07-15T00:00:02Z".to_string()),
+            deleted_at: None,
+            server_version: server_version.to_string(),
+        }
+    }
+
     // ── Test 1: Migration v67 columns/indexes exist ──────────────────────────
 
     #[test]
@@ -1356,7 +1994,13 @@ mod tests {
         let conn = fresh_db();
 
         // conversations must have the v67 columns
-        for col in ["cloud_id", "server_version", "created_at_utc", "deleted_at_utc", "needs_push"] {
+        for col in [
+            "cloud_id",
+            "server_version",
+            "created_at_utc",
+            "deleted_at_utc",
+            "needs_push",
+        ] {
             let exists: bool = conn
                 .query_row(
                     &format!("SELECT COUNT(*) > 0 FROM pragma_table_info('conversations') WHERE name = '{}'", col),
@@ -1368,10 +2012,20 @@ mod tests {
         }
 
         // messages must have the v67 columns + conversation_cloud_id
-        for col in ["cloud_id", "server_version", "created_at_utc", "deleted_at_utc", "needs_push", "conversation_cloud_id"] {
+        for col in [
+            "cloud_id",
+            "server_version",
+            "created_at_utc",
+            "deleted_at_utc",
+            "needs_push",
+            "conversation_cloud_id",
+        ] {
             let exists: bool = conn
                 .query_row(
-                    &format!("SELECT COUNT(*) > 0 FROM pragma_table_info('messages') WHERE name = '{}'", col),
+                    &format!(
+                        "SELECT COUNT(*) > 0 FROM pragma_table_info('messages') WHERE name = '{}'",
+                        col
+                    ),
                     [],
                     |row| row.get(0),
                 )
@@ -1387,7 +2041,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(table_exists, "cloud_sync_state table should exist after v67");
+        assert!(
+            table_exists,
+            "cloud_sync_state table should exist after v67"
+        );
 
         // INTEGER PK intact
         let pk_type: String = conn
@@ -1397,7 +2054,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(pk_type, "INTEGER", "conversations.id must remain INTEGER PK");
+        assert_eq!(
+            pk_type, "INTEGER",
+            "conversations.id must remain INTEGER PK"
+        );
     }
 
     #[test]
@@ -1463,8 +2123,14 @@ mod tests {
             )
             .unwrap();
 
-        assert!(cloud_id.is_none(), "local conversation must NOT get a cloud_id");
-        assert_eq!(needs_push, 0, "local conversation must NOT get needs_push=1");
+        assert!(
+            cloud_id.is_none(),
+            "local conversation must NOT get a cloud_id"
+        );
+        assert_eq!(
+            needs_push, 0,
+            "local conversation must NOT get needs_push=1"
+        );
     }
 
     #[test]
@@ -1496,7 +2162,10 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(first_id, second_id, "COALESCE must keep the original cloud_id on re-mint");
+        assert_eq!(
+            first_id, second_id,
+            "COALESCE must keep the original cloud_id on re-mint"
+        );
     }
 
     // ── Test 3: Push gather/map ───────────────────────────────────────────────
@@ -1523,7 +2192,11 @@ mod tests {
         .unwrap();
 
         let push_convs = gather_push_conversations(&conn, "u1").unwrap();
-        assert_eq!(push_convs.len(), 1, "only cloud conversation should be gathered");
+        assert_eq!(
+            push_convs.len(),
+            1,
+            "only cloud conversation should be gathered"
+        );
         assert_eq!(push_convs[0].title, "Cloud");
     }
 
@@ -1557,7 +2230,11 @@ mod tests {
         .unwrap();
 
         let push_msgs = gather_push_messages(&conn, "u1").unwrap();
-        assert_eq!(push_msgs.len(), 0, "message with NULL conversation_cloud_id must be skipped");
+        assert_eq!(
+            push_msgs.len(),
+            0,
+            "message with NULL conversation_cloud_id must be skipped"
+        );
     }
 
     #[test]
@@ -1572,7 +2249,11 @@ mod tests {
         let conv_id: i64 = conn.last_insert_rowid();
         mark_conversation_for_push(&conn, conv_id).unwrap();
         let conv_cloud_id: String = conn
-            .query_row("SELECT cloud_id FROM conversations WHERE id = ?1", params![conv_id], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id = ?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
             .unwrap();
 
         // All three transcript roles are part of the synced set. (The messages table's
@@ -1619,13 +2300,19 @@ mod tests {
         let conv_id: i64 = conn.last_insert_rowid();
         mark_conversation_for_push(&conn, conv_id).unwrap();
         let cloud_id: String = conn
-            .query_row("SELECT cloud_id FROM conversations WHERE id = ?1", params![conv_id], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id = ?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
             .unwrap();
-
         // Simulate ack from server.
-        let acked = vec![AckedRow { id: cloud_id.clone(), server_version: "42".to_string() }];
-        let attempted = vec![cloud_id.clone()];
-        ack_clear_conversations(&conn, &acked, &attempted);
+        let acked = vec![AckedRow {
+            id: cloud_id.clone(),
+            server_version: "42".to_string(),
+        }];
+        let sent = gather_push_conversations(&conn, "u1").unwrap();
+        ack_clear_conversations(&conn, &acked, &sent);
 
         let (needs_push, sv): (i64, Option<String>) = conn
             .query_row(
@@ -1635,7 +2322,160 @@ mod tests {
             )
             .unwrap();
         assert_eq!(needs_push, 0, "needs_push must be 0 after ack");
-        assert_eq!(sv.as_deref(), Some("42"), "server_version must be set from ack");
+        assert_eq!(
+            sv.as_deref(),
+            Some("42"),
+            "server_version must be set from ack"
+        );
+    }
+
+    #[test]
+    fn conversation_ack_preserves_an_edit_made_after_the_sent_snapshot() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('sent title', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, conv_id).unwrap();
+        let sent = gather_push_conversations(&conn, "u1").unwrap();
+        let cloud_id = sent[0].id.clone();
+
+        conn.execute(
+            "UPDATE conversations SET title = 'later edit', needs_push = 1 WHERE id = ?1",
+            params![conv_id],
+        )
+        .unwrap();
+
+        ack_clear_conversations(
+            &conn,
+            &[AckedRow {
+                id: cloud_id,
+                server_version: "8".to_string(),
+            }],
+            &sent,
+        );
+
+        let (title, needs_push, server_version): (String, i64, Option<String>) = conn
+            .query_row(
+                "SELECT title, needs_push, server_version FROM conversations WHERE id = ?1",
+                params![conv_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(title, "later edit");
+        assert_eq!(needs_push, 1, "the unsent edit must remain dirty");
+        assert_eq!(server_version.as_deref(), Some("8"));
+    }
+
+    #[test]
+    fn conversation_conflict_adopts_the_server_winner_when_snapshot_is_unchanged() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('local', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let local_id = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, local_id).unwrap();
+        conn.execute(
+            "UPDATE conversations SET server_version = '5' WHERE id = ?1",
+            params![local_id],
+        )
+        .unwrap();
+        let sent = gather_push_conversations(&conn, "u1").unwrap();
+        let id = sent[0].id.clone();
+        let current = ConversationDelta {
+            id: id.clone(),
+            title: Some("server".to_string()),
+            model: None,
+            project_id: None,
+            pinned: None,
+            created_at: None,
+            updated_at: Some("2026-07-15T00:00:00.000Z".to_string()),
+            deleted_at: None,
+            server_version: "6".to_string(),
+        };
+
+        resolve_conversation_conflicts(
+            &conn,
+            "u1",
+            &[SyncConflict {
+                id,
+                current: Some(current),
+            }],
+            &sent,
+        );
+
+        let (title, needs_push, version): (String, i64, Option<String>) = conn
+            .query_row(
+                "SELECT title, needs_push, server_version FROM conversations WHERE id = ?1",
+                params![local_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(title, "server");
+        assert_eq!(needs_push, 0);
+        assert_eq!(version.as_deref(), Some("6"));
+    }
+
+    #[test]
+    fn conversation_conflict_rebases_an_in_flight_local_edit() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('sent', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let local_id = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, local_id).unwrap();
+        conn.execute(
+            "UPDATE conversations SET server_version = '5' WHERE id = ?1",
+            params![local_id],
+        )
+        .unwrap();
+        let sent = gather_push_conversations(&conn, "u1").unwrap();
+        let id = sent[0].id.clone();
+        conn.execute(
+            "UPDATE conversations SET title = 'later edit', needs_push = 1 WHERE id = ?1",
+            params![local_id],
+        )
+        .unwrap();
+
+        resolve_conversation_conflicts(
+            &conn,
+            "u1",
+            &[SyncConflict {
+                id: id.clone(),
+                current: Some(ConversationDelta {
+                    id,
+                    title: Some("server".to_string()),
+                    model: None,
+                    project_id: None,
+                    pinned: None,
+                    created_at: None,
+                    updated_at: None,
+                    deleted_at: None,
+                    server_version: "6".to_string(),
+                }),
+            }],
+            &sent,
+        );
+
+        let (title, needs_push, version): (String, i64, Option<String>) = conn
+            .query_row(
+                "SELECT title, needs_push, server_version FROM conversations WHERE id = ?1",
+                params![local_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(title, "later edit");
+        assert_eq!(needs_push, 1);
+        assert_eq!(version.as_deref(), Some("6"));
     }
 
     #[test]
@@ -1650,7 +2490,11 @@ mod tests {
         let conv_id: i64 = conn.last_insert_rowid();
         mark_conversation_for_push(&conn, conv_id).unwrap();
         let conv_cloud_id: String = conn
-            .query_row("SELECT cloud_id FROM conversations WHERE id = ?1", params![conv_id], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id = ?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
             .unwrap();
 
         conn.execute(
@@ -1669,7 +2513,7 @@ mod tests {
 
         // Server did NOT ack this message (e.g. parent conversation not yet on server).
         let acked: Vec<AckedRow> = vec![];
-        ack_clear_messages(&conn, &acked);
+        ack_clear_messages(&conn, &acked, &[]);
 
         let needs_push: i64 = conn
             .query_row(
@@ -1679,6 +2523,148 @@ mod tests {
             )
             .unwrap();
         assert_eq!(needs_push, 1, "unacked message must stay needs_push=1");
+    }
+
+    #[test]
+    fn message_ack_preserves_a_tombstone_created_after_the_sent_snapshot() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('C', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, conv_id).unwrap();
+        let conv_cloud_id: String = conn
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id = ?1",
+                params![conv_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content, created_at) \
+             VALUES (?1, 'u1', 'user', 'hello', CURRENT_TIMESTAMP)",
+            params![conv_id],
+        )
+        .unwrap();
+        let msg_id = conn.last_insert_rowid();
+        conn.execute(
+            "UPDATE messages SET cloud_id = 'msg-uuid', conversation_cloud_id = ?1, \
+             needs_push = 1, created_at_utc = CURRENT_TIMESTAMP WHERE id = ?2",
+            params![conv_cloud_id, msg_id],
+        )
+        .unwrap();
+        let sent = gather_push_messages(&conn, "u1").unwrap();
+
+        conn.execute(
+            "UPDATE messages SET deleted_at_utc = CURRENT_TIMESTAMP, needs_push = 1 WHERE id = ?1",
+            params![msg_id],
+        )
+        .unwrap();
+        ack_clear_messages(
+            &conn,
+            &[AckedRow {
+                id: "msg-uuid".to_string(),
+                server_version: "11".to_string(),
+            }],
+            &sent,
+        );
+
+        let (needs_push, server_version): (i64, Option<String>) = conn
+            .query_row(
+                "SELECT needs_push, server_version FROM messages WHERE id = ?1",
+                params![msg_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(sent[0].is_deleted, None);
+        assert_eq!(needs_push, 1, "the unsent tombstone must remain dirty");
+        assert_eq!(server_version.as_deref(), Some("11"));
+    }
+
+    #[test]
+    fn message_identity_conflict_adopts_the_server_row() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('C', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conv_id = conn.last_insert_rowid();
+        mark_conversation_for_push(&conn, conv_id).unwrap();
+        let conv_cloud_id: String = conn
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id = ?1",
+                params![conv_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content, model, provider, created_at) \
+             VALUES (?1, 'u1', 'user', 'local collision', 'local-model', 'local-provider', CURRENT_TIMESTAMP)",
+            params![conv_id],
+        )
+        .unwrap();
+        let msg_id = conn.last_insert_rowid();
+        conn.execute(
+            "UPDATE messages SET cloud_id = 'message-collision', conversation_cloud_id = ?1, \
+             needs_push = 1 WHERE id = ?2",
+            params![conv_cloud_id, msg_id],
+        )
+        .unwrap();
+
+        resolve_message_conflicts(
+            &conn,
+            "u1",
+            &[SyncConflict {
+                id: "message-collision".to_string(),
+                current: Some(MessageDelta {
+                    id: "message-collision".to_string(),
+                    conversation_id: conv_cloud_id,
+                    role: Some("assistant".to_string()),
+                    content: Some("server winner".to_string()),
+                    model: Some("server-model".to_string()),
+                    provider: Some("server-provider".to_string()),
+                    created_at: Some("2026-07-15T00:00:00.000Z".to_string()),
+                    deleted_at: None,
+                    server_version: "9".to_string(),
+                }),
+            }],
+        );
+
+        let (role, content, model, provider, needs_push, version): (
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            i64,
+            Option<String>,
+        ) = conn
+            .query_row(
+                "SELECT role, content, model, provider, needs_push, server_version \
+                 FROM messages WHERE id = ?1",
+                params![msg_id],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(role, "assistant");
+        assert_eq!(content, "server winner");
+        assert_eq!(model.as_deref(), Some("server-model"));
+        assert_eq!(provider.as_deref(), Some("server-provider"));
+        assert_eq!(needs_push, 0);
+        assert_eq!(version.as_deref(), Some("9"));
     }
 
     // ── Test 5: Pull dedup ───────────────────────────────────────────────────
@@ -1697,8 +2683,17 @@ mod tests {
         let local_id: i64 = conn.last_insert_rowid();
         mark_conversation_for_push(&conn, local_id).unwrap();
         let cloud_id: String = conn
-            .query_row("SELECT cloud_id FROM conversations WHERE id = ?1", params![local_id], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id = ?1",
+                params![local_id],
+                |r| r.get(0),
+            )
             .unwrap();
+        conn.execute(
+            "UPDATE conversations SET needs_push = 0, server_version = '99' WHERE id = ?1",
+            params![local_id],
+        )
+        .unwrap();
 
         // Simulate a pull delta for the same cloud_id (from another device or re-pull).
         let delta = ConversationDelta {
@@ -1723,7 +2718,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1, "DEDUP: must not insert a second row for existing cloud_id");
+        assert_eq!(
+            count, 1,
+            "DEDUP: must not insert a second row for existing cloud_id"
+        );
 
         // The title should be updated.
         let title: String = conn
@@ -1733,7 +2731,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(title, "Updated Title", "Existing row should be updated with pulled title");
+        assert_eq!(
+            title, "Updated Title",
+            "Existing row should be updated with pulled title"
+        );
 
         // Local INTEGER id must be unchanged.
         let still_local_id: i64 = conn
@@ -1743,7 +2744,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(still_local_id, local_id, "Integer PK must remain the same after dedup update");
+        assert_eq!(
+            still_local_id, local_id,
+            "Integer PK must remain the same after dedup update"
+        );
     }
 
     // ── Test 6: Pull FK-map ──────────────────────────────────────────────────
@@ -1789,7 +2793,10 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert_eq!(int_conv_id, local_conv_id, "FK-map: message must have local INTEGER conversation_id");
+        assert_eq!(
+            int_conv_id, local_conv_id,
+            "FK-map: message must have local INTEGER conversation_id"
+        );
         assert_eq!(
             conv_cloud_id_saved.as_deref(),
             Some(conv_cloud_id),
@@ -1823,7 +2830,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 0, "Orphan message must NOT be inserted into messages table");
+        assert_eq!(
+            count, 0,
+            "Orphan message must NOT be inserted into messages table"
+        );
     }
 
     // ── Test 7: Pull tombstone ───────────────────────────────────────────────
@@ -1877,7 +2887,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(still_exists, 1, "tombstone must NOT hard-delete the row");
-        assert!(deleted_at_utc.is_some(), "tombstone must set deleted_at_utc");
+        assert!(
+            deleted_at_utc.is_some(),
+            "tombstone must set deleted_at_utc"
+        );
 
         // Child message must still exist (no CASCADE DELETE triggered).
         let child_count: i64 = conn
@@ -1887,7 +2900,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(child_count, 1, "child messages must NOT be deleted by tombstone");
+        assert_eq!(
+            child_count, 1,
+            "child messages must NOT be deleted by tombstone"
+        );
     }
 
     // ── Test 8: Cursor ───────────────────────────────────────────────────────
@@ -1899,7 +2915,10 @@ mod tests {
         assert!(!bigint_greater("9", "10"), "9 < 10");
         assert!(!bigint_greater("0", "0"), "0 == 0");
         assert!(!bigint_greater("42", "42"), "42 == 42");
-        assert!(bigint_greater("1000000000000000001", "999999999999999999"), "bigint boundary");
+        assert!(
+            bigint_greater("1000000000000000001", "999999999999999999"),
+            "bigint boundary"
+        );
     }
 
     #[test]
@@ -1933,7 +2952,10 @@ mod tests {
             re.is_match(&ts),
             "now_z() must produce a Z-suffix ISO-8601 timestamp; got: {ts}"
         );
-        assert!(!ts.contains('+'), "now_z() must not contain timezone offset (+00:00)");
+        assert!(
+            !ts.contains('+'),
+            "now_z() must not contain timezone offset (+00:00)"
+        );
     }
 
     #[test]
@@ -1946,7 +2968,10 @@ mod tests {
             re.is_match(&out),
             "to_z_datetime must convert SQLite CURRENT_TIMESTAMP to Z-suffix; got: {out}"
         );
-        assert!(out.starts_with("2026-06-21T12:34:56"), "datetime part must be preserved: {out}");
+        assert!(
+            out.starts_with("2026-06-21T12:34:56"),
+            "datetime part must be preserved: {out}"
+        );
     }
 
     #[test]
@@ -1962,10 +2987,7 @@ mod tests {
     }
 
     #[test]
-    fn gather_push_conversations_updated_at_is_zod_safe() {
-        // Arrange: insert a cloud conversation whose updated_at is CURRENT_TIMESTAMP
-        // (space-separated). This mimics real production rows where updated_at was set
-        // by CURRENT_TIMESTAMP (the SQLite default, not a Z-suffix timestamp).
+    fn gather_push_conversations_uses_revision_zero_without_client_clocks() {
         let conn = fresh_db();
         conn.execute(
             "INSERT INTO conversations (title, user_id, app_mode, created_at, updated_at) \
@@ -1977,13 +2999,15 @@ mod tests {
         mark_conversation_for_push(&conn, conv_id).unwrap();
 
         let push_convs = gather_push_conversations(&conn, "u1").unwrap();
-        assert_eq!(push_convs.len(), 1, "one cloud conversation must be gathered");
-        let updated_at = &push_convs[0].updated_at;
-        let re = regex::Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$").unwrap();
-        assert!(
-            re.is_match(updated_at),
-            "gathered updated_at must be Zod-safe (Z-suffix ISO-8601); got: {updated_at}"
+        assert_eq!(
+            push_convs.len(),
+            1,
+            "one cloud conversation must be gathered"
         );
+        assert_eq!(push_convs[0].base_version, "0");
+        let wire = serde_json::to_value(&push_convs[0]).unwrap();
+        assert!(wire.get("createdAt").is_none());
+        assert!(wire.get("updatedAt").is_none());
     }
 
     // ── Test 10: Gating ──────────────────────────────────────────────────────
@@ -2014,12 +3038,19 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert!(cloud_id.is_none(), "local conversation cloud_id must stay NULL");
+        assert!(
+            cloud_id.is_none(),
+            "local conversation cloud_id must stay NULL"
+        );
         assert_eq!(needs_push, 0, "local conversation needs_push must stay 0");
 
         // Verify push gather also excludes it.
         let push_convs = gather_push_conversations(&conn, "u1").unwrap();
-        assert_eq!(push_convs.len(), 0, "local conversation must not appear in push gather");
+        assert_eq!(
+            push_convs.len(),
+            0,
+            "local conversation must not appear in push gather"
+        );
     }
 
     // ── Pull deltas built from the snake_case wire shape ─────────────────────
@@ -2033,7 +3064,12 @@ mod tests {
         .unwrap()
     }
 
-    fn msg_delta(id: &str, conv_cloud_id: &str, sv: &str, deleted_at: Option<&str>) -> MessageDelta {
+    fn msg_delta(
+        id: &str,
+        conv_cloud_id: &str,
+        sv: &str,
+        deleted_at: Option<&str>,
+    ) -> MessageDelta {
         serde_json::from_value(serde_json::json!({
             "id": id, "conversation_id": conv_cloud_id, "role": "user", "content": "hello",
             "model": null, "provider": null, "created_at": "2026-06-20T00:00:00Z",
@@ -2058,24 +3094,44 @@ mod tests {
         let applied = apply_message_deltas(&conn, "u1", &[msg_delta("m1", "conv-c1", "10", None)]);
         assert_eq!(applied, 0, "orphan is not inserted into messages");
         assert_eq!(
-            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages WHERE cloud_id='m1'"),
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM cloud_sync_pending_messages WHERE cloud_id='m1'"
+            ),
             1,
             "orphan must be buffered, never dropped"
         );
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"), 0);
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"),
+            0
+        );
 
         // Parent conversation lands; draining resolves the buffered orphan.
         apply_conversation_deltas(&conn, "u1", &[conv_delta("conv-c1", "20", None)]);
         let drained = drain_pending_messages(&conn, "u1");
-        assert_eq!(drained, 1, "buffered orphan is inserted once its parent exists");
+        assert_eq!(
+            drained, 1,
+            "buffered orphan is inserted once its parent exists"
+        );
 
         let parent_local: i64 = conn
-            .query_row("SELECT id FROM conversations WHERE cloud_id='conv-c1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT id FROM conversations WHERE cloud_id='conv-c1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         let msg_fk: i64 = conn
-            .query_row("SELECT conversation_id FROM messages WHERE cloud_id='m1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT conversation_id FROM messages WHERE cloud_id='m1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(msg_fk, parent_local, "message FK maps to the parent's local INTEGER id");
+        assert_eq!(
+            msg_fk, parent_local,
+            "message FK maps to the parent's local INTEGER id"
+        );
         assert_eq!(
             count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
             0,
@@ -2092,7 +3148,10 @@ mod tests {
         apply_conversation_deltas(&conn, "u1", std::slice::from_ref(&delta));
         apply_conversation_deltas(&conn, "u1", std::slice::from_ref(&delta));
         assert_eq!(
-            count(&conn, "SELECT COUNT(*) FROM conversations WHERE cloud_id='cc1'"),
+            count(
+                &conn,
+                "SELECT COUNT(*) FROM conversations WHERE cloud_id='cc1'"
+            ),
             1,
             "re-pulling the same cloud_id must not create a duplicate row"
         );
@@ -2105,7 +3164,11 @@ mod tests {
         let conn = fresh_db();
         apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "5", None)]);
         apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "6", None)]);
-        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "7", Some("2026-06-20T01:00:00Z"))]);
+        apply_message_deltas(
+            &conn,
+            "u1",
+            &[msg_delta("m1", "cc1", "7", Some("2026-06-20T01:00:00Z"))],
+        );
 
         assert_eq!(
             count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"),
@@ -2113,9 +3176,16 @@ mod tests {
             "tombstoned message row must NOT be hard-deleted"
         );
         let deleted: Option<String> = conn
-            .query_row("SELECT deleted_at_utc FROM messages WHERE cloud_id='m1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT deleted_at_utc FROM messages WHERE cloud_id='m1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert!(deleted.is_some(), "deleted_at_utc must be set on a tombstoned message");
+        assert!(
+            deleted.is_some(),
+            "deleted_at_utc must be set on a tombstoned message"
+        );
     }
 
     /// The engine must advance the cursor from the SERVER's safe cursor, never the
@@ -2149,7 +3219,10 @@ mod tests {
         .unwrap();
         let (_c1, m1, _a1) = apply_pull_page(&conn, "u1", &page1);
         assert_eq!(m1, 0, "orphan not applied yet");
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"), 1);
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
+            1
+        );
 
         // Page 2: the parent conversation lands → drain resolves the buffered orphan.
         let page2: PullResponse = serde_json::from_value(serde_json::json!({
@@ -2163,9 +3236,18 @@ mod tests {
         .unwrap();
         let (c2, m2, _a2) = apply_pull_page(&conn, "u1", &page2);
         assert_eq!(c2, 1, "parent conversation applied");
-        assert_eq!(m2, 1, "buffered orphan drained on the page its parent landed");
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"), 1);
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"), 0);
+        assert_eq!(
+            m2, 1,
+            "buffered orphan drained on the page its parent landed"
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM messages WHERE cloud_id='m1'"),
+            1
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
+            0
+        );
     }
 
     /// Re-pulling the same non-tombstone message must not insert a duplicate row.
@@ -2182,20 +3264,62 @@ mod tests {
         );
     }
 
-    /// A conversation tombstone drops any orphan messages buffered under it, so a
-    /// conversation deleted on another device can't strand the buffer forever.
+    /// A conversation tombstone drops any orphan messages and artifacts buffered
+    /// under it, so a deleted parent cannot strand either durable journal.
     #[test]
     fn conversation_tombstone_drops_buffered_orphans() {
         let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
         // Buffer an orphan (parent never seen).
-        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc-gone", "6", None)]);
-        assert_eq!(count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"), 1);
+        apply_message_deltas(
+            &conn,
+            "u1",
+            &[msg_delta(
+                &message_cloud_id,
+                &conversation_cloud_id,
+                "6",
+                None,
+            )],
+        );
+        apply_artifact_deltas(
+            &conn,
+            "u1",
+            &[cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                Some(&message_cloud_id),
+                "7",
+            )],
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
+            1
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_artifacts"),
+            1
+        );
         // Parent arrives only as a tombstone (deleted on another device).
-        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc-gone", "9", Some("2026-06-20T01:00:00Z"))]);
+        apply_conversation_deltas(
+            &conn,
+            "u1",
+            &[conv_delta(
+                &conversation_cloud_id,
+                "9",
+                Some("2026-06-20T01:00:00Z"),
+            )],
+        );
         assert_eq!(
             count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_messages"),
             0,
             "tombstoned parent must drop its buffered orphan messages"
+        );
+        assert_eq!(
+            count(&conn, "SELECT COUNT(*) FROM cloud_sync_pending_artifacts"),
+            0,
+            "tombstoned parent must drop its buffered orphan artifacts"
         );
     }
 
@@ -2213,7 +3337,11 @@ mod tests {
         let conv_id = conn.last_insert_rowid();
         mark_conversation_for_push(&conn, conv_id).unwrap();
         let conv_cloud_id: String = conn
-            .query_row("SELECT cloud_id FROM conversations WHERE id=?1", params![conv_id], |r| r.get(0))
+            .query_row(
+                "SELECT cloud_id FROM conversations WHERE id=?1",
+                params![conv_id],
+                |r| r.get(0),
+            )
             .unwrap();
 
         conn.execute(
@@ -2248,15 +3376,15 @@ mod tests {
     #[test]
     fn push_body_serializes_to_server_camelcase_schema() {
         let body = PushBody {
+            protocol_version: 2,
             conversations: vec![PushConversation {
                 id: "c1".into(),
                 title: "T".into(),
                 model: None,
                 project_id: Some("p1".into()),
-                pinned: false,
-                created_at: Some("2026-06-20T00:00:00Z".into()),
-                updated_at: "2026-06-20T00:00:01Z".into(),
-                deleted_at: None,
+                pinned: Some(false),
+                base_version: "12".into(),
+                is_deleted: None,
             }],
             messages: vec![PushMessage {
                 id: "m1".into(),
@@ -2265,24 +3393,39 @@ mod tests {
                 content: "hi".into(),
                 model: None,
                 provider: None,
-                created_at: Some("2026-06-20T00:00:00Z".into()),
-                deleted_at: None,
+                is_deleted: None,
             }],
             artifacts: vec![],
         };
         let v = serde_json::to_value(&body).unwrap();
 
         let conv = &v["conversations"][0];
-        assert_eq!(conv["projectId"], "p1", "project_id must serialize as projectId");
-        assert!(conv.get("createdAt").is_some(), "created_at → createdAt");
-        assert!(conv.get("updatedAt").is_some(), "updated_at → updatedAt");
-        assert!(conv.get("project_id").is_none(), "must not emit snake_case project_id");
-        assert!(conv.get("deletedAt").is_some(), "deleted_at key present (null) → deletedAt");
+        assert_eq!(
+            conv["projectId"], "p1",
+            "project_id must serialize as projectId"
+        );
+        assert_eq!(conv["baseVersion"], "12");
+        assert!(conv.get("createdAt").is_none());
+        assert!(conv.get("updatedAt").is_none());
+        assert!(
+            conv.get("project_id").is_none(),
+            "must not emit snake_case project_id"
+        );
+        assert!(
+            conv.get("isDeleted").is_none(),
+            "isDeleted is omitted for a live row"
+        );
 
         let msg = &v["messages"][0];
-        assert_eq!(msg["conversationId"], "c1", "conversation_id must serialize as conversationId");
-        assert!(msg.get("createdAt").is_some(), "created_at → createdAt");
-        assert!(msg.get("conversation_id").is_none(), "must not emit snake_case conversation_id");
+        assert_eq!(
+            msg["conversationId"], "c1",
+            "conversation_id must serialize as conversationId"
+        );
+        assert!(msg.get("createdAt").is_none());
+        assert!(
+            msg.get("conversation_id").is_none(),
+            "must not emit snake_case conversation_id"
+        );
 
         // Trust boundary: no user_id anywhere in the push body.
         for obj in [conv, msg] {
@@ -2290,7 +3433,10 @@ mod tests {
         }
 
         // Empty artifacts array is omitted (skip_serializing_if = Vec::is_empty).
-        assert!(v.get("artifacts").is_none(), "empty artifacts must be omitted from body");
+        assert!(
+            v.get("artifacts").is_none(),
+            "empty artifacts must be omitted from body"
+        );
     }
 
     /// The push ACK response is snake_case (`server_version` from the SQL RETURNING).
@@ -2298,10 +3444,16 @@ mod tests {
     #[test]
     fn push_response_deserializes_snake_case_server_version() {
         let resp: PushResponse = serde_json::from_value(serde_json::json!({
+            "protocolVersion": 2,
             "applied": {
                 "conversations": [{ "id": "c1", "server_version": "42" }],
                 "messages": [{ "id": "m1", "server_version": "43" }],
                 "artifacts": [{ "id": "a1", "server_version": "44" }]
+            },
+            "conflicts": {
+                "conversations": [],
+                "messages": [],
+                "artifacts": []
             },
             "cursor": "44"
         }))
@@ -2311,6 +3463,25 @@ mod tests {
         assert_eq!(resp.applied.messages[0].server_version, "43");
         assert_eq!(resp.applied.artifacts[0].id, "a1");
         assert_eq!(resp.applied.artifacts[0].server_version, "44");
+    }
+
+    #[test]
+    fn chat_v2_wire_matches_the_shared_cross_language_golden_fixture() {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Golden {
+            chat_push: PushBody,
+            chat_push_response: PushResponse,
+        }
+
+        let fixture: Golden = serde_json::from_str(include_str!(
+            "../../../../../packages/contracts/cloud-contracts/src/__fixtures__/chat-memory-sync-cas.golden.json"
+        ))
+        .unwrap();
+        assert_eq!(fixture.chat_push.protocol_version, 2);
+        assert_eq!(fixture.chat_push.conversations[0].base_version, "42");
+        assert_eq!(fixture.chat_push_response.protocol_version, 2);
+        assert_eq!(fixture.chat_push_response.conflicts.messages.len(), 1);
     }
 
     /// TRUST BOUNDARY (CLAUDE.md locked rule): the engine must perform ZERO network
@@ -2347,9 +3518,16 @@ mod tests {
 
         let conn = db.connection().unwrap();
         let needs_push: i64 = conn
-            .query_row("SELECT needs_push FROM conversations WHERE user_id='u1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT needs_push FROM conversations WHERE user_id='u1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(needs_push, 1, "no push happened, so the dirty flag is untouched");
+        assert_eq!(
+            needs_push, 1,
+            "no push happened, so the dirty flag is untouched"
+        );
     }
 
     // ── Artifact sync tests ──────────────────────────────────────────────────
@@ -2359,8 +3537,14 @@ mod tests {
     fn migration_v71_adds_artifact_sync_columns() {
         let conn = fresh_db();
 
-        for col in ["cloud_id", "server_version", "needs_push", "app_mode",
-                    "conversation_cloud_id", "deleted_at_utc"] {
+        for col in [
+            "cloud_id",
+            "server_version",
+            "needs_push",
+            "app_mode",
+            "conversation_cloud_id",
+            "deleted_at_utc",
+        ] {
             let exists: bool = conn
                 .query_row(
                     &format!(
@@ -2388,7 +3572,27 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(app_mode, "local", "artifacts.app_mode must default to 'local'");
+        assert_eq!(
+            app_mode, "local",
+            "artifacts.app_mode must default to 'local'"
+        );
+    }
+
+    #[test]
+    fn migration_v74_adds_portable_artifact_message_identity() {
+        let conn = fresh_db();
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('artifacts') \
+                 WHERE name = 'message_cloud_id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+        assert!(
+            exists,
+            "artifacts.message_cloud_id is required because local INTEGER message ids are device-specific"
+        );
     }
 
     /// mint_local_artifact: mark_artifact_for_push is a no-op for local artifacts.
@@ -2467,13 +3671,72 @@ mod tests {
             )
             .unwrap();
 
-        assert!(cloud_id.is_some(), "cloud artifact must get a cloud_id after mint");
-        assert_eq!(needs_push, 1, "cloud artifact must get needs_push=1 after mint");
+        assert!(
+            cloud_id.is_some(),
+            "cloud artifact must get a cloud_id after mint"
+        );
+        assert_eq!(
+            needs_push, 1,
+            "cloud artifact must get needs_push=1 after mint"
+        );
         assert_eq!(
             conv_cloud_id_col.as_deref(),
             Some(conv_cloud_id.as_str()),
             "conversation_cloud_id must be populated from the parent's cloud_id"
         );
+    }
+
+    #[test]
+    fn minting_message_cloud_id_repairs_an_already_linked_artifact() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        conn.execute(
+            "INSERT INTO conversations \
+             (title, user_id, app_mode, cloud_id, created_at, updated_at) \
+             VALUES ('Cloud', 'u1', 'cloud', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            params![conversation_cloud_id],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content, created_at) \
+             VALUES (?1, 'u1', 'assistant', 'answer', CURRENT_TIMESTAMP)",
+            params![conversation_id],
+        )
+        .unwrap();
+        let message_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO artifacts \
+             (id, artifact_type, title, content, conversation_id, message_id, \
+              created_at, updated_at, app_mode, cloud_id, conversation_cloud_id, needs_push) \
+             VALUES ('late-message-cloud-id', 'code', 'A', 'x', ?1, ?2, \
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'cloud', ?3, ?4, 0)",
+            params![
+                conversation_id.to_string(),
+                message_id,
+                Uuid::now_v7().to_string(),
+                conversation_cloud_id
+            ],
+        )
+        .unwrap();
+
+        mark_message_for_push(&conn, message_id).unwrap();
+        let message_cloud_id: String = conn
+            .query_row(
+                "SELECT cloud_id FROM messages WHERE id = ?1",
+                params![message_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let artifact: (Option<String>, i64) = conn
+            .query_row(
+                "SELECT message_cloud_id, needs_push FROM artifacts WHERE id = 'late-message-cloud-id'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(artifact.0.as_deref(), Some(message_cloud_id.as_str()));
+        assert_eq!(artifact.1, 1);
     }
 
     /// push_gather_excludes_local_artifacts: gather only pulls cloud artifacts.
@@ -2520,29 +3783,116 @@ mod tests {
         let arts = gather_push_artifacts(&conn, "u1").unwrap();
         assert_eq!(arts.len(), 1, "only cloud artifact should be gathered");
         assert_eq!(arts[0].id, "uuid-cloud-art-2");
-        assert_eq!(arts[0].artifact_type, "code", "artifact_type must be gathered");
+        assert_eq!(
+            arts[0].artifact_type, "code",
+            "artifact_type must be gathered"
+        );
         assert_eq!(arts[0].content, "hello", "content must be gathered");
+    }
+
+    #[test]
+    fn artifact_push_uses_only_the_portable_message_cloud_id() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        conn.execute(
+            "INSERT INTO conversations \
+             (title, user_id, app_mode, cloud_id, created_at, updated_at) \
+             VALUES ('Cloud', 'u1', 'cloud', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            params![conversation_cloud_id],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages \
+             (conversation_id, conversation_cloud_id, user_id, role, content, cloud_id, created_at) \
+             VALUES (?1, ?2, 'u1', 'assistant', 'answer', ?3, CURRENT_TIMESTAMP)",
+            params![conversation_id, conversation_cloud_id, message_cloud_id],
+        )
+        .unwrap();
+        let local_message_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO artifacts \
+             (id, artifact_type, title, content, conversation_id, message_id, message_cloud_id, \
+              created_at, updated_at, app_mode, cloud_id, conversation_cloud_id, needs_push) \
+             VALUES ('portable-owner-artifact', 'react', 'A', '<A />', ?1, ?2, ?3, \
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'cloud', ?4, ?5, 1)",
+            params![
+                conversation_id.to_string(),
+                local_message_id,
+                message_cloud_id,
+                artifact_cloud_id,
+                conversation_cloud_id
+            ],
+        )
+        .unwrap();
+
+        let artifacts = gather_push_artifacts(&conn, "u1").unwrap();
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(
+            artifacts[0].message_id.as_deref(),
+            Some(message_cloud_id.as_str())
+        );
+        let wire = serde_json::to_value(&artifacts[0]).unwrap();
+        assert_eq!(wire["messageId"], message_cloud_id);
+        assert_ne!(wire["messageId"], local_message_id);
+    }
+
+    #[test]
+    fn malformed_message_cloud_id_is_never_serialized() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        conn.execute(
+            "INSERT INTO conversations \
+             (title, user_id, app_mode, cloud_id, created_at, updated_at) \
+             VALUES ('Cloud', 'u1', 'cloud', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            params![conversation_cloud_id],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO artifacts \
+             (id, artifact_type, title, content, conversation_id, message_id, message_cloud_id, \
+              created_at, updated_at, app_mode, cloud_id, conversation_cloud_id, needs_push) \
+             VALUES ('malformed-owner-artifact', 'code', 'A', 'x', ?1, 42, '42', \
+                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'cloud', ?2, ?3, 1)",
+            params![
+                conversation_id.to_string(),
+                artifact_cloud_id,
+                conversation_cloud_id
+            ],
+        )
+        .unwrap();
+
+        let artifacts = gather_push_artifacts(&conn, "u1").unwrap();
+        assert_eq!(artifacts.len(), 1);
+        assert!(artifacts[0].message_id.is_none());
+        let wire = serde_json::to_value(&artifacts[0]).unwrap();
+        assert!(wire.get("messageId").is_none());
     }
 
     /// artifact push wire shape: camelCase with skip_serializing_if for None.
     #[test]
     fn artifact_push_body_serializes_to_camelcase_schema() {
         let body = PushBody {
+            protocol_version: 2,
             conversations: vec![],
             messages: vec![],
             artifacts: vec![PushArtifact {
                 id: "art-uuid-1".into(),
                 conversation_id: "conv-uuid-1".into(),
+                message_id: Some("019b7ba6-6d81-7000-8000-000000000001".into()),
                 artifact_type: "code".into(),
                 content: "fn main() {}".into(),
-                updated_at: "2026-06-22T00:00:00.000Z".into(),
+                base_version: "9".into(),
                 title: Some("My Artifact".into()),
                 language: Some("rust".into()),
                 current_version: Some(2),
                 pinned: Some(true),
                 tags: Some(vec!["tag1".into()]),
-                created_at: Some("2026-06-20T00:00:00.000Z".into()),
-                deleted_at: None,
+                is_deleted: None,
             }],
         };
         let v = serde_json::to_value(&body).unwrap();
@@ -2554,28 +3904,48 @@ mod tests {
 
         // Required camelCase fields.
         assert_eq!(art["id"], "art-uuid-1");
-        assert_eq!(art["conversationId"], "conv-uuid-1", "conversationId must be camelCase");
-        assert_eq!(art["artifactType"], "code", "artifactType must be camelCase");
+        assert_eq!(
+            art["conversationId"], "conv-uuid-1",
+            "conversationId must be camelCase"
+        );
+        assert_eq!(
+            art["artifactType"], "code",
+            "artifactType must be camelCase"
+        );
         assert_eq!(art["content"], "fn main() {}");
-        assert!(art.get("updatedAt").is_some(), "updatedAt must be present");
+        assert_eq!(art["baseVersion"], "9");
+        assert_eq!(
+            art["messageId"], "019b7ba6-6d81-7000-8000-000000000001",
+            "messageId must be the portable cloud UUID"
+        );
+        assert!(art.get("updatedAt").is_none());
 
         // Optional camelCase fields.
         assert_eq!(art["title"], "My Artifact");
         assert_eq!(art["language"], "rust");
         assert_eq!(art["currentVersion"], 2, "currentVersion must be camelCase");
         assert_eq!(art["pinned"], true);
-        assert_eq!(art["createdAt"], "2026-06-20T00:00:00.000Z");
+        assert!(art.get("createdAt").is_none());
 
         // deletedAt absent when None (Zod optional rejects null).
         assert!(
-            art.get("deletedAt").is_none(),
-            "deletedAt must be absent when None — Zod .optional() rejects null"
+            art.get("isDeleted").is_none(),
+            "isDeleted must be absent when None"
         );
 
         // snake_case keys must never appear.
-        assert!(art.get("artifact_type").is_none(), "must not emit snake_case artifact_type");
-        assert!(art.get("conversation_id").is_none(), "must not emit snake_case conversation_id");
-        assert!(art.get("current_version").is_none(), "must not emit snake_case current_version");
+        assert!(
+            art.get("artifact_type").is_none(),
+            "must not emit snake_case artifact_type"
+        );
+        assert!(
+            art.get("conversation_id").is_none(),
+            "must not emit snake_case conversation_id"
+        );
+        assert!(
+            art.get("current_version").is_none(),
+            "must not emit snake_case current_version"
+        );
 
         // user_id must never appear.
         assert!(art.get("userId").is_none() && art.get("user_id").is_none());
@@ -2585,29 +3955,38 @@ mod tests {
     #[test]
     fn artifact_push_none_optionals_are_absent_not_null() {
         let body = PushBody {
+            protocol_version: 2,
             conversations: vec![],
             messages: vec![],
             artifacts: vec![PushArtifact {
                 id: "art-uuid-2".into(),
                 conversation_id: "conv-uuid-2".into(),
+                message_id: None,
                 artifact_type: "document".into(),
                 content: "some text".into(),
-                updated_at: "2026-06-22T00:00:00.000Z".into(),
+                base_version: "0".into(),
                 title: None,
                 language: None,
                 current_version: None,
                 pinned: None,
                 tags: None,
-                created_at: None,
-                deleted_at: None,
+                is_deleted: None,
             }],
         };
         let v = serde_json::to_value(&body).unwrap();
         let art = &v["artifacts"][0];
 
         // All None optional fields must be completely absent (key must not exist).
-        for key in ["title", "language", "currentVersion", "pinned", "tags",
-                    "createdAt", "deletedAt"] {
+        for key in [
+            "title",
+            "messageId",
+            "language",
+            "currentVersion",
+            "pinned",
+            "tags",
+            "createdAt",
+            "deletedAt",
+        ] {
             assert!(
                 art.get(key).is_none(),
                 "Optional field '{}' must be absent when None — Zod .optional() rejects null",
@@ -2681,7 +4060,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 1, "re-pulling the same artifact cloud_id must not create a duplicate row");
+        assert_eq!(
+            count, 1,
+            "re-pulling the same artifact cloud_id must not create a duplicate row"
+        );
     }
 
     /// pull_artifact_tombstone: a deleted_at in the delta soft-deletes the local row.
@@ -2740,8 +4122,14 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert_eq!(still_exists, 1, "tombstoned artifact must NOT be hard-deleted");
-        assert!(deleted_at_utc.is_some(), "tombstoned artifact must have deleted_at_utc set");
+        assert_eq!(
+            still_exists, 1,
+            "tombstoned artifact must NOT be hard-deleted"
+        );
+        assert!(
+            deleted_at_utc.is_some(),
+            "tombstoned artifact must have deleted_at_utc set"
+        );
     }
 
     /// pull_artifact_orphan: artifact whose parent conversation is absent is skipped.
@@ -2777,7 +4165,10 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(count, 0, "orphan artifact must NOT be inserted into artifacts table");
+        assert_eq!(
+            count, 0,
+            "orphan artifact must NOT be inserted into artifacts table"
+        );
     }
 
     /// apply_pull_page resolves within-page artifact orphan when conversation lands first.
@@ -2806,7 +4197,10 @@ mod tests {
 
         let (convs, _msgs, arts) = apply_pull_page(&conn, "u1", &page);
         assert_eq!(convs, 1, "conversation must be applied");
-        assert_eq!(arts, 1, "artifact must be applied (conversation landed first on same page)");
+        assert_eq!(
+            arts, 1,
+            "artifact must be applied (conversation landed first on same page)"
+        );
 
         let count: i64 = conn
             .query_row(
@@ -2817,18 +4211,817 @@ mod tests {
             .unwrap();
         assert_eq!(count, 1, "artifact must be in DB after apply_pull_page");
     }
+
+    #[test]
+    fn pull_same_page_links_artifact_to_the_local_message_by_cloud_identity() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        let page = PullResponse {
+            conversations: vec![cloud_conversation_delta(&conversation_cloud_id, "1")],
+            messages: vec![cloud_message_delta(
+                &message_cloud_id,
+                &conversation_cloud_id,
+                "2",
+            )],
+            artifacts: vec![cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                Some(&message_cloud_id),
+                "3",
+            )],
+            cursor: Some("3".to_string()),
+            has_more: false,
+        };
+
+        let (_, messages, artifacts) = apply_pull_page(&conn, "u1", &page);
+        assert_eq!(messages, 1);
+        assert_eq!(artifacts, 1);
+        let local_message_id: i64 = conn
+            .query_row(
+                "SELECT id FROM messages WHERE cloud_id = ?1",
+                params![message_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let owner: (Option<i64>, Option<String>) = conn
+            .query_row(
+                "SELECT message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(owner.0, Some(local_message_id));
+        assert_eq!(owner.1.as_deref(), Some(message_cloud_id.as_str()));
+    }
+
+    #[test]
+    fn pull_artifact_before_message_reconciles_on_a_later_page() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+
+        let artifact_page = PullResponse {
+            conversations: vec![cloud_conversation_delta(&conversation_cloud_id, "1")],
+            messages: vec![],
+            artifacts: vec![cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                Some(&message_cloud_id),
+                "2",
+            )],
+            cursor: Some("2".to_string()),
+            has_more: true,
+        };
+        apply_pull_page(&conn, "u1", &artifact_page);
+        let before: (Option<i64>, Option<String>) = conn
+            .query_row(
+                "SELECT message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(before.0, None);
+        assert_eq!(before.1.as_deref(), Some(message_cloud_id.as_str()));
+
+        let message_page = PullResponse {
+            conversations: vec![],
+            messages: vec![cloud_message_delta(
+                &message_cloud_id,
+                &conversation_cloud_id,
+                "3",
+            )],
+            artifacts: vec![],
+            cursor: Some("3".to_string()),
+            has_more: false,
+        };
+        apply_pull_page(&conn, "u1", &message_page);
+
+        let expected_message_id: i64 = conn
+            .query_row(
+                "SELECT id FROM messages WHERE cloud_id = ?1",
+                params![message_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let linked_message_id: Option<i64> = conn
+            .query_row(
+                "SELECT message_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(linked_message_id, Some(expected_message_id));
+    }
+
+    #[test]
+    fn pull_missing_or_deleted_message_stays_unlinked_but_retains_portable_owner() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let missing_message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        apply_conversation_deltas(
+            &conn,
+            "u1",
+            &[cloud_conversation_delta(&conversation_cloud_id, "1")],
+        );
+        apply_artifact_deltas(
+            &conn,
+            "u1",
+            &[cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                Some(&missing_message_cloud_id),
+                "2",
+            )],
+        );
+
+        let owner: (Option<i64>, Option<String>) = conn
+            .query_row(
+                "SELECT message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(owner.0, None);
+        assert_eq!(owner.1.as_deref(), Some(missing_message_cloud_id.as_str()));
+
+        let local_conversation_id: i64 = conn
+            .query_row(
+                "SELECT id FROM conversations WHERE cloud_id = ?1",
+                params![conversation_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        conn.execute(
+            "INSERT INTO messages \
+             (cloud_id, conversation_id, conversation_cloud_id, user_id, role, content, \
+              created_at, deleted_at_utc, needs_push) \
+             VALUES (?1, ?2, ?3, 'u1', 'assistant', 'deleted', CURRENT_TIMESTAMP, \
+                     CURRENT_TIMESTAMP, 0)",
+            params![
+                missing_message_cloud_id,
+                local_conversation_id,
+                conversation_cloud_id
+            ],
+        )
+        .unwrap();
+        assert_eq!(reconcile_artifact_message_links(&conn, "u1"), 0);
+        let linked: Option<i64> = conn
+            .query_row(
+                "SELECT message_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            linked, None,
+            "a tombstoned message must never regain an artifact"
+        );
+    }
+
+    #[test]
+    fn message_tombstone_detaches_an_existing_artifact_without_losing_cloud_identity() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        apply_conversation_deltas(
+            &conn,
+            "u1",
+            &[cloud_conversation_delta(&conversation_cloud_id, "1")],
+        );
+        apply_message_deltas(
+            &conn,
+            "u1",
+            &[cloud_message_delta(
+                &message_cloud_id,
+                &conversation_cloud_id,
+                "2",
+            )],
+        );
+        apply_artifact_deltas(
+            &conn,
+            "u1",
+            &[cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                Some(&message_cloud_id),
+                "3",
+            )],
+        );
+        let mut tombstone = cloud_message_delta(&message_cloud_id, &conversation_cloud_id, "4");
+        tombstone.deleted_at = Some("2026-07-15T00:00:04Z".to_string());
+        apply_message_deltas(&conn, "u1", &[tombstone]);
+
+        let owner: (Option<i64>, Option<String>) = conn
+            .query_row(
+                "SELECT message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(owner.0, None);
+        assert_eq!(owner.1.as_deref(), Some(message_cloud_id.as_str()));
+        assert_eq!(reconcile_artifact_message_links(&conn, "u1"), 0);
+    }
+
+    #[test]
+    fn malformed_pulled_message_cloud_id_fails_closed() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        apply_conversation_deltas(
+            &conn,
+            "u1",
+            &[cloud_conversation_delta(&conversation_cloud_id, "1")],
+        );
+        apply_artifact_deltas(
+            &conn,
+            "u1",
+            &[cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                Some("42"),
+                "2",
+            )],
+        );
+
+        let owner: (Option<i64>, Option<String>) = conn
+            .query_row(
+                "SELECT message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(owner, (None, None));
+    }
+
+    #[test]
+    fn late_reconciliation_never_crosses_tenant_or_conversation_boundaries() {
+        let conn = fresh_db();
+        let owner_conversation_cloud_id = Uuid::now_v7().to_string();
+        let other_conversation_cloud_id = Uuid::now_v7().to_string();
+        let shared_message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        apply_conversation_deltas(
+            &conn,
+            "u1",
+            &[
+                cloud_conversation_delta(&owner_conversation_cloud_id, "1"),
+                cloud_conversation_delta(&other_conversation_cloud_id, "2"),
+            ],
+        );
+        apply_artifact_deltas(
+            &conn,
+            "u1",
+            &[cloud_artifact_delta(
+                &artifact_cloud_id,
+                &owner_conversation_cloud_id,
+                Some(&shared_message_cloud_id),
+                "3",
+            )],
+        );
+        let other_conversation_id: i64 = conn
+            .query_row(
+                "SELECT id FROM conversations WHERE cloud_id = ?1",
+                params![other_conversation_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        conn.execute(
+            "INSERT INTO messages \
+             (cloud_id, conversation_id, conversation_cloud_id, user_id, role, content, created_at) \
+             VALUES (?1, ?2, ?3, 'u2', 'assistant', 'wrong owner', CURRENT_TIMESTAMP)",
+            params![
+                shared_message_cloud_id,
+                other_conversation_id,
+                other_conversation_cloud_id
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(reconcile_artifact_message_links(&conn, "u1"), 0);
+        let owner: Option<i64> = conn
+            .query_row(
+                "SELECT message_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(owner, None);
+    }
+
+    #[test]
+    fn duplicate_pull_is_idempotent_and_preserves_message_owner() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        apply_conversation_deltas(
+            &conn,
+            "u1",
+            &[cloud_conversation_delta(&conversation_cloud_id, "1")],
+        );
+        apply_message_deltas(
+            &conn,
+            "u1",
+            &[cloud_message_delta(
+                &message_cloud_id,
+                &conversation_cloud_id,
+                "2",
+            )],
+        );
+        let delta = cloud_artifact_delta(
+            &artifact_cloud_id,
+            &conversation_cloud_id,
+            Some(&message_cloud_id),
+            "3",
+        );
+        assert_eq!(
+            apply_artifact_deltas(&conn, "u1", std::slice::from_ref(&delta)),
+            1
+        );
+        assert_eq!(apply_artifact_deltas(&conn, "u1", &[delta]), 1);
+        let result: (i64, Option<i64>, Option<String>) = conn
+            .query_row(
+                "SELECT COUNT(*), message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(result.0, 1);
+        assert!(result.1.is_some());
+        assert_eq!(result.2.as_deref(), Some(message_cloud_id.as_str()));
+    }
+
+    #[test]
+    fn reconciliation_handles_zero_one_five_hundred_and_five_hundred_one_rows() {
+        for expected in [0usize, 1, 500, 501] {
+            let conn = fresh_db();
+            let conversation_cloud_id = Uuid::now_v7().to_string();
+            let message_cloud_id = Uuid::now_v7().to_string();
+            apply_conversation_deltas(
+                &conn,
+                "u1",
+                &[cloud_conversation_delta(&conversation_cloud_id, "1")],
+            );
+            for ordinal in 0..expected {
+                let artifact_cloud_id = Uuid::now_v7().to_string();
+                apply_artifact_deltas(
+                    &conn,
+                    "u1",
+                    &[cloud_artifact_delta(
+                        &artifact_cloud_id,
+                        &conversation_cloud_id,
+                        Some(&message_cloud_id),
+                        &(ordinal + 2).to_string(),
+                    )],
+                );
+            }
+            apply_message_deltas(
+                &conn,
+                "u1",
+                &[cloud_message_delta(
+                    &message_cloud_id,
+                    &conversation_cloud_id,
+                    "2000",
+                )],
+            );
+            assert_eq!(
+                reconcile_artifact_message_links(&conn, "u1"),
+                expected,
+                "reconciliation must process exactly {expected} rows"
+            );
+            let linked: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM artifacts WHERE message_id IS NOT NULL",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(linked, expected as i64);
+        }
+    }
+
+    #[test]
+    fn portable_owner_survives_database_restart_and_tombstone_does_not_relink() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("artifact-cloud-owner.sqlite");
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let message_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        {
+            let conn = Connection::open(&path).unwrap();
+            run_migrations(&conn).unwrap();
+            let page = PullResponse {
+                conversations: vec![cloud_conversation_delta(&conversation_cloud_id, "1")],
+                messages: vec![cloud_message_delta(
+                    &message_cloud_id,
+                    &conversation_cloud_id,
+                    "2",
+                )],
+                artifacts: vec![cloud_artifact_delta(
+                    &artifact_cloud_id,
+                    &conversation_cloud_id,
+                    Some(&message_cloud_id),
+                    "3",
+                )],
+                cursor: Some("3".to_string()),
+                has_more: false,
+            };
+            apply_pull_page(&conn, "u1", &page);
+        }
+        {
+            let conn = Connection::open(&path).unwrap();
+            run_migrations(&conn).unwrap();
+            let owner: (Option<i64>, Option<String>) = conn
+                .query_row(
+                    "SELECT message_id, message_cloud_id FROM artifacts WHERE cloud_id = ?1",
+                    params![artifact_cloud_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .unwrap();
+            assert!(owner.0.is_some());
+            assert_eq!(owner.1.as_deref(), Some(message_cloud_id.as_str()));
+
+            conn.execute(
+                "UPDATE artifacts SET deleted_at_utc = CURRENT_TIMESTAMP, message_id = NULL \
+                 WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+            )
+            .unwrap();
+            assert_eq!(reconcile_artifact_message_links(&conn, "u1"), 0);
+            let owner_after_tombstone: Option<i64> = conn
+                .query_row(
+                    "SELECT message_id FROM artifacts WHERE cloud_id = ?1",
+                    params![artifact_cloud_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(owner_after_tombstone, None);
+        }
+    }
+
+    #[test]
+    fn artifact_waits_durably_when_its_conversation_is_on_the_next_page() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        let artifact_page = PullResponse {
+            conversations: vec![],
+            messages: vec![],
+            artifacts: vec![cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                None,
+                "1",
+            )],
+            cursor: Some("1".to_string()),
+            has_more: true,
+        };
+        let (_, _, applied_before_parent) = apply_pull_page(&conn, "u1", &artifact_page);
+        assert_eq!(applied_before_parent, 0);
+        let pending: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM cloud_sync_pending_artifacts WHERE user_id = 'u1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(pending, 1);
+
+        let conversation_page = PullResponse {
+            conversations: vec![cloud_conversation_delta(&conversation_cloud_id, "2")],
+            messages: vec![],
+            artifacts: vec![],
+            cursor: Some("2".to_string()),
+            has_more: false,
+        };
+        let (_, _, applied_after_parent) = apply_pull_page(&conn, "u1", &conversation_page);
+        assert_eq!(applied_after_parent, 1);
+        let result: (i64, i64) = conn
+            .query_row(
+                "SELECT \
+                   (SELECT COUNT(*) FROM artifacts WHERE cloud_id = ?1), \
+                   (SELECT COUNT(*) FROM cloud_sync_pending_artifacts WHERE cloud_id = ?1)",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(result, (1, 0));
+
+        let (_, _, duplicate_replay) = apply_pull_page(&conn, "u1", &artifact_page);
+        assert_eq!(
+            duplicate_replay, 1,
+            "a late duplicate is an idempotent update"
+        );
+        let rows: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(rows, 1);
+    }
+
+    #[test]
+    fn artifact_parent_at_record_five_hundred_one_is_not_lost() {
+        let conn = fresh_db();
+        let target_conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        let first_page = PullResponse {
+            conversations: (0..500)
+                .map(|ordinal| {
+                    cloud_conversation_delta(
+                        &Uuid::now_v7().to_string(),
+                        &(ordinal + 1).to_string(),
+                    )
+                })
+                .collect(),
+            messages: vec![],
+            artifacts: vec![cloud_artifact_delta(
+                &artifact_cloud_id,
+                &target_conversation_cloud_id,
+                None,
+                "501",
+            )],
+            cursor: Some("501".to_string()),
+            has_more: true,
+        };
+        apply_pull_page(&conn, "u1", &first_page);
+        let second_page = PullResponse {
+            conversations: vec![cloud_conversation_delta(
+                &target_conversation_cloud_id,
+                "502",
+            )],
+            messages: vec![],
+            artifacts: vec![],
+            cursor: Some("502".to_string()),
+            has_more: false,
+        };
+        let (_, _, artifacts) = apply_pull_page(&conn, "u1", &second_page);
+        assert_eq!(artifacts, 1);
+        let exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM artifacts WHERE cloud_id = ?1)",
+                params![artifact_cloud_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(exists);
+    }
+
+    #[test]
+    fn pending_artifact_survives_restart_between_pull_pages() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pending-artifact.sqlite");
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        {
+            let conn = Connection::open(&path).unwrap();
+            run_migrations(&conn).unwrap();
+            apply_artifact_deltas(
+                &conn,
+                "u1",
+                &[cloud_artifact_delta(
+                    &artifact_cloud_id,
+                    &conversation_cloud_id,
+                    None,
+                    "1",
+                )],
+            );
+        }
+        {
+            let conn = Connection::open(&path).unwrap();
+            run_migrations(&conn).unwrap();
+            let page = PullResponse {
+                conversations: vec![cloud_conversation_delta(&conversation_cloud_id, "2")],
+                messages: vec![],
+                artifacts: vec![],
+                cursor: Some("2".to_string()),
+                has_more: false,
+            };
+            let (_, _, applied) = apply_pull_page(&conn, "u1", &page);
+            assert_eq!(applied, 1);
+            let pending: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM cloud_sync_pending_artifacts",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(pending, 0);
+        }
+    }
+
+    #[test]
+    fn pending_artifact_keeps_only_the_newest_reordered_server_version() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        let mut newest =
+            cloud_artifact_delta(&artifact_cloud_id, &conversation_cloud_id, None, "10");
+        newest.content = "newest".to_string();
+        let mut older = newest.clone();
+        older.server_version = "8".to_string();
+        older.content = "older".to_string();
+        let mut duplicate = newest.clone();
+        duplicate.content = "newest".to_string();
+
+        assert!(buffer_pending_artifact(&conn, "u1", &newest));
+        assert!(!buffer_pending_artifact(&conn, "u1", &older));
+        assert!(
+            !buffer_pending_artifact(&conn, "u1", &duplicate),
+            "an equal server revision is an idempotent no-op"
+        );
+        let row: (i64, String, String) = conn
+            .query_row(
+                "SELECT COUNT(*), content, server_version \
+                 FROM cloud_sync_pending_artifacts WHERE cloud_id = ?1",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(row, (1, "newest".to_string(), "10".to_string()));
+    }
+
+    #[test]
+    fn pending_artifact_tombstone_and_recreation_order_is_preserved() {
+        for tombstone_is_newest in [false, true] {
+            let conn = fresh_db();
+            let conversation_cloud_id = Uuid::now_v7().to_string();
+            let artifact_cloud_id = Uuid::now_v7().to_string();
+            let mut create = cloud_artifact_delta(
+                &artifact_cloud_id,
+                &conversation_cloud_id,
+                None,
+                if tombstone_is_newest { "10" } else { "11" },
+            );
+            create.content = "live".to_string();
+            let mut tombstone = create.clone();
+            tombstone.server_version = if tombstone_is_newest { "11" } else { "10" }.to_string();
+            tombstone.deleted_at = Some("2026-07-15T00:00:03Z".to_string());
+
+            if tombstone_is_newest {
+                assert!(buffer_pending_artifact(&conn, "u1", &create));
+                assert!(buffer_pending_artifact(&conn, "u1", &tombstone));
+            } else {
+                assert!(buffer_pending_artifact(&conn, "u1", &tombstone));
+                assert!(buffer_pending_artifact(&conn, "u1", &create));
+            }
+            apply_conversation_deltas(
+                &conn,
+                "u1",
+                &[cloud_conversation_delta(&conversation_cloud_id, "12")],
+            );
+            let _ = drain_pending_artifacts(&conn, "u1");
+            let live: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM artifacts \
+                     WHERE cloud_id = ?1 AND deleted_at_utc IS NULL",
+                    params![artifact_cloud_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(live, if tombstone_is_newest { 0 } else { 1 });
+        }
+    }
+
+    #[test]
+    fn permanently_missing_parent_remains_bounded_and_unapplied() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        let artifact = cloud_artifact_delta(&artifact_cloud_id, &conversation_cloud_id, None, "1");
+        apply_artifact_deltas(&conn, "u1", std::slice::from_ref(&artifact));
+        apply_artifact_deltas(&conn, "u1", std::slice::from_ref(&artifact));
+        assert_eq!(drain_pending_artifacts(&conn, "u1"), 0);
+        let state: (i64, i64) = conn
+            .query_row(
+                "SELECT \
+                   (SELECT COUNT(*) FROM cloud_sync_pending_artifacts WHERE cloud_id = ?1), \
+                   (SELECT COUNT(*) FROM artifacts WHERE cloud_id = ?1)",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(state, (1, 0));
+    }
+
+    #[test]
+    fn malformed_parentless_artifact_identity_is_never_journaled() {
+        let conn = fresh_db();
+        let valid_artifact_id = Uuid::now_v7().to_string();
+        let valid_conversation_id = Uuid::now_v7().to_string();
+        let cases = [
+            cloud_artifact_delta("not-a-uuid", &valid_conversation_id, None, "1"),
+            cloud_artifact_delta(&valid_artifact_id, "not-a-uuid", None, "2"),
+            cloud_artifact_delta(&valid_artifact_id, &valid_conversation_id, None, "bad"),
+        ];
+        for delta in cases {
+            assert!(!buffer_pending_artifact(&conn, "u1", &delta));
+        }
+        let pending: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM cloud_sync_pending_artifacts",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(pending, 0);
+    }
+
+    #[test]
+    fn pending_artifact_pruning_enforces_row_and_byte_caps_deterministically() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        for (ordinal, content) in [(1, "a"), (2, "bb"), (3, "ccc")] {
+            let mut artifact = cloud_artifact_delta(
+                &Uuid::now_v7().to_string(),
+                &conversation_cloud_id,
+                None,
+                &ordinal.to_string(),
+            );
+            artifact.content = content.to_string();
+            assert!(buffer_pending_artifact(&conn, "u1", &artifact));
+        }
+        prune_pending_artifacts(&conn, "u1", 2, 4);
+        let kept: Vec<String> = conn
+            .prepare(
+                "SELECT server_version FROM cloud_sync_pending_artifacts \
+                 WHERE user_id = 'u1' ORDER BY CAST(server_version AS INTEGER)",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(kept, vec!["3".to_string()]);
+
+        let mut multibyte = cloud_artifact_delta(
+            &Uuid::now_v7().to_string(),
+            &conversation_cloud_id,
+            None,
+            "4",
+        );
+        multibyte.content = "💥💥".to_string();
+        assert!(buffer_pending_artifact(&conn, "u2", &multibyte));
+        prune_pending_artifacts(&conn, "u2", 1, 4);
+        let multibyte_kept: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM cloud_sync_pending_artifacts WHERE user_id = 'u2'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            multibyte_kept, 0,
+            "the cap is measured in encoded bytes, not Unicode scalar values"
+        );
+    }
+
+    #[test]
+    fn pending_artifact_never_drains_into_another_users_conversation() {
+        let conn = fresh_db();
+        let conversation_cloud_id = Uuid::now_v7().to_string();
+        let artifact_cloud_id = Uuid::now_v7().to_string();
+        assert!(buffer_pending_artifact(
+            &conn,
+            "u1",
+            &cloud_artifact_delta(&artifact_cloud_id, &conversation_cloud_id, None, "1",)
+        ));
+        apply_conversation_deltas(
+            &conn,
+            "u2",
+            &[cloud_conversation_delta(&conversation_cloud_id, "2")],
+        );
+        assert_eq!(drain_pending_artifacts(&conn, "u1"), 0);
+        let state: (i64, i64) = conn
+            .query_row(
+                "SELECT \
+                   (SELECT COUNT(*) FROM cloud_sync_pending_artifacts WHERE cloud_id = ?1), \
+                   (SELECT COUNT(*) FROM artifacts WHERE cloud_id = ?1)",
+                params![artifact_cloud_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(state, (1, 0));
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Fixture replay (Wave 4 — shared sync-apply extraction).
 //
-// The golden fixtures under packages/services/src/sync-apply/__fixtures__/
+// The golden fixtures under packages/client/sync/src/__fixtures__/
 // are the cross-language contract: TS's replay lives in
-// packages/services/src/sync-apply/__tests__/fixtures.test.ts. This module
+// packages/client/sync/src/__tests__/fixtures.test.ts. This module
 // replays the SAME JSON against these native Rust apply fns (Rust cannot
 // import the TS module — it re-implements the rules natively) to prove the
 // two independently-written implementations agree on observable outcome.
-// NO existing function in this file was changed to add this module.
 //
 // Fixture access — DIRECT include_str! across the workspace (not a copy):
 // `include_str!` resolves at COMPILE TIME relative to THIS source file, not
@@ -2838,17 +5031,12 @@ mod tests {
 // copy — if the canonical fixture changes, this file picks it up on the
 // next build. The tradeoff is a compile-time dependency from this crate on
 // a sibling pnpm package's file layout: if
-// packages/services/src/sync-apply/__fixtures__ is ever moved, this path
+// packages/client/sync/src/__fixtures__ is ever moved, this path
 // must move with it — a loud compile error, not a silent skip.
 //
 // DIVERGENCE LEDGER (cases intentionally not replayed here, or replayed
 // with different intermediate assertions than the TS side — full rationale
 // in each fixture case's own `divergenceNote` field):
-//   - "dirty_title_preserved_against_stale_delta" (pull-apply.json, tagged
-//     ["ts"] only): apply_conversation_deltas has no dirtyConversationIds
-//     parameter — it always applies the server title via COALESCE. Desktop
-//     has no client-side rename-durability guard today; not a bug to fix
-//     as part of this test-only extraction.
 //   - "message_count_preserved_from_existing_on_update" (tagged ["ts"]
 //     only): the `conversations` table has no message_count column
 //     (desktop counts messages by SQL query, not a stored counter) — not a
@@ -2858,7 +5046,7 @@ mod tests {
 //     assertion after step 1 alone (message buffered, not yet a live row)
 //     that the TS side does not have — TS's port has no FK constraint, so
 //     the message is already visible after step 1 there. See
-//     packages/services/src/sync-apply/messages.ts's module docstring for
+//     packages/client/sync/src/messages.ts's module docstring for
 //     the full rationale (SQLite FK constraint vs. a plain Zustand map).
 //   - Rust's wire structs (ConversationDelta/MessageDelta/ArtifactDelta) use
 //     lenient `Option<...>` fields where the TS wire schema requires
@@ -2889,7 +5077,7 @@ mod fixture_tests {
 
     const USER_ID: &str = "fixture-user";
 
-    // ── Fixture schema (mirrors packages/services/src/sync-apply/__fixtures__) ──
+    // ── Fixture schema (mirrors packages/client/sync/src/__fixtures__) ──
     //
     // These structs are test-only projections, distinct from the production
     // ConversationDelta/MessageDelta/ArtifactDelta wire structs (which are
@@ -2931,6 +5119,8 @@ mod fixture_tests {
         name: String,
         applies: Vec<String>,
         #[serde(default)]
+        dirty_conversation_ids: Vec<String>,
+        #[serde(default)]
         initial_conversations: Vec<FxConversation>,
         #[serde(default)]
         initial_messages: HashMap<String, Vec<FxMessage>>,
@@ -2953,10 +5143,8 @@ mod fixture_tests {
     }
 
     fn load_pull_apply_fixtures() -> FxFile {
-        // Canonical source: packages/services/src/sync-apply/__fixtures__/pull-apply.json
-        let raw = include_str!(
-            "../../../../../packages/services/src/sync-apply/__fixtures__/pull-apply.json"
-        );
+        // Canonical source: packages/client/sync/src/__fixtures__/pull-apply.json
+        let raw = include_str!("../../../../../packages/client/sync/src/__fixtures__/pull-apply.json");
         serde_json::from_str(raw).expect("pull-apply.json must parse into FxFile")
     }
 
@@ -3002,12 +5190,32 @@ mod fixture_tests {
             params![expected.id],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         );
-        let (title, created_at, updated_at, deleted_at_utc) = result
-            .unwrap_or_else(|e| panic!("[{case}] expected live conversation {} is missing: {e}", expected.id));
-        assert_eq!(title, expected.title, "[{case}] conversation {} title", expected.id);
-        assert_eq!(created_at, expected.created_at, "[{case}] conversation {} createdAt", expected.id);
-        assert_eq!(updated_at, expected.updated_at, "[{case}] conversation {} updatedAt", expected.id);
-        assert!(deleted_at_utc.is_none(), "[{case}] conversation {} must be live", expected.id);
+        let (title, created_at, updated_at, deleted_at_utc) = result.unwrap_or_else(|e| {
+            panic!(
+                "[{case}] expected live conversation {} is missing: {e}",
+                expected.id
+            )
+        });
+        assert_eq!(
+            title, expected.title,
+            "[{case}] conversation {} title",
+            expected.id
+        );
+        assert_eq!(
+            created_at, expected.created_at,
+            "[{case}] conversation {} createdAt",
+            expected.id
+        );
+        assert_eq!(
+            updated_at, expected.updated_at,
+            "[{case}] conversation {} updatedAt",
+            expected.id
+        );
+        assert!(
+            deleted_at_utc.is_none(),
+            "[{case}] conversation {} must be live",
+            expected.id
+        );
     }
 
     fn assert_tombstoned_conversation(conn: &Connection, case: &str, id: &str) {
@@ -3017,13 +5225,23 @@ mod fixture_tests {
                 params![id],
                 |r| r.get(0),
             )
-            .unwrap_or_else(|e| panic!("[{case}] expected tombstoned conversation {id} is missing: {e}"));
-        assert!(deleted_at_utc.is_some(), "[{case}] conversation {id} must be tombstoned (deleted_at_utc set)");
+            .unwrap_or_else(|e| {
+                panic!("[{case}] expected tombstoned conversation {id} is missing: {e}")
+            });
+        assert!(
+            deleted_at_utc.is_some(),
+            "[{case}] conversation {id} must be tombstoned (deleted_at_utc set)"
+        );
     }
 
     /// Ordered by created_at (always non-null on this path — see apply_message_deltas'
     /// insert branch), then cloud_id — the same tie-break TS's port applies.
-    fn assert_live_messages(conn: &Connection, case: &str, conversation_cloud_id: &str, expected: &[FxMessage]) {
+    fn assert_live_messages(
+        conn: &Connection,
+        case: &str,
+        conversation_cloud_id: &str,
+        expected: &[FxMessage],
+    ) {
         let mut stmt = conn
             .prepare(
                 "SELECT m.cloud_id, m.role, m.content FROM messages m \
@@ -3033,12 +5251,16 @@ mod fixture_tests {
             )
             .unwrap();
         let actual: Vec<(String, String, String)> = stmt
-            .query_map(params![conversation_cloud_id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .query_map(params![conversation_cloud_id], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
             .unwrap()
             .map(|r| r.unwrap())
             .collect();
-        let expected_tuples: Vec<(String, String, String)> =
-            expected.iter().map(|m| (m.id.clone(), m.role.clone(), m.content.clone())).collect();
+        let expected_tuples: Vec<(String, String, String)> = expected
+            .iter()
+            .map(|m| (m.id.clone(), m.role.clone(), m.content.clone()))
+            .collect();
         assert_eq!(
             actual, expected_tuples,
             "[{case}] live messages for conversation {conversation_cloud_id} (id, role, content), ordered by created_at then id"
@@ -3047,16 +5269,32 @@ mod fixture_tests {
 
     fn assert_live_artifact(conn: &Connection, case: &str, id: &str) {
         let deleted_at_utc: Option<String> = conn
-            .query_row("SELECT deleted_at_utc FROM artifacts WHERE cloud_id = ?1", params![id], |r| r.get(0))
+            .query_row(
+                "SELECT deleted_at_utc FROM artifacts WHERE cloud_id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
             .unwrap_or_else(|e| panic!("[{case}] expected live artifact {id} is missing: {e}"));
-        assert!(deleted_at_utc.is_none(), "[{case}] artifact {id} must be live");
+        assert!(
+            deleted_at_utc.is_none(),
+            "[{case}] artifact {id} must be live"
+        );
     }
 
     fn assert_tombstoned_artifact(conn: &Connection, case: &str, id: &str) {
         let deleted_at_utc: Option<String> = conn
-            .query_row("SELECT deleted_at_utc FROM artifacts WHERE cloud_id = ?1", params![id], |r| r.get(0))
-            .unwrap_or_else(|e| panic!("[{case}] expected tombstoned artifact {id} is missing: {e}"));
-        assert!(deleted_at_utc.is_some(), "[{case}] artifact {id} must be tombstoned");
+            .query_row(
+                "SELECT deleted_at_utc FROM artifacts WHERE cloud_id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .unwrap_or_else(|e| {
+                panic!("[{case}] expected tombstoned artifact {id} is missing: {e}")
+            });
+        assert!(
+            deleted_at_utc.is_some(),
+            "[{case}] artifact {id} must be tombstoned"
+        );
     }
 
     fn take_page(step: &mut FxStep) -> PullResponse {
@@ -3089,6 +5327,18 @@ mod fixture_tests {
             for conv in &case.initial_conversations {
                 seed_conversation(&conn, conv);
             }
+            for id in &case.dirty_conversation_ids {
+                conn.execute(
+                    "UPDATE conversations SET needs_push = 1 WHERE cloud_id = ?1",
+                    params![id],
+                )
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "[{}] failed to mark dirty conversation {id}: {e}",
+                        case.name
+                    )
+                });
+            }
             for (conv_id, msgs) in &case.initial_messages {
                 for msg in msgs {
                     seed_message(&conn, conv_id, msg);
@@ -3101,14 +5351,31 @@ mod fixture_tests {
                 // the message must NOT be a live row — it must be buffered.
                 // Replayed via apply_pull_page (not apply_message_deltas
                 // directly) so the real conv→drain→msg ordering is exercised.
-                assert_eq!(case.steps.len(), 2, "[{}] expected exactly 2 steps", case.name);
+                assert_eq!(
+                    case.steps.len(),
+                    2,
+                    "[{}] expected exactly 2 steps",
+                    case.name
+                );
                 let page1 = take_page(&mut case.steps[0]);
                 let (_c, m, _a) = apply_pull_page(&conn, USER_ID, &page1);
-                assert_eq!(m, 0, "[{}] orphan message must not be visible before its parent lands", case.name);
+                assert_eq!(
+                    m, 0,
+                    "[{}] orphan message must not be visible before its parent lands",
+                    case.name
+                );
                 let pending: i64 = conn
-                    .query_row("SELECT COUNT(*) FROM cloud_sync_pending_messages", [], |r| r.get(0))
+                    .query_row(
+                        "SELECT COUNT(*) FROM cloud_sync_pending_messages",
+                        [],
+                        |r| r.get(0),
+                    )
                     .unwrap();
-                assert_eq!(pending, 1, "[{}] orphan message must be buffered, not dropped", case.name);
+                assert_eq!(
+                    pending, 1,
+                    "[{}] orphan message must be buffered, not dropped",
+                    case.name
+                );
 
                 let page2 = take_page(&mut case.steps[1]);
                 apply_pull_page(&conn, USER_ID, &page2);
@@ -3136,7 +5403,10 @@ mod fixture_tests {
             }
         }
 
-        assert!(ran_any, "sanity: at least one rust-tagged fixture case must have run");
+        assert!(
+            ran_any,
+            "sanity: at least one rust-tagged fixture case must have run"
+        );
     }
 
     // ── Suite (d): bigint cursor compare (cursor-compare.json) ─────────────
@@ -3176,17 +5446,26 @@ mod fixture_tests {
 
     #[test]
     fn replay_cursor_compare_fixtures() {
-        // Canonical source: packages/services/src/sync-apply/__fixtures__/cursor-compare.json
-        let raw = include_str!(
-            "../../../../../packages/services/src/sync-apply/__fixtures__/cursor-compare.json"
-        );
-        let fixtures: FxCursorFile = serde_json::from_str(raw).expect("cursor-compare.json must parse");
+        // Canonical source: packages/client/sync/src/__fixtures__/cursor-compare.json
+        let raw = include_str!("../../../../../packages/client/sync/src/__fixtures__/cursor-compare.json");
+        let fixtures: FxCursorFile =
+            serde_json::from_str(raw).expect("cursor-compare.json must parse");
 
         for c in &fixtures.bigint_greater_cases {
-            assert_eq!(bigint_greater(&c.a, &c.b), c.expected, "bigintGreater — {}", c.name);
+            assert_eq!(
+                bigint_greater(&c.a, &c.b),
+                c.expected,
+                "bigintGreater — {}",
+                c.name
+            );
         }
         for c in &fixtures.max_cursor_cases {
-            assert_eq!(max_cursor(&c.base, &c.versions), c.expected, "maxCursor — {}", c.name);
+            assert_eq!(
+                max_cursor(&c.base, &c.versions),
+                c.expected,
+                "maxCursor — {}",
+                c.name
+            );
         }
         for c in &fixtures.select_next_cursor_cases {
             assert_eq!(

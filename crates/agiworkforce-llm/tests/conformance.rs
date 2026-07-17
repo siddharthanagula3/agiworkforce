@@ -25,7 +25,7 @@ use serde::Deserialize;
 
 use agiworkforce_llm::{
     LlmError, StreamEvent, classify_error_response, run_anthropic_stream, run_gemini_stream,
-    run_ollama_stream, run_openai_compat_stream,
+    run_ollama_stream, run_openai_compat_stream, run_openai_responses_stream,
 };
 
 const IDLE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -37,6 +37,14 @@ struct StreamFixture {
     chunks: Vec<String>,
     expected_events: Vec<serde_json::Value>,
     expected_outcome: Option<serde_json::Value>,
+    #[serde(default)]
+    expected_error: Option<ExpectedStreamError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExpectedStreamError {
+    kind: String,
+    message_contains: String,
 }
 
 fn load_fixtures<T: serde::de::DeserializeOwned>(file: &str) -> Vec<T> {
@@ -47,7 +55,8 @@ fn load_fixtures<T: serde::de::DeserializeOwned>(file: &str) -> Vec<T> {
         .lines()
         .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
         .map(|l| {
-            serde_json::from_str(l).unwrap_or_else(|e| panic!("bad fixture line in {file}: {e}\n{l}"))
+            serde_json::from_str(l)
+                .unwrap_or_else(|e| panic!("bad fixture line in {file}: {e}\n{l}"))
         })
         .collect();
     assert!(!fixtures.is_empty(), "{file} must contain fixtures");
@@ -72,19 +81,39 @@ async fn replay(fixture: StreamFixture) {
         events.push(serde_json::to_value(&event).expect("StreamEvent serializes"));
     };
 
-    let outcome = match fixture.dialect.as_str() {
+    let result = match fixture.dialect.as_str() {
         "anthropic" => run_anthropic_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
         "gemini" => run_gemini_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
         "ollama" => run_ollama_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
         "openai" => run_openai_compat_stream(stream, IDLE_TIMEOUT, &mut on_event).await,
+        "openai_responses" => {
+            run_openai_responses_stream(stream, IDLE_TIMEOUT, &mut on_event).await
+        }
         other => panic!("[{name}] unknown dialect {other}"),
-    }
-    .unwrap_or_else(|e| panic!("[{name}] stream replay must succeed, got error: {e}"));
+    };
 
     assert_eq!(
         events, fixture.expected_events,
         "[{name}] event sequence mismatch"
     );
+
+    if let Some(expected_error) = fixture.expected_error {
+        match result {
+            Err(error) => {
+                assert_eq!(error.kind(), expected_error.kind, "[{name}] error kind");
+                assert!(
+                    error.to_string().contains(&expected_error.message_contains),
+                    "[{name}] error must contain {:?}, got: {error}",
+                    expected_error.message_contains
+                );
+                return;
+            }
+            Ok(outcome) => panic!("[{name}] expected stream error, got outcome: {outcome:?}"),
+        }
+    }
+
+    let outcome =
+        result.unwrap_or_else(|e| panic!("[{name}] stream replay must succeed, got error: {e}"));
 
     if let Some(expected_outcome) = fixture.expected_outcome {
         let got = serde_json::to_value(&outcome).expect("ChatOutcome serializes");
@@ -101,6 +130,11 @@ async fn replay_file(file: &str) {
 #[tokio::test]
 async fn openai_stream_fixtures() {
     replay_file("openai.jsonl").await;
+}
+
+#[tokio::test]
+async fn openai_responses_stream_fixtures() {
+    replay_file("openai_responses.jsonl").await;
 }
 
 #[tokio::test]
@@ -159,7 +193,11 @@ fn http_error_classification_fixtures() {
             fixture.retry_after.as_deref(),
             &fixture.body,
         );
-        assert_eq!(err.kind(), fixture.expected.kind, "[{name}] kind mismatch: {err}");
+        assert_eq!(
+            err.kind(),
+            fixture.expected.kind,
+            "[{name}] kind mismatch: {err}"
+        );
         if let Some(expected_retry) = fixture.expected.retry_after {
             assert_eq!(
                 err.retry_after(),
@@ -202,7 +240,10 @@ async fn idle_timeout_stall_yields_structured_error() {
         .await
         .expect_err("a silent stream must time out");
     assert!(matches!(err, LlmError::IdleTimeout { .. }), "got: {err}");
-    assert!(err.to_string().starts_with("Streaming timed out: no data received for"));
+    assert!(
+        err.to_string()
+            .starts_with("Streaming timed out: no data received for")
+    );
     assert!(events.is_empty(), "no events on a silent stream");
 }
 

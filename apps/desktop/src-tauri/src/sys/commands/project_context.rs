@@ -780,8 +780,14 @@ mod tests {
         };
         let expected = vec!["md".to_string(), "py".to_string(), "rs".to_string()];
         // Same result regardless of input order (the AC-19 property).
-        assert_eq!(order(vec![(&rs.0, &rs.1), (&py.0, &py.1), (&md.0, &md.1)]), expected);
-        assert_eq!(order(vec![(&py.0, &py.1), (&md.0, &md.1), (&rs.0, &rs.1)]), expected);
+        assert_eq!(
+            order(vec![(&rs.0, &rs.1), (&py.0, &py.1), (&md.0, &md.1)]),
+            expected
+        );
+        assert_eq!(
+            order(vec![(&py.0, &py.1), (&md.0, &md.1), (&rs.0, &rs.1)]),
+            expected
+        );
     }
 
     #[tokio::test]

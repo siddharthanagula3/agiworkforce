@@ -3,7 +3,7 @@
 //!
 //! Round-10 autonomous suite-transformation slice (2026-05-21). The
 //! TypeScript canonical source lives at
-//! `packages/types/src/suite-contracts.ts`. This Rust mirror exists so the
+//! `packages/contracts/types/src/suite-contracts.ts`. This Rust mirror exists so the
 //! CLI, Tauri backends, and future cloud services can serialize and
 //! deserialize project metadata against the same wire shape that Web,
 //! Desktop, and Mobile consume.
@@ -19,7 +19,7 @@ use serde::Serialize;
 use ts_rs::TS;
 
 /// Bounded accent color palette for project visual identity. Mirrors
-/// `ProjectAccentColor` in `packages/types/src/suite-contracts.ts`.
+/// `ProjectAccentColor` in `packages/contracts/types/src/suite-contracts.ts`.
 /// Default is `Zinc`, mirroring the TS `PROJECT_ACCENT_FALLBACK`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
@@ -90,7 +90,7 @@ pub enum ProjectSourceSurface {
 }
 
 /// Consumer chat-sync surfaces per the locked /goal rule. Mirrors the TS
-/// `SYNCED_APP_SURFACES` export in `packages/types/src/suite-contracts.ts`.
+/// `SYNCED_APP_SURFACES` export in `packages/contracts/types/src/suite-contracts.ts`.
 /// Chat history may sync across these surfaces only — see
 /// `assertSurfaceCanSyncChats` on the TS side.
 pub const SYNCED_APP_SURFACES: &[ProjectSourceSurface] = &[
@@ -221,7 +221,7 @@ pub struct ProjectInstructions {
 }
 
 /// Normalize an accent color string to the bounded palette. Mirrors
-/// `normalizeProjectAccentColor` in `packages/types/src/suite-contracts.ts`.
+/// `normalizeProjectAccentColor` in `packages/contracts/types/src/suite-contracts.ts`.
 pub fn normalize_accent_color(value: Option<&str>) -> ProjectAccentColor {
     match value {
         Some("emerald") => ProjectAccentColor::Emerald,
@@ -491,7 +491,7 @@ mod tests {
     // -- Parity guard against the TS canonical contract --
     //
     // These tests read the canonical TS source
-    // (`packages/types/src/suite-contracts.ts`) at test time and assert that
+    // (`packages/contracts/types/src/suite-contracts.ts`) at test time and assert that
     // this hand-maintained Rust mirror enumerates exactly the same wire-form
     // string-literal members. If the TS side adds/removes/renames a variant
     // (e.g. a new `PrivacyMode` or `SourceSurface`), these tests fail loudly so
@@ -502,7 +502,7 @@ mod tests {
     /// manifest dir so it works regardless of the test runner's cwd.
     fn suite_contracts_ts() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../packages/types/src/suite-contracts.ts")
+            .join("../../packages/contracts/types/src/suite-contracts.ts")
     }
 
     /// Extract the string-literal members of a single-line TS union type
@@ -515,10 +515,7 @@ mod tests {
             .unwrap_or_else(|| {
                 panic!("type `{type_name}` not found in suite-contracts.ts — TS contract changed")
             });
-        let rhs = line
-            .split_once('=')
-            .expect("union declaration has `=`")
-            .1;
+        let rhs = line.split_once('=').expect("union declaration has `=`").1;
         let mut members: Vec<String> = rhs
             .split('|')
             .filter_map(|part| {
@@ -551,8 +548,7 @@ mod tests {
 
     #[test]
     fn privacy_mode_matches_ts_canonical() {
-        let ts = std::fs::read_to_string(suite_contracts_ts())
-            .expect("read suite-contracts.ts");
+        let ts = std::fs::read_to_string(suite_contracts_ts()).expect("read suite-contracts.ts");
         let ts_members = ts_union_members(&ts, "PrivacyMode");
         let rust_members = sorted(
             [
@@ -572,8 +568,7 @@ mod tests {
 
     #[test]
     fn provider_mode_matches_ts_canonical() {
-        let ts = std::fs::read_to_string(suite_contracts_ts())
-            .expect("read suite-contracts.ts");
+        let ts = std::fs::read_to_string(suite_contracts_ts()).expect("read suite-contracts.ts");
         let ts_members = ts_union_members(&ts, "ProviderMode");
         let rust_members = sorted(
             [
@@ -594,8 +589,7 @@ mod tests {
 
     #[test]
     fn source_surface_matches_ts_canonical() {
-        let ts = std::fs::read_to_string(suite_contracts_ts())
-            .expect("read suite-contracts.ts");
+        let ts = std::fs::read_to_string(suite_contracts_ts()).expect("read suite-contracts.ts");
         let ts_members = ts_union_members(&ts, "SourceSurface");
         let rust_members = sorted(
             [

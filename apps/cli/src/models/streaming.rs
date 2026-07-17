@@ -22,17 +22,17 @@ use reqwest::Client;
 use std::collections::HashMap;
 
 use agiworkforce_llm::{
-    Auth, ChatOutcome, ChatRequest, Dialect, LlmError, OpenAiOpts, ProviderSpec, StreamEvent,
-    stream_chat,
+    stream_chat, Auth, ChatOutcome, ChatRequest, Dialect, LlmError, OpenAiOpts, ProviderSpec,
+    StreamEvent,
 };
 
 use crate::config::CliConfig;
 use crate::errors::CliError;
 
 use super::{
-    CompletionResult, Message, OllamaMode, Provider, STREAM_IDLE_TIMEOUT, StreamCallback,
-    ToolDefinition,
     provider_dispatch::{resolve_key, try_subscription_auth},
+    CompletionResult, Message, OllamaMode, Provider, StreamCallback, ToolDefinition,
+    STREAM_IDLE_TIMEOUT,
 };
 
 /// Last-known Ollama tool-support result per model id, so a transient `/api/show`
@@ -185,6 +185,36 @@ fn openai_compat_spec(name: &str, base_url: &str, api_key: &str) -> ProviderSpec
     }
 }
 
+/// Build the AGI managed-cloud transport without conflating the gateway with
+/// the selected upstream provider. The caller-supplied base is validated by
+/// the same host allowlist used by tier lookup before the Bearer token can be
+/// attached, closing the configuration-based credential-exfiltration path.
+fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec> {
+    let base = crate::tier_cache::resolve_agi_api_base(raw_base).ok_or_else(|| {
+        CliError::config("Managed cloud requires a trusted AGI Workforce HTTPS host.".to_string())
+    })?;
+    let base = base.trim_end_matches('/');
+    let endpoint = if base.ends_with("/api") {
+        format!("{base}/llm/v1/chat/completions")
+    } else {
+        format!("{base}/api/llm/v1/chat/completions")
+    };
+
+    Ok(ProviderSpec {
+        id: "managed_cloud".to_string(),
+        dialect: Dialect::OpenAiCompat(OpenAiOpts::for_url(&endpoint)),
+        base_url: endpoint,
+        auth: Auth::Bearer(jwt.to_string()),
+        extra_headers: vec![("X-Requested-With".to_string(), "XMLHttpRequest".to_string())],
+    })
+}
+
+fn managed_cloud_spec(jwt: &str) -> Result<ProviderSpec> {
+    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| "https://agiworkforce.com".to_string());
+    managed_cloud_spec_for_base(jwt, &raw_base)
+}
+
 /// Subscription-auth specs (Copilot / ChatGPT Plus). Auth resolution happened
 /// in `provider_dispatch::try_subscription_auth`; here we only attach the
 /// provider-required extra headers.
@@ -202,7 +232,10 @@ fn subscription_spec(
                     "User-Agent".to_string(),
                     concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")).to_string(),
                 ),
-                ("Openai-Intent".to_string(), "conversation-edits".to_string()),
+                (
+                    "Openai-Intent".to_string(),
+                    "conversation-edits".to_string(),
+                ),
                 ("Copilot-Vision-Request".to_string(), "true".to_string()),
             ];
             spec
@@ -306,6 +339,21 @@ pub async fn stream_completion(
     let key = api_key.as_deref().unwrap_or_default();
 
     match provider {
+        Provider::ManagedCloud => {
+            let spec = managed_cloud_spec(key)?;
+            run_spec(
+                &client,
+                &spec,
+                model,
+                messages,
+                max_tokens,
+                temperature,
+                tools,
+                &mut on_chunk,
+                thinking_budget,
+            )
+            .await
+        }
         Provider::Anthropic => {
             run_spec(
                 &client,
@@ -451,6 +499,35 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
+    #[test]
+    fn managed_cloud_spec_uses_the_authenticated_agi_gateway_contract() {
+        let spec = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
+            .expect("canonical AGI origin must be accepted");
+
+        assert_eq!(spec.id, "managed_cloud");
+        assert_eq!(
+            spec.base_url,
+            "https://agiworkforce.com/api/llm/v1/chat/completions"
+        );
+        assert_eq!(spec.auth, Auth::Bearer("test-jwt".to_string()));
+        assert!(spec
+            .extra_headers
+            .contains(&("X-Requested-With".to_string(), "XMLHttpRequest".to_string(),)));
+    }
+
+    #[test]
+    fn managed_cloud_spec_refuses_non_agi_hosts_before_attaching_the_jwt() {
+        let error = managed_cloud_spec_for_base("test-jwt", "https://attacker.example")
+            .expect_err("managed JWT must never be sent to an untrusted host");
+
+        assert!(
+            error
+                .to_string()
+                .contains("trusted AGI Workforce HTTPS host"),
+            "{error}"
+        );
+    }
+
     // -- LlmError -> CliError mapping (the downcast contract the agent loop
     //    retry/fallback logic depends on) --
 
@@ -475,10 +552,7 @@ mod tests {
             message: "invalid key".into(),
         });
         assert!(err.downcast_ref::<CliError>().is_some());
-        assert!(
-            err.to_string().contains("Authentication failed"),
-            "{err}"
-        );
+        assert!(err.to_string().contains("Authentication failed"), "{err}");
     }
 
     #[test]
@@ -491,10 +565,7 @@ mod tests {
             "overloaded",
         );
         let err = map_llm_error(llm);
-        assert!(
-            err.to_string().contains("Anthropic is overloaded"),
-            "{err}"
-        );
+        assert!(err.to_string().contains("Anthropic is overloaded"), "{err}");
     }
 
     #[test]
@@ -579,13 +650,8 @@ mod tests {
     #[test]
     fn classified_managed_cloud_429_paywall_maps_to_cli_paywall() {
         let paywall_body = r#"{"kind":"paywall","feature":"chat","requiredTier":"pro","reason":"Pro features require upgrade"}"#;
-        let llm = agiworkforce_llm::classify_error_response(
-            "agiworkforce",
-            "m",
-            429,
-            None,
-            paywall_body,
-        );
+        let llm =
+            agiworkforce_llm::classify_error_response("agiworkforce", "m", 429, None, paywall_body);
         let err = map_llm_error(llm);
         let cli = err.downcast_ref::<CliError>().expect("CliError");
         assert!(
@@ -660,12 +726,10 @@ mod tests {
             matches!(&chatgpt.dialect, Dialect::OpenAiCompat(o) if o.use_max_completion_tokens),
             "chatgpt.com endpoint must use max_completion_tokens"
         );
-        assert!(
-            chatgpt
-                .extra_headers
-                .iter()
-                .any(|(n, v)| n == "ChatGPT-Account-Id" && v == "acct_1")
-        );
+        assert!(chatgpt
+            .extra_headers
+            .iter()
+            .any(|(n, v)| n == "ChatGPT-Account-Id" && v == "acct_1"));
     }
 
     #[test]
@@ -674,9 +738,7 @@ mod tests {
         // Authorization header with an empty Bearer token.
         let spec = openai_compat_spec("lmstudio", "http://localhost:1234/v1/chat/completions", "");
         assert_eq!(spec.auth, Auth::Bearer(String::new()));
-        assert!(
-            matches!(&spec.dialect, Dialect::OpenAiCompat(o) if !o.use_max_completion_tokens)
-        );
+        assert!(matches!(&spec.dialect, Dialect::OpenAiCompat(o) if !o.use_max_completion_tokens));
     }
 
     #[test]

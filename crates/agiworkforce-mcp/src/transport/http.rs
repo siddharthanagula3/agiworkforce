@@ -147,9 +147,7 @@ pub(crate) async fn send_request_http(
 
             // Persist before retrying so a crash mid-retry doesn't lose the token.
             if let Err(e) = hooks.token_store.set(url, new_token.clone()) {
-                eprintln!(
-                    "[{server_name}] [mcp http] warning: failed to persist OAuth token: {e}"
-                );
+                eprintln!("[{server_name}] [mcp http] warning: failed to persist OAuth token: {e}");
             }
 
             bearer = Some(new_token.access_token.clone());
@@ -223,7 +221,9 @@ async fn send_once(
     }
 
     let resp = match tokio::time::timeout(timeout, req.send()).await {
-        Ok(r) => r.with_context(|| format!("[{server_name}] [mcp http] POST '{method_name}' failed"))?,
+        Ok(r) => {
+            r.with_context(|| format!("[{server_name}] [mcp http] POST '{method_name}' failed"))?
+        }
         Err(_) => bail!(
             "[{server_name}] [mcp http] POST timeout ({}ms) on '{method_name}'",
             timeout.as_millis()
@@ -340,10 +340,9 @@ async fn send_once(
             }
         }
     }
-    let value: serde_json::Value = resp
-        .json()
-        .await
-        .with_context(|| format!("[{server_name}] [mcp http] parse json body on '{method_name}'"))?;
+    let value: serde_json::Value = resp.json().await.with_context(|| {
+        format!("[{server_name}] [mcp http] parse json body on '{method_name}'")
+    })?;
     match extract_matching_response(&value, body.id, server_name)? {
         Some(matched) => Ok(SendOutcome::Done(matched)),
         None => {

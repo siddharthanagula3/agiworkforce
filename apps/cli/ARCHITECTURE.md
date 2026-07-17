@@ -19,7 +19,7 @@ short and path-checked so it does not drift into stale reference material.
 
 1. `src/main.rs` calls `run_main()`.
 2. `src/lib.rs` parses CLI flags and subcommands, loads configuration, and dispatches into
-   TUI, REPL, one-shot exec, MCP server, app-server, cloud, session, plugin, or utility modes.
+   TUI, REPL, one-shot exec, MCP server, app-server, session, plugin, or utility modes.
 3. Interactive and one-shot paths create an `AgentSession` from `src/agent/mod.rs`.
 4. The session builds provider/model configuration, emits tool definitions from the runtime
    catalog, streams model output, executes tool calls through `src/features/exec/tools/`, and

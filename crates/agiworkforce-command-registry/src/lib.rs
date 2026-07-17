@@ -169,7 +169,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
     vec![
         RegistryCommand::builtin_slash(
             "model",
-            "Switch model (e.g. /model gpt-5.5)",
+            "Switch active model (/model <model-id>)",
             false,
             true,
             vec!["m"],
@@ -564,6 +564,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec!["fork-byok", "byok"],
         ),
         RegistryCommand::builtin_slash(
+            "continue-with-cloud",
+            "Draft an explicit Local to Managed Cloud continuation",
+            true,
+            true,
+            vec!["fork-cloud", "managed-cloud"],
+        ),
+        RegistryCommand::builtin_slash(
             "rate-limit-options",
             "Show rate-limit and usage-limit options",
             true,
@@ -585,13 +592,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             true,
             vec![],
         ),
-        RegistryCommand::builtin_slash(
-            "stickers",
-            "Manage session stickers",
-            true,
-            false,
-            vec![],
-        ),
+        RegistryCommand::builtin_slash("stickers", "Manage session stickers", true, false, vec![]),
         RegistryCommand::builtin_slash("tag", "Tag the current session", true, true, vec![]),
         RegistryCommand::builtin_slash(
             "think-back",
@@ -622,13 +623,6 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash("vim", "Toggle Vim keybindings", true, true, vec![]),
-        RegistryCommand::builtin_slash(
-            "remote-control",
-            "Connect to the AGI desktop bridge (port 8787)",
-            true,
-            false,
-            vec!["rc"],
-        ),
         RegistryCommand::builtin_slash(
             "debug",
             "Toggle debug mode (verbose tool output and hook traces)",
@@ -672,6 +666,17 @@ mod tests {
         assert!(compact.user_invocable);
         assert!(!compact.disable_model_invocation);
         assert_eq!(compact.loaded_from.as_deref(), Some("builtin"));
+    }
+
+    #[test]
+    fn model_command_help_is_catalog_agnostic() {
+        let commands = builtin_slash_registry_commands();
+        let model = commands
+            .iter()
+            .find(|command| command.name == "model")
+            .expect("model command should be registered");
+
+        assert_eq!(model.description, "Switch active model (/model <model-id>)");
     }
 
     #[test]
@@ -812,6 +817,7 @@ mod tests {
             "privacy-settings",
             "privacy-mode",
             "continue-with-byok",
+            "continue-with-cloud",
             "rate-limit-options",
             "security-review",
             "stats",

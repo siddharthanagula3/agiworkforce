@@ -451,8 +451,7 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
     // e.g. `rm -rf "/"`, whose quotes dodge the substring blocklist but not
     // the shlex-tokenized argv rules. `Prompt` does not block: it routes
     // through `requires_confirmation` into the existing confirmation flow.
-    let outcome =
-        super::exec_gate::evaluate_full(super::exec_gate::default_policy(), command);
+    let outcome = super::exec_gate::evaluate_full(super::exec_gate::default_policy(), command);
     if outcome.decision == agiworkforce_execpolicy::Decision::Forbidden {
         let pattern = outcome
             .matched_forbidden_prefix

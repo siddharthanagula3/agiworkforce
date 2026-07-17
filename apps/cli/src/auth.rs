@@ -351,7 +351,8 @@ const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
 //                                      used by this const
 //   - https://agiworkforce.com       — /api/me tier lookup (tier_cache::DEFAULT_API_BASE),
 //                                      used by resolve_user_tier()
-//   - https://cloud.agiworkforce.com — managed inference API (cloud.rs CloudConfig, private beta)
+//   - the configured managed inference host — selected by models/provider_dispatch.rs only
+//     after an explicit Managed privacy handoff; there is no separate cloud-task command
 //
 // These MUST NOT be conflated. The unauthenticated device-grant endpoints now
 // live on the web origin (apps/web: POST /api/auth/device/code + /token), so the

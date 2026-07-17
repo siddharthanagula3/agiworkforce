@@ -2,8 +2,8 @@
 
 use crate::data::cloud_sync;
 use crate::data::db::models::{Conversation, Message, MessageRole};
-use crate::data::{memory_sync, projects_sync, settings_sync};
 use crate::data::db::repository;
+use crate::data::{memory_sync, projects_sync};
 use chrono::Utc;
 use tauri::State;
 
@@ -21,9 +21,22 @@ pub fn chat_create_conversation(
     let trimmed_title = request.title.trim();
 
     let conn = db.connection()?;
-    let id =
-        repository::create_conversation(&conn, trimmed_title.to_string(), request.user_id.clone())
-            .map_err(|e| format!("Failed to create conversation: {e}"))?;
+    let execution_mode = request
+        .execution_mode
+        .unwrap_or(super::ChatExecutionMode::LocalOnly);
+    let app_mode = if execution_mode.uses_local_storage() {
+        "local"
+    } else {
+        "cloud"
+    };
+    let id = repository::create_conversation_with_execution_mode(
+        &conn,
+        trimmed_title.to_string(),
+        request.user_id.clone(),
+        app_mode,
+        execution_mode.as_str(),
+    )
+    .map_err(|e| format!("Failed to create conversation: {e}"))?;
     repository::get_conversation(&conn, id, &request.user_id)
         .map_err(|e| format!("Failed to retrieve conversation {}: {e}", id))
 }
@@ -391,30 +404,6 @@ pub async fn sync_conversations_to_cloud(
         }
         Err(e) => tracing::warn!(error = %e, "cloud projects sync failed (chat sync unaffected)"),
     }
-    // Settings sync runs ONLY in managed cloud (egress gate above already guards this).
-    // A failure MUST NOT fail chat sync — log and continue (graceful degradation).
-    // NOTE: sync_settings_now takes 5 args (not 4) because settings live in
-    // SettingsState (Arc<Mutex<Settings>>), not in the SQLite DB.  The db arg
-    // is used only for the cursor.  See settings_sync.rs for the full rationale.
-    match settings_sync::sync_settings_now(
-        &db,
-        &settings_state,
-        &user_id,
-        &token,
-        &base_url,
-    )
-    .await
-    {
-        Ok(s) => {
-            tracing::debug!(
-                pushed = s.settings_pushed,
-                pulled = s.settings_pulled,
-                "cloud settings sync ok"
-            )
-        }
-        Err(e) => tracing::warn!(error = %e, "cloud settings sync failed (chat sync unaffected)"),
-    }
-
     Ok(cloud_sync::BulkSyncResult {
         conversations_synced: outcome.conversations_pushed + outcome.conversations_pulled,
         conversations_failed: 0,

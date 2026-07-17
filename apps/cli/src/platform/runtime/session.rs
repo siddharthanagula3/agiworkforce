@@ -1,3 +1,5 @@
+use agiworkforce_model_registry::TrustMode;
+use agiworkforce_protocol::developer_session::DeveloperRoutingTaskType;
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -31,7 +33,10 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
 /// v1: messages + fork only.
 /// v2: adds permission_mode, plan_mode, plan_approved, current_plan, fast_mode,
 ///     output_style, fallback_model_ids fields (all optional, serde(default)).
-pub const MANAGED_SESSION_VERSION: u32 = 2;
+/// v3: adds title, model, workspace_root, and created_by metadata shared by
+///     terminal and IDE clients (all optional for v1/v2 compatibility).
+/// v4: adds persisted Auto-routing selection/model/task/trust continuity.
+pub const MANAGED_SESSION_VERSION: u32 = 4;
 
 /// Default JSONL extension for managed session files.
 pub const MANAGED_SESSION_JSONL_EXTENSION: &str = "jsonl";
@@ -47,6 +52,17 @@ pub struct ManagedSessionForkMetadata {
     pub forked_at: DateTime<Utc>,
 }
 
+/// Persisted Auto policy state. A resumed CLI/VS Code developer session must
+/// retain both its user-selected profile and its immutable trust boundary;
+/// the concrete provider route may change as the task changes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSessionAutoRouting {
+    pub selection: String,
+    pub model_key: String,
+    pub task_type: DeveloperRoutingTaskType,
+    pub trust_mode: TrustMode,
+}
+
 /// Persisted managed session snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManagedSession {
@@ -58,6 +74,16 @@ pub struct ManagedSession {
     pub messages: Vec<Message>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<ManagedSessionForkMetadata>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_root: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<DateTime<Utc>>,
     // --- v2 session-state fields (all optional for backward compat with v1 files) ---
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permission_mode: Option<PermissionMode>,
@@ -75,6 +101,8 @@ pub struct ManagedSession {
     /// FallbackChain does not implement Serialize.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fallback_model_ids: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_routing: Option<ManagedSessionAutoRouting>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,7 +114,17 @@ enum ManagedSessionJsonlRecord {
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        fork: Option<ManagedSessionForkMetadata>,
+        fork: Option<Box<ManagedSessionForkMetadata>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        workspace_root: Option<PathBuf>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        created_by: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        archived_at: Option<DateTime<Utc>>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         permission_mode: Option<PermissionMode>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -101,6 +139,8 @@ enum ManagedSessionJsonlRecord {
         output_style: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         fallback_model_ids: Option<Vec<String>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        auto_routing: Option<ManagedSessionAutoRouting>,
     },
     Message {
         message: Message,
@@ -117,6 +157,11 @@ impl ManagedSession {
             updated_at: created_at,
             messages: Vec::new(),
             fork: None,
+            title: None,
+            model: None,
+            workspace_root: None,
+            created_by: None,
+            archived_at: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -124,6 +169,7 @@ impl ManagedSession {
             fast_mode: None,
             output_style: None,
             fallback_model_ids: None,
+            auto_routing: None,
         }
     }
 
@@ -159,6 +205,11 @@ impl ManagedSession {
                 source_message_count: source.messages.len(),
                 forked_at,
             }),
+            title: source.title.clone(),
+            model: source.model.clone(),
+            workspace_root: source.workspace_root.clone(),
+            created_by: source.created_by.clone(),
+            archived_at: None,
             permission_mode: None,
             plan_mode: None,
             plan_approved: None,
@@ -166,6 +217,7 @@ impl ManagedSession {
             fast_mode: None,
             output_style: None,
             fallback_model_ids: None,
+            auto_routing: source.auto_routing.clone(),
         }
     }
 
@@ -263,6 +315,11 @@ impl ManagedSession {
                     created_at,
                     updated_at,
                     fork,
+                    title,
+                    model,
+                    workspace_root,
+                    created_by,
+                    archived_at,
                     permission_mode,
                     plan_mode,
                     plan_approved,
@@ -270,6 +327,7 @@ impl ManagedSession {
                     fast_mode,
                     output_style,
                     fallback_model_ids,
+                    auto_routing,
                 } => {
                     if header.is_some() {
                         bail!("Managed session JSONL file contains more than one header record");
@@ -280,7 +338,12 @@ impl ManagedSession {
                         created_at,
                         updated_at,
                         messages: Vec::new(),
-                        fork,
+                        fork: fork.map(|fork| *fork),
+                        title,
+                        model,
+                        workspace_root,
+                        created_by,
+                        archived_at,
                         permission_mode,
                         plan_mode,
                         plan_approved,
@@ -288,6 +351,7 @@ impl ManagedSession {
                         fast_mode,
                         output_style,
                         fallback_model_ids,
+                        auto_routing,
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -331,7 +395,12 @@ impl ManagedSession {
             session_id: self.session_id.clone(),
             created_at: self.created_at,
             updated_at: self.updated_at,
-            fork: self.fork.clone(),
+            fork: self.fork.clone().map(Box::new),
+            title: self.title.clone(),
+            model: self.model.clone(),
+            workspace_root: self.workspace_root.clone(),
+            created_by: self.created_by.clone(),
+            archived_at: self.archived_at,
             permission_mode: self.permission_mode,
             plan_mode: self.plan_mode,
             plan_approved: self.plan_approved,
@@ -339,6 +408,7 @@ impl ManagedSession {
             fast_mode: self.fast_mode,
             output_style: self.output_style.clone(),
             fallback_model_ids: self.fallback_model_ids.clone(),
+            auto_routing: self.auto_routing.clone(),
         };
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -363,8 +433,8 @@ impl ManagedSession {
 
 #[cfg(test)]
 mod tests {
-    use super::ManagedSession;
     use super::ManagedSessionForkMetadata;
+    use super::{ManagedSession, ManagedSessionAutoRouting};
     use crate::models::{ContentBlock, Message};
     use chrono::{TimeZone, Utc};
     use tempfile::tempdir;
@@ -379,6 +449,24 @@ mod tests {
                 }],
             ),
         ]
+    }
+
+    #[test]
+    fn jsonl_round_trip_preserves_auto_routing_continuity() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("auto-session.jsonl");
+        let mut session = ManagedSession::new("auto-session", Utc::now());
+        session.auto_routing = Some(ManagedSessionAutoRouting {
+            selection: "auto-balanced".to_string(),
+            model_key: "claude-sonnet-4.6".to_string(),
+            task_type: agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
+            trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+        });
+
+        session.save_to_path(&path).expect("save Auto session");
+        let restored = ManagedSession::load_from_path(&path).expect("load Auto session");
+
+        assert_eq!(restored.auto_routing, session.auto_routing);
     }
 
     fn null_state_fields() -> (
@@ -420,6 +508,11 @@ mod tests {
                 source_message_count: 2,
                 forked_at: Utc.with_ymd_and_hms(2025, 1, 1, 10, 0, 0).unwrap(),
             }),
+            title: Some("Fix the parser".to_string()),
+            model: Some("registry/model-key".to_string()),
+            workspace_root: Some(temp_dir.path().to_path_buf()),
+            created_by: Some("vscode".to_string()),
+            archived_at: None,
             permission_mode,
             plan_mode,
             plan_approved,
@@ -427,6 +520,7 @@ mod tests {
             fast_mode,
             output_style,
             fallback_model_ids,
+            auto_routing: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -458,6 +552,11 @@ mod tests {
             updated_at: Utc.with_ymd_and_hms(2025, 2, 1, 10, 5, 0).unwrap(),
             messages: sample_messages(),
             fork: None,
+            title: None,
+            model: None,
+            workspace_root: None,
+            created_by: None,
+            archived_at: None,
             permission_mode,
             plan_mode,
             plan_approved,
@@ -465,6 +564,7 @@ mod tests {
             fast_mode,
             output_style,
             fallback_model_ids,
+            auto_routing: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -486,5 +586,10 @@ mod tests {
         assert!(session.permission_mode.is_none());
         assert!(session.plan_mode.is_none());
         assert!(session.fallback_model_ids.is_none());
+        assert!(session.title.is_none());
+        assert!(session.model.is_none());
+        assert!(session.workspace_root.is_none());
+        assert!(session.created_by.is_none());
+        assert!(session.archived_at.is_none());
     }
 }

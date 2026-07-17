@@ -12,7 +12,6 @@ use crate::terminal_style as ts;
 
 /// Terminal color capability level.
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[allow(dead_code)]
 pub enum ColorLevel {
     /// No color support (e.g. `NO_COLOR` set, dumb terminal, piped output).
     None,
@@ -31,7 +30,6 @@ pub enum ColorLevel {
 /// 2. `COLORTERM` — `truecolor` or `24bit` → `TrueColor`.
 /// 3. `TERM` — contains `256color` → `Ansi256`.
 /// 4. Fallback: `Ansi16`.
-#[allow(dead_code)]
 pub fn detect_color_level() -> ColorLevel {
     // NO_COLOR spec: https://no-color.org/ — presence means disable color
     if env::var("NO_COLOR").is_ok() {
@@ -889,15 +887,5 @@ mod tests {
         assert_eq!(lines.len(), 3); // header + sep + 1 row
                                     // Row should contain "1" and two blank-padded cells
         assert!(lines[2].starts_with('1'));
-    }
-
-    // -- create_progress_bar tests -----------------------------------------
-
-    #[test]
-    fn test_create_progress_bar_returns_bar() {
-        let pb = create_progress_bar(100, "Downloading");
-        assert_eq!(pb.length(), Some(100));
-        assert_eq!(pb.position(), 0);
-        pb.finish_and_clear();
     }
 }

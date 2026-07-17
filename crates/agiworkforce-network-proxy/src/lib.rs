@@ -1,6 +1,7 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 mod certs;
+mod home_dir;
 mod config;
 mod http_proxy;
 mod mitm;
@@ -10,6 +11,7 @@ mod proxy;
 mod reasons;
 mod responses;
 mod runtime;
+mod rustls_provider;
 mod socks5;
 mod state;
 mod upstream;

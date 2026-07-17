@@ -261,6 +261,8 @@ Provide a detailed analysis in a structured format."#
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let candidates = router.candidates(&llm_request, &preferences);

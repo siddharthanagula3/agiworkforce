@@ -71,7 +71,10 @@ pub async fn run_turn(
             .collect();
         tracker.extend(&call_hashes);
         if tracker.has_identical_tail()
-            && host.confirm_tool_runaway(tracker, &current_tool_calls).await == LoopControl::Break
+            && host
+                .confirm_tool_runaway(tracker, &current_tool_calls)
+                .await
+                == LoopControl::Break
         {
             break;
         }
@@ -247,9 +250,7 @@ async fn complete_and_emit(
     };
     for event in buffered {
         match event {
-            StreamEvent::TextDelta { text } => {
-                host.on_event(&TurnEvent::TextDelta { text, phase })
-            }
+            StreamEvent::TextDelta { text } => host.on_event(&TurnEvent::TextDelta { text, phase }),
             StreamEvent::ReasoningDelta { text } => {
                 host.on_event(&TurnEvent::ReasoningDelta { text })
             }

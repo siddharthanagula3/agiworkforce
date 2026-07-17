@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Rust platform
-Last updated: 2026-07-09
+Last updated: 2026-07-15
 Kind: rust-crate
 Criticality: high
 
@@ -14,9 +14,8 @@ Enterprise Local licensing foundation (design
 `docs/enterprise/enterprise-local-design.md` §2.1 / §2.2).
 
 This crate is a byte-for-byte re-implementation of the TypeScript
-`@agiworkforce/licensing` package (`packages/licensing`) and the org-policy
-verifier in `@agiworkforce/services`
-(`packages/services/src/cloud-contracts/org-policy.ts`). It is the **verify
+`@agiworkforce/licensing` package (`packages/contracts/licensing`), including its
+org-policy verifier (`packages/contracts/licensing/src/org-policy.ts`). It is the **verify
 primitive only** — it does not sign, activate, interpret product feature flags,
 or wire into any app/desktop/CLI/gateway runtime.
 
@@ -31,8 +30,8 @@ re-serializes the payload.
 
 The corpora live with the TS package and are the single source of truth:
 
-- `packages/licensing/src/__fixtures__/` (license corpus + `manifest.json`)
-- `packages/services/src/cloud-contracts/__fixtures__/org-policy/` (org-policy
+- `packages/contracts/licensing/src/__fixtures__/` (license corpus + `manifest.json`)
+- `packages/contracts/licensing/src/__fixtures__/org-policy/` (org-policy
   corpus + `manifest.json`)
 
 The crate's `#[cfg(test)]` suite REPLAYS those exact files (read via a path

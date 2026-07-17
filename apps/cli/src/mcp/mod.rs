@@ -19,7 +19,7 @@
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -192,6 +192,17 @@ impl McpServerConfig {
     }
 }
 
+/// Whether a configured MCP transport may be opened inside the active trust
+/// boundary. Stdio is the only Local transport: SSE and Streamable HTTP are
+/// network egress even when their tool schemas look read-only.
+fn mcp_transport_allowed(
+    config: &McpServerConfig,
+    privacy_mode: crate::agent::PrivacyMode,
+) -> bool {
+    privacy_mode != crate::agent::PrivacyMode::Local
+        || matches!(config.as_transport(), McpTransport::Stdio { .. })
+}
+
 /// MCP tool discovered from a server.
 #[derive(Debug, Clone)]
 pub struct McpTool {
@@ -236,9 +247,7 @@ pub struct McpPromptArgument {
 /// Convert the CLI's manifest config shape into the engine's transport config.
 fn to_transport_config(config: &McpServerConfig) -> TransportConfig {
     match config.as_transport() {
-        McpTransport::Stdio { command, args, env } => {
-            TransportConfig::Stdio { command, args, env }
-        }
+        McpTransport::Stdio { command, args, env } => TransportConfig::Stdio { command, args, env },
         McpTransport::Sse { url, headers } => TransportConfig::Sse { url, headers },
         McpTransport::Http { url, headers, auth } => TransportConfig::Http {
             url,
@@ -380,13 +389,13 @@ impl ElicitationHandler for HookFiringElicitationHandler {
 
 /// Build the host capability bundle handed to `McpClient::connect`.
 ///
-/// Defaults to [`AutoDeclineHandler`] (safe for headless/CI), wrapped so the
-/// CLI hooks fire. The client identity reports the CLI's own name + version
-/// (never the engine crate's).
-fn build_client_hooks() -> ClientHooks {
+/// The caller chooses the elicitation surface: headless flows inject
+/// [`AutoDeclineHandler`], while the full-screen TUI injects its interactive
+/// queue. The wrapper keeps the CLI hook lifecycle identical in both cases.
+fn build_client_hooks(elicitation: Arc<dyn ElicitationHandler>) -> ClientHooks {
     ClientHooks {
         token_store: Arc::new(FileTokenStore),
-        elicitation: Arc::new(HookFiringElicitationHandler::new(Arc::new(AutoDeclineHandler))),
+        elicitation: Arc::new(HookFiringElicitationHandler::new(elicitation)),
         browser: Arc::new(CliBrowserAuthorizer),
         client_info: ClientInfo {
             name: "agiworkforce-cli".to_string(),
@@ -412,9 +421,20 @@ pub struct McpConnection {
 impl McpConnection {
     /// Start an MCP server and initialize the connection.
     pub async fn connect(name: &str, config: &McpServerConfig) -> Result<Self> {
+        Self::connect_with_elicitation(name, config, Arc::new(AutoDeclineHandler)).await
+    }
+
+    /// Start an MCP server with an explicitly owned elicitation surface.
+    /// Interactive callers must keep the handler alive and drain it while a
+    /// request is in flight; headless callers should use [`Self::connect`].
+    pub async fn connect_with_elicitation(
+        name: &str,
+        config: &McpServerConfig,
+        elicitation: Arc<dyn ElicitationHandler>,
+    ) -> Result<Self> {
         let transport = to_transport_config(config);
         let timeouts = McpTimeouts::default();
-        let hooks = build_client_hooks();
+        let hooks = build_client_hooks(elicitation);
         let client = McpClient::connect(name, transport, timeouts.clone(), hooks).await?;
         Ok(Self {
             server_name: name.to_string(),
@@ -552,6 +572,7 @@ pub struct McpManager {
     connections: HashMap<String, McpConnection>,
     tools: Vec<McpTool>,
     prompts: Vec<McpPrompt>,
+    remote_servers: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -730,7 +751,21 @@ impl McpManager {
             connections: HashMap::new(),
             tools: Vec::new(),
             prompts: Vec::new(),
+            remote_servers: HashSet::new(),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_discovered_stdio_tool_for_test(server_name: &str, tool_name: &str) -> Self {
+        let mut manager = Self::new();
+        manager.tools.push(McpTool {
+            namespaced_name: format!("mcp_{server_name}_{tool_name}"),
+            original_name: tool_name.to_string(),
+            server_name: server_name.to_string(),
+            description: "Test MCP tool".to_string(),
+            input_schema: serde_json::json!({"type": "object"}),
+        });
+        manager
     }
 
     /// Load MCP server configurations from project/global MCP JSON files.
@@ -759,13 +794,51 @@ impl McpManager {
     }
 
     /// Connect to all configured MCP servers and discover tools.
-    pub async fn connect_all(&mut self, configs: &HashMap<String, McpServerConfig>) -> Result<()> {
+    pub async fn connect_all(
+        &mut self,
+        configs: &HashMap<String, McpServerConfig>,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Result<()> {
+        self.connect_all_with_elicitation(
+            configs,
+            privacy_mode,
+            Arc::new(AutoDeclineHandler),
+        )
+        .await
+    }
+
+    /// Connect all configured servers with a caller-owned elicitation surface.
+    pub async fn connect_all_with_elicitation(
+        &mut self,
+        configs: &HashMap<String, McpServerConfig>,
+        privacy_mode: crate::agent::PrivacyMode,
+        elicitation: Arc<dyn ElicitationHandler>,
+    ) -> Result<()> {
         // Suppress raw stderr progress while the full-screen TUI owns the
         // terminal — otherwise these lines bleed into and corrupt the display.
         // In exec / non-TUI mode the flag is false and they render normally.
         let quiet = crate::tui::tui_active();
         for (name, config) in configs {
-            match McpConnection::connect(name, config).await {
+            let is_remote = !matches!(config.as_transport(), McpTransport::Stdio { .. });
+            if is_remote {
+                self.remote_servers.insert(name.clone());
+            }
+            if !mcp_transport_allowed(config, privacy_mode) {
+                if !quiet {
+                    eprintln!(
+                        "  MCP server '{}': blocked in Local privacy mode; use an explicit BYOK or Managed continuation before connecting a remote MCP server",
+                        name
+                    );
+                }
+                continue;
+            }
+            match McpConnection::connect_with_elicitation(
+                name,
+                config,
+                Arc::clone(&elicitation),
+            )
+            .await
+            {
                 Ok(mut conn) => match conn.list_tools().await {
                     Ok(tools) => {
                         let count = tools.len();
@@ -823,14 +896,56 @@ impl McpManager {
         &self.prompts
     }
 
+    fn server_allowed(&self, server_name: &str, privacy_mode: crate::agent::PrivacyMode) -> bool {
+        privacy_mode != crate::agent::PrivacyMode::Local
+            || !self.remote_servers.contains(server_name)
+    }
+
+    /// Drop every already-connected remote server when a session enters Local
+    /// mode. This is intentionally synchronous: dropping the client closes the
+    /// transport immediately, while a graceful network shutdown would itself
+    /// violate the newly selected no-egress boundary.
+    pub fn enforce_privacy_mode(&mut self, privacy_mode: crate::agent::PrivacyMode) {
+        if privacy_mode != crate::agent::PrivacyMode::Local {
+            return;
+        }
+        let remote_servers = &self.remote_servers;
+        self.connections
+            .retain(|server_name, _| !remote_servers.contains(server_name));
+        self.tools
+            .retain(|tool| !remote_servers.contains(&tool.server_name));
+        self.prompts
+            .retain(|prompt| !remote_servers.contains(&prompt.server_name));
+    }
+
+    pub fn tools_for_privacy(&self, privacy_mode: crate::agent::PrivacyMode) -> Vec<McpTool> {
+        self.tools
+            .iter()
+            .filter(|tool| self.server_allowed(&tool.server_name, privacy_mode))
+            .cloned()
+            .collect()
+    }
+
+    pub fn prompts_for_privacy(&self, privacy_mode: crate::agent::PrivacyMode) -> Vec<McpPrompt> {
+        self.prompts
+            .iter()
+            .filter(|prompt| self.server_allowed(&prompt.server_name, privacy_mode))
+            .cloned()
+            .collect()
+    }
+
     /// Convert MCP tools to ToolDefinitions for the LLM.
     ///
     /// Concurrency flags default to false (safe, sequential) for MCP tools —
     /// the MCP protocol exposes `annotations.readOnlyHint` and similar but we
     /// don't plumb those through yet.
-    pub fn tool_definitions(&self) -> Vec<crate::models::ToolDefinition> {
+    pub fn tool_definitions(
+        &self,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Vec<crate::models::ToolDefinition> {
         self.tools
             .iter()
+            .filter(|tool| self.server_allowed(&tool.server_name, privacy_mode))
             .map(|t| crate::models::ToolDefinition {
                 name: t.namespaced_name.clone(),
                 description: format!("[MCP:{}] {}", t.server_name, t.description),
@@ -850,12 +965,34 @@ impl McpManager {
     }
 
     /// Execute a namespaced MCP tool call.
+    pub fn tool_identity(
+        &self,
+        namespaced_name: &str,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Result<(String, String)> {
+        let tool = self
+            .tools
+            .iter()
+            .find(|tool| tool.namespaced_name == namespaced_name)
+            .context(format!("MCP tool '{}' not found", namespaced_name))?;
+        if !self.server_allowed(&tool.server_name, privacy_mode) {
+            bail!(
+                "MCP tool '{}' is remote and unavailable in Local privacy mode; create an explicit BYOK or Managed continuation before sending context to server '{}'",
+                namespaced_name,
+                tool.server_name
+            );
+        }
+        Ok((tool.server_name.clone(), tool.original_name.clone()))
+    }
+
+    /// Execute a namespaced MCP tool call.
     pub async fn execute_tool(
         &mut self,
         namespaced_name: &str,
         arguments: serde_json::Value,
+        privacy_mode: crate::agent::PrivacyMode,
     ) -> Result<String> {
-        // Find which server owns this tool.
+        self.tool_identity(namespaced_name, privacy_mode)?;
         let tool = self
             .tools
             .iter()
@@ -871,7 +1008,11 @@ impl McpManager {
         conn.call_tool(&tool.original_name, arguments).await
     }
 
-    pub async fn expand_prompt_invocation(&mut self, input: &str) -> Result<Option<String>> {
+    pub async fn expand_prompt_invocation(
+        &mut self,
+        input: &str,
+        privacy_mode: crate::agent::PrivacyMode,
+    ) -> Result<Option<String>> {
         let Some((command_name, arg_text)) = parse_mcp_prompt_invocation(input) else {
             return Ok(None);
         };
@@ -883,6 +1024,13 @@ impl McpManager {
             Some(prompt) => prompt.clone(),
             None => return Ok(None),
         };
+        if !self.server_allowed(&prompt.server_name, privacy_mode) {
+            bail!(
+                "MCP prompt '{}' is remote and unavailable in Local privacy mode; create an explicit BYOK or Managed continuation before sending context to server '{}'",
+                command_name,
+                prompt.server_name
+            );
+        }
         let args = mcp_prompt_arguments_from_text(&prompt, arg_text)?;
         let conn = self
             .connections
@@ -1061,6 +1209,71 @@ fn normalize_mcp_prompt_part(value: &str) -> String {
 mod tests {
     use super::*;
 
+    struct AcceptingElicitationHandler {
+        called: Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    impl ElicitationHandler for AcceptingElicitationHandler {
+        fn handle<'a>(
+            &'a self,
+            _server_name: &'a str,
+            _request: ElicitationRequest,
+        ) -> Pin<Box<dyn Future<Output = ElicitationResponse> + Send + 'a>> {
+            self.called.store(true, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async { ElicitationResponse::accept_without_content() })
+        }
+    }
+
+    #[tokio::test]
+    async fn client_hooks_use_the_injected_interactive_elicitation_handler() {
+        let called = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let hooks = build_client_hooks(Arc::new(AcceptingElicitationHandler {
+            called: Arc::clone(&called),
+        }));
+
+        let response = hooks
+            .elicitation
+            .handle(
+                "interactive-server",
+                ElicitationRequest {
+                    message: "Choose a repository".to_string(),
+                    requested_schema: serde_json::json!({"type": "object"}),
+                    mode: agiworkforce_mcp::ElicitationMode::Form,
+                    url: None,
+                    elicitation_id: Some("request-1".to_string()),
+                },
+            )
+            .await;
+
+        assert!(called.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(response.action, agiworkforce_mcp::ElicitationAction::Accept);
+    }
+
+    #[test]
+    fn local_privacy_allows_stdio_mcp_but_rejects_remote_transports() {
+        let stdio = McpServerConfig::stdio("node", vec!["server.js".to_string()], HashMap::new());
+        let sse = McpServerConfig::sse("https://mcp.example/sse", HashMap::new());
+        let http = McpServerConfig::http("https://mcp.example/rpc", HashMap::new());
+
+        assert!(mcp_transport_allowed(
+            &stdio,
+            crate::agent::PrivacyMode::Local
+        ));
+        assert!(!mcp_transport_allowed(
+            &sse,
+            crate::agent::PrivacyMode::Local
+        ));
+        assert!(!mcp_transport_allowed(
+            &http,
+            crate::agent::PrivacyMode::Local
+        ));
+        assert!(mcp_transport_allowed(&sse, crate::agent::PrivacyMode::Byok));
+        assert!(mcp_transport_allowed(
+            &http,
+            crate::agent::PrivacyMode::Managed
+        ));
+    }
+
     #[test]
     fn test_mcp_tool_namespacing() {
         let tool = McpTool {
@@ -1165,7 +1378,69 @@ mod tests {
         let manager = McpManager::new();
         assert!(manager.tools().is_empty());
         assert!(manager.prompts().is_empty());
-        assert!(manager.tool_definitions().is_empty());
+        assert!(manager
+            .tool_definitions(crate::agent::PrivacyMode::Local)
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn local_privacy_hides_and_rejects_a_previously_discovered_remote_tool() {
+        let mut manager = McpManager::new();
+        manager.remote_servers.insert("remote".to_string());
+        manager.tools.push(McpTool {
+            namespaced_name: "mcp_remote_search".to_string(),
+            original_name: "search".to_string(),
+            server_name: "remote".to_string(),
+            description: "Search remotely".to_string(),
+            input_schema: serde_json::json!({"type": "object"}),
+        });
+
+        assert!(manager
+            .tool_definitions(crate::agent::PrivacyMode::Local)
+            .is_empty());
+        assert_eq!(
+            manager
+                .tool_definitions(crate::agent::PrivacyMode::Byok)
+                .len(),
+            1
+        );
+
+        let error = manager
+            .execute_tool(
+                "mcp_remote_search",
+                serde_json::json!({"query": "private context"}),
+                crate::agent::PrivacyMode::Local,
+            )
+            .await
+            .expect_err("Local mode must reject remote MCP execution");
+        assert!(error
+            .to_string()
+            .contains("unavailable in Local privacy mode"));
+    }
+
+    #[test]
+    fn entering_local_privacy_drops_remote_mcp_metadata() {
+        let mut manager = McpManager::new();
+        manager.remote_servers.insert("remote".to_string());
+        manager.tools.push(McpTool {
+            namespaced_name: "mcp_remote_search".to_string(),
+            original_name: "search".to_string(),
+            server_name: "remote".to_string(),
+            description: "Search remotely".to_string(),
+            input_schema: serde_json::json!({"type": "object"}),
+        });
+        manager.prompts.push(McpPrompt {
+            command_name: "mcp:remote:research".to_string(),
+            original_name: "research".to_string(),
+            server_name: "remote".to_string(),
+            description: "Research remotely".to_string(),
+            arguments: Vec::new(),
+        });
+
+        manager.enforce_privacy_mode(crate::agent::PrivacyMode::Local);
+
+        assert!(manager.tools().is_empty());
+        assert!(manager.prompts().is_empty());
     }
 
     #[test]

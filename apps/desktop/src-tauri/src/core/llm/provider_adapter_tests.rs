@@ -206,8 +206,10 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["text"]["format"], "json_schema");
-        assert_eq!(adapted["text"]["json_schema"], json_schema);
+        assert_eq!(adapted["text"]["format"]["type"], "json_schema");
+        assert_eq!(adapted["text"]["format"]["name"], "response");
+        assert_eq!(adapted["text"]["format"]["schema"], json_schema);
+        assert_eq!(adapted["text"]["format"]["strict"], true);
     }
 
     #[test]
@@ -265,7 +267,11 @@ mod tests {
         let tools_arr = adapted["tools"].as_array().unwrap();
         assert_eq!(tools_arr.len(), 1);
         assert_eq!(tools_arr[0]["type"], "function");
-        assert_eq!(tools_arr[0]["function"]["name"], "get_weather");
+        assert_eq!(tools_arr[0]["name"], "get_weather");
+        assert!(
+            tools_arr[0].get("function").is_none(),
+            "Responses function tools use a flat schema"
+        );
         assert_eq!(adapted["tool_choice"], "auto");
     }
 
@@ -318,12 +324,88 @@ mod tests {
         let adapted = adapter
             .adapt_request(&request)
             .expect("request should adapt");
-        let params = &adapted["tools"][0]["function"]["parameters"];
+        let params = &adapted["tools"][0]["parameters"];
         assert_eq!(
             params["properties"]["params"]["items"],
             json!({}),
             "array params must include items schema"
         );
+    }
+
+    #[test]
+    fn openai_responses_tool_history_and_specific_choice_use_typed_items() {
+        let model = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
+            .expect("catalog must contain an OpenAI reasoning model")
+            .id
+            .clone();
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+        let request = LLMRequest {
+            model,
+            messages: vec![
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: "Read the file".to_string(),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "assistant".to_string(),
+                    content: String::new(),
+                    tool_calls: Some(vec![ToolCall {
+                        id: "call_1".to_string(),
+                        name: "read_file".to_string(),
+                        arguments: "{\"path\":\"a.txt\"}".to_string(),
+                    }]),
+                    tool_call_id: None,
+                    multimodal_content: None,
+                },
+                ChatMessage {
+                    role: "tool".to_string(),
+                    content: "hello".to_string(),
+                    tool_calls: None,
+                    tool_call_id: Some("call_1".to_string()),
+                    multimodal_content: None,
+                },
+            ],
+            tools: Some(vec![ToolDefinition {
+                name: "read_file".to_string(),
+                description: "Read a file".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                    "additionalProperties": false
+                }),
+                strict: Some(true),
+            }]),
+            tool_choice: Some(ToolChoice::Specific("read_file".to_string())),
+            stream: true,
+            ..Default::default()
+        };
+
+        let adapted = adapter.adapt_request(&request).expect("Responses request");
+        let input = adapted["input"].as_array().expect("typed input items");
+        assert_eq!(input[0]["role"], "user");
+        assert_eq!(input[1]["type"], "function_call");
+        assert_eq!(input[1]["call_id"], "call_1");
+        assert_eq!(input[1]["name"], "read_file");
+        assert_eq!(input[2]["type"], "function_call_output");
+        assert_eq!(input[2]["call_id"], "call_1");
+        assert_eq!(input[2]["output"], "hello");
+        assert!(
+            input.iter().all(|item| item["role"] != "tool"),
+            "Responses input must not contain Chat Completions tool-role messages"
+        );
+
+        assert_eq!(adapted["tools"][0]["name"], "read_file");
+        assert_eq!(adapted["tools"][0]["strict"], true);
+        assert!(adapted["tools"][0].get("function").is_none());
+        assert_eq!(adapted["tool_choice"]["type"], "function");
+        assert_eq!(adapted["tool_choice"]["name"], "read_file");
+        assert!(adapted["tool_choice"].get("function").is_none());
     }
 
     #[test]
@@ -673,7 +755,8 @@ mod tests {
             "output": [
                 {
                     "type": "function_call",
-                    "id": "call_fn_1",
+                    "id": "fc_1",
+                    "call_id": "call_fn_1",
                     "name": "get_weather",
                     "arguments": "{\"location\":\"San Francisco\"}"
                 },
@@ -705,6 +788,87 @@ mod tests {
         assert_eq!(tool_calls[0].id, "call_fn_1");
         assert_eq!(tool_calls[0].name, "get_weather");
         assert_eq!(tool_calls[0].arguments, "{\"location\":\"San Francisco\"}");
+    }
+
+    #[test]
+    fn test_openai_adapter_responses_api_reasoning_cache_and_incomplete_reason() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "resp_reasoning_1",
+            "object": "response",
+            "status": "incomplete",
+            "incomplete_details": {
+                "reason": "max_output_tokens"
+            },
+            "model": "gpt-5.5",
+            "output": [
+                {
+                    "type": "reasoning",
+                    "id": "rs_1",
+                    "summary": [
+                        {
+                            "type": "summary_text",
+                            "text": "I compared the available evidence."
+                        }
+                    ]
+                },
+                {
+                    "type": "message",
+                    "content": [
+                        { "type": "output_text", "text": "The answer is 42." }
+                    ]
+                }
+            ],
+            "usage": {
+                "input_tokens": 40,
+                "input_tokens_details": {
+                    "cached_tokens": 24
+                },
+                "output_tokens": 12,
+                "total_tokens": 52,
+                "output_tokens_details": {
+                    "reasoning_tokens": 8
+                }
+            }
+        });
+
+        let response = adapter
+            .adapt_response(&api_response)
+            .expect("Responses payload should adapt");
+
+        assert_eq!(response.content, "The answer is 42.");
+        assert_eq!(
+            response.reasoning_content.as_deref(),
+            Some("I compared the available evidence.")
+        );
+        assert_eq!(response.cache_read_input_tokens, Some(24));
+        assert_eq!(response.reasoning_tokens, Some(8));
+        assert_eq!(response.finish_reason.as_deref(), Some("max_output_tokens"));
+    }
+
+    #[test]
+    fn test_openai_adapter_responses_api_failed_without_output_returns_error() {
+        let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
+
+        let api_response = json!({
+            "id": "resp_failed_1",
+            "object": "response",
+            "status": "failed",
+            "model": "gpt-5.5",
+            "error": {
+                "code": "server_error",
+                "message": "The response could not be generated."
+            }
+        });
+
+        let error = adapter
+            .adapt_response(&api_response)
+            .expect_err("failed Responses payload must not become an empty success");
+
+        let message = error.to_string();
+        assert!(message.contains("server_error"));
+        assert!(message.contains("The response could not be generated."));
     }
 
     #[test]
@@ -914,10 +1078,12 @@ mod tests {
 
         // Check image part
         assert_eq!(content[1]["type"], "image_url");
-        assert!(content[1]["image_url"]["url"]
-            .as_str()
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
+        assert!(
+            content[1]["image_url"]["url"]
+                .as_str()
+                .unwrap()
+                .starts_with("data:image/png;base64,")
+        );
         assert_eq!(content[1]["image_url"]["detail"], "high");
     }
 
@@ -992,19 +1158,24 @@ mod tests {
 
         // Verify the input structure for Responses API
         let input = adapted["input"].as_array().unwrap();
-        assert_eq!(input.len(), 2, "Should have text and image input parts");
+        assert_eq!(input.len(), 1, "Should have one typed message input item");
+        assert_eq!(input[0]["role"], "user");
+        let content = input[0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2, "Should have text and image content parts");
 
         // Check text input
-        assert_eq!(input[0]["type"], "input_text");
-        assert_eq!(input[0]["text"], "Analyze this image");
+        assert_eq!(content[0]["type"], "input_text");
+        assert_eq!(content[0]["text"], "Analyze this image");
 
         // Check image input
-        assert_eq!(input[1]["type"], "input_image");
-        assert!(input[1]["source"]["url"]
-            .as_str()
-            .unwrap()
-            .starts_with("data:image/png;base64,"));
-        assert_eq!(input[1]["source"]["detail"], "low");
+        assert_eq!(content[1]["type"], "input_image");
+        assert!(
+            content[1]["image_url"]
+                .as_str()
+                .unwrap()
+                .starts_with("data:image/png;base64,")
+        );
+        assert_eq!(content[1]["detail"], "low");
     }
 
     // M21 — DeepSeek adapter canonicalization test
@@ -3096,13 +3267,10 @@ mod tests {
     }
 
     #[test]
-    fn openai_chat_model_body_has_messages_and_max_completion_tokens() {
-        // BUG 2 regression: a catalog OpenAI chat model (gpt-5-nano) must produce
-        // a Chat Completions body carrying `messages` (never a Responses-shaped
-        // body with `input` and no `messages`, which OpenAI rejects with 400
-        // "Missing required parameter: 'messages'"). OpenAI-managed
-        // /chat/completions also deprecated `max_tokens` for gpt-5/o-series and
-        // rejects it, so the cap must serialize as `max_completion_tokens`.
+    fn openai_gpt54_nano_body_uses_responses_shape() {
+        // Official OpenAI documentation classifies gpt-5.4-nano as reasoning.
+        // It supports both endpoints, but AGI selects Responses so effort and
+        // hosted-tool semantics do not split across two request shapes.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
         let request = LLMRequest {
             messages: vec![ChatMessage {
@@ -3112,7 +3280,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5-nano".to_string(),
+            model: "gpt-5.4-nano".to_string(),
             max_tokens: Some(32),
             stream: true,
             ..Default::default()
@@ -3120,27 +3288,29 @@ mod tests {
 
         let adapted = adapter.adapt_request(&request).expect("adapt ok");
 
-        // Chat Completions shape, not Responses.
+        // Responses shape, not Chat Completions.
         assert!(
-            adapted.get("messages").and_then(|m| m.as_array()).is_some(),
-            "OpenAI chat model body must contain a `messages` array, got: {adapted}"
+            adapted.get("input").is_some(),
+            "OpenAI reasoning model body must contain `input`, got: {adapted}"
         );
         assert!(
-            adapted.get("input").is_none(),
-            "OpenAI chat model body must NOT contain a Responses-API `input` field"
+            adapted.get("messages").is_none(),
+            "OpenAI Responses body must not contain Chat Completions `messages`"
         );
-        assert_eq!(adapted["messages"][0]["role"], "user");
         assert_eq!(
-            adapted["messages"][0]["content"],
+            adapted["input"],
             "Reply with a short one-sentence greeting."
         );
-        // apiModelId for gpt-5-nano equals its internal id.
-        assert_eq!(adapted["model"], "gpt-5-nano");
-        // OpenAI-managed models require max_completion_tokens, not max_tokens.
-        assert_eq!(adapted["max_completion_tokens"], 32);
+        // apiModelId for gpt-5.4-nano equals its internal id.
+        assert_eq!(adapted["model"], "gpt-5.4-nano");
+        assert_eq!(adapted["max_output_tokens"], 32);
         assert!(
             adapted.get("max_tokens").is_none(),
-            "OpenAI body must not send deprecated `max_tokens`"
+            "OpenAI Responses body must not send `max_tokens`"
+        );
+        assert!(
+            adapted.get("max_completion_tokens").is_none(),
+            "OpenAI Responses body must not send Chat Completions `max_completion_tokens`"
         );
     }
 

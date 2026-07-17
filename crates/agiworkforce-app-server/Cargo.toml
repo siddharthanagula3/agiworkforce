@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "agiworkforce-app-server"
 version = "0.1.0"
 edition = "2021"
@@ -16,6 +17,7 @@ unused_mut = "deny"
 dead_code = "deny"
 
 [dependencies]
+agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 anyhow = "1"
 async-trait = "0.1.89"
 axum = { version = "0.8", features = ["tokio", "ws"] }

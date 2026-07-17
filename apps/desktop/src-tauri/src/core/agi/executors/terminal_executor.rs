@@ -21,6 +21,8 @@
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
+use crate::sys::commands::settings::TerminalSandboxPreferences;
+use crate::sys::security::sandbox_runtime::{build_sandboxed_command, SandboxedCommandSpec};
 use crate::ui::events::frontend_events::{emit_terminal_command, TerminalCommand};
 use crate::ui::events::tool_stream::{emit_tool_output_chunk, emit_tool_progress, OutputChunkType};
 use anyhow::{anyhow, Result};
@@ -49,6 +51,16 @@ const MAX_TIMEOUT_MS: u64 = 300_000;
 /// Executes shell commands with security controls, timeout handling,
 /// and streaming output support.
 pub struct TerminalExecutor;
+
+/// Fully resolved process launch for an agent-owned terminal command.
+/// `_sandbox_spec` keeps the temporary sandbox settings file alive until the
+/// child process has finished.
+struct AgentTerminalLaunch {
+    program: String,
+    args: Vec<String>,
+    sandboxed: bool,
+    _sandbox_spec: Option<SandboxedCommandSpec>,
+}
 
 /// Security mode for command execution.
 ///
@@ -513,6 +525,57 @@ impl TerminalExecutor {
         }
     }
 
+    fn build_agent_terminal_launch(
+        program: &str,
+        args: &[String],
+        cwd: Option<&str>,
+        allowed_directories: &[String],
+        preferences: &TerminalSandboxPreferences,
+    ) -> Result<AgentTerminalLaunch> {
+        let sandbox_spec =
+            build_sandboxed_command(program, args, cwd, allowed_directories, preferences)
+                .map_err(|error| anyhow!(error))?;
+
+        match sandbox_spec {
+            Some(spec) => Ok(AgentTerminalLaunch {
+                program: spec.program.clone(),
+                args: spec.args.clone(),
+                sandboxed: true,
+                _sandbox_spec: Some(spec),
+            }),
+            None => Ok(AgentTerminalLaunch {
+                program: program.to_string(),
+                args: args.to_vec(),
+                sandboxed: false,
+                _sandbox_spec: None,
+            }),
+        }
+    }
+
+    async fn load_terminal_sandbox_settings(
+        context: &ExecutorContext,
+    ) -> Result<(TerminalSandboxPreferences, Vec<String>)> {
+        let Some(app_handle) = context.app_handle.as_ref() else {
+            return Ok((TerminalSandboxPreferences::default(), Vec::new()));
+        };
+
+        use tauri::Manager;
+        let settings_state = app_handle
+            .try_state::<crate::sys::commands::settings::SettingsState>()
+            .ok_or_else(|| {
+                anyhow!(
+                    "Terminal sandbox settings are unavailable; refusing agent terminal execution"
+                )
+            })?;
+        let settings = settings_state.settings.lock().await;
+        let execution_preferences = settings.execution_preferences.clone().unwrap_or_default();
+
+        Ok((
+            execution_preferences.terminal_sandbox,
+            settings.allowed_directories.clone(),
+        ))
+    }
+
     /// Execute a terminal command.
     ///
     /// # Arguments
@@ -620,9 +683,30 @@ impl TerminalExecutor {
             );
         }
 
-        // Build the command
-        let mut cmd = Command::new(shell_cmd);
-        cmd.arg(shell_arg).arg(command);
+        let shell_args = vec![shell_arg.to_string(), command.to_string()];
+        let cwd_string = canonical_cwd
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned());
+        let (sandbox_preferences, allowed_directories) =
+            Self::load_terminal_sandbox_settings(context).await?;
+        let launch = Self::build_agent_terminal_launch(
+            shell_cmd,
+            &shell_args,
+            cwd_string.as_deref(),
+            &allowed_directories,
+            &sandbox_preferences,
+        )?;
+
+        tracing::info!(
+            "[TerminalExecutor] Agent terminal sandbox applied: {}",
+            launch.sandboxed
+        );
+
+        // Build the command from the same sandbox policy used by the manual
+        // terminal path. When sandboxing is disabled this resolves to the
+        // original shell invocation byte-for-byte.
+        let mut cmd = Command::new(&launch.program);
+        cmd.args(&launch.args);
 
         // Set working directory if provided
         if let Some(ref dir) = canonical_cwd {
@@ -719,6 +803,7 @@ impl TerminalExecutor {
                     "stderr": stderr,
                     "timed_out": timed_out,
                     "shell": shell_cmd,
+                    "sandboxed": launch.sandboxed,
                     "cwd": canonical_cwd.as_ref().map(|p| p.to_string_lossy().to_string()),
                     "execution_time_ms": execution_time_ms
                 }))
@@ -984,6 +1069,19 @@ impl ToolExecutor for TerminalExecutor {
 mod tests {
     use super::*;
 
+    fn sandbox_preferences(enabled: bool) -> TerminalSandboxPreferences {
+        TerminalSandboxPreferences {
+            enabled,
+            backend: "srt".to_string(),
+            policy: "workspace-write".to_string(),
+            executable: std::env::current_exe()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+            allowed_domains: Vec::new(),
+        }
+    }
+
     #[test]
     fn test_terminal_executor_tool_names() {
         let executor = TerminalExecutor::new();
@@ -1167,5 +1265,59 @@ mod tests {
     fn test_default_trait() {
         let executor = TerminalExecutor::new();
         assert_eq!(executor.tool_names(), vec!["terminal_execute"]);
+    }
+
+    #[test]
+    fn agent_terminal_launch_uses_configured_sandbox() {
+        let cwd = std::env::current_dir().unwrap();
+        let launch = TerminalExecutor::build_agent_terminal_launch(
+            "bash",
+            &["-c".to_string(), "pwd".to_string()],
+            Some(cwd.to_string_lossy().as_ref()),
+            &[],
+            &sandbox_preferences(true),
+        )
+        .unwrap();
+
+        assert!(launch.sandboxed);
+        assert!(launch.args.iter().any(|arg| arg == "--settings"));
+        assert!(launch.args.iter().any(|arg| arg == "bash"));
+        assert!(launch.args.iter().any(|arg| arg == "pwd"));
+    }
+
+    #[test]
+    fn agent_terminal_launch_preserves_shell_when_sandbox_is_disabled() {
+        let launch = TerminalExecutor::build_agent_terminal_launch(
+            "bash",
+            &["-c".to_string(), "pwd".to_string()],
+            None,
+            &[],
+            &sandbox_preferences(false),
+        )
+        .unwrap();
+
+        assert!(!launch.sandboxed);
+        assert_eq!(launch.program, "bash");
+        assert_eq!(launch.args, vec!["-c".to_string(), "pwd".to_string()]);
+    }
+
+    #[test]
+    fn agent_terminal_launch_fails_closed_for_invalid_sandbox_backend() {
+        let mut preferences = sandbox_preferences(true);
+        preferences.backend = "unsupported".to_string();
+
+        let error = TerminalExecutor::build_agent_terminal_launch(
+            "bash",
+            &["-c".to_string(), "pwd".to_string()],
+            None,
+            &[],
+            &preferences,
+        )
+        .err()
+        .expect("invalid configured sandbox backend must fail closed");
+
+        assert!(error
+            .to_string()
+            .contains("Unsupported terminal sandbox backend"));
     }
 }

@@ -17,9 +17,10 @@ async fn http_session_id_is_sticky() {
         headers: HashMap::new(),
         oauth: None,
     };
-    let mut client = McpClient::connect("sim", cfg, McpTimeouts::default(), support::decline_hooks())
-        .await
-        .expect("connect");
+    let mut client =
+        McpClient::connect("sim", cfg, McpTimeouts::default(), support::decline_hooks())
+            .await
+            .expect("connect");
 
     let _ = client.list_tools().await.expect("list_tools");
     let _ = client

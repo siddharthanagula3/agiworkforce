@@ -605,7 +605,10 @@ async fn mid_turn_stream_error_propagates() {
 
     assert!(result.is_err());
     assert!(
-        result.unwrap_err().to_string().contains("stream disconnected"),
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("stream disconnected"),
         "the underlying error text must propagate unchanged"
     );
     // The first dispatch completed and committed before the continuation failed.
@@ -625,9 +628,7 @@ async fn text_deltas_forward_as_turn_events() {
     // desktop host + fixtures consume these; the CLI renders app-locally).
     let mut first = completion("hi there", vec![]);
     first.stream = vec![
-        StreamEvent::TextDelta {
-            text: "hi ".into(),
-        },
+        StreamEvent::TextDelta { text: "hi ".into() },
         StreamEvent::ReasoningDelta {
             text: "(pondering)".into(),
         },

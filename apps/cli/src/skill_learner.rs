@@ -632,12 +632,10 @@ mod tests {
         assert!(SkillLearner::save_skill(home, &skill).is_ok());
 
         let content =
-            fs::read_to_string(home.join("skills").join("learned").join("auto-weird.md"))
-                .unwrap();
+            fs::read_to_string(home.join("skills").join("learned").join("auto-weird.md")).unwrap();
         // The raw colon/hash/quote/newline must be escaped inside one scalar,
         // so the description stays on a single quoted line.
-        assert!(content
-            .contains("description: \"uses: tool#1 with \\\"quotes\\\"\\nand newline\""));
+        assert!(content.contains("description: \"uses: tool#1 with \\\"quotes\\\"\\nand newline\""));
         // The frontmatter must still parse as exactly two `---` fences.
         assert_eq!(content.matches("---").count(), 2);
     }

@@ -9,7 +9,7 @@
 /// any cloud or managed-cloud path.
 #[cfg(test)]
 mod byok_vault_tests {
-    use tauri_plugin_stronghold::{stronghold::Stronghold, kdf::KeyDerivation};
+    use tauri_plugin_stronghold::{kdf::KeyDerivation, stronghold::Stronghold};
     use tempfile::TempDir;
 
     /// Helper: derive a 32-byte Argon2id key from a password + temp salt file.
@@ -39,11 +39,7 @@ mod byok_vault_tests {
 
         // Insert a provider key.
         store
-            .insert(
-                b"openai".to_vec(),
-                b"sk-test-key-value".to_vec(),
-                None,
-            )
+            .insert(b"openai".to_vec(), b"sk-test-key-value".to_vec(), None)
             .expect("store insert");
 
         // Flush to disk.
@@ -84,7 +80,10 @@ mod byok_vault_tests {
         let wrong_key = derive_key("wrong-password", &salt_path);
         let result = Stronghold::new(&snapshot_path, wrong_key);
         // Stronghold must return Err — wrong password cannot decrypt the snapshot.
-        assert!(result.is_err(), "wrong password must fail to open the vault");
+        assert!(
+            result.is_err(),
+            "wrong password must fail to open the vault"
+        );
     }
 
     /// Verify delete removes the key and subsequent get returns None.
@@ -107,10 +106,7 @@ mod byok_vault_tests {
 
         // Verify gone.
         let result = store.get(b"xai".as_ref()).expect("get after delete");
-        assert!(
-            result.is_none(),
-            "deleted key must not be retrievable"
-        );
+        assert!(result.is_none(), "deleted key must not be retrievable");
     }
 
     /// Verify that a fresh snapshot (no file on disk) is created successfully.
@@ -128,6 +124,9 @@ mod byok_vault_tests {
         vault.save().expect("save");
 
         // File now exists.
-        assert!(snapshot_path.exists(), "snapshot file should be created after save");
+        assert!(
+            snapshot_path.exists(),
+            "snapshot file should be created after save"
+        );
     }
 }

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 /// Look up OpenAI's task-routed model for the given snake_case task
 /// (e.g. `"code_generation"`, `"chat"`).  Falls back to the provider's
 /// default model from `models.json` so this never returns a stale literal.
-/// Source of truth: `packages/types/src/models.json`.
+/// Source of truth: `packages/contracts/types/src/models.json`.
 fn openai_model_for_task(task: &str) -> String {
     models_config::get_task_model(&Provider::OpenAI, task).to_string()
 }
@@ -16,20 +16,20 @@ fn claude_model_for_task(task: &str) -> String {
 }
 
 /// Look up Perplexity's task-routed model for the given snake_case task.
-/// Source of truth: `packages/types/src/models.json` (providers.perplexity.taskRouting).
+/// Source of truth: `packages/contracts/types/src/models.json` (providers.perplexity.taskRouting).
 fn perplexity_model_for_task(task: &str) -> String {
     models_config::get_task_model(&Provider::Perplexity, task).to_string()
 }
 
 /// Look up an image/video generation model's wire API ID from the catalog.
 /// Falls back to the catalog key itself if no `apiModelId` override is set.
-/// Source of truth: `packages/types/src/models.json` (models section).
+/// Source of truth: `packages/contracts/types/src/models.json` (models section).
 fn gen_model_api_id(catalog_key: &str) -> String {
     models_config::get_api_model_id(catalog_key)
 }
 
 /// Ollama fallback model for local inference.
-/// Source of truth: `packages/types/src/models.json` (providers.ollama.defaultModel).
+/// Source of truth: `packages/contracts/types/src/models.json` (providers.ollama.defaultModel).
 fn ollama_default_model() -> String {
     models_config::get_default_model(&Provider::Ollama).to_string()
 }

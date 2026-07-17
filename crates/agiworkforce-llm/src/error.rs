@@ -201,22 +201,32 @@ pub fn humanize_error_body(body: &str) -> Option<String> {
     // OpenRouter wraps the upstream provider's error as a JSON *string* under
     // error.metadata.raw — unwrap it for the most specific message.
     if let Some(raw) = v.pointer("/error/metadata/raw").and_then(|r| r.as_str())
-        && let Ok(inner) = serde_json::from_str::<serde_json::Value>(raw) {
-            let inner_msg = inner
-                .get("error")
-                .and_then(|e| e.as_str().or_else(|| e.get("message").and_then(|m| m.as_str())))
-                .or_else(|| inner.get("message").and_then(|m| m.as_str()));
-            if let Some(m) = inner_msg.map(str::trim).filter(|m| !m.is_empty()) {
-                return Some(m.to_string());
-            }
+        && let Ok(inner) = serde_json::from_str::<serde_json::Value>(raw)
+    {
+        let inner_msg = inner
+            .get("error")
+            .and_then(|e| {
+                e.as_str()
+                    .or_else(|| e.get("message").and_then(|m| m.as_str()))
+            })
+            .or_else(|| inner.get("message").and_then(|m| m.as_str()));
+        if let Some(m) = inner_msg.map(str::trim).filter(|m| !m.is_empty()) {
+            return Some(m.to_string());
         }
+    }
 
     let msg = v
         .get("error")
-        .and_then(|e| e.get("message").and_then(|m| m.as_str()).or_else(|| e.as_str()))
+        .and_then(|e| {
+            e.get("message")
+                .and_then(|m| m.as_str())
+                .or_else(|| e.as_str())
+        })
         .or_else(|| v.get("message").and_then(|m| m.as_str()))
         .or_else(|| v.get("detail").and_then(|m| m.as_str()));
-    msg.map(str::trim).filter(|m| !m.is_empty()).map(str::to_string)
+    msg.map(str::trim)
+        .filter(|m| !m.is_empty())
+        .map(str::to_string)
 }
 
 /// Turn a provider's 401/403 error body into a concise, human-readable message
@@ -397,7 +407,10 @@ mod tests {
     #[test]
     fn classify_401_as_auth() {
         let err = classify_error_response("openai", "m", 401, None, "invalid key");
-        assert!(matches!(err, LlmError::Auth { .. }), "401 should be auth: {err}");
+        assert!(
+            matches!(err, LlmError::Auth { .. }),
+            "401 should be auth: {err}"
+        );
         assert!(err.to_string().contains("Authentication failed"));
     }
 
@@ -544,10 +557,19 @@ mod tests {
 
     #[test]
     fn provider_name_from_url_covers_known_hosts() {
-        assert_eq!(provider_name_from_url("https://api.anthropic.com/v1"), "anthropic");
-        assert_eq!(provider_name_from_url("https://api.openai.com/v1"), "openai");
+        assert_eq!(
+            provider_name_from_url("https://api.anthropic.com/v1"),
+            "anthropic"
+        );
+        assert_eq!(
+            provider_name_from_url("https://api.openai.com/v1"),
+            "openai"
+        );
         assert_eq!(provider_name_from_url("http://localhost:1234/v1"), "local");
-        assert_eq!(provider_name_from_url("https://api.ollama.com/v1"), "ollama-cloud");
+        assert_eq!(
+            provider_name_from_url("https://api.ollama.com/v1"),
+            "ollama-cloud"
+        );
         assert_eq!(provider_name_from_url("https://example.com"), "unknown");
     }
 }

@@ -121,6 +121,8 @@ mod tests {
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         assert_eq!(prefs.provider, Some(Provider::Ollama));
@@ -1172,6 +1174,117 @@ mod streaming_idle_timeout_tests {
             CHUNK_IDLE_TIMEOUT,
             Duration::from_secs(30),
             "CHUNK_IDLE_TIMEOUT must be 30 seconds"
+        );
+    }
+}
+
+// -----------------------------------------------------------------
+// Regression tests for compute_streaming_timeout (2026-07-11):
+// previously a flat 90s Duration::from_secs(90), which a real,
+// contention-free measurement showed a realistic 111-tool-injected
+// prompt (21,483 tokens) can consume ALONE in prompt evaluation, 88.7s, on
+// ordinary consumer hardware, before any generation starts. The
+// timeout must now scale with prompt size instead of staying flat.
+// This is distinct from CHUNK_IDLE_TIMEOUT / streaming_idle_timeout_tests
+// above, which governs gaps between already-arriving chunks, not the
+// initial connection/first-token wait this covers.
+// -----------------------------------------------------------------
+#[cfg(test)]
+mod streaming_connection_timeout_tests {
+    use crate::core::llm::llm_router::compute_streaming_timeout;
+    use crate::core::llm::{ChatMessage, ToolDefinition};
+    use std::time::Duration;
+
+    fn make_message(content: &str) -> ChatMessage {
+        ChatMessage {
+            role: "user".to_string(),
+            content: content.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        }
+    }
+
+    fn make_tool(name: &str) -> ToolDefinition {
+        ToolDefinition {
+            name: name.to_string(),
+            description:
+                "Performs an operation against the configured backend, returning a structured result."
+                    .to_string(),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "options": {"type": "object", "properties": {"recursive": {"type": "boolean"}}},
+                },
+                "required": ["path"],
+            }),
+            strict: None,
+        }
+    }
+
+    #[test]
+    fn test_streaming_timeout_stays_at_base_for_typical_prompt_with_no_tools() {
+        let messages = vec![make_message("Say the word banana and nothing else.")];
+        let timeout = compute_streaming_timeout(&messages, None);
+        assert_eq!(
+            timeout,
+            Duration::from_secs(90),
+            "a short prompt with no tools must not be penalized by the large-prompt scaling"
+        );
+    }
+
+    #[test]
+    fn test_streaming_timeout_ignores_an_empty_tool_list() {
+        let messages = vec![make_message("Say the word banana and nothing else.")];
+        let empty: Vec<ToolDefinition> = vec![];
+        let timeout = compute_streaming_timeout(&messages, Some(&empty));
+        assert_eq!(
+            timeout,
+            Duration::from_secs(90),
+            "an empty tools slice must behave identically to no tools at all"
+        );
+    }
+
+    #[test]
+    fn test_streaming_timeout_scales_up_for_a_large_tool_catalog() {
+        let messages = vec![make_message("Say the word banana and nothing else.")];
+        let tools: Vec<ToolDefinition> =
+            (0..111).map(|i| make_tool(&format!("tool_{i}"))).collect();
+        let timeout = compute_streaming_timeout(&messages, Some(&tools));
+        assert!(
+            timeout > Duration::from_secs(90),
+            "a 111-tool catalog must scale the timeout above the 90s base, got {timeout:?}"
+        );
+    }
+
+    #[test]
+    fn test_streaming_timeout_never_exceeds_the_configured_maximum() {
+        let messages = vec![make_message("Say the word banana and nothing else.")];
+        // Absurdly large tool count to force saturation against the ceiling.
+        let tools: Vec<ToolDefinition> =
+            (0..5000).map(|i| make_tool(&format!("tool_{i}"))).collect();
+        let timeout = compute_streaming_timeout(&messages, Some(&tools));
+        assert_eq!(
+            timeout,
+            Duration::from_secs(240),
+            "the timeout must saturate at MAX_STREAM_TIMEOUT_SECS rather than growing unbounded"
+        );
+    }
+
+    #[test]
+    fn test_streaming_timeout_uses_the_uncapped_tool_set_not_a_provider_specific_cap() {
+        // compute_streaming_timeout is provider-agnostic and must size off the
+        // request's real tool set, independent of any downstream provider-specific
+        // cap (e.g. Ollama's MAX_PROMPT_INJECTED_TOOLS = 32) — a smaller, capped
+        // count here would under-estimate the timeout for providers that inject
+        // the full set. 40 tools already exceeds Ollama's 32-tool cap.
+        let messages = vec![make_message("Say the word banana and nothing else.")];
+        let tools: Vec<ToolDefinition> = (0..40).map(|i| make_tool(&format!("tool_{i}"))).collect();
+        let timeout = compute_streaming_timeout(&messages, Some(&tools));
+        assert!(
+            timeout >= Duration::from_secs(90),
+            "timeout must reflect the real (uncapped) tool count passed in, got {timeout:?}"
         );
     }
 }

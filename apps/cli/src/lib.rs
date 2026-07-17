@@ -63,7 +63,6 @@ pub mod voice;
 pub mod app_server;
 pub mod apply_patch;
 pub mod approval_audit;
-pub mod cloud;
 pub mod ecosystem;
 pub mod exec_policy;
 pub mod init;
@@ -143,7 +142,7 @@ use std::io::{self, IsTerminal, Read};
                   Connects to Anthropic, OpenAI, Google, Ollama, and more."
 )]
 pub struct Cli {
-    /// Subcommand (exec, review, apply, sandbox, cloud, etc.)
+    /// Subcommand (exec, review, apply, sandbox, etc.)
     #[command(subcommand)]
     command: Option<Command>,
 
@@ -393,13 +392,13 @@ pub struct Cli {
 
     /// Use automatic model routing (mutually exclusive with --model).
     ///
-    /// Sends `model: "auto-economy"` to the AGI managed-cloud API,
-    /// which delegates routing to the server-side classifier. Responses must
-    /// show the selected provider/model label when the server returns it.
+    /// Resolves the economy profile through AGI's canonical model policy, then
+    /// sends the concrete provider model ID through the managed-cloud transport.
+    /// Responses disclose the selected provider/model provenance.
     ///
     /// Only applies to managed-cloud sessions; BYOK and local (Ollama / LMStudio)
     /// providers always require an explicit --model.
-    #[arg(long, conflicts_with = "model")]
+    #[arg(long, conflicts_with_all = ["model", "provider"])]
     auto: bool,
 
     /// Read the system prompt from a file. Mutually composes with
@@ -586,11 +585,6 @@ enum Command {
         #[command(subcommand)]
         action: ModelsSubcommand,
     },
-    /// Managed cloud beta status and model catalog. Execution is not wired in this build.
-    Cloud {
-        #[command(subcommand)]
-        action: CloudSubcommand,
-    },
     /// Manage plugins.
     Plugin {
         #[command(subcommand)]
@@ -654,23 +648,6 @@ enum Command {
     Init,
     /// Run the first-run onboarding wizard again.
     Onboarding,
-}
-
-#[derive(Subcommand, Debug)]
-enum CloudSubcommand {
-    /// Attempt managed cloud execution. Currently fails closed until the backend contract is available.
-    Exec {
-        prompt: String,
-        #[arg(short, long)]
-        model: Option<String>,
-    },
-    /// List managed cloud tasks. Currently unavailable in the private beta CLI.
-    List {
-        #[arg(long, default_value = "10")]
-        limit: usize,
-    },
-    /// Show managed cloud model catalog and BYOK environment status.
-    Models,
 }
 
 #[derive(Subcommand, Debug)]
@@ -1171,7 +1148,13 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                 // Slugify: lowercase, replace non-alphanumeric with '-', collapse runs.
                 let raw: String = name
                     .chars()
-                    .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+                    .map(|c| {
+                        if c.is_alphanumeric() {
+                            c.to_ascii_lowercase()
+                        } else {
+                            '-'
+                        }
+                    })
                     .collect();
                 let slug = raw
                     .split('-')
@@ -1727,13 +1710,21 @@ pub async fn run_main() -> Result<()> {
                 allowed_origin,
                 allow_query_token,
             } => {
+                if listen == "stdio" {
+                    let workspace_root = std::env::current_dir()?;
+                    let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
+                        app_config.clone(),
+                        workspace_root,
+                    )?);
+                    let capabilities = host.capabilities();
+                    return app_server::run_developer_session_stdio(host, capabilities).await;
+                }
+
                 // CLI app-server binds 8788 by default; Desktop occupies 8787.
                 // Override at runtime via AGI_CLI_SERVER_ADDR env var.
                 let cli_server_addr = std::env::var("AGI_CLI_SERVER_ADDR")
                     .unwrap_or_else(|_| "127.0.0.1:8788".to_string());
-                let cfg = if listen == "stdio" {
-                    app_server::AppServerConfig::default()
-                } else {
+                let cfg = {
                     let addr: std::net::SocketAddr = listen
                         .trim_start_matches("ws://")
                         .parse()
@@ -1768,25 +1759,6 @@ pub async fn run_main() -> Result<()> {
                     }
                 };
                 app_server::run_app_server(cfg, app_server::make_dispatch()).await
-            }
-            Command::Cloud { action } => {
-                let cc = cloud::CloudConfig::default();
-                match action {
-                    CloudSubcommand::Exec { prompt, model } => {
-                        cloud::cloud_exec(&cc, prompt, model.as_deref()).await?;
-                        Ok(())
-                    }
-                    CloudSubcommand::List { .. } => {
-                        anyhow::bail!(
-                            "Managed cloud task listing is private beta and is not wired in this CLI build."
-                        )
-                    }
-                    CloudSubcommand::Models => {
-                        println!("{}", cloud::format_cloud_models());
-                        cloud::print_cloud_status(&cc);
-                        Ok(())
-                    }
-                }
             }
             Command::Models { action } => handle_models_command(action, &app_config).await,
             Command::Plugin { action } => {
@@ -2384,22 +2356,14 @@ pub async fn run_main() -> Result<()> {
     // Resolve model.
     //
     // Priority (highest first):
-    //   1. `--auto` flag → use an explicit auto-routing sentinel. Downstream
-    //      responses must disclose the selected provider/model; this must never
-    //      become silent managed routing.
+    //   1. `--auto` explicitly opts into the managed-cloud policy router.
     //   2. Explicit `--model` CLI flag.
-    //   3. Tier-aware default: if no model specified AND user has a managed-cloud
-    //      JWT, resolve the tier (cache-first, 1 h TTL) and use the economy-tier
-    //      default model from `models.json`.  Falls back to config default on any
-    //      error so startup is never blocked.
-    //   4. `config.toml` default.model.
-    let model: String = if cli.auto {
-        // --auto: request explainable routing via the auto sentinel.
-        "auto-economy".to_string()
-    } else if let Some(ref explicit_model) = cli.model {
-        explicit_model.clone()
-    } else {
-        // No explicit model — attempt tier-aware selection.
+    //   3. `config.toml` default.model.
+    //
+    // Account-tier lookup must never silently turn an ordinary Local/BYOK CLI
+    // launch into managed cloud. The managed boundary is entered only through
+    // the explicit `--auto`/managed-provider path.
+    let auto_route = if cli.auto {
         let jwt = tier_cache::load_jwt();
         let tier_resolution = tokio::time::timeout(
             std::time::Duration::from_secs(3),
@@ -2407,35 +2371,46 @@ pub async fn run_main() -> Result<()> {
         )
         .await
         .unwrap_or_default();
-
-        // If the managed token expired (401), print a one-line non-blocking re-auth hint.
-        // Never block Local/BYOK runs — this is purely informational.
         if tier_resolution.needs_reauth && jwt.is_some() {
             eprintln!(
                 "{}",
                 colored::Colorize::yellow(
-                    "AGI session expired — run `agi login` (or set AGIWORKFORCE_JWT) to restore managed tier."
+                    "AGI session expired — run `agi login` (or set AGIWORKFORCE_JWT) to use managed Auto routing."
                 )
             );
         }
+        let tier = tier_resolution
+            .cached
+            .as_ref()
+            .map(|cached| match cached.tier {
+                tier_cache::UserTier::Free => "free",
+                tier_cache::UserTier::Pro => "pro",
+                tier_cache::UserTier::Max => "max",
+                tier_cache::UserTier::Enterprise => "enterprise",
+                // BYOK is not a server entitlement. Managed routing must fail
+                // closed to the Free policy until the account tier is proven.
+                tier_cache::UserTier::Byok => "free",
+            })
+            .unwrap_or("free");
+        Some(
+            model_catalog::resolve_auto_model(
+                "auto-economy",
+                agiworkforce_model_registry::RoutingTaskType::Coding,
+                tier,
+                agiworkforce_model_registry::TrustMode::ManagedCloud,
+            )
+            .map_err(anyhow::Error::msg)?,
+        )
+    } else {
+        None
+    };
 
-        if let Some(ct) = tier_resolution.cached {
-            // Use the tier's economy default if no model is pinned in config.
-            // Managed-cloud Byok tier falls through to config default so users
-            // who added BYOK keys don't accidentally hit the managed API.
-            // Enterprise maps to economy_default_model() like Pro/Max (default_model_id handles this).
-            if !matches!(ct.tier, tier_cache::UserTier::Byok) {
-                if let Some(economy_model) = ct.tier.default_model_id() {
-                    economy_model.to_string()
-                } else {
-                    app_config.default.model.clone()
-                }
-            } else {
-                app_config.default.model.clone()
-            }
-        } else {
-            app_config.default.model.clone()
-        }
+    let model: String = if let Some(route) = &auto_route {
+        route.provider_model_id.clone()
+    } else if let Some(ref explicit_model) = cli.model {
+        explicit_model.clone()
+    } else {
+        app_config.default.model.clone()
     };
 
     // Parse `-m model1,model2,...` fallback-chain syntax. Without this the
@@ -2450,6 +2425,20 @@ pub async fn run_main() -> Result<()> {
         .head()
         .map(|s| s.to_string())
         .unwrap_or(model);
+    // `--auto` selects a concrete upstream model locally, but execution must
+    // remain inside the Managed Cloud trust boundary. Never let provider
+    // inference turn that concrete model into a silent direct/BYOK request.
+    let effective_provider_override = if cli.auto {
+        Some("agiworkforce")
+    } else {
+        cli.provider.as_deref()
+    };
+    if let Some(route) = &auto_route {
+        eprintln!(
+            "Auto route: managed_cloud -> {}/{} (harness: {})",
+            route.upstream_provider, route.provider_model_id, route.harness_id
+        );
+    }
 
     // Read file contents for -f flag — text files and images are handled separately
     let file_context_result = read_file_contexts(&cli.files)?;
@@ -2553,7 +2542,7 @@ pub async fn run_main() -> Result<()> {
         return run_oneshot(
             &app_config,
             &model,
-            cli.provider.as_deref(),
+            effective_provider_override,
             prompt,
             oneshot_output_mode,
             &sys_context,
@@ -2713,7 +2702,7 @@ pub async fn run_main() -> Result<()> {
             team_mode,
             effective_auto_approve_safe,
             cli.quiet,
-            cli.provider.as_deref(),
+            effective_provider_override,
             effective_permission_mode,
             effective_auto_approve_plan,
             normalized_cli_options.allowed_tools.clone(),
@@ -2737,7 +2726,7 @@ pub async fn run_main() -> Result<()> {
             team_mode,
             effective_auto_approve_safe,
             cli.quiet,
-            cli.provider,
+            effective_provider_override.map(str::to_string),
             effective_permission_mode,
             effective_auto_approve_plan,
             cli.no_sandbox,
@@ -2902,8 +2891,13 @@ pub(crate) async fn attach_mcp_manager_for_session(
     include_default_configs: bool,
     include_plugin_configs: bool,
 ) -> Result<()> {
-    if let Some(mgr) =
-        build_mcp_manager(mcp_config_options, include_default_configs, include_plugin_configs).await?
+    if let Some(mgr) = build_mcp_manager(
+        mcp_config_options,
+        include_default_configs,
+        include_plugin_configs,
+        session.privacy_mode,
+    )
+    .await?
     {
         session.set_mcp_manager(mgr);
     }
@@ -2921,6 +2915,43 @@ pub(crate) async fn build_mcp_manager(
     mcp_config_options: &mcp::McpConfigLoadOptions,
     include_default_configs: bool,
     include_plugin_configs: bool,
+    privacy_mode: agent::PrivacyMode,
+) -> Result<Option<mcp::McpManager>> {
+    build_mcp_manager_inner(
+        mcp_config_options,
+        include_default_configs,
+        include_plugin_configs,
+        privacy_mode,
+        None,
+    )
+    .await
+}
+
+/// TUI-only MCP builder. Headless/REPL/app-server callers intentionally keep
+/// the fail-closed auto-decline handler installed by [`build_mcp_manager`].
+pub(crate) async fn build_mcp_manager_with_elicitation(
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+    privacy_mode: agent::PrivacyMode,
+    elicitation: std::sync::Arc<dyn agiworkforce_mcp::ElicitationHandler>,
+) -> Result<Option<mcp::McpManager>> {
+    build_mcp_manager_inner(
+        mcp_config_options,
+        include_default_configs,
+        include_plugin_configs,
+        privacy_mode,
+        Some(elicitation),
+    )
+    .await
+}
+
+async fn build_mcp_manager_inner(
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+    privacy_mode: agent::PrivacyMode,
+    elicitation: Option<std::sync::Arc<dyn agiworkforce_mcp::ElicitationHandler>>,
 ) -> Result<Option<mcp::McpManager>> {
     if !include_default_configs && !mcp_config_options.has_explicit_sources() {
         return Ok(None);
@@ -2947,7 +2978,15 @@ pub(crate) async fn build_mcp_manager(
     }
 
     let mut mcp_mgr = mcp::McpManager::new();
-    if let Err(err) = mcp_mgr.connect_all(&mcp_configs).await {
+    let connect_result = match elicitation {
+        Some(handler) => {
+            mcp_mgr
+                .connect_all_with_elicitation(&mcp_configs, privacy_mode, handler)
+                .await
+        }
+        None => mcp_mgr.connect_all(&mcp_configs, privacy_mode).await,
+    };
+    if let Err(err) = connect_result {
         // Suppress the raw stderr warning while the full-screen TUI owns the
         // terminal (it would corrupt the alternate screen); exec/REPL still
         // surface it.
@@ -3023,7 +3062,10 @@ pub async fn run_oneshot(
                 agent_def.apply_to_session(&mut session);
             }
             None => {
-                eprintln!("Warning: agent '{}' not found. Continuing without agent.", name);
+                eprintln!(
+                    "Warning: agent '{}' not found. Continuing without agent.",
+                    name
+                );
             }
         }
     }
@@ -3253,6 +3295,19 @@ mod tests {
     use super::*;
 
     #[test]
+    fn cli_does_not_advertise_an_unimplemented_cloud_task_surface() {
+        let subcommands: Vec<String> = Cli::command()
+            .get_subcommands()
+            .map(|command| command.get_name().to_string())
+            .collect();
+
+        assert!(
+            !subcommands.iter().any(|command| command == "cloud"),
+            "managed execution uses the normal model/session path; an unwired cloud task command must not be exposed: {subcommands:?}"
+        );
+    }
+
+    #[test]
     fn dash_prompt_uses_stdin_content_as_the_prompt() {
         assert_eq!(
             build_final_prompt(Some("-"), Some("explain this diff"), ""),
@@ -3370,6 +3425,19 @@ mod tests {
     }
 
     #[test]
+    fn auto_rejects_direct_provider_or_model_overrides() {
+        assert!(
+            Cli::try_parse_from(["agi", "--auto", "--provider", "openai"]).is_err(),
+            "managed Auto must not be combined with a direct BYOK provider"
+        );
+        let catalog_model = model_catalog::default_model();
+        assert!(
+            Cli::try_parse_from(["agi", "--auto", "--model", catalog_model]).is_err(),
+            "Auto policy and an explicit model are mutually exclusive"
+        );
+    }
+
+    #[test]
     fn session_id_flag_parses() {
         let cli = Cli::try_parse_from(["agiworkforce", "--session-id", "my-session-abc", "hello"])
             .expect("--session-id should parse");
@@ -3416,18 +3484,12 @@ mod tests {
     #[test]
     fn unsupported_bidirectional_sdk_flags_are_not_active_cli_surface() {
         assert!(
-            Cli::try_parse_from([
-                "agiworkforce",
-                "--input-format",
-                "stream-json",
-                "hello",
-            ])
-            .is_err(),
+            Cli::try_parse_from(["agiworkforce", "--input-format", "stream-json", "hello",])
+                .is_err(),
             "--input-format must not be accepted until bidirectional SDK input is wired"
         );
         assert!(
-            Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"])
-                .is_err(),
+            Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"]).is_err(),
             "--include-partial-messages must not be accepted until partial deltas are wired"
         );
     }

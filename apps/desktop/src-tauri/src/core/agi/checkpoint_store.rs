@@ -29,8 +29,10 @@ impl CheckpointStore {
     pub async fn init(&self) -> Result<()> {
         let db_path = self.db_path.clone();
         tokio::task::spawn_blocking(move || {
-            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
-                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+            let conn =
+                crate::data::db::encryption::open_keyed_connection(&db_path).map_err(|e| {
+                    rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+                })?;
 
             // Enable WAL mode for better concurrency
             conn.execute_batch("PRAGMA journal_mode = WAL")?;
@@ -350,8 +352,10 @@ impl CheckpointStore {
         let db_path = self.db_path.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
-                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+            let conn =
+                crate::data::db::encryption::open_keyed_connection(&db_path).map_err(|e| {
+                    rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+                })?;
             conn.execute(
                 "DELETE FROM agi_task_checkpoints WHERE id = ?1",
                 params![checkpoint_id],
@@ -370,8 +374,10 @@ impl CheckpointStore {
         let keep_count = keep_count as i32;
 
         let deleted = tokio::task::spawn_blocking(move || {
-            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
-                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+            let conn =
+                crate::data::db::encryption::open_keyed_connection(&db_path).map_err(|e| {
+                    rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+                })?;
 
             // Get checkpoint IDs to delete
             let mut stmt = conn.prepare(
@@ -426,8 +432,10 @@ impl CheckpointStore {
         let db_path = self.db_path.clone();
 
         tokio::task::spawn_blocking(move || {
-            let conn = crate::data::db::encryption::open_keyed_connection(&db_path)
-                .map_err(|e| rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e)))?;
+            let conn =
+                crate::data::db::encryption::open_keyed_connection(&db_path).map_err(|e| {
+                    rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(1), Some(e))
+                })?;
 
             conn.execute(
                 "INSERT INTO agi_checkpoint_restore_history (

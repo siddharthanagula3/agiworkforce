@@ -252,7 +252,7 @@ mod tests {
     fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
 
-        assert_eq!(commands.len(), 87);
+        assert_eq!(commands.len(), 88);
         assert_eq!(commands[0].name, "model");
         assert_eq!(
             commands
@@ -469,6 +469,7 @@ mod tests {
             "privacy-settings",
             "privacy-mode",
             "continue-with-byok",
+            "continue-with-cloud",
             "rate-limit-options",
             "security-review",
             "stats",

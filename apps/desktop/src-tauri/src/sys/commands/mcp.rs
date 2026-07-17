@@ -12,7 +12,6 @@ use crate::sys::commands::tool_confirmation::{
     request_tool_confirmation, request_tool_confirmation_no_mode_gate, ToolConfirmationState,
 };
 use crate::sys::security::tool_guard::{RiskLevel, ToolConfirmationRequest, ToolSafetyTier};
-use base64::Engine as _;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -90,9 +89,13 @@ fn restore_redacted_env_values(
         // Without this, saving an edited config would persist "<redacted>" and wipe
         // the real credentials.
         use crate::core::mcp::transport::TransportConfig;
-        if let (Some(TransportConfig::Http(incoming_http)), Some(TransportConfig::Http(existing_http))) =
-            (incoming_server.transport.as_mut(), existing_server.transport.as_ref())
-        {
+        if let (
+            Some(TransportConfig::Http(incoming_http)),
+            Some(TransportConfig::Http(existing_http)),
+        ) = (
+            incoming_server.transport.as_mut(),
+            existing_server.transport.as_ref(),
+        ) {
             if incoming_http.api_key.as_deref() == Some(redacted_sentinel) {
                 incoming_http.api_key = existing_http.api_key.clone();
             }
@@ -903,30 +906,27 @@ pub async fn mcp_call_tool(
     // Generate correlation ID for request tracing
     let correlation_id = uuid::Uuid::new_v4().to_string();
 
-    let decode_component = |value: &str| -> String {
-        if let Some(encoded) = value.strip_prefix("hex:") {
-            if let Ok(bytes) = hex::decode(encoded) {
-                if let Ok(decoded) = String::from_utf8(bytes) {
-                    return decoded;
-                }
-            }
-        } else if let Some(encoded) = value.strip_prefix("b64:") {
-            if let Ok(bytes) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded) {
-                if let Ok(decoded) = String::from_utf8(bytes) {
-                    return decoded;
-                }
-            }
+    // Resolve (server_name, tool_name) via the shared registry decoder
+    // instead of a hand-rolled prefix strip. `create_safe_tool_id`
+    // (registry.rs) emits `b64_`-prefixed components (or a hashed
+    // `mcp__h__<hash>` id for very long names); the previous inline decode
+    // here only understood legacy `hex:`/`b64:` prefixes (note also the
+    // missing trailing underscore vs. the registry's `__` delimiter), so
+    // `server_name`/`bare_tool_name` never decoded correctly and every
+    // permission lookup below silently missed its stored value.
+    let (server_name, bare_tool_name) = match state.registry.resolve_tool_id(&tool_id) {
+        Ok(pair) => pair,
+        Err(e) => {
+            tracing::warn!(
+                target: "mcp",
+                correlation_id = %correlation_id,
+                tool_id = %tool_id,
+                error = %e,
+                "Failed to resolve MCP tool ID; falling back to unresolved name for logging/permission checks"
+            );
+            ("unknown".to_string(), tool_id.clone())
         }
-        value.to_string()
     };
-
-    // Extract server name from tool_id (format: mcp__servername__toolname__)
-    // Use double underscore delimiter to match registry format
-    let server_name = tool_id
-        .strip_prefix("mcp__")
-        .and_then(|s| s.split("__").next())
-        .map(decode_component)
-        .unwrap_or_else(|| "unknown".to_string());
 
     tracing::info!(
         target: "mcp",
@@ -937,14 +937,17 @@ pub async fn mcp_call_tool(
     );
 
     // 1a. Per-tool connector permission gate (audit C-rank 1).
-    // Extract bare tool name from mcp__<server>__<tool>__ format.
-    let bare_tool_name = tool_id
-        .strip_prefix("mcp__")
-        .and_then(|s| s.split("__").nth(1))
-        .map(|s| s.trim_end_matches('_').to_string())
-        .unwrap_or_else(|| tool_id.clone());
-
-    // connector_id is the server_name for MCP tools.
+    // The permission store is keyed by connector *catalog* id (e.g.
+    // "github"), written by
+    // packages/ui/unified-chat/src/lib/connectorPermissionStore.ts, while
+    // `server_name` here is the MCP server name (e.g. "connector-github") —
+    // those two strings never matched, so a saved "Always allow" or
+    // "Blocked" choice had no effect. Map back to the catalog id via the
+    // same table `get_connector_mcp_mapping` uses; fall back to the raw
+    // server name for non-catalog (custom/user-added) MCP servers.
+    let connector_id = crate::sys::commands::mcp_oauth::connector_id_for_server_name(&server_name)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| server_name.clone());
     let enc = encryption_from_state(&mp_state);
     // destructive: heuristically flag write/delete tools; conservative default is false
     // (the stored value overrides this at read time when the user has set a permission).
@@ -954,7 +957,7 @@ pub async fn mcp_call_tool(
         || bare_tool_name.contains("update")
         || bare_tool_name.contains("remove");
 
-    let perm = resolve_permission(&enc, &server_name, &bare_tool_name, is_destructive);
+    let perm = resolve_permission(&enc, &connector_id, &bare_tool_name, is_destructive);
 
     match perm {
         PermissionLevel::Blocked => {

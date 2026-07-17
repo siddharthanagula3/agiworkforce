@@ -61,7 +61,10 @@ pub(super) fn log_chat_request(request: &ChatSendMessageRequest, correlation_id:
 /// storage preference is "cloud". Otherwise it follows the storage preference.
 /// Extracted as a pure function so production (`send_message.rs`) and the gating
 /// tests exercise the SAME logic (not a reimplementation).
-pub(crate) fn derive_cloud_sync_enabled(active_mode: Option<&str>, storage_mode_is_cloud: bool) -> bool {
+pub(crate) fn derive_cloud_sync_enabled(
+    active_mode: Option<&str>,
+    storage_mode_is_cloud: bool,
+) -> bool {
     if active_mode == Some("local") {
         false
     } else {
@@ -83,13 +86,16 @@ pub(super) fn resolve_request_flags(
     // Determine whether the request is operating in local-only mode.
     // The frontend sends `active_mode: "local" | "cloud"` from the toggle.
     // Fall back to !prefer_cloud_credits for legacy callers that omit active_mode.
-    let is_local_mode = match request.active_mode.as_deref() {
-        Some("cloud") => false,
-        Some("local") => true,
-        // Legacy path: if prefer_cloud_credits is explicitly true treat as cloud;
-        // otherwise treat as local (safe default — never silently bleed to cloud).
-        _ => !request.prefer_cloud_credits,
-    };
+    let is_local_mode = request.execution_mode.map_or_else(
+        || match request.active_mode.as_deref() {
+            Some("cloud") => false,
+            Some("local") => true,
+            // Legacy path: if prefer_cloud_credits is explicitly true treat as cloud;
+            // otherwise treat as local (safe default — never silently bleed to cloud).
+            _ => !request.prefer_cloud_credits,
+        },
+        ChatExecutionMode::uses_local_storage,
+    );
 
     SendMessageFlags {
         agent_mode,
@@ -130,29 +136,45 @@ pub(super) fn build_router_preferences(
     model: &str,
     plan_tier: String,
 ) -> RouterPreferences {
-    let router_context = request.task_metadata.as_ref().map(|meta| RouterContext {
-        intents: meta.intents.clone(),
-        requires_vision: meta.requires_vision,
-        token_estimate: meta.token_estimate.unwrap_or(0),
-        cost_priority: Default::default(),
-        plan_tier,
-        intent_type: meta.intent_type.clone(),
-        model_category: meta.model_category.clone(),
-        selected_model: meta.selected_model.clone(),
-        suggested_tool_categories: meta.suggested_tool_categories.clone(),
-        auto_execute_tools: meta.auto_execute_tools,
-        confidence: meta.confidence,
-        routing_reason: meta.routing_reason.clone(),
+    // Plan tier is routing policy input even when the TypeScript classifier did
+    // not attach task metadata. Always construct the context so tier clamping
+    // cannot silently fall back to the wrong profile.
+    let router_context = Some(if let Some(meta) = request.task_metadata.as_ref() {
+        RouterContext {
+            intents: meta.intents.clone(),
+            requires_vision: meta.requires_vision,
+            token_estimate: meta.token_estimate.unwrap_or(0),
+            cost_priority: Default::default(),
+            plan_tier,
+            intent_type: meta.intent_type.clone(),
+            model_category: meta.model_category.clone(),
+            selected_model: meta.selected_model.clone(),
+            suggested_tool_categories: meta.suggested_tool_categories.clone(),
+            auto_execute_tools: meta.auto_execute_tools,
+            confidence: meta.confidence,
+            routing_reason: meta.routing_reason.clone(),
+        }
+    } else {
+        RouterContext {
+            plan_tier,
+            ..RouterContext::default()
+        }
     });
 
     // TRUST BOUNDARY: pure Local mode must never receive a ManagedCloud candidate.
     // Mirror the canonical is_local_mode derivation above (active_mode "local" wins;
     // legacy callers without active_mode fall back to !prefer_cloud_credits).
-    let local_only = match request.active_mode.as_deref() {
-        Some("local") => true,
-        Some("cloud") => false,
-        _ => !request.prefer_cloud_credits,
-    };
+    let local_only = request.execution_mode.map_or_else(
+        || match request.active_mode.as_deref() {
+            Some("local") => true,
+            Some("cloud") => false,
+            _ => !request.prefer_cloud_credits,
+        },
+        |mode| matches!(mode, ChatExecutionMode::LocalOnly),
+    );
+    let managed_cloud_only = request.execution_mode.map_or(!local_only, |mode| {
+        matches!(mode, ChatExecutionMode::CloudManaged)
+    });
 
     RouterPreferences {
         provider: provider_enum,
@@ -161,6 +183,8 @@ pub(super) fn build_router_preferences(
         context: router_context,
         prefer_cloud_credits: request.prefer_cloud_credits,
         local_only,
+        managed_cloud_only,
+        trust_mode: request.execution_mode.map(ChatExecutionMode::trust_mode),
     }
 }
 
@@ -182,8 +206,13 @@ pub(super) async fn prepare_send_message(
         debug!("[Chat] Incognito mode active: skipping all persistence");
     }
 
-    let conversation =
-        load_or_create_conversation(db, &request, flags.incognito, cloud_sync_enabled, flags.is_local_mode)?;
+    let conversation = load_or_create_conversation(
+        db,
+        &request,
+        flags.incognito,
+        cloud_sync_enabled,
+        flags.is_local_mode,
+    )?;
     let (user_message, input_tokens, input_cost) = create_user_message_record(
         db,
         &conversation,
@@ -482,6 +511,11 @@ fn load_or_create_conversation(
             user_id: request.user_id.clone(),
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            execution_mode: request
+                .execution_mode
+                .unwrap_or(ChatExecutionMode::LocalOnly)
+                .as_str()
+                .to_string(),
         });
     }
 
@@ -489,15 +523,29 @@ fn load_or_create_conversation(
 
     let conn = db.connection()?;
     if let Some(conv_id) = request.conversation_id {
-        repository::get_conversation(&conn, conv_id, &request.user_id)
-            .map_err(|e| format!("Failed to get conversation: {e}"))
+        let conversation = repository::get_conversation(&conn, conv_id, &request.user_id)
+            .map_err(|e| format!("Failed to get conversation: {e}"))?;
+        if let Some(execution_mode) = request.execution_mode {
+            if conversation.execution_mode != execution_mode.as_str() {
+                return Err(format!(
+                    "Conversation execution boundary mismatch: stored={}, requested={}",
+                    conversation.execution_mode,
+                    execution_mode.as_str()
+                ));
+            }
+        }
+        Ok(conversation)
     } else {
         let title = request.content.chars().take(50).collect::<String>();
-        let id = repository::create_conversation_with_mode(
+        let execution_mode = request
+            .execution_mode
+            .unwrap_or(ChatExecutionMode::LocalOnly);
+        let id = repository::create_conversation_with_execution_mode(
             &conn,
             title,
             request.user_id.clone(),
             app_mode,
+            execution_mode.as_str(),
         )
         .map_err(|e| format!("Failed to create conversation: {e}"))?;
         let conversation = repository::get_conversation(&conn, id, &request.user_id)
@@ -635,7 +683,10 @@ async fn resolve_effective_folder(
 /// assembly MUST be deterministic). Primary key: relevance score, descending.
 /// Tiebreaker: skill name, ascending — so equal-scoring skills are selected in a
 /// stable, reproducible order independent of the skill manager's iteration order.
-fn cmp_skill_match_desc(a: &(String, String, f64), b: &(String, String, f64)) -> std::cmp::Ordering {
+fn cmp_skill_match_desc(
+    a: &(String, String, f64),
+    b: &(String, String, f64),
+) -> std::cmp::Ordering {
     b.2.partial_cmp(&a.2)
         .unwrap_or(std::cmp::Ordering::Equal)
         .then_with(|| a.0.cmp(&b.0))
@@ -745,10 +796,13 @@ fn maybe_inject_matching_skills(
 
 #[cfg(test)]
 mod tests {
-    use super::{derive_cloud_sync_enabled, resolve_routing_strategy, resolve_thinking_parameter};
+    use super::{
+        build_router_preferences, derive_cloud_sync_enabled, resolve_routing_strategy,
+        resolve_thinking_parameter,
+    };
     use crate::core::llm::llm_router::RoutingStrategy;
-    use crate::core::llm::ThinkingParameter;
-    use crate::sys::commands::chat::types::ChatSendMessageRequest;
+    use crate::core::llm::{Provider, ThinkingParameter};
+    use crate::sys::commands::chat::types::{ChatExecutionMode, ChatSendMessageRequest};
 
     // ── DESK-6 trust-boundary egress contract ────────────────────────────────
     // `derive_cloud_sync_enabled` is the SINGLE gate that decides whether a turn's
@@ -794,9 +848,19 @@ mod tests {
             v.into_iter().map(|(n, _, _)| n).collect::<Vec<_>>()
         };
         // "middle" (0.9) outranks the tied 0.5 pair; ties break by ascending name.
-        let expected = vec!["middle".to_string(), "alpha".to_string(), "zebra".to_string()];
-        assert_eq!(names(vec![mk("zebra", 0.5), mk("alpha", 0.5), mk("middle", 0.9)]), expected);
-        assert_eq!(names(vec![mk("alpha", 0.5), mk("middle", 0.9), mk("zebra", 0.5)]), expected);
+        let expected = vec![
+            "middle".to_string(),
+            "alpha".to_string(),
+            "zebra".to_string(),
+        ];
+        assert_eq!(
+            names(vec![mk("zebra", 0.5), mk("alpha", 0.5), mk("middle", 0.9)]),
+            expected
+        );
+        assert_eq!(
+            names(vec![mk("alpha", 0.5), mk("middle", 0.9), mk("zebra", 0.5)]),
+            expected
+        );
     }
 
     // Regression guard for LOCAL-CHAT-NOINVOKE-01 (Critical): a dynamically
@@ -819,14 +883,20 @@ mod tests {
             "a Local send forwarding provider='ollama' must resolve to Some(Ollama); \
              None forces the Auto path and silently drops the Ollama send (LOCAL-CHAT-NOINVOKE-01)"
         );
-        assert_eq!(model, "gemma4:e4b", "the dynamic model id must pass through unchanged");
+        assert_eq!(
+            model, "gemma4:e4b",
+            "the dynamic model id must pass through unchanged"
+        );
     }
 
     // ---------------------------------------------------------------------------
     // Mode-routing guard tests (trust-boundary: Local/Cloud separation)
     // ---------------------------------------------------------------------------
 
-    fn minimal_request_with_mode(active_mode: Option<&str>, prefer_cloud_credits: bool) -> ChatSendMessageRequest {
+    fn minimal_request_with_mode(
+        active_mode: Option<&str>,
+        prefer_cloud_credits: bool,
+    ) -> ChatSendMessageRequest {
         ChatSendMessageRequest {
             conversation_id: None,
             user_id: "test-user".to_string(),
@@ -853,6 +923,7 @@ mod tests {
             enable_agent_mode: None,
             prefer_cloud_credits,
             active_mode: active_mode.map(String::from),
+            execution_mode: None,
             frontend_message_id: None,
             custom_instructions: None,
             project_folder: None,
@@ -875,7 +946,10 @@ mod tests {
             Some("local") => true,
             _ => !req.prefer_cloud_credits,
         };
-        assert!(is_local, "active_mode=local must yield is_local_mode=true even when prefer_cloud_credits=true");
+        assert!(
+            is_local,
+            "active_mode=local must yield is_local_mode=true even when prefer_cloud_credits=true"
+        );
     }
 
     /// TRUST-BOUNDARY: active_mode="cloud" must set is_local_mode=false regardless
@@ -888,7 +962,10 @@ mod tests {
             Some("local") => true,
             _ => !req.prefer_cloud_credits,
         };
-        assert!(!is_local, "active_mode=cloud must yield is_local_mode=false even when prefer_cloud_credits=false");
+        assert!(
+            !is_local,
+            "active_mode=cloud must yield is_local_mode=false even when prefer_cloud_credits=false"
+        );
     }
 
     /// Legacy callers omitting active_mode: prefer_cloud_credits=false => local.
@@ -900,7 +977,10 @@ mod tests {
             Some("local") => true,
             _ => !req.prefer_cloud_credits,
         };
-        assert!(is_local, "legacy callers with prefer_cloud_credits=false must default to local");
+        assert!(
+            is_local,
+            "legacy callers with prefer_cloud_credits=false must default to local"
+        );
     }
 
     /// Legacy callers omitting active_mode: prefer_cloud_credits=true => cloud.
@@ -912,7 +992,60 @@ mod tests {
             Some("local") => true,
             _ => !req.prefer_cloud_credits,
         };
-        assert!(!is_local, "legacy callers with prefer_cloud_credits=true must default to cloud");
+        assert!(
+            !is_local,
+            "legacy callers with prefer_cloud_credits=true must default to cloud"
+        );
+    }
+
+    #[test]
+    fn router_preferences_preserve_tier_without_classifier_metadata() {
+        let mut req = minimal_request_with_mode(Some("cloud"), true);
+        req.execution_mode = Some(ChatExecutionMode::CloudManaged);
+        let preferences = build_router_preferences(&req, None, "auto-premium", "max".to_string());
+
+        assert!(preferences.managed_cloud_only);
+        assert!(!preferences.local_only);
+        assert_eq!(
+            preferences.trust_mode,
+            Some(agiworkforce_model_registry::TrustMode::ManagedCloud)
+        );
+        assert_eq!(
+            preferences
+                .context
+                .as_ref()
+                .map(|context| context.plan_tier.as_str()),
+            Some("max")
+        );
+    }
+
+    #[test]
+    fn local_router_preferences_cannot_enable_managed_cloud_fallbacks() {
+        let mut req = minimal_request_with_mode(Some("local"), false);
+        req.execution_mode = Some(ChatExecutionMode::LocalOnly);
+        let preferences = build_router_preferences(&req, None, "auto-balanced", "byok".to_string());
+
+        assert!(preferences.local_only);
+        assert!(!preferences.managed_cloud_only);
+        assert_eq!(
+            preferences.trust_mode,
+            Some(agiworkforce_model_registry::TrustMode::Local)
+        );
+    }
+
+    #[test]
+    fn byok_router_preferences_are_not_local_or_managed() {
+        let mut req = minimal_request_with_mode(Some("local"), false);
+        req.execution_mode = Some(ChatExecutionMode::Byok);
+        let preferences =
+            build_router_preferences(&req, Some(Provider::OpenAI), "gpt-5.5", "pro".to_string());
+
+        assert!(!preferences.local_only);
+        assert!(!preferences.managed_cloud_only);
+        assert_eq!(
+            preferences.trust_mode,
+            Some(agiworkforce_model_registry::TrustMode::Byok)
+        );
     }
 
     #[test]

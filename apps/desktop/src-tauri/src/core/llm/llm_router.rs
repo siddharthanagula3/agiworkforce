@@ -9,11 +9,60 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 
+use agiworkforce_model_registry::{
+    resolve_auto_route, AutoRouteDecision, AutoRoutingRequest,
+    RoutingTaskType as RegistryRoutingTaskType, TrustMode,
+};
+
 use crate::core::llm::cache_manager::CacheManager;
 use crate::core::llm::cost_calculator::CostCalculator;
+use crate::core::llm::prompt_tool_injection::build_tool_injection_prompt;
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::token_counter::TokenCounter;
-use crate::core::llm::{ChatMessage, LLMProvider, LLMRequest, LLMResponse, Provider};
+use crate::core::llm::{
+    ChatMessage, LLMProvider, LLMRequest, LLMResponse, Provider, ToolDefinition,
+};
+
+/// Streaming connection timeout: 90s base covers model load + reasoning
+/// models (60-90s) for typical prompts. Large prompts need additional
+/// prompt-eval headroom that scales with size instead of a flat ceiling —
+/// confirmed empirically (2026-07-11, docs/agent-context/known-flaws.md): a
+/// realistic 111-tool catalog injected into a small local model's system
+/// prompt (the path non-tool-native Ollama models take, see
+/// `prompt_tool_injection.rs`) measured 88.7s of prompt-eval ALONE on an
+/// idle, warm Ollama instance, already at the old flat timeout's edge before
+/// any generation started. Reuses the real injection formatter so the size
+/// estimate matches what would actually be sent, not a guess; the
+/// conservative 100 tok/s throughput assumption pads for hardware slower
+/// than the ~242 tok/s measured on the machine that produced the 88.7s
+/// figure above.
+const BASE_STREAM_TIMEOUT_SECS: u64 = 90;
+const LARGE_PROMPT_TOKEN_THRESHOLD: u64 = 4_000;
+const CONSERVATIVE_EVAL_TOKENS_PER_SEC: u64 = 100;
+const MAX_STREAM_TIMEOUT_SECS: u64 = 240;
+
+/// Computes the streaming connection timeout for a request, scaling up from
+/// `BASE_STREAM_TIMEOUT_SECS` for prompts large enough that plain prompt-eval
+/// time alone could approach it — most commonly a large injected tool
+/// catalog for a non-tool-native local model (see the module doc above).
+/// `tools` should be the request's full, uncapped tool set: any
+/// provider-specific capping (e.g. Ollama's `MAX_PROMPT_INJECTED_TOOLS`)
+/// happens deeper in the provider, so sizing the timeout off the uncapped
+/// set is a deliberately conservative (larger, never smaller) estimate.
+pub(crate) fn compute_streaming_timeout(
+    messages: &[ChatMessage],
+    tools: Option<&[ToolDefinition]>,
+) -> Duration {
+    let tool_injection_tokens: u64 = tools
+        .filter(|tools| !tools.is_empty())
+        .map(|tools| TokenCounter::estimate_text_tokens(&build_tool_injection_prompt(tools)) as u64)
+        .unwrap_or(0);
+    let prompt_tokens =
+        TokenCounter::estimate_prompt_tokens(messages) as u64 + tool_injection_tokens;
+    let extra_secs = prompt_tokens.saturating_sub(LARGE_PROMPT_TOKEN_THRESHOLD)
+        / CONSERVATIVE_EVAL_TOKENS_PER_SEC;
+    Duration::from_secs((BASE_STREAM_TIMEOUT_SECS + extra_secs).min(MAX_STREAM_TIMEOUT_SECS))
+}
 
 /// Configuration for retry behavior
 #[derive(Debug, Clone)]
@@ -229,6 +278,36 @@ pub struct RouterPreferences {
     /// TRUST BOUNDARY: when true (pure Local mode), candidate selection must NEVER
     /// yield `Provider::ManagedCloud` — a Local chat must not cross into AGI cloud.
     pub local_only: bool,
+    /// TRUST BOUNDARY: when true, candidates must use AGI Managed Cloud and
+    /// must never fall back to a direct/BYOK or local provider.
+    pub managed_cloud_only: bool,
+    /// Canonical three-way execution boundary. New chat callers must set this;
+    /// the legacy booleans remain temporarily for non-chat call sites.
+    pub trust_mode: Option<TrustMode>,
+}
+
+fn provider_matches_trust_mode(provider: Provider, trust_mode: TrustMode) -> bool {
+    let is_local = matches!(
+        provider,
+        Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm
+    );
+    match trust_mode {
+        TrustMode::Local | TrustMode::OnDevice => is_local,
+        TrustMode::Byok => !is_local && provider != Provider::ManagedCloud,
+        TrustMode::ManagedCloud => provider == Provider::ManagedCloud,
+    }
+}
+
+fn effective_trust_mode(preferences: &RouterPreferences) -> Option<TrustMode> {
+    preferences.trust_mode.or_else(|| {
+        if preferences.managed_cloud_only {
+            Some(TrustMode::ManagedCloud)
+        } else if preferences.local_only {
+            Some(TrustMode::Local)
+        } else {
+            None
+        }
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -854,11 +933,28 @@ impl LLMRouter {
         request: &LLMRequest,
         preferences: &RouterPreferences,
     ) -> Vec<RouteCandidate> {
+        if preferences.local_only && preferences.managed_cloud_only {
+            tracing::error!(
+                "Invalid router trust boundary: local_only and managed_cloud_only are both true"
+            );
+            return Vec::new();
+        }
+        let boundary = effective_trust_mode(preferences);
+        if matches!(boundary, Some(TrustMode::ManagedCloud)) && preferences.local_only
+            || matches!(boundary, Some(TrustMode::Local | TrustMode::OnDevice))
+                && preferences.managed_cloud_only
+        {
+            tracing::error!("Invalid router trust boundary: canonical and legacy modes disagree");
+            return Vec::new();
+        }
         let mut order = Vec::new();
         let _user_specified_provider = preferences.provider.is_some();
 
         if let Some(preferred) = preferences.provider {
-            if self.has_provider(preferred) {
+            if self.has_provider(preferred)
+                && boundary
+                    .is_none_or(|trust_mode| provider_matches_trust_mode(preferred, trust_mode))
+            {
                 order.push(RouteCandidate {
                     strategy: None,
                     provider: preferred,
@@ -871,11 +967,6 @@ impl LLMRouter {
                 });
             }
 
-            // TRUST BOUNDARY: even an explicitly-preferred provider cannot be
-            // ManagedCloud in pure Local mode.
-            if preferences.local_only {
-                order.retain(|c| c.provider != Provider::ManagedCloud);
-            }
             return order;
         }
 
@@ -893,6 +984,9 @@ impl LLMRouter {
         if preferences.prefer_cloud_credits
             && self.has_provider(Provider::ManagedCloud)
             && !is_auto_strategy
+            && boundary.is_none_or(|trust_mode| {
+                provider_matches_trust_mode(Provider::ManagedCloud, trust_mode)
+            })
         {
             let task_type = classify_request(request);
             order.push(RouteCandidate {
@@ -903,26 +997,39 @@ impl LLMRouter {
             });
         }
 
-        if let Some(context) = &preferences.context {
-            let suggestion = self.suggest_for_context(context);
-            // Don't override ManagedCloud if it was already added
-            if !order
-                .iter()
-                .any(|existing| existing.provider == suggestion.provider)
-                && self.has_provider(suggestion.provider)
-            {
-                order.push(RouteCandidate {
-                    strategy: None,
-                    provider: suggestion.provider,
-                    model: suggestion.model,
-                    reason: "context-signal",
-                });
+        if !is_auto_strategy {
+            if let Some(context) = &preferences.context {
+                let suggestion = self.suggest_for_context(context);
+                // Don't override ManagedCloud if it was already added
+                if !order
+                    .iter()
+                    .any(|existing| existing.provider == suggestion.provider)
+                    && self.has_provider(suggestion.provider)
+                    && boundary.is_none_or(|trust_mode| {
+                        provider_matches_trust_mode(suggestion.provider, trust_mode)
+                    })
+                {
+                    order.push(RouteCandidate {
+                        strategy: None,
+                        provider: suggestion.provider,
+                        model: suggestion.model,
+                        reason: "context-signal",
+                    });
+                }
             }
         }
 
         let task_type = classify_request(request);
+        let registry_task = classify_registry_task(request, preferences.context.as_ref());
         let plan_tier = preferences.context.as_ref().map(|c| c.plan_tier.as_str());
-        let mut strategy_set = self.strategy_order(task_type, preferences.strategy, plan_tier);
+        let trust_mode = boundary.unwrap_or(TrustMode::Byok);
+        let mut strategy_set = self.strategy_order(
+            task_type,
+            registry_task,
+            preferences.strategy,
+            plan_tier,
+            trust_mode,
+        );
 
         for candidate in strategy_set.drain(..) {
             if order
@@ -934,6 +1041,18 @@ impl LLMRouter {
             if self.has_provider(candidate.provider) {
                 order.push(candidate);
             }
+        }
+
+        // Auto policy is authoritative. Do not append legacy provider defaults
+        // after an unavailable policy decision; doing so could bypass capability,
+        // tier, or trust-boundary admission.
+        if is_auto_strategy {
+            if let Some(trust_mode) = boundary {
+                order.retain(|candidate| {
+                    provider_matches_trust_mode(candidate.provider, trust_mode)
+                });
+            }
+            return order;
         }
 
         if !order.iter().any(|c| c.provider == self.default_provider)
@@ -1001,8 +1120,8 @@ impl LLMRouter {
         // a Local chat must not cross into AGI cloud, regardless of how candidates were
         // assembled (prefer_cloud_credits, context signal, strategy order, default, or
         // the fallback loop above).
-        if preferences.local_only {
-            order.retain(|c| c.provider != Provider::ManagedCloud);
+        if let Some(trust_mode) = boundary {
+            order.retain(|candidate| provider_matches_trust_mode(candidate.provider, trust_mode));
         }
 
         // LOCAL-CHAT-NOINVOKE-01 diagnostics: an empty list here (especially with
@@ -1015,6 +1134,7 @@ impl LLMRouter {
             candidate_count = order.len(),
             preferred = ?preferences.provider,
             local_only = preferences.local_only,
+            trust_mode = ?boundary,
             "router candidates assembled"
         );
 
@@ -1099,22 +1219,11 @@ impl LLMRouter {
 
         let mut routed_request = request.clone();
 
-        // Handle dynamic model resolution based on strategy
         if let Some(strategy) = candidate.strategy {
-            let token_count = TokenCounter::estimate_prompt_tokens(&request.messages);
-
-            // H13 fix: delegate to shared helper to avoid copy-paste with streaming path
-            let resolved_model =
-                Self::resolve_model_for_strategy(strategy, token_count, &candidate.model);
-
-            tracing::info!(
-                "Dynamic Routing [Strategy: {:?}] [Tokens: {}] -> Selected: {}",
-                strategy,
-                token_count,
-                resolved_model
-            );
-
-            routed_request.model = resolved_model;
+            return Err(anyhow!(
+                "Unresolved routing strategy {:?} reached provider execution; Auto candidates must be resolved by the canonical policy",
+                strategy
+            ));
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
@@ -1459,8 +1568,10 @@ impl LLMRouter {
     fn strategy_order(
         &self,
         task: TaskCategory,
+        registry_task: RegistryRoutingTaskType,
         strategy: RoutingStrategy,
         plan_tier: Option<&str>,
+        trust_mode: TrustMode,
     ) -> Vec<RouteCandidate> {
         match strategy {
             RoutingStrategy::LocalFirst => {
@@ -1572,323 +1683,94 @@ impl LLMRouter {
             ],
             RoutingStrategy::Auto => {
                 // Auto maps to different strategies based on plan tier
-                let strategy =
-                    if matches!(
-                        plan_tier,
-                        Some("free") | Some("basic") | Some("hobby") | Some("standard")
-                    ) {
-                        RoutingStrategy::AutoEconomy
-                    } else if matches!(plan_tier, Some("pro") | Some("professional")) {
-                        RoutingStrategy::AutoBalanced
-                    } else {
-                        RoutingStrategy::AutoPremium
-                    };
-                self.strategy_order(task, strategy, plan_tier)
+                let strategy = if matches!(
+                    plan_tier,
+                    Some("free") | Some("basic") | Some("hobby") | Some("standard")
+                ) {
+                    RoutingStrategy::AutoEconomy
+                } else if matches!(plan_tier, Some("pro") | Some("professional")) {
+                    RoutingStrategy::AutoBalanced
+                } else {
+                    RoutingStrategy::AutoPremium
+                };
+                self.strategy_order(task, registry_task, strategy, plan_tier, trust_mode)
             }
-            RoutingStrategy::AutoEconomy => {
-                // AutoEconomy: current low-cost defaults derived from the shared catalog.
-                // Keep the dynamic ManagedCloud lane first, then fall back through the core
-                // OpenAI / Google / Anthropic stack before the generic provider fallback chain.
-                match task {
-                    TaskCategory::Simple => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoEconomy),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-economy".to_string(),
-                            reason: "auto-economy-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "fast_completion"),
-                            reason: "auto-economy-fast",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "fast_completion"),
-                            reason: "auto-economy-fast",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-economy-cloud",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "chat"),
-                            reason: "auto-economy-quality",
-                        },
-                    ],
-                    TaskCategory::Complex => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoEconomy),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-economy".to_string(),
-                            reason: "auto-economy-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "fast_completion"),
-                            reason: "auto-economy-fast",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "chat"),
-                            reason: "auto-economy-balanced",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-economy-cloud",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "chat"),
-                            reason: "auto-economy-quality",
-                        },
-                    ],
-                    TaskCategory::Creative => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoEconomy),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-economy".to_string(),
-                            reason: "auto-economy-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "chat"),
-                            reason: "auto-economy-creative",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "chat"),
-                            reason: "auto-economy-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "chat"),
-                            reason: "auto-economy-creative",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-economy-cloud",
-                        },
-                    ],
-                }
+            RoutingStrategy::AutoEconomy
+            | RoutingStrategy::AutoBalanced
+            | RoutingStrategy::AutoPremium => {
+                self.auto_policy_candidate(strategy, registry_task, plan_tier, trust_mode)
             }
-            RoutingStrategy::AutoBalanced => {
-                // AutoBalanced: current quality/cost defaults derived from the shared catalog.
-                match task {
-                    TaskCategory::Simple => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoBalanced),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-balanced".to_string(),
-                            reason: "auto-balanced-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "chat"),
-                            reason: "auto-balanced-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "chat"),
-                            reason: "auto-balanced-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "chat"),
-                            reason: "auto-balanced-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-balanced-cloud",
-                        },
-                    ],
-                    TaskCategory::Complex => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoBalanced),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-balanced".to_string(),
-                            reason: "auto-balanced-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "chat"),
-                            reason: "auto-balanced-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "complex_reasoning"),
-                            reason: "auto-balanced-reasoning",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "complex_reasoning"),
-                            reason: "auto-balanced-reasoning",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-balanced-cloud",
-                        },
-                    ],
-                    TaskCategory::Creative => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoBalanced),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-balanced".to_string(),
-                            reason: "auto-balanced-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "vision"),
-                            reason: "auto-balanced-creative",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "chat"),
-                            reason: "auto-balanced-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "chat"),
-                            reason: "auto-balanced-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-balanced-cloud",
-                        },
-                    ],
+        }
+    }
+
+    fn auto_policy_candidate(
+        &self,
+        strategy: RoutingStrategy,
+        task_type: RegistryRoutingTaskType,
+        plan_tier: Option<&str>,
+        trust_mode: TrustMode,
+    ) -> Vec<RouteCandidate> {
+        let selection = match strategy {
+            RoutingStrategy::Auto | RoutingStrategy::AutoBalanced => "auto-balanced",
+            RoutingStrategy::AutoEconomy => "auto-economy",
+            RoutingStrategy::AutoPremium => "auto-premium",
+            _ => return Vec::new(),
+        };
+        let request = AutoRoutingRequest {
+            selection: Some(selection),
+            task_type,
+            subscription_tier: plan_tier,
+            trust_mode,
+            runtime_profile_id: Some(match trust_mode {
+                TrustMode::ManagedCloud => "desktop/cloud-chat",
+                TrustMode::Byok => "desktop/byok-chat",
+                TrustMode::Local | TrustMode::OnDevice => "desktop/local-chat",
+            }),
+            ..AutoRoutingRequest::default()
+        };
+
+        match resolve_auto_route(&request) {
+            Ok(AutoRouteDecision::Selected(selected)) => {
+                let provider = if trust_mode == TrustMode::ManagedCloud {
+                    Provider::ManagedCloud
+                } else if let Some(provider) = Provider::from_string(&selected.provider) {
+                    provider
+                } else {
+                    tracing::warn!(
+                        provider = %selected.provider,
+                        model = %selected.model_key,
+                        "Auto policy selected a provider unsupported by the Desktop runtime"
+                    );
+                    return Vec::new();
+                };
+
+                if !self.has_provider(provider) {
+                    tracing::warn!(
+                        provider = %provider.as_string(),
+                        model = %selected.model_key,
+                        "Auto policy route is eligible but its Desktop transport is not configured"
+                    );
+                    return Vec::new();
                 }
+
+                vec![RouteCandidate {
+                    strategy: None,
+                    provider,
+                    model: selected.provider_model_id,
+                    reason: "canonical-auto-policy",
+                }]
             }
-            RoutingStrategy::AutoPremium => {
-                // AutoPremium: latest flagship defaults from the shared catalog.
-                match task {
-                    TaskCategory::Simple => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoPremium),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-premium".to_string(),
-                            reason: "auto-premium-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "complex_reasoning"),
-                            reason: "auto-premium-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "complex_reasoning"),
-                            reason: "auto-premium-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "complex_reasoning"),
-                            reason: "auto-premium-quality",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-premium-cloud",
-                        },
-                    ],
-                    TaskCategory::Complex => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoPremium),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-premium".to_string(),
-                            reason: "auto-premium-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "complex_reasoning"),
-                            reason: "auto-premium-reasoning",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "complex_reasoning"),
-                            reason: "auto-premium-reasoning",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "complex_reasoning"),
-                            reason: "auto-premium-complex",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "long_context"),
-                            reason: "auto-premium-cloud",
-                        },
-                    ],
-                    TaskCategory::Creative => vec![
-                        RouteCandidate {
-                            strategy: Some(RoutingStrategy::AutoPremium),
-                            provider: Provider::ManagedCloud,
-                            model: "auto-premium".to_string(),
-                            reason: "auto-premium-dynamic",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Google,
-                            model: provider_task_model(Provider::Google, "vision"),
-                            reason: "auto-premium-creative",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::Anthropic,
-                            model: provider_task_model(Provider::Anthropic, "chat"),
-                            reason: "auto-premium-creative",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::OpenAI,
-                            model: provider_task_model(Provider::OpenAI, "chat"),
-                            reason: "auto-premium-creative",
-                        },
-                        RouteCandidate {
-                            strategy: None,
-                            provider: Provider::ManagedCloud,
-                            model: provider_task_model(Provider::ManagedCloud, "chat"),
-                            reason: "auto-premium-cloud",
-                        },
-                    ],
-                }
+            Ok(AutoRouteDecision::Unavailable(unavailable)) => {
+                tracing::warn!(
+                    code = ?unavailable.code,
+                    reasons = ?unavailable.reasons,
+                    "Canonical Auto policy found no eligible Desktop route"
+                );
+                Vec::new()
+            }
+            Err(error) => {
+                tracing::error!(error = %error, "Failed to load canonical Auto policy");
+                Vec::new()
             }
         }
     }
@@ -1896,60 +1778,11 @@ impl LLMRouter {
     /// Default model selection for each provider and task category.
     ///
     /// Provider defaults are catalog-backed. Keep model upgrades in
-    /// `packages/types/src/models.curation.json` and regenerate `models.json`
+    /// `packages/ai/model-registry/catalog/models.curation.json` and regenerate `models.json`
     /// instead of copying provider model IDs into router logic.
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
             .to_string()
-    }
-
-    /// H13 fix: shared model-resolution logic extracted from `invoke_candidate` and
-    /// `invoke_streaming_with_retry` to eliminate the copy-paste duplication.
-    ///
-    /// Given a routing strategy and the estimated prompt token count, returns the concrete
-    /// model name that should be used.  For strategies not listed the `candidate_model`
-    /// is returned unchanged.
-    pub(crate) fn resolve_model_for_strategy(
-        strategy: RoutingStrategy,
-        token_count: u32,
-        candidate_model: &str,
-    ) -> String {
-        match strategy {
-            RoutingStrategy::AutoEconomy => {
-                // Cost-optimized: simple queries use cheap models, complex use capable
-                if token_count < 1000 {
-                    super::models_config::get_task_model(&Provider::OpenAI, "fast_completion")
-                        .to_string()
-                } else if token_count < 8000 {
-                    super::models_config::get_task_model(&Provider::ManagedCloud, "chat")
-                        .to_string()
-                } else {
-                    super::models_config::get_task_model(&Provider::ManagedCloud, "long_context")
-                        .to_string()
-                }
-            }
-            RoutingStrategy::AutoBalanced => {
-                // Balance: cheap for simple, quality for complex
-                if token_count < 500 {
-                    super::models_config::get_task_model(&Provider::OpenAI, "fast_completion")
-                        .to_string()
-                } else if token_count < 4000 {
-                    super::models_config::get_task_model(&Provider::Anthropic, "chat").to_string()
-                } else {
-                    super::models_config::get_task_model(&Provider::OpenAI, "chat").to_string()
-                }
-            }
-            RoutingStrategy::AutoPremium => {
-                // Premium: Always best models, switch based on context window needs
-                if token_count < 16000 {
-                    super::models_config::get_task_model(&Provider::Anthropic, "chat").to_string()
-                } else {
-                    super::models_config::get_task_model(&Provider::Anthropic, "complex_reasoning")
-                        .to_string()
-                }
-            }
-            _ => candidate_model.to_string(),
-        }
     }
 }
 
@@ -2041,6 +1874,88 @@ fn classify_request(request: &LLMRequest) -> TaskCategory {
     }
 
     TaskCategory::Simple
+}
+
+fn classify_registry_task(
+    request: &LLMRequest,
+    context: Option<&RouterContext>,
+) -> RegistryRoutingTaskType {
+    if let Some(context) = context {
+        if context.requires_vision {
+            return RegistryRoutingTaskType::Multimodal;
+        }
+        if context.token_estimate >= 50_000 {
+            return RegistryRoutingTaskType::LongContext;
+        }
+        if let Some(intent) = context
+            .intent_type
+            .as_deref()
+            .or(context.model_category.as_deref())
+        {
+            match intent.trim().to_ascii_lowercase().as_str() {
+                "coding" | "code" => return RegistryRoutingTaskType::Coding,
+                "reasoning" | "analysis" | "planning" => {
+                    return RegistryRoutingTaskType::Reasoning;
+                }
+                "creative" | "creative-writing" | "writing" => {
+                    return RegistryRoutingTaskType::CreativeWriting;
+                }
+                "multimodal" | "vision" => return RegistryRoutingTaskType::Multimodal,
+                "search" | "research" | "deep-research" => {
+                    return RegistryRoutingTaskType::Research;
+                }
+                "agentic" | "tool-use" => return RegistryRoutingTaskType::Agentic,
+                "computer-use" | "computer_use" => {
+                    return RegistryRoutingTaskType::ComputerUse;
+                }
+                "image-gen" | "image_generation" | "image" => {
+                    return RegistryRoutingTaskType::ImageGeneration;
+                }
+                "simple-chat" | "simple_chat" => return RegistryRoutingTaskType::SimpleChat,
+                _ => {}
+            }
+        }
+    }
+
+    if request
+        .messages
+        .iter()
+        .any(|message| message.multimodal_content.is_some())
+    {
+        return RegistryRoutingTaskType::Multimodal;
+    }
+    if TokenCounter::estimate_prompt_tokens(&request.messages) >= 50_000 {
+        return RegistryRoutingTaskType::LongContext;
+    }
+
+    let last_user_text = request
+        .messages
+        .iter()
+        .rev()
+        .find(|message| message.role.eq_ignore_ascii_case("user"))
+        .map(|message| message.content.to_ascii_lowercase())
+        .unwrap_or_default();
+    if contains_word(&last_user_text, "code")
+        || last_user_text.contains("coding")
+        || contains_word(&last_user_text, "function")
+        || contains_word(&last_user_text, "debug")
+    {
+        RegistryRoutingTaskType::Coding
+    } else if last_user_text.contains("analyze")
+        || last_user_text.contains("analysis")
+        || contains_word(&last_user_text, "plan")
+        || contains_word(&last_user_text, "reason")
+    {
+        RegistryRoutingTaskType::Reasoning
+    } else if contains_word(&last_user_text, "design")
+        || contains_word(&last_user_text, "story")
+        || last_user_text.contains("creative")
+        || last_user_text.contains("write a poem")
+    {
+        RegistryRoutingTaskType::CreativeWriting
+    } else {
+        RegistryRoutingTaskType::General
+    }
 }
 
 impl LLMRouter {
@@ -2289,22 +2204,11 @@ impl LLMRouter {
 
         let mut routed_request = request.clone();
 
-        // Handle dynamic model resolution based on strategy (mirrors non-streaming invoke_candidate)
         if let Some(strategy) = candidate.strategy {
-            let token_count = TokenCounter::estimate_prompt_tokens(&request.messages);
-
-            // H13 fix: delegate to shared helper to avoid copy-paste with non-streaming path
-            let resolved_model =
-                Self::resolve_model_for_strategy(strategy, token_count, &candidate.model);
-
-            tracing::info!(
-                "Dynamic Routing (Streaming) [Strategy: {:?}] [Tokens: {}] -> Selected: {}",
-                strategy,
-                token_count,
-                resolved_model
-            );
-
-            routed_request.model = resolved_model;
+            return Err(anyhow!(
+                "Unresolved routing strategy {:?} reached streaming provider execution; Auto candidates must be resolved by the canonical policy",
+                strategy
+            ));
         } else if candidate.model == "auto" {
             // Check if strategy is somehow missing but model is auto (fallback)
             // Use a safe default from the active model catalog.
@@ -2373,17 +2277,19 @@ impl LLMRouter {
 
         let mut last_error: Option<anyhow::Error> = None;
 
+        let stream_timeout = compute_streaming_timeout(&request.messages, request.tools.as_deref());
+
         for attempt in 0..=retry_config.max_retries {
             tracing::info!(
-                "Starting streaming request to {} with model {} (attempt {}/{})",
+                "Starting streaming request to {} with model {} (attempt {}/{}), stream_timeout={:?}",
                 provider.name(),
                 candidate.model,
                 attempt + 1,
-                retry_config.max_retries + 1
+                retry_config.max_retries + 1,
+                stream_timeout
             );
 
             // Add timeout to the streaming connection attempt
-            let stream_timeout = Duration::from_secs(90); // 90s timeout for initial connection (thinking/reasoning models need 60-90s)
             let stream_result = tokio::time::timeout(
                 stream_timeout,
                 provider.send_message_streaming(&routed_request),

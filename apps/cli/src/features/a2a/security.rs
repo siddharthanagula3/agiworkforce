@@ -77,7 +77,9 @@ pub fn a2a_pinned_client(url: &str, timeout_secs: u64) -> Result<reqwest::Client
     if !addrs.is_empty() {
         builder = builder.resolve_to_addrs(&host, &addrs);
     }
-    builder.build().context("failed to build pinned A2A HTTP client")
+    builder
+        .build()
+        .context("failed to build pinned A2A HTTP client")
 }
 
 pub fn is_private_ip(ip: &IpAddr) -> bool {

@@ -1,4 +1,5 @@
 [package]
+publish = false
 edition = "2024"
 
 name = "agiworkforce-protocol"
@@ -14,13 +15,13 @@ path = "src/lib.rs"
 [dependencies]
 chardetng = "0.1.17"
 chrono = { version = "0.4.43", features = ["serde"] }
-agiworkforce-async-utils = { path = "../agiworkforce-async-utils" }
+async-trait = "0.1.89"
 agiworkforce-execpolicy = { path = "../agiworkforce-execpolicy" }
 agiworkforce-network-proxy = { path = "../agiworkforce-network-proxy" }
 agiworkforce-utils-absolute-path = { path = "../agiworkforce-utils-absolute-path" }
 agiworkforce-utils-image = { path = "../agiworkforce-utils-image" }
-agiworkforce-utils-string = { path = "../agiworkforce-utils-string" }
-agiworkforce-utils-template = { path = "../agiworkforce-utils-template" }
+regex-lite = "0.1.8"
+tokio-util = "0.7.18"
 encoding_rs = "0.8.35"
 globset = "0.4"
 icu_decimal = "2.1"

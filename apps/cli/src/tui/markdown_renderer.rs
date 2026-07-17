@@ -34,10 +34,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut current_spans: Vec<Span<'static>> = Vec::new();
 
-    let parser = Parser::new_ext(
-        text,
-        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
-    );
+    let parser = Parser::new_ext(text, Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH);
 
     let mut in_code_block = false;
     let mut in_table_cell = false;
@@ -419,9 +416,18 @@ mod tests {
         }
         let joined = rendered.join("\n");
         assert!(joined.contains('┌') && joined.contains('┐'), "top border");
-        assert!(joined.contains('├') && joined.contains('┤'), "header divider");
-        assert!(joined.contains('└') && joined.contains('┘'), "bottom border");
-        assert!(joined.contains("Fruit") && joined.contains("Color"), "header cells");
+        assert!(
+            joined.contains('├') && joined.contains('┤'),
+            "header divider"
+        );
+        assert!(
+            joined.contains('└') && joined.contains('┘'),
+            "bottom border"
+        );
+        assert!(
+            joined.contains("Fruit") && joined.contains("Color"),
+            "header cells"
+        );
         assert!(joined.contains("Apple") && joined.contains("Red"), "row 1");
         assert!(joined.contains("Lime") && joined.contains("Green"), "row 2");
     }

@@ -5,7 +5,7 @@
 //! boundary/rotation/tamper unit tests mint REAL Ed25519 signatures (never
 //! hand-forged bytes) and derive keypairs deterministically. It is gated behind
 //! `#[cfg(any(test, feature = "test-support"))]` so it never ships in a normal
-//! build. It mirrors `packages/licensing/src/test-support.ts`.
+//! build. It mirrors `packages/contracts/licensing/src/test-support.ts`.
 //!
 //! Determinism: an Ed25519 secret key IS its 32-byte seed, so a keypair derived
 //! from a fixed committed seed is byte-reproducible — the same property the TS
@@ -54,7 +54,11 @@ pub fn derive_keypair_from_seed(seed: [u8; 32]) -> TestKeyPair {
 /// Build a signed container file for the given payload object and format.
 /// Returns the exact bytes that would be written to disk. The signature is over
 /// the ASCII bytes of the base64 payload string, matching the wire format.
-pub fn make_signed_container(payload: &serde_json::Value, key: &TestKeyPair, format: &str) -> Vec<u8> {
+pub fn make_signed_container(
+    payload: &serde_json::Value,
+    key: &TestKeyPair,
+    format: &str,
+) -> Vec<u8> {
     let payload_json = serde_json::to_string(payload).expect("payload serializes");
     let payload_b64 = bytes_to_base64(payload_json.as_bytes());
     let signature = key.signing_key.sign(payload_b64.as_bytes());

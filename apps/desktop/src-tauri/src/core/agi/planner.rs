@@ -223,6 +223,8 @@ Return ONLY the JSON array."#,
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let request = LLMRequest {
@@ -657,6 +659,8 @@ Return ONLY a JSON array of steps with this structure:
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let request = LLMRequest {

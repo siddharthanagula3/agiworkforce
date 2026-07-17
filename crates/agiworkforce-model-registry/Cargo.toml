@@ -1,0 +1,19 @@
+[package]
+publish = false
+name = "agiworkforce-model-registry"
+version = "0.1.0"
+edition = "2024"
+description = "Typed Rust access to AGI Workforce's generated model registry and Auto routing policy."
+
+[lints]
+workspace = true
+
+[lib]
+name = "agiworkforce_model_registry"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+

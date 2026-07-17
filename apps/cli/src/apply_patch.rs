@@ -17,7 +17,7 @@ pub struct PatchResult {
 /// targets it touches and verify each one is contained within `cwd`.
 ///
 /// FIX (audit 2026-05-20, §3): the equivalent TS validator in
-/// `packages/apply-patch` takes a `workspaceOnly: boolean` flag. The Rust
+/// `packages/tools/apply-patch` takes a `workspaceOnly: boolean` flag. The Rust
 /// CLI never had a way to opt out — workspace-only is the only mode.
 /// To make that invariant explicit (and protect against a future refactor
 /// re-introducing an `--unsafe-paths` knob): this function fails closed.

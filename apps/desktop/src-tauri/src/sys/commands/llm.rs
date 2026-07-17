@@ -271,6 +271,8 @@ pub async fn llm_send_message(
         context: None,
         prefer_cloud_credits: request.prefer_cloud_credits,
         local_only: false,
+        managed_cloud_only: false,
+        trust_mode: None,
     };
 
     let candidates = {
@@ -721,6 +723,13 @@ pub struct ProviderUsage {
     pub messages: u64,
 }
 
+/// A catalog model is selectable only when its own provider route is
+/// configured. Managed Cloud is a separate trust boundary and must never make
+/// direct OpenAI, Anthropic, Google, or other BYOK routes appear available.
+fn catalog_provider_is_available(router: &LLMRouter, provider: Provider) -> bool {
+    router.has_provider(provider)
+}
+
 #[tauri::command]
 pub async fn llm_get_available_models(
     state: State<'_, LLMState>,
@@ -746,15 +755,13 @@ pub async fn llm_get_available_models(
 
     let mut available_models = Vec::new();
 
-    let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
-
     for mut model in all_models {
         let provider_enum = match Provider::from_string(&model.provider) {
             Some(p) => p,
             None => continue,
         };
 
-        if router.has_provider(provider_enum) || managed_cloud_available {
+        if catalog_provider_is_available(&router, provider_enum) {
             model.available = true;
             available_models.push(model);
         }
@@ -824,11 +831,8 @@ pub async fn llm_get_available_models(
             Ok(models) => {
                 let existing_ids: std::collections::HashSet<String> =
                     available_models.iter().map(|m| m.id.clone()).collect();
-                available_models.extend(
-                    models
-                        .into_iter()
-                        .filter(|m| !existing_ids.contains(&m.id)),
-                );
+                available_models
+                    .extend(models.into_iter().filter(|m| !existing_ids.contains(&m.id)));
             }
             Err(e) => tracing::debug!("OpenRouter live model list unavailable: {}", e),
         }
@@ -846,8 +850,10 @@ pub async fn llm_check_provider_status(
 
     // Local runtimes (Ollama, LM Studio, llama.cpp, vLLM) are "available" purely
     // based on whether the local server responds — they never require an API key.
-    let is_local_runtime =
-        matches!(provider.as_str(), "ollama" | "lmstudio" | "llamacpp" | "vllm");
+    let is_local_runtime = matches!(
+        provider.as_str(),
+        "ollama" | "lmstudio" | "llamacpp" | "vllm"
+    );
     let local_runtime_label = match provider.as_str() {
         "ollama" => "Ollama",
         "lmstudio" => "LM Studio",
@@ -1208,7 +1214,7 @@ pub async fn llm_list_vllm_models() -> Result<Vec<ModelInfo>, String> {
 //
 // OpenRouter is a BYOK gateway proxying hundreds of models across many
 // underlying providers — the small hand-curated set in
-// `packages/types/src/models.curation.json` (a handful of free-tier models)
+// `packages/ai/model-registry/catalog/models.curation.json` (a handful of free-tier models)
 // can't reasonably represent that whole catalog. This fetches OpenRouter's
 // public `/api/v1/models` list live and supplements (never replaces) the
 // curated entries in `llm_get_available_models`. Reference implementation
@@ -1296,7 +1302,11 @@ async fn list_openrouter_models_internal() -> Result<Vec<ModelInfo>, String> {
         .await
         .map_err(|e| format!("Failed to parse OpenRouter models response: {}", e))?;
 
-    Ok(parsed.data.iter().filter_map(map_openrouter_entry).collect())
+    Ok(parsed
+        .data
+        .iter()
+        .filter_map(map_openrouter_entry)
+        .collect())
 }
 
 /// List OpenRouter's live model catalog (`GET /api/v1/models`). Unlike the
@@ -1326,9 +1336,9 @@ pub async fn router_suggestions(
 
 /// Returns capability metadata for a given model.
 ///
-/// For Ollama models the detection queries `/api/show` (cached).
-/// For cloud providers a default set is returned since they universally
-/// support tools, vision, and streaming.
+/// Ollama capability detection queries `/api/show` and is cached. Known cloud
+/// model capabilities come from the generated model registry in the renderer;
+/// this runtime probe must never synthesize provider-wide defaults.
 #[tauri::command]
 pub async fn get_model_capabilities(
     provider: String,
@@ -1365,16 +1375,9 @@ pub async fn get_model_capabilities(
             "tool_mode": tool_mode,
         }))
     } else {
-        // Cloud providers (openai, anthropic, google, xai, mistral, deepseek, etc.)
-        // universally support tools, streaming, and vision for modern models.
-        Ok(serde_json::json!({
-            "supports_tools": true,
-            "supports_vision": true,
-            "supports_streaming": true,
-            "supports_thinking": true,
-            "context_length": 128_000,
-            "tool_mode": "native",
-        }))
+        Err(format!(
+            "Runtime capability probing is unsupported for provider {provider}; use the generated model registry for {model_id}"
+        ))
     }
 }
 
@@ -1437,6 +1440,38 @@ mod tests {
         fn name(&self) -> &str {
             "mock"
         }
+    }
+
+    #[test]
+    fn managed_cloud_registration_does_not_advertise_unconfigured_byok_providers() {
+        let mut router = LLMRouter::new();
+        router.set_managed_cloud(Box::new(MockProvider {
+            calls: Arc::new(AtomicUsize::new(0)),
+        }));
+
+        assert!(catalog_provider_is_available(
+            &router,
+            Provider::ManagedCloud
+        ));
+        assert!(
+            !catalog_provider_is_available(&router, Provider::OpenAI),
+            "ManagedCloud must not make an unconfigured OpenAI BYOK route appear available"
+        );
+        assert!(
+            !catalog_provider_is_available(&router, Provider::Anthropic),
+            "ManagedCloud must not make an unconfigured Anthropic BYOK route appear available"
+        );
+    }
+
+    #[tokio::test]
+    async fn capability_probe_rejects_cloud_models_instead_of_inventing_defaults() {
+        let result =
+            get_model_capabilities("openai".to_string(), "gpt-5.4-nano".to_string(), None).await;
+
+        assert!(
+            result.is_err(),
+            "known cloud-model capabilities must come from the generated registry"
+        );
     }
 
     #[test]
@@ -1521,6 +1556,8 @@ mod tests {
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let candidate = {
@@ -1615,7 +1652,11 @@ mod tests {
         });
         let parsed: OpenRouterModelsResponse =
             serde_json::from_value(body).expect("should deserialize real-shaped payload");
-        let models: Vec<ModelInfo> = parsed.data.iter().filter_map(map_openrouter_entry).collect();
+        let models: Vec<ModelInfo> = parsed
+            .data
+            .iter()
+            .filter_map(map_openrouter_entry)
+            .collect();
         assert_eq!(models.len(), 1, "audio-output model should be filtered out");
         assert_eq!(models[0].id, "meta-llama/llama-3.3-70b-instruct:free");
     }

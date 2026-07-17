@@ -34,15 +34,20 @@ impl OpenAiOpts {
 
 /// Which provider wire dialect to speak.
 ///
-/// Three dialects stay specialized because their API shapes differ
+/// Four dialects stay specialized because their API shapes differ
 /// substantially from OpenAI Chat Completions: `Anthropic` (Messages API),
-/// `Gemini` (Google generateContent), and `OllamaNative` (newline-delimited
-/// JSON). Everything else flows through `OpenAiCompat`.
+/// `Gemini` (Google generateContent), `OllamaNative` (newline-delimited JSON),
+/// and `OpenAiResponses` (typed input Items + semantic SSE). Everything else
+/// flows through `OpenAiCompat`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Dialect {
     Anthropic,
     Gemini,
     OllamaNative,
+    /// OpenAI's native Responses API. This is deliberately distinct from
+    /// OpenAI-compatible Chat Completions: request fields, function tools,
+    /// usage, and streaming event schemas are not wire-compatible.
+    OpenAiResponses,
     OpenAiCompat(OpenAiOpts),
 }
 
@@ -69,7 +74,9 @@ impl fmt::Debug for Auth {
         match self {
             Auth::None => f.write_str("Auth::None"),
             Auth::Bearer(_) => f.write_str("Auth::Bearer([redacted])"),
-            Auth::Header { name, .. } => write!(f, "Auth::Header {{ name: {name:?}, value: [redacted] }}"),
+            Auth::Header { name, .. } => {
+                write!(f, "Auth::Header {{ name: {name:?}, value: [redacted] }}")
+            }
         }
     }
 }
@@ -86,6 +93,7 @@ pub struct ProviderSpec {
     /// - Anthropic: the full Messages URL (e.g. `https://api.anthropic.com/v1/messages`)
     /// - Gemini: the API root (e.g. `https://generativelanguage.googleapis.com/v1beta`)
     /// - OllamaNative: the server root (e.g. `http://localhost:11434`)
+    /// - OpenAiResponses: the full Responses URL (e.g. `https://api.openai.com/v1/responses`)
     /// - OpenAiCompat: the full chat-completions URL
     pub base_url: String,
     pub auth: Auth,
@@ -100,10 +108,22 @@ mod tests {
 
     #[test]
     fn openai_opts_for_url_matches_native_endpoints_only() {
-        assert!(OpenAiOpts::for_url("https://api.openai.com/v1/chat/completions").use_max_completion_tokens);
-        assert!(OpenAiOpts::for_url("https://chatgpt.com/backend-api/codex/responses").use_max_completion_tokens);
-        assert!(!OpenAiOpts::for_url("https://api.deepseek.com/v1/chat/completions").use_max_completion_tokens);
-        assert!(!OpenAiOpts::for_url("http://localhost:1234/v1/chat/completions").use_max_completion_tokens);
+        assert!(
+            OpenAiOpts::for_url("https://api.openai.com/v1/chat/completions")
+                .use_max_completion_tokens
+        );
+        assert!(
+            OpenAiOpts::for_url("https://chatgpt.com/backend-api/codex/responses")
+                .use_max_completion_tokens
+        );
+        assert!(
+            !OpenAiOpts::for_url("https://api.deepseek.com/v1/chat/completions")
+                .use_max_completion_tokens
+        );
+        assert!(
+            !OpenAiOpts::for_url("http://localhost:1234/v1/chat/completions")
+                .use_max_completion_tokens
+        );
     }
 
     #[test]

@@ -21,7 +21,6 @@ mod task_registry;
 mod web;
 
 pub use task_registry::session_task_summaries;
-pub(crate) use task_registry::set_advisor_local_privacy_mode;
 
 use bash::execute_run_command;
 use common::{describe_command, print_tool_status, truncate_output_with_save};
@@ -82,6 +81,11 @@ pub struct ToolExecOptions {
     pub auto_approve_safe: bool,
     pub quiet: bool,
     pub approval_callback: Option<ApprovalCallback>,
+    /// Trust boundary of the session that requested this invocation.
+    ///
+    /// Tool policy must travel with each call. A process-global flag is unsafe
+    /// because the CLI app-server can host concurrent Local and BYOK sessions.
+    pub privacy_mode: crate::agent::PrivacyMode,
 }
 
 // ---------------------------------------------------------------------------
@@ -185,12 +189,30 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
         auto_approve_safe: false,
         quiet: false,
         approval_callback: None,
+        // A sessionless invocation has no authority to leave the device.
+        privacy_mode: crate::agent::PrivacyMode::Local,
     };
     execute_tool_with_opts(call, &opts).await
 }
 
 pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
     let canonical_name = canonical_tool_name(&call.name);
+
+    // Network-capable built-ins are a trust-boundary operation, even when
+    // their catalog classification is read-only. Local means no hidden API or
+    // cloud call; the user must create an explicit BYOK/Managed continuation.
+    if opts.privacy_mode == crate::agent::PrivacyMode::Local
+        && matches!(canonical_name, "web_search" | "web_fetch" | "advisor")
+    {
+        return Ok(ToolResult {
+            tool_name: canonical_name.to_string(),
+            success: false,
+            output: format!(
+                "{canonical_name} is unavailable in Local privacy mode: network context must not leave this device. Create an explicit BYOK or Managed continuation to use this tool."
+            ),
+        });
+    }
+
     let is_safe_tool = is_catalog_read_only_tool(canonical_name);
     let require_confirm = opts.require_confirmation && !(opts.auto_approve_safe && is_safe_tool);
 
@@ -251,7 +273,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "cron_create" => execute_cron_create(&call.args).await,
         "cron_delete" => execute_cron_delete(&call.args).await,
         "cron_list" => execute_cron_list(&call.args).await,
-        "advisor" => execute_advisor(&call.args).await,
+        "advisor" => execute_advisor(&call.args, opts.privacy_mode).await,
         "enter_worktree" => {
             execute_enter_worktree(&call.args, require_confirm, opts.approval_callback.as_ref())
                 .await
@@ -805,6 +827,35 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
+    #[tokio::test]
+    async fn local_mode_blocks_builtin_network_tools_before_dispatch() {
+        let opts = ToolExecOptions {
+            require_confirmation: false,
+            auto_approve_safe: true,
+            quiet: true,
+            approval_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Local,
+        };
+
+        for name in ["web_search", "web_fetch"] {
+            let call = ToolCall {
+                name: name.to_string(),
+                // These arguments are deliberately invalid for network use;
+                // the trust gate must run before provider or URL validation.
+                args: HashMap::new(),
+            };
+            let result = execute_tool_with_opts(&call, &opts)
+                .await
+                .expect("Local tool policy result");
+            assert!(!result.success, "{name} must fail in Local mode");
+            assert!(
+                result.output.contains("unavailable in Local privacy mode"),
+                "{name} reached its executor instead of the Local egress gate: {}",
+                result.output
+            );
+        }
+    }
+
     fn dispatched_tool_names_from_source() -> BTreeSet<String> {
         let source = include_str!("mod.rs");
         let start = source
@@ -937,6 +988,7 @@ mod tests {
             auto_approve_safe: true,
             quiet: true,
             approval_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Local,
         };
 
         let result = execute_batch(&call, &opts).await.unwrap();
@@ -1560,7 +1612,13 @@ mod private_ip_classifier_tests {
     fn read_only_registry_registers_the_read_only_cluster() {
         let reg = super::build_read_only_registry();
         assert_eq!(reg.len(), 5);
-        for name in ["read_file", "search_files", "list_directory", "glob", "grep_files"] {
+        for name in [
+            "read_file",
+            "search_files",
+            "list_directory",
+            "glob",
+            "grep_files",
+        ] {
             let tool = reg.get(name).unwrap_or_else(|| panic!("missing {name}"));
             assert_eq!(tool.name(), name);
             assert!(tool.read_only(), "{name} must be read-only");

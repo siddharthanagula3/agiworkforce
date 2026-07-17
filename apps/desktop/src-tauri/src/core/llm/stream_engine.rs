@@ -34,7 +34,7 @@ use std::time::Duration;
 
 use agiworkforce_llm::{
     LlmError, StreamEvent, Usage as CrateUsage, run_anthropic_stream, run_gemini_stream,
-    run_openai_compat_stream,
+    run_ollama_stream, run_openai_compat_stream, run_openai_responses_stream,
 };
 use futures_util::{Stream, StreamExt};
 use tokio_stream::wrappers::UnboundedReceiverStream;
@@ -46,23 +46,35 @@ type ChunkResult = Result<StreamChunk, Box<dyn Error + Send + Sync>>;
 
 /// Which shared decoder to drive for a desktop provider.
 ///
-/// Mirrors the pre-swap `sse_parser::parse_sse_event` routing exactly: only
-/// Anthropic (Messages API) and Google (Gemini `generateContent`) get
-/// specialized dialects; every other BYOK cloud provider DirectApiProvider
-/// serves speaks OpenAI-compatible Chat Completions. Ollama has its own native
-/// provider path (`providers/ollama.rs`) and never reaches DirectApiProvider,
-/// so `OllamaNative` is intentionally not represented here.
+/// Anthropic (Messages API), Google (Gemini `generateContent`), and native
+/// OpenAI catalog models that require Responses get specialized dialects.
+/// Every other BYOK cloud provider served by `DirectApiProvider` speaks
+/// OpenAI-compatible Chat Completions. Ollama's native NDJSON path
+/// (`providers/ollama.rs`) never reaches `DirectApiProvider`; its decoder is
+/// driven through [`decode_bytes`] directly.
 #[derive(Clone, Copy)]
-enum Decoder {
+pub(crate) enum Decoder {
     Anthropic,
     Gemini,
+    OpenAiResponses,
     OpenAiCompat,
+    // Ollama native NDJSON (`/api/chat`). The Ollama provider adapter builds its
+    // own local request and decodes the response stream through the shared engine
+    // (`decode_direct_stream` → `decoder_for(Ollama)` → this variant →
+    // `run_ollama_stream`), the same strangler path Anthropic/Google/OpenAI use.
+    // Byte-identity with the retired `parse_ollama_sse` is proven by the c2a
+    // oracle (modulo the enumerated intentional c2b decode fixes).
+    OllamaNative,
 }
 
-fn decoder_for(provider: Provider) -> Decoder {
+fn decoder_for(provider: Provider, model: &str) -> Decoder {
     match provider {
         Provider::Anthropic => Decoder::Anthropic,
         Provider::Google => Decoder::Gemini,
+        Provider::Ollama => Decoder::OllamaNative,
+        Provider::OpenAI if super::models_config::model_uses_responses_api(model) => {
+            Decoder::OpenAiResponses
+        }
         _ => Decoder::OpenAiCompat,
     }
 }
@@ -129,9 +141,9 @@ fn gemini_block_error(reason: &str) -> Option<&'static str> {
         "SAFETY" | "BLOCKLIST" | "PROHIBITED_CONTENT" | "SPII" => Some(
             "Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings.",
         ),
-        "RECITATION" => Some(
-            "Response was blocked due to recitation concerns. Try rephrasing your request.",
-        ),
+        "RECITATION" => {
+            Some("Response was blocked due to recitation concerns. Try rephrasing your request.")
+        }
         "MALFORMED_FUNCTION_CALL" => Some(
             "Google returned a malformed function call. Try simplifying your request or tool definitions.",
         ),
@@ -150,13 +162,91 @@ fn gemini_block_error(reason: &str) -> Option<&'static str> {
 pub fn decode_direct_stream(
     response: reqwest::Response,
     provider: Provider,
+    model: &str,
 ) -> impl Stream<Item = ChunkResult> + Send {
     let byte_stream = response.bytes_stream().map(|r| {
         r.map_err(|e| LlmError::Read {
             message: e.to_string(),
         })
     });
-    decode_bytes(Box::pin(byte_stream), decoder_for(provider))
+    decode_bytes(Box::pin(byte_stream), decoder_for(provider, model))
+}
+
+/// Project one crate [`StreamEvent`] into desktop `StreamChunk` item(s) on
+/// `tx`. This is THE swap's event-to-IPC mapping — shared by every dialect
+/// (and replayed verbatim by the c2a decode oracle), so the projection under
+/// test is exactly the projection in production.
+pub(crate) fn project_stream_event(
+    event: StreamEvent,
+    is_gemini: bool,
+    tx: &tokio::sync::mpsc::UnboundedSender<ChunkResult>,
+) {
+    match event {
+        StreamEvent::TextDelta { text } => {
+            let mut c = empty_chunk();
+            c.content = text;
+            let _ = tx.send(Ok(c));
+        }
+        StreamEvent::ReasoningDelta { text } => {
+            let mut c = empty_chunk();
+            c.reasoning = Some(text);
+            let _ = tx.send(Ok(c));
+        }
+        StreamEvent::ToolCallStart { index, id, name } => {
+            let mut c = empty_chunk();
+            c.tool_calls = Some(vec![StreamingToolCall {
+                index,
+                id,
+                name,
+                arguments: String::new(),
+            }]);
+            let _ = tx.send(Ok(c));
+        }
+        StreamEvent::ToolCallArgsDelta { index, fragment } => {
+            let mut c = empty_chunk();
+            c.tool_calls = Some(vec![StreamingToolCall {
+                index,
+                id: String::new(),
+                name: String::new(),
+                arguments: fragment,
+            }]);
+            let _ = tx.send(Ok(c));
+        }
+        StreamEvent::Usage { usage } => {
+            let mut c = empty_chunk();
+            c.usage = Some(map_usage(&usage));
+            let _ = tx.send(Ok(c));
+        }
+        StreamEvent::Keepalive => {
+            let mut c = empty_chunk();
+            c.keepalive = true;
+            let _ = tx.send(Ok(c));
+        }
+        StreamEvent::Vendor { event: _, data } => {
+            if let Some(err) = extract_stream_error(&data) {
+                let _ = tx.send(Err(err));
+            } else {
+                // Non-error vendor frame the crate did not interpret
+                // (e.g. role-only openers). Treat as a keepalive: no
+                // content, but the stream is alive.
+                let mut c = empty_chunk();
+                c.keepalive = true;
+                let _ = tx.send(Ok(c));
+            }
+        }
+        StreamEvent::End { stop_reason } => {
+            if is_gemini {
+                if let Some(msg) = stop_reason.as_deref().and_then(gemini_block_error) {
+                    let _ = tx.send(Err(msg.into()));
+                    return;
+                }
+            }
+            let mut c = empty_chunk();
+            c.done = true;
+            c.finish_reason = stop_reason;
+            let _ = tx.send(Ok(c));
+        }
+    }
 }
 
 /// The reqwest-decoupled core of the swap: drive the shared dialect runner
@@ -165,7 +255,7 @@ pub fn decode_direct_stream(
 /// crate-runner integration can be regression-tested with canned byte fixtures
 /// (no network). Cancellation is preserved: when the consumer drops the
 /// receiver, byte pulling halts and the backing connection is released.
-fn decode_bytes<S>(byte_stream: S, decoder: Decoder) -> UnboundedReceiverStream<ChunkResult>
+pub(crate) fn decode_bytes<S>(byte_stream: S, decoder: Decoder) -> UnboundedReceiverStream<ChunkResult>
 where
     S: Stream<Item = Result<bytes::Bytes, LlmError>> + Send + Unpin + 'static,
 {
@@ -184,79 +274,19 @@ where
         // watchdog effectively unbounded so idle-timeout behavior is unchanged.
         let idle = Duration::from_secs(86_400);
         let tx_events = tx.clone();
-        let mut on_event = move |event: StreamEvent| match event {
-            StreamEvent::TextDelta { text } => {
-                let mut c = empty_chunk();
-                c.content = text;
-                let _ = tx_events.send(Ok(c));
-            }
-            StreamEvent::ReasoningDelta { text } => {
-                let mut c = empty_chunk();
-                c.reasoning = Some(text);
-                let _ = tx_events.send(Ok(c));
-            }
-            StreamEvent::ToolCallStart { index, id, name } => {
-                let mut c = empty_chunk();
-                c.tool_calls = Some(vec![StreamingToolCall {
-                    index,
-                    id,
-                    name,
-                    arguments: String::new(),
-                }]);
-                let _ = tx_events.send(Ok(c));
-            }
-            StreamEvent::ToolCallArgsDelta { index, fragment } => {
-                let mut c = empty_chunk();
-                c.tool_calls = Some(vec![StreamingToolCall {
-                    index,
-                    id: String::new(),
-                    name: String::new(),
-                    arguments: fragment,
-                }]);
-                let _ = tx_events.send(Ok(c));
-            }
-            StreamEvent::Usage { usage } => {
-                let mut c = empty_chunk();
-                c.usage = Some(map_usage(&usage));
-                let _ = tx_events.send(Ok(c));
-            }
-            StreamEvent::Keepalive => {
-                let mut c = empty_chunk();
-                c.keepalive = true;
-                let _ = tx_events.send(Ok(c));
-            }
-            StreamEvent::Vendor { event: _, data } => {
-                if let Some(err) = extract_stream_error(&data) {
-                    let _ = tx_events.send(Err(err));
-                } else {
-                    // Non-error vendor frame the crate did not interpret
-                    // (e.g. role-only openers). Treat as a keepalive: no
-                    // content, but the stream is alive.
-                    let mut c = empty_chunk();
-                    c.keepalive = true;
-                    let _ = tx_events.send(Ok(c));
-                }
-            }
-            StreamEvent::End { stop_reason } => {
-                if is_gemini {
-                    if let Some(msg) = stop_reason.as_deref().and_then(gemini_block_error) {
-                        let _ = tx_events.send(Err(msg.into()));
-                        return;
-                    }
-                }
-                let mut c = empty_chunk();
-                c.done = true;
-                c.finish_reason = stop_reason;
-                let _ = tx_events.send(Ok(c));
-            }
-        };
+        let mut on_event =
+            move |event: StreamEvent| project_stream_event(event, is_gemini, &tx_events);
 
         let result = match decoder {
             Decoder::Anthropic => run_anthropic_stream(byte_stream, idle, &mut on_event).await,
             Decoder::Gemini => run_gemini_stream(byte_stream, idle, &mut on_event).await,
+            Decoder::OpenAiResponses => {
+                run_openai_responses_stream(byte_stream, idle, &mut on_event).await
+            }
             Decoder::OpenAiCompat => {
                 run_openai_compat_stream(byte_stream, idle, &mut on_event).await
             }
+            Decoder::OllamaNative => run_ollama_stream(byte_stream, idle, &mut on_event).await,
         };
 
         if let Err(err) = result {
@@ -383,6 +413,78 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn openai_responses_text_reasoning_tool_usage_and_completion_accumulate() {
+        let raw = concat!(
+            "event: response.reasoning_summary_text.delta\n",
+            "data: {\"type\":\"response.reasoning_summary_text.delta\",\"output_index\":0,\"delta\":\"Plan\"}\n\n",
+            "event: response.output_item.added\n",
+            "data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"read_file\",\"arguments\":\"\"}}\n\n",
+            "event: response.function_call_arguments.delta\n",
+            "data: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":1,\"delta\":\"{\\\"path\\\":\\\"a.txt\\\"}\"}\n\n",
+            "event: response.output_text.delta\n",
+            "data: {\"type\":\"response.output_text.delta\",\"output_index\":2,\"delta\":\"Done\"}\n\n",
+            "event: response.completed\n",
+            "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":10,\"output_tokens\":7,\"output_tokens_details\":{\"reasoning_tokens\":3}}}}\n\n",
+        );
+
+        let a = accumulate(chunked(raw.as_bytes(), 9), Decoder::OpenAiResponses).await;
+        assert!(a.err.is_none(), "unexpected error: {:?}", a.err);
+        assert_eq!(a.reasoning, "Plan");
+        assert_eq!(a.content, "Done");
+        assert_eq!(a.finish.as_deref(), Some("completed"));
+        let tool = a.tools.get(&1).expect("Responses function call");
+        assert_eq!(tool.id, "call_1");
+        assert_eq!(tool.name, "read_file");
+        assert_eq!(tool.arguments, "{\"path\":\"a.txt\"}");
+        let usage = a.usage.expect("Responses completion usage");
+        assert_eq!(usage.prompt_tokens, Some(10));
+        assert_eq!(usage.completion_tokens, Some(7));
+    }
+
+    #[tokio::test]
+    async fn openai_responses_error_event_is_terminal() {
+        let raw = concat!(
+            "event: error\n",
+            "data: {\"type\":\"error\",\"code\":\"server_error\",\"message\":\"stream exploded\"}\n\n",
+        );
+
+        let a = accumulate(chunked(raw.as_bytes(), 5), Decoder::OpenAiResponses).await;
+        assert!(
+            a.err
+                .as_deref()
+                .is_some_and(|error| error.contains("stream exploded")),
+            "Responses error must terminate the Desktop stream: {:?}",
+            a.err
+        );
+    }
+
+    #[test]
+    fn decoder_routing_uses_catalog_model_type_without_affecting_chat_tier() {
+        let catalog = super::super::models_config::get_all_model_entries();
+        let reasoning = catalog
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
+            .expect("catalog must contain an OpenAI reasoning model");
+        let chat = catalog
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.model_type == "chat")
+            .expect("catalog must contain an OpenAI chat model");
+
+        assert!(matches!(
+            decoder_for(Provider::OpenAI, &reasoning.id),
+            Decoder::OpenAiResponses
+        ));
+        assert!(matches!(
+            decoder_for(Provider::OpenAI, &chat.id),
+            Decoder::OpenAiCompat
+        ));
+        assert!(matches!(
+            decoder_for(Provider::OpenRouter, &reasoning.id),
+            Decoder::OpenAiCompat
+        ));
+    }
+
+    #[tokio::test]
     async fn gemini_safety_finish_reason_is_terminal_error() {
         // Desktop's pre-swap parse_google_sse turned a SAFETY finishReason into
         // a user-facing terminal error; the adapter reproduces that from the
@@ -390,7 +492,9 @@ mod tests {
         let raw =
             "data: {\"candidates\":[{\"finishReason\":\"SAFETY\",\"content\":{\"parts\":[]}}]}\n\n";
         let a = accumulate(chunked(raw.as_bytes(), 9), Decoder::Gemini).await;
-        let err = a.err.expect("safety block should surface as terminal error");
+        let err = a
+            .err
+            .expect("safety block should surface as terminal error");
         assert!(err.contains("safety filters"), "unexpected error: {err}");
     }
 

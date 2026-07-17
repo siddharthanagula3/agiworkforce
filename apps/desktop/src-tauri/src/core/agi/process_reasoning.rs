@@ -341,6 +341,8 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let request = LLMRequest {

@@ -20,7 +20,10 @@ pub(crate) fn generate_pkce() -> PkceCodes {
     let verifier = generate_random_string(43);
     let hash = Sha256::digest(verifier.as_bytes());
     let challenge = URL_SAFE_NO_PAD.encode(hash);
-    PkceCodes { verifier, challenge }
+    PkceCodes {
+        verifier,
+        challenge,
+    }
 }
 
 /// Uniformly-random string over the PKCE unreserved alphabet.

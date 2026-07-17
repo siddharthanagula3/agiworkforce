@@ -1,8 +1,8 @@
 //! Normalized global CLI option contract.
 //!
-//! Claude's CLI parses many entrypoint flags into a single options object before
-//! launching print, interactive, SDK, or remote-control modes. This module is
-//! the Rust equivalent for flags that must be shared across those paths.
+//! Entrypoint flags are normalized into one options object before launching the
+//! implemented print, interactive, or SDK paths. Remote control is intentionally
+//! absent until AGI has a real authenticated host/relay transport.
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
@@ -60,7 +60,11 @@ impl CliOptions {
         // interactive prompt -> denied), matching the documented contract that
         // only pre-approved safe work runs. Only `BypassPermissions` (and the
         // explicit `--dangerously-skip-permissions` flag) skip all approvals.
-        explicit_skip || matches!(self.permission_mode, Some(PermissionMode::BypassPermissions))
+        explicit_skip
+            || matches!(
+                self.permission_mode,
+                Some(PermissionMode::BypassPermissions)
+            )
     }
 
     pub(crate) fn should_auto_approve_safe(&self, explicit_yes: bool) -> bool {

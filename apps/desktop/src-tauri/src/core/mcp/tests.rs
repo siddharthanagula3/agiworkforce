@@ -93,10 +93,7 @@ while True:
 
         let config = McpServerConfig {
             command: "python3".to_string(),
-            args: vec![
-                "-u".to_string(),
-                script_path.to_string_lossy().into_owned(),
-            ],
+            args: vec!["-u".to_string(), script_path.to_string_lossy().into_owned()],
             env: HashMap::new(),
             enabled: true,
             transport: None,
@@ -516,7 +513,7 @@ mod unit_tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "spawns a real npx MCP filesystem server; integration-only, run with --ignored"]
     async fn test_filesystem_server_integration() {
         let config = McpServerConfig {
             command: "npx".to_string(),
@@ -554,7 +551,7 @@ mod unit_tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "spawns a real npx MCP filesystem server; integration-only, run with --ignored"]
     async fn test_client_multiple_servers() {
         let client = McpClient::new();
 

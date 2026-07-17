@@ -49,8 +49,9 @@ mod tests {
 
     #[tokio::test]
     async fn fires_on_stalled_stream() {
-        let mut stream =
-            Box::pin(futures_util::stream::pending::<Result<bytes::Bytes, LlmError>>());
+        let mut stream = Box::pin(futures_util::stream::pending::<
+            Result<bytes::Bytes, LlmError>,
+        >());
         let watchdog = IdleWatchdog::new(Duration::from_millis(50));
         let result = watchdog.next_item(&mut stream).await;
         assert!(matches!(result, Err(LlmError::IdleTimeout { .. })));

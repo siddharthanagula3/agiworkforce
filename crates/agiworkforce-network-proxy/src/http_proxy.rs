@@ -28,7 +28,7 @@ use crate::state::BlockedRequestArgs;
 use crate::state::NetworkProxyState;
 use crate::upstream::UpstreamClient;
 use crate::upstream::proxy_for_connect;
-use agiworkforce_utils_rustls_provider::ensure_rustls_crypto_provider;
+use crate::rustls_provider::ensure_rustls_crypto_provider;
 use anyhow::Context as _;
 use anyhow::Result;
 use rama_core::Layer;

@@ -391,7 +391,10 @@ fn resolve_output_path(output_path: &str) -> Result<String> {
     // directory traversal and protected system paths so a model-driven create can't
     // escape to ~/.ssh, shell rc files, LaunchAgents, etc. (legitimate absolute
     // paths are still allowed; only `..` and denylisted paths are blocked).
-    if resolved.components().any(|c| matches!(c, Component::ParentDir)) {
+    if resolved
+        .components()
+        .any(|c| matches!(c, Component::ParentDir))
+    {
         return Err(Error::InvalidPath(
             "output_path must not contain '..' (directory traversal)".to_string(),
         ));

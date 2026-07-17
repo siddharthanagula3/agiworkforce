@@ -8,6 +8,5 @@ pub mod db;
 pub mod memory_sync;
 pub mod metrics;
 pub mod projects_sync;
-pub mod settings_sync;
 pub mod settings;
 pub mod state;

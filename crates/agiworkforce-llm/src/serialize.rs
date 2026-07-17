@@ -206,6 +206,74 @@ pub fn convert_message_to_openai(m: &Message) -> Vec<Value> {
     }
 }
 
+/// Convert an internal message into OpenAI Responses API input Items.
+///
+/// Responses is not Chat Completions with renamed top-level fields: messages,
+/// function calls, and function results are peer Items in the `input` array.
+/// A message can therefore expand into multiple Items while preserving its
+/// original order.
+pub fn convert_message_to_openai_responses(m: &Message) -> Vec<Value> {
+    match &m.content {
+        MessageContent::Text(text) => vec![serde_json::json!({
+            "role": m.role,
+            "content": text,
+        })],
+        MessageContent::Blocks(blocks) => {
+            let mut content = Vec::new();
+            let mut non_message_items = Vec::new();
+
+            for block in blocks {
+                match block {
+                    ContentBlock::Text { text } => content.push(serde_json::json!({
+                        "type": "input_text",
+                        "text": text,
+                    })),
+                    ContentBlock::Image { mime, data_b64 } => {
+                        content.push(serde_json::json!({
+                            "type": "input_image",
+                            "image_url": format!("data:{mime};base64,{data_b64}"),
+                        }));
+                    }
+                    ContentBlock::ToolUse { id, name, input } => {
+                        non_message_items.push(serde_json::json!({
+                            "type": "function_call",
+                            "call_id": id,
+                            "name": name,
+                            "arguments": input.to_string(),
+                        }));
+                    }
+                    ContentBlock::ToolResult {
+                        tool_use_id,
+                        content,
+                        ..
+                    } => {
+                        non_message_items.push(serde_json::json!({
+                            "type": "function_call_output",
+                            "call_id": tool_use_id,
+                            "output": content,
+                        }));
+                    }
+                }
+            }
+
+            let mut items = Vec::new();
+            if !content.is_empty() {
+                items.push(serde_json::json!({
+                    "role": m.role,
+                    "content": content,
+                }));
+            } else if non_message_items.is_empty() {
+                items.push(serde_json::json!({
+                    "role": m.role,
+                    "content": "",
+                }));
+            }
+            items.extend(non_message_items);
+            items
+        }
+    }
+}
+
 /// Build a `tool_use_id -> function name` map from all ToolUse blocks. Gemini's
 /// `functionResponse.name` must equal the originating `functionCall.name`, but a
 /// ToolResult only carries `tool_use_id`, so the name is resolved via this map.
@@ -316,6 +384,22 @@ pub fn openai_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
                     "description": tool.description,
                     "parameters": tool.input_schema,
                 }
+            })
+        })
+        .collect()
+}
+
+/// OpenAI Responses `tools` array. Unlike Chat Completions, custom function
+/// fields are flat peers of `type`; wrapping them under `function` is rejected.
+pub fn openai_responses_function_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
+    tool_defs
+        .iter()
+        .map(|tool| {
+            serde_json::json!({
+                "type": "function",
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.input_schema,
             })
         })
         .collect()
@@ -475,7 +559,10 @@ pub fn ollama_nativize_message_values(messages: &mut [Value]) {
             let Some(func) = tc.get_mut("function").and_then(Value::as_object_mut) else {
                 continue;
             };
-            let arg_str = func.get("arguments").and_then(Value::as_str).map(str::to_string);
+            let arg_str = func
+                .get("arguments")
+                .and_then(Value::as_str)
+                .map(str::to_string);
             if let Some(s) = arg_str {
                 let obj = serde_json::from_str::<Value>(&s)
                     .ok()
@@ -932,7 +1019,10 @@ mod tests {
         ollama_nativize_message_values(&mut msgs);
         let args = msgs[0].pointer("/tool_calls/0/function/arguments").unwrap();
         assert!(args.is_object(), "arguments must be an object, got: {args}");
-        assert_eq!(args.get("command").and_then(|c| c.as_str()), Some("echo hi"));
+        assert_eq!(
+            args.get("command").and_then(|c| c.as_str()),
+            Some("echo hi")
+        );
     }
 
     #[test]
@@ -947,7 +1037,10 @@ mod tests {
         })];
         ollama_nativize_message_values(&mut msgs);
         let args = msgs[0].pointer("/tool_calls/0/function/arguments").unwrap();
-        assert!(args.is_object(), "malformed args must fall back to an object: {args}");
+        assert!(
+            args.is_object(),
+            "malformed args must fall back to an object: {args}"
+        );
         assert_eq!(args.as_object().map(serde_json::Map::len), Some(0));
     }
 }

@@ -52,7 +52,10 @@ async fn http_401_triggers_discovery_registration_and_retry() {
         "expected an unauthed + authed initialize, got {}",
         inits.len()
     );
-    assert!(inits[0].authorization.is_none(), "first initialize is the 401");
+    assert!(
+        inits[0].authorization.is_none(),
+        "first initialize is the 401"
+    );
     assert!(
         inits.last().unwrap().authorization.as_deref() == Some("Bearer sim-access-token"),
         "retry initialize must carry the issued bearer"
