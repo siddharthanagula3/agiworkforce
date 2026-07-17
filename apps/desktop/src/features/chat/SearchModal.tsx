@@ -13,7 +13,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useSearchModal } from '../../hooks/useSearchModal';
 import { cn } from '../../lib/utils';
-import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useReducedMotion } from '@agiworkforce/unified-chat';
 import type { ConversationSummary } from '../../stores/chat/types';
 import type { Project } from '../../stores/projectStore';
 import type { ArtifactSummary } from '../../stores/artifactStore';

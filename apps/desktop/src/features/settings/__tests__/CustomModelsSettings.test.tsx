@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CustomModelsSettings } from '../CustomModelsSettings';
-import type { CustomModelConfig } from '../../../types/customModel';
+import type { CustomModelConfig } from '@agiworkforce/types';
 
 // ── Radix UI / jsdom compat polyfills ────────────────────────────────────────
 if (typeof Element.prototype.hasPointerCapture === 'undefined') {
