@@ -44,8 +44,14 @@ describe('agentTaskStore', () => {
       expect(tasks[0]!.id).toBe('goal-123');
     });
 
-    it('submits parallel goal and marks as completed', async () => {
-      mockInvoke.mockResolvedValueOnce({ bestResult: { score: 0.95 } });
+    it('uses the engine goal id and actual result for parallel execution', async () => {
+      mockInvoke.mockResolvedValueOnce({
+        goalId: 'goal-parallel-123',
+        bestResult: {
+          score: 0.95,
+          result: { success: true, error: null },
+        },
+      });
 
       const { submitGoal } = useAgentTaskStore.getState();
       const taskId = await submitGoal('Parallel task', { parallel: true, maxIterations: 3 });
@@ -53,12 +59,62 @@ describe('agentTaskStore', () => {
       expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal_parallel', {
         request: { description: 'Parallel task', priority: 'medium', numAgents: 3 },
       });
-      expect(taskId).toMatch(/^parallel_/);
+      expect(taskId).toBe('goal-parallel-123');
 
       const { tasks } = useAgentTaskStore.getState();
       expect(tasks.length).toBe(1);
+      expect(tasks[0]!.id).toBe('goal-parallel-123');
       expect(tasks[0]!.status).toBe('completed');
       expect(tasks[0]!.result).toContain('0.95');
+    });
+
+    it('marks a parallel task failed when the engine result failed', async () => {
+      mockInvoke.mockResolvedValueOnce({
+        goalId: 'goal-parallel-failed',
+        bestResult: {
+          score: 0.1,
+          result: { success: false, error: 'Tool execution failed' },
+        },
+      });
+
+      await useAgentTaskStore.getState().submitGoal('Parallel task', { parallel: true });
+
+      expect(useAgentTaskStore.getState().tasks).toEqual([
+        expect.objectContaining({
+          id: 'goal-parallel-failed',
+          status: 'failed',
+          error: 'Tool execution failed',
+        }),
+      ]);
+    });
+
+    it('updates an event-created task instead of appending a duplicate', async () => {
+      useAgentTaskStore.setState({
+        tasks: [
+          {
+            id: 'goal-parallel-existing',
+            goal: 'Parallel task',
+            status: 'running',
+            createdAt: new Date().toISOString(),
+            executionMode: 'parallel',
+          },
+        ],
+      });
+      mockInvoke.mockResolvedValueOnce({
+        goalId: 'goal-parallel-existing',
+        bestResult: {
+          score: 0.9,
+          result: { success: true, error: null },
+        },
+      });
+
+      await useAgentTaskStore.getState().submitGoal('Parallel task', { parallel: true });
+
+      const { tasks } = useAgentTaskStore.getState();
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0]).toEqual(
+        expect.objectContaining({ id: 'goal-parallel-existing', status: 'completed' }),
+      );
     });
   });
 
@@ -112,33 +168,6 @@ describe('agentTaskStore', () => {
 
       // toast.error should have been called
       expect(toast.error).toHaveBeenCalledWith('Failed to cancel task');
-    });
-  });
-
-  describe('partialize', () => {
-    it('excludes parallel tasks from persistence', () => {
-      useAgentTaskStore.setState({
-        tasks: [
-          {
-            id: 'normal-task',
-            goal: 'Normal goal',
-            status: 'completed',
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: 'parallel_123',
-            goal: 'Parallel goal',
-            status: 'completed',
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      });
-
-      // The partialize function filters tasks where id starts with 'parallel_'
-      const state = useAgentTaskStore.getState();
-      const persistedTasks = state.tasks.filter((t) => !t.id.startsWith('parallel_'));
-      expect(persistedTasks.length).toBe(1);
-      expect(persistedTasks[0]!.id).toBe('normal-task');
     });
   });
 

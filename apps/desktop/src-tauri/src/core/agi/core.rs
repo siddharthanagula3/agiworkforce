@@ -414,8 +414,15 @@ impl AGICore {
         // even if it's mid-LLM-call (the polling flag inside achieve_goal
         // only fires at loop boundaries, which can be 30s+ apart).
         let handle = tokio::spawn(async move {
-            if let Err(e) = core_with_app.achieve_goal(goal_id_for_spawn).await {
+            if let Err(e) = core_with_app.achieve_goal(goal_id_for_spawn.clone()).await {
                 tracing::error!("[AGI] Goal execution failed: {}", e);
+                core_with_app.emit_event(
+                    "agi:goal:error",
+                    json!({
+                        "goal_id": goal_id_for_spawn,
+                        "error": e.to_string(),
+                    }),
+                );
             }
         });
         if let Ok(mut handles) = lock_with_recovery(&self.goal_handles, "submit_goal:goal_handles")
@@ -507,6 +514,7 @@ impl AGICore {
                 "rank": best_result.rank,
                 "success": best_result.result.success,
                 "execution_time_ms": best_result.result.execution_time_ms,
+                "error": best_result.result.error,
             }),
         );
 
@@ -564,19 +572,41 @@ impl AGICore {
         };
 
         // Create swarm orchestrator
-        let orchestrator = SwarmOrchestrator::new(
+        let orchestrator = match SwarmOrchestrator::new(
             config,
             self.router.clone(),
             self.automation.clone(),
             self.app_handle.clone(),
-        )
-        .map_err(|e| anyhow::anyhow!("Failed to create swarm orchestrator: {}", e))?;
+        ) {
+            Ok(orchestrator) => orchestrator,
+            Err(error) => {
+                let error = anyhow::anyhow!("Failed to create swarm orchestrator: {}", error);
+                self.emit_event(
+                    "agi:goal:error",
+                    json!({
+                        "goal_id": goal.id,
+                        "error": error.to_string(),
+                    }),
+                );
+                return Err(error);
+            }
+        };
 
         // Execute the goal using swarm
-        let result = orchestrator
-            .execute_swarm_task(goal.clone())
-            .await
-            .map_err(|e| anyhow::anyhow!("Swarm execution failed: {}", e))?;
+        let result = match orchestrator.execute_swarm_task(goal.clone()).await {
+            Ok(result) => result,
+            Err(error) => {
+                let error = anyhow::anyhow!("Swarm execution failed: {}", error);
+                self.emit_event(
+                    "agi:goal:error",
+                    json!({
+                        "goal_id": goal.id,
+                        "error": error.to_string(),
+                    }),
+                );
+                return Err(error);
+            }
+        };
 
         self.emit_event(
             "agi:goal:swarm_completed",
@@ -589,6 +619,7 @@ impl AGICore {
                 "speedup_ratio": result.speedup_ratio,
                 "critical_path_length": result.critical_path_length,
                 "max_parallelism": result.max_parallelism,
+                "error": if result.success { None } else { Some(result.summary.clone()) },
             }),
         );
 

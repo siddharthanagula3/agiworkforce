@@ -157,18 +157,8 @@ export async function submitGoalSwarm(
   }
 
   if (!isTauri) {
-    console.debug('[agi] submitGoalSwarm (mock)', request);
-    return {
-      success: true,
-      goalId: `mock_swarm_${Date.now()}`,
-      succeeded: 1,
-      failed: 0,
-      wallTimeMs: 1000,
-      speedupRatio: 1.0,
-      criticalPathLength: 1,
-      maxParallelism: 1,
-      summary: 'Mock swarm execution',
-    };
+    toast.error('Agent execution requires the desktop app');
+    return null;
   }
 
   try {
@@ -201,8 +191,8 @@ export async function submitGoalAuto(
   }
 
   if (!isTauri) {
-    console.debug('[agi] submitGoalAuto (mock)', request);
-    return { goalId: `mock_auto_${Date.now()}` };
+    toast.error('Agent execution requires the desktop app');
+    return null;
   }
 
   try {

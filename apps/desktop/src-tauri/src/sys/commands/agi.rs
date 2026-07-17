@@ -50,6 +50,7 @@ pub struct SubmitParallelGoalRequest {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmitParallelGoalResponse {
+    pub goal_id: String,
     pub best_result: ScoredResult,
 }
 
@@ -159,6 +160,7 @@ pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalRes
 #[tauri::command]
 pub async fn agi_submit_goal_parallel(
     request: SubmitParallelGoalRequest,
+    app: tauri::AppHandle,
 ) -> Result<SubmitParallelGoalResponse, String> {
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
@@ -185,15 +187,31 @@ pub async fn agi_submit_goal_parallel(
         success_criteria: request.success_criteria.unwrap_or_default(),
     };
 
+    let goal_id = goal.id.clone();
     let num_agents = request.num_agents.unwrap_or(8);
 
     let agi = agi_arc.lock().await;
-    let best_result = agi
-        .submit_goal_parallel(goal, num_agents)
-        .await
-        .map_err(|e| format!("Failed to execute parallel goal: {}", e))?;
+    let best_result = match agi.submit_goal_parallel(goal, num_agents).await {
+        Ok(result) => result,
+        Err(error) => {
+            let message = format!("Failed to execute parallel goal: {}", error);
+            if let Err(emit_error) = app.emit(
+                "agi:goal:error",
+                serde_json::json!({
+                    "goal_id": goal_id,
+                    "error": message,
+                }),
+            ) {
+                tracing::warn!("Failed to emit parallel goal error: {}", emit_error);
+            }
+            return Err(message);
+        }
+    };
 
-    Ok(SubmitParallelGoalResponse { best_result })
+    Ok(SubmitParallelGoalResponse {
+        goal_id,
+        best_result,
+    })
 }
 
 #[tauri::command]

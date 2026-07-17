@@ -5,6 +5,8 @@ import {
   applyAgentTaskGoalError,
   applyAgentTaskGoalPlanCreated,
   applyAgentTaskGoalProgress,
+  applyAgentTaskGoalExecutionCompleted,
+  applyAgentTaskGoalExecutionStarted,
   applyAgentTaskGoalStepCompleted,
   applyAgentTaskGoalStepStarted,
   applyAgentTaskGoalSubmitted,
@@ -120,6 +122,58 @@ describe('agentTaskStore goal event reducers', () => {
     expect(task?.completedAt).toBeDefined();
     expect(liveStep?.status).toBe('failed');
     expect(liveStep?.completedAt).toBeInstanceOf(Date);
+  });
+
+  it('reflects native parallel execution from engine start through completion', () => {
+    applyAgentTaskGoalExecutionStarted(
+      {
+        goal_id: 'goal-parallel',
+        description: 'Analyze all files',
+      },
+      'parallel',
+    );
+
+    expect(useAgentTaskStore.getState().tasks).toEqual([
+      expect.objectContaining({
+        id: 'goal-parallel',
+        status: 'running',
+        executionMode: 'parallel',
+      }),
+    ]);
+
+    applyAgentTaskGoalExecutionCompleted({
+      goal_id: 'goal-parallel',
+      success: true,
+    });
+
+    expect(useAgentTaskStore.getState().tasks).toEqual([
+      expect.objectContaining({
+        id: 'goal-parallel',
+        status: 'completed',
+        completedAt: expect.any(String),
+      }),
+    ]);
+  });
+
+  it('does not let a late start event downgrade an engine-terminal task', () => {
+    useAgentTaskStore.setState({
+      tasks: [
+        {
+          id: 'goal-terminal',
+          goal: 'Finished goal',
+          status: 'completed',
+          createdAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    applyAgentTaskGoalExecutionStarted(
+      { goal_id: 'goal-terminal', description: 'Finished goal' },
+      'swarm',
+    );
+
+    expect(useAgentTaskStore.getState().tasks[0]?.status).toBe('completed');
   });
 
   it('caps retained live task progress for long-running demo sessions', () => {
