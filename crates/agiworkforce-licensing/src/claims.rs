@@ -1,5 +1,5 @@
 //! License claims — the signed payload of an `.agilicense` file. Mirrors
-//! `packages/licensing/src/claims.ts` (design §2.1) exactly.
+//! `packages/contracts/licensing/src/claims.ts` (design §2.1) exactly.
 //!
 //! Shape-only validation: `features` is an OPEN string array (product capability
 //! flags are a founder pricing/edition decision, populated out of band — never
@@ -59,7 +59,9 @@ impl LicenseClaims {
             ("orgName", &self.org_name),
         ] {
             if value.is_empty() {
-                return Err(format!("license claims field \"{field}\" must be non-empty"));
+                return Err(format!(
+                    "license claims field \"{field}\" must be non-empty"
+                ));
             }
         }
         Ok(())

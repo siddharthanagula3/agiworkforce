@@ -466,6 +466,8 @@ If not found:
             }),
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let candidates = router.candidates(&request, &preferences);

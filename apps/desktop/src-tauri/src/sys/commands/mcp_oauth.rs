@@ -27,7 +27,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::RwLock;
+use tokio::time::Duration;
 
 // ============================================================================
 // Connector → MCP Server Registry
@@ -247,6 +249,25 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         .iter()
         .find(|(id, _)| *id == connector_id)
         .map(|(_, mapping)| mapping.clone())
+}
+
+/// Reverse lookup: map an MCP `server_name` (e.g. "connector-github") back to
+/// its connector catalog id (e.g. "github").
+///
+/// The per-tool connector permission store
+/// (`packages/ui/unified-chat/src/lib/connectorPermissionStore.ts`, backed by
+/// `connector_permission_get`/`connector_permission_set` in
+/// `connector_permissions.rs`) is keyed by this catalog id, while MCP tool
+/// calls only carry the MCP `server_name`. Without this mapping the two
+/// never compare equal (e.g. "github" vs "connector-github") and a saved
+/// permission silently never matches at lookup time. Returns `None` for MCP
+/// servers outside the connector catalog (custom/user-added servers), which
+/// have no catalog id — callers should fall back to the raw server name.
+pub(crate) fn connector_id_for_server_name(server_name: &str) -> Option<&'static str> {
+    CONNECTOR_MCP_MAPPINGS
+        .iter()
+        .find(|(_, mapping)| mapping.server_name == server_name)
+        .map(|(id, _)| *id)
 }
 
 /// Every connector id that has a real, working MCP server mapping — i.e.
@@ -526,6 +547,12 @@ struct PendingOAuthFlow {
     code_verifier: String,
     created_at: u64,
     redirect_uri: String, // AUDIT-FIX: H-3 — captured loopback URI
+    /// The literal connector id the frontend started the flow for (e.g.
+    /// "gmail", "google_drive", "google_calendar" — several distinct
+    /// connector ids can share one `McpOAuthProvider` bucket). Captured so
+    /// the loopback callback listener (AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01)
+    /// can activate the right MCP server once tokens are stored.
+    connector_id: String,
 }
 
 // ============================================================================
@@ -869,6 +896,12 @@ pub async fn mcp_oauth_start(
     state: tauri::State<'_, McpOAuthState>,
     app: tauri::AppHandle,
 ) -> Result<OAuthStartResponse, String> {
+    // The frontend passes the connector catalog id here (e.g. "gmail",
+    // "google_drive" — see `connectorsStore.connect(id)` ->
+    // `McpClient.oauthStartRaw(id)`), which is more specific than the
+    // canonical `McpOAuthProvider` bucket it resolves to below. Captured so
+    // the loopback callback listener can activate the right MCP server.
+    let connector_id = provider.clone();
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
@@ -908,7 +941,6 @@ pub async fn mcp_oauth_start(
         .local_addr()
         .map_err(|e| format!("Failed to read loopback port: {}", e))?
         .port();
-    drop(listener); // listener is reopened on the callback handler invocation
     let redirect_uri = oauth_provider.redirect_uri(port);
 
     let mut auth_url = format!(
@@ -959,9 +991,37 @@ pub async fn mcp_oauth_start(
                 code_verifier: pkce.code_verifier,
                 created_at: McpOAuthState::now(),
                 redirect_uri: redirect_uri.clone(), // AUDIT-FIX: H-3
+                connector_id: connector_id.clone(),
             },
         );
     }
+
+    // AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01: the listener above used to be
+    // dropped right after reading its assigned port, with a comment claiming
+    // it would be "reopened on the callback handler invocation" — nothing
+    // ever did that, so no process was listening on `redirect_uri` and the
+    // OAuth flow could never complete. Keep the listener alive and hand it to
+    // a background task that serves exactly one request (the provider's
+    // redirect), completes the token exchange, and activates the connector's
+    // MCP server — all inside this process. This intentionally does NOT
+    // route back out through the OS via the `agiworkforce://` custom-scheme
+    // deep link (see `useDeepLink.ts`): doing so would reintroduce the exact
+    // custom-scheme hijack risk that moving `redirect_uri` to a loopback
+    // interface (AUDIT-FIX: H-3, above) was meant to close.
+    let pending_flows_for_listener = state.pending_flows.clone();
+    let http_client_for_listener = state.http_client.clone();
+    let callback_state = oauth_state.clone();
+    let app_for_listener = app.clone();
+    tauri::async_runtime::spawn(async move {
+        run_oauth_loopback_listener(
+            listener,
+            callback_state,
+            pending_flows_for_listener,
+            http_client_for_listener,
+            app_for_listener,
+        )
+        .await;
+    });
 
     // Open browser using platform-specific commands
     let auth_url_clone = auth_url.clone();
@@ -984,30 +1044,37 @@ pub async fn mcp_oauth_start(
     })
 }
 
-/// Handle OAuth callback with authorization code
+/// Validate the CSRF `callback_state`, exchange `code` for tokens with the
+/// provider recorded in the matching pending flow, and persist them.
 ///
-/// Exchanges the authorization code for access tokens and stores them
-/// encrypted in the database.
-#[tauri::command]
-pub async fn mcp_oauth_callback(
-    provider: String,
+/// Shared by `mcp_oauth_callback` (the legacy custom-scheme deep-link path —
+/// still a valid Tauri command surface, kept for backward compatibility) and
+/// `run_oauth_loopback_listener` (the primary completion path since
+/// AUDIT-FIX H-3 moved `redirect_uri` off the custom scheme onto a loopback
+/// HTTP interface). `expected_provider`, when `Some`, must match the pending
+/// flow's stored provider or the exchange is rejected without consuming the
+/// flow — preserves `mcp_oauth_callback`'s original cross-check against its
+/// `provider` argument (sourced from the deep-link URL) so a caller can
+/// retry with the correct provider instead of losing the pending flow.
+async fn complete_oauth_exchange(
+    pending_flows: &Arc<RwLock<HashMap<String, PendingOAuthFlow>>>,
+    http_client: &reqwest::Client,
     code: String,
     callback_state: String,
-    state: tauri::State<'_, McpOAuthState>,
-) -> Result<OAuthTokenResponse, String> {
-    let oauth_provider = McpOAuthProvider::from_str(&provider)
-        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
-
+    expected_provider: Option<McpOAuthProvider>,
+) -> Result<(McpOAuthProvider, String, OAuthTokenResponse), String> {
     // Validate and consume pending flow under one write lock to avoid replay races.
     let pending_flow = {
-        let mut flows = state.pending_flows.write().await;
+        let mut flows = pending_flows.write().await;
         let flow = flows
             .get(&callback_state)
             .cloned()
             .ok_or_else(|| "Invalid or expired OAuth state".to_string())?;
 
-        if flow.provider != oauth_provider {
-            return Err("Provider mismatch".to_string());
+        if let Some(expected) = expected_provider {
+            if flow.provider != expected {
+                return Err("Provider mismatch".to_string());
+            }
         }
 
         if McpOAuthState::now().saturating_sub(flow.created_at) >= 600 {
@@ -1019,6 +1086,9 @@ pub async fn mcp_oauth_callback(
             .remove(&callback_state)
             .ok_or_else(|| "Invalid or expired OAuth state".to_string())?
     };
+
+    let oauth_provider = pending_flow.provider;
+    let connector_id = pending_flow.connector_id.clone();
 
     // Get client credentials
     let (client_id, client_secret) = get_client_credentials(oauth_provider)?;
@@ -1034,8 +1104,7 @@ pub async fn mcp_oauth_callback(
     params.insert("client_secret", &client_secret);
     params.insert("code_verifier", &pending_flow.code_verifier);
 
-    let response = state
-        .http_client
+    let response = http_client
         .post(oauth_provider.token_url())
         .header("Accept", "application/json")
         .form(&params)
@@ -1090,7 +1159,7 @@ pub async fn mcp_oauth_callback(
     let expires_at = expires_in.map(|secs| McpOAuthState::now() as i64 + secs as i64);
 
     // Fetch user info
-    let user_info = fetch_user_info(oauth_provider, &access_token, &state.http_client)
+    let user_info = fetch_user_info(oauth_provider, &access_token, http_client)
         .await
         .ok();
 
@@ -1106,15 +1175,306 @@ pub async fn mcp_oauth_callback(
     store_tokens(oauth_provider, &stored_tokens)?;
 
     tracing::info!(
+        "OAuth tokens stored for provider: {} (connector: {})",
+        oauth_provider.as_str(),
+        connector_id
+    );
+
+    Ok((
+        oauth_provider,
+        connector_id,
+        OAuthTokenResponse {
+            provider: oauth_provider.as_str().to_string(),
+            connected: true,
+            expires_at,
+        },
+    ))
+}
+
+/// Handle OAuth callback with authorization code
+///
+/// Exchanges the authorization code for access tokens and stores them
+/// encrypted in the database. This is the legacy custom-scheme deep-link
+/// completion path (`useDeepLink.ts` parsing an `agiworkforce://oauth/mcp/…`
+/// URL); the primary path since AUDIT-FIX H-3 is the loopback HTTP listener
+/// spawned by `mcp_oauth_start` (`run_oauth_loopback_listener`), which calls
+/// [`complete_oauth_exchange`] directly.
+#[tauri::command]
+pub async fn mcp_oauth_callback(
+    provider: String,
+    code: String,
+    callback_state: String,
+    state: tauri::State<'_, McpOAuthState>,
+) -> Result<OAuthTokenResponse, String> {
+    let oauth_provider = McpOAuthProvider::from_str(&provider)
+        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
+
+    let (_matched_provider, _connector_id, response) = complete_oauth_exchange(
+        &state.pending_flows,
+        &state.http_client,
+        code,
+        callback_state,
+        Some(oauth_provider),
+    )
+    .await?;
+
+    tracing::info!(
         "OAuth callback completed for provider: {}",
         oauth_provider.as_str()
     );
 
-    Ok(OAuthTokenResponse {
-        provider: oauth_provider.as_str().to_string(),
-        connected: true,
-        expires_at,
-    })
+    Ok(response)
+}
+
+// ============================================================================
+// Loopback OAuth Callback Listener (AUDIT-FIX OAUTH-LOOPBACK-COMPLETION-01)
+// ============================================================================
+
+/// Serves exactly one HTTP request on `listener` — the OAuth provider's
+/// redirect to our loopback `redirect_uri` — then shuts down. Bounded to 5
+/// minutes; if nothing arrives in that window the pending flow is dropped so
+/// it cannot be replayed later, and the frontend's own client-side timeout
+/// (`OAUTH_TIMEOUT_MS` in `connectorsStore.ts`) reports the failure to the user.
+async fn run_oauth_loopback_listener(
+    listener: tokio::net::TcpListener,
+    expected_state: String,
+    pending_flows: Arc<RwLock<HashMap<String, PendingOAuthFlow>>>,
+    http_client: reqwest::Client,
+    app: tauri::AppHandle,
+) {
+    let accept_result = tokio::time::timeout(Duration::from_secs(300), listener.accept()).await;
+
+    let mut stream = match accept_result {
+        Ok(Ok((stream, _addr))) => stream,
+        Ok(Err(e)) => {
+            tracing::warn!("[MCP OAuth] Loopback listener accept failed: {}", e);
+            pending_flows.write().await.remove(&expected_state);
+            return;
+        }
+        Err(_) => {
+            tracing::warn!(
+                "[MCP OAuth] Loopback listener timed out waiting for the provider redirect"
+            );
+            pending_flows.write().await.remove(&expected_state);
+            return;
+        }
+    };
+
+    let path = match read_http_request_path(&mut stream).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(
+                "[MCP OAuth] Failed to read loopback callback request: {}",
+                e
+            );
+            pending_flows.write().await.remove(&expected_state);
+            return;
+        }
+    };
+
+    let query_url = match url::Url::parse(&format!("http://127.0.0.1{}", path)) {
+        Ok(u) => u,
+        Err(e) => {
+            tracing::warn!(
+                "[MCP OAuth] Failed to parse loopback callback path '{}': {}",
+                path,
+                e
+            );
+            let _ = write_http_response(
+                &mut stream,
+                &oauth_result_html(false, "Invalid callback request."),
+            )
+            .await;
+            pending_flows.write().await.remove(&expected_state);
+            return;
+        }
+    };
+
+    let params: HashMap<String, String> = query_url.query_pairs().into_owned().collect();
+    let code = params.get("code").cloned();
+    let callback_state = params.get("state").cloned().unwrap_or_default();
+    let error = params.get("error").cloned();
+    let error_description = params.get("error_description").cloned().unwrap_or_default();
+
+    // The redirect_uri is unique per flow (a fresh ephemeral port every call
+    // to `mcp_oauth_start`), so the incoming state should always match. Still
+    // validate explicitly rather than trusting "only one flow could ever hit
+    // this port" as a substitute for CSRF protection.
+    if callback_state != expected_state {
+        tracing::warn!("[MCP OAuth] Loopback callback state mismatch; discarding request");
+        let _ = write_http_response(
+            &mut stream,
+            &oauth_result_html(
+                false,
+                "Authorization state mismatch. Please try connecting again.",
+            ),
+        )
+        .await;
+        pending_flows.write().await.remove(&expected_state);
+        return;
+    }
+
+    if let Some(error) = error {
+        tracing::warn!(
+            "[MCP OAuth] Provider returned an error on loopback callback: {} ({})",
+            error,
+            error_description
+        );
+        let message = if error_description.is_empty() {
+            error.clone()
+        } else {
+            error_description.clone()
+        };
+        let _ = write_http_response(&mut stream, &oauth_result_html(false, &message)).await;
+        emit_oauth_completion_events(&app, None, Some(error), Some(error_description));
+        pending_flows.write().await.remove(&expected_state);
+        return;
+    }
+
+    let Some(code) = code else {
+        let _ = write_http_response(
+            &mut stream,
+            &oauth_result_html(false, "Missing authorization code in provider redirect."),
+        )
+        .await;
+        pending_flows.write().await.remove(&expected_state);
+        return;
+    };
+
+    match complete_oauth_exchange(&pending_flows, &http_client, code, callback_state, None).await {
+        Ok((oauth_provider, connector_id, _response)) => {
+            let _ = write_http_response(
+                &mut stream,
+                &oauth_result_html(true, "You can return to AGI Workforce."),
+            )
+            .await;
+
+            // Best-effort: activate the MCP server immediately so the
+            // connector is usable without a manual reconnect step. A failure
+            // here does not roll back the already-stored tokens — the user
+            // can retry activation from Settings → Connectors.
+            if let Err(e) = connect_connector_internal(&connector_id, &app).await {
+                tracing::warn!(
+                    "[MCP OAuth] Tokens stored for '{}' but connector activation failed: {}",
+                    connector_id,
+                    e
+                );
+            }
+
+            emit_oauth_completion_events(&app, Some((oauth_provider, connector_id)), None, None);
+        }
+        Err(e) => {
+            tracing::warn!("[MCP OAuth] Loopback token exchange failed: {}", e);
+            let _ = write_http_response(&mut stream, &oauth_result_html(false, &e)).await;
+            emit_oauth_completion_events(&app, None, Some("exchange_failed".to_string()), Some(e));
+        }
+    }
+}
+
+/// Read just enough of an HTTP request to extract its request-line path
+/// (`GET /oauth/callback?code=…&state=… HTTP/1.1`). Bounded so a misbehaving
+/// or malicious connection on the loopback port cannot hold this task open
+/// indefinitely or exhaust memory.
+async fn read_http_request_path(
+    stream: &mut tokio::net::TcpStream,
+) -> Result<String, std::io::Error> {
+    let mut buf = Vec::with_capacity(4096);
+    let mut chunk = [0u8; 1024];
+    loop {
+        let n = stream.read(&mut chunk).await?;
+        if n == 0 {
+            break;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+        if buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.len() > 16_384 {
+            break;
+        }
+    }
+    let text = String::from_utf8_lossy(&buf);
+    let path = text
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("/")
+        .to_string();
+    Ok(path)
+}
+
+/// Write a minimal, self-contained HTTP response and close the connection.
+async fn write_http_response(
+    stream: &mut tokio::net::TcpStream,
+    body: &str,
+) -> Result<(), std::io::Error> {
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    stream.write_all(response.as_bytes()).await?;
+    stream.flush().await
+}
+
+/// Minimal HTML page shown in the user's browser tab after the OAuth
+/// provider redirects back to the loopback listener.
+fn oauth_result_html(success: bool, message: &str) -> String {
+    let heading = if success {
+        "You can return to AGI Workforce"
+    } else {
+        "Something went wrong"
+    };
+    let escaped_message = message
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;");
+    format!(
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>AGI Workforce</title>\
+<style>body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0b0b0c;color:#eaeaea;\
+display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}\
+.card{{max-width:420px;text-align:center;padding:32px}}h1{{font-size:20px;margin-bottom:8px}}\
+p{{color:#9a9a9a;font-size:14px}}</style></head><body><div class=\"card\">\
+<h1>{heading}</h1><p>{escaped_message}</p></div></body></html>"
+    )
+}
+
+/// Emit the OAuth completion signal for the frontend once the loopback
+/// listener finishes (success, provider error, or exchange failure).
+///
+/// `mcp:connection_changed` / `mcp:tools_updated` (emitted inside
+/// `connect_connector_internal`, mirroring `mcp_connect_connector`) already
+/// refresh the live MCP tools/servers store (`useAgenticEvents.ts` ->
+/// `useMcpStore`). This additionally emits `mcp-oauth-callback` /
+/// `mcp-oauth-error` — the same event names `ConnectorGallery.tsx`'s
+/// `window.addEventListener` listens for — so a small frontend follow-up
+/// (`listen('mcp-oauth-callback', e => window.dispatchEvent(new CustomEvent(...)))`)
+/// can bridge Tauri events into that listener without a further backend
+/// change. NOTE: as of this fix nothing performs that bridge, so
+/// `ConnectorGallery`'s local "Connecting…" spinner and
+/// `connectorsStore.pendingOAuth` do not yet clear from this signal alone —
+/// see the open risk noted alongside this fix.
+fn emit_oauth_completion_events(
+    app: &tauri::AppHandle,
+    succeeded: Option<(McpOAuthProvider, String)>,
+    error: Option<String>,
+    error_description: Option<String>,
+) {
+    if let Some((provider, connector_id)) = succeeded {
+        let _ = app.emit(
+            "mcp-oauth-callback",
+            serde_json::json!({
+                "provider": provider.as_str(),
+                "connectorId": connector_id,
+            }),
+        );
+        let _ = app.emit("connector:connected", &connector_id);
+    } else {
+        let _ = app.emit(
+            "mcp-oauth-error",
+            serde_json::json!({
+                "error": error.unwrap_or_else(|| "oauth_failed".to_string()),
+                "error_description": error_description.unwrap_or_default(),
+            }),
+        );
+    }
 }
 
 /// Check the connection status for a provider
@@ -1393,9 +1753,7 @@ pub async fn mcp_oauth_set_credentials(
 /// `get_client_credentials` and `mcp_oauth_set_credentials` do, so badge state
 /// and actual credential lookup are always in sync.
 #[tauri::command]
-pub async fn mcp_oauth_credentials_status(
-    provider: String,
-) -> Result<serde_json::Value, String> {
+pub async fn mcp_oauth_credentials_status(provider: String) -> Result<serde_json::Value, String> {
     let oauth_provider = McpOAuthProvider::from_str(&provider)
         .ok_or_else(|| format!("Unknown provider: {}", provider))?;
 
@@ -1570,6 +1928,14 @@ async fn fetch_user_info(
     }
 }
 
+/// Server-name prefix `CustomRemoteMcpConnectorDialog.tsx`'s
+/// `slugifyServerName` always applies to a user-added remote MCP connector
+/// (e.g. "custom-acme-mcp"). These entries are written directly into
+/// `config.mcp_servers` — never through `get_connector_mcp_mapping` or the
+/// OAuth/API-key credential tables — so they need a separate inclusion rule
+/// in `resolve_connected_providers` (see AUDIT note there).
+const CUSTOM_MCP_SERVER_PREFIX: &str = "custom-";
+
 /// Every connector id `mcp_list_connected_providers` will consider.
 const KNOWN_CONNECTOR_PROVIDERS: &[&str] = &[
     "gmail",
@@ -1694,6 +2060,27 @@ fn resolve_connected_providers(
         }
     }
 
+    // AUDIT-FIX (custom-connectors-never-show-connected-01): a user-added
+    // remote MCP connector (CustomRemoteMcpConnectorDialog.tsx) is written
+    // straight into `config.mcp_servers` under a `custom-<slug>` key via
+    // `mcp_update_config` — which reconnects enabled servers immediately, so
+    // by the time the dialog reports success the server is genuinely live.
+    // It never goes through `get_connector_mcp_mapping` or the OAuth/API-key
+    // credential tables (there is no catalog id for it, nothing to look up
+    // above), so the loop over `known_providers` can never surface it,
+    // leaving `mcp_list_connected_providers` — and therefore
+    // ConnectorGallery's "Connected" section — permanently blind to it even
+    // though it works in chat. It meets the identical bar the loop above
+    // uses for catalog connectors (server name present in the persisted
+    // config), so include it here on that same basis.
+    let mut custom_server_names: Vec<String> = configured_servers
+        .iter()
+        .filter(|name| name.starts_with(CUSTOM_MCP_SERVER_PREFIX))
+        .cloned()
+        .collect();
+    custom_server_names.sort();
+    providers.extend(custom_server_names);
+
     Ok(providers)
 }
 
@@ -1753,9 +2140,21 @@ pub async fn mcp_connect_connector(
     connector_id: String,
     app_handle: tauri::AppHandle,
 ) -> Result<(), String> {
+    connect_connector_internal(&connector_id, &app_handle).await
+}
+
+/// Core logic behind [`mcp_connect_connector`], split out so the OAuth
+/// loopback callback listener (`run_oauth_loopback_listener`, AUDIT-FIX
+/// OAUTH-LOOPBACK-COMPLETION-01) can activate a connector's MCP server
+/// immediately after storing its tokens, without depending on a separate
+/// frontend-initiated `mcp_connect_connector` call.
+async fn connect_connector_internal(
+    connector_id: &str,
+    app_handle: &tauri::AppHandle,
+) -> Result<(), String> {
     tracing::info!("Connecting connector MCP server: {}", connector_id);
 
-    let mapping = match get_connector_mcp_mapping(&connector_id) {
+    let mapping = match get_connector_mcp_mapping(connector_id) {
         Some(m) => m,
         None => {
             // No MCP mapping for this connector — mark connected without MCP
@@ -1763,7 +2162,7 @@ pub async fn mcp_connect_connector(
                 "No MCP server mapping for connector '{}', skipping MCP setup",
                 connector_id
             );
-            let _ = app_handle.emit("connector:connected", &connector_id);
+            let _ = app_handle.emit("connector:connected", connector_id);
             return Ok(());
         }
     };
@@ -1811,7 +2210,7 @@ pub async fn mcp_connect_connector(
             // machine-key fallback when the vault isn't configured).
             let encryption_state =
                 app_handle.state::<crate::sys::security::MasterPasswordEncryption>();
-            let api_key = retrieve_api_key(Some(encryption_state.inner()), &connector_id)?;
+            let api_key = retrieve_api_key(Some(encryption_state.inner()), connector_id)?;
             for (env_var, _desc) in mapping.env_keys {
                 runtime_env.insert(env_var.to_string(), api_key.clone());
                 persisted_env.insert(
@@ -1864,7 +2263,7 @@ pub async fn mcp_connect_connector(
                 )
             })?;
         emit_mcp_event(
-            &app_handle,
+            app_handle,
             McpEvent::ServerConnectionChanged {
                 server_name: server_name.clone(),
                 connected: false,
@@ -1872,7 +2271,7 @@ pub async fn mcp_connect_connector(
             },
         );
         emit_mcp_event(
-            &app_handle,
+            app_handle,
             McpEvent::ToolsUpdated {
                 server_name: server_name.clone(),
                 tool_count: 0,
@@ -1929,7 +2328,7 @@ pub async fn mcp_connect_connector(
         }
         let err_message = format!("Failed to connect MCP server '{}': {}", server_name, err);
         emit_mcp_event(
-            &app_handle,
+            app_handle,
             McpEvent::ServerConnectionChanged {
                 server_name: server_name.clone(),
                 connected: false,
@@ -1945,7 +2344,7 @@ pub async fn mcp_connect_connector(
         .map(|tools| tools.len())
         .unwrap_or(0);
     emit_mcp_event(
-        &app_handle,
+        app_handle,
         McpEvent::ServerConnectionChanged {
             server_name: server_name.clone(),
             connected: true,
@@ -1953,7 +2352,7 @@ pub async fn mcp_connect_connector(
         },
     );
     emit_mcp_event(
-        &app_handle,
+        app_handle,
         McpEvent::ToolsUpdated {
             server_name: server_name.clone(),
             tool_count,
@@ -1967,7 +2366,7 @@ pub async fn mcp_connect_connector(
     );
 
     // Emit events
-    let _ = app_handle.emit("connector:connected", &connector_id);
+    let _ = app_handle.emit("connector:connected", connector_id);
 
     Ok(())
 }
@@ -2374,6 +2773,30 @@ mod tests {
         .await;
 
         assert!(!providers.contains(&"atlassian".to_string()));
+    }
+
+    /// AUDIT-FIX (custom-connectors-never-show-connected-01): a live
+    /// `custom-*` server (added via CustomRemoteMcpConnectorDialog.tsx and
+    /// persisted through `mcp_update_config`) must be reported connected
+    /// even though it has no `get_connector_mcp_mapping` entry and no
+    /// OAuth/API-key credential row — those only apply to catalog
+    /// connectors, not user-added remote MCP servers.
+    #[tokio::test]
+    async fn live_custom_mcp_server_is_reported_connected_without_catalog_credentials() {
+        let providers = with_temp_settings_db(|conn| async move {
+            let mut configured_servers = std::collections::HashSet::new();
+            configured_servers.insert("custom-acme-mcp".to_string());
+            configured_servers.insert("connector-something-else".to_string());
+
+            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
+                .expect("resolve connected providers")
+        })
+        .await;
+
+        assert!(providers.contains(&"custom-acme-mcp".to_string()));
+        // A non-custom, non-catalog server name must still never resolve —
+        // this test doesn't loosen the existing unmapped-id guarantee.
+        assert!(!providers.contains(&"connector-something-else".to_string()));
     }
 
     #[test]

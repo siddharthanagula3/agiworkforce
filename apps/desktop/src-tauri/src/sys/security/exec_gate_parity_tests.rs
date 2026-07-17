@@ -656,7 +656,13 @@ fn requires_confirmation_still_true_for_old_true_cases() {
 /// as `false` — everyday commands must not start prompting.
 #[test]
 fn requires_confirmation_still_false_for_old_false_cases() {
-    for command in ["ls -la", "git status", "cat README.md", "cargo build", "echo hello"] {
+    for command in [
+        "ls -la",
+        "git status",
+        "cat README.md",
+        "cargo build",
+        "echo hello",
+    ] {
         assert!(
             !requires_confirmation(command),
             "requires_confirmation({:?}) regressed to true",
@@ -857,7 +863,15 @@ fn interactive_input_parity() {
     }
     // Functional guard: the pass-through cases must still pass (blocking all
     // keystrokes would break the terminal).
-    for input in ["", "x", "\x1b[A", "\x1b[B", "\x1b[1;5C", "ls -la\n", "git status\n"] {
+    for input in [
+        "",
+        "x",
+        "\x1b[A",
+        "\x1b[B",
+        "\x1b[1;5C",
+        "ls -la\n",
+        "git status\n",
+    ] {
         assert!(
             validate_interactive_input(input, None).is_ok(),
             "interactive input {:?} must keep passing",

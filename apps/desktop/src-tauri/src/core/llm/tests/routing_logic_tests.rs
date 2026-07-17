@@ -19,11 +19,12 @@
 mod tests {
     use std::error::Error;
 
+    use crate::core::llm::llm_router::RouterPreferences;
     use crate::core::llm::{
         CostPriority, LLMProvider, LLMRequest, LLMResponse, LLMRouter, Provider, RouterContext,
         RoutingStrategy, TaskType,
     };
-    use crate::core::llm::llm_router::RouterPreferences;
+    use agiworkforce_model_registry::TrustMode;
 
     // ------------------------------------------------------------------
     // MockProvider -- a zero-cost stub that satisfies `has_provider` checks
@@ -124,6 +125,7 @@ mod tests {
         let cloud_prefs = RouterPreferences {
             prefer_cloud_credits: true,
             local_only: false,
+            strategy: RoutingStrategy::CostOptimized,
             ..Default::default()
         };
         let cloud_candidates = router.candidates(&request, &cloud_prefs);
@@ -132,6 +134,94 @@ mod tests {
                 .iter()
                 .any(|c| c.provider == Provider::ManagedCloud),
             "Non-local mode should still allow a ManagedCloud candidate"
+        );
+    }
+
+    #[test]
+    fn local_trust_mode_rejects_direct_byok_providers() {
+        let router = router_with_all_providers();
+        let request = LLMRequest::default();
+        let preferences = RouterPreferences {
+            provider: Some(Provider::OpenAI),
+            model: Some("gpt-5.5".to_string()),
+            trust_mode: Some(TrustMode::Local),
+            ..Default::default()
+        };
+
+        assert!(router.candidates(&request, &preferences).is_empty());
+    }
+
+    #[test]
+    fn byok_trust_mode_rejects_local_and_managed_providers() {
+        let router = router_with_all_providers();
+        let request = LLMRequest::default();
+
+        for provider in [Provider::Ollama, Provider::ManagedCloud] {
+            let preferences = RouterPreferences {
+                provider: Some(provider),
+                trust_mode: Some(TrustMode::Byok),
+                ..Default::default()
+            };
+            assert!(
+                router.candidates(&request, &preferences).is_empty(),
+                "BYOK boundary admitted {provider:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn trust_modes_admit_only_their_own_provider_class() {
+        let router = router_with_all_providers();
+        let request = LLMRequest::default();
+        let cases = [
+            (TrustMode::Local, Provider::Ollama),
+            (TrustMode::Byok, Provider::OpenAI),
+            (TrustMode::ManagedCloud, Provider::ManagedCloud),
+        ];
+
+        for (trust_mode, provider) in cases {
+            let preferences = RouterPreferences {
+                provider: Some(provider),
+                trust_mode: Some(trust_mode),
+                ..Default::default()
+            };
+            let candidates = router.candidates(&request, &preferences);
+            assert_eq!(candidates.len(), 1, "{trust_mode:?} rejected {provider:?}");
+            assert_eq!(candidates[0].provider, provider);
+        }
+    }
+
+    #[test]
+    fn managed_cloud_auto_fails_closed_while_desktop_cloud_profile_is_unwired() {
+        let router = router_with_all_providers();
+        let request = LLMRequest {
+            messages: vec![crate::core::llm::ChatMessage {
+                role: "user".to_string(),
+                content: "Debug this Rust function".to_string(),
+                tool_calls: None,
+                tool_call_id: None,
+                multimodal_content: None,
+            }],
+            ..LLMRequest::default()
+        };
+        let preferences = RouterPreferences {
+            strategy: RoutingStrategy::AutoPremium,
+            context: Some(intelligent_context(
+                "max",
+                Some("coding"),
+                Some("chat"),
+                None,
+            )),
+            prefer_cloud_credits: true,
+            local_only: false,
+            managed_cloud_only: true,
+            ..RouterPreferences::default()
+        };
+
+        let candidates = router.candidates(&request, &preferences);
+        assert!(
+            candidates.is_empty(),
+            "Desktop managed cloud must remain unavailable until desktop/cloud-chat is wired"
         );
     }
 

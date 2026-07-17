@@ -42,7 +42,10 @@ pub fn enter_worktree(repo: &Path, opts: WorktreeOptions) -> Result<Worktree> {
     // `-b <branch>` is an option-argument, so guard the branch name explicitly
     // to keep a dash-prefixed value from being mis-parsed.
     if opts.branch.starts_with('-') {
-        anyhow::bail!("worktree branch name must not start with '-': {:?}", opts.branch);
+        anyhow::bail!(
+            "worktree branch name must not start with '-': {:?}",
+            opts.branch
+        );
     }
     if let Some(base) = opts.base.as_deref() {
         if base.starts_with('-') {

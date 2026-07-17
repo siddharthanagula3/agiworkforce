@@ -16,10 +16,18 @@
 use super::types::*;
 use crate::data::cloud_sync;
 use rusqlite::{params, Connection};
+use std::collections::HashSet;
 
 /// Save (INSERT or UPDATE) an artifact to the database.
 pub fn save_artifact_to_db(conn: &Connection, artifact: &Artifact) -> Result<(), String> {
-    let artifact_type_str = artifact.artifact_type.to_string();
+    // Persist the exact cross-surface renderer type. The Rust `artifact_type`
+    // field is intentionally coarser and cannot distinguish react/code,
+    // svg/image, or markdown/document after a restart.
+    let artifact_type_str = if artifact.render_type.trim().is_empty() {
+        artifact.artifact_type.to_string()
+    } else {
+        artifact.render_type.clone()
+    };
     let metadata_json =
         serde_json::to_string(&artifact.metadata).unwrap_or_else(|_| "{}".to_string());
     let conversation_id_str = artifact.conversation_id.map(|id| id.to_string());
@@ -50,15 +58,17 @@ pub fn save_artifact_to_db(conn: &Connection, artifact: &Artifact) -> Result<(),
 
     conn.execute(
         "INSERT INTO artifacts (id, artifact_type, title, content, language, metadata,
-            conversation_id, version, content_hash, status, is_pinned, is_archived,
+            conversation_id, message_id, version, content_hash, status, is_pinned, is_archived,
             tags, created_at, updated_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
         ON CONFLICT(id) DO UPDATE SET
+            artifact_type = excluded.artifact_type,
             title = excluded.title,
             content = excluded.content,
             language = excluded.language,
             metadata = excluded.metadata,
             conversation_id = excluded.conversation_id,
+            message_id = excluded.message_id,
             version = excluded.version,
             content_hash = excluded.content_hash,
             status = excluded.status,
@@ -74,6 +84,7 @@ pub fn save_artifact_to_db(conn: &Connection, artifact: &Artifact) -> Result<(),
             language,
             metadata_json,
             conversation_id_str,
+            artifact.message_id,
             artifact.current_version as i64,
             content_hash,
             status_str,
@@ -100,7 +111,12 @@ pub fn save_artifact_to_db(conn: &Connection, artifact: &Artifact) -> Result<(),
          WHERE id = ?1",
         params![artifact.id],
     )
-    .map_err(|e| format!("Failed to derive artifact app_mode from conversation: {}", e))?;
+    .map_err(|e| {
+        format!(
+            "Failed to derive artifact app_mode from conversation: {}",
+            e
+        )
+    })?;
 
     // CLOUD SYNC HOOK: mark for push if this artifact belongs to a cloud conversation.
     // The gate is entirely inside mark_artifact_for_push (WHERE app_mode='cloud') so
@@ -152,9 +168,9 @@ pub fn load_artifact_from_db(conn: &Connection, id: &str) -> Result<Option<Artif
     let mut stmt = conn
         .prepare(
             "SELECT id, artifact_type, title, content, language, metadata,
-                conversation_id, version, content_hash, status, is_pinned, is_archived,
+                conversation_id, message_id, version, content_hash, status, is_pinned, is_archived,
                 tags, created_at, updated_at
-            FROM artifacts WHERE id = ?1",
+            FROM artifacts WHERE id = ?1 AND deleted_at_utc IS NULL",
         )
         .map_err(|e| format!("Failed to prepare artifact query: {}", e))?;
 
@@ -165,17 +181,18 @@ pub fn load_artifact_from_db(conn: &Connection, id: &str) -> Result<Option<Artif
                 artifact_type: row.get(1)?,
                 title: row.get(2)?,
                 content: row.get(3)?,
-                _language: row.get(4)?,
+                language: row.get(4)?,
                 metadata: row.get(5)?,
                 conversation_id: row.get::<_, Option<String>>(6)?,
-                version: row.get(7)?,
-                _content_hash: row.get(8)?,
-                status: row.get(9)?,
-                is_pinned: row.get(10)?,
-                is_archived: row.get(11)?,
-                tags: row.get(12)?,
-                created_at: row.get(13)?,
-                updated_at: row.get(14)?,
+                message_id: row.get(7)?,
+                version: row.get(8)?,
+                _content_hash: row.get(9)?,
+                status: row.get(10)?,
+                is_pinned: row.get(11)?,
+                is_archived: row.get(12)?,
+                tags: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
             })
         })
         .optional()
@@ -203,13 +220,19 @@ pub fn list_artifacts_from_db(
 
     if let Some(cid) = conversation_id {
         bound_conv_id = cid.to_string();
+        // A conversation reopen is a correctness path, not a browse/list path:
+        // omitting `limit` must load every artifact owned by the conversation.
+        // The global startup cache remains capped in the branch below.
+        let limit_clause = limit
+            .map(|value| format!(" LIMIT {}", value.max(0)))
+            .unwrap_or_default();
         sql = format!(
             "SELECT id, artifact_type, title, content, language, metadata,
-                conversation_id, version, content_hash, status, is_pinned, is_archived,
+                conversation_id, message_id, version, content_hash, status, is_pinned, is_archived,
                 tags, created_at, updated_at
-            FROM artifacts WHERE conversation_id = ?1
-            ORDER BY updated_at DESC LIMIT {}",
-            limit.unwrap_or(500)
+            FROM artifacts WHERE conversation_id = ?1 AND deleted_at_utc IS NULL
+            ORDER BY updated_at DESC{}",
+            limit_clause
         );
         let mut stmt = conn
             .prepare(&sql)
@@ -222,17 +245,18 @@ pub fn list_artifacts_from_db(
                     artifact_type: row.get(1)?,
                     title: row.get(2)?,
                     content: row.get(3)?,
-                    _language: row.get(4)?,
+                    language: row.get(4)?,
                     metadata: row.get(5)?,
                     conversation_id: row.get::<_, Option<String>>(6)?,
-                    version: row.get(7)?,
-                    _content_hash: row.get(8)?,
-                    status: row.get(9)?,
-                    is_pinned: row.get(10)?,
-                    is_archived: row.get(11)?,
-                    tags: row.get(12)?,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
+                    message_id: row.get(7)?,
+                    version: row.get(8)?,
+                    _content_hash: row.get(9)?,
+                    status: row.get(10)?,
+                    is_pinned: row.get(11)?,
+                    is_archived: row.get(12)?,
+                    tags: row.get(13)?,
+                    created_at: row.get(14)?,
+                    updated_at: row.get(15)?,
                 })
             })
             .map_err(|e| format!("Failed to list artifacts: {}", e))?;
@@ -241,9 +265,9 @@ pub fn list_artifacts_from_db(
     } else {
         sql = format!(
             "SELECT id, artifact_type, title, content, language, metadata,
-                conversation_id, version, content_hash, status, is_pinned, is_archived,
+                conversation_id, message_id, version, content_hash, status, is_pinned, is_archived,
                 tags, created_at, updated_at
-            FROM artifacts ORDER BY updated_at DESC LIMIT {}",
+            FROM artifacts WHERE deleted_at_utc IS NULL ORDER BY updated_at DESC LIMIT {}",
             limit.unwrap_or(500)
         );
         let mut stmt = conn
@@ -257,23 +281,120 @@ pub fn list_artifacts_from_db(
                     artifact_type: row.get(1)?,
                     title: row.get(2)?,
                     content: row.get(3)?,
-                    _language: row.get(4)?,
+                    language: row.get(4)?,
                     metadata: row.get(5)?,
                     conversation_id: row.get::<_, Option<String>>(6)?,
-                    version: row.get(7)?,
-                    _content_hash: row.get(8)?,
-                    status: row.get(9)?,
-                    is_pinned: row.get(10)?,
-                    is_archived: row.get(11)?,
-                    tags: row.get(12)?,
-                    created_at: row.get(13)?,
-                    updated_at: row.get(14)?,
+                    message_id: row.get(7)?,
+                    version: row.get(8)?,
+                    _content_hash: row.get(9)?,
+                    status: row.get(10)?,
+                    is_pinned: row.get(11)?,
+                    is_archived: row.get(12)?,
+                    tags: row.get(13)?,
+                    created_at: row.get(14)?,
+                    updated_at: row.get(15)?,
                 })
             })
             .map_err(|e| format!("Failed to list artifacts: {}", e))?;
 
         collect_artifact_rows(conn, rows)
     }
+}
+
+/// Atomically link persisted artifacts to the assistant message that owns
+/// them. This is the durable bridge between the live `chat:artifact` event and
+/// conversation reload. The operation is idempotent for the same
+/// conversation/message pair and rejects cross-conversation or conflicting
+/// ownership.
+pub fn link_artifacts_to_message_in_db(
+    conn: &Connection,
+    conversation_id: i64,
+    message_id: i64,
+    artifact_ids: &[String],
+) -> Result<usize, String> {
+    if conversation_id <= 0 || message_id <= 0 {
+        return Err("Conversation and message IDs must be positive".to_string());
+    }
+
+    let unique_ids: Vec<&str> = artifact_ids
+        .iter()
+        .map(String::as_str)
+        .filter(|id| !id.trim().is_empty())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    if unique_ids.is_empty() {
+        return Ok(0);
+    }
+    let conversation_id_text = conversation_id.to_string();
+
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|error| format!("Failed to begin artifact link transaction: {error}"))?;
+
+    let message_cloud_id: Option<String> = tx
+        .query_row(
+            "SELECT cloud_id FROM messages WHERE id = ?1 AND conversation_id = ?2",
+            params![message_id, conversation_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to validate artifact message owner: {error}"))?
+        .ok_or_else(|| {
+            format!("Message {message_id} does not belong to conversation {conversation_id}")
+        })?;
+
+    for artifact_id in &unique_ids {
+        let row = tx
+            .query_row(
+                "SELECT conversation_id, message_id FROM artifacts WHERE id = ?1",
+                params![artifact_id],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<String>>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|error| format!("Failed to validate artifact {artifact_id}: {error}"))?
+            .ok_or_else(|| format!("Artifact not found: {artifact_id}"))?;
+
+        if row.0.as_deref() != Some(conversation_id_text.as_str()) {
+            return Err(format!(
+                "Artifact {artifact_id} does not belong to conversation {conversation_id}"
+            ));
+        }
+        if let Some(existing_message_id) = row.1 {
+            if existing_message_id != message_id {
+                return Err(format!(
+                    "Artifact {artifact_id} is already linked to message {existing_message_id}"
+                ));
+            }
+        }
+    }
+
+    for artifact_id in &unique_ids {
+        tx.execute(
+            "UPDATE artifacts \
+             SET message_id = ?1, \
+                 message_cloud_id = CASE \
+                     WHEN app_mode = 'cloud' THEN ?2 \
+                     ELSE NULL \
+                 END, \
+                 needs_push = CASE \
+                     WHEN app_mode = 'cloud' AND ?2 IS NOT NULL THEN 1 \
+                     ELSE needs_push \
+                 END \
+             WHERE id = ?3",
+            params![message_id, message_cloud_id, artifact_id],
+        )
+        .map_err(|error| format!("Failed to link artifact {artifact_id}: {error}"))?;
+    }
+
+    tx.commit()
+        .map_err(|error| format!("Failed to commit artifact links: {error}"))?;
+    Ok(unique_ids.len())
 }
 
 /// Delete an artifact and its versions from the database.
@@ -299,9 +420,10 @@ struct RawArtifactRow {
     artifact_type: String,
     title: String,
     content: String,
-    _language: Option<String>,
+    language: Option<String>,
     metadata: Option<String>,
     conversation_id: Option<String>,
+    message_id: Option<i64>,
     version: i64,
     _content_hash: Option<String>,
     status: String,
@@ -367,14 +489,14 @@ fn load_versions_for_artifact(
 
 fn parse_artifact_type(s: &str) -> ArtifactType {
     match s {
-        "code" => ArtifactType::Code,
-        "document" => ArtifactType::Document,
-        "spreadsheet" => ArtifactType::Spreadsheet,
-        "diagram" => ArtifactType::Diagram,
-        "web" => ArtifactType::Web,
+        "code" | "react" | "component" => ArtifactType::Code,
+        "document" | "markdown" | "email" | "research" => ArtifactType::Document,
+        "spreadsheet" | "table" | "csv" => ArtifactType::Spreadsheet,
+        "diagram" | "mermaid" => ArtifactType::Diagram,
+        "web" | "html" => ArtifactType::Web,
         "chart" => ArtifactType::Chart,
         "presentation" => ArtifactType::Presentation,
-        "image" => ArtifactType::Image,
+        "image" | "svg" => ArtifactType::Image,
         _ => ArtifactType::Document,
     }
 }
@@ -399,11 +521,24 @@ fn row_to_artifact(
     let artifact_type = parse_artifact_type(&raw.artifact_type);
     let status = parse_artifact_status(&raw.status, raw.is_archived);
 
-    let metadata: ArtifactMetadata = raw
+    let mut metadata: ArtifactMetadata = raw
         .metadata
         .as_deref()
         .and_then(|s| serde_json::from_str(s).ok())
         .unwrap_or_default();
+
+    // Older rows may have a valid language column but missing/invalid metadata.
+    // Preserve that language when reconstructing code/react artifacts.
+    if matches!(raw.artifact_type.as_str(), "code" | "react" | "component") {
+        if let Some(language) = raw.language.as_deref() {
+            if !matches!(metadata, ArtifactMetadata::Code(_)) {
+                metadata = ArtifactMetadata::Code(CodeMetadata {
+                    language: language.to_string(),
+                    ..Default::default()
+                });
+            }
+        }
+    }
 
     let conversation_id: Option<i64> = raw.conversation_id.as_deref().and_then(|s| s.parse().ok());
 
@@ -425,10 +560,11 @@ fn row_to_artifact(
         id: raw.id,
         title: raw.title,
         artifact_type,
+        render_type: raw.artifact_type,
         content: raw.content,
         metadata,
         conversation_id,
-        message_id: None,
+        message_id: raw.message_id,
         status,
         versions,
         current_version: raw.version as u32,
@@ -498,6 +634,7 @@ mod tests {
             id: id.to_string(),
             title: "Test Artifact".to_string(),
             artifact_type: ArtifactType::Code,
+            render_type: "code".to_string(),
             content: "fn main() {}".to_string(),
             metadata: ArtifactMetadata::default(),
             conversation_id: conv_id,
@@ -516,6 +653,270 @@ mod tests {
             updated_at: now,
             tags: vec![],
             pinned: false,
+        }
+    }
+
+    #[test]
+    fn persistence_round_trip_preserves_render_type_message_owner_and_version() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, created_at, updated_at) \
+             VALUES ('Artifacts', 'u1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content) \
+             VALUES (?1, 'u1', 'assistant', 'Created a component')",
+            params![conversation_id],
+        )
+        .unwrap();
+        let message_id = conn.last_insert_rowid();
+
+        let mut artifact = make_artifact("persist-rich-artifact", Some(conversation_id));
+        artifact.render_type = "react".to_string();
+        artifact.message_id = Some(message_id);
+        artifact.current_version = 3;
+        artifact.metadata = ArtifactMetadata::Code(crate::core::artifacts::CodeMetadata {
+            language: "tsx".to_string(),
+            ..Default::default()
+        });
+        artifact.versions = (1..=3)
+            .map(|version| ArtifactVersion {
+                version,
+                content: format!("component-v{version}"),
+                created_at: Utc::now(),
+                change_description: None,
+                size_bytes: 12,
+                content_hash: format!("hash-{version}"),
+            })
+            .collect();
+
+        save_artifact_to_db(&conn, &artifact).expect("save rich artifact");
+        for version in &artifact.versions {
+            save_artifact_version_to_db(&conn, &artifact.id, version).expect("save version");
+        }
+
+        let loaded = load_artifact_from_db(&conn, &artifact.id)
+            .expect("load query")
+            .expect("persisted artifact");
+        assert_eq!(loaded.render_type, "react");
+        assert_eq!(loaded.message_id, Some(message_id));
+        assert_eq!(loaded.current_version, 3);
+        assert_eq!(loaded.versions.len(), 3);
+        match loaded.metadata {
+            ArtifactMetadata::Code(metadata) => assert_eq!(metadata.language, "tsx"),
+            other => panic!("expected code metadata, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn message_link_is_idempotent_and_rejects_conflicting_ownership() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, created_at, updated_at) \
+             VALUES ('Artifacts', 'u1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        for content in ["first", "second"] {
+            conn.execute(
+                "INSERT INTO messages (conversation_id, user_id, role, content) \
+                 VALUES (?1, 'u1', 'assistant', ?2)",
+                params![conversation_id, content],
+            )
+            .unwrap();
+        }
+        let second_message_id = conn.last_insert_rowid();
+        let first_message_id = second_message_id - 1;
+
+        let artifact = make_artifact("link-artifact", Some(conversation_id));
+        save_artifact_to_db(&conn, &artifact).unwrap();
+        let failed_batch = vec![artifact.id.clone(), "missing-artifact".to_string()];
+        let missing_error = link_artifacts_to_message_in_db(
+            &conn,
+            conversation_id,
+            first_message_id,
+            &failed_batch,
+        )
+        .expect_err("a partially invalid link batch must fail atomically");
+        assert!(missing_error.contains("Artifact not found"));
+        let owner_after_failed_batch: Option<i64> = conn
+            .query_row(
+                "SELECT message_id FROM artifacts WHERE id = ?1",
+                params![artifact.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            owner_after_failed_batch, None,
+            "validation failure must not leave a partial message link"
+        );
+
+        let ids = vec![artifact.id.clone(), artifact.id.clone()];
+
+        assert_eq!(
+            link_artifacts_to_message_in_db(&conn, conversation_id, first_message_id, &ids,)
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            link_artifacts_to_message_in_db(&conn, conversation_id, first_message_id, &ids,)
+                .unwrap(),
+            1,
+            "repeating the same association must be idempotent"
+        );
+
+        let conflict =
+            link_artifacts_to_message_in_db(&conn, conversation_id, second_message_id, &ids)
+                .expect_err("an artifact cannot be reassigned to a different message");
+        assert!(conflict.contains("already linked"));
+
+        let persisted_owner: i64 = conn
+            .query_row(
+                "SELECT message_id FROM artifacts WHERE id = ?1",
+                params![artifact.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(persisted_owner, first_message_id);
+    }
+
+    #[test]
+    fn cloud_message_link_persists_portable_owner_and_requeues_artifact_sync() {
+        let conn = fresh_db();
+        let conversation_cloud_id = "019b7ba6-6d81-7000-8000-000000000010";
+        let message_cloud_id = "019b7ba6-6d81-7000-8000-000000000011";
+        conn.execute(
+            "INSERT INTO conversations \
+             (title, user_id, app_mode, cloud_id, created_at, updated_at) \
+             VALUES ('Cloud artifacts', 'u1', 'cloud', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            params![conversation_cloud_id],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages \
+             (conversation_id, conversation_cloud_id, user_id, role, content, cloud_id) \
+             VALUES (?1, ?2, 'u1', 'assistant', 'Created it', ?3)",
+            params![conversation_id, conversation_cloud_id, message_cloud_id],
+        )
+        .unwrap();
+        let message_id = conn.last_insert_rowid();
+
+        let artifact = make_artifact("cloud-link-artifact", Some(conversation_id));
+        save_artifact_to_db(&conn, &artifact).unwrap();
+        // Simulate the early artifact push being acknowledged before stream-end
+        // has associated it with the assistant message.
+        conn.execute(
+            "UPDATE artifacts SET needs_push = 0 WHERE id = ?1",
+            params![artifact.id],
+        )
+        .unwrap();
+
+        link_artifacts_to_message_in_db(
+            &conn,
+            conversation_id,
+            message_id,
+            std::slice::from_ref(&artifact.id),
+        )
+        .unwrap();
+
+        let owner: (Option<i64>, Option<String>, i64) = conn
+            .query_row(
+                "SELECT message_id, message_cloud_id, needs_push FROM artifacts WHERE id = ?1",
+                params![artifact.id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(owner.0, Some(message_id));
+        assert_eq!(owner.1.as_deref(), Some(message_cloud_id));
+        assert_eq!(
+            owner.2, 1,
+            "late ownership must be pushed after the early artifact ack"
+        );
+    }
+
+    #[test]
+    fn conversation_reload_is_not_truncated_at_the_startup_cache_limit() {
+        let conn = fresh_db();
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, created_at, updated_at) \
+             VALUES ('Large artifact thread', 'u1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .unwrap();
+        let conversation_id = conn.last_insert_rowid();
+
+        let empty = list_artifacts_from_db(&conn, Some(&conversation_id.to_string()), None)
+            .expect("load empty conversation snapshot");
+        assert!(empty.is_empty());
+
+        let first = make_artifact("large-conversation-artifact-0", Some(conversation_id));
+        save_artifact_to_db(&conn, &first).expect("persist first conversation artifact");
+        let single = list_artifacts_from_db(&conn, Some(&conversation_id.to_string()), None)
+            .expect("load one-artifact conversation snapshot");
+        assert_eq!(single.len(), 1);
+
+        for index in 1..500 {
+            let artifact = make_artifact(
+                &format!("large-conversation-artifact-{index}"),
+                Some(conversation_id),
+            );
+            save_artifact_to_db(&conn, &artifact).expect("persist conversation artifact");
+        }
+
+        let at_old_limit = list_artifacts_from_db(&conn, Some(&conversation_id.to_string()), None)
+            .expect("load 500-artifact conversation snapshot");
+        assert_eq!(at_old_limit.len(), 500);
+
+        let beyond_old_limit =
+            make_artifact("large-conversation-artifact-500", Some(conversation_id));
+        save_artifact_to_db(&conn, &beyond_old_limit)
+            .expect("persist artifact beyond old cache limit");
+
+        let loaded = list_artifacts_from_db(&conn, Some(&conversation_id.to_string()), None)
+            .expect("load complete conversation snapshot");
+        assert_eq!(
+            loaded.len(),
+            501,
+            "conversation reload must not silently drop artifacts"
+        );
+    }
+
+    #[test]
+    fn malformed_legacy_metadata_and_empty_render_type_have_safe_fidelity_fallbacks() {
+        let conn = fresh_db();
+
+        let mut empty_render_type = make_artifact("empty-render-type", None);
+        empty_render_type.render_type.clear();
+        save_artifact_to_db(&conn, &empty_render_type).expect("save legacy empty type");
+        let reloaded_empty = load_artifact_from_db(&conn, &empty_render_type.id)
+            .expect("load legacy empty type")
+            .expect("legacy artifact exists");
+        assert_eq!(reloaded_empty.render_type, "code");
+        assert_eq!(reloaded_empty.artifact_type, ArtifactType::Code);
+
+        let legacy = make_artifact("legacy-malformed-metadata", None);
+        save_artifact_to_db(&conn, &legacy).expect("save legacy artifact");
+        conn.execute(
+            "UPDATE artifacts
+             SET artifact_type = 'react', metadata = '{not-json', language = 'tsx'
+             WHERE id = ?1",
+            params![legacy.id],
+        )
+        .expect("corrupt legacy metadata fixture");
+
+        let reloaded = load_artifact_from_db(&conn, &legacy.id)
+            .expect("load malformed legacy artifact")
+            .expect("legacy artifact exists");
+        assert_eq!(reloaded.render_type, "react");
+        assert_eq!(reloaded.artifact_type, ArtifactType::Code);
+        match reloaded.metadata {
+            ArtifactMetadata::Code(metadata) => assert_eq!(metadata.language, "tsx"),
+            other => panic!("expected recovered code metadata, got {other:?}"),
         }
     }
 
@@ -565,7 +966,10 @@ mod tests {
             app_mode, "cloud",
             "artifact under a cloud conversation must inherit app_mode='cloud'"
         );
-        assert_eq!(needs_push, 1, "cloud artifact must have needs_push=1 after save");
+        assert_eq!(
+            needs_push, 1,
+            "cloud artifact must have needs_push=1 after save"
+        );
         assert!(
             cloud_id.is_some(),
             "cloud artifact must have cloud_id set after save"

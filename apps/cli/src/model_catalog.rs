@@ -2,13 +2,13 @@
 //!
 //! Architecture (inspired by Aider + models.dev):
 //!
-//! Tier 1 — SHARED:   `packages/types/src/models.json`, compiled into binary.
+//! Tier 1 — SHARED:   `packages/contracts/types/src/models.json`, compiled into binary.
 //! Tier 2 — CACHE:    ~/.agiworkforce/cache/models.json (5-min TTL, version-aware)
 //! Tier 3 — REMOTE:   models.dev/api.json (104 providers, free, open-source)
 //! Tier 4 — USER:     config.toml [[models]] overrides (always win)
 //!
-//! To add/update models: edit `packages/types/src/models.curation.json`, run
-//! `node scripts/sync-models.mjs`, then the CLI picks up the generated shared
+//! To add/update models: edit `packages/ai/model-registry/catalog/models.curation.json`, run
+//! `pnpm sync:models`, then the CLI picks up the generated shared
 //! catalog through `include_str!`. Do not maintain a separate CLI model table.
 //!
 //! Last updated: 2026-06-03
@@ -22,6 +22,10 @@ use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 
+use agiworkforce_model_registry::{
+    resolve_auto_route, AutoRouteDecision, AutoRoutingRequest, RoutingTaskType, TrustMode,
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,7 +34,7 @@ const CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
 const FETCH_TIMEOUT: Duration = Duration::from_secs(5); // never block startup
 const MODELS_DEV_URL: &str = "https://models.dev/api.json";
 const CACHE_FILE: &str = "cache/models.json";
-const SHARED_MODELS_JSON: &str = include_str!("../../../packages/types/src/models.json");
+const SHARED_MODELS_JSON: &str = include_str!("../../../packages/contracts/types/src/models.json");
 const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "anthropic",
     "openai",
@@ -45,7 +49,6 @@ const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "open_router",
     "nvidia_nim",
 ];
-
 const FALLBACK_DEFAULT_PROVIDER: &str = "anthropic";
 
 fn canonical_cli_provider(provider: &str) -> &str {
@@ -67,7 +70,7 @@ fn pick_fallback_default_model() -> String {
         return model;
     }
     panic!(
-        "rule-models-json: packages/types/src/models.json failed to parse; \
+        "rule-models-json: packages/contracts/types/src/models.json failed to parse; \
          cannot derive a default model without hardcoded model IDs"
     )
 }
@@ -422,6 +425,75 @@ fn cache_write_price(provider: &str, input_price_per_1m: f64, explicit: Option<f
     input_price_per_1m
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CliAutoModelSelection {
+    pub model_key: String,
+    pub provider_model_id: String,
+    pub upstream_provider: String,
+    pub harness_id: String,
+    pub fallback_provider_model_ids: Vec<String>,
+}
+
+/// Resolve a CLI Auto profile through the same generated policy used by the
+/// TypeScript surfaces and Desktop. The caller still owns the transport
+/// boundary: Managed Cloud uses the AGI gateway, while BYOK uses the selected
+/// provider directly.
+pub fn resolve_auto_model(
+    selection: &str,
+    task_type: RoutingTaskType,
+    tier: &str,
+    trust_mode: TrustMode,
+) -> Result<CliAutoModelSelection, String> {
+    resolve_auto_model_with_context(selection, task_type, tier, trust_mode, None, None)
+}
+
+/// Resolve Auto for a subsequent developer-session turn while preserving the
+/// previous concrete model when the central cache-continuity policy permits
+/// it and re-evaluating when the task genuinely changes.
+pub fn resolve_auto_model_with_context(
+    selection: &str,
+    task_type: RoutingTaskType,
+    tier: &str,
+    trust_mode: TrustMode,
+    current_model_key: Option<&str>,
+    previous_task_type: Option<RoutingTaskType>,
+) -> Result<CliAutoModelSelection, String> {
+    let runtime_profile_id = match trust_mode {
+        TrustMode::ManagedCloud => "cli/managed-chat",
+        TrustMode::Byok => "cli/byok-chat",
+        TrustMode::Local | TrustMode::OnDevice => "cli/local-chat",
+    };
+    let request = AutoRoutingRequest {
+        selection: Some(selection),
+        task_type,
+        subscription_tier: Some(tier),
+        trust_mode,
+        current_model_key,
+        previous_task_type,
+        runtime_profile_id: Some(runtime_profile_id),
+        ..AutoRoutingRequest::default()
+    };
+
+    match resolve_auto_route(&request).map_err(|error| error.to_string())? {
+        AutoRouteDecision::Selected(selected) => Ok(CliAutoModelSelection {
+            model_key: selected.model_key,
+            provider_model_id: selected.provider_model_id,
+            upstream_provider: selected.provider,
+            harness_id: selected.harness_id,
+            fallback_provider_model_ids: selected
+                .fallbacks
+                .into_iter()
+                .map(|fallback| fallback.provider_model_id)
+                .collect(),
+        }),
+        AutoRouteDecision::Unavailable(unavailable) => Err(format!(
+            "Auto routing is unavailable ({:?}): {}",
+            unavailable.code,
+            unavailable.reasons.join("; ")
+        )),
+    }
+}
+
 pub fn default_model() -> &'static str {
     DEFAULT_MODEL_ID
         .get_or_init(|| {
@@ -495,7 +567,7 @@ pub fn fast_completion_model(provider: &str) -> String {
 ///
 /// This is the tier-appropriate default when the user has no explicit `--model`
 /// flag and their tier is free/hobby.  It is NOT the workhorse routing slot
-/// (that lives in `packages/types/src/model-catalog.ts` SLOT_REGISTRY) — it is
+/// (that lives in `packages/contracts/types/src/model-catalog.ts` SLOT_REGISTRY) — it is
 /// simply the first entry of the economy bucket so CLI users get a cheap,
 /// capable model by default without touching the TS type catalog.
 ///
@@ -547,7 +619,7 @@ fn bundled_models() -> Vec<Model> {
         return shared_models;
     }
     panic!(
-        "rule-models-json: packages/types/src/models.json failed to parse; \
+        "rule-models-json: packages/contracts/types/src/models.json failed to parse; \
          cannot build model catalog without hardcoded model IDs"
     )
 }
@@ -1341,6 +1413,22 @@ mod tests {
     }
 
     #[test]
+    fn cli_auto_selection_uses_the_canonical_registry_policy() {
+        let selected = resolve_auto_model(
+            "auto-premium",
+            agiworkforce_model_registry::RoutingTaskType::Coding,
+            "byok",
+            agiworkforce_model_registry::TrustMode::Byok,
+        )
+        .expect("BYOK coding route should be available");
+
+        assert_eq!(selected.model_key, "claude-opus-4.8");
+        assert_eq!(selected.provider_model_id, "claude-opus-4-8");
+        assert_eq!(selected.upstream_provider, "anthropic");
+        assert!(!selected.provider_model_id.starts_with("auto"));
+    }
+
+    #[test]
     fn api_wire_id_resolves_dotted_display_id_to_wire_id() {
         // A dotted display id (the form web/desktop/mobile use) must resolve to
         // the dashed provider wire id so it does not 404 at the provider.
@@ -1350,7 +1438,10 @@ mod tests {
         // Case-insensitive on the display id.
         assert_eq!(api_wire_id("Claude-Haiku-4.5"), "claude-haiku-4-5");
         // Unknown ids (local/Ollama/custom) fall through unchanged.
-        assert_eq!(api_wire_id("my-local-model:latest"), "my-local-model:latest");
+        assert_eq!(
+            api_wire_id("my-local-model:latest"),
+            "my-local-model:latest"
+        );
     }
 
     #[test]

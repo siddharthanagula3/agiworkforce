@@ -265,7 +265,11 @@ async fn prepare_loopback_callback(oauth_cfg: &OAuthConfig) -> Result<(TcpListen
         let is_loopback = host == "127.0.0.1" || host == "[::1]" || host == "localhost";
         if is_loopback {
             if let Some(port) = parsed.port() {
-                let bind_host = if host == "[::1]" { "[::1]" } else { "127.0.0.1" };
+                let bind_host = if host == "[::1]" {
+                    "[::1]"
+                } else {
+                    "127.0.0.1"
+                };
                 let listener = TcpListener::bind(format!("{bind_host}:{port}"))
                     .await
                     .with_context(|| {

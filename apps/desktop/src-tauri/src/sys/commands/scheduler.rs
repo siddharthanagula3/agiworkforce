@@ -17,6 +17,7 @@
 //! 3. Remove the duplicate types from this module.
 
 use std::collections::HashMap;
+use std::path::Path;
 use std::process::{Output, Stdio};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -30,6 +31,8 @@ use tokio::io::AsyncReadExt;
 
 use crate::core::scheduler::types::{ExecutionStatus, JobExecutionRecord};
 use crate::sys::error::{Error, Result};
+
+use super::scheduler_store::SchedulerStore;
 
 /// Maximum allowed length for a shell command string.
 /// Commands exceeding this are rejected to prevent abuse via extremely large payloads.
@@ -271,14 +274,79 @@ impl ScheduledJob {
 /// The proactive scheduler that manages scheduled jobs
 pub struct ProactiveScheduler {
     pub(crate) jobs: RwLock<HashMap<String, ScheduledJob>>,
+    /// Disk persistence backing this scheduler. `None` means pure in-memory
+    /// operation (used by tests and as the last-resort fallback in `lib.rs`
+    /// if even a temp-dir database cannot be opened).
+    store: Option<Arc<SchedulerStore>>,
 }
 
 impl ProactiveScheduler {
-    /// Create a new proactive scheduler
+    /// Create a new proactive scheduler with no disk persistence.
     pub fn new() -> Self {
         Self {
             jobs: RwLock::new(HashMap::new()),
+            store: None,
         }
+    }
+
+    /// Create a scheduler backed by disk persistence. Every create/update/
+    /// delete mutation is written to `store` before (or as part of) making
+    /// it visible in memory, so `jobs` and the on-disk table never diverge.
+    pub fn with_store(store: Arc<SchedulerStore>) -> Self {
+        Self {
+            jobs: RwLock::new(HashMap::new()),
+            store: Some(store),
+        }
+    }
+
+    /// Replace the in-memory job set with previously-persisted jobs.
+    /// Intended to be called once at startup, immediately after loading
+    /// from disk — it does not re-persist, since the jobs are already on
+    /// disk.
+    pub fn hydrate(&self, jobs: HashMap<String, ScheduledJob>) -> Result<()> {
+        let mut guard = self
+            .jobs
+            .write()
+            .map_err(|e| Error::Generic(format!("Failed to acquire write lock: {}", e)))?;
+        *guard = jobs;
+        Ok(())
+    }
+
+    /// Persist a job, propagating any failure to the caller. Used by
+    /// user-initiated mutations (create/update/pause/resume), which must
+    /// not silently diverge from what the frontend is told succeeded.
+    fn persist(&self, job: &ScheduledJob) -> Result<()> {
+        if let Some(store) = &self.store {
+            store.upsert_job(job)?;
+        }
+        Ok(())
+    }
+
+    /// Persist a job, logging but not propagating failure. Used only for
+    /// execution bookkeeping (`mark_job_run`): rolling back that in-memory
+    /// update on a persist failure would leave `next_run` unadvanced, and
+    /// the background loop would re-fire an already-executed job on its
+    /// very next poll. The next successful mutation for this job rewrites
+    /// the full row, so a transient failure here self-heals.
+    fn persist_best_effort(&self, job: &ScheduledJob) {
+        if let Some(store) = &self.store {
+            if let Err(e) = store.upsert_job(job) {
+                tracing::warn!(
+                    "[Scheduler] Failed to persist run bookkeeping for job {} \
+                     (non-fatal, will retry on next mutation): {}",
+                    job.id,
+                    e
+                );
+            }
+        }
+    }
+
+    /// Persist a job's deletion, propagating any failure to the caller.
+    fn persist_delete(&self, job_id: &str) -> Result<()> {
+        if let Some(store) = &self.store {
+            store.delete_job(job_id)?;
+        }
+        Ok(())
     }
 
     /// Add a new scheduled job
@@ -291,6 +359,10 @@ impl ProactiveScheduler {
     ) -> Result<String> {
         let job = ScheduledJob::new(name, schedule, action_type, action_data)?;
         let job_id = job.id.clone();
+
+        // Persist before making the job visible in memory, so a failed
+        // write never leaves an unpersisted job that a restart would drop.
+        self.persist(&job)?;
 
         let mut jobs = self
             .jobs
@@ -307,6 +379,15 @@ impl ProactiveScheduler {
             .jobs
             .write()
             .map_err(|e| Error::Generic(format!("Failed to acquire write lock: {}", e)))?;
+
+        if !jobs.contains_key(job_id) {
+            return Ok(false);
+        }
+
+        // Persist the deletion before removing from memory, within the same
+        // write-lock critical section, so a failed delete never leaves the
+        // job missing in memory but still present on disk.
+        self.persist_delete(job_id)?;
 
         Ok(jobs.remove(job_id).is_some())
     }
@@ -330,8 +411,13 @@ impl ProactiveScheduler {
 
         if let Some(job) = jobs.get_mut(job_id) {
             if job.status == JobStatus::Active {
+                let before = job.clone();
                 job.status = JobStatus::Paused;
                 job.updated_at = Utc::now();
+                if let Err(e) = self.persist(job) {
+                    *job = before;
+                    return Err(e);
+                }
                 return Ok(true);
             }
         }
@@ -347,9 +433,14 @@ impl ProactiveScheduler {
 
         if let Some(job) = jobs.get_mut(job_id) {
             if job.status == JobStatus::Paused {
+                let before = job.clone();
                 job.status = JobStatus::Active;
                 job.next_run = job.calculate_next_run();
                 job.updated_at = Utc::now();
+                if let Err(e) = self.persist(job) {
+                    *job = before;
+                    return Err(e);
+                }
                 return Ok(true);
             }
         }
@@ -409,6 +500,11 @@ impl ProactiveScheduler {
 
             // Calculate next run time
             job.next_run = job.calculate_next_run();
+
+            // Best-effort: see `persist_best_effort` doc comment for why a
+            // persist failure here does not roll back the in-memory update.
+            self.persist_best_effort(job);
+
             return Ok(true);
         }
         Ok(false)
@@ -435,6 +531,27 @@ impl SchedulerState {
             scheduler: Arc::new(ProactiveScheduler::new()),
             execution_history: Arc::new(RwLock::new(Vec::new())),
         }
+    }
+
+    /// Construct scheduler state backed by disk persistence at `db_path`,
+    /// hydrating any previously-persisted jobs into memory before
+    /// returning. Call this during app setup instead of `new()` so
+    /// schedules survive restarts; call `register_default_memory_jobs()`
+    /// afterward as usual — it is name-keyed and idempotent, so hydrated
+    /// defaults (including any user edits to them, e.g. a pause) are left
+    /// alone rather than recreated.
+    pub fn new_with_store(db_path: impl AsRef<Path>) -> Result<Self> {
+        let store = SchedulerStore::new(db_path);
+        store.init()?;
+        let jobs = store.load_all()?;
+
+        let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+        scheduler.hydrate(jobs)?;
+
+        Ok(Self {
+            scheduler: Arc::new(scheduler),
+            execution_history: Arc::new(RwLock::new(Vec::new())),
+        })
     }
 
     /// Register default memory maintenance jobs (summarization + decay).
@@ -469,12 +586,13 @@ impl SchedulerState {
             }
         }
 
-        // Weekly memory decay on Sundays at 4 AM
+        // Weekly memory decay on Sundays at 4 AM.
+        // Weekday field uses this crate's 1-7 (SUN-SAT) convention, not 0-6.
         let decay_name = "memory_weekly_decay";
         if !self.has_job_by_name(decay_name) {
             match self.scheduler.add_job(
                 decay_name.to_string(),
-                "0 0 4 * * 0".to_string(),
+                "0 0 4 * * 1".to_string(),
                 SchedulerActionType::MemoryDecay,
                 serde_json::json!({}),
             ) {
@@ -1743,6 +1861,8 @@ pub async fn scheduler_update_job(
         .map_err(|e| Error::Generic(format!("Failed to acquire write lock: {}", e)))?;
 
     if let Some(job) = jobs.get_mut(&id) {
+        let before = job.clone();
+
         if let Some(name) = updates.name {
             job.name = name;
         }
@@ -1793,6 +1913,12 @@ pub async fn scheduler_update_job(
             job.action_data["prompt"] = serde_json::Value::String(prompt);
         }
         job.updated_at = Utc::now();
+
+        if let Err(e) = state.scheduler.persist(job) {
+            *job = before;
+            return Err(e);
+        }
+
         Ok(true)
     } else {
         Err(Error::Generic(format!("Job not found: {}", id)))
@@ -2249,5 +2375,200 @@ mod tests {
     fn test_extract_base_command_only_env_vars() {
         // Edge case: only env vars, no command — returns empty
         assert_eq!(extract_base_command("FOO=bar"), "");
+    }
+
+    // ======================================================================
+    // Persistence: restart-simulation and defaults-merge semantics
+    // ======================================================================
+    //
+    // These tests simulate an app restart by constructing a *fresh*
+    // ProactiveScheduler / SchedulerState against the same on-disk store,
+    // rather than reusing the original in-memory instance — proving jobs
+    // round-trip through disk, not just through the RwLock they started in.
+
+    fn temp_db_path() -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scheduler_restart_test.db");
+        (dir, path)
+    }
+
+    #[test]
+    fn test_add_job_survives_restart_simulation() {
+        let (_dir, db_path) = temp_db_path();
+
+        let job_id = {
+            let store = SchedulerStore::new(&db_path);
+            store.init().unwrap();
+            let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+            scheduler
+                .add_job(
+                    "Restart Test".to_string(),
+                    "0 0 9 * * *".to_string(),
+                    SchedulerActionType::Notification,
+                    json!({ "message": "hi" }),
+                )
+                .unwrap()
+        };
+        // `scheduler` and its `store` are dropped here — nothing but the
+        // db file on disk survives into the next block.
+
+        let restarted = {
+            let store = SchedulerStore::new(&db_path);
+            store.init().unwrap();
+            let jobs = store.load_all().unwrap();
+            let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+            scheduler.hydrate(jobs).unwrap();
+            scheduler
+        };
+
+        let job = restarted.get_job(&job_id).unwrap();
+        assert!(
+            job.is_some(),
+            "job created before 'restart' must still exist after"
+        );
+        assert_eq!(job.unwrap().name, "Restart Test");
+    }
+
+    #[test]
+    fn test_removed_job_stays_gone_after_restart_simulation() {
+        let (_dir, db_path) = temp_db_path();
+
+        let job_id = {
+            let store = SchedulerStore::new(&db_path);
+            store.init().unwrap();
+            let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+            let id = scheduler
+                .add_job(
+                    "To Delete".to_string(),
+                    "0 0 9 * * *".to_string(),
+                    SchedulerActionType::Notification,
+                    json!({}),
+                )
+                .unwrap();
+            assert!(scheduler.remove_job(&id).unwrap());
+            id
+        };
+
+        let restarted = {
+            let store = SchedulerStore::new(&db_path);
+            store.init().unwrap();
+            let jobs = store.load_all().unwrap();
+            let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+            scheduler.hydrate(jobs).unwrap();
+            scheduler
+        };
+
+        assert!(restarted.get_job(&job_id).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_paused_status_survives_restart_simulation() {
+        let (_dir, db_path) = temp_db_path();
+
+        let job_id = {
+            let store = SchedulerStore::new(&db_path);
+            store.init().unwrap();
+            let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+            let id = scheduler
+                .add_job(
+                    "Pause Me".to_string(),
+                    "0 0 9 * * *".to_string(),
+                    SchedulerActionType::Notification,
+                    json!({}),
+                )
+                .unwrap();
+            assert!(scheduler.pause_job(&id).unwrap());
+            id
+        };
+
+        let restarted = {
+            let store = SchedulerStore::new(&db_path);
+            store.init().unwrap();
+            let jobs = store.load_all().unwrap();
+            let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+            scheduler.hydrate(jobs).unwrap();
+            scheduler
+        };
+
+        let job = restarted.get_job(&job_id).unwrap().unwrap();
+        assert_eq!(
+            job.status,
+            JobStatus::Paused,
+            "a pause applied before 'restart' must not revert to Active after"
+        );
+    }
+
+    #[test]
+    fn test_add_job_persist_failure_does_not_mutate_memory() {
+        // Point the store at a path whose parent directory does not exist,
+        // so opening the connection fails — proving add_job leaves the
+        // in-memory map untouched (and returns Err) rather than silently
+        // diverging from disk.
+        let unwritable_path = std::path::PathBuf::from("/nonexistent-dir-for-test/scheduler.db");
+        let store = SchedulerStore::new(&unwritable_path);
+        let scheduler = ProactiveScheduler::with_store(Arc::new(store));
+
+        let result = scheduler.add_job(
+            "Should Not Persist".to_string(),
+            "0 0 9 * * *".to_string(),
+            SchedulerActionType::Notification,
+            json!({}),
+        );
+
+        assert!(result.is_err());
+        assert!(scheduler.list_jobs().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_default_memory_jobs_are_idempotent_and_edits_survive_across_relaunches() {
+        let (_dir, db_path) = temp_db_path();
+
+        // "Launch 1": fresh state, register defaults, then simulate a user
+        // pausing one of them.
+        let (first_ids, paused_id) = {
+            let state = SchedulerState::new_with_store(&db_path).unwrap();
+            state.register_default_memory_jobs();
+
+            let jobs = state.scheduler.list_jobs().unwrap();
+            assert_eq!(jobs.len(), 2, "expected the two default memory jobs");
+
+            let summarization = jobs
+                .iter()
+                .find(|j| j.name == "memory_auto_summarization")
+                .unwrap();
+            state.scheduler.pause_job(&summarization.id).unwrap();
+
+            let ids: std::collections::HashSet<String> =
+                jobs.iter().map(|j| j.id.clone()).collect();
+            (ids, summarization.id.clone())
+        };
+
+        // "Launch 2": brand new SchedulerState against the same db file —
+        // hydration should find both defaults already present (by name),
+        // so register_default_memory_jobs() must not create duplicates or
+        // regenerate new ids, and the pause must still hold.
+        let state2 = SchedulerState::new_with_store(&db_path).unwrap();
+        state2.register_default_memory_jobs();
+
+        let jobs2 = state2.scheduler.list_jobs().unwrap();
+        assert_eq!(
+            jobs2.len(),
+            2,
+            "defaults must not be duplicated across relaunches"
+        );
+
+        let second_ids: std::collections::HashSet<String> =
+            jobs2.iter().map(|j| j.id.clone()).collect();
+        assert_eq!(
+            first_ids, second_ids,
+            "default jobs must keep the same identity across relaunches"
+        );
+
+        let summarization2 = jobs2.iter().find(|j| j.id == paused_id).unwrap();
+        assert_eq!(
+            summarization2.status,
+            JobStatus::Paused,
+            "a user's pause of a default job must survive a relaunch, not reset to Active"
+        );
     }
 }

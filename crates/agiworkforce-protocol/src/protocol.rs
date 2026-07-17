@@ -3002,7 +3002,7 @@ impl TruncationPolicy {
     pub fn token_budget(&self) -> usize {
         match self {
             TruncationPolicy::Bytes(bytes) => usize::try_from(
-                agiworkforce_utils_string::approx_tokens_from_byte_count(*bytes),
+                crate::string_utils::approx_tokens_from_byte_count(*bytes),
             )
             .unwrap_or(usize::MAX),
             TruncationPolicy::Tokens(tokens) => *tokens,
@@ -3013,7 +3013,7 @@ impl TruncationPolicy {
         match self {
             TruncationPolicy::Bytes(bytes) => *bytes,
             TruncationPolicy::Tokens(tokens) => {
-                agiworkforce_utils_string::approx_bytes_for_tokens(*tokens)
+                crate::string_utils::approx_bytes_for_tokens(*tokens)
             }
         }
     }

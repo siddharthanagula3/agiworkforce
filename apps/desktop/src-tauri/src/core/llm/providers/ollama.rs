@@ -1,12 +1,48 @@
 use super::http_client_factory::{create_http_client, HttpClientConfig};
 use crate::core::llm::prompt_tool_injection;
-use crate::core::llm::sse_parser::{parse_sse_stream, StreamChunk, StreamingToolCall};
-use crate::core::llm::{ContentPart, LLMProvider, LLMRequest, LLMResponse};
+use crate::core::llm::sse_parser::{StreamChunk, StreamingToolCall};
+use crate::core::llm::stream_engine::decode_direct_stream;
+use crate::core::llm::{ContentPart, LLMProvider, LLMRequest, LLMResponse, ToolDefinition};
 use futures_util::Stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::pin::Pin;
+
+/// Hard cap on how many tools get injected as markdown text into the system
+/// prompt for models without native tool-calling support (see
+/// `prompt_tool_injection.rs`). Tool-native models are unaffected — they
+/// still receive the full set via Ollama's compact structured `tools` field
+/// below, which this cap does not touch.
+///
+/// Confirmed empirically (2026-07-11, docs/agent-context/known-flaws.md): a
+/// realistic 111-tool catalog in this injected format measured 88.7s of
+/// prompt-eval ALONE on an idle, warm Ollama instance — already at the
+/// streaming timeout's edge before the model generated a single token. 111
+/// tools stuffed into one small local model's context is wrong regardless of
+/// timeout headroom; a cap keeps prompt-eval bounded and, per common
+/// tool-selection-accuracy findings, likely improves the model's ability to
+/// pick the right tool from a smaller list too.
+const MAX_PROMPT_INJECTED_TOOLS: usize = 32;
+
+/// Applies `MAX_PROMPT_INJECTED_TOOLS`, logging when the catalog is actually
+/// truncated so a real user hitting this is diagnosable in the app log rather
+/// than silently losing access to tools past the cap.
+fn cap_tools_for_prompt_injection(tools: &[ToolDefinition]) -> &[ToolDefinition] {
+    if tools.len() > MAX_PROMPT_INJECTED_TOOLS {
+        tracing::warn!(
+            "[Ollama] {} tool(s) enabled but this model has no native tool support; \
+             only the first {} are injected into the system prompt to keep prompt-eval \
+             time bounded — the remaining {} are unavailable this turn.",
+            tools.len(),
+            MAX_PROMPT_INJECTED_TOOLS,
+            tools.len() - MAX_PROMPT_INJECTED_TOOLS,
+        );
+        &tools[..MAX_PROMPT_INJECTED_TOOLS]
+    } else {
+        tools
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct OllamaMessage {
@@ -267,16 +303,17 @@ impl LLMProvider for OllamaProvider {
                         request.messages.clone(),
                     )
                 } else {
+                    let capped_tools = cap_tools_for_prompt_injection(req_tools);
                     tracing::info!(
                         "[Ollama] Model {} does not support native tools \
                          — injecting {} tool(s) into system prompt",
                         request.model,
-                        req_tools.len(),
+                        capped_tools.len(),
                     );
                     let injected =
                         prompt_tool_injection::inject_tools_into_system_prompt_with_nonce(
                             &request.messages,
-                            req_tools,
+                            capped_tools,
                         );
                     prompt_injected_tool_nonce = Some(injected.nonce.clone());
                     (None, injected.messages)
@@ -496,16 +533,17 @@ impl LLMProvider for OllamaProvider {
                         request.messages.clone(),
                     )
                 } else {
+                    let capped_tools = cap_tools_for_prompt_injection(req_tools);
                     tracing::info!(
                         "[Ollama] Model {} does not support native tools \
                          — injecting {} tool(s) into system prompt (streaming)",
                         request.model,
-                        req_tools.len(),
+                        capped_tools.len(),
                     );
                     let injected =
                         prompt_tool_injection::inject_tools_into_system_prompt_with_nonce(
                             &request.messages,
-                            req_tools,
+                            capped_tools,
                         );
                     prompt_injected_tool_nonce = Some(injected.nonce.clone());
                     (None, injected.messages)
@@ -562,7 +600,11 @@ impl LLMProvider for OllamaProvider {
 
         tracing::debug!("Ollama streaming response received, starting JSON line parsing");
 
-        let inner_stream = parse_sse_stream(response, crate::core::llm::Provider::Ollama);
+        // c2b: decode Ollama's `/api/chat` NDJSON through the shared engine
+        // (byte-identical to the retired `parse_sse_stream` Ollama path modulo the
+        // enumerated intentional decode fixes — proven by the c2a oracle).
+        let inner_stream =
+            decode_direct_stream(response, crate::core::llm::Provider::Ollama, &request.model);
 
         if let Some(tool_nonce) = prompt_injected_tool_nonce {
             // Wrap the stream to accumulate text and parse tool calls on the final chunk.
@@ -650,6 +692,79 @@ mod tests {
     use super::*;
     use crate::core::llm::{ChatMessage, LLMRequest};
 
+    fn make_tool(name: &str) -> ToolDefinition {
+        ToolDefinition {
+            name: name.to_string(),
+            description: "A test tool.".to_string(),
+            parameters: serde_json::json!({"type": "object", "properties": {}}),
+            strict: None,
+        }
+    }
+
+    // -----------------------------------------------------------------
+    // Regression tests for cap_tools_for_prompt_injection (2026-07-11): a
+    // real, contention-free measurement showed a realistic 111-tool
+    // catalog took 88.7s of prompt-eval ALONE for a non-tool-native local
+    // model, already at the (now also fixed) streaming timeout's edge
+    // before generation even started.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn test_cap_tools_for_prompt_injection_leaves_a_small_catalog_untouched() {
+        let tools: Vec<ToolDefinition> = (0..10).map(|i| make_tool(&format!("tool_{i}"))).collect();
+        let capped = cap_tools_for_prompt_injection(&tools);
+        assert_eq!(
+            capped.len(),
+            10,
+            "a catalog under the cap must not be truncated"
+        );
+    }
+
+    #[test]
+    fn test_cap_tools_for_prompt_injection_truncates_a_111_tool_catalog() {
+        let tools: Vec<ToolDefinition> =
+            (0..111).map(|i| make_tool(&format!("tool_{i}"))).collect();
+        let capped = cap_tools_for_prompt_injection(&tools);
+        assert_eq!(
+            capped.len(),
+            MAX_PROMPT_INJECTED_TOOLS,
+            "111 tools (the size observed live) must be truncated to the cap"
+        );
+    }
+
+    #[test]
+    fn test_cap_tools_for_prompt_injection_is_exactly_at_the_boundary() {
+        let at_cap: Vec<ToolDefinition> = (0..MAX_PROMPT_INJECTED_TOOLS)
+            .map(|i| make_tool(&format!("tool_{i}")))
+            .collect();
+        assert_eq!(
+            cap_tools_for_prompt_injection(&at_cap).len(),
+            MAX_PROMPT_INJECTED_TOOLS
+        );
+
+        let one_over: Vec<ToolDefinition> = (0..=MAX_PROMPT_INJECTED_TOOLS)
+            .map(|i| make_tool(&format!("tool_{i}")))
+            .collect();
+        assert_eq!(
+            cap_tools_for_prompt_injection(&one_over).len(),
+            MAX_PROMPT_INJECTED_TOOLS
+        );
+    }
+
+    #[test]
+    fn test_cap_tools_for_prompt_injection_preserves_order_and_identity_of_kept_tools() {
+        let tools: Vec<ToolDefinition> =
+            (0..111).map(|i| make_tool(&format!("tool_{i}"))).collect();
+        let capped = cap_tools_for_prompt_injection(&tools);
+        for (i, tool) in capped.iter().enumerate() {
+            assert_eq!(
+                tool.name,
+                format!("tool_{i}"),
+                "kept tools must retain their original order"
+            );
+        }
+    }
+
     #[test]
     fn test_ollama_request_shape_is_constructible_without_network() {
         let provider = OllamaProvider::new(None).expect("Failed to create provider");
@@ -693,8 +808,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_available_returns_false_for_empty_base_url() {
-        let provider =
-            OllamaProvider::new(Some(String::new())).expect("Failed to create provider");
+        let provider = OllamaProvider::new(Some(String::new())).expect("Failed to create provider");
 
         assert!(!provider.is_available().await);
     }

@@ -119,7 +119,8 @@ impl RunawayTracker {
         if self.recent_tool_calls.len() < LOOP_DETECTION_THRESHOLD {
             return false;
         }
-        let tail = &self.recent_tool_calls[self.recent_tool_calls.len() - LOOP_DETECTION_THRESHOLD..];
+        let tail =
+            &self.recent_tool_calls[self.recent_tool_calls.len() - LOOP_DETECTION_THRESHOLD..];
         tail.windows(2).all(|w| w[0] == w[1])
     }
 

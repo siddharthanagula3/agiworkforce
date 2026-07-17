@@ -1,4 +1,4 @@
-//! Mirror of `packages/types/src/design-system/`.
+//! Mirror of `packages/contracts/types/src/design-system/`.
 //!
 //! This file is a manual Rust mirror of the TypeScript design-system contracts.
 //! The TypeScript side is the single source of truth — update both when the TS
@@ -150,7 +150,7 @@ pub struct ProviderDisplay {
 
 /// Returns the canonical display metadata for a provider.
 ///
-/// Values mirror `PROVIDER_DISPLAY` in `packages/types/src/design-system/provider-display.ts`.
+/// Values mirror `PROVIDER_DISPLAY` in `packages/contracts/types/src/design-system/provider-display.ts`.
 pub fn provider_display(id: ProviderId) -> ProviderDisplay {
     match id {
         ProviderId::Anthropic => ProviderDisplay {

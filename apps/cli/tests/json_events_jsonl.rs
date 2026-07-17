@@ -31,7 +31,7 @@ fn agiworkforce_cmd() -> Command {
 }
 
 /// Resolve two distinct Anthropic model IDs from the canonical catalog
-/// (`packages/types/src/models.json`) rather than hardcoding literals, per the
+/// (`packages/contracts/types/src/models.json`) rather than hardcoding literals, per the
 /// repo rule that model IDs are canonical only in the shared catalog.
 ///
 /// Both IDs must detect as `Provider::Anthropic` so the exec privacy_mode

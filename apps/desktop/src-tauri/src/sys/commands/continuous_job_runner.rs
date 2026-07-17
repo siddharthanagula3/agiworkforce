@@ -1953,6 +1953,8 @@ async fn plan_agentic_fallback_actions(
         }),
         prefer_cloud_credits: true,
         local_only: false,
+        managed_cloud_only: false,
+        trust_mode: None,
     };
 
     let router = llm_state.router.read().await;

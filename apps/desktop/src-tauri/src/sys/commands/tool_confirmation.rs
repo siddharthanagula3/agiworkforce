@@ -200,9 +200,7 @@ impl ToolConfirmationState {
             None => {
                 // No persisted row, malformed value, or DB error — stay on
                 // the safe seed (`AgentMode::Safe`) set in `new_with_db`.
-                warn!(
-                    "[ToolConfirmation] No valid persisted agent mode found; defaulting to Safe"
-                );
+                warn!("[ToolConfirmation] No valid persisted agent mode found; defaulting to Safe");
             }
         }
 

@@ -1,5 +1,5 @@
 //! `verify_license` — the offline, pure license-verification entry point (design
-//! §2.1). Port of `packages/licensing/src/verify.ts`. No I/O, never panics,
+//! §2.1). Port of `packages/contracts/licensing/src/verify.ts`. No I/O, never panics,
 //! never gates data access: an invalid/expired license resolves to a structured
 //! `{ ok: false }` verdict the caller uses to degrade to the free Local tier.
 
@@ -71,23 +71,28 @@ pub fn verify_license(
     root_public_keys: &[String],
     now_ms: i64,
 ) -> LicenseVerifyResult {
-    let payload = match verify_signed_container(file_bytes, root_public_keys, LICENSE_CONTAINER_FORMAT)
-    {
-        VerifiedContainer::Ok { payload } => payload,
-        // ContainerErrorCode (Malformed | BadSignature) is a subset of
-        // LicenseErrorCode, so the code carries through unchanged.
-        VerifiedContainer::Err(error) => {
-            let code = match error.code {
-                ContainerErrorCode::Malformed => LicenseErrorCode::Malformed,
-                ContainerErrorCode::BadSignature => LicenseErrorCode::BadSignature,
-            };
-            return err(code, &error.message);
-        }
-    };
+    let payload =
+        match verify_signed_container(file_bytes, root_public_keys, LICENSE_CONTAINER_FORMAT) {
+            VerifiedContainer::Ok { payload } => payload,
+            // ContainerErrorCode (Malformed | BadSignature) is a subset of
+            // LicenseErrorCode, so the code carries through unchanged.
+            VerifiedContainer::Err(error) => {
+                let code = match error.code {
+                    ContainerErrorCode::Malformed => LicenseErrorCode::Malformed,
+                    ContainerErrorCode::BadSignature => LicenseErrorCode::BadSignature,
+                };
+                return err(code, &error.message);
+            }
+        };
 
     let claims_text = match std::str::from_utf8(&payload) {
         Ok(text) => text,
-        Err(_) => return err(LicenseErrorCode::Malformed, "license claims are not valid UTF-8"),
+        Err(_) => {
+            return err(
+                LicenseErrorCode::Malformed,
+                "license claims are not valid UTF-8",
+            );
+        }
     };
 
     let claims: LicenseClaims = match serde_json::from_str(claims_text) {
@@ -95,7 +100,10 @@ pub fn verify_license(
         Err(_) => {
             // Covers both "not valid JSON" and "failed schema" — both are a
             // structured `malformed` verdict on the TS side, never a throw.
-            return err(LicenseErrorCode::Malformed, "license claims are not valid JSON or schema");
+            return err(
+                LicenseErrorCode::Malformed,
+                "license claims are not valid JSON or schema",
+            );
         }
     };
 

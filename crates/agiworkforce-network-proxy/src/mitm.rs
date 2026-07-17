@@ -479,10 +479,7 @@ fn extract_request_port(request_host: &str) -> Option<u16> {
     // Only treat `:port` as a port when there is exactly one colon, so we do not
     // misparse an unbracketed IPv6 literal.
     if host.bytes().filter(|b| *b == b':').count() == 1 {
-        return host
-            .rsplit(':')
-            .next()
-            .and_then(|p| p.parse::<u16>().ok());
+        return host.rsplit(':').next().and_then(|p| p.parse::<u16>().ok());
     }
     None
 }

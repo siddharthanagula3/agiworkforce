@@ -7,7 +7,7 @@
 //! logged to `~/.agiworkforce/daemon-logs/`.  Concurrent execution is capped
 //! at `max_parallel` (default 4).
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use axum::response::IntoResponse;
 use chrono::Local;
 use cron::Schedule;
@@ -18,9 +18,11 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, watch, Semaphore};
 
 use crate::agent::AgentSession;
+use crate::cli_options::PermissionMode;
 use crate::config::CliConfig;
 use crate::context;
 use crate::hooks::{self, HookEvent, HookInput, HooksConfig, TriggerConfig, TriggerType};
+use crate::models::{provider_from_name, OllamaMode, Provider};
 use crate::terminal_style as ts;
 
 // ---------------------------------------------------------------------------
@@ -53,6 +55,120 @@ struct TriggerEvent {
     model: Option<String>,
     /// Extra context (e.g. changed file path, webhook payload).
     context: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TriggerModelSelection {
+    requested: String,
+    concrete_model: String,
+    provider_override: Option<String>,
+    harness_id: Option<String>,
+}
+
+fn provider_trust_mode(provider: &Provider) -> Option<agiworkforce_model_registry::TrustMode> {
+    match provider {
+        Provider::ManagedCloud => Some(agiworkforce_model_registry::TrustMode::ManagedCloud),
+        Provider::Ollama(OllamaMode::Local)
+        | Provider::OpenAICompatible {
+            api_key_env: None, ..
+        }
+        | Provider::Custom {
+            api_key_env: None, ..
+        } => None,
+        Provider::Ollama(OllamaMode::Cloud)
+        | Provider::Anthropic
+        | Provider::Google
+        | Provider::OpenAICompatible {
+            api_key_env: Some(_),
+            ..
+        }
+        | Provider::Custom {
+            api_key_env: Some(_),
+            ..
+        } => Some(agiworkforce_model_registry::TrustMode::Byok),
+    }
+}
+
+async fn managed_subscription_tier() -> &'static str {
+    use crate::tier_cache::UserTier;
+
+    let jwt = crate::tier_cache::load_jwt();
+    let resolution = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        crate::tier_cache::resolve_user_tier(jwt.as_deref()),
+    )
+    .await
+    .unwrap_or_default();
+
+    match resolution.cached.map(|cached| cached.tier) {
+        Some(UserTier::Pro) => "pro",
+        Some(UserTier::Max) => "max",
+        Some(UserTier::Enterprise) => "enterprise",
+        Some(UserTier::Free | UserTier::Byok) | None => "free",
+    }
+}
+
+async fn resolve_trigger_model(
+    requested: &str,
+    config: &CliConfig,
+) -> Result<TriggerModelSelection> {
+    if !agiworkforce_model_registry::is_auto_routing_selection(requested) {
+        return Ok(TriggerModelSelection {
+            requested: requested.to_string(),
+            concrete_model: requested.to_string(),
+            provider_override: crate::models::selection_provider_override(
+                requested,
+                &config.default.model,
+                &config.default.provider,
+                None,
+            )
+            .map(str::to_string),
+            harness_id: None,
+        });
+    }
+
+    let configured_provider = provider_from_name(&config.default.provider).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unknown configured provider '{}' for Auto trigger routing",
+            config.default.provider
+        )
+    })?;
+    let Some(trust_mode) = provider_trust_mode(&configured_provider) else {
+        bail!(
+            "Auto trigger profile '{}' cannot choose a local model safely. Configure a concrete local model for this trigger.",
+            requested
+        );
+    };
+    if trust_mode != agiworkforce_model_registry::TrustMode::ManagedCloud {
+        bail!(
+            "Auto trigger profile '{}' requires the managed_cloud provider until credential-aware BYOK fallback admission is implemented. Configure a concrete BYOK model for this trigger.",
+            requested
+        );
+    }
+    let tier = managed_subscription_tier().await;
+    let route = crate::model_catalog::resolve_auto_model(
+        requested,
+        agiworkforce_model_registry::RoutingTaskType::General,
+        tier,
+        trust_mode,
+    )
+    .map_err(anyhow::Error::msg)?;
+
+    Ok(TriggerModelSelection {
+        requested: requested.to_string(),
+        concrete_model: route.provider_model_id,
+        provider_override: Some("managed_cloud".to_string()),
+        harness_id: Some(route.harness_id),
+    })
+}
+
+fn configure_daemon_session(session: &mut AgentSession) {
+    // Headless automation is fail-closed: read-only tools can run, saved
+    // approvals are honored, and any new mutating/privileged action is denied
+    // instead of receiving an implicit blanket bypass.
+    session.permission_mode = PermissionMode::DontAsk;
+    session.skip_permissions = false;
+    session.auto_approve_safe = true;
 }
 
 /// Simple per-endpoint rate limiter (sliding window, 60 requests/minute).
@@ -130,8 +246,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
         "id": "daily-summary",
         "type": "cron",
         "cron": "0 9 * * *",
-        "prompt": "Generate daily standup summary",
-        "model": "auto-balanced"
+        "prompt": "Generate daily standup summary"
       }}
     ]
   }}"#
@@ -850,8 +965,11 @@ async fn execute_trigger(
     let start = std::time::Instant::now();
     let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
 
-    // Determine model
-    let model = event.model.as_deref().unwrap_or(&config.default.model);
+    // Resolve routing profiles to a concrete provider model before any hook or
+    // transport sees them. Auto is policy, never a provider model ID.
+    let requested_model = event.model.as_deref().unwrap_or(&config.default.model);
+    let selection = resolve_trigger_model(requested_model, config).await?;
+    let model = selection.concrete_model.as_str();
 
     // Gather system context
     let sys_context = context::gather_system_context();
@@ -881,14 +999,9 @@ async fn execute_trigger(
         model,
         &sys_context,
         None,
-        crate::models::selection_provider_override(
-            model,
-            &config.default.model,
-            &config.default.provider,
-            None,
-        ),
+        selection.provider_override.as_deref(),
     )?;
-    session.skip_permissions = true; // daemon runs unattended
+    configure_daemon_session(&mut session);
     session.max_turns = Some(25);
 
     let result = session
@@ -917,7 +1030,10 @@ async fn execute_trigger(
         "trigger_id": event.trigger_id,
         "trigger_type": format!("{:?}", event.trigger_type).to_lowercase(),
         "timestamp": Local::now().to_rfc3339(),
+        "requested_model": selection.requested,
         "model": model,
+        "provider": selection.provider_override,
+        "harness": selection.harness_id,
         "prompt": redact_secrets(&event.prompt),
         "context": event.context.as_ref().map(|c| redact_secrets(c)),
         "status": status,
@@ -1017,7 +1133,7 @@ async fn wait_for_shutdown_signal() {
 // CLI-3 (audit 2026-05-03): minimal secret redactor used before writing
 // trigger prompts + responses to log files on disk. Same pattern set as
 // `apps/desktop/src-tauri/src/sys/security/log_redaction.rs` and
-// `packages/utils/src/logger.ts`. Kept inline so daemon.rs has no
+// `packages/platform/utils/src/logger.ts`. Kept inline so daemon.rs has no
 // cross-crate dep on agiworkforce-secrets (which is workspace-excluded).
 // ---------------------------------------------------------------------------
 
@@ -1073,6 +1189,48 @@ fn redact_secrets(input: &str) -> String {
 mod tests {
     use super::*;
     use crate::hooks::{TriggerConfig, TriggerType, TriggersConfig};
+
+    #[tokio::test]
+    async fn daemon_auto_profile_refuses_credential_blind_byok_routing() {
+        let mut config = CliConfig::default();
+        config.default.provider = "anthropic".to_string();
+
+        let error = resolve_trigger_model("auto-balanced", &config)
+            .await
+            .expect_err("BYOK Auto must not guess which provider credential is available");
+
+        assert!(error.to_string().contains("credential-aware BYOK"));
+    }
+
+    #[tokio::test]
+    async fn daemon_auto_profile_refuses_implicit_local_routing() {
+        let mut config = CliConfig::default();
+        config.default.provider = "ollama".to_string();
+
+        let error = resolve_trigger_model("auto-balanced", &config)
+            .await
+            .expect_err("local Auto requires an explicit concrete model");
+
+        assert!(error.to_string().contains("concrete local model"));
+    }
+
+    #[test]
+    fn daemon_session_never_blanket_bypasses_permissions() {
+        let sys_context = context::gather_system_context();
+        let mut session = AgentSession::new_checked(
+            crate::model_catalog::default_model(),
+            &sys_context,
+            None,
+            None,
+        )
+        .expect("default catalog model should construct a session");
+
+        configure_daemon_session(&mut session);
+
+        assert_eq!(session.permission_mode, PermissionMode::DontAsk);
+        assert!(!session.skip_permissions);
+        assert!(session.auto_approve_safe);
+    }
 
     #[test]
     fn redact_strips_well_known_secret_patterns() {

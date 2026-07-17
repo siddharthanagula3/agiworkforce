@@ -257,6 +257,8 @@ Only respond with the JSON object, no other text."#,
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
+            managed_cloud_only: false,
+            trust_mode: None,
         };
 
         let request = LLMRequest {

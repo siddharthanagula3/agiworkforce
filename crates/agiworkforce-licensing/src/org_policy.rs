@@ -1,5 +1,5 @@
 //! Signed **org policy** schema + offline verifier (design §2.2). Port of
-//! `packages/services/src/cloud-contracts/org-policy.ts`.
+//! `packages/contracts/licensing/src/org-policy.ts`.
 //!
 //! Root of trust: the org LICENSE. A policy signature must verify against a key
 //! in the (already-verified) license's `policyKeys[]`, so a forged policy cannot
@@ -243,8 +243,10 @@ pub fn check_policy_tightening(
     }
 
     if candidate.egress.managed_cloud && !baseline.egress.managed_cloud {
-        violations
-            .push("egress.managedCloud: policy re-enables managed-cloud egress the baseline forbids".to_string());
+        violations.push(
+            "egress.managedCloud: policy re-enables managed-cloud egress the baseline forbids"
+                .to_string(),
+        );
     }
 
     // `None` = unbounded = top of the lattice.
@@ -343,21 +345,29 @@ pub fn verify_org_policy(
     now_ms: i64,
     baseline: Option<&PolicyPermissions>,
 ) -> OrgPolicyVerifyResult {
-    let payload =
-        match verify_signed_container(file_bytes, &license_claims.policy_keys, POLICY_CONTAINER_FORMAT) {
-            VerifiedContainer::Ok { payload } => payload,
-            VerifiedContainer::Err(error) => {
-                let code = match error.code {
-                    ContainerErrorCode::Malformed => OrgPolicyErrorCode::Malformed,
-                    ContainerErrorCode::BadSignature => OrgPolicyErrorCode::BadSignature,
-                };
-                return err(code, &error.message);
-            }
-        };
+    let payload = match verify_signed_container(
+        file_bytes,
+        &license_claims.policy_keys,
+        POLICY_CONTAINER_FORMAT,
+    ) {
+        VerifiedContainer::Ok { payload } => payload,
+        VerifiedContainer::Err(error) => {
+            let code = match error.code {
+                ContainerErrorCode::Malformed => OrgPolicyErrorCode::Malformed,
+                ContainerErrorCode::BadSignature => OrgPolicyErrorCode::BadSignature,
+            };
+            return err(code, &error.message);
+        }
+    };
 
     let policy_text = match std::str::from_utf8(&payload) {
         Ok(text) => text,
-        Err(_) => return err(OrgPolicyErrorCode::Malformed, "org policy is not valid UTF-8"),
+        Err(_) => {
+            return err(
+                OrgPolicyErrorCode::Malformed,
+                "org policy is not valid UTF-8",
+            );
+        }
     };
 
     let policy: OrgPolicy = match serde_json::from_str(policy_text) {

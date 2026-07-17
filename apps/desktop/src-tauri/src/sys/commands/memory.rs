@@ -24,8 +24,8 @@ use crate::core::agi::memory_manager::{
 };
 use crate::core::llm::memory_integration::MemoryInjectionConfig;
 use crate::data::memory_sync;
-use crate::sys::commands::chat::state::AppDatabase;
 use crate::sys::commands::chat::send_message_setup::derive_cloud_sync_enabled;
+use crate::sys::commands::chat::state::AppDatabase;
 use crate::sys::commands::settings::SettingsState;
 use crate::sys::error::{Error, Result};
 use tokio::sync::RwLock;
@@ -166,9 +166,10 @@ pub async fn memory_remember(
     settings_state: State<'_, SettingsState>,
 ) -> Result<i64> {
     let category = parse_category(&category)?;
-    let memory_id = state
-        .manager
-        .remember(category, &topic, &content, importance, source.as_deref())?;
+    let memory_id =
+        state
+            .manager
+            .remember(category, &topic, &content, importance, source.as_deref())?;
 
     // CLOUD SYNC HOOK: derive_cloud_sync_enabled is the single source of truth
     // for the managed-cloud trust boundary (send_message_setup.rs:64).
@@ -384,9 +385,10 @@ pub async fn memory_store(
     settings_state: State<'_, SettingsState>,
 ) -> Result<i64> {
     let category = parse_category(&category)?;
-    let memory_id = state
-        .manager
-        .remember(category, &topic, &content, importance, source.as_deref())?;
+    let memory_id =
+        state
+            .manager
+            .remember(category, &topic, &content, importance, source.as_deref())?;
 
     let storage_mode_is_cloud = {
         let settings = settings_state.settings.lock().await;

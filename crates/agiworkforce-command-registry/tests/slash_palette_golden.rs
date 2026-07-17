@@ -53,7 +53,7 @@ fn slash_palette_has_87_commands() {
     let count = builtin_slash_registry_commands().len();
     assert_eq!(
         count, 87,
-        "Expected 87 built-in slash commands after the current command-registry audit; got {count}"
+        "Expected 87 implemented built-in slash commands after removing the unimplemented remote-control placeholder; got {count}"
     );
 }
 

@@ -45,6 +45,9 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "continue-with-byok",
         "fork-byok",
         "byok",
+        "continue-with-cloud",
+        "fork-cloud",
+        "managed-cloud",
         "rate-limit-options",
         "stats",
         "passes",
@@ -80,8 +83,6 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "pr-comments",
         "ultrareview",
         "think-back",
-        "remote-control",
-        "rc",
         "debug",
         "tui",
         "powerup",
@@ -147,6 +148,11 @@ pub fn handle_shared_command(
             session.arm_byok_handoff(&draft);
             ParityCommandResult::DraftPrompt(draft)
         }
+        "/continue-with-cloud" | "/fork-cloud" | "/managed-cloud" => {
+            let draft = continue_with_cloud_draft(session, arg);
+            session.arm_managed_handoff(&draft);
+            ParityCommandResult::DraftPrompt(draft)
+        }
         "/rate-limit-options" => {
             ParityCommandResult::SystemMessage(render_rate_limit_options(session))
         }
@@ -195,9 +201,6 @@ pub fn handle_shared_command(
         "/pr-comments" => ParityCommandResult::Prompt(pr_comments_prompt(arg)),
         "/ultrareview" => ParityCommandResult::Prompt(ultrareview_prompt(arg)),
         "/think-back" => ParityCommandResult::Prompt(think_back_prompt(arg)),
-        "/remote-control" | "/rc" => {
-            ParityCommandResult::SystemMessage(render_remote_control())
-        }
         "/debug" => ParityCommandResult::SystemMessage(handle_debug(session)),
         "/tui" => ParityCommandResult::SystemMessage(handle_tui(session, arg)),
         "/powerup" => ParityCommandResult::Prompt(powerup_prompt(arg)),
@@ -308,6 +311,7 @@ pub fn render_privacy_settings(session: &AgentSession) -> String {
         "  Local file access: explicit workspace roots only".to_string(),
         "  Additional roots: opt-in with --add-dir or /add-dir".to_string(),
         "  Local -> BYOK: explicit only with /continue-with-byok".to_string(),
+        "  Local -> Managed Cloud: explicit only with /continue-with-cloud".to_string(),
         "  Attached files: never included in BYOK handoff drafts automatically".to_string(),
         "  Telemetry: CLI-local unless managed cloud features are enabled".to_string(),
         "  Sync: opt-in with agi sync".to_string(),
@@ -327,9 +331,9 @@ pub fn handle_privacy_mode(session: &mut AgentSession, arg: &str) -> String {
 
     if mode == PrivacyMode::Managed {
         return [
-            "Managed cloud mode is private beta and is not wired in this CLI build.",
             "Privacy mode was not changed.",
-            "Use local mode, or use /continue-with-byok to create a reviewable BYOK handoff draft.",
+            "Local -> Managed Cloud requires an explicit reviewable handoff.",
+            "Run /continue-with-cloud to draft a fork with selected context, secret-scan redaction, payload preview, and consent before sending.",
         ]
         .join("\n");
     }
@@ -359,6 +363,19 @@ pub fn handle_privacy_mode(session: &mut AgentSession, arg: &str) -> String {
 }
 
 pub fn continue_with_byok_draft(session: &AgentSession, arg: &str) -> String {
+    continue_with_handoff_draft(session, arg, "BYOK", "the user's configured provider")
+}
+
+pub fn continue_with_cloud_draft(session: &AgentSession, arg: &str) -> String {
+    continue_with_handoff_draft(session, arg, "Managed Cloud", "AGI managed cloud")
+}
+
+fn continue_with_handoff_draft(
+    session: &AgentSession,
+    arg: &str,
+    destination_mode: &str,
+    destination: &str,
+) -> String {
     let selected = selected_handoff_messages(session, arg);
     let transcript = if selected.is_empty() {
         "No non-system conversation messages were selected.".to_string()
@@ -377,9 +394,9 @@ pub fn continue_with_byok_draft(session: &AgentSession, arg: &str) -> String {
     };
 
     let mut lines = vec![
-        "You are continuing an AGI Local chat in BYOK mode.".to_string(),
+        format!("You are continuing an AGI Local chat in {destination_mode} mode."),
         String::new(),
-        "Privacy boundary: the user explicitly selected this handoff. Do not assume attached files, local-only tool outputs, or unlisted context are available.".to_string(),
+        format!("Privacy boundary: the user explicitly selected this handoff to {destination}. Do not assume attached files, local-only tool outputs, or unlisted context are available."),
         format!("Source privacy mode: {}", session.privacy_mode.label()),
         format!("Current model: {}", session.model),
         format!("Current provider route: {}", session.provider_privacy_mode().label()),
@@ -750,7 +767,7 @@ pub fn render_reload_plugins() -> String {
 }
 
 pub fn render_extra_usage() -> String {
-    "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nPro/Max: managed cloud flat subscription (waitlist — agiworkforce.com).".to_string()
+    "Pricing & extra usage:\n  https://agiworkforce.com/pricing\nLocal + BYOK: free forever.\nManaged cloud: public alpha, open to signed-in users with metered plan usage.".to_string()
 }
 
 pub fn render_remote_env() -> String {
@@ -957,13 +974,6 @@ pub fn think_back_prompt(arg: &str) -> String {
     )
 }
 
-pub fn render_remote_control() -> String {
-    "AGI desktop bridge listens on port 8787. Launch the desktop companion first, then reconnect \
-     this CLI session to mirror commands and share context. Use /desktop to open the companion \
-     or run `agiworkforce bridge --port 8787` for a manual connection."
-        .to_string()
-}
-
 pub fn handle_debug(session: &mut AgentSession) -> String {
     session.debug_mode = !session.debug_mode;
     if session.debug_mode {
@@ -1159,6 +1169,22 @@ mod tests {
     }
 
     #[test]
+    fn remote_control_is_not_exposed_without_a_real_transport() {
+        let mut session = test_session();
+
+        assert!(!shared_runtime_command_names().contains(&"remote-control"));
+        assert!(!shared_runtime_command_names().contains(&"rc"));
+        assert_eq!(
+            handle_shared_command("/remote-control", "", &mut session),
+            ParityCommandResult::NotHandled
+        );
+        assert_eq!(
+            handle_shared_command("/rc", "", &mut session),
+            ParityCommandResult::NotHandled
+        );
+    }
+
+    #[test]
     fn shared_runtime_command_names_are_handled() {
         for command in shared_runtime_command_names() {
             let mut session = test_session();
@@ -1282,7 +1308,7 @@ mod tests {
     }
 
     #[test]
-    fn privacy_mode_managed_is_private_beta_not_wired() {
+    fn privacy_mode_managed_requires_a_reviewable_local_handoff() {
         let mut session = test_session();
         session.set_privacy_mode(PrivacyMode::Local);
 
@@ -1290,8 +1316,12 @@ mod tests {
 
         match result {
             ParityCommandResult::SystemMessage(message) => {
-                assert!(message.contains("private beta"), "{message}");
-                assert!(message.contains("not wired"), "{message}");
+                assert!(
+                    message.contains("Privacy mode was not changed"),
+                    "{message}"
+                );
+                assert!(message.contains("/continue-with-cloud"), "{message}");
+                assert!(message.contains("secret-scan"), "{message}");
             }
             other => panic!("expected system message, got {other:?}"),
         }
@@ -1317,6 +1347,30 @@ mod tests {
                 assert!(prompt.contains("Local chat in BYOK mode"));
                 assert!(prompt.contains("[redacted sensitive line]"));
                 assert!(!prompt.contains("sk-test-secret"));
+            }
+            other => panic!("expected draft prompt, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_with_cloud_returns_reviewable_redacted_draft() {
+        let mut session = test_session();
+        session.messages.push(crate::models::Message::text(
+            "user",
+            "use api_key = sk-test-managed-secret",
+        ));
+        session.messages.push(crate::models::Message::text(
+            "assistant",
+            "I will keep it local.",
+        ));
+
+        let result = handle_shared_command("/continue-with-cloud", "full", &mut session);
+
+        match result {
+            ParityCommandResult::DraftPrompt(prompt) => {
+                assert!(prompt.contains("Local chat in Managed Cloud mode"));
+                assert!(prompt.contains("[redacted sensitive line]"));
+                assert!(!prompt.contains("sk-test-managed-secret"));
             }
             other => panic!("expected draft prompt, got {other:?}"),
         }

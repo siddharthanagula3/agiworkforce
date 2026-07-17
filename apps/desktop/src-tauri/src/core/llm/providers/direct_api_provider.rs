@@ -5,7 +5,7 @@
 //! Anthropic, Google, DeepSeek, xAI, Mistral, Perplexity, Groq, Together,
 //! Fireworks, Cerebras, DeepInfra, Cohere, AI21, Sambanova, and Azure.
 
-use super::http_client_factory::{create_http_client, HttpClientConfig};
+use super::http_client_factory::{HttpClientConfig, create_http_client};
 use crate::core::llm::provider_adapter::ProviderAdapterFactory;
 use crate::core::llm::sse_parser::StreamChunk;
 use crate::core::llm::stream_engine::decode_direct_stream;
@@ -101,6 +101,19 @@ impl DirectApiProvider {
             }
             // OpenAI-compatible providers all use /chat/completions
             _ => format!("{}/chat/completions", self.base_url),
+        }
+    }
+
+    /// Build the endpoint for this concrete request. OpenAI catalog models
+    /// declared as reasoning use the native Responses API; OpenAI chat-tier
+    /// models and every OpenAI-compatible provider remain on Chat Completions.
+    fn request_endpoint(&self, model: &str) -> String {
+        if self.provider == Provider::OpenAI
+            && crate::core::llm::models_config::model_uses_responses_api(model)
+        {
+            format!("{}/responses", self.base_url)
+        } else {
+            self.chat_endpoint()
         }
     }
 
@@ -234,7 +247,7 @@ fn validate_provider_base_url(url: &str) -> Result<(), String> {
         scheme => {
             return Err(format!(
                 "Unsupported URL scheme '{scheme}'. Only https:// (and http:// for approved local ports) are allowed."
-            ))
+            ));
         }
     }
 
@@ -416,7 +429,7 @@ impl LLMProvider for DirectApiProvider {
         let url = if self.provider == Provider::Google {
             self.google_endpoint(&request.model, false)
         } else {
-            self.chat_endpoint()
+            self.request_endpoint(&request.model)
         };
 
         let builder = self.client.post(&url);
@@ -473,7 +486,7 @@ impl LLMProvider for DirectApiProvider {
         let url = if self.provider == Provider::Google {
             self.google_endpoint(&request.model, true)
         } else {
-            self.chat_endpoint()
+            self.request_endpoint(&request.model)
         };
 
         let builder = self.streaming_client.post(&url);
@@ -504,7 +517,11 @@ impl LLMProvider for DirectApiProvider {
         // Wave 5 c2: SSE/NDJSON decode now runs through the shared
         // `agiworkforce-llm` dialect runners via the desktop stream_engine
         // facade, replacing desktop's duplicate `parse_sse_stream` decoder.
-        Ok(Box::pin(decode_direct_stream(res, self.provider)))
+        Ok(Box::pin(decode_direct_stream(
+            res,
+            self.provider,
+            &request.model,
+        )))
     }
 
     fn is_configured(&self) -> bool {
@@ -718,6 +735,36 @@ mod tests {
     }
 
     #[test]
+    fn request_endpoint_routes_catalog_reasoning_models_to_responses() {
+        let p = DirectApiProvider::new(Provider::OpenAI, "key".to_string(), None)
+            .expect("should create");
+        let model = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
+            .expect("catalog must contain an OpenAI reasoning model");
+
+        assert_eq!(
+            p.request_endpoint(&model.id),
+            "https://api.openai.com/v1/responses"
+        );
+    }
+
+    #[test]
+    fn request_endpoint_preserves_chat_completions_for_catalog_chat_models() {
+        let p = DirectApiProvider::new(Provider::OpenAI, "key".to_string(), None)
+            .expect("should create");
+        let model = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.model_type == "chat")
+            .expect("catalog must contain an OpenAI chat model");
+
+        assert_eq!(
+            p.request_endpoint(&model.id),
+            "https://api.openai.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
     fn chat_endpoint_anthropic() {
         let p = DirectApiProvider::new(Provider::Anthropic, "key".to_string(), None)
             .expect("should create");
@@ -753,10 +800,7 @@ mod tests {
         let p = DirectApiProvider::new(Provider::OpenRouter, "sk-or-v1-test".to_string(), None)
             .expect("should create");
         let builder = reqwest::Client::new().post("https://openrouter.ai/api/v1/chat/completions");
-        let request = p
-            .apply_auth(builder)
-            .build()
-            .expect("request should build");
+        let request = p.apply_auth(builder).build().expect("request should build");
         let headers = request.headers();
         assert_eq!(
             headers.get("authorization").and_then(|v| v.to_str().ok()),
@@ -816,8 +860,8 @@ mod tests {
 
     #[test]
     fn lmstudio_chat_endpoint_is_openai_compat() {
-        let p = DirectApiProvider::new(Provider::LmStudio, String::new(), None)
-            .expect("should create");
+        let p =
+            DirectApiProvider::new(Provider::LmStudio, String::new(), None).expect("should create");
         assert_eq!(
             p.chat_endpoint(),
             "http://localhost:1234/v1/chat/completions"
@@ -826,8 +870,8 @@ mod tests {
 
     #[test]
     fn llamacpp_chat_endpoint_is_openai_compat() {
-        let p = DirectApiProvider::new(Provider::LlamaCpp, String::new(), None)
-            .expect("should create");
+        let p =
+            DirectApiProvider::new(Provider::LlamaCpp, String::new(), None).expect("should create");
         assert_eq!(
             p.chat_endpoint(),
             "http://localhost:8080/v1/chat/completions"
@@ -836,8 +880,7 @@ mod tests {
 
     #[test]
     fn vllm_chat_endpoint_is_openai_compat() {
-        let p = DirectApiProvider::new(Provider::Vllm, String::new(), None)
-            .expect("should create");
+        let p = DirectApiProvider::new(Provider::Vllm, String::new(), None).expect("should create");
         assert_eq!(
             p.chat_endpoint(),
             "http://localhost:8000/v1/chat/completions"
@@ -913,10 +956,7 @@ mod tests {
     fn vllm_apply_auth_omits_bearer_header_when_no_key_configured() {
         let p = DirectApiProvider::new(Provider::Vllm, String::new(), None).expect("should create");
         let builder = reqwest::Client::new().post("http://localhost:8000/v1/chat/completions");
-        let request = p
-            .apply_auth(builder)
-            .build()
-            .expect("request should build");
+        let request = p.apply_auth(builder).build().expect("request should build");
         assert!(
             !request.headers().contains_key("authorization"),
             "vLLM with no configured key must not send an Authorization header"
@@ -931,10 +971,7 @@ mod tests {
         let p = DirectApiProvider::new(Provider::Vllm, "vllm-secret".to_string(), None)
             .expect("should create");
         let builder = reqwest::Client::new().post("http://localhost:8000/v1/chat/completions");
-        let request = p
-            .apply_auth(builder)
-            .build()
-            .expect("request should build");
+        let request = p.apply_auth(builder).build().expect("request should build");
         assert_eq!(
             request
                 .headers()
@@ -977,9 +1014,11 @@ mod tests {
     fn validate_blocks_http_non_loopback() {
         let result = validate_provider_base_url("http://10.0.0.5:8080");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("HTTP (non-TLS) is only allowed for approved localhost ports"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("HTTP (non-TLS) is only allowed for approved localhost ports")
+        );
     }
 
     #[test]

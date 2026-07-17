@@ -33,7 +33,7 @@ use crate::sys::security::master_password_encryption::MasterPasswordEncryption;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-/// Mirrors `ConnectorPermissionLevel` from packages/types.
+/// Mirrors `ConnectorPermissionLevel` from packages/contracts/types.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PermissionLevel {

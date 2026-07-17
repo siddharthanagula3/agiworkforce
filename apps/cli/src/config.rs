@@ -438,7 +438,10 @@ impl CliConfig {
 
         let names: Vec<String> = project.providers.keys().cloned().collect();
         for name in names {
-            let Some(base_url) = project.providers.get(&name).and_then(|p| p.base_url.clone())
+            let Some(base_url) = project
+                .providers
+                .get(&name)
+                .and_then(|p| p.base_url.clone())
             else {
                 continue;
             };

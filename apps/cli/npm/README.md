@@ -84,18 +84,20 @@ agi
 agi exec -m "claude-opus-4.8,gpt-5.5,llama3.1:8b" "explain this code"
 ```
 
-## 22 subcommands
+## 26 subcommands
 
-| Group           | Commands                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------------- |
-| Run             | `exec` (alias `e`), `review`, `apply` (alias `a`), `sandbox`                              |
-| Servers         | `mcp-server`, `app-server`                                                                |
-| Sessions        | `resume`, `fork`, `session`                                                               |
-| Cloud / Plugins | `cloud`, `plugin`, `marketplace`                                                          |
-| Inspection      | `features`, `execpolicy`, `ecosystem`, `history`, `--list-models`, `--dump-system-prompt` |
-| Sync            | `sync`                                                                                    |
-| Auth            | `login`, `logout`, `auth-status`                                                          |
-| Setup           | `init`, `onboarding`                                                                      |
+| Group            | Commands                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| Run              | `exec` (alias `e`), `review`, `apply` (alias `a`), `sandbox`                              |
+| Servers          | `mcp-server`, `app-server`                                                                |
+| Sessions         | `resume`, `fork`, `session`                                                               |
+| Models / Plugins | `models`, `plugin`, `marketplace`                                                         |
+| Completions      | `completion` (alias `completions`)                                                        |
+| Inspection       | `features`, `execpolicy`, `ecosystem`, `history`, `--list-models`, `--dump-system-prompt` |
+| Policy           | `approvals`                                                                               |
+| Sync             | `sync`                                                                                    |
+| Auth             | `login`, `logout`, `auth-status`                                                          |
+| Setup            | `init`, `onboarding`, `migrate`                                                           |
 
 Run `agi <command> --help` for any.
 

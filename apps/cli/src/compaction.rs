@@ -342,7 +342,10 @@ pub fn compact_with_config(
     }
 
     // Phase 6: Last resort — select the most recent messages that fit.
-    msgs = normalize_tool_pairs(select_recent(combined, target_tokens), &original_tool_use_ids);
+    msgs = normalize_tool_pairs(
+        select_recent(combined, target_tokens),
+        &original_tool_use_ids,
+    );
     let final_tokens = total_tokens(&msgs);
 
     let status = if final_tokens > original_tokens {
@@ -448,8 +451,9 @@ fn normalize_tool_pairs(
                 "user",
                 vec![ContentBlock::ToolResult {
                     tool_use_id: id.clone(),
-                    content: "[Tool call was aborted during context compaction — no output produced]"
-                        .to_string(),
+                    content:
+                        "[Tool call was aborted during context compaction — no output produced]"
+                            .to_string(),
                     is_error: true,
                 }],
             ));

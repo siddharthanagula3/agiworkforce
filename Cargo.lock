@@ -119,6 +119,7 @@ dependencies = [
 name = "agiworkforce-app-server"
 version = "0.1.0"
 dependencies = [
+ "agiworkforce-protocol",
  "anyhow",
  "async-trait",
  "axum",
@@ -126,16 +127,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
-]
-
-[[package]]
-name = "agiworkforce-async-utils"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "pretty_assertions",
- "tokio",
- "tokio-util",
 ]
 
 [[package]]
@@ -148,6 +139,7 @@ dependencies = [
  "agiworkforce-execpolicy",
  "agiworkforce-llm",
  "agiworkforce-mcp",
+ "agiworkforce-model-registry",
  "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",
  "agiworkforce-utils-image",
@@ -215,6 +207,7 @@ dependencies = [
  "agiworkforce-execpolicy",
  "agiworkforce-llm",
  "agiworkforce-mcp",
+ "agiworkforce-model-registry",
  "agiworkforce-sandbox-policy",
  "anyhow",
  "arboard",
@@ -416,16 +409,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "agiworkforce-model-registry"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "agiworkforce-network-proxy"
 version = "0.1.0"
 dependencies = [
  "agiworkforce-utils-absolute-path",
- "agiworkforce-utils-home-dir",
- "agiworkforce-utils-rustls-provider",
  "anyhow",
  "async-trait",
  "chrono",
  "clap",
+ "dirs 6.0.0",
  "globset",
  "pretty_assertions",
  "rama-core",
@@ -436,6 +437,8 @@ dependencies = [
  "rama-tcp",
  "rama-tls-rustls",
  "rama-unix",
+ "rustls 0.23.36",
+ "rustls-native-certs",
  "serde",
  "serde_json",
  "tempfile",
@@ -450,14 +453,12 @@ dependencies = [
 name = "agiworkforce-protocol"
 version = "0.1.0"
 dependencies = [
- "agiworkforce-async-utils",
  "agiworkforce-execpolicy",
  "agiworkforce-network-proxy",
  "agiworkforce-utils-absolute-path",
  "agiworkforce-utils-image",
- "agiworkforce-utils-string",
- "agiworkforce-utils-template",
  "anyhow",
+ "async-trait",
  "chardetng",
  "chrono",
  "encoding_rs",
@@ -469,6 +470,7 @@ dependencies = [
  "landlock",
  "pretty_assertions",
  "quick-xml 0.38.4",
+ "regex-lite",
  "reqwest 0.12.28",
  "schemars 0.8.22",
  "seccompiler",
@@ -481,6 +483,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tracing",
  "ts-rs",
  "uuid 1.20.0",
@@ -510,69 +513,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "agiworkforce-utils-cache"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "lru 0.16.3",
- "serde",
- "sha1",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "agiworkforce-utils-home-dir"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "dirs 6.0.0",
- "pretty_assertions",
- "serde",
- "tempfile",
-]
-
-[[package]]
 name = "agiworkforce-utils-image"
 version = "0.1.0"
 dependencies = [
- "agiworkforce-utils-cache",
  "anyhow",
  "base64 0.22.1",
  "image 0.25.9",
+ "lru 0.16.3",
  "mime_guess",
  "schemars 0.8.22",
  "serde",
  "serde_json",
+ "sha1",
  "thiserror 2.0.18",
  "tokio",
  "ts-rs",
-]
-
-[[package]]
-name = "agiworkforce-utils-rustls-provider"
-version = "0.1.0"
-dependencies = [
- "rustls 0.23.36",
- "rustls-native-certs",
-]
-
-[[package]]
-name = "agiworkforce-utils-string"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "pretty_assertions",
- "regex-lite",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "agiworkforce-utils-template"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
 ]
 
 [[package]]

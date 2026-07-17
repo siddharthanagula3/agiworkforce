@@ -213,7 +213,7 @@ pub trait ProviderAdapter: Send + Sync {
 
     /// Convert provider-specific response to unified LLMResponse.
     fn adapt_response(&self, response: &Value)
-        -> Result<LLMResponse, Box<dyn Error + Send + Sync>>;
+    -> Result<LLMResponse, Box<dyn Error + Send + Sync>>;
 
     /// Get the provider name.
     fn provider_name(&self) -> &str;
@@ -331,7 +331,11 @@ impl ProviderAdapter for OpenAIAdapter {
         response: &Value,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
         // Check if this is a Responses API response or Chat Completions API response
-        if response.get("output").is_some() {
+        let is_responses_api = response.get("output").is_some()
+            || response.get("object").and_then(Value::as_str) == Some("response")
+            || (response.get("status").is_some() && response.get("choices").is_none());
+
+        if is_responses_api {
             self.adapt_from_responses_api(response)
         } else {
             self.adapt_from_chat_completions_api(response)
@@ -440,7 +444,7 @@ impl OpenAIAdapter {
         data: &[u8],
         format: super::ImageFormat,
     ) -> Result<String, Box<dyn Error + Send + Sync>> {
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
 
         let base64_data = STANDARD.encode(data);
         let mime_type = match format {
@@ -456,14 +460,15 @@ impl OpenAIAdapter {
     fn process_multimodal_content_responses(
         &self,
         content_parts: &[super::ContentPart],
-    ) -> Result<(Value, u32), Box<dyn Error + Send + Sync>> {
-        let mut processed_parts = Vec::new();
+    ) -> Result<(Vec<Value>, Vec<Value>, u32), Box<dyn Error + Send + Sync>> {
+        let mut message_parts = Vec::new();
+        let mut input_items = Vec::new();
         let mut total_image_tokens = 0u32;
 
         for part in content_parts {
             match part {
                 super::ContentPart::Text { text } => {
-                    processed_parts.push(serde_json::json!({
+                    message_parts.push(serde_json::json!({
                         "type": "input_text",
                         "text": text
                     }));
@@ -490,33 +495,26 @@ impl OpenAIAdapter {
                         super::ImageDetail::Auto => "auto",
                     };
 
-                    processed_parts.push(serde_json::json!({
+                    message_parts.push(serde_json::json!({
                         "type": "input_image",
-                        "source": {
-                            "type": "url",
-                            "url": image_url,
-                            "detail": detail_str
-                        }
+                        "image_url": image_url,
+                        "detail": detail_str
                     }));
                 }
                 super::ContentPart::ToolUse { tool_use } => {
-                    processed_parts.push(serde_json::json!({
+                    input_items.push(serde_json::json!({
                         "type": "function_call",
-                        "id": tool_use.id,
+                        "call_id": tool_use.id,
                         "name": tool_use.name,
                         "arguments": serde_json::to_string(&tool_use.input)?
                     }));
                 }
                 super::ContentPart::ToolResult { tool_result } => {
-                    let mut tool_result_json = serde_json::json!({
-                        "type": "function_result",
+                    input_items.push(serde_json::json!({
+                        "type": "function_call_output",
                         "call_id": tool_result.tool_use_id,
                         "output": tool_result.content
-                    });
-                    if tool_result.is_error {
-                        tool_result_json["is_error"] = serde_json::json!(true);
-                    }
-                    processed_parts.push(tool_result_json);
+                    }));
                 }
                 _ => {
                     tracing::warn!("Unsupported content type in Responses API multimodal content");
@@ -524,7 +522,96 @@ impl OpenAIAdapter {
             }
         }
 
-        Ok((serde_json::json!(processed_parts), total_image_tokens))
+        Ok((message_parts, input_items, total_image_tokens))
+    }
+
+    /// Convert Desktop's message/history shape into Responses API input Items.
+    /// Function calls and their outputs are top-level Items, not message
+    /// content blocks and not Chat Completions `tool` messages.
+    fn adapt_messages_to_responses_input(
+        &self,
+        messages: &[super::ChatMessage],
+    ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
+        let mut input = Vec::new();
+        let mut emitted_call_ids = std::collections::HashSet::new();
+
+        for message in messages {
+            let mut message_content = None;
+            let mut side_items = Vec::new();
+
+            if let Some(multimodal) = &message.multimodal_content {
+                let (parts, items, _image_tokens) =
+                    self.process_multimodal_content_responses(multimodal)?;
+                if !parts.is_empty() {
+                    message_content = Some(serde_json::json!(parts));
+                }
+                side_items = items;
+            } else if !message.content.is_empty() {
+                message_content = Some(serde_json::json!(message.content));
+            }
+
+            if message.role == "tool" {
+                let has_typed_output = side_items.iter().any(|item| {
+                    item.get("type").and_then(Value::as_str) == Some("function_call_output")
+                });
+                if !has_typed_output {
+                    let call_id = message.tool_call_id.as_deref().ok_or_else(|| {
+                        "OpenAI Responses tool-result message is missing tool_call_id".to_string()
+                    })?;
+                    side_items.push(serde_json::json!({
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": message.content,
+                    }));
+                }
+            } else {
+                let has_tool_calls = message
+                    .tool_calls
+                    .as_ref()
+                    .is_some_and(|calls| !calls.is_empty())
+                    || side_items.iter().any(|item| {
+                        item.get("type").and_then(Value::as_str) == Some("function_call")
+                    });
+                if let Some(content) = message_content {
+                    input.push(serde_json::json!({
+                        "role": message.role,
+                        "content": content,
+                    }));
+                } else if !has_tool_calls {
+                    input.push(serde_json::json!({
+                        "role": message.role,
+                        "content": "",
+                    }));
+                }
+
+                if let Some(tool_calls) = &message.tool_calls {
+                    for tool_call in tool_calls {
+                        if emitted_call_ids.insert(tool_call.id.clone()) {
+                            input.push(serde_json::json!({
+                                "type": "function_call",
+                                "call_id": tool_call.id,
+                                "name": tool_call.name,
+                                "arguments": tool_call.arguments,
+                            }));
+                        }
+                    }
+                }
+            }
+
+            for item in side_items {
+                let is_function_call =
+                    item.get("type").and_then(Value::as_str) == Some("function_call");
+                let call_id = item.get("call_id").and_then(Value::as_str);
+                if is_function_call
+                    && call_id.is_some_and(|call_id| !emitted_call_ids.insert(call_id.to_string()))
+                {
+                    continue;
+                }
+                input.push(item);
+            }
+        }
+
+        Ok(input)
     }
 
     /// Process multimodal content for Chat Completions API format
@@ -601,36 +688,18 @@ impl OpenAIAdapter {
             api_request["previous_response_id"] = serde_json::json!(prev_response_id);
         }
 
-        // Convert messages to input format with vision support
-        if request.messages.len() == 1 && request.messages[0].role == "user" {
-            // Check if message has multimodal content (images, etc.)
-            if let Some(multimodal_content) = &request.messages[0].multimodal_content {
-                let (processed_content, _image_tokens) =
-                    self.process_multimodal_content_responses(multimodal_content)?;
-                api_request["input"] = processed_content;
-            } else {
-                // Simple case: single user message with text only
-                api_request["input"] = serde_json::json!(request.messages[0].content.clone());
-            }
+        // A single text-only user turn can use the compact string form. Every
+        // multimodal/history/tool turn uses typed input Items.
+        if request.messages.len() == 1
+            && request.messages[0].role == "user"
+            && request.messages[0].multimodal_content.is_none()
+            && request.messages[0].tool_calls.is_none()
+            && request.messages[0].tool_call_id.is_none()
+        {
+            api_request["input"] = serde_json::json!(request.messages[0].content.clone());
         } else {
-            // Complex case: multiple messages with roles
-            let mut processed_messages = Vec::new();
-            for msg in &request.messages {
-                if let Some(multimodal_content) = &msg.multimodal_content {
-                    let (processed_content, _image_tokens) =
-                        self.process_multimodal_content_responses(multimodal_content)?;
-                    processed_messages.push(serde_json::json!({
-                        "role": msg.role,
-                        "content": processed_content
-                    }));
-                } else {
-                    processed_messages.push(serde_json::json!({
-                        "role": msg.role,
-                        "content": msg.content
-                    }));
-                }
-            }
-            api_request["input"] = serde_json::json!(processed_messages);
+            api_request["input"] =
+                serde_json::json!(self.adapt_messages_to_responses_input(&request.messages)?);
         }
 
         // Add instructions (system prompt)
@@ -698,19 +767,16 @@ impl OpenAIAdapter {
                     schema,
                     description,
                 } => {
-                    let mut schema_obj = serde_json::json!({
+                    let mut format = serde_json::json!({
+                        "type": "json_schema",
                         "name": name,
                         "schema": schema,
+                        "strict": true,
                     });
                     if let Some(desc) = description {
-                        schema_obj["description"] = serde_json::json!(desc);
+                        format["description"] = serde_json::json!(desc);
                     }
-                    api_request["text"] = serde_json::json!({
-                        "format": {
-                            "type": "json_schema",
-                            "json_schema": schema_obj,
-                        }
-                    });
+                    api_request["text"] = serde_json::json!({ "format": format });
                     tracing::info!(
                         schema_name = %name,
                         "OpenAI Responses API structured output requested (json_schema)"
@@ -721,11 +787,25 @@ impl OpenAIAdapter {
                 }
             }
         } else if let Some(format) = &request.response_format {
-            if let Some(json_schema) = &format.json_schema {
-                api_request["text"] = serde_json::json!({
-                    "format": "json_schema",
-                    "json_schema": json_schema
-                });
+            match format.format_type.as_str() {
+                "json_schema" => {
+                    if let Some(json_schema) = &format.json_schema {
+                        api_request["text"] = serde_json::json!({
+                            "format": {
+                                "type": "json_schema",
+                                "name": "response",
+                                "schema": json_schema,
+                                "strict": true,
+                            }
+                        });
+                    }
+                }
+                "json_object" => {
+                    api_request["text"] = serde_json::json!({
+                        "format": { "type": "json_object" }
+                    });
+                }
+                _ => {}
             }
         }
 
@@ -754,14 +834,14 @@ impl OpenAIAdapter {
             api_request["max_output_tokens"] = serde_json::json!(max_tokens);
         }
 
-        // Add tools (nested format)
+        // Add tools in Responses' flat custom-function format.
         if let Some(tools) = &request.tools {
-            api_request["tools"] = self.adapt_tools_to_nested_format(tools)?;
+            api_request["tools"] = self.adapt_tools_to_responses_format(tools)?;
         }
 
         // Add tool_choice
         if let Some(tool_choice) = &request.tool_choice {
-            api_request["tool_choice"] = serde_json::to_value(tool_choice)?;
+            api_request["tool_choice"] = Self::adapt_tool_choice_to_responses(tool_choice);
         }
 
         // Add streaming
@@ -873,7 +953,7 @@ impl OpenAIAdapter {
 
         // Add tools (nested format for OpenAI)
         if let Some(tools) = &request.tools {
-            api_request["tools"] = self.adapt_tools_to_nested_format(tools)?;
+            api_request["tools"] = self.adapt_tools_to_chat_completions_format(tools)?;
         }
 
         // Add tool_choice
@@ -936,9 +1016,9 @@ impl OpenAIAdapter {
         Ok(api_request)
     }
 
-    /// Convert tools to OpenAI's nested format
+    /// Convert tools to OpenAI Chat Completions' nested function format.
     /// Detects and handles built-in server-side tools (web_search, code_interpreter, etc.)
-    fn adapt_tools_to_nested_format(
+    fn adapt_tools_to_chat_completions_format(
         &self,
         tools: &[super::ToolDefinition],
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
@@ -969,6 +1049,45 @@ impl OpenAIAdapter {
             .collect();
 
         Ok(serde_json::json!(nested_tools))
+    }
+
+    /// Convert tools to the Responses API's flat function format.
+    fn adapt_tools_to_responses_format(
+        &self,
+        tools: &[super::ToolDefinition],
+    ) -> Result<Value, Box<dyn Error + Send + Sync>> {
+        let response_tools = tools
+            .iter()
+            .map(|tool| {
+                if let Some(server_tool) = OpenAIServerTool::from_str(&tool.name) {
+                    return self.create_builtin_tool_definition(server_tool, tool);
+                }
+
+                let mut definition = serde_json::json!({
+                    "type": "function",
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": Self::normalize_array_items_in_schema(&tool.parameters),
+                });
+                if let Some(strict) = tool.strict {
+                    definition["strict"] = serde_json::json!(strict);
+                }
+                definition
+            })
+            .collect::<Vec<_>>();
+        Ok(serde_json::json!(response_tools))
+    }
+
+    fn adapt_tool_choice_to_responses(tool_choice: &super::ToolChoice) -> Value {
+        match tool_choice {
+            super::ToolChoice::Auto => serde_json::json!("auto"),
+            super::ToolChoice::Required => serde_json::json!("required"),
+            super::ToolChoice::None => serde_json::json!("none"),
+            super::ToolChoice::Specific(name) => serde_json::json!({
+                "type": "function",
+                "name": name,
+            }),
+        }
     }
 
     /// OpenAI-compatible tool schemas require `items` for any array schema.
@@ -1141,7 +1260,7 @@ impl OpenAIAdapter {
         content_parts: &[super::ContentPart],
     ) -> Result<Vec<Value>, Box<dyn Error + Send + Sync>> {
         use super::ContentPart;
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
 
         let mut processed_parts = Vec::new();
 
@@ -1188,7 +1307,7 @@ impl OpenAIAdapter {
                     processed_parts.push(audio_part);
                 }
                 ContentPart::Image { image } => {
-                    use base64::{engine::general_purpose::STANDARD, Engine as _};
+                    use base64::{Engine as _, engine::general_purpose::STANDARD};
                     let base64_str = STANDARD.encode(&image.data);
                     let data_url =
                         format!("data:{};base64,{}", image.format.mime_type(), base64_str);
@@ -1202,7 +1321,7 @@ impl OpenAIAdapter {
                 }
                 ContentPart::Video { video } => {
                     use super::VideoData;
-                    use base64::{engine::general_purpose::STANDARD, Engine as _};
+                    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
                     let video_url = match &video.data {
                         VideoData::Bytes(bytes) => {
@@ -1294,9 +1413,9 @@ impl OpenAIAdapter {
 
         if output_type == "function_call" {
             let id = value
-                .get("id")
+                .get("call_id")
                 .and_then(Value::as_str)
-                .or_else(|| value.get("call_id").and_then(Value::as_str))
+                .or_else(|| value.get("id").and_then(Value::as_str))
                 .map(ToString::to_string)
                 .unwrap_or_else(|| format!("call_{}", uuid::Uuid::new_v4()));
             let name = value.get("name").and_then(Value::as_str)?.to_string();
@@ -1357,8 +1476,29 @@ impl OpenAIAdapter {
         &self,
         response: &Value,
     ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+        let status = response.get("status").and_then(Value::as_str);
+        let error = response.get("error").filter(|error| !error.is_null());
+        if status == Some("failed") || error.is_some() {
+            let error = error.unwrap_or(&Value::Null);
+            let code = error
+                .get("code")
+                .and_then(Value::as_str)
+                .map(|code| format!(" ({code})"))
+                .unwrap_or_default();
+            let message = error
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("The OpenAI Responses request failed without an error message.");
+
+            return Err(std::io::Error::other(format!(
+                "OpenAI Responses API error{code}: {message}"
+            ))
+            .into());
+        }
+
         // Extract text from output array
         let mut content = String::new();
+        let mut reasoning_parts = Vec::new();
         let mut tool_calls = Vec::new();
 
         if let Some(output) = response["output"].as_array() {
@@ -1372,6 +1512,15 @@ impl OpenAIAdapter {
                     if item_type == "output_text" {
                         if let Some(text) = item.get("text").and_then(Value::as_str) {
                             Self::append_output_text(&mut content, text);
+                        }
+                    } else if item_type == "reasoning" {
+                        if let Some(summary) = item.get("summary").and_then(Value::as_array) {
+                            reasoning_parts.extend(summary.iter().filter_map(|part| {
+                                (part.get("type").and_then(Value::as_str) == Some("summary_text"))
+                                    .then(|| part.get("text").and_then(Value::as_str))
+                                    .flatten()
+                                    .map(ToString::to_string)
+                            }));
                         }
                     } else if item_type == "message" {
                         // Message text is usually nested in content blocks.
@@ -1412,16 +1561,29 @@ impl OpenAIAdapter {
         let reasoning_tokens = usage["output_tokens_details"]["reasoning_tokens"]
             .as_u64()
             .map(|v| v as u32);
+        let cache_read_input_tokens = usage["input_tokens_details"]["cached_tokens"]
+            .as_u64()
+            .map(|v| v as u32);
 
-        let finish_reason = response["status"].as_str().map(|s| s.to_string());
+        let finish_reason = response["incomplete_details"]["reason"]
+            .as_str()
+            .or(status)
+            .map(ToString::to_string);
         let response_id = response["id"].as_str().map(|s| s.to_string());
+        let reasoning_content = if reasoning_parts.is_empty() {
+            None
+        } else {
+            Some(reasoning_parts.join("\n"))
+        };
 
         Ok(LLMResponse {
             content,
             tokens: total_tokens,
             prompt_tokens,
             completion_tokens,
+            cache_read_input_tokens,
             reasoning_tokens,
+            reasoning_content,
             model: response["model"].as_str().unwrap_or("").to_string(),
             tool_calls: if tool_calls.is_empty() {
                 None
@@ -1538,7 +1700,7 @@ impl OpenAIAdapter {
         &self,
         response: &Value,
     ) -> (Option<Vec<u8>>, Option<super::AudioFormat>, Option<String>) {
-        use base64::{engine::general_purpose::STANDARD, Engine as _};
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
 
         // Check for audio in message content
         if let Some(audio_obj) = response["choices"][0]["message"]["audio"].as_object() {
@@ -1614,7 +1776,7 @@ impl ProviderAdapter for AnthropicAdapter {
         // "tool_result".  We detect tool-result-bearing messages in both
         // the multimodal and plain-text paths and always emit role="user".
         let messages: Vec<Value> = {
-            use base64::{engine::general_purpose::STANDARD, Engine as _};
+            use base64::{Engine as _, engine::general_purpose::STANDARD};
             let mut out = Vec::with_capacity(request.messages.len());
             for msg in &request.messages {
                 if let Some(parts) = &msg.multimodal_content {
@@ -1646,9 +1808,13 @@ impl ProviderAdapter for AnthropicAdapter {
                                 let base64_data = STANDARD.encode(&document.data);
                                 let media_type = match document.format {
                                     super::DocumentFormat::Pdf => "application/pdf",
-                                    super::DocumentFormat::Docx => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                    super::DocumentFormat::Docx => {
+                                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                    }
                                     super::DocumentFormat::Html => "text/html",
-                                    super::DocumentFormat::Md | super::DocumentFormat::Txt => "text/plain",
+                                    super::DocumentFormat::Md | super::DocumentFormat::Txt => {
+                                        "text/plain"
+                                    }
                                 };
                                 let mut doc_block = serde_json::json!({
                                     "type": "document",

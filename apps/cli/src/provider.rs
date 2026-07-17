@@ -596,20 +596,20 @@ mod tests {
     #[test]
     fn test_non_reasoning_models_not_flagged() {
         // Spot-check a model that is non-reasoning per the SSOT
-        // (packages/types/src/models.json capabilities.thinking=false).
+        // (packages/contracts/types/src/models.json capabilities.thinking=false).
         let model = find_model("gemini-3.1-flash-lite").unwrap();
         assert!(!model.supports_reasoning);
     }
 
     /// Guard against test-vs-SSOT drift: derive reasoning expectations from
-    /// `packages/types/src/models.json` (the SSOT the catalog is compiled
+    /// `packages/contracts/types/src/models.json` (the SSOT the catalog is compiled
     /// from) instead of hardcoding per-model booleans. A capability flip in
     /// the SSOT (e.g. Haiku 4.5 thinking=true in the effort-catalog wave)
     /// must never leave this suite asserting stale values.
     #[test]
     fn test_reasoning_flags_match_ssot_thinking_capability() {
         let ssot: serde_json::Value =
-            serde_json::from_str(include_str!("../../../packages/types/src/models.json"))
+            serde_json::from_str(include_str!("../../../packages/contracts/types/src/models.json"))
                 .expect("models.json must parse");
         let models = ssot
             .get("models")
@@ -1112,9 +1112,7 @@ mod tests {
             .get("default")
             .is_none());
         // anyOf union members sanitized.
-        let any_of = cleaned["properties"]["choice"]["anyOf"]
-            .as_array()
-            .unwrap();
+        let any_of = cleaned["properties"]["choice"]["anyOf"].as_array().unwrap();
         assert!(any_of[0].get("default").is_none());
         assert!(any_of[1].get("const").is_none());
         // Nested object property sanitized at depth.
@@ -1126,6 +1124,9 @@ mod tests {
             .is_none());
         // Structural fields preserved.
         assert_eq!(cleaned["properties"]["tags"]["items"]["type"], "string");
-        assert_eq!(cleaned["properties"]["choice"]["anyOf"][1]["type"], "integer");
+        assert_eq!(
+            cleaned["properties"]["choice"]["anyOf"][1]["type"],
+            "integer"
+        );
     }
 }

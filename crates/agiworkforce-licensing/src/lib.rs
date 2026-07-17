@@ -3,9 +3,8 @@
 //! §2.1 / §2.2).
 //!
 //! This crate is a byte-for-byte re-implementation of the TypeScript
-//! `@agiworkforce/licensing` package (`packages/licensing`) and the org-policy
-//! verifier in `@agiworkforce/services`
-//! (`packages/services/src/cloud-contracts/org-policy.ts`). Both implementations
+//! `@agiworkforce/licensing` package (`packages/contracts/licensing`), including its
+//! org-policy verifier (`packages/contracts/licensing/src/org-policy.ts`). Both implementations
 //! deliberately share ONE language-neutral fixture corpus so the Rust verdicts
 //! can be proven identical to the TS verdicts — the same cross-language replay
 //! pattern used by `sync-apply`. The container format is intentionally

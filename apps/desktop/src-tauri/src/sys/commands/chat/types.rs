@@ -77,6 +77,38 @@ pub trait Validate {
     fn validate(&self) -> Result<(), ValidationError>;
 }
 
+/// Per-conversation execution boundary. This is distinct from `active_mode`:
+/// Local and BYOK are both stored on-device, but they admit different providers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatExecutionMode {
+    LocalOnly,
+    Byok,
+    CloudManaged,
+}
+
+impl ChatExecutionMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::LocalOnly => "local_only",
+            Self::Byok => "byok",
+            Self::CloudManaged => "cloud_managed",
+        }
+    }
+
+    pub fn trust_mode(self) -> agiworkforce_model_registry::TrustMode {
+        match self {
+            Self::LocalOnly => agiworkforce_model_registry::TrustMode::Local,
+            Self::Byok => agiworkforce_model_registry::TrustMode::Byok,
+            Self::CloudManaged => agiworkforce_model_registry::TrustMode::ManagedCloud,
+        }
+    }
+
+    pub fn uses_local_storage(self) -> bool {
+        !matches!(self, Self::CloudManaged)
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateConversationRequest {
     pub title: String,
@@ -87,6 +119,8 @@ pub struct CreateConversationRequest {
     // visible error. Same pattern as ChatSendMessageRequest's per-field aliases.
     #[serde(alias = "userId")]
     pub user_id: String,
+    #[serde(default, alias = "executionMode")]
+    pub execution_mode: Option<ChatExecutionMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -187,6 +221,11 @@ pub struct ChatSendMessageRequest {
     /// `prefer_cloud_credits` bool for backwards compatibility.
     #[serde(default, alias = "activeMode")]
     pub active_mode: Option<String>,
+
+    /// Immutable execution boundary copied from the conversation. New clients
+    /// must send this; `active_mode` remains as a storage-plane compatibility field.
+    #[serde(default, alias = "executionMode")]
+    pub execution_mode: Option<ChatExecutionMode>,
 
     // Frontend message ID for event coordination
     #[serde(default, alias = "frontendMessageId")]
@@ -470,6 +509,35 @@ impl Validate for ChatSendMessageRequest {
                         "Invalid active_mode '{}'. Must be 'local' or 'cloud'.",
                         mode
                     ),
+                });
+            }
+        }
+
+        if let Some(execution_mode) = self.execution_mode {
+            let expected_active_mode = if execution_mode.uses_local_storage() {
+                "local"
+            } else {
+                "cloud"
+            };
+            if self
+                .active_mode
+                .as_deref()
+                .is_some_and(|mode| mode != expected_active_mode)
+            {
+                return Err(ValidationError {
+                    field: "execution_mode".to_string(),
+                    message: format!(
+                        "execution_mode is inconsistent with active_mode; expected '{}'.",
+                        expected_active_mode
+                    ),
+                });
+            }
+            let expects_cloud_credits = matches!(execution_mode, ChatExecutionMode::CloudManaged);
+            if self.prefer_cloud_credits != expects_cloud_credits {
+                return Err(ValidationError {
+                    field: "prefer_cloud_credits".to_string(),
+                    message: "prefer_cloud_credits must be true only for cloud_managed execution."
+                        .to_string(),
                 });
             }
         }

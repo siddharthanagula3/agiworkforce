@@ -175,20 +175,32 @@ mod tests {
     fn message_not_marked_for_push_when_cloud_sync_disabled() {
         let (_db_inner, db) = make_test_db();
         let conn = db.connection().expect("connection");
-        let conv_id =
-            repository::create_conversation(&conn, "c".to_string(), "u1".to_string())
-                .expect("create conversation");
+        let conv_id = repository::create_conversation(&conn, "c".to_string(), "u1".to_string())
+            .expect("create conversation");
         drop(conn);
 
         save_assistant_message(
-            &db, conv_id, "u1", "hello", Some(10), Some(0.001), Some("openai"), "gpt-4",
+            &db,
+            conv_id,
+            "u1",
+            "hello",
+            Some(10),
+            Some(0.001),
+            Some("openai"),
+            "gpt-4",
             false, // cloud_sync_enabled = false
         )
         .expect("save should succeed");
 
         let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
-        assert_eq!(needs_push, 0, "needs_push must stay 0 when cloud sync is disabled");
-        assert!(cloud_id.is_none(), "no cloud_id when cloud sync is disabled");
+        assert_eq!(
+            needs_push, 0,
+            "needs_push must stay 0 when cloud sync is disabled"
+        );
+        assert!(
+            cloud_id.is_none(),
+            "no cloud_id when cloud sync is disabled"
+        );
     }
 
     /// Even with cloud_sync_enabled=true, a message on a LOCAL conversation is never
@@ -198,20 +210,32 @@ mod tests {
     fn local_conversation_message_not_marked_even_when_cloud_sync_enabled() {
         let (_db_inner, db) = make_test_db();
         let conn = db.connection().expect("connection");
-        let conv_id =
-            repository::create_conversation(&conn, "local".to_string(), "u2".to_string())
-                .expect("create conversation"); // app_mode defaults to 'local'
+        let conv_id = repository::create_conversation(&conn, "local".to_string(), "u2".to_string())
+            .expect("create conversation"); // app_mode defaults to 'local'
         drop(conn);
 
         save_assistant_message(
-            &db, conv_id, "u2", "cloud test", None, None, None, "gpt-4",
+            &db,
+            conv_id,
+            "u2",
+            "cloud test",
+            None,
+            None,
+            None,
+            "gpt-4",
             true, // cloud_sync_enabled = true
         )
         .expect("save should succeed");
 
         let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
-        assert_eq!(needs_push, 0, "local-conversation message must not be marked for push");
-        assert!(cloud_id.is_none(), "local-conversation message must not get a cloud_id");
+        assert_eq!(
+            needs_push, 0,
+            "local-conversation message must not be marked for push"
+        );
+        assert!(
+            cloud_id.is_none(),
+            "local-conversation message must not get a cloud_id"
+        );
     }
 
     /// Happy path: a CLOUD conversation + cloud_sync_enabled=true → the message IS
@@ -221,7 +245,10 @@ mod tests {
         let (_db_inner, db) = make_test_db();
         let conn = db.connection().expect("connection");
         let conv_id = repository::create_conversation_with_mode(
-            &conn, "cloud".to_string(), "u3".to_string(), "cloud",
+            &conn,
+            "cloud".to_string(),
+            "u3".to_string(),
+            "cloud",
         )
         .expect("create cloud conversation");
         drop(conn);
@@ -233,7 +260,13 @@ mod tests {
         .expect("save should succeed");
 
         let (needs_push, cloud_id) = latest_message_sync_state(&db, conv_id);
-        assert_eq!(needs_push, 1, "cloud-conversation message must be marked for push");
-        assert!(cloud_id.is_some(), "cloud-conversation message must get a cloud_id");
+        assert_eq!(
+            needs_push, 1,
+            "cloud-conversation message must be marked for push"
+        );
+        assert!(
+            cloud_id.is_some(),
+            "cloud-conversation message must get a cloud_id"
+        );
     }
 }

@@ -699,10 +699,33 @@ pub fn run() {
             // Notification state for scheduled notifications
             app.manage(NotificationState::new());
 
-            // Scheduler state for proactive task scheduling
-            let scheduler_state = SchedulerState::new();
+            // Scheduler state for proactive task scheduling, backed by local
+            // encrypted SQLite so schedules survive app restarts. Falls back
+            // to a temp-dir database, then to in-memory-only, if persistence
+            // cannot be initialized at the primary path.
+            let scheduler_db_path = app_data_dir.join("scheduler.db");
+            let scheduler_state = match SchedulerState::new_with_store(&scheduler_db_path) {
+                Ok(state) => state,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to initialize scheduler persistence at {}: {}. Falling back to a temp-dir database.",
+                        scheduler_db_path.display(),
+                        e
+                    );
+                    let fallback_path = std::env::temp_dir().join("scheduler_fallback.db");
+                    SchedulerState::new_with_store(&fallback_path).unwrap_or_else(|e2| {
+                        tracing::error!(
+                            "Fallback scheduler persistence also failed: {}. Running with an \
+                             in-memory-only scheduler for this session — jobs will not survive restart.",
+                            e2
+                        );
+                        SchedulerState::new()
+                    })
+                }
+            };
             // Register default memory maintenance jobs (daily summarization + weekly decay).
-            // Idempotent — skips if jobs already exist.
+            // Idempotent — skips if jobs already exist (including jobs just hydrated from disk),
+            // so a paused/edited default job is left as the user set it rather than recreated.
             scheduler_state.register_default_memory_jobs();
             // Start the background polling loop so scheduled jobs fire automatically.
             // The loop polls every 30 seconds and dispatches any jobs whose next_run
@@ -1949,6 +1972,8 @@ pub fn run() {
             crate::sys::commands::extension_page_context,
             crate::sys::commands::extension_analyze_forms,
             crate::sys::commands::extension_task_result,
+            crate::sys::commands::extension_clear_selected_context_handoff,
+            crate::sys::commands::extension_get_pending_selected_context_handoff,
             crate::sys::commands::extension_status,
             crate::sys::commands::extension_get_config,
             crate::sys::commands::extension_set_config,
@@ -2327,6 +2352,8 @@ pub fn run() {
             crate::sys::commands::artifacts::artifact_remove_tags,
             crate::sys::commands::artifacts::artifact_list,
             crate::sys::commands::artifacts::artifact_get_by_conversation,
+            crate::sys::commands::artifacts::artifact_get_conversation_snapshot,
+            crate::sys::commands::artifacts::artifact_link_to_message,
             crate::sys::commands::artifacts::artifact_get_versions,
             crate::sys::commands::artifacts::artifact_get_diff,
             crate::sys::commands::artifacts::artifact_get_stats,

@@ -228,8 +228,12 @@ pub fn execute(req: &PowerShellRequest) -> Result<PowerShellResult> {
         std::thread::sleep(std::time::Duration::from_millis(50));
     };
 
-    let stdout = stdout_reader.and_then(|h| h.join().ok()).unwrap_or_default();
-    let stderr = stderr_reader.and_then(|h| h.join().ok()).unwrap_or_default();
+    let stdout = stdout_reader
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
+    let stderr = stderr_reader
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
 
     Ok(PowerShellResult {
         exit_code: status.code().unwrap_or(-1),

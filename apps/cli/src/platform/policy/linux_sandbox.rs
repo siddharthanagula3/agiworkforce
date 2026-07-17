@@ -401,10 +401,7 @@ mod tests {
 
     #[test]
     fn allowlist_has_no_duplicate_syscall_names() {
-        for preset in [
-            LinuxSandboxPreset::ReadOnly,
-            LinuxSandboxPreset::Contained,
-        ] {
+        for preset in [LinuxSandboxPreset::ReadOnly, LinuxSandboxPreset::Contained] {
             let allow = allowed_syscalls(preset);
             let mut seen = std::collections::BTreeSet::new();
             for name in &allow {

@@ -13,7 +13,9 @@
 use std::io::{BufRead, Write};
 
 fn main() {
-    let mode = std::env::args().nth(1).unwrap_or_else(|| "normal".to_string());
+    let mode = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "normal".to_string());
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     let mut lines = stdin.lock().lines();
@@ -80,8 +82,8 @@ fn main() {
                     );
                     // Read exactly one reply frame (the client's elicitation response).
                     if let Some(Ok(reply_line)) = lines.next() {
-                        let reply: serde_json::Value =
-                            serde_json::from_str(reply_line.trim()).unwrap_or(serde_json::Value::Null);
+                        let reply: serde_json::Value = serde_json::from_str(reply_line.trim())
+                            .unwrap_or(serde_json::Value::Null);
                         // Only proceed if it is the elicitation reply we expect.
                         let ok = reply.get("id").and_then(|v| v.as_str()) == Some("elicit-1");
                         if !ok {

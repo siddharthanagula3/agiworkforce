@@ -1,8 +1,8 @@
 //! Cross-language verification tests.
 //!
 //! The primary suites REPLAY the committed cross-language fixture corpora — the
-//! SAME files the TS `@agiworkforce/licensing` and `@agiworkforce/services`
-//! suites consume. Nothing a replay needs (root keys, `nowMs`, expected verdict,
+//! SAME files the TS `@agiworkforce/licensing` suites consume. Nothing a replay
+//! needs (root keys, `nowMs`, expected verdict,
 //! license claims, baseline) is hardcoded here: it all lives in the two shared
 //! `manifest.json` files, read via a path relative to `CARGO_MANIFEST_DIR`. The
 //! fixtures are NOT copied into this crate — a discrepancy here is a real
@@ -17,24 +17,26 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::LicenseClaims;
 use crate::org_policy::{
-    OrgPolicyErrorCode, OrgPolicyVerifyResult, PolicyPermissions, POLICY_CONTAINER_FORMAT,
+    OrgPolicyErrorCode, OrgPolicyVerifyResult, POLICY_CONTAINER_FORMAT, PolicyPermissions,
     verify_org_policy,
 };
 use crate::test_support::{derive_keypair_from_seed_label, make_signed_container};
-use crate::verify::{LICENSE_CONTAINER_FORMAT, LicenseErrorCode, LicenseVerifyResult, verify_license};
-use crate::LicenseClaims;
+use crate::verify::{
+    LICENSE_CONTAINER_FORMAT, LicenseErrorCode, LicenseVerifyResult, verify_license,
+};
 
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
 fn license_fixtures_dir() -> PathBuf {
-    manifest_dir().join("../../packages/licensing/src/__fixtures__")
+    manifest_dir().join("../../packages/contracts/licensing/src/__fixtures__")
 }
 
 fn org_policy_fixtures_dir() -> PathBuf {
-    manifest_dir().join("../../packages/services/src/cloud-contracts/__fixtures__/org-policy")
+    manifest_dir().join("../../packages/contracts/licensing/src/__fixtures__/org-policy")
 }
 
 fn read_fixture(dir: &Path, file: &str) -> Vec<u8> {
@@ -94,8 +96,17 @@ fn license_fixture_corpus_replays_identically() {
             case.expect["code"].as_str().expect("error case has a code")
         });
     }
-    for required in ["ok", "bad_signature", "expired", "not_yet_valid", "malformed"] {
-        assert!(seen.contains(&required), "corpus is missing a {required} case");
+    for required in [
+        "ok",
+        "bad_signature",
+        "expired",
+        "not_yet_valid",
+        "malformed",
+    ] {
+        assert!(
+            seen.contains(&required),
+            "corpus is missing a {required} case"
+        );
     }
 
     assert!(!manifest.cases.is_empty());
@@ -114,7 +125,11 @@ fn license_fixture_corpus_replays_identically() {
                         "{}: graceActive mismatch",
                         case.file
                     );
-                    assert!(!claims.org_id.is_empty(), "{}: orgId should be present", case.file);
+                    assert!(
+                        !claims.org_id.is_empty(),
+                        "{}: orgId should be present",
+                        case.file
+                    );
                 }
                 LicenseVerifyResult::Err(error) => panic!(
                     "{}: expected ok, got error {:?}",
@@ -183,7 +198,10 @@ fn org_policy_fixture_corpus_replays_identically() {
         "not_tightening",
         "malformed",
     ] {
-        assert!(seen.contains(&required), "corpus is missing a {required} case");
+        assert!(
+            seen.contains(&required),
+            "corpus is missing a {required} case"
+        );
     }
 
     assert!(!manifest.cases.is_empty());
@@ -316,7 +334,8 @@ fn accepts_any_key_in_the_rotatable_root_list() {
     let old_key = derive_keypair_from_seed_label("rotate-old");
     let new_key = derive_keypair_from_seed_label("rotate-new");
     let now = 1_500_000_000_000i64;
-    let signed_by_new = make_signed_container(&rotation_claims(), &new_key, LICENSE_CONTAINER_FORMAT);
+    let signed_by_new =
+        make_signed_container(&rotation_claims(), &new_key, LICENSE_CONTAINER_FORMAT);
     // Old key first, new key second — verification must try all of them.
     let result = verify_license(
         &signed_by_new,
@@ -331,7 +350,8 @@ fn rejects_once_the_signing_key_is_dropped() {
     let old_key = derive_keypair_from_seed_label("rotate-old");
     let new_key = derive_keypair_from_seed_label("rotate-new");
     let now = 1_500_000_000_000i64;
-    let signed_by_old = make_signed_container(&rotation_claims(), &old_key, LICENSE_CONTAINER_FORMAT);
+    let signed_by_old =
+        make_signed_container(&rotation_claims(), &old_key, LICENSE_CONTAINER_FORMAT);
     match verify_license(&signed_by_old, &[new_key.public_key_b64], now) {
         LicenseVerifyResult::Err(e) => assert_eq!(e.code, LicenseErrorCode::BadSignature),
         _ => panic!("expected bad_signature"),

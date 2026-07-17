@@ -80,7 +80,13 @@ mod tests {
             .collect();
         scored.sort_by(|a, b| b.0.cmp(&a.0));
         assert_eq!(scored.first().map(|(_, s)| *s), Some("model"));
-        assert!(!scored.iter().any(|(_, s)| *s == "plan"), "non-match dropped");
-        assert!(!scored.iter().any(|(_, s)| *s == "memory"), "non-match dropped");
+        assert!(
+            !scored.iter().any(|(_, s)| *s == "plan"),
+            "non-match dropped"
+        );
+        assert!(
+            !scored.iter().any(|(_, s)| *s == "memory"),
+            "non-match dropped"
+        );
     }
 }

@@ -87,6 +87,7 @@ pub mod prompt_enhancement;
 pub mod realtime;
 pub mod research;
 pub mod scheduler;
+pub mod scheduler_store;
 pub mod screen_watcher;
 pub mod security;
 pub mod settings;

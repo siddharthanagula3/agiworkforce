@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use agiworkforce_agent_core::{
-    Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, MAX_AGENTIC_ITERATIONS,
-    Prepared, PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent,
-    TurnHost, TurnParams, TurnPhase, run_turn,
+    run_turn, Completion, DispatchMode, ExecFuture, ExecResult, LoopControl, Prepared,
+    PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost,
+    TurnParams, TurnPhase, MAX_AGENTIC_ITERATIONS,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -237,6 +237,7 @@ impl AgentSession {
         // an unrelated Local message does NOT flip the boundary, so it still blocks
         // below. (Drafting alone must never leave Local mode.)
         self.consume_byok_handoff(user_input);
+        self.consume_managed_handoff(user_input);
         self.validate_privacy_boundary()?;
 
         // Context compaction: if above 90%, shrink to 70%
@@ -746,7 +747,8 @@ impl TurnHostAdapter<'_> {
                                 };
                                 self.session.model = fallback_model.clone();
                                 self.session.provider = fallback_provider;
-                                if let Err(boundary_err) = self.session.validate_privacy_boundary() {
+                                if let Err(boundary_err) = self.session.validate_privacy_boundary()
+                                {
                                     // Restore state so the session remains coherent.
                                     self.session.model = prev_model;
                                     self.session.provider = prev_provider;
@@ -886,7 +888,11 @@ impl TurnHostAdapter<'_> {
 
     /// Shared per-tool pre-dispatch check (availability, invalid args, plan-mode
     /// gate on the sequential path, `PreToolUse` hooks, and tool-filters).
-    async fn prepare_tool_inner(&mut self, call: &ToolCallResponse, mode: DispatchMode) -> Prepared {
+    async fn prepare_tool_inner(
+        &mut self,
+        call: &ToolCallResponse,
+        mode: DispatchMode,
+    ) -> Prepared {
         if !self.available_tool_names.contains(call.name.as_str()) {
             return Prepared::PreEmpted {
                 block: ResultBlock {
@@ -1064,7 +1070,8 @@ impl TurnHost for TurnHostAdapter<'_> {
                 continue;
             }
 
-            let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.session.model, tc).await {
+            let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.session.model, tc).await
+            {
                 PreToolUseOutcome::Proceed(args) => args,
                 PreToolUseOutcome::Blocked(reason_text) => {
                     if !self.session.quiet {
@@ -1215,7 +1222,10 @@ impl TurnHost for TurnHostAdapter<'_> {
                             crate::tools::ToolResult {
                                 tool_name: "task".to_string(),
                                 success: false,
-                                output: format!("Subagent {} finished with status: {}", id, sa_status),
+                                output: format!(
+                                    "Subagent {} finished with status: {}",
+                                    id, sa_status
+                                ),
                             }
                         } else {
                             crate::tools::ToolResult {
@@ -1307,6 +1317,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 .on_tool_approval
                 .as_ref()
                 .map(|sink| sink.0.clone()),
+            privacy_mode: self.session.privacy_mode,
         };
         let legacy = super::executor::ToolCall {
             name: prepared.name.clone(),
@@ -1417,7 +1428,8 @@ impl TurnHost for TurnHostAdapter<'_> {
             // `None`: this orchestrator session has no per-teammate identity yet.
             // Pass the executing teammate's name here once teammate-scoped
             // sessions exist to enforce the message sender.
-            match execute_team_tool(&self.session.team_manager, &call.name, &legacy.args, None).await
+            match execute_team_tool(&self.session.team_manager, &call.name, &legacy.args, None)
+                .await
             {
                 Ok(r) => r,
                 Err(e) => crate::tools::ToolResult {
@@ -1427,7 +1439,19 @@ impl TurnHost for TurnHostAdapter<'_> {
                 },
             }
         } else if call.name.starts_with("mcp_") {
-            match execute_mcp_tool(&mut self.session.mcp_manager, &call.name, args.clone()).await {
+            match execute_mcp_tool(
+                &mut self.session.mcp_manager,
+                &call.name,
+                args.clone(),
+                self.session.privacy_mode,
+                !self.session.skip_permissions,
+                self.session
+                    .on_tool_approval
+                    .as_ref()
+                    .map(|sink| sink.0.clone()),
+            )
+            .await
+            {
                 Ok(r) => r,
                 Err(e) => crate::tools::ToolResult {
                     tool_name: call.name.clone(),
@@ -1445,6 +1469,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                     .on_tool_approval
                     .as_ref()
                     .map(|sink| sink.0.clone()),
+                privacy_mode: self.session.privacy_mode,
             };
             match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
                 Ok(r) => r,

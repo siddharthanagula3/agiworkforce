@@ -70,6 +70,7 @@
 /privacy-settings
 /privacy-mode [trust-boundary]
 /continue-with-byok [fork-byok, byok]
+/continue-with-cloud [fork-cloud, managed-cloud]
 /rate-limit-options
 /security-review
 /stats
@@ -81,7 +82,6 @@
 /ultrareview
 /upgrade
 /vim
-/remote-control [rc]
 /debug
 /tui
 /powerup

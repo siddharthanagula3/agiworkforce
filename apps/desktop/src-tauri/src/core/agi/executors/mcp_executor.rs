@@ -1,5 +1,21 @@
 //! MCP (Model Context Protocol) tool executor.
 //!
+//! # ⚠️ UNWIRED — must gain the connector permission gate before activation
+//!
+//! Nothing constructs this executor today: `ExecutorRegistry::with_mcp` and
+//! `set_mcp_client` (the only ways to install it) have zero callers, so every
+//! shipping `AGIExecutor` refuses `mcp__` tools instead of reaching it. That
+//! is the ONLY reason this path is currently safe: `execute` calls
+//! `self.client.call_tool(...)` directly with NO per-tool connector
+//! permission check (Blocked / Always-allow / NeedsApproval) and its own
+//! hand-rolled tool-id decode. The live, gated MCP paths are
+//! `ToolExecutor::execute_tool_call` (core/llm/tool_executor/mod.rs,
+//! `enforce_mcp_connector_permission`) and `mcp_call_tool`
+//! (sys/commands/mcp.rs). If you wire this executor up, port that same
+//! fail-closed gate (and registry-based tool-id resolution) here first —
+//! otherwise it becomes an unguarded bypass of the user's connector
+//! permissions.
+//!
 //! This module provides an executor for MCP tools that are dynamically registered
 //! from connected MCP servers. It routes tool calls through the MCP client and
 //! handles streaming results.

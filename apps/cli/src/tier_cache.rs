@@ -6,12 +6,12 @@
 //! network call.
 //!
 //! ## Tier model
-//! Canonical `ProductTier` (from `packages/types/src/model-catalog.ts`):
+//! Canonical `ProductTier` (from `packages/contracts/types/src/model-catalog.ts`):
 //!   `free` | `pro` | `max` | `enterprise`
 //! The CLI also tracks `byok` for Local/BYOK sessions (not a server-side tier).
 //! Subscription is a flat model — NO token caps, NO credits, NO usage cents.
 //! The single source of truth for tier strings is `normalizeProductTier` in
-//! `packages/types/src/model-catalog.ts`: team→Pro, else unknown→Free (fail-closed).
+//! `packages/contracts/types/src/model-catalog.ts`: team→Pro, else unknown→Free (fail-closed).
 //!
 //! ## Flow
 //! 1. Check `~/.agiworkforce/cache/tier.toml` — if present and < 1 h old, return cached tier.
@@ -56,11 +56,11 @@ const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
 
 /// User's current subscription tier as returned by the AGI Workforce API.
 ///
-/// Mirrors the canonical `ProductTier` union in `packages/types/src/model-catalog.ts`:
+/// Mirrors the canonical `ProductTier` union in `packages/contracts/types/src/model-catalog.ts`:
 ///   `free` | `pro` | `max` | `enterprise`
 /// Plus `Byok` which is a CLI-side classification for Local/BYOK sessions (no server tier).
 ///
-/// Keep in sync with `normalizeProductTier` in `packages/types/src/model-catalog.ts`.
+/// Keep in sync with `normalizeProductTier` in `packages/contracts/types/src/model-catalog.ts`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
@@ -86,10 +86,9 @@ impl UserTier {
     /// BYOK → `None` (no managed-cloud default; callers must require `--model`).
     pub fn default_model_id(&self) -> Option<&'static str> {
         match self {
-            UserTier::Free
-            | UserTier::Pro
-            | UserTier::Max
-            | UserTier::Enterprise => Some(crate::model_catalog::economy_default_model()),
+            UserTier::Free | UserTier::Pro | UserTier::Max | UserTier::Enterprise => {
+                Some(crate::model_catalog::economy_default_model())
+            }
             UserTier::Byok => None,
         }
     }
@@ -252,8 +251,7 @@ pub fn resolve_agi_api_base(raw: &str) -> Option<String> {
     let host = after_scheme.split('/').next().unwrap_or("");
 
     // Host must be exactly "agiworkforce.com" or end with ".agiworkforce.com".
-    let host_ok =
-        host == "agiworkforce.com" || host.ends_with(".agiworkforce.com");
+    let host_ok = host == "agiworkforce.com" || host.ends_with(".agiworkforce.com");
 
     if !host_ok {
         tracing::warn!(
@@ -470,7 +468,7 @@ async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse, Fetc
 
 /// Map a server-returned tier string to `UserTier`.
 ///
-/// Mirrors `normalizeProductTier` in `packages/types/src/model-catalog.ts`:
+/// Mirrors `normalizeProductTier` in `packages/contracts/types/src/model-catalog.ts`:
 ///   "free"             → `Free`
 ///   "pro" | "team"     → `Pro`   (Clerk "team" plan normalizes to Pro)
 ///   "max"              → `Max`
@@ -582,7 +580,7 @@ mod tests {
 
     #[test]
     fn parse_tier_str_team_normalizes_to_pro() {
-        // Mirrors packages/types normalizeProductTier: "team" → Pro
+        // Mirrors packages/contracts/types normalizeProductTier: "team" → Pro
         assert_eq!(parse_tier_str("team"), Some(UserTier::Pro));
     }
 
@@ -616,7 +614,10 @@ mod tests {
     #[test]
     fn enterprise_tier_default_model_is_economy() {
         let model = UserTier::Enterprise.default_model_id();
-        assert!(model.is_some(), "Enterprise tier must have a default model ID");
+        assert!(
+            model.is_some(),
+            "Enterprise tier must have a default model ID"
+        );
     }
 
     #[test]
@@ -672,7 +673,10 @@ mod tests {
     fn resolve_agi_api_base_rejects_evil_host() {
         // An attacker-set env var must not cause the JWT to be sent to evil.com.
         assert_eq!(resolve_agi_api_base("https://evil.com"), None);
-        assert_eq!(resolve_agi_api_base("https://evil.agiworkforce.com.evil.com"), None);
+        assert_eq!(
+            resolve_agi_api_base("https://evil.agiworkforce.com.evil.com"),
+            None
+        );
     }
 
     #[test]

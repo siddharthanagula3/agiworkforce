@@ -135,6 +135,26 @@ impl ArtifactStore {
             let conn = db.lock().map_err(|e| e.to_string())?;
             persistence::list_artifacts_from_db(&conn, Some(conversation_id), None)?
         }; // db lock released here
+        let numeric_conversation_id = conversation_id
+            .parse::<i64>()
+            .map_err(|_| format!("Invalid conversation ID: {conversation_id}"))?;
+        let persisted_ids: std::collections::HashSet<_> = artifacts
+            .iter()
+            .map(|artifact| artifact.id.as_str())
+            .collect();
+        let stale_ids: Vec<String> = self
+            .artifacts
+            .read()
+            .values()
+            .filter(|artifact| {
+                artifact.conversation_id == Some(numeric_conversation_id)
+                    && !persisted_ids.contains(artifact.id.as_str())
+            })
+            .map(|artifact| artifact.id.clone())
+            .collect();
+        for stale_id in stale_ids {
+            self.remove_cached_artifact(&stale_id);
+        }
         let count = artifacts.len();
         for artifact in artifacts {
             self.insert_artifact(artifact);
@@ -149,6 +169,21 @@ impl ArtifactStore {
 
     /// Create a new artifact
     pub fn create(&self, request: CreateArtifactRequest) -> Result<Artifact, String> {
+        self.create_internal(request, true)
+    }
+
+    /// Create an artifact that is available to the active UI turn but is never
+    /// persisted. Temporary/incognito conversations use this path so artifact
+    /// content honors the same no-disk contract as their messages.
+    pub fn create_ephemeral(&self, request: CreateArtifactRequest) -> Result<Artifact, String> {
+        self.create_internal(request, false)
+    }
+
+    fn create_internal(
+        &self,
+        request: CreateArtifactRequest,
+        persist: bool,
+    ) -> Result<Artifact, String> {
         let id = Self::generate_id();
 
         let metadata = request
@@ -173,6 +208,10 @@ impl ArtifactStore {
             metadata,
         );
 
+        if let Some(render_type) = request.render_type {
+            artifact.render_type = render_type;
+        }
+
         artifact.conversation_id = request.conversation_id;
         artifact.message_id = request.message_id;
 
@@ -183,8 +222,9 @@ impl ArtifactStore {
         // Store the artifact
         self.insert_artifact(artifact.clone());
 
-        // Persist to DB
-        self.persist_artifact(&artifact);
+        if persist {
+            self.persist_artifact(&artifact);
+        }
 
         Ok(artifact)
     }
@@ -316,22 +356,8 @@ impl ArtifactStore {
 
     /// Delete an artifact
     pub fn delete(&self, id: &str) -> Result<(), String> {
-        let artifact = self
-            .artifacts
-            .write()
-            .remove(id)
+        self.remove_cached_artifact(id)
             .ok_or_else(|| format!("Artifact not found: {}", id))?;
-
-        // Remove from indexes
-        if let Some(conv_id) = artifact.conversation_id {
-            if let Some(ids) = self.by_conversation.write().get_mut(&conv_id) {
-                ids.retain(|i| i != id);
-            }
-        }
-
-        if let Some(ids) = self.by_type.write().get_mut(&artifact.artifact_type) {
-            ids.retain(|i| i != id);
-        }
 
         // Persist deletion to DB
         self.persist_delete(id);
@@ -496,6 +522,84 @@ impl ArtifactStore {
         })
     }
 
+    /// Return the full durable artifact records needed to reconstruct chat
+    /// message attachments after a conversation is reopened.
+    pub fn get_conversation_snapshot(&self, conversation_id: i64) -> Vec<Artifact> {
+        let artifacts = self.artifacts.read();
+        let mut snapshot: Vec<_> = artifacts
+            .values()
+            .filter(|artifact| {
+                artifact.conversation_id == Some(conversation_id)
+                    && matches!(
+                        artifact.status,
+                        ArtifactStatus::Complete | ArtifactStatus::Streaming
+                    )
+            })
+            .cloned()
+            .collect();
+        snapshot.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        snapshot
+    }
+
+    /// Associate artifacts emitted during a live turn with the assistant
+    /// message persisted at stream completion. The database validates that the
+    /// message and every artifact belong to the same conversation; repeated
+    /// calls with the same association are idempotent.
+    pub fn link_to_message(
+        &self,
+        conversation_id: i64,
+        message_id: i64,
+        artifact_ids: &[String],
+    ) -> Result<usize, String> {
+        {
+            let artifacts = self.artifacts.read();
+            for artifact_id in artifact_ids {
+                let artifact = artifacts
+                    .get(artifact_id)
+                    .ok_or_else(|| format!("Artifact not found: {artifact_id}"))?;
+                if artifact.conversation_id != Some(conversation_id) {
+                    return Err(format!(
+                        "Artifact {artifact_id} does not belong to conversation {conversation_id}"
+                    ));
+                }
+                if let Some(existing_message_id) = artifact.message_id {
+                    if existing_message_id != message_id {
+                        return Err(format!(
+                            "Artifact {artifact_id} is already linked to message {existing_message_id}"
+                        ));
+                    }
+                }
+            }
+        }
+
+        let linked = if let Some(ref db) = self.db_conn {
+            let conn = db
+                .lock()
+                .map_err(|error| format!("Failed to acquire artifact DB lock: {error}"))?;
+            persistence::link_artifacts_to_message_in_db(
+                &conn,
+                conversation_id,
+                message_id,
+                artifact_ids,
+            )?
+        } else {
+            artifact_ids.len()
+        };
+
+        let mut artifacts = self.artifacts.write();
+        for artifact_id in artifact_ids {
+            if let Some(artifact) = artifacts.get_mut(artifact_id) {
+                artifact.message_id = Some(message_id);
+            }
+        }
+
+        Ok(linked)
+    }
+
     /// Get artifact version history
     pub fn get_version_history(&self, id: &str) -> Option<Vec<ArtifactVersion>> {
         self.artifacts.read().get(id).map(|a| a.versions.clone())
@@ -559,7 +663,9 @@ impl ArtifactStore {
         let artifact_type = artifact.artifact_type;
         let conversation_id = artifact.conversation_id;
 
-        // Insert into main storage
+        // Replacing a persisted row must not duplicate its index entries or
+        // leave it indexed under an older conversation/type.
+        self.remove_cached_artifact(&id);
         self.artifacts.write().insert(id.clone(), artifact);
 
         // Update conversation index
@@ -577,6 +683,27 @@ impl ArtifactStore {
             .entry(artifact_type)
             .or_default()
             .push(id);
+    }
+
+    fn remove_cached_artifact(&self, id: &str) -> Option<Artifact> {
+        let artifact = self.artifacts.write().remove(id)?;
+        if let Some(conversation_id) = artifact.conversation_id {
+            let mut by_conversation = self.by_conversation.write();
+            if let Some(ids) = by_conversation.get_mut(&conversation_id) {
+                ids.retain(|candidate| candidate != id);
+                if ids.is_empty() {
+                    by_conversation.remove(&conversation_id);
+                }
+            }
+        }
+        let mut by_type = self.by_type.write();
+        if let Some(ids) = by_type.get_mut(&artifact.artifact_type) {
+            ids.retain(|candidate| candidate != id);
+            if ids.is_empty() {
+                by_type.remove(&artifact.artifact_type);
+            }
+        }
+        Some(artifact)
     }
 
     fn prune_versions(&self, artifact: &mut Artifact) {
@@ -642,6 +769,7 @@ mod tests {
         let request = CreateArtifactRequest {
             title: "Test Code".to_string(),
             artifact_type: ArtifactType::Code,
+            render_type: None,
             content: "fn main() {}".to_string(),
             metadata: Some(ArtifactMetadata::Code(CodeMetadata {
                 language: "rust".to_string(),
@@ -661,12 +789,267 @@ mod tests {
     }
 
     #[test]
+    fn ephemeral_create_never_writes_temporary_chat_content_to_disk() {
+        let conn = Connection::open_in_memory().expect("open test database");
+        crate::data::db::migrations::run_migrations(&conn).expect("migrate test database");
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, created_at, updated_at) \
+             VALUES ('Temporary', 'u1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .expect("insert conversation");
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content) \
+             VALUES (?1, 'u1', 'assistant', 'Temporary response')",
+            [conversation_id],
+        )
+        .expect("insert assistant message");
+        let message_id = conn.last_insert_rowid();
+        let db = Arc::new(Mutex::new(conn));
+        let store = ArtifactStore::with_db(50, db.clone());
+
+        let artifact = store
+            .create_ephemeral(CreateArtifactRequest {
+                title: "Temporary notes".to_string(),
+                artifact_type: ArtifactType::Document,
+                render_type: Some("markdown".to_string()),
+                content: "This must remain memory-only".to_string(),
+                metadata: None,
+                conversation_id: Some(conversation_id),
+                message_id: None,
+                tags: None,
+            })
+            .expect("create temporary artifact");
+
+        assert!(
+            store.get(&artifact.id).is_some(),
+            "live preview still needs the artifact"
+        );
+        let link_error = store
+            .link_to_message(
+                conversation_id,
+                message_id,
+                std::slice::from_ref(&artifact.id),
+            )
+            .expect_err("an ephemeral artifact must not acquire a durable message link");
+        assert!(link_error.contains("Artifact not found"));
+        {
+            let conn = db.lock().expect("database lock");
+            let persisted_artifacts: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM artifacts WHERE id = ?1",
+                    [&artifact.id],
+                    |row| row.get(0),
+                )
+                .expect("count persisted artifacts");
+            let persisted_versions: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM artifact_versions WHERE artifact_id = ?1",
+                    [&artifact.id],
+                    |row| row.get(0),
+                )
+                .expect("count persisted versions");
+            let persisted_links: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM artifacts WHERE id = ?1 AND message_id IS NOT NULL",
+                    [&artifact.id],
+                    |row| row.get(0),
+                )
+                .expect("count persisted message links");
+            assert_eq!(persisted_artifacts, 0, "temporary artifact reached SQLite");
+            assert_eq!(persisted_versions, 0, "temporary version reached SQLite");
+            assert_eq!(persisted_links, 0, "temporary message link reached SQLite");
+        }
+
+        let durable = store
+            .create(CreateArtifactRequest {
+                title: "Durable notes".to_string(),
+                artifact_type: ArtifactType::Document,
+                render_type: Some("markdown".to_string()),
+                content: "Normal chats still persist".to_string(),
+                metadata: None,
+                conversation_id: Some(conversation_id),
+                message_id: None,
+                tags: None,
+            })
+            .expect("create durable artifact");
+        let conn = db.lock().expect("database lock");
+        let durable_rows: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM artifacts WHERE id = ?1",
+                [&durable.id],
+                |row| row.get(0),
+            )
+            .expect("count durable artifact");
+        let durable_versions: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM artifact_versions WHERE artifact_id = ?1",
+                [&durable.id],
+                |row| row.get(0),
+            )
+            .expect("count durable versions");
+        assert_eq!(durable_rows, 1, "normal artifact must remain durable");
+        assert_eq!(
+            durable_versions, 1,
+            "normal artifact version must remain durable"
+        );
+    }
+
+    #[test]
+    fn persisted_artifact_reopens_from_a_fresh_store_with_owner_and_rich_type() {
+        let conn = Connection::open_in_memory().expect("open test database");
+        crate::data::db::migrations::run_migrations(&conn).expect("migrate test database");
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, created_at, updated_at) \
+             VALUES ('Reopen', 'u1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .expect("insert conversation");
+        let conversation_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO messages (conversation_id, user_id, role, content) \
+             VALUES (?1, 'u1', 'assistant', 'Created a component')",
+            [conversation_id],
+        )
+        .expect("insert assistant message");
+        let message_id = conn.last_insert_rowid();
+        let db = Arc::new(Mutex::new(conn));
+
+        let first_store = ArtifactStore::with_db(50, db.clone());
+        let artifact = first_store
+            .create(CreateArtifactRequest {
+                title: "Counter".to_string(),
+                artifact_type: ArtifactType::Code,
+                render_type: Some("react".to_string()),
+                content: "export default function Counter() { return <button />; }".to_string(),
+                metadata: Some(ArtifactMetadata::Code(CodeMetadata {
+                    language: "tsx".to_string(),
+                    ..Default::default()
+                })),
+                conversation_id: Some(conversation_id),
+                message_id: None,
+                tags: None,
+            })
+            .expect("create durable component");
+        first_store
+            .link_to_message(
+                conversation_id,
+                message_id,
+                std::slice::from_ref(&artifact.id),
+            )
+            .expect("link component to assistant message");
+        drop(first_store);
+
+        let reopened_store = ArtifactStore::with_db(50, db);
+        reopened_store
+            .load_conversation_from_db(&conversation_id.to_string())
+            .expect("reload conversation artifacts after restart");
+        let snapshot = reopened_store.get_conversation_snapshot(conversation_id);
+        assert_eq!(snapshot.len(), 1);
+        assert_eq!(snapshot[0].id, artifact.id);
+        assert_eq!(snapshot[0].render_type, "react");
+        assert_eq!(snapshot[0].message_id, Some(message_id));
+        assert_eq!(snapshot[0].current_version, 1);
+    }
+
+    #[test]
+    fn cloud_tombstone_removes_a_previously_cached_artifact_on_refresh() {
+        let conn = Connection::open_in_memory().expect("open test database");
+        crate::data::db::migrations::run_migrations(&conn).expect("migrate test database");
+        conn.execute(
+            "INSERT INTO conversations \
+             (title, user_id, app_mode, created_at, updated_at) \
+             VALUES ('Cloud refresh', 'u1', 'cloud', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+            [],
+        )
+        .expect("insert conversation");
+        let conversation_id = conn.last_insert_rowid();
+        let db = Arc::new(Mutex::new(conn));
+        let store = ArtifactStore::with_db(50, db.clone());
+        let artifact = store
+            .create(CreateArtifactRequest {
+                title: "Remote artifact".to_string(),
+                artifact_type: ArtifactType::Document,
+                render_type: Some("markdown".to_string()),
+                content: "will be deleted remotely".to_string(),
+                metadata: None,
+                conversation_id: Some(conversation_id),
+                message_id: None,
+                tags: None,
+            })
+            .expect("create cloud artifact");
+        assert_eq!(store.get_conversation_snapshot(conversation_id).len(), 1);
+
+        db.lock()
+            .expect("database lock")
+            .execute(
+                "UPDATE artifacts SET deleted_at_utc = CURRENT_TIMESTAMP WHERE id = ?1",
+                [&artifact.id],
+            )
+            .expect("apply cloud tombstone");
+        store
+            .load_conversation_from_db(&conversation_id.to_string())
+            .expect("refresh conversation cache");
+
+        assert!(store.get(&artifact.id).is_none());
+        assert!(store.get_conversation_snapshot(conversation_id).is_empty());
+        assert!(store.get_by_conversation(conversation_id).is_empty());
+    }
+
+    #[test]
+    fn concurrent_durable_creates_serialize_without_losing_artifacts_or_versions() {
+        let conn = Connection::open_in_memory().expect("open test database");
+        crate::data::db::migrations::run_migrations(&conn).expect("migrate test database");
+        let db = Arc::new(Mutex::new(conn));
+        let store = Arc::new(ArtifactStore::with_db(50, db.clone()));
+
+        let handles: Vec<_> = (0..8)
+            .map(|index| {
+                let store = store.clone();
+                std::thread::spawn(move || {
+                    store
+                        .create(CreateArtifactRequest {
+                            title: format!("Concurrent {index}"),
+                            artifact_type: ArtifactType::Document,
+                            render_type: Some("markdown".to_string()),
+                            content: format!("artifact {index}"),
+                            metadata: None,
+                            conversation_id: None,
+                            message_id: None,
+                            tags: None,
+                        })
+                        .expect("concurrent create")
+                })
+            })
+            .collect();
+        let created: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("artifact thread"))
+            .collect();
+        assert_eq!(created.len(), 8);
+
+        let conn = db.lock().expect("database lock");
+        let artifacts: i64 = conn
+            .query_row("SELECT COUNT(*) FROM artifacts", [], |row| row.get(0))
+            .expect("count concurrent artifacts");
+        let versions: i64 = conn
+            .query_row("SELECT COUNT(*) FROM artifact_versions", [], |row| {
+                row.get(0)
+            })
+            .expect("count concurrent versions");
+        assert_eq!(artifacts, 8);
+        assert_eq!(versions, 8);
+    }
+
+    #[test]
     fn test_update_creates_version() {
         let store = ArtifactStore::default();
 
         let request = CreateArtifactRequest {
             title: "Test".to_string(),
             artifact_type: ArtifactType::Document,
+            render_type: None,
             content: "Version 1".to_string(),
             metadata: None,
             conversation_id: None,
@@ -700,6 +1083,7 @@ mod tests {
         let request = CreateArtifactRequest {
             title: "Test".to_string(),
             artifact_type: ArtifactType::Document,
+            render_type: None,
             content: "Version 1".to_string(),
             metadata: None,
             conversation_id: None,
@@ -767,6 +1151,7 @@ mod tests {
             .create(CreateArtifactRequest {
                 title: "Code 1".to_string(),
                 artifact_type: ArtifactType::Code,
+                render_type: None,
                 content: "code".to_string(),
                 metadata: None,
                 conversation_id: Some(1),
@@ -779,6 +1164,7 @@ mod tests {
             .create(CreateArtifactRequest {
                 title: "Doc 1".to_string(),
                 artifact_type: ArtifactType::Document,
+                render_type: None,
                 content: "document".to_string(),
                 metadata: None,
                 conversation_id: Some(1),
@@ -791,6 +1177,7 @@ mod tests {
             .create(CreateArtifactRequest {
                 title: "Code 2".to_string(),
                 artifact_type: ArtifactType::Code,
+                render_type: None,
                 content: "more code".to_string(),
                 metadata: None,
                 conversation_id: Some(2),

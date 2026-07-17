@@ -72,7 +72,7 @@ pub const MAX_MESSAGE_AGE_MS: i64 = 30_000;
 pub const NONCE_CACHE_TTL_MS: i64 = 60_000;
 
 /// ISO 8601 UTC date after which unsigned messages must be rejected.
-/// Mirrors `packages/types/src/dispatch.ts:DISPATCH_HMAC_REQUIRED_AFTER`
+/// Mirrors `packages/contracts/types/src/dispatch.ts:DISPATCH_HMAC_REQUIRED_AFTER`
 /// (which is the canonical source — `apps/mobile/lib/dispatchHmac.ts` and
 /// `apps/desktop/src/services/dispatch.ts` import from there). All four
 /// surfaces must move together.

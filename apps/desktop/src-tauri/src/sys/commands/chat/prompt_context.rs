@@ -278,7 +278,7 @@ pub(super) fn escape_xml(s: &str) -> String {
 
 /// Check if a model is likely to support vision.
 ///
-/// Authoritative source: `packages/types/src/models.json` (`capabilities.vision`).
+/// Authoritative source: `packages/contracts/types/src/models.json` (`capabilities.vision`).
 /// Looked up first via the canonical catalog.  For models not in the catalog
 /// (custom Ollama tags, brand-new releases that haven't been added yet,
 /// prefix-only sniffing, etc.) we fall back to a list of FAMILY SUBSTRINGS —

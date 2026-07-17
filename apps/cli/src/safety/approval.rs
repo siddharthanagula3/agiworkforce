@@ -263,7 +263,13 @@ mod tests {
     fn classify_sed_rejects_mixed_quote_expression() {
         // `'5p"` must NOT be normalized into a "safe" print pattern by asymmetric
         // quote trimming — it falls through to Unknown (which prompts the user).
-        assert_eq!(classify_sed("sed -n '5p\" file.txt"), CommandSafety::Unknown);
-        assert_eq!(classify_sed("sed -n \"5p' file.txt"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_sed("sed -n '5p\" file.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_sed("sed -n \"5p' file.txt"),
+            CommandSafety::Unknown
+        );
     }
 }

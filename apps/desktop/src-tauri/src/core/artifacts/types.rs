@@ -262,6 +262,15 @@ pub struct Artifact {
     pub title: String,
     /// Artifact type
     pub artifact_type: ArtifactType,
+    /// Exact cross-surface renderer type (`react`, `svg`, `markdown`, etc.).
+    ///
+    /// `artifact_type` is the backend storage/rendering category. Several rich
+    /// UI types intentionally share that category, so it cannot be used to
+    /// reconstruct the user-visible artifact after a restart. This exact value
+    /// is persisted in the SQLite `artifacts.artifact_type` text column and is
+    /// the durable wire contract for chat reloads.
+    #[serde(default)]
+    pub render_type: String,
     /// Current content
     pub content: String,
     /// Type-specific metadata
@@ -312,6 +321,7 @@ impl Artifact {
             id,
             title,
             artifact_type,
+            render_type: artifact_type.to_string(),
             content,
             metadata,
             conversation_id: None,
@@ -339,6 +349,7 @@ impl Artifact {
             id,
             title,
             artifact_type,
+            render_type: artifact_type.to_string(),
             content: String::new(),
             metadata,
             conversation_id: None,
@@ -495,6 +506,9 @@ pub struct VersionDiff {
 pub struct CreateArtifactRequest {
     pub title: String,
     pub artifact_type: ArtifactType,
+    /// Exact renderer type when it is richer than the backend category.
+    #[serde(default)]
+    pub render_type: Option<String>,
     pub content: String,
     pub metadata: Option<ArtifactMetadata>,
     pub conversation_id: Option<i64>,

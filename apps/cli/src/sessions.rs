@@ -503,12 +503,6 @@ pub fn rename_session(conn: &Connection, session_id: &str, new_title: &str) -> R
     write_metadata(&conn.base_dir, &session.session_id, &metadata)
 }
 
-/// Archive (delete) a managed session.
-#[allow(dead_code)]
-pub fn archive_session(conn: &Connection, session_id: &str) -> Result<()> {
-    delete_session(conn, session_id)
-}
-
 fn normalize_for_search(input: &str) -> String {
     input.to_lowercase()
 }
@@ -552,52 +546,6 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
         .collect())
 }
 
-/// Search across session messages and return matching snippets with context.
-#[allow(dead_code)]
-pub fn search_session_messages(
-    conn: &Connection,
-    query: &str,
-    max_results: usize,
-) -> Result<Vec<(SessionSummary, Vec<String>)>> {
-    let sessions = search_sessions(conn, query)?;
-    let needle = normalize_for_search(query);
-    let mut results = Vec::new();
-
-    for session in sessions.into_iter().take(max_results) {
-        let messages = load_session(conn, &session.id)?;
-        let mut snippets = Vec::new();
-
-        for message in &messages {
-            let text = message.text_content();
-            let text_lower = normalize_for_search(&text);
-            if let Some(pos) = text_lower.find(&needle) {
-                let raw_start = pos.saturating_sub(60);
-                let raw_end = (pos + needle.len() + 60).min(text_lower.len());
-                // Snap to char boundaries against `text_lower` (the buffer the
-                // offsets were derived from); `to_lowercase()` can shift byte
-                // positions/length relative to `text`, so slicing `text` here
-                // could land off a UTF-8 char boundary and panic.
-                let start = floor_char_boundary(&text_lower, raw_start);
-                let end = ceil_char_boundary(&text_lower, raw_end);
-                let snippet = text_lower[start..end].replace('\n', " ");
-                let prefix = if start > 0 { "..." } else { "" };
-                let suffix = if end < text_lower.len() { "..." } else { "" };
-                snippets.push(format!(
-                    "[{}] {}{}{}",
-                    message.role, prefix, snippet, suffix
-                ));
-                if snippets.len() >= 3 {
-                    break;
-                }
-            }
-        }
-
-        results.push((session, snippets));
-    }
-
-    Ok(results)
-}
-
 /// Fork an existing managed session into a new managed session id.
 #[allow(dead_code)]
 pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
@@ -626,20 +574,6 @@ pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
     write_metadata(&conn.base_dir, &new_id, &metadata)?;
 
     Ok(new_id)
-}
-
-/// Compatibility shim for older tool-call recording code paths.
-#[allow(dead_code)]
-pub fn record_tool_call(
-    _conn: &Connection,
-    _message_id: i64,
-    _tool_name: &str,
-    _args: &serde_json::Value,
-    _output: &str,
-    _success: bool,
-    _duration_ms: u64,
-) -> Result<i64> {
-    Ok(now_ms())
 }
 
 /// Aggregate session store statistics.

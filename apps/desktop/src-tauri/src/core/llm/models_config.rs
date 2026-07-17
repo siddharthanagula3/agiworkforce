@@ -19,10 +19,10 @@ use super::Provider;
 
 /// The raw JSON string, embedded at compile time.
 /// Path is relative to this .rs file:
-///   src-tauri/src/core/llm/models_config.rs  ->  ../../../../../packages/types/src/models.json
+///   src-tauri/src/core/llm/models_config.rs  ->  ../../../../../packages/contracts/types/src/models.json
 const MODELS_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../../packages/types/src/models.json"
+    "/../../../packages/contracts/types/src/models.json"
 ));
 
 /// Global singleton for the loaded models config.
@@ -371,8 +371,8 @@ pub fn model_uses_responses_api(model_id: &str) -> bool {
 
     // Catalog is authoritative for known models: trust the declared
     // `model_type`. Only OpenAI reasoning-tier models use the Responses API;
-    // OpenAI *chat* models (e.g. gpt-5-nano, gpt-4.1-nano) and every non-OpenAI
-    // model use Chat Completions. Returning here (rather than falling through to
+    // OpenAI chat models and every non-OpenAI model use Chat Completions.
+    // Returning here (rather than falling through to
     // the version heuristics below) prevents the `gpt-` major>=5 / 4.1 heuristic
     // from misrouting a catalog chat model into a Responses-shaped body (`input`,
     // no `messages`) — which is posted to `/chat/completions` and 400s with
@@ -593,23 +593,24 @@ mod tests {
     }
 
     #[test]
-    fn catalog_openai_chat_models_use_chat_completions_not_responses() {
-        // Regression: catalog OpenAI *chat*-tier models (gpt-5-nano, gpt-4.1-nano)
-        // must NOT be routed to the Responses API. The `gpt-` major>=5 / 4.1
-        // version heuristic would otherwise misroute them into a Responses-shaped
-        // body (`input`, no `messages`) posted to `/chat/completions`, which the
-        // provider rejects with 400 "Missing required parameter: 'messages'".
-        // Catalog `model_type` is authoritative for known ids.
-        for id in ["gpt-5-nano", "gpt-4.1-nano"] {
+    fn catalog_openai_reasoning_models_use_responses() {
+        // Official OpenAI model documentation classifies gpt-5.4-nano as a
+        // reasoning model and lists both Responses and Chat Completions as
+        // supported endpoints. AGI deliberately selects Responses so reasoning
+        // effort and provider-native tools have one canonical request shape.
+        for id in ["gpt-5.4-nano"] {
             let entry = CONFIG
                 .models
                 .get(id)
                 .unwrap_or_else(|| panic!("{id} missing from catalog"));
             assert_eq!(entry.provider, "openai", "{id} should be an openai model");
-            assert_eq!(entry.model_type, "chat", "{id} should be a chat model");
+            assert_eq!(
+                entry.model_type, "reasoning",
+                "{id} should be a reasoning model"
+            );
             assert!(
-                !model_uses_responses_api(id),
-                "{id} is a catalog chat model and must use Chat Completions, not Responses API"
+                model_uses_responses_api(id),
+                "{id} is a catalog reasoning model and must use Responses"
             );
         }
         // Catalog reasoning-tier OpenAI models still use the Responses API.

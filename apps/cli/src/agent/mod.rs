@@ -145,6 +145,9 @@ pub struct AgentSession {
     /// Local→BYOK transition fires only when the user sends a message carrying
     /// that preamble — drafting alone never leaves Local mode.
     pub pending_byok_handoff: Option<String>,
+    /// Armed by `/continue-with-cloud`; consumed only when the reviewed draft
+    /// itself is sent, exactly like the BYOK handoff gate.
+    pub pending_managed_handoff: Option<String>,
     pub additional_context_dirs: Vec<PathBuf>,
     pub attached_context_files: Vec<PathBuf>,
     pub debug_mode: bool,
@@ -333,11 +336,6 @@ impl AgentSession {
         );
 
         let privacy_mode = provider_privacy_mode(&provider);
-        // Keep the advisor tool's Local-privacy guard in sync with this session's
-        // privacy mode so a Local session can never reach the cloud advisor.
-        crate::features::exec::tools::set_advisor_local_privacy_mode(
-            privacy_mode == PrivacyMode::Local,
-        );
 
         Self {
             messages: vec![system_message],
@@ -383,6 +381,7 @@ impl AgentSession {
             disallowed_tools: Vec::new(),
             privacy_mode,
             pending_byok_handoff: None,
+            pending_managed_handoff: None,
             additional_context_dirs: Vec::new(),
             attached_context_files: Vec::new(),
             debug_mode: false,
@@ -447,7 +446,7 @@ impl AgentSession {
         let mcp_tool_definitions = self
             .mcp_manager
             .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions());
+            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
         let planning_locked = self.plan_mode && !self.plan_approved;
         let mut tool_definitions = crate::runtime::tool_catalog::effective_tool_definitions(
             planning_locked,
@@ -654,7 +653,9 @@ impl AgentSession {
 
     pub fn set_privacy_mode(&mut self, mode: PrivacyMode) {
         self.privacy_mode = mode;
-        crate::features::exec::tools::set_advisor_local_privacy_mode(mode == PrivacyMode::Local);
+        if let Some(manager) = self.mcp_manager.as_mut() {
+            manager.enforce_privacy_mode(mode);
+        }
     }
 
     pub fn apply_ui_config(&mut self, config: &CliConfig) {
@@ -682,6 +683,7 @@ impl AgentSession {
     pub fn arm_byok_handoff(&mut self, draft: &str) {
         let token = draft.lines().next().unwrap_or("").trim().to_string();
         self.pending_byok_handoff = (!token.is_empty()).then_some(token);
+        self.pending_managed_handoff = None;
     }
 
     /// Complete an armed BYOK handoff iff `user_input` carries the reviewed
@@ -700,15 +702,42 @@ impl AgentSession {
         matched
     }
 
+    /// Arm a Local→Managed Cloud continuation without changing the boundary.
+    pub fn arm_managed_handoff(&mut self, draft: &str) {
+        let token = draft.lines().next().unwrap_or("").trim().to_string();
+        self.pending_managed_handoff = (!token.is_empty()).then_some(token);
+        self.pending_byok_handoff = None;
+    }
+
+    /// Complete a reviewed Local→Managed Cloud continuation only when the
+    /// exact draft preamble is sent. Unrelated input remains Local and blocked.
+    pub fn consume_managed_handoff(&mut self, user_input: &str) -> bool {
+        let matched = self
+            .pending_managed_handoff
+            .as_deref()
+            .is_some_and(|token| user_input.trim_start().starts_with(token));
+        if matched {
+            self.pending_managed_handoff = None;
+            self.set_privacy_mode(PrivacyMode::Managed);
+        }
+        matched
+    }
+
     pub fn validate_privacy_boundary(&self) -> Result<()> {
         let provider_mode = self.provider_privacy_mode();
         if self.privacy_mode == PrivacyMode::Local && provider_mode != PrivacyMode::Local {
+            let handoff_command = match provider_mode {
+                PrivacyMode::Managed => "/continue-with-cloud",
+                PrivacyMode::Byok => "/continue-with-byok",
+                PrivacyMode::Local => unreachable!("local provider already passed the guard"),
+            };
             anyhow::bail!(
-                "Privacy boundary blocked: this session is Local, but model `{}` routes to {:?} ({}) through {} mode. Use `/continue-with-byok` to create a reviewable BYOK handoff draft, or run `/privacy-mode byok` only after you intentionally leave Local mode.",
+                "Privacy boundary blocked: this session is Local, but model `{}` routes to {:?} ({}) through {} mode. Use `{}` to create a reviewable, redacted continuation before anything leaves Local mode.",
                 self.model,
                 self.provider,
                 provider_mode.description(),
                 provider_mode.label(),
+                handoff_command,
             );
         }
         Ok(())
@@ -717,11 +746,8 @@ impl AgentSession {
     fn adopt_provider_privacy_mode(&mut self) {
         let provider_mode = self.provider_privacy_mode();
         if self.privacy_mode != PrivacyMode::Local || provider_mode == PrivacyMode::Local {
-            self.privacy_mode = provider_mode;
+            self.set_privacy_mode(provider_mode);
         }
-        crate::features::exec::tools::set_advisor_local_privacy_mode(
-            self.privacy_mode == PrivacyMode::Local,
-        );
     }
 
     /// Switch the active output style.
@@ -831,6 +857,11 @@ impl AgentSession {
             crate::runtime::session_control::create_managed_session(self.messages.clone())?;
         let managed_session = ManagedSession::load_from_path(&resolved.path)?;
         self.adopt_managed_session(managed_session, resolved.path);
+        if let Some(managed_session) = self.managed_session.as_mut() {
+            managed_session.model = Some(self.model.clone());
+            managed_session.workspace_root = std::env::current_dir().ok();
+            managed_session.created_by = Some("cli".to_string());
+        }
         self.sync_managed_session_metadata()?;
         Ok(())
     }
@@ -888,6 +919,23 @@ impl AgentSession {
             return Ok(());
         };
         managed_session.messages = self.messages.clone();
+        managed_session.model = Some(self.model.clone());
+        managed_session.workspace_root = managed_session
+            .workspace_root
+            .clone()
+            .or_else(|| std::env::current_dir().ok());
+        if managed_session.created_by.is_none() {
+            managed_session.created_by = Some("cli".to_string());
+        }
+        if managed_session.title.is_none() {
+            managed_session.title = self
+                .messages
+                .iter()
+                .find(|message| message.role == "user")
+                .map(Message::text_content)
+                .map(|text| text.trim().chars().take(80).collect::<String>())
+                .filter(|title| !title.is_empty());
+        }
         managed_session.permission_mode = Some(self.permission_mode);
         managed_session.plan_mode = Some(self.plan_mode);
         managed_session.plan_approved = Some(self.plan_approved);
@@ -904,6 +952,23 @@ impl AgentSession {
 
     pub fn managed_session_id(&self) -> Option<&str> {
         self.managed_session.as_ref().map(|s| s.session_id.as_str())
+    }
+
+    pub(crate) fn managed_auto_routing(
+        &self,
+    ) -> Option<&crate::runtime::session::ManagedSessionAutoRouting> {
+        self.managed_session
+            .as_ref()
+            .and_then(|session| session.auto_routing.as_ref())
+    }
+
+    pub(crate) fn set_managed_auto_routing(
+        &mut self,
+        state: Option<crate::runtime::session::ManagedSessionAutoRouting>,
+    ) {
+        if let Some(session) = self.managed_session.as_mut() {
+            session.auto_routing = state;
+        }
     }
 
     fn sync_managed_session_metadata(&self) -> Result<()> {
@@ -925,7 +990,8 @@ impl AgentSession {
     }
 
     /// Attach an MCP server manager.
-    pub fn set_mcp_manager(&mut self, manager: mcp::McpManager) {
+    pub fn set_mcp_manager(&mut self, mut manager: mcp::McpManager) {
+        manager.enforce_privacy_mode(self.privacy_mode);
         self.mcp_manager = Some(manager);
     }
 
@@ -953,7 +1019,9 @@ impl AgentSession {
         let Some(manager) = self.mcp_manager.as_mut() else {
             return Ok(None);
         };
-        manager.expand_prompt_invocation(input).await
+        manager
+            .expand_prompt_invocation(input, self.privacy_mode)
+            .await
     }
 
     /// Get the hooks configuration.
@@ -1036,6 +1104,7 @@ fn escape_attr(path: &Path) -> String {
 
 fn provider_privacy_mode(provider: &Provider) -> PrivacyMode {
     match provider {
+        Provider::ManagedCloud => PrivacyMode::Managed,
         Provider::Ollama(models::OllamaMode::Local) => PrivacyMode::Local,
         Provider::OpenAICompatible {
             base_url,
@@ -1504,7 +1573,9 @@ mod tests {
             .next()
             .map(|m| m.id.clone())
             .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
-        session.switch_model(&cloud_model).expect("catalog OpenAI model");
+        session
+            .switch_model(&cloud_model)
+            .expect("catalog OpenAI model");
 
         // Local session + cloud model → blocked until an explicit, consented handoff.
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
@@ -1553,6 +1624,71 @@ mod tests {
         let session = AgentSession::new("claude-sonnet-4-6", &ctx, None);
 
         assert_eq!(session.privacy_mode, PrivacyMode::Byok);
+        assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn managed_gateway_starts_in_managed_privacy_mode() {
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let session = AgentSession::new_with_provider(
+            "claude-sonnet-4-6",
+            &ctx,
+            None,
+            Provider::ManagedCloud,
+        );
+
+        assert_eq!(session.privacy_mode, PrivacyMode::Managed);
+        assert_eq!(session.provider_privacy_mode(), PrivacyMode::Managed);
+        assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn managed_handoff_consents_only_on_matching_draft_send() {
+        let ctx = SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new_with_provider(
+            "claude-sonnet-4-6",
+            &ctx,
+            None,
+            Provider::ManagedCloud,
+        );
+        session.set_privacy_mode(PrivacyMode::Local);
+        let draft = "You are continuing an AGI Local chat in Managed Cloud mode.\nPrivacy boundary: the user explicitly selected this handoff.";
+
+        session.arm_managed_handoff(draft);
+        assert!(!session.consume_managed_handoff("unrelated local message"));
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.validate_privacy_boundary().is_err());
+
+        assert!(session.consume_managed_handoff(draft));
+        assert_eq!(session.privacy_mode, PrivacyMode::Managed);
         assert!(session.validate_privacy_boundary().is_ok());
     }
 

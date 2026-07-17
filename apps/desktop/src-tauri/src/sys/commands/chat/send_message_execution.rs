@@ -689,6 +689,7 @@ fn spawn_streaming_chat(
                         &frontend_message_id,
                         request.project_folder.clone(),
                         request.conversation_mode.clone(),
+                        !flags.incognito,
                         0,
                         tool_registry.clone(),
                     )
@@ -1033,6 +1034,7 @@ fn spawn_streaming_chat(
                                                         &frontend_message_id,
                                                         request.project_folder.clone(),
                                                         request.conversation_mode.clone(),
+                                                        !flags.incognito,
                                                         streaming_tool_iteration,
                                                         tool_registry.clone(),
                                                     )
@@ -1621,6 +1623,7 @@ async fn run_nonstreaming_chat(
                     outcome,
                     request.project_folder.clone(),
                     request.conversation_mode.clone(),
+                    !flags.incognito,
                     request.thinking_mode,
                     tool_registry.clone(),
                 )

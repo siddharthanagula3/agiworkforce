@@ -17,6 +17,7 @@ pub(super) async fn execute_tool_calls_batch(
     frontend_message_id: &str,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    persist_internal_resources: bool,
     iteration: usize,
     registry: Option<Arc<crate::core::agi::tools::ToolRegistry>>,
 ) -> (Vec<ChatToolResult>, Vec<String>) {
@@ -116,6 +117,7 @@ pub(super) async fn execute_tool_calls_batch(
             frontend_message_id,
             project_folder.clone(),
             conversation_mode.clone(),
+            persist_internal_resources,
             Some(tool_call.id.as_str()),
             registry.clone(),
         )
@@ -203,6 +205,7 @@ pub(super) async fn execute_chat_tool_with_timeout(
     frontend_message_id: &str,
     project_folder: Option<String>,
     conversation_mode: Option<String>,
+    persist_internal_resources: bool,
     tool_call_id: Option<&str>,
     registry: Option<Arc<crate::core::agi::tools::ToolRegistry>>,
 ) -> Result<String, String> {
@@ -247,6 +250,7 @@ pub(super) async fn execute_chat_tool_with_timeout(
             Some(&app_handle_clone),
             project_folder_owned,
             conversation_mode_owned,
+            persist_internal_resources,
             tool_call_id_owned.as_deref(),
             registry,
             Some(conversation_id),

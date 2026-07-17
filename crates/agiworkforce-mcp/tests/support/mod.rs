@@ -15,8 +15,8 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use axum::{
@@ -29,10 +29,10 @@ use axum::{
 };
 use futures_util::StreamExt;
 
+use agiworkforce_mcp::hooks::{InMemoryTokenStore, noop_log};
 use agiworkforce_mcp::{
     AutoDeclineHandler, BrowserAuthorizer, ClientHooks, ClientInfo, ElicitationHandler,
 };
-use agiworkforce_mcp::hooks::{InMemoryTokenStore, noop_log};
 
 pub fn client_info() -> ClientInfo {
     ClientInfo {
@@ -224,7 +224,9 @@ pub fn http_basic(session_id: Option<String>) -> (Router, Arc<HttpRecord>) {
                             rpc_result(&id, tools_call_result(&args)),
                         )
                     }
-                    _ => json_response(StatusCode::OK, None, rpc_result(&id, serde_json::json!({}))),
+                    _ => {
+                        json_response(StatusCode::OK, None, rpc_result(&id, serde_json::json!({})))
+                    }
                 }
             }
         }),
@@ -291,9 +293,8 @@ pub fn http_oauth() -> (Router, Arc<HttpRecord>) {
             "registration_endpoint": format!("http://{host}/register")
         }))
     });
-    let register = post(|| async {
-        axum::Json(serde_json::json!({ "client_id": "sim-client-id" }))
-    });
+    let register =
+        post(|| async { axum::Json(serde_json::json!({ "client_id": "sim-client-id" })) });
     let token = post(|| async {
         axum::Json(serde_json::json!({
             "access_token": "sim-access-token",
@@ -465,14 +466,20 @@ pub fn sse_sim(fail_calls: usize) -> (Router, Arc<SseRecord>) {
                         .and_then(|p| p.get("arguments"))
                         .cloned()
                         .unwrap_or(serde_json::Value::Null);
-                    json_response(StatusCode::OK, None, rpc_result(&id, tools_call_result(&args)))
+                    json_response(
+                        StatusCode::OK,
+                        None,
+                        rpc_result(&id, tools_call_result(&args)),
+                    )
                 }
                 _ => json_response(StatusCode::OK, None, rpc_result(&id, serde_json::json!({}))),
             }
         }
     });
 
-    let app = Router::new().route("/sse", sse_get).route("/messages", messages);
+    let app = Router::new()
+        .route("/sse", sse_get)
+        .route("/messages", messages);
     (app, rec)
 }
 
