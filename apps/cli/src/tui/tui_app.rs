@@ -3906,6 +3906,18 @@ async fn send_message(
                         cost_str: turn_cost_str.clone(),
                     };
                     render_turn_frame(terminal, &ctx)?;
+
+                    // MCP servers may also elicit input MID-turn: the engine's
+                    // read-loop parks awaiting the response, so the queue must
+                    // be driven here too (the idle-loop drain at the top of
+                    // `run_app` only runs between turns). Mirrors the approval
+                    // arm above; uses the same disjoint-field `ctx`.
+                    let elicitation_handler = Arc::clone(&app.mcp_elicitation_handler);
+                    while let Some(pending) = elicitation_handler.drain_pending().await {
+                        let request_id = pending.id;
+                        let response = run_turn_mcp_elicitation_modal(terminal, &ctx, pending)?;
+                        elicitation_handler.complete(request_id, response).await;
+                    }
                 }
             }
         }
