@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Settings layout — auth gate only. The actual settings UI is now the shared
- * SettingsModal (packages/ui) opened via SettingsModalProvider. Each child
+ * SettingsModal (packages/ui/ui) opened via SettingsModalProvider. Each child
  * page under /settings/* renders a SettingsModalRedirect that fires
  * openSettings(section) and sends the user back to /chat with the modal open.
  */

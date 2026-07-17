@@ -1,4 +1,4 @@
-// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
+// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { open } from '@tauri-apps/plugin-shell';
 import { toast } from 'sonner';
 import { create } from 'zustand';

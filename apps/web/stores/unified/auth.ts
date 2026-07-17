@@ -13,7 +13,7 @@
 
 import React from 'react';
 import { create } from 'zustand';
-import { parseMeResponse } from '@agiworkforce/services';
+import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import { hasClerkSessionCookie } from '@/lib/clerk-session';
 
 // Minimal user shape retained for backward compatibility with components reading user.email/id.
@@ -51,6 +51,8 @@ export interface CreditBalance {
 export interface FeatureFlags {
   beta_features: boolean;
   advanced_model_access: boolean;
+  /** Deployment capability: the E2B code-execution loop is enabled server-side. */
+  code_execution?: boolean;
 }
 
 // /api/me wire shape comes from the shared cloud contract (restructure Wave 4);

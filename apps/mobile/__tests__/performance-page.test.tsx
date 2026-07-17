@@ -50,7 +50,10 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-jest.mock('@agiworkforce/local-llm', () => ({
+jest.mock('@agiworkforce/local-llm', () => {
+  const actual = jest.requireActual('@agiworkforce/local-llm');
+  return {
+  ...actual,
   isThermallyThrottled: jest.fn().mockReturnValue(false),
   getCapabilities: jest.fn().mockResolvedValue({
     totalRAMMB: 8192,
@@ -104,7 +107,8 @@ jest.mock('@agiworkforce/local-llm', () => ({
       return { text: 'benchmark result', runtime: 'foundation_models', aborted: false };
     }),
   selectTier: jest.fn().mockResolvedValue({ tier: 1, runtime: 'foundation_models' }),
-}));
+  };
+});
 
 // Inject AGIFoundationModels into the jest-expo NativeModules mock.
 // jest-expo provides a pre-configured react-native mock so we only extend it.

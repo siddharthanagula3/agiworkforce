@@ -16,7 +16,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getProviderProbeModel, normalizeModelId, type Provider } from '@agiworkforce/types';
-import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 
 const SETTINGS_PROVIDER_ALIASES: Record<string, Provider> = {
   anthropic: 'anthropic',

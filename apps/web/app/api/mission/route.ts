@@ -18,7 +18,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { requireCsrfToken } from '@/lib/csrf';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getTaskModelForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
-import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 
 /**
  * Mission Control API
@@ -310,26 +310,59 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     const costDiff = actualCostCents - estimatedCostCents;
     if (costDiff !== 0) {
       const reconcKey = CreditService.generateIdempotencyKey(userId, 'reconciliation', requestId);
-      await CreditService.deductCredits(
-        userClient,
-        userId,
-        costDiff,
-        `Credit adjustment: mission control (${missionProvider}/${missionModel})`,
-        { provider: missionProvider, model: missionModel, type: 'reconciliation', requestId },
-        reconcKey,
-      );
+      try {
+        await CreditService.settleCreditsDurably(
+          {
+            userId,
+            amountCents: costDiff,
+            description: `Credit adjustment: mission control (${missionProvider}/${missionModel})`,
+            metadata: {
+              provider: missionProvider,
+              model: missionModel,
+              type: 'reconciliation',
+              requestId,
+            },
+            idempotencyKey: reconcKey,
+          },
+          userClient,
+        );
+      } catch (settlementError) {
+        logger.error(
+          {
+            event: 'mission_reconciliation_settlement_unrecorded',
+            error: settlementError,
+            userId,
+            requestId,
+          },
+          'Mission reconciliation could not be persisted',
+        );
+      }
     }
   } catch (error) {
     // Refund reserved credits on failure
     const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
-    await CreditService.deductCredits(
-      userClient,
-      userId,
-      -estimatedCostCents,
-      `Refund: mission control planning failed`,
-      { type: 'refund', reason: 'llm_failure', requestId },
-      refundKey,
-    );
+    try {
+      await CreditService.settleCreditsDurably(
+        {
+          userId,
+          amountCents: -estimatedCostCents,
+          description: `Refund: mission control planning failed`,
+          metadata: { type: 'refund', reason: 'llm_failure', requestId },
+          idempotencyKey: refundKey,
+        },
+        userClient,
+      );
+    } catch (settlementError) {
+      logger.error(
+        {
+          event: 'mission_refund_settlement_unrecorded',
+          error: settlementError,
+          userId,
+          requestId,
+        },
+        'Mission refund could not be persisted',
+      );
+    }
     logger.error({ error, userId: userId, requestId }, 'Mission control LLM call failed');
     throw createError.internal('Failed to process mission. Please try again.');
   }

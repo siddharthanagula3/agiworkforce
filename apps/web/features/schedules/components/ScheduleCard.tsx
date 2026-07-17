@@ -1,187 +1,243 @@
 'use client';
 
-import { Badge, Button, Card, CardContent } from '@agiworkforce/ui';
-import { Switch } from '@agiworkforce/ui';
-import { Clock, Play, History, Pencil, Trash2, ChevronUp, Copy, TrendingUp } from 'lucide-react';
-import { formatDate, getNextRunCountdown, recurrenceLabel } from '../types';
-import type { Schedule, ScheduleRun } from '../types';
-import { ScheduleRunHistory } from './ScheduleRunHistory';
+import { Badge, Button, Card, CardContent, Switch } from '@agiworkforce/ui';
+import { CalendarClock, History, Pencil, Play, Trash2 } from 'lucide-react';
+import type { ScheduleTask } from '../types';
+import { DAYS_OF_WEEK, formatDateTime, recurrenceLabel, taskRecurrence } from '../types';
+import { ScheduleRunHistory, type ScheduleHistoryState } from './ScheduleRunHistory';
 
-// ---------------------------------------------------------------------------
-// Status badge helper (kept local since it renders JSX)
-// ---------------------------------------------------------------------------
-
-function statusBadge(status: string | null) {
-  if (!status) return null;
-  const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    success: 'default',
-    pending: 'secondary',
-    running: 'secondary',
-    failed: 'destructive',
-    error: 'destructive',
-  };
-  return (
-    <Badge variant={variants[status] || 'outline'} className="text-xs capitalize">
-      {status}
-    </Badge>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Success rate helper
-// ---------------------------------------------------------------------------
-
-function successRateBadge(runs: ScheduleRun[] | undefined) {
-  if (!runs || runs.length === 0) return null;
-  const successes = runs.filter((r) => r.status === 'success').length;
-  const rate = Math.round((successes / runs.length) * 100);
-  const variant = rate >= 90 ? 'default' : rate >= 60 ? 'secondary' : 'destructive';
-  return (
-    <Badge variant={variant} className="flex items-center gap-1 text-xs">
-      <TrendingUp className="h-3 w-3" />
-      {rate}%
-    </Badge>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
+export type ScheduleOperation = 'toggle' | 'run' | 'delete' | null;
 
 interface ScheduleCardProps {
-  schedule: Schedule;
-  isHistoryExpanded: boolean;
-  historyRuns: ScheduleRun[];
-  historyLoading: boolean;
-  onToggleActive: (id: string, isActive: boolean) => void;
-  onTriggerRun: (id: string) => void;
-  onToggleHistory: (id: string) => void;
-  onEdit: (schedule: Schedule) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (schedule: Schedule) => void;
-  onRerun: (scheduleId: string, run: ScheduleRun) => void;
+  schedule: ScheduleTask;
+  operation: ScheduleOperation;
+  error: string | null;
+  historyExpanded: boolean;
+  history: ScheduleHistoryState;
+  onToggleEnabled: (schedule: ScheduleTask) => void;
+  onRunNow: (schedule: ScheduleTask) => void;
+  onEdit: (schedule: ScheduleTask) => void;
+  onDelete: (schedule: ScheduleTask) => void;
+  onToggleHistory: (schedule: ScheduleTask) => void;
+  onRetryHistory: (schedule: ScheduleTask) => void;
+  onLoadMoreHistory: (schedule: ScheduleTask) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+const TERMINAL_STATUSES = new Set<ScheduleTask['status']>(['completed', 'expired']);
+
+function scheduleTiming(schedule: ScheduleTask): string {
+  const recurrence = taskRecurrence(schedule);
+  const metadata = schedule.metadata ?? {};
+  const time = typeof metadata['timeOfDay'] === 'string' ? metadata['timeOfDay'] : null;
+  if (recurrence === 'once') return formatDateTime(schedule.executeAt, schedule.timezone);
+  if (recurrence === 'interval' && schedule.intervalMs) {
+    const minutes = schedule.intervalMs / 60_000;
+    if (minutes % 1_440 === 0) return `Every ${minutes / 1_440} day${minutes === 1_440 ? '' : 's'}`;
+    if (minutes % 60 === 0) return `Every ${minutes / 60} hour${minutes === 60 ? '' : 's'}`;
+    return `Every ${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+  if (recurrence === 'custom') return schedule.cronExpression ?? 'Invalid cron';
+  if (recurrence === 'weekly') {
+    const days = Array.isArray(metadata['daysOfWeek'])
+      ? metadata['daysOfWeek']
+          .filter((day): day is number => typeof day === 'number')
+          .map((day) => DAYS_OF_WEEK.find((candidate) => candidate.value === day)?.label)
+          .filter(Boolean)
+          .join(', ')
+      : '';
+    return `${days || 'Weekly'} at ${time ?? 'unknown time'}`;
+  }
+  if (recurrence === 'monthly') {
+    return `Day ${String(metadata['dayOfMonth'] ?? '?')} at ${time ?? 'unknown time'}`;
+  }
+  return `Every day at ${time ?? 'unknown time'}`;
+}
+
+function statusVariant(status: ScheduleTask['status']) {
+  if (status === 'failed' || status === 'expired') return 'destructive' as const;
+  if (status === 'active') return 'default' as const;
+  return 'secondary' as const;
+}
 
 export function ScheduleCard({
   schedule,
-  isHistoryExpanded,
-  historyRuns,
-  historyLoading,
-  onToggleActive,
-  onTriggerRun,
-  onToggleHistory,
+  operation,
+  error,
+  historyExpanded,
+  history,
+  onToggleEnabled,
+  onRunNow,
   onEdit,
   onDelete,
-  onDuplicate,
-  onRerun,
+  onToggleHistory,
+  onRetryHistory,
+  onLoadMoreHistory,
 }: ScheduleCardProps) {
-  const countdown = getNextRunCountdown(schedule.nextRunAt);
+  const terminal = TERMINAL_STATUSES.has(schedule.status);
+  const supported = schedule.actionType === 'agent';
+  const canRun = supported && schedule.isEnabled && schedule.status === 'active' && !operation;
+  const canEdit = supported && !terminal && !operation;
+  const canToggle = !terminal && (!schedule.isEnabled ? supported : true) && !operation;
+  const headingId = `schedule-title-${schedule.id}`;
 
   return (
-    <Card className="border-border bg-card">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          {/* Left: info */}
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <h3 className="truncate text-sm font-semibold">{schedule.name}</h3>
-              <Badge variant="outline" className="text-xs">
-                {recurrenceLabel(schedule.recurrence)}
+    <Card
+      as="article"
+      aria-labelledby={headingId}
+      className="overflow-hidden border-border/80 bg-card shadow-sm"
+    >
+      <CardContent className="p-0">
+        <div className="flex flex-col gap-5 p-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <CalendarClock className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <h2
+                id={headingId}
+                className="min-w-0 break-words text-base font-semibold text-foreground"
+              >
+                {schedule.name}
+              </h2>
+              <Badge variant={statusVariant(schedule.status)} className="capitalize">
+                {schedule.status}
               </Badge>
-              {statusBadge(schedule.lastRunStatus)}
-              {successRateBadge(historyRuns.length > 0 ? historyRuns : undefined)}
+              <Badge variant="outline">{recurrenceLabel(taskRecurrence(schedule))}</Badge>
+              {!supported && <Badge variant="destructive">Unsupported action type</Badge>}
             </div>
 
-            <p className="line-clamp-2 text-xs text-muted-foreground">{schedule.prompt}</p>
+            {schedule.description && (
+              <p className="break-words text-sm text-muted-foreground">{schedule.description}</p>
+            )}
+            <p className="line-clamp-3 break-words text-sm leading-relaxed text-foreground/85">
+              {schedule.prompt || 'No task instructions are stored.'}
+            </p>
 
-            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-              <span>
-                {schedule.timeOfDay} {schedule.timezone}
-              </span>
-              {schedule.lastRunAt && <span>Last run: {formatDate(schedule.lastRunAt)}</span>}
-              {countdown && schedule.isActive && (
-                <span className="text-primary/70">Next: {countdown}</span>
-              )}
-              {schedule.model && schedule.model !== 'auto-balanced' && (
-                <span>Model: {schedule.model}</span>
-              )}
-            </div>
+            <dl className="grid gap-x-6 gap-y-2 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
+              <div className="min-w-0">
+                <dt className="font-medium text-foreground/70">Timing</dt>
+                <dd className="break-words font-mono">{scheduleTiming(schedule)}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-medium text-foreground/70">Time Zone</dt>
+                <dd className="break-words font-mono" translate="no">
+                  {schedule.timezone}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-medium text-foreground/70">Next Run</dt>
+                <dd>
+                  {schedule.isEnabled
+                    ? formatDateTime(schedule.nextExecutionAt, schedule.timezone)
+                    : 'Paused'}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-medium text-foreground/70">Last Run</dt>
+                <dd>{formatDateTime(schedule.lastExecutedAt, schedule.timezone)}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-medium text-foreground/70">Runs</dt>
+                <dd className="tabular-nums">
+                  {new Intl.NumberFormat().format(schedule.executionCount)}
+                  {schedule.maxExecutions === null
+                    ? ''
+                    : ` of ${new Intl.NumberFormat().format(schedule.maxExecutions)}`}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-medium text-foreground/70">Model</dt>
+                <dd className="break-words font-mono" translate="no">
+                  {schedule.model ?? 'auto-balanced'}
+                </dd>
+              </div>
+            </dl>
+
+            {schedule.lastError && (
+              <p className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                Last run: {schedule.lastError}
+              </p>
+            )}
+            {error && (
+              <p
+                role="alert"
+                className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {error} Retry the action when ready.
+              </p>
+            )}
           </div>
 
-          {/* Right: actions */}
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Switch
-              checked={schedule.isActive}
-              onCheckedChange={(checked) => onToggleActive(schedule.id, checked)}
-              aria-label={`Toggle ${schedule.name}`}
+              checked={schedule.isEnabled}
+              onCheckedChange={() => onToggleEnabled(schedule)}
+              disabled={!canToggle}
+              aria-label={`${schedule.isEnabled ? 'Pause' : 'Resume'} ${schedule.name}`}
+              aria-busy={operation === 'toggle'}
             />
             <Button
-              variant="ghost"
+              type="button"
+              variant="outline"
               size="icon"
-              className="h-8 w-8"
-              onClick={() => onTriggerRun(schedule.id)}
-              title="Run now"
+              onClick={() => onRunNow(schedule)}
+              disabled={!canRun}
+              aria-label={`Run ${schedule.name} Now`}
+              title="Run Now"
             >
-              <Play className="h-4 w-4" />
+              <Play className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
-              variant="ghost"
+              type="button"
+              variant="outline"
               size="icon"
-              className="h-8 w-8"
-              onClick={() => onToggleHistory(schedule.id)}
-              title="Run history"
+              onClick={() => onToggleHistory(schedule)}
+              aria-expanded={historyExpanded}
+              aria-controls={`schedule-history-${schedule.id}`}
+              aria-label={`${historyExpanded ? 'Hide' : 'View'} History for ${schedule.name}`}
+              title="Run History"
             >
-              {isHistoryExpanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <History className="h-4 w-4" />
-              )}
+              <History className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
-              variant="ghost"
+              type="button"
+              variant="outline"
               size="icon"
-              className="h-8 w-8"
-              onClick={() => onDuplicate(schedule)}
-              title="Duplicate"
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
               onClick={() => onEdit(schedule)}
-              title="Edit"
+              disabled={!canEdit}
+              aria-label={`Edit ${schedule.name}`}
+              title="Edit Schedule"
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
-              variant="ghost"
+              type="button"
+              variant="outline"
               size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-              onClick={() => onDelete(schedule.id)}
-              title="Delete"
+              onClick={() => onDelete(schedule)}
+              disabled={operation !== null}
+              aria-label={`Delete ${schedule.name}`}
+              title="Delete Schedule"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
             </Button>
+            {operation && <span className="sr-only">Schedule action in progress…</span>}
           </div>
         </div>
 
-        {/* Run history panel */}
-        {isHistoryExpanded && (
-          <div className="mt-3 border-t border-border/50 pt-3">
+        {historyExpanded && (
+          <section
+            id={`schedule-history-${schedule.id}`}
+            aria-label={`Run History for ${schedule.name}`}
+            className="border-t border-border/70 bg-muted/20 p-5"
+          >
+            <h3 className="mb-3 text-sm font-semibold text-foreground">Run History</h3>
             <ScheduleRunHistory
-              scheduleId={schedule.id}
-              runs={historyRuns}
-              loading={historyLoading}
-              onRerun={(run) => onRerun(schedule.id, run)}
+              state={history}
+              timezone={schedule.timezone}
+              onRetry={() => onRetryHistory(schedule)}
+              onLoadMore={() => onLoadMoreHistory(schedule)}
             />
-          </div>
+          </section>
         )}
       </CardContent>
     </Card>

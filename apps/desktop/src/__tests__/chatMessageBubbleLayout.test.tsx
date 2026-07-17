@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MessageBubble } from '../../../../packages/unified-chat/src/components/MessageBubble';
+import { MessageBubble } from '../../../../packages/ui/unified-chat/src/components/MessageBubble';
 
 describe('MessageBubble user layout', () => {
   it('keeps the user bubble width constrained on the outer wrapper', () => {
@@ -16,7 +16,7 @@ describe('MessageBubble user layout', () => {
       />,
     );
 
-    expect(container.firstElementChild).toHaveClass('max-w-[80%]');
+    expect(container.firstElementChild).toHaveClass('max-w-[85%]');
     expect(screen.getByText('hi')).toHaveClass('w-fit');
   });
 });

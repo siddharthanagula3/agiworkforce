@@ -28,7 +28,7 @@ import {
   type GeneratedFileTrustBoundaryViolationCode,
 } from '@agiworkforce/types';
 
-import type { PublishResult, WaitlistPublishResult } from '@agiworkforce/services';
+import type { PublishResult, WaitlistPublishResult } from '@agiworkforce/artifacts';
 
 export type { PublishResult, WaitlistPublishResult };
 

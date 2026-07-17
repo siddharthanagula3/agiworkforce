@@ -445,10 +445,23 @@ class NeonQueryBuilder<T = LooseDbRow> implements PromiseLike<DbResult<T[]>> {
   }
 }
 
+interface SystemAccessScope {
+  purpose: SystemClientPurpose;
+  tables: ReadonlySet<string>;
+}
+
 class NeonDataClient {
-  constructor(private readonly sql: QueryExecutor) {}
+  constructor(
+    private readonly sql: QueryExecutor,
+    private readonly systemScope?: SystemAccessScope,
+  ) {}
 
   from<T = LooseDbRow>(table: string): NeonQueryBuilder<T> {
+    if (this.systemScope && !this.systemScope.tables.has(table)) {
+      throw new Error(
+        `System database purpose ${this.systemScope.purpose} is not authorized for table ${table}`,
+      );
+    }
     return new NeonQueryBuilder<T>(this.sql, table);
   }
 
@@ -456,6 +469,15 @@ class NeonDataClient {
     functionName: string,
     args: Record<string, unknown> = {},
   ): Promise<DbResult<T>> {
+    if (this.systemScope) {
+      return {
+        data: null,
+        error: {
+          message: `System database purpose ${this.systemScope.purpose} is not authorized for RPC ${functionName}`,
+        },
+        count: null,
+      };
+    }
     try {
       const functionIdentifier = assertIdentifier(functionName);
       const values: unknown[] = [];
@@ -478,15 +500,50 @@ class NeonDataClient {
   }
 }
 
-let serviceClient: NeonDataClient | null = null;
+let systemClients = new Map<SystemClientPurpose, NeonDataClient>();
 
 export type CloudDbClient = NeonDataClient;
 
-export function getServiceClient(): CloudDbClient {
-  if (serviceClient) return serviceClient;
+export type SystemClientPurpose =
+  | 'device-authorization'
+  | 'gateway-health'
+  | 'shadow-schema-compatibility';
+
+const SYSTEM_TABLES: Record<SystemClientPurpose, ReadonlySet<string>> = {
+  'device-authorization': new Set(['device_authorization_codes', 'profiles']),
+  'gateway-health': new Set(['profiles']),
+  'shadow-schema-compatibility': new Set([
+    'agent_approval_requests',
+    'chat_messages',
+    'conversations',
+    'device_pairings',
+    'enterprise_audit_events',
+    'messages',
+    'organization_admin_policies',
+    'organization_usage_ledger',
+    'support_cases',
+  ]),
+};
+
+/**
+ * Return the privileged database connection for operations that cannot run as
+ * an end user. Callers must name the purpose so service-role access remains
+ * visible in review. User-owned canonical data must use getUserScopedClient.
+ */
+export function getSystemClient(_purpose: SystemClientPurpose): CloudDbClient {
+  const existing = systemClients.get(_purpose);
+  if (existing) return existing;
+  const tables = SYSTEM_TABLES[_purpose];
+  if (!tables) {
+    throw new Error(`Unknown system database purpose: ${String(_purpose)}`);
+  }
   const sql = getSql();
-  serviceClient = new NeonDataClient({ query: (text, values) => sql.query(text, values) });
-  return serviceClient;
+  const client = new NeonDataClient(
+    { query: (text, values) => sql.query(text, values) },
+    { purpose: _purpose, tables },
+  );
+  systemClients.set(_purpose, client);
+  return client;
 }
 
 export interface UserAuth {
@@ -539,88 +596,45 @@ export async function disposeUserScopedClientPool(): Promise<void> {
 
 /**
  * SECURITY (P1-GW-RLS, real fix): binds `auth.token` via
- * NeonDatabaseAdapter.withUser() (packages/data-layer/src/adapters/neon.ts),
+ * NeonDatabaseAdapter.withUser() (packages/platform/data-layer/src/adapters/neon.ts),
  * which runs every query as the NON-BYPASSRLS `app_rls` role with
  * `request.jwt.claim.sub` set to the token's own `sub` claim — the same
  * mechanism apps/web/lib/server/rls-db.ts uses in production. RLS policies
  * keyed on that GUC (0037_rls_user_isolation.sql and friends) now enforce
  * tenant isolation at the DATABASE level for tables that have one.
  *
- * IMPORTANT — most gateway tables do NOT have an RLS policy yet (see the
- * Wave-4 coverage audit / SVC-GATEWAY-RLS-NOOP-01 follow-up). Only call this
- * for a table you've confirmed has BOTH `ENABLE`+`FORCE ROW LEVEL SECURITY`
- * AND a policy keyed on `request.jwt.claim.sub` matching your filter column.
- * Every other call site MUST keep using getServiceClient() directly with its
- * explicit `.eq('user_id', …)` filter and an `// RLS-GAP:` comment — calling
- * this function for an uncovered table won't error (app_rls has blanket DML
- * grants on all public-schema tables via 0037's `GRANT ... ON ALL TABLES`),
- * it just pays pooled-connection overhead for zero added row-level
- * protection while looking like it's scoped.
- *
- * Falls back to getServiceClient() — today's baseline, not a regression —
- * in TWO distinct failure modes, both logged so they're observable rather
- * than silently masked:
- *
- * 1. The token can't be bound: withUser() throws SYNCHRONOUSLY on a
- *    malformed/`sub`-less token (e.g. a gateway device token minted before
- *    the `sub` claim was added in deviceAuth.ts; those remain valid for up
- *    to ACCESS_TOKEN_EXPIRES_SECONDS after this ships).
- * 2. The query itself fails once it actually runs: `SET LOCAL ROLE app_rls`
- *    / the pooled connection only execute INSIDE userAdapter.query() (per
- *    query, per NeonDatabaseAdapter's design), which is outside the
- *    withUser() try/catch below. If the `app_rls` role is missing, ungranted
- *    to the connecting role, or the pool can't connect, that surfaces here —
- *    NOT as a thrown withUser() error. Without this second fallback a
- *    misprovisioned database would turn planGate (gates ALL cloud chat) and
- *    deduct_credits (a billing write) into hard failures instead of a safe
- *    degrade. Wrapping every query keeps the fallback point-in-time correct
- *    even if the RLS infrastructure is provisioned after this ships, or goes
- *    down independently of it.
+ * This boundary is fail closed. Missing or malformed tokens throw before a
+ * query is built. Connection, role, policy, and query failures are returned to
+ * the caller as database errors by NeonQueryBuilder; they are never retried on
+ * the privileged system connection. This deliberately turns RLS provisioning
+ * drift into an observable request failure instead of silent tenant-boundary
+ * bypass.
  */
 export function getUserScopedClient(auth: UserAuth): CloudDbClient {
   if (!auth.token) {
-    logger.warn(
-      { userId: auth.userId },
-      'getUserScopedClient: called with no token — falling back to service client',
-    );
-    return getServiceClient();
+    throw new Error('User-scoped database access requires a verified bearer token');
   }
 
   let userAdapter: DatabaseAdapter;
   try {
     userAdapter = getRlsAdapter().withUser(auth.token);
   } catch (err) {
-    logger.warn(
+    logger.error(
       { err, userId: auth.userId },
-      'getUserScopedClient: withUser() rejected the token (likely a pre-rollout gateway ' +
-        'device token without a `sub` claim) — falling back to service client',
+      'getUserScopedClient: refusing request because the verified token could not be bound',
     );
-    return getServiceClient();
+    throw new Error('User-scoped database access could not bind the verified token', {
+      cause: err,
+    });
   }
 
   return new NeonDataClient({
-    query: async (text, values) => {
-      try {
-        return await userAdapter.query(text, values);
-      } catch (err) {
-        // The withUser()-scoped connection/role failed AFTER withUser() itself
-        // succeeded — e.g. `app_rls` doesn't exist or isn't granted on this
-        // database. Retry via the service-role executor so the request still
-        // completes with today's app-layer-filter-only guarantee instead of
-        // hard-failing.
-        logger.warn(
-          { err, userId: auth.userId },
-          'getUserScopedClient: withUser()-scoped query failed (app_rls role/grant likely ' +
-            'missing on this database) — retrying via service-role client for this call',
-        );
-        return getSql().query(text, values);
-      }
-    },
+    query: (text, values) => userAdapter.query(text, values),
   });
 }
 
 export function _resetCloudDbForTests(): void {
-  serviceClient = null;
+  systemClients = new Map<SystemClientPurpose, NeonDataClient>();
   serviceSql = null;
   rlsAdapter = null;
 }

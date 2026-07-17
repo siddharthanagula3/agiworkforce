@@ -4,8 +4,12 @@
 // 208/209/188). No structural changes are in scope -- this is purely for
 // side-by-side polish comparison. Safe to delete after the comparison lands.
 
+import * as fs from 'node:fs';
+
 const SCREEN_DIR =
   '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/claude-compare';
+
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
 
 function clickSelector(selector: string) {
   return browser.execute((sel) => {

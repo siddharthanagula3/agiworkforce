@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { getAllowedModelsForTier, getModelMetadata } from '../../constants/llm';
 import { useModelStore, formatOllamaModelSize, getOllamaModelDisplayName } from '../modelStore';
 
 // Mock @tauri-apps/api/core - throw for unknown commands so error-handling paths are exercised
@@ -64,20 +65,26 @@ describe('modelStore', () => {
 
   describe('selectModel', () => {
     it('updates selectedModel and selectedProvider', async () => {
-      // Use claude-sonnet-4.6 (dot, not hyphen) which is in the pro/max allowed list
-      await useModelStore.getState().selectModel('claude-sonnet-4.6', 'anthropic');
+      const modelId = getAllowedModelsForTier('max').find(
+        (candidate) => getModelMetadata(candidate)?.provider === 'anthropic',
+      );
+      expect(modelId).toBeDefined();
+      await useModelStore.getState().selectModel(modelId!, 'anthropic');
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('claude-sonnet-4.6');
+      expect(state.selectedModel).toBe(modelId);
       expect(state.selectedProvider).toBe('anthropic');
     });
 
     it('adds model to recent models', async () => {
-      // Use gpt-5.5 which is in the max allowed list (flagship tier)
-      await useModelStore.getState().selectModel('gpt-5.5', 'openai');
+      const modelId = getAllowedModelsForTier('max').find(
+        (candidate) => getModelMetadata(candidate)?.provider === 'openai',
+      );
+      expect(modelId).toBeDefined();
+      await useModelStore.getState().selectModel(modelId!, 'openai');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('gpt-5.5');
+      expect(state.recentModels).toContain(modelId);
     });
   });
 
@@ -178,18 +185,6 @@ describe('modelStore', () => {
       const state = useModelStore.getState();
       expect(state.thinkingBudget).toBe(0);
       expect(state.thinkingModeEnabled).toBe(false);
-    });
-  });
-
-  describe('isManualModelSelection', () => {
-    it('returns false for auto mode selections', () => {
-      useModelStore.setState({ selectedModel: 'auto-economy' });
-      expect(useModelStore.getState().isManualModelSelection()).toBe(false);
-    });
-
-    it('returns false for null model', () => {
-      useModelStore.setState({ selectedModel: null });
-      expect(useModelStore.getState().isManualModelSelection()).toBe(false);
     });
   });
 

@@ -25,7 +25,7 @@ import {
   getTaskModelForProvider,
   requireProviderDefaultModel,
 } from '@agiworkforce/types';
-import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 
 /**
  * Prompt Completion API

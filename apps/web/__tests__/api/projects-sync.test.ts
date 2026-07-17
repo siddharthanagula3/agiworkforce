@@ -3,7 +3,7 @@
  *
  * Guards:
  *  - cursor advances to the highest delivered server_version (bigint, not lexicographic),
- *  - push UPSERTs by id with last-writer-wins (excluded.updated_at >= existing),
+ *  - push compare-and-swaps by the server-owned revision (client clocks never win),
  *  - user_id is forced server-side (RLS WITH CHECK backstop) — never from the body,
  *  - deleted_at carries the tombstone so deletes propagate cross-device,
  *  - the pull query does NOT filter deleted_at (tombstones must be delivered),
@@ -26,7 +26,7 @@ const sv = (n: number) => ({ server_version: String(n) });
 
 beforeEach(() => {
   queryMock.mockReset();
-  queryMock.mockResolvedValue([{ id: 'x', server_version: '4' }]);
+  queryMock.mockResolvedValue([{ kind: 'applied', id: 'x', server_version: '4', current: null }]);
 });
 
 function postReq(body: unknown) {
@@ -50,7 +50,7 @@ describe('computeProjectsPullCursor', () => {
 });
 
 describe('POST /api/projects/sync — push', () => {
-  it('UPSERTs by id with last-writer-wins, forces user_id, carries the tombstone', async () => {
+  it('compare-and-swaps by server revision, forces user_id, carries the tombstone', async () => {
     const res = await POST(
       postReq({
         projects: [
@@ -58,6 +58,7 @@ describe('POST /api/projects/sync — push', () => {
             id: '0190a000-0000-7000-8000-0000000000d1',
             name: 'Launch plan',
             instructions: 'Be concise.',
+            baseVersion: '0',
             updatedAt: '2026-06-22T00:00:00.000Z',
             deletedAt: null,
           },
@@ -73,14 +74,15 @@ describe('POST /api/projects/sync — push', () => {
     );
     expect(call).toBeDefined();
     const sql = String(call![0]);
-    expect(sql).toContain('excluded.updated_at >= user_projects.updated_at');
-    expect(sql).toContain('user_projects.user_id = $2');
-    expect(sql).toContain('deleted_at = excluded.deleted_at');
+    expect(sql).toContain('existing.server_version = incoming.base_version');
+    expect(sql).toContain('existing.user_id = $1');
+    expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
+    expect(sql).not.toContain('excluded.updated_at');
     // user_id param is the SESSION user, never from the body.
-    expect((call![1] as unknown[])[1]).toBe('u1');
+    expect((call![1] as unknown[])[0]).toBe('u1');
   });
 
-  it('rejects local routing-hint fields not in the contract (extra keys ignored by zod)', async () => {
+  it('strips local routing-hint fields that are not in the sync contract', async () => {
     // default_privacy_mode is intentionally NOT a wire field; zod strips unknown keys,
     // so the insert SQL must never reference it.
     const res = await POST(
@@ -89,6 +91,7 @@ describe('POST /api/projects/sync — push', () => {
           {
             id: '0190a000-0000-7000-8000-0000000000d2',
             name: 'X',
+            baseVersion: '0',
             updatedAt: '2026-06-22T00:00:00.000Z',
             default_privacy_mode: 'local',
           },
@@ -100,6 +103,8 @@ describe('POST /api/projects/sync — push', () => {
       String(c[0]).includes('insert into user_projects'),
     );
     expect(String(call![0])).not.toContain('privacy_mode');
+    const pushed = JSON.parse(String((call![1] as unknown[])[1]));
+    expect(pushed[0].default_privacy_mode).toBeUndefined();
   });
 });
 

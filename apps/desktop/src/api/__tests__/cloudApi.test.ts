@@ -153,11 +153,19 @@ describe('cloudApi', () => {
       onError,
       undefined,
       onEvent,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000001',
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/llm/v1/chat/completions'),
       expect.objectContaining({
+        headers: expect.objectContaining({
+          'Idempotency-Key': 'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000001',
+        }),
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           messages: [{ role: 'user', content: 'Ping' }],
@@ -169,5 +177,38 @@ describe('cloudApi', () => {
     expect(onEvent).toHaveBeenCalled();
     expect(onDone).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('includes research only when the managed runtime explicitly requests it', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(stream, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sendCloudMessage(
+      'conv_research',
+      'Investigate',
+      'claude-sonnet-4.6',
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000002',
+      { research: true },
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(request.body as string)).toEqual(
+      expect.objectContaining({ research: true }),
+    );
   });
 });

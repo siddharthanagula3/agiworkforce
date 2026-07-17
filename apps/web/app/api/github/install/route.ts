@@ -18,7 +18,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const state = searchParams.get('state');
 
   if (!installationId || Number.isNaN(Number(installationId)) || Number(installationId) <= 0) {
-    return NextResponse.redirect(new URL('/chat?error=github_install_failed', request.url));
+    return NextResponse.redirect(new URL('/connectors?github=install_failed', request.url));
   }
 
   const cookieStore = await cookies();
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       { hasState: !!state, hasStoredState: !!storedState },
       'GitHub install callback: state mismatch',
     );
-    return NextResponse.redirect(new URL('/chat?error=github_install_invalid_state', request.url));
+    return NextResponse.redirect(new URL('/connectors?github=invalid_state', request.url));
   }
 
   let userId: string;
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     userId = auth.userId;
   } catch {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', '/chat/integrations/github');
+    loginUrl.searchParams.set('redirectTo', '/connectors');
     return NextResponse.redirect(loginUrl);
   }
 
@@ -58,9 +58,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   } catch (err) {
     logger.error({ err, userId }, 'Failed to save GitHub installation');
-    return NextResponse.redirect(
-      new URL('/chat/integrations/github?error=save_failed', request.url),
-    );
+    return NextResponse.redirect(new URL('/connectors?github=save_failed', request.url));
   }
 
   // Clear the state cookie after successful use
@@ -71,5 +69,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     path: '/',
   });
 
-  return NextResponse.redirect(new URL('/chat/integrations/github?connected=true', request.url));
+  return NextResponse.redirect(new URL('/connectors?github=connected', request.url));
 }

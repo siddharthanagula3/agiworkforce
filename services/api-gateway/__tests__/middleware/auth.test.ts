@@ -21,8 +21,8 @@ const JWT_SIGN_OPTIONS = {
 
 // Mock Neon client for kill-switch + revocation checks. Wave 1.5+
 // task #17 (2026-05-08): the legacy `lib/db` singleton was deleted;
-// middleware/auth.ts now goes through `getServiceClient()` from
-// neonClients. Mock returns `account_status: 'active'` for the
+// middleware/auth.ts now goes through getUserScopedClient() from neonClients.
+// Mock returns `account_status: 'active'` for the
 // kill-switch and `null` for revoked_jwts so the happy path passes.
 vi.mock('../../src/lib/neonClients', () => {
   const mockClient = {
@@ -39,8 +39,6 @@ vi.mock('../../src/lib/neonClients', () => {
     })),
   };
   return {
-    getServiceClient: vi.fn(() => mockClient),
-    getUserClient: vi.fn(() => mockClient),
     getUserScopedClient: vi.fn(() => mockClient),
   };
 });
@@ -137,11 +135,8 @@ describe('authenticateToken Middleware', () => {
   });
 
   it('should return 403 when account is suspended', async () => {
-    // Wave 1.5+ task #17: kill-switch lookup now goes through
-    // `getServiceClient()`. We override its return so this test sees a
-    // suspended account.
-    const { getServiceClient } = await import('../../src/lib/neonClients');
-    vi.mocked(getServiceClient).mockReturnValue({
+    const { getUserScopedClient } = await import('../../src/lib/neonClients');
+    vi.mocked(getUserScopedClient).mockReturnValue({
       from: vi.fn(() => ({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -174,8 +169,8 @@ describe('authenticateToken Middleware', () => {
   });
 
   it('should return 403 when account is banned', async () => {
-    const { getServiceClient } = await import('../../src/lib/neonClients');
-    vi.mocked(getServiceClient).mockReturnValue({
+    const { getUserScopedClient } = await import('../../src/lib/neonClients');
+    vi.mocked(getUserScopedClient).mockReturnValue({
       from: vi.fn(() => ({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
@@ -208,8 +203,8 @@ describe('authenticateToken Middleware', () => {
   });
 
   it('should return 503 when Neon is unavailable and account has no cached status (fail closed)', async () => {
-    const { getServiceClient } = await import('../../src/lib/neonClients');
-    vi.mocked(getServiceClient).mockReturnValue({
+    const { getUserScopedClient } = await import('../../src/lib/neonClients');
+    vi.mocked(getUserScopedClient).mockReturnValue({
       from: vi.fn(() => {
         throw new Error('Neon connection failed');
       }),

@@ -6,6 +6,11 @@ import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useChatStream, ToolApprovalProvider } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
+import {
+  isTemporaryConversationById,
+  persistImageGenerationUserMessage,
+  persistImageGenerationAssistantMessage,
+} from '../lib/imageGenerationPersistence';
 import { useChatStore } from '@/stores/chatStore';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
@@ -34,6 +39,7 @@ import {
   LogOut,
   FolderOpen,
   LibraryBig,
+  CalendarClock,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { useShareConversation } from '../hooks/use-share-conversation';
@@ -96,8 +102,14 @@ import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
 import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
-import { useProjectStore, ProjectSettingsDialog, type Project } from '@features/projects';
+import {
+  useManagedCloudProjects,
+  useProjectStore,
+  ProjectSettingsDialog,
+} from '@features/projects';
+import { webManagedCloudProjects } from '@features/projects/services/managed-cloud-projects';
 import { useMediaGeneration } from '@/lib/hooks/useMediaGeneration';
+import { classifyTaskLocally } from '@agiworkforce/routing';
 import {
   IMAGE_ASPECT_OPTIONS,
   IMAGE_MODELS,
@@ -105,8 +117,10 @@ import {
 } from '../components/Composer/ChatComposerNew';
 
 type SendMeta = {
-  agentMode?: string;
-  folderId?: string | null;
+  /** Composer work mode at send time ('chat' | 'agiwork'). */
+  workMode?: string;
+  /** Project scoping the send; threads into createConversation → project_id. */
+  projectId?: string | null;
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
@@ -345,6 +359,17 @@ export default function WebChatPage() {
   // true for the whole `sendContent` lifetime so the reconciler never clears an
   // active conversation mid-send. It is a ref (not state) so flipping it never
   // triggers a render; the reconciler reads it at effect-run time.
+  //
+  // DOUBLE-SUBMIT GUARD (streaming/approval cluster Finding 7): this ref also
+  // now doubles as sendContent's reentrancy guard, mirroring mobile's
+  // ChatInput.tsx `sendPendingRef` -- ChatComposerNew's own `isLoading || disabled`
+  // check in handleSubmit only blocks a SECOND click once the store's
+  // `isLoading` has round-tripped through a React render, but `sendContent` is
+  // an async function whose body (including the `isSendingRef.current = true`
+  // set below) runs SYNCHRONOUSLY up to its first `await` -- so checking this
+  // ref at the very top closes the double-submit window with zero render
+  // latency, exactly like a synchronous ref check, without needing a second
+  // ref in the composer.
   const isSendingRef = useRef(false);
 
   // Consume any pending message written by the project-detail composer before
@@ -373,6 +398,9 @@ export default function WebChatPage() {
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
   const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  // Whether CreateProjectDialog was opened from the composer picker (select the
+  // new project as chat scope) vs the sidebar (navigate to the project page).
+  const [createProjectFromComposer, setCreateProjectFromComposer] = useState(false);
   const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
 
   // Dialog state — lifted from ChatSidebar so they live at the page level and
@@ -391,35 +419,31 @@ export default function WebChatPage() {
   const { openSettings } = useSettingsModal();
 
   // Project store — same data source already used by the filter dropdown in <Sidebar>
-  const storeProjects = useProjectStore((s) => s.projects);
+  const { projects: storeProjects, isReady: projectsReady } = useManagedCloudProjects();
   const updateProjectInStore = useProjectStore((s) => s.updateProject);
   const removeProjectFromStore = useProjectStore((s) => s.removeProject);
   const setStoreProjects = useProjectStore((s) => s.setProjects);
 
-  // Hydrate the project store from the server once on mount. The store is
-  // otherwise localStorage-only, so server-side projects (user_projects) never
-  // appeared in the sidebar. Merge server rows with any local-only projects,
-  // server winning on id conflicts.
+  // Active project for the NEXT new chat. The shared store's activeProjectId is
+  // the canonical selection (the /projects pages already write it); the composer
+  // "Project or folder" picker reads/writes the same field, and createConversation
+  // below threads it into POST /api/chat/conversations as projectId.
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const setActiveProject = useProjectStore((s) => s.setActiveProject);
+
+  // Seed the active project from the URL. `?projectId=` is the ONE canonical
+  // entry param (sidebar project row "New chat" and the project-detail
+  // composer both emit it). Until this wiring nothing consumed it, so those
+  // entries silently dropped the project scope. The composer flips itself
+  // into AGI Work mode when it sees a preselected project.
+  // `projectsReady` is a dependency on purpose: the managed-cloud hydrate
+  // RESETS the store's activeProjectId to null when it lands (account-scope
+  // safety in project-store.ts), which would clobber a seed that ran on
+  // mount — re-seeding when readiness flips keeps the URL's intent.
+  const urlProjectId = searchParams?.get('projectId') ?? null;
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/projects?limit=100', { credentials: 'same-origin' });
-        if (!res.ok) return;
-        const json = (await res.json()) as { projects?: Project[] };
-        const serverProjects = Array.isArray(json.projects) ? json.projects : [];
-        if (cancelled || serverProjects.length === 0) return;
-        const serverIds = new Set(serverProjects.map((p) => p.id));
-        const localOnly = useProjectStore.getState().projects.filter((p) => !serverIds.has(p.id));
-        setStoreProjects([...serverProjects, ...localOnly]);
-      } catch {
-        // Non-fatal: sidebar simply shows whatever is already in the store.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [setStoreProjects]);
+    if (urlProjectId) setActiveProject(urlProjectId);
+  }, [urlProjectId, setActiveProject, projectsReady]);
 
   // Map store Project[] -> SidebarProject[] (no starred->pinned: use starred as pinned proxy)
   const sidebarProjects = useMemo<SidebarProject[]>(
@@ -725,18 +749,31 @@ export default function WebChatPage() {
         meta?: SendMeta;
       } = {},
     ) => {
+      // Double-submit guard (Finding 7): bails out synchronously if a send is
+      // already in flight -- see isSendingRef's doc comment above for why this
+      // check, positioned before any `await`, is what actually closes the
+      // reentrancy window (a rapid double Enter/click otherwise fires two
+      // concurrent turns since ChatComposerNew's isLoading-based guard alone
+      // has a render-latency gap).
+      if (isSendingRef.current) return;
+
       // Hold the send guard for the entire flow (set BEFORE createConversation,
       // which is the first thing to mutate the store's activeConversationId) so
       // the stale-active reconciler can never null the just-created conversation
       // during the first-message → navigate window. Cleared in `finally`.
       isSendingRef.current = true;
       try {
+        // Project scope for a NEW conversation: the composer's send meta is the
+        // value the user saw at submit time; fall back to the shared store for
+        // sends that do not originate from the composer picker flow.
+        const sendProjectId =
+          options.meta?.projectId !== undefined ? options.meta.projectId : activeProjectId;
         let freshConvId: string | null = null;
         const convId =
           options.conversationId ||
           urlConversationId ||
           bareChatSessionId ||
-          (await createConversation('New Chat', activeModelId).then((c) => {
+          (await createConversation('New Chat', activeModelId, sendProjectId).then((c) => {
             if (c) {
               freshConvId = c.id;
               if (!urlConversationId) setBareChatSessionId(c.id);
@@ -814,7 +851,15 @@ export default function WebChatPage() {
         isSendingRef.current = false;
       }
     },
-    [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId, router],
+    [
+      urlConversationId,
+      bareChatSessionId,
+      createConversation,
+      sendMessage,
+      activeModelId,
+      activeProjectId,
+      router,
+    ],
   );
 
   const { generateImage } = useMediaGeneration();
@@ -871,7 +916,11 @@ export default function WebChatPage() {
           // Ensure a conversation exists (lazy-create, same pattern as sendContent).
           let convId = displayedConversationId;
           if (!convId) {
-            const fresh = await createConversation('Image generation', activeModelId);
+            const fresh = await createConversation(
+              'Image generation',
+              activeModelId,
+              activeProjectId,
+            );
             if (fresh) {
               convId = fresh.id;
               if (!urlConversationId) setBareChatSessionId(fresh.id);
@@ -880,13 +929,42 @@ export default function WebChatPage() {
           }
           if (!convId) return;
 
+          // WEB-IMAGE-CHAT-PERSISTENCE-01: unlike sendContent (which streams
+          // through useChatStream and persists via saveMessageToDb on every
+          // turn), this composer-driven flow only ever touched the in-memory
+          // chatStore — the generated image bytes are durably stored by
+          // /api/media/image/generate, but the chat MESSAGE recording that it
+          // happened was never saved, so it vanished on reload. Persist both
+          // turns the same way useChatStream's sendMessage does (see
+          // features/chat/lib/imageGenerationPersistence.ts), skipping
+          // temporary conversations exactly like every other send path.
+          const isTemporaryConversation = isTemporaryConversationById(
+            useChatStore.getState().conversations,
+            convId,
+          );
+          const getAuthToken = async () => {
+            const token = await getToken();
+            if (!token) throw new Error('Not authenticated');
+            return token;
+          };
+
           // User message (prompt)
+          const userMessageId = crypto.randomUUID();
           addMessage({
-            id: crypto.randomUUID(),
+            id: userMessageId,
             role: 'user',
             content: prompt,
             createdAt: new Date().toISOString(),
           });
+          if (!isTemporaryConversation) {
+            void persistImageGenerationUserMessage({
+              conversationId: convId,
+              messageId: userMessageId,
+              content: prompt,
+              getAuthToken,
+              updateMessage,
+            });
+          }
 
           // Placeholder assistant message while generating (isStreaming = true → state A)
           const assistantMsgId = crypto.randomUUID();
@@ -910,17 +988,28 @@ export default function WebChatPage() {
               provider,
               model: options.modelId,
             });
+            const finalMetadata: MessageMetadata = {
+              toolType: 'image-generation',
+              imageUrl,
+              imageGenPrompt: prompt,
+              imageGenAspect: options.aspectRatio,
+              imageGenModel: options.modelId,
+            };
             updateMessage(assistantMsgId, {
               content: '',
               isStreaming: false,
-              metadata: {
-                toolType: 'image-generation',
-                imageUrl,
-                imageGenPrompt: prompt,
-                imageGenAspect: options.aspectRatio,
-                imageGenModel: options.modelId,
-              },
+              metadata: finalMetadata,
             });
+            if (!isTemporaryConversation) {
+              void persistImageGenerationAssistantMessage({
+                conversationId: convId,
+                messageId: assistantMsgId,
+                model: options.modelId,
+                metadata: finalMetadata,
+                getAuthToken,
+                updateMessage,
+              });
+            }
           } catch (err) {
             applyImageError(assistantMsgId, err instanceof Error ? err.message : String(err));
           }
@@ -935,11 +1024,13 @@ export default function WebChatPage() {
       urlConversationId,
       createConversation,
       activeModelId,
+      activeProjectId,
       addMessage,
       updateMessage,
       generateImage,
       applyImageError,
       router,
+      getToken,
     ],
   );
 
@@ -969,24 +1060,69 @@ export default function WebChatPage() {
       });
 
       const imageUrl = await generateImage(opts.prompt, { size, provider, model: opts.modelId });
+      const finalMetadata: MessageMetadata = {
+        toolType: 'image-generation',
+        imageUrl,
+        imageGenPrompt: opts.prompt,
+        imageGenAspect: opts.aspectRatio,
+        imageGenModel: opts.modelId,
+      };
       updateMessage(messageId, {
         isStreaming: false,
-        metadata: {
-          toolType: 'image-generation',
-          imageUrl,
-          imageGenPrompt: opts.prompt,
-          imageGenAspect: opts.aspectRatio,
-          imageGenModel: opts.modelId,
-        },
+        metadata: finalMetadata,
       });
+
+      // WEB-IMAGE-CHAT-PERSISTENCE-01: this updates an EXISTING assistant
+      // message in place, so persist via the same message id — the route is
+      // idempotent on client-supplied id (ON CONFLICT), so this upserts the
+      // row saved when the image was first generated instead of duplicating it.
+      const convId = displayedConversationId;
+      if (convId) {
+        const isTemporaryConversation = isTemporaryConversationById(
+          useChatStore.getState().conversations,
+          convId,
+        );
+        if (!isTemporaryConversation) {
+          const getAuthToken = async () => {
+            const token = await getToken();
+            if (!token) throw new Error('Not authenticated');
+            return token;
+          };
+          void persistImageGenerationAssistantMessage({
+            conversationId: convId,
+            messageId,
+            model: opts.modelId,
+            metadata: finalMetadata,
+            getAuthToken,
+            updateMessage,
+          });
+        }
+      }
+
       return imageUrl;
     },
-    [resolveImageParams, updateMessage, generateImage],
+    [resolveImageParams, updateMessage, generateImage, displayedConversationId, getToken],
   );
 
   const handleSend = useCallback(
     (content: string, attachments?: File[], skillId?: string, meta?: SendMeta): false | void => {
       void skillId; // skill identity resolved; body is carried in meta.skillBody
+
+      // Natural-language image requests use the existing media harness even
+      // when the user has not manually toggled Image mode. This interception
+      // must happen before the chat-completions route because media models use
+      // provider media endpoints, not text-chat adapters.
+      if (!attachments?.length && classifyTaskLocally(content, []).type === 'image_generation') {
+        const defaultImageModel = IMAGE_MODELS[0];
+        if (defaultImageModel) {
+          handleGenerateImage(content, {
+            aspectRatio: 'auto',
+            modelId: defaultImageModel.id,
+          });
+          return;
+        }
+      }
+
       const sourceConversationId = displayedConversationId;
       const conversation = displayedConversation;
 
@@ -1031,6 +1167,7 @@ export default function WebChatPage() {
       displayedConversationId,
       displayedMessages,
       activeModelId,
+      handleGenerateImage,
       handleOpenUpgradeDialog,
       sendContent,
     ],
@@ -1160,8 +1297,11 @@ export default function WebChatPage() {
     setBareChatSessionId(null);
     setComposerPrefill(undefined);
     setComposerClearSignal((value) => value + 1);
+    // Global "New chat" starts unscoped. Project-scoped new chats go through
+    // the sidebar project row (/chat?projectId=...) or the composer picker.
+    setActiveProject(null);
     router.push('/chat');
-  }, [router, setActiveConversation]);
+  }, [router, setActiveConversation, setActiveProject]);
 
   const handleToggleSidebar = useCallback(
     () => setSidebarCollapsed((c) => !c),
@@ -1311,6 +1451,17 @@ export default function WebChatPage() {
    * then pushes the user directly to the new project page.
    */
   const handleProjectCreate = useCallback(() => {
+    setCreateProjectFromComposer(false);
+    setCreateProjectOpen(true);
+  }, []);
+
+  /**
+   * Create project from the composer "Project or folder" picker: same dialog,
+   * but on success the new project becomes the active chat scope instead of
+   * navigating away to the project page (the user is mid-composition).
+   */
+  const handleComposerCreateProject = useCallback(() => {
+    setCreateProjectFromComposer(true);
     setCreateProjectOpen(true);
   }, []);
 
@@ -1338,15 +1489,7 @@ export default function WebChatPage() {
       // never lies about what actually got deleted.
       removeProjectFromStore(projectId);
       try {
-        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-        const res = await fetch(`/api/projects/${projectId}`, {
-          method: 'DELETE',
-          headers,
-          credentials: 'same-origin',
-        });
-        if (!res.ok) {
-          throw new Error(`Failed to delete project (${res.status})`);
-        }
+        await webManagedCloudProjects.deleteProject(projectId);
       } catch (err) {
         if (project) {
           setStoreProjects([...useProjectStore.getState().projects, project]);
@@ -1361,6 +1504,19 @@ export default function WebChatPage() {
   const projectForSettings = useMemo(
     () => (projectSettingsId ? storeProjects.find((p) => p.id === projectSettingsId) : null),
     [projectSettingsId, storeProjects],
+  );
+
+  // Composer "Project or folder" picker (new-chat composer only). Web offers
+  // projects; the composer itself adds the local-folder action only on surfaces
+  // with the working-directory capability (desktop), so this stays honest here.
+  const composerProjectPicker = useMemo(
+    () => ({
+      projects: storeProjects.map((p) => ({ id: p.id, name: p.name })),
+      activeProjectId,
+      onSelectProject: setActiveProject,
+      onCreateProject: handleComposerCreateProject,
+    }),
+    [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
   // Auto-title: when the second message arrives (first assistant reply), derive title
@@ -1741,6 +1897,13 @@ export default function WebChatPage() {
         isActive: false,
       },
       {
+        id: 'schedules',
+        label: 'Schedules',
+        icon: CalendarClock,
+        onClick: () => router.push('/schedules'),
+        isActive: false,
+      },
+      {
         id: 'customize',
         label: 'Customize',
         icon: Settings,
@@ -2053,6 +2216,7 @@ export default function WebChatPage() {
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     onUpgradeRequest={handleOpenUpgradeDialog}
                     onGenerateImage={handleGenerateImage}
+                    projectPicker={composerProjectPicker}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
                       promptsUsed: trialPromptsUsed,
@@ -2122,7 +2286,13 @@ export default function WebChatPage() {
         <ResearchPanel />
         <ArtifactsPanel />
       </div>
-      <CreateProjectDialog open={createProjectOpen} onOpenChange={setCreateProjectOpen} />
+      <CreateProjectDialog
+        open={createProjectOpen}
+        onOpenChange={setCreateProjectOpen}
+        onCreated={
+          createProjectFromComposer ? (project) => setActiveProject(project.id) : undefined
+        }
+      />
       <UpgradePlanDialog
         open={upgradePlanOpen}
         onOpenChange={setUpgradePlanOpen}

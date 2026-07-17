@@ -32,8 +32,110 @@ jobs:
       - name: Verify Node version
         run: bash scripts/check-node-version.sh
 
+      - name: Release boundary regression checks
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const read = (path) => fs.readFileSync(path, 'utf8');
+          const requireText = (text, needle, message) => {
+            if (!text.includes(needle)) throw new Error(message);
+          };
+          const rejectText = (text, needle, message) => {
+            if (text.includes(needle)) throw new Error(message);
+          };
+
+          const desktop = read('.github/workflows/release-desktop.yml');
+          const windows = read('.github/workflows/build-windows-release.yml');
+          const cli = read('.github/workflows/release-cli.yml');
+          const installer = read('scripts/install.sh');
+
+          requireText(desktop, "- 'v-desktop-*'", 'desktop releases must use v-desktop-* tags');
+          rejectText(desktop, "- 'v*'", 'desktop releases must not consume CLI tags');
+          requireText(desktop, 'TAG="v-desktop-${VERSION}"', 'manual desktop releases must create canonical tags');
+          requireText(desktop, 'releases/download/${TAG}', 'desktop download URLs must use the canonical tag');
+          rejectText(windows, '/releases/latest', 'Windows uploads must not select a cross-product latest release');
+          requireText(windows, '^v-desktop-', 'Windows uploads must filter desktop releases');
+          requireText(desktop, 'PACKAGE_VERSION=', 'desktop release tags must match source versions');
+          requireText(cli, 'Validate CLI release version', 'CLI release tags must match package versions');
+          requireText(cli, 'cosign sign-blob', 'CLI releases must sign their checksum manifest');
+          requireText(cli, 'needs: [validate-version, build, sign-release-assets]', 'npm publishing must wait for version validation and signed assets');
+          requireText(installer, 'cosign verify-blob', 'CLI installer must verify release provenance');
+          requireText(installer, 'actual_checksum', 'CLI installer must verify archive bytes');
+          NODE
+
+      - name: Monorepo task graph regression checks
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const root = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const graph = JSON.parse(fs.readFileSync('turbo.json', 'utf8'));
+          const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+
+          for (const script of ['build', 'build:all', 'build:desktop', 'lint', 'lint:extension', 'test', 'typecheck', 'typecheck:all']) {
+            if (!root.scripts?.[script]?.startsWith('turbo run ')) {
+              throw new Error(`root script ${script} must delegate to turbo run`);
+            }
+          }
+          for (const task of ['build', 'lint', 'test', 'typecheck']) {
+            if (!graph.tasks?.[task]) throw new Error(`turbo task ${task} is required`);
+          }
+          if (!graph.tasks.build.dependsOn?.includes('^build')) {
+            throw new Error('build must follow the workspace dependency graph');
+          }
+          if (!graph.tasks.build.outputs?.includes('dist/**')) {
+            throw new Error('build outputs must include dist/** for cache correctness');
+          }
+          for (const task of ['lint', 'test', 'typecheck']) {
+            if (!graph.tasks[task].dependsOn?.includes('transit')) {
+              throw new Error(`${task} must include the transit graph dependency`);
+            }
+          }
+          for (const command of [
+            'turbo run lint --affected',
+            'turbo run typecheck --affected',
+            'turbo run test --affected',
+            'turbo run build --affected',
+          ]) {
+            if (!ci.includes(command)) throw new Error(`CI must invoke ${command}`);
+          }
+
+          const manifests = [];
+          for (const top of ['apps', 'packages', 'services', 'infrastructure']) {
+            if (!fs.existsSync(top)) continue;
+            for (const entry of fs.readdirSync(top, { withFileTypes: true })) {
+              if (!entry.isDirectory()) continue;
+              const direct = path.join(top, entry.name, 'package.json');
+              if (fs.existsSync(direct)) manifests.push(direct);
+              if (top === 'packages' && entry.name === 'providers') {
+                for (const provider of fs.readdirSync(path.join(top, entry.name), { withFileTypes: true })) {
+                  const nested = path.join(top, entry.name, provider.name, 'package.json');
+                  if (provider.isDirectory() && fs.existsSync(nested)) manifests.push(nested);
+                }
+              }
+            }
+          }
+          for (const manifest of manifests) {
+            const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+            const directory = path.dirname(manifest);
+            if (pkg.scripts?.posttest?.includes('build')) {
+              throw new Error(`${manifest} must not hide builds in posttest`);
+            }
+            if (fs.existsSync(path.join(directory, 'src')) && !pkg.scripts?.lint) {
+              throw new Error(`${manifest} owns source files but has no lint task`);
+            }
+            if (pkg.scripts?.lint && !pkg.scripts.lint.includes('--max-warnings=0')) {
+              throw new Error(`${manifest} lint task must reject warnings`);
+            }
+          }
+          NODE
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate monorepo task graph
+        run: pnpm exec turbo run build lint test typecheck --dry=json
 
       - name: LLM and repo operability checks
         run: pnpm check:llm-operability

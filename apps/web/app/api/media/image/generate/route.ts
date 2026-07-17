@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ManagedMediaImageGenerationRequestSchema,
+  type ManagedMediaImageProvider,
+} from '@agiworkforce/cloud-contracts';
 import { getOptionalEnv, requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -16,7 +19,7 @@ import { randomUUID } from 'crypto';
 import {
   getModelMetadataById,
   getModelsForProvider,
-  getRoutingSlotModel,
+  type ModelMetadata,
 } from '@agiworkforce/types';
 import {
   isMediaStorageConfigured,
@@ -41,38 +44,7 @@ import { insertMediaAsset } from '@/lib/server/media-assets';
 export const maxDuration = 60;
 export const runtime = 'nodejs';
 
-// Supported providers
-type ImageProvider = 'google' | 'openai' | 'stability';
-
-// Request schema
-const ImageGenerationRequestSchema = z.object({
-  prompt: z.string().min(1).max(4000),
-  provider: z.enum(['google', 'openai', 'stability']).optional(),
-  /** Catalog model id (e.g. 'imagen-4-ultra'); resolved to apiModelId + imageApi server-side. */
-  model: z.string().max(200).optional(),
-  size: z
-    .enum([
-      // Common sizes
-      '1024x1024',
-      '1792x1024',
-      '1024x1792',
-      // GPT Image sizes
-      '512x512',
-      '256x256',
-      // Stability/Imagen additional sizes
-      '768x768',
-      '1536x1536',
-    ])
-    .optional()
-    .default('1024x1024'),
-  style: z
-    .enum(['natural', 'vivid', 'cinematic', 'anime', 'digital-art', 'photographic'])
-    .optional(),
-  n: z.number().int().min(1).max(4).optional().default(1),
-  // Provider-specific options
-  quality: z.enum(['standard', 'hd']).optional().default('standard'),
-  negative_prompt: z.string().max(2000).optional(),
-});
+type ImageProvider = ManagedMediaImageProvider;
 
 // Response types
 interface GeneratedImage {
@@ -101,6 +73,15 @@ const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> =
   stability: 8,
 };
 
+function resolveRequestedCatalogModel(
+  models: readonly ModelMetadata[],
+  requestedModelId?: string,
+): ModelMetadata | undefined {
+  if (!requestedModelId) return undefined;
+  const canonicalModelId = getModelMetadataById(requestedModelId)?.id;
+  return canonicalModelId ? models.find((model) => model.id === canonicalModelId) : undefined;
+}
+
 function resolveGoogleImageModel(requestedModelId?: string) {
   const googleImageModels = getModelsForProvider('google', {
     includeDeprecated: false,
@@ -108,10 +89,8 @@ function resolveGoogleImageModel(requestedModelId?: string) {
   });
 
   // Honour the user's explicit model choice when it's a valid Google image model.
-  if (requestedModelId) {
-    const requested = googleImageModels.find((model) => model.id === requestedModelId);
-    if (requested) return requested;
-  }
+  const requested = resolveRequestedCatalogModel(googleImageModels, requestedModelId);
+  if (requested) return requested;
 
   // Default: prefer the Gemini backend (fast, low-cost) via the declarative
   // `imageApi` catalog field, else the first catalog Google image model. No id
@@ -121,10 +100,41 @@ function resolveGoogleImageModel(requestedModelId?: string) {
   );
 }
 
+function resolveOpenAIImageModel(requestedModelId?: string) {
+  const openaiImageModels = getModelsForProvider('openai', {
+    includeDeprecated: false,
+    modelTypes: ['image'],
+  });
+
+  // Honour the user's explicit model choice when it's a valid OpenAI image model.
+  const requested = resolveRequestedCatalogModel(openaiImageModels, requestedModelId);
+  if (requested) return requested;
+
+  // Default: prefer the model tagged for the OpenAI Images API via the
+  // declarative `imageApi` catalog field, else the first catalog OpenAI image
+  // model. No id pattern, no hardcoded id — selection is driven entirely by
+  // catalog data (previously this fell through to the shared `image_generation`
+  // routing slot, which is Google-only, sending a Gemini model id to OpenAI).
+  return (
+    openaiImageModels.find((model) => model.imageApi === 'openai') ?? openaiImageModels[0] ?? null
+  );
+}
+
+function resolveStabilityImageModel(requestedModelId?: string) {
+  const stabilityImageModels = getModelsForProvider('managed_cloud', {
+    includeDeprecated: false,
+    modelTypes: ['image'],
+  }).filter((model) => model.imageApi === 'stability');
+
+  const requested = resolveRequestedCatalogModel(stabilityImageModels, requestedModelId);
+  return requested ?? stabilityImageModels[0] ?? null;
+}
+
 function estimateImageCostCents(
   provider: ImageProvider,
   imageCount: number,
   quality: string | undefined,
+  requestedModelId?: string,
 ): number {
   if (provider === 'openai') {
     const qualityKey = quality === 'hd' ? 'high' : 'medium';
@@ -132,7 +142,14 @@ function estimateImageCostCents(
   }
 
   if (provider === 'google') {
-    const perImageUsd = resolveGoogleImageModel()?.imagePerImageCost;
+    const perImageUsd = resolveGoogleImageModel(requestedModelId)?.imagePerImageCost;
+    if (typeof perImageUsd === 'number' && perImageUsd > 0) {
+      return Math.ceil(perImageUsd * 100) * imageCount;
+    }
+  }
+
+  if (provider === 'stability') {
+    const perImageUsd = resolveStabilityImageModel(requestedModelId)?.imagePerImageCost;
     if (typeof perImageUsd === 'number' && perImageUsd > 0) {
       return Math.ceil(perImageUsd * 100) * imageCount;
     }
@@ -194,10 +211,14 @@ async function generateWithOpenAIImage(
   size: string,
   quality: string,
   n: number,
+  requestedModelId?: string,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('openai');
-  const catalogModelId = getRoutingSlotModel('image_generation');
-  const model = getModelMetadataById(catalogModelId)?.apiModelId ?? catalogModelId;
+  const catalogModel = resolveOpenAIImageModel(requestedModelId);
+  if (!catalogModel) {
+    throw new Error('No active OpenAI image model is configured in the catalog');
+  }
+  const model = catalogModel.apiModelId ?? catalogModel.id;
   const validSizes = ['1024x1024', '1536x1024', '1024x1536', 'auto'];
   const imageSize = validSizes.includes(size) ? size : '1024x1024';
   const imageQuality = quality === 'hd' ? 'high' : 'medium';
@@ -276,7 +297,8 @@ async function generateWithImagen(
   //     candidates[].content.parts[].inlineData.
   //   - imageApi 'imagen' → `:predict`; bytes in predictions[].bytesBase64Encoded.
   // Dispatch on the catalog's declarative imageApi field (no id pattern), so a new
-  // Google image model only needs its imageApi set in models.curation.json.
+  // Google image model only needs its imageApi set in
+  // packages/ai/model-registry/catalog/models.curation.json.
   if (catalogModel.imageApi === 'gemini') {
     return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n);
   }
@@ -411,8 +433,13 @@ async function generateWithStability(
   style: string | undefined,
   n: number,
   negativePrompt?: string,
+  requestedModelId?: string,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('stability');
+  const catalogModel = resolveStabilityImageModel(requestedModelId);
+  if (!catalogModel) {
+    throw new Error('No active Stability image model is configured in the catalog');
+  }
 
   // Map size to closest supported aspect_ratio
   const sizeParts = size.split('x').map(Number);
@@ -502,7 +529,7 @@ async function generateWithStability(
 
   return {
     images,
-    model: 'stable-image-core',
+    model: catalogModel.apiModelId ?? catalogModel.id,
   };
 }
 
@@ -635,7 +662,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   }
 
   // Validate request
-  const validationResult = ImageGenerationRequestSchema.safeParse(body);
+  const validationResult = ManagedMediaImageGenerationRequestSchema.safeParse(body);
   if (!validationResult.success) {
     return NextResponse.json(
       {
@@ -715,7 +742,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   // We use the per-image cost for the chosen provider * requested image count.
   // The model isn't determined until after generation, so we use the most expensive
   // model for the provider as the upper bound estimate.
-  const estimatedCostCents = estimateImageCostCents(provider, n, quality);
+  const estimatedCostCents = estimateImageCostCents(provider, n, quality, requestedModel);
 
   // Check credits BEFORE invoking the provider (402 if insufficient)
   const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
@@ -797,13 +824,20 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
     switch (provider) {
       case 'openai':
-        result = await generateWithOpenAIImage(prompt, size, quality, n);
+        result = await generateWithOpenAIImage(prompt, size, quality, n, requestedModel);
         break;
       case 'google':
         result = await generateWithImagen(prompt, size, style, n, negative_prompt, requestedModel);
         break;
       case 'stability':
-        result = await generateWithStability(prompt, size, style, n, negative_prompt);
+        result = await generateWithStability(
+          prompt,
+          size,
+          style,
+          n,
+          negative_prompt,
+          requestedModel,
+        );
         break;
     }
 
@@ -819,13 +853,26 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   } catch (error) {
     // Refund the reserved credits on generation failure
     const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
-    await CreditService.deductCredits(
-      userId,
-      -estimatedCostCents,
-      `Refund: image generation failed (${provider})`,
-      { provider, type: 'refund', reason: 'generation_failure', requestId },
-      refundKey,
-    );
+    try {
+      await CreditService.settleCreditsDurably({
+        userId,
+        amountCents: -estimatedCostCents,
+        description: `Refund: image generation failed (${provider})`,
+        metadata: { provider, type: 'refund', reason: 'generation_failure', requestId },
+        idempotencyKey: refundKey,
+      });
+    } catch (settlementError) {
+      logger.error(
+        {
+          event: 'image_refund_settlement_unrecorded',
+          error: settlementError,
+          userId,
+          provider,
+          requestId,
+        },
+        'Image generation refund could not be persisted',
+      );
+    }
 
     logger.error(
       {
@@ -879,7 +926,12 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   }
 
   // Calculate actual cost and reconcile with the reservation
-  const costEstimate = estimateImageCostCents(provider, result.images.length, quality);
+  const costEstimate = estimateImageCostCents(
+    provider,
+    result.images.length,
+    quality,
+    requestedModel,
+  );
   const costDifference = costEstimate - estimatedCostCents;
 
   if (costDifference !== 0) {
@@ -889,22 +941,36 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       'reconciliation',
       requestId,
     );
-    await CreditService.deductCredits(
-      userId,
-      costDifference,
-      costDifference > 0
-        ? `Additional charge: image generation (${provider}/${result.model})`
-        : `Credit adjustment: image generation (${provider}/${result.model})`,
-      {
-        provider,
-        model: result.model,
-        type: 'reconciliation',
-        estimatedCostCents,
-        actualCostCents: costEstimate,
-        requestId,
-      },
-      reconciliationKey,
-    );
+    try {
+      await CreditService.settleCreditsDurably({
+        userId,
+        amountCents: costDifference,
+        description:
+          costDifference > 0
+            ? `Additional charge: image generation (${provider}/${result.model})`
+            : `Credit adjustment: image generation (${provider}/${result.model})`,
+        metadata: {
+          provider,
+          model: result.model,
+          type: 'reconciliation',
+          estimatedCostCents,
+          actualCostCents: costEstimate,
+          requestId,
+        },
+        idempotencyKey: reconciliationKey,
+      });
+    } catch (settlementError) {
+      logger.error(
+        {
+          event: 'image_reconciliation_settlement_unrecorded',
+          error: settlementError,
+          userId,
+          provider,
+          requestId,
+        },
+        'Image generation reconciliation could not be persisted',
+      );
+    }
   }
 
   logger.info(

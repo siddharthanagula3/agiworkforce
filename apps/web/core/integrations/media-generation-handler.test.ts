@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 import {
   MediaGenerationService,
   mediaGenerationService,
@@ -144,6 +145,49 @@ describe('Media Generation Handler', () => {
           body: expect.stringContaining('"style":"realistic"'),
         }),
       );
+    });
+
+    it('routes the default image slot through the provider declared by the catalog', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          images: [{ url: 'https://example.com/image.png' }],
+          cost_estimate: 0.04,
+        }),
+      } as Response);
+
+      await mediaGenerationService.generateImage({ prompt: 'Catalog default' });
+
+      const body = JSON.parse(
+        String((vi.mocked(global.fetch).mock.calls[0]?.[1] as RequestInit | undefined)?.body),
+      ) as { provider: string; model: string };
+      const slotModel = getModelMetadataById(getRoutingSlotModel('image_generation'))!;
+
+      expect(body.model).toBe(slotModel.id);
+      expect(body.provider).toBe(slotModel.provider);
+    });
+
+    it('routes an explicit Stability catalog model without an app-owned model union', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          images: [{ url: 'https://example.com/stable.png' }],
+          model: 'stable-image-core',
+          cost_estimate: 0.03,
+        }),
+      } as Response);
+
+      await mediaGenerationService.generateImage({
+        prompt: 'Stable concept',
+        model: 'stable-image-core' as ImageGenerationRequest['model'],
+      });
+
+      const body = JSON.parse(
+        String((vi.mocked(global.fetch).mock.calls[0]?.[1] as RequestInit | undefined)?.body),
+      ) as { provider: string; model: string };
+      expect(body).toMatchObject({ provider: 'stability', model: 'stable-image-core' });
     });
 
     it('should pass other styles correctly', async () => {

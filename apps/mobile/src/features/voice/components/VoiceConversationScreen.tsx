@@ -260,8 +260,14 @@ export function VoiceConversationScreen({
   return (
     <Animated.View
       testID="voice-conversation-screen"
-      entering={reducedMotion ? undefined : SlideInDown.springify().damping(18)}
-      exiting={reducedMotion ? undefined : SlideOutDown.springify().damping(18)}
+      // dampingRatio(1) = critically damped: the fastest settle with zero
+      // overshoot, independent of whatever stiffness/mass springify() uses
+      // by default. The previous `.damping(18)` only pinned one side of the
+      // spring equation — on a full-screen translateY the residual
+      // underdamped oscillation was visible as a "jiggle" right as the
+      // sheet finished sliding in/out.
+      entering={reducedMotion ? undefined : SlideInDown.springify().dampingRatio(1)}
+      exiting={reducedMotion ? undefined : SlideOutDown.springify().dampingRatio(1)}
       className="absolute inset-0 z-50"
       style={{ backgroundColor: colors.voiceConversationBgEnd }}
     >

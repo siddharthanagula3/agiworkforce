@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ProjectGallery, ProjectCard, useChatProjectStore } from '@agiworkforce/unified-chat';
-import type { Project } from '@agiworkforce/unified-chat';
+import { ProjectGallery, ProjectCard } from '@agiworkforce/unified-chat';
+import type { Project, ProjectGalleryCreateInput } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
 import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
-import { useProjectStore } from '@features/projects/stores/project-store';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useManagedCloudProjects, useProjectStore } from '@features/projects';
+import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { WebAppShell } from '@/components/layout/WebAppShell';
+import { toast } from 'sonner';
 
 /**
  * /projects · top-level Projects hub on web.
@@ -53,10 +54,10 @@ function sortProjects(projects: Project[], mode: SortMode): Project[] {
 export default function ProjectsPage() {
   const router = useRouter();
   const updateProject = useProjectStore((s) => s.updateProject);
+  const addProject = useProjectStore((s) => s.addProject);
   const removeProject = useProjectStore((s) => s.removeProject);
-  const setActiveProject = useChatProjectStore((s) => s.setActiveProject);
-
-  const projects = useChatProjectStore((s) => s.projects);
+  const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const { projects, status: projectStatus, error: projectError, retry } = useManagedCloudProjects();
 
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('updated');
@@ -66,36 +67,47 @@ export default function ProjectsPage() {
   const sortedProjects = useMemo(() => sortProjects(projects, sortMode), [projects, sortMode]);
 
   // Server-backed create: persist to Neon (user_projects) and return the saved
-  // row so ProjectGallery merges the canonical id into the store. Without this
-  // handler the gallery falls back to a device-local-only project.
-  const handleCreateProject = useCallback(async (name: string): Promise<Project> => {
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-      credentials: 'same-origin',
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) {
-      throw new Error(`Failed to create project (${res.status})`);
-    }
-    const json = (await res.json()) as { project: Project };
-    return json.project;
-  }, []);
+  // row so ProjectGallery inserts the canonical server id into the view model.
+  const handleCreateProject = useCallback(
+    async (input: ProjectGalleryCreateInput): Promise<Project> => {
+      return webManagedCloudProjects.createProject(input);
+    },
+    [],
+  );
 
-  // Server-backed delete: remove from Neon, then from the local store.
-  const handleDeleteProjectServer = useCallback(
-    async (projectId: string) => {
+  const handleArchiveProjectServer = useCallback(
+    async (project: Project, alreadyRemovedFromView: boolean) => {
+      if (!alreadyRemovedFromView) {
+        updateProject(project.id, { isArchived: true });
+      }
       try {
-        await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
-          method: 'DELETE',
-          headers: await addCsrfHeaders(),
-          credentials: 'same-origin',
-        });
-      } finally {
-        removeProject(projectId);
+        await webManagedCloudProjects.updateProject(project.id, { isArchived: true });
+      } catch (error) {
+        updateProject(project.id, { isArchived: false });
+        toast.error(error instanceof Error ? error.message : 'Failed to archive project');
       }
     },
-    [removeProject],
+    [updateProject],
+  );
+
+  // The gallery removes optimistically; the custom sorted cards do not. A
+  // failed Cloud delete restores an optimistic row instead of lying in the UI.
+  const handleDeleteProjectServer = useCallback(
+    async (project: Project, alreadyRemovedFromView: boolean) => {
+      try {
+        await webManagedCloudProjects.deleteProject(project.id);
+        if (!alreadyRemovedFromView) removeProject(project.id);
+      } catch (error) {
+        if (
+          alreadyRemovedFromView &&
+          !useProjectStore.getState().projects.some((candidate) => candidate.id === project.id)
+        ) {
+          addProject(project);
+        }
+        toast.error(error instanceof Error ? error.message : 'Failed to delete project');
+      }
+    },
+    [addProject, removeProject],
   );
 
   // For the default mode, delegate to ProjectGallery (keeps search + create form).
@@ -153,8 +165,8 @@ export default function ProjectsPage() {
                 }}
               >
                 Group related conversations under a shared project. Each project can carry its own
-                files, instructions, and chat history. Stored on this device in v1; cloud sync
-                arrives with Cloud Managed.
+                files, instructions, and chat history. Projects sync securely across your AGI Web,
+                Mobile, and Desktop cloud sessions.
               </p>
             </div>
 
@@ -262,7 +274,27 @@ export default function ProjectsPage() {
               minHeight: 480,
             }}
           >
-            {useGallery ? (
+            {projectStatus === 'loading' || projectStatus === 'idle' ? (
+              <div
+                role="status"
+                style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--agi-ink-2)' }}
+              >
+                Loading projects…
+              </div>
+            ) : projectStatus === 'error' ? (
+              <div style={{ padding: '48px 16px', textAlign: 'center' }}>
+                <p role="alert" style={{ color: 'var(--agi-ink-2)', margin: '0 0 12px' }}>
+                  {projectError ?? 'Projects could not be loaded.'}
+                </p>
+                <button type="button" onClick={retry}>
+                  Retry
+                </button>
+              </div>
+            ) : projectStatus === 'signed-out' ? (
+              <div style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--agi-ink-2)' }}>
+                Sign in to view your cloud projects.
+              </div>
+            ) : useGallery ? (
               /* Default sort: delegate to ProjectGallery (keeps search + create form) */
               <ProjectGallery
                 title={null}
@@ -273,11 +305,11 @@ export default function ProjectsPage() {
                   router.push(`/projects/${encodeURIComponent(project.id)}`);
                 }}
                 onEditProject={(project) => setEditProject(project)}
-                onArchiveProject={() => {
-                  /* archive stays a local store mutation handled inside the gallery */
+                onArchiveProject={(project) => {
+                  void handleArchiveProjectServer(project, true);
                 }}
                 onDeleteProject={(project) => {
-                  void handleDeleteProjectServer(project.id);
+                  void handleDeleteProjectServer(project, true);
                 }}
               />
             ) : (
@@ -319,8 +351,8 @@ export default function ProjectsPage() {
                           router.push(`/projects/${encodeURIComponent(p.id)}`);
                         }}
                         onEdit={(p) => setEditProject(p)}
-                        onArchive={(p) => updateProject(p.id, { isArchived: true })}
-                        onDelete={(p) => void handleDeleteProjectServer(p.id)}
+                        onArchive={(p) => void handleArchiveProjectServer(p, false)}
+                        onDelete={(p) => void handleDeleteProjectServer(p, false)}
                       />
                     ))}
                   </div>

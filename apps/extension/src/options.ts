@@ -611,7 +611,7 @@ async function buildPage(): Promise<void> {
   const logoutLeft = el('div');
   logoutLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Log out'));
   logoutLeft.appendChild(
-    el('div', { class: 'opt-row-hint' }, 'Remove your API key and session from this device.'),
+    el('div', { class: 'opt-row-hint' }, 'Remove your AGI account session from this device.'),
   );
   logoutRow.appendChild(logoutLeft);
 
@@ -753,9 +753,11 @@ async function buildPage(): Promise<void> {
 
   page.appendChild(profileSection);
 
-  // ── Section: Dev Bearer Token (computer-use auth) ─────────────────────────
-
-  const bearerSection = el('div', { class: 'opt-section' });
+  // Development-only escape hatch for local gateway testing. Production
+  // bundles expose only the official Clerk Native API flow and never ask a
+  // user to copy a session cookie out of DevTools.
+  if (import.meta.env.DEV) {
+    const bearerSection = el('div', { class: 'opt-section' });
   const bearerHeader = el('div', { class: 'opt-section-header' });
   bearerHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Computer Use — Cloud Auth'));
   bearerSection.appendChild(bearerHeader);
@@ -765,10 +767,8 @@ async function buildPage(): Promise<void> {
     el(
       'p',
       { class: 'opt-bearer-help' },
-      'Dev/demo path: paste a Clerk session JWT here. The agent loop uses this as the Bearer token ' +
-        'when calling api.agiworkforce.com. Cleared on extension uninstall. ' +
-        'Get your token: open agiworkforce.com, open DevTools → Application → Cookies → ' +
-        'copy the value of __session (Clerk JWT). Expires after the Clerk session TTL.',
+      'Local-development fallback only. Production builds use the Clerk Chrome Extension SDK. ' +
+        'Use a short-lived test token issued by your local gateway; never copy a browser session cookie.',
     ),
   );
 
@@ -822,7 +822,8 @@ async function buildPage(): Promise<void> {
     }, 1500);
   });
 
-  page.appendChild(bearerSection);
+    page.appendChild(bearerSection);
+  }
 
   // ── Section: Shortcuts ────────────────────────────────────────────────────
 

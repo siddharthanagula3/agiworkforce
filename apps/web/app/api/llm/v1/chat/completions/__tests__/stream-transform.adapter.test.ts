@@ -1,15 +1,15 @@
 /**
- * buildAdapterStreamResponse (stream-transform.ts) · the packages/providers
+ * buildAdapterStreamResponse (stream-transform.ts) · the packages/ai/providers
  * adapter-path sibling of buildStreamResponse, proven separately in
  * stream-transform-usage.test.ts (the still-untouched legacy path) and
- * packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts (wire
+ * packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts (wire
  * bytes at the assembler level, no route/billing wiring).
  *
  * Neither of those exercises the REAL route function end-to-end with
  * billing: this suite feeds a StreamChunk sequence through
  * `buildAdapterStreamResponse` itself and asserts both (a) the exact SSE
  * bytes on the wire, including `data: [DONE]` framing, and (b)
- * CreditService.deductCredits / LLMCostCalculator.calculateCost /
+ * CreditService.settleCreditsDurably / LLMCostCalculator.calculateCost /
  * recordModelUsage are called with the correct reconciliation math -- the
  * money path advisor flagged as unverified by the assembler-level parity
  * test alone.
@@ -29,6 +29,9 @@ vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     generateIdempotencyKey: vi.fn(() => 'idempotency-key'),
     deductCredits: vi.fn(() => Promise.resolve()),
+    settleCreditsDurably: vi.fn(() =>
+      Promise.resolve({ status: 'succeeded', success: true, attempt_count: 1 }),
+    ),
   },
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
@@ -49,7 +52,7 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { recordModelUsage } from '@/lib/cost-tracker';
 import { logger } from '@/lib/logger';
 
-const mockDeductCredits = CreditService.deductCredits as ReturnType<typeof vi.fn>;
+const mockSettleCreditsDurably = CreditService.settleCreditsDurably as ReturnType<typeof vi.fn>;
 const mockCalculateCost = LLMCostCalculator.calculateCost as ReturnType<typeof vi.fn>;
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
 const mockLoggerInfo = logger.info as ReturnType<typeof vi.fn>;
@@ -166,11 +169,11 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     });
 
     // actualCostCents (mocked 4) - estimatedCostCents (5) = -1 !== 0 -> reconciles.
-    expect(mockDeductCredits).toHaveBeenCalledWith(
-      'user-002',
-      -1,
-      'Credit adjustment (streaming): anthropic/claude-opus-4-8',
-      expect.objectContaining({
+    expect(mockSettleCreditsDurably).toHaveBeenCalledWith({
+      userId: 'user-002',
+      amountCents: -1,
+      description: 'Credit adjustment (streaming): anthropic/claude-opus-4-8',
+      metadata: expect.objectContaining({
         provider: 'anthropic',
         model: 'claude-opus-4-8',
         type: 'streaming_reconciliation',
@@ -181,8 +184,8 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
         totalTokens: 200,
         requestId: 'req-adapter-001',
       }),
-      'idempotency-key',
-    );
+      idempotencyKey: 'idempotency-key',
+    });
   });
 
   it('skips reconciliation when actual cost matches the estimate exactly', async () => {
@@ -203,7 +206,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockDeductCredits).not.toHaveBeenCalled();
+    expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
   });
 
   it('skips reconciliation entirely for a free-trial request', async () => {
@@ -226,7 +229,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockDeductCredits).not.toHaveBeenCalled();
+    expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
   });
 
   it('records cache/reasoning usage fields for cost tracking', async () => {

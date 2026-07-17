@@ -5,6 +5,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/control-plane/status
@@ -115,8 +116,15 @@ export async function GET(request: NextRequest) {
         diff < ONLINE_MS ? 'online' : diff < OFFLINE_MS ? 'offline' : 'offline';
       surfaces[idx] = { ...surfaces[idx]!, status, lastSeen: hb.last_seen_at };
     }
-  } catch {
-    // Table not yet created - all surfaces remain 'unknown'
+  } catch (err) {
+    // Table not yet created (expected pre-migration) OR a genuine DB
+    // failure — this catch doesn't distinguish the two, so log it rather
+    // than swallowing silently. Falls through to all-'unknown' either way:
+    // this is a dashboard hero widget, not worth failing the request over.
+    logger.warn(
+      { err, userId, route: 'GET /api/control-plane/status', section: 'surface_heartbeats' },
+      'Failed to fetch surface heartbeats; surfaces remain unknown',
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -148,8 +156,15 @@ export async function GET(request: NextRequest) {
       pendingApprovals: parseInt(pendingRows[0]?.cnt ?? '0', 10),
       completedToday: parseInt(completedRows[0]?.cnt ?? '0', 10),
     };
-  } catch {
-    // Table not yet created - return zeros
+  } catch (err) {
+    // Table not yet created (expected pre-migration) OR a genuine DB
+    // failure — log rather than swallow silently. Falls through to zeros
+    // either way: this is a dashboard hero widget, not worth failing the
+    // request over.
+    logger.warn(
+      { err, userId, route: 'GET /api/control-plane/status', section: 'agent_activity' },
+      'Failed to fetch agent activity counts; defaulting to zeros',
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -181,8 +196,15 @@ export async function GET(request: NextRequest) {
       action: row.action_label,
       timestamp: row.created_at,
     }));
-  } catch {
-    // Table not yet created - empty feed
+  } catch (err) {
+    // Table not yet created (expected pre-migration) OR a genuine DB
+    // failure — log rather than swallow silently. Falls through to an
+    // empty feed either way: this is a dashboard hero widget, not worth
+    // failing the request over.
+    logger.warn(
+      { err, userId, route: 'GET /api/control-plane/status', section: 'recent_activity' },
+      'Failed to fetch recent activity feed; returning empty',
+    );
   }
 
   const response: ControlPlaneResponse = {

@@ -32,7 +32,6 @@ describe('PA-3 / DESK-CLOUD-COPY-01: desktop managed-cloud copy is honest interi
     toastError.mockClear();
     useAppModeStore.setState({
       mode: 'local',
-      planTier: 'free',
       hasOnboarded: false,
       hasSelectedMode: false,
       isOnline: true,
@@ -42,6 +41,7 @@ describe('PA-3 / DESK-CLOUD-COPY-01: desktop managed-cloud copy is honest interi
     useAuthStore.setState({
       isAuthenticated: true,
       accessToken: 'token',
+      plan: 'pro',
     });
   });
 

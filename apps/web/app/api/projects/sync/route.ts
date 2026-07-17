@@ -7,10 +7,12 @@
  *          deleted_at IS NOT NULL, so deletes propagate), scoped to the
  *          authenticated user, plus the next cursor + hasMore.
  *   POST /api/projects/sync  { projects: [...] }
- *        → idempotent UPSERT by id. user_id set SERVER-SIDE from the verified
- *          session (never the body); RLS WITH CHECK is the backstop. Last-writer-
- *          wins by updated_at; a null/older updated_at can never clobber a newer
- *          row. deleted_at carries the tombstone.
+ *        → compare-and-swap by id + baseVersion. user_id is set SERVER-SIDE from
+ *          the verified session (never the body); RLS WITH CHECK is the backstop.
+ *          Client wall clocks never participate. A stale write is rejected and
+ *          the current server row is returned as the deterministic server winner.
+ *          deletedAt is only a tombstone signal; the server owns the persisted
+ *          deletion timestamp.
  *
  * Scope (v1): the CORE shareable project content — name, description, instructions,
  * color, is_archived, metadata. Local-specific routing hints (default_privacy_mode,
@@ -24,7 +26,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { ProjectsSyncPushRequestSchema, ServerVersionSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -33,11 +35,10 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const MAX_PROJECTS_PULL = 500;
-const MAX_PROJECTS_PUSH = 500;
 
 // Wire shape from the shared cloud contract (restructure Wave 4) — enforced
 // by route.contract.test.ts, consumed at runtime by mobile's cloudSyncEngine.
-type ProjectDelta = import('@agiworkforce/services').ProjectWireDelta;
+type ProjectDelta = import('@agiworkforce/cloud-contracts').ProjectWireDelta;
 
 // ---------------------------------------------------------------------------
 // Pull
@@ -50,7 +51,11 @@ async function handlePull(request: NextRequest, url: URL) {
   const { db, userId } = await getUserScopedDb(request);
 
   const sinceRaw = url.searchParams.get('since') ?? '0';
-  const since = /^\d{1,19}$/.test(sinceRaw) ? sinceRaw : '0';
+  const parsedSince = ServerVersionSchema.safeParse(sinceRaw);
+  if (!parsedSince.success) {
+    throw createError.validation('Invalid projects sync cursor', parsedSince.error);
+  }
+  const since = parsedSince.data;
 
   try {
     const projects = await db.query<ProjectDelta>(
@@ -83,23 +88,6 @@ async function handleGet(request: NextRequest) {
 // Push
 // ---------------------------------------------------------------------------
 
-const PushProjectSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().max(200),
-  description: z.string().max(2_000).nullable().optional(),
-  instructions: z.string().max(10_000).nullable().optional(),
-  color: z.string().max(50).nullable().optional(),
-  isArchived: z.boolean().optional(),
-  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  createdAt: z.string().datetime().optional(),
-  updatedAt: z.string().datetime(),
-  deletedAt: z.string().datetime().nullable().optional(),
-});
-
-const PushBodySchema = z.object({
-  projects: z.array(PushProjectSchema).max(MAX_PROJECTS_PUSH).optional(),
-});
-
 async function handlePost(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
@@ -115,54 +103,120 @@ async function handlePost(request: NextRequest) {
   } catch {
     throw createError.validation('Invalid JSON body');
   }
-  const parsed = PushBodySchema.safeParse(rawBody);
+  const parsed = ProjectsSyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid projects sync payload', parsed.error);
   }
   const { projects = [] } = parsed.data;
 
+  if (projects.length === 0) {
+    return NextResponse.json({ applied: [], conflicts: [], cursor: '0' });
+  }
+
   const applied: Array<{ id: string; server_version: string }> = [];
+  const conflicts: Array<{ id: string; current: ProjectDelta | null }> = [];
   try {
-    for (const p of projects) {
-      const rows = await db.query<{ id: string; server_version: string }>(
-        `
+    const rows = await db.query<{
+      kind: 'applied' | 'conflict';
+      id: string;
+      server_version: string | null;
+      current: ProjectDelta | null;
+    }>(
+      `
+        with input as materialized (
+          select (item ->> 'id')::uuid as id,
+                 item ->> 'name' as name,
+                 item ->> 'description' as description,
+                 item ->> 'instructions' as instructions,
+                 item ->> 'color' as color,
+                 coalesce((item ->> 'isArchived')::boolean, false) as is_archived,
+                 case when item ? 'metadata' then item -> 'metadata' else 'null'::jsonb end
+                   as metadata,
+                 (item ->> 'baseVersion')::bigint as base_version,
+                 nullif(item ->> 'deletedAt', '') is not null as should_delete
+            from jsonb_array_elements($2::jsonb) as source(item)
+        ), updated as (
+          update user_projects as existing
+             set name = incoming.name,
+                 description = incoming.description,
+                 instructions = incoming.instructions,
+                 color = incoming.color,
+                 is_archived = incoming.is_archived,
+                 metadata = incoming.metadata,
+                 updated_at = now(),
+                 deleted_at = case when incoming.should_delete then now() else null end
+            from input as incoming
+           where existing.id = incoming.id
+             and existing.user_id = $1
+             and existing.server_version = incoming.base_version
+          returning existing.id, existing.server_version
+        ), inserted as (
           insert into user_projects
             (id, user_id, name, description, instructions, color, is_archived, metadata,
              created_at, updated_at, deleted_at)
-          values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb,
-                  coalesce($9::timestamptz, now()), $10::timestamptz, $11::timestamptz)
-          on conflict (id) do update set
-            name = excluded.name,
-            description = excluded.description,
-            instructions = excluded.instructions,
-            color = excluded.color,
-            is_archived = excluded.is_archived,
-            metadata = excluded.metadata,
-            updated_at = excluded.updated_at,
-            deleted_at = excluded.deleted_at
-          where user_projects.user_id = $2
-            and excluded.updated_at >= user_projects.updated_at
+          select incoming.id, $1, incoming.name, incoming.description, incoming.instructions,
+                 incoming.color, incoming.is_archived, incoming.metadata, now(), now(),
+                 case when incoming.should_delete then now() else null end
+            from input as incoming
+           where incoming.base_version = 0
+          on conflict (id) do nothing
           returning id, server_version
-        `,
-        [
-          p.id,
-          userId,
-          p.name,
-          p.description ?? null,
-          p.instructions ?? null,
-          p.color ?? null,
-          p.isArchived ?? false,
-          JSON.stringify(p.metadata ?? null),
-          p.createdAt ?? null,
-          p.updatedAt,
-          p.deletedAt ?? null,
-        ],
-      );
-      if (rows[0]) applied.push(rows[0]);
+        ), applied_rows as materialized (
+          select id, server_version from updated
+          union all
+          select id, server_version from inserted
+        ), conflict_rows as (
+          select incoming.id,
+                 case when current.id is null then null else jsonb_build_object(
+                   'id', current.id::text,
+                   'name', current.name,
+                   'description', current.description,
+                   'instructions', current.instructions,
+                   'color', current.color,
+                   'is_archived', current.is_archived,
+                   'metadata', current.metadata,
+                   'created_at', current.created_at,
+                   'updated_at', current.updated_at,
+                   'deleted_at', current.deleted_at,
+                   'server_version', current.server_version::text
+                 ) end as current
+            from input as incoming
+            left join user_projects as current
+              on current.id = incoming.id and current.user_id = $1
+           where not exists (
+             select 1 from applied_rows where applied_rows.id = incoming.id
+           )
+        )
+        select 'applied'::text as kind,
+               applied_rows.id::text as id,
+               applied_rows.server_version::text as server_version,
+               null::jsonb as current
+          from applied_rows
+        union all
+        select 'conflict'::text as kind,
+               conflict_rows.id::text as id,
+               null::text as server_version,
+               conflict_rows.current
+          from conflict_rows
+      `,
+      [userId, JSON.stringify(projects)],
+    );
+
+    for (const row of rows) {
+      if (row.kind === 'applied' && row.server_version !== null) {
+        applied.push({ id: row.id, server_version: row.server_version });
+      } else if (row.kind === 'conflict') {
+        conflicts.push({ id: row.id, current: row.current });
+      } else {
+        throw new Error('Projects sync database returned an invalid batch result');
+      }
     }
 
-    const cursor = maxServerVersion('0', applied);
-    return NextResponse.json({ applied, cursor });
+    const conflictRows = conflicts.flatMap((conflict) =>
+      conflict.current ? [conflict.current] : [],
+    );
+    const cursor = maxServerVersion('0', applied, conflictRows);
+    return NextResponse.json({ applied, conflicts, cursor });
   } catch (error) {
     logger.error({ error, userId }, 'Projects sync push failed');
     throw createError.internal('Failed to push project changes');

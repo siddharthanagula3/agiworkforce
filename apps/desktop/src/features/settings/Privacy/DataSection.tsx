@@ -32,7 +32,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { onboarding } from '@agiworkforce/api';
+import { onboarding } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
 
 import { errorTracking } from '../../../services/errorTracking';

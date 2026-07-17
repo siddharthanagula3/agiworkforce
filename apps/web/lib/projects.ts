@@ -4,9 +4,9 @@
  * Maps a `public.user_projects` row (snake_case Postgres) into the canonical
  * `ProjectRecord` shape from `@agiworkforce/types`, while tolerating
  * pre-migration column states. The round-10 schema migration
- * (`20260521120000_project_schema_round_10.sql`) adds:
- *   - default_privacy_mode (NOT NULL default 'local')
- *   - default_provider_mode (NOT NULL default 'Local')
+ * (`0053_projects_managed_cloud_contract.sql`) adds:
+ *   - default_privacy_mode (NOT NULL default 'managed')
+ *   - default_provider_mode (NOT NULL default 'ManagedGateway')
  *   - allowed_surfaces (NOT NULL default ['web','desktop','mobile'])
  *   - icon_emoji, accent_color, imported_from, organization_id,
  *     default_model_id, last_used_at (all nullable)
@@ -21,9 +21,6 @@
  */
 
 import {
-  DEVELOPER_SESSION_SURFACES,
-  PRIVACY_MODES,
-  PROVIDER_MODES,
   SYNCED_APP_SURFACES,
   type PrivacyMode,
   type ProviderMode,
@@ -42,7 +39,7 @@ const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'zinc',
 ];
 const IMPORT_SOURCES: readonly ProjectImportSource[] = ['claude', 'openai', 'manual'];
-const SURFACES: readonly SourceSurface[] = [...SYNCED_APP_SURFACES, ...DEVELOPER_SESSION_SURFACES];
+const SURFACES: readonly SourceSurface[] = [...SYNCED_APP_SURFACES];
 
 const DEFAULT_ALLOWED_SURFACES: SourceSurface[] = [...SYNCED_APP_SURFACES];
 
@@ -77,16 +74,12 @@ function asBool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
-function asPrivacyMode(value: unknown): PrivacyMode {
-  return typeof value === 'string' && (PRIVACY_MODES as readonly string[]).includes(value)
-    ? (value as PrivacyMode)
-    : 'local';
+function asPrivacyMode(_value: unknown): PrivacyMode {
+  return 'managed';
 }
 
 function asProviderMode(value: unknown): ProviderMode {
-  return typeof value === 'string' && (PROVIDER_MODES as readonly string[]).includes(value)
-    ? (value as ProviderMode)
-    : 'Local';
+  return value === 'ManagedNative' ? 'ManagedNative' : 'ManagedGateway';
 }
 
 function asAccentColor(value: unknown): ProjectAccentColor | null {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appendWebSearchTool } from './request-processor';
+import { appendWebSearchTool, shouldOfferGenericWebSearchTool } from './request-processor';
 import {
   WEB_SEARCH_INJECTION_PROVIDERS,
   providerInjectsWebSearchTool,
@@ -11,13 +11,15 @@ import {
  * The client sends `web_search:true` and the composer only lets the toggle turn on
  * when the model's catalog `search` flag is set. The break was NOT client-side (the
  * prior "added deps to handleSubmit" fix): it is that the server only injects a
- * native search tool for anthropic/google/openai, while xai/qwen/moonshot models
- * ALSO carry `search:true` in the catalog — so their toggle lit a checkmark but the
- * request went out with no tool and the model replied "I can't browse the internet".
+ * native search tool for anthropic/google, while xai/qwen/moonshot/openai models
+ * ALSO carry (or carried) `search:true` in the catalog — so their toggle lit a
+ * checkmark but the request went out with no tool and the model replied "I can't
+ * browse the internet".
  *
  * These tests pin exactly which providers inject (so the composer's client-side gate,
  * `providerSupportsWebSearch`, can never drift from the server) and that unsupported
- * providers are a no-op rather than a silent-but-toggle-enabled failure.
+ * providers are a no-op at this hop — WP4's `shouldOfferGenericWebSearchTool` covers
+ * them with the platform-executed fallback tool instead (tested below).
  */
 describe('appendWebSearchTool', () => {
   const caps = { search: true };
@@ -33,19 +35,17 @@ describe('appendWebSearchTool', () => {
     expect(appendWebSearchTool('google', undefined, caps)).toEqual([{ google_search: {} }]);
   });
 
-  it('injects the OpenAI web_search_preview tool', () => {
-    expect(appendWebSearchTool('openai', undefined, caps)).toEqual([
-      { type: 'web_search_preview' },
-    ]);
-  });
-
-  it.each(['xai', 'qwen', 'moonshot', 'deepseek', 'perplexity'])(
-    'does NOT inject a tool for %s (no wired tool-injection branch)',
+  it.each(['xai', 'qwen', 'moonshot', 'deepseek', 'perplexity', 'openai'])(
+    'does NOT inject a tool for %s (no native path on this route — WP4 generic tool covers it)',
     (provider) => {
-      // Returns the existing tool list unchanged — the historical silent no-op that
-      // made the toggle cosmetic. These providers are now gated OUT of the composer
-      // toggle client-side (providerSupportsWebSearch) so the no-op is never reached
-      // with an enabled toggle.
+      // Returns the existing tool list unchanged. openai joined this list 2026-07-11
+      // (WP4): web_search_preview is Responses-API-only and this route is
+      // useResponsesApi:false, so injecting it here was a dead tool that
+      // translate.ts silently stripped before the wire for zero benefit — removed
+      // rather than left as harmless-looking dead code. xai/qwen/moonshot/deepseek
+      // are gated OUT of the composer toggle client-side (providerSupportsWebSearch)
+      // so this no-op is never reached with an enabled native-path toggle; all of
+      // them (openai included) are covered by the generic fallback instead.
       const existing = [{ type: 'function', function: { name: 'x' } }];
       expect(appendWebSearchTool(provider, existing, caps)).toEqual(existing);
     },
@@ -67,14 +67,65 @@ describe('appendWebSearchTool', () => {
   });
 
   it('injection branches match the shared WEB_SEARCH_INJECTION_PROVIDERS source of truth', () => {
-    for (const provider of ['anthropic', 'google', 'openai']) {
+    for (const provider of ['anthropic', 'google']) {
       expect(WEB_SEARCH_INJECTION_PROVIDERS.has(provider)).toBe(true);
       expect(providerInjectsWebSearchTool(provider)).toBe(true);
       expect(appendWebSearchTool(provider, undefined, caps)).toHaveLength(1);
     }
-    for (const provider of ['xai', 'qwen', 'moonshot']) {
+    for (const provider of ['xai', 'qwen', 'moonshot', 'openai']) {
       expect(providerInjectsWebSearchTool(provider)).toBe(false);
       expect(appendWebSearchTool(provider, undefined, caps)).toBeUndefined();
     }
+  });
+});
+
+/**
+ * WP4 — gates the platform-executed generic `web_search` function tool. Every
+ * condition must hold or the tool is not offered; getting any one wrong either
+ * reintroduces a cosmetic toggle (offering with no backend) or a stalled turn
+ * (offering with no execution path, i.e. outside the tool loop).
+ */
+describe('shouldOfferGenericWebSearchTool', () => {
+  const baseArgs = {
+    providerLower: 'openai',
+    toolsCapable: true,
+    stream: true,
+    freeTrial: false,
+    backendConfigured: true,
+  };
+
+  it('is true for openai with every other condition satisfied', () => {
+    expect(shouldOfferGenericWebSearchTool(baseArgs)).toBe(true);
+  });
+
+  it.each(['xai', 'deepseek', 'qwen', 'moonshot', 'zhipu', 'mistral', 'groq'])(
+    'is true for %s (no native path) with every other condition satisfied',
+    (providerLower) => {
+      expect(shouldOfferGenericWebSearchTool({ ...baseArgs, providerLower })).toBe(true);
+    },
+  );
+
+  it.each(['anthropic', 'google', 'perplexity', 'managed_cloud'])(
+    'is false for %s — native/resolved path already covers it, no fallback needed',
+    (providerLower) => {
+      expect(shouldOfferGenericWebSearchTool({ ...baseArgs, providerLower })).toBe(false);
+    },
+  );
+
+  it('is false when the resolved model is not tools-capable', () => {
+    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, toolsCapable: false })).toBe(false);
+  });
+
+  it('is false on a non-streaming request (offer ⊆ run — only streaming enters the tool loop)', () => {
+    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, stream: false })).toBe(false);
+    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, stream: undefined })).toBe(false);
+  });
+
+  it('is false on a free-trial request', () => {
+    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, freeTrial: true })).toBe(false);
+  });
+
+  it('is false when no search backend is configured — never offer a tool the server cannot execute', () => {
+    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, backendConfigured: false })).toBe(false);
   });
 });

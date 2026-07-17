@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { normalizeModelId } from '@agiworkforce/types';
+import { getModelReasoning, normalizeModelId } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
-  DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
   canAccessCloudModelForTier,
+  getDefaultCloudModelIdForTier,
   getDefaultSelectableModelId,
   getModelByIdForCloudAccess,
   isAutoMode,
@@ -54,6 +54,11 @@ function providerForModelId(modelId: string): string {
 function normalizeProvider(providerId: string): string {
   if (providerId === CLOUD_PROVIDER_ID && isCloudUnlocked()) return CLOUD_PROVIDER_ID;
   return 'local';
+}
+
+function modelRequiresThinking(modelId: string): boolean {
+  const reasoning = getModelReasoning(modelId);
+  return reasoning.capable && reasoning.canDisableThinking === false;
 }
 
 interface ModelState {
@@ -105,13 +110,18 @@ export const useModelStore = create<ModelState>()(
 
         // Sync legacy thinkingModeEnabled with per-model state.
         const perModel = get().thinkingEnabledPerModel;
-        const thinkingModeEnabled = perModel[resolvedModelId] ?? false;
+        const requiresThinking = modelRequiresThinking(resolvedModelId);
+        const thinkingEnabledPerModel = requiresThinking
+          ? { ...perModel, [resolvedModelId]: true }
+          : perModel;
+        const thinkingModeEnabled = requiresThinking || (perModel[resolvedModelId] ?? false);
 
         set({
           selectedModel: resolvedModelId,
           selectedProvider: providerForModelId(resolvedModelId),
           recentModels,
           thinkingModeEnabled,
+          thinkingEnabledPerModel,
         });
       },
 
@@ -131,8 +141,18 @@ export const useModelStore = create<ModelState>()(
       },
 
       setThinkingMode: (enabled: boolean) => {
-        // Only allow enabling if the current model supports thinking.
         const { selectedModel } = get();
+        if (modelRequiresThinking(selectedModel)) {
+          set((state) => ({
+            thinkingModeEnabled: true,
+            thinkingEnabledPerModel: {
+              ...state.thinkingEnabledPerModel,
+              [selectedModel]: true,
+            },
+          }));
+          return;
+        }
+        // Only allow enabling if the current model supports thinking.
         if (enabled && !isAutoMode(selectedModel)) {
           const model = getModelByIdForCloudAccess(selectedModel, isCloudUnlocked());
           if (model && !model.supportsThinking) return;
@@ -150,6 +170,17 @@ export const useModelStore = create<ModelState>()(
         // Only toggle for models that support thinking.
         const model = getModelByIdForCloudAccess(resolvedModelId, isCloudUnlocked());
         if (model && !model.supportsThinking) return;
+        if (modelRequiresThinking(resolvedModelId)) {
+          set((state) => ({
+            thinkingModeEnabled:
+              state.selectedModel === resolvedModelId ? true : state.thinkingModeEnabled,
+            thinkingEnabledPerModel: {
+              ...state.thinkingEnabledPerModel,
+              [resolvedModelId]: true,
+            },
+          }));
+          return;
+        }
 
         const current = get().thinkingEnabledPerModel;
         const next = { ...current, [resolvedModelId]: !current[resolvedModelId] };
@@ -164,7 +195,9 @@ export const useModelStore = create<ModelState>()(
 
       isThinkingEnabledForSelected: () => {
         const { selectedModel, thinkingEnabledPerModel } = get();
-        return thinkingEnabledPerModel[selectedModel] ?? false;
+        return (
+          modelRequiresThinking(selectedModel) || (thinkingEnabledPerModel[selectedModel] ?? false)
+        );
       },
     }),
     {
@@ -178,7 +211,10 @@ export const useModelStore = create<ModelState>()(
           isSelectableModelIdForCloudAccess(persistedState.selectedModel, cloudUnlocked)
             ? persistedState.selectedModel
             : getDefaultSelectableModelId(persistedState.selectedModel);
-        const thinkingEnabledPerModel = filterThinkingState(persistedState.thinkingEnabledPerModel);
+        const filteredThinkingState = filterThinkingState(persistedState.thinkingEnabledPerModel);
+        const thinkingEnabledPerModel = modelRequiresThinking(selectedModel)
+          ? { ...filteredThinkingState, [selectedModel]: true }
+          : filteredThinkingState;
         const selectedProvider = providerForModelId(selectedModel);
 
         return {
@@ -192,7 +228,9 @@ export const useModelStore = create<ModelState>()(
             MAX_RECENT,
           ),
           thinkingEnabledPerModel,
-          thinkingModeEnabled: thinkingEnabledPerModel[selectedModel] ?? false,
+          thinkingModeEnabled:
+            modelRequiresThinking(selectedModel) ||
+            (thinkingEnabledPerModel[selectedModel] ?? false),
         };
       },
       // AUDIT-FIX: MMKV-RACE
@@ -209,17 +247,17 @@ rehydrateWhenMmkvReady(useModelStore, 'model-store');
 /**
  * A tier downgrade (e.g. Max → Pro) must not leave a now-locked flagship model
  * selected and check-marked. Re-check tier access whenever the billing tier
- * changes and fall back to the default cloud model (economy-listed, so it is
- * accessible on every tier including free-trial).
+ * changes and fall back to the tier's registry-owned default cloud model.
  */
 function revalidateSelectedModelForTier(tier: string): void {
   const { selectedModel, thinkingEnabledPerModel } = useModelStore.getState();
   if (!isCloudManagedModelId(selectedModel)) return;
   if (canAccessCloudModelForTier(selectedModel, tier)) return;
 
+  const preferredDefault = getDefaultCloudModelIdForTier(tier);
   const fallbackId =
-    DEFAULT_CLOUD_MODEL_ID && canAccessCloudModelForTier(DEFAULT_CLOUD_MODEL_ID, tier)
-      ? DEFAULT_CLOUD_MODEL_ID
+    preferredDefault && canAccessCloudModelForTier(preferredDefault, tier)
+      ? preferredDefault
       : DEFAULT_LOCAL_MODEL_ID;
   useModelStore.setState({
     selectedModel: fallbackId,

@@ -1,15 +1,15 @@
 /**
  * Chrome extension send-pipeline queue.
  *
- * Wraps `messageQueueManager` from @agiworkforce/runtime with a
+ * Wraps `messageQueueManager` from @agiworkforce/client-runtime with a
  * synchronous-shaped wrapper around `chrome.storage.local`. The async
  * Chrome storage API is fire-and-forget here — reads return the cached
  * snapshot and writes are dispatched without awaiting; the queue stays
  * in-memory authoritative.
  */
 
-import { createMessageQueue, type MessageQueue } from '@agiworkforce/runtime';
-import type { QueuedCommand } from '@agiworkforce/runtime';
+import { createMessageQueue, type MessageQueue } from '@agiworkforce/client-runtime';
+import type { QueuedCommand } from '@agiworkforce/client-runtime';
 
 const STORAGE_KEY = 'agiworkforce.queue.extension';
 

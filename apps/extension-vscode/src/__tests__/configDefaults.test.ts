@@ -52,6 +52,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   desktopBridgePort: 'agiWorkforce.desktopBridge.port',
   tier: 'agiWorkforce.tier',
   currentTier: 'agiWorkforce.currentTier',
+  cliPath: 'agiWorkforce.cliPath',
 };
 
 describe('Config DEFAULTS ↔ package.json parity', () => {
@@ -82,5 +83,17 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
       missing,
       `Config keys with no matching package.json setting: ${missing.join(', ')}`,
     ).toEqual([]);
+  });
+
+  it('describes Auto mode using the runtime safe-tool approval boundary', () => {
+    const description = pkgSettings['agiWorkforce.agent.mode']?.description ?? '';
+    const commandSetup = fs.readFileSync(
+      path.resolve(__dirname, '../core/commandSetup.ts'),
+      'utf8',
+    );
+
+    expect(description).toContain('safe, read-only');
+    expect(description).toContain('writes and commands still require approval');
+    expect(commandSetup).not.toContain('Edits run without confirmation');
   });
 });

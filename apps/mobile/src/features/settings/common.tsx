@@ -21,7 +21,17 @@ export function SettingsScreenShell({
   const router = useRouter();
   const { colors, statusBarStyle } = useTheme();
   const goBack = useCallback(() => {
-    router.navigate(backHref as Parameters<typeof router.navigate>[0]);
+    // Prefer popping the real stack so this screen returns callers to wherever
+    // they came from (Settings tab, a chat tab, or an open chat/[id]) instead
+    // of always landing on `backHref` — this shell is reused by routes reached
+    // from more than one entry point (e.g. Connectors from Settings and from
+    // the chat "Add to Chat" sheet). `backHref` remains the fallback for
+    // deep-linked/no-history entries.
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.navigate(backHref as Parameters<typeof router.navigate>[0]);
+    }
   }, [backHref, router]);
 
   return (

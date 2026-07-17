@@ -1,87 +1,77 @@
-# AGI Workforce — VS Code
+# AGI for VS Code
 
 Status: Current
+
 Owner role: Extension lead
-Last updated: 2026-06-06
+
+Last updated: 2026-07-14
+
 Kind: app
+
 Criticality: high
 
 ## Purpose
 
-IDE-native AGI coding assistant for editor context, diffs, file references, explicit Desktop bridge flows, and cloud handoff where implemented. Provider/model behavior must come from the current AGI catalog and current extension code, not from marketing counts.
+IDE-native access to AGI developer sessions. Chat is workspace scoped and runs through the local `agi app-server` process shared with the CLI protocol. It does not synchronize consumer Web, Mobile, or Desktop chat history.
 
-## Features (v0.3.0)
+## Developer-session architecture
 
-- **`@agi` chat participant** with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, `/model` subcommands — type `@agi /fix` in GitHub Copilot Chat.
-- **Chat-in-editor panel** (`Cmd+Shift+A` or `agi-workforce.openChatInEditor`) — full chat as a VS Code editor tab.
-- **Sidebar chat** with multi-conversation history, context-file pinning, and code-action suggestions.
-- **`@mention` file quickpick** — type `@` in the chat input to add any workspace file as context; content capped at 20 K chars.
-- **Inline completions** (debounced, LRU-cached, 16-entry) — enabled by default, API-key required, with a first-run notice and sensitive-file suppression.
-- **CodeLens** "Ask AI / Tests / Docs" actions on every function or class — cached by `(uri, version)` to avoid repeated rescans.
-- **Model picker** — `agi-workforce.selectModel` opens a QuickPick over the full provider catalog; no hardcoded model IDs.
-- **Agent mode** — multi-file edit with diff preview and one-click batch undo; workspace-trust gated.
-- **Desktop bridge** (port 8787) — token-authenticated WebSocket to the AGI Workforce desktop app; allowlisted message types only.
-- **56+ commands** covering chat, diff, patch, git, test, document, explain, refactor, and subsystem health.
-- **Multi-root workspace** support across git/test/patch operations.
-- **Workspace Trust** integration — endpoint, CLI path, system prompt, and agent-auto-apply settings are restricted in untrusted workspaces.
+- `@agi` chat participant, sidebar chat, and chat-editor panel use the same `LocalRuntimePool`.
+- Each workspace root owns one lazy local app-server process.
+- The app-server owns threads, turns, streamed output, approvals, cancellation, and session history.
+- Multi-root windows keep runtimes isolated by workspace root.
+- Changing `agiWorkforce.cliPath` disposes existing processes; the next request starts a process with the new path.
+- MCP discovery runs in the local runtime. Loading and availability notifications are non-terminal.
+- VS Code sessions stay local/workspace/task scoped unless a separate explicit handoff flow is invoked.
 
 ## Quick start
 
-1. Install from the VS Code Marketplace (or sideload the `.vsix`).
-2. Run **AGI Workforce: Set API Key** from the command palette (`cmd+shift+p`).
-3. Or, if you have GitHub Copilot installed, leave `agiWorkforce.fallbackToVscodeLm` on (default true) and the `@agi` participant will use Copilot's model when no API key is set.
+1. Install or build the extension.
+2. Install the AGI CLI so `agi` is on `PATH`, or set `agiWorkforce.cliPath` to the binary.
+3. Open a trusted workspace folder.
+4. Open the AGI sidebar, run `AGI: Open Chat in Editor`, or use `@agi` in VS Code Chat.
 
-## Setup
+No AGI Cloud sign-in or extension API key is required for the local developer-session transport. Provider credentials and routing are owned by the local runtime configuration. Inline completions and older cloud-backed utility commands have separate credential requirements.
 
-1. Install the extension.
-2. Open the AGI Workforce sidebar (Activity Bar icon).
-3. Pick an available path:
-   - **BYOK:** paste your provider API key in Settings → AGI Workforce → Models.
-   - **Local:** install Ollama or LM Studio; the extension auto-detects them.
-   - **AGI Cloud:** use AGI Web for invite and waitlist access. VS Code account sign-in is not wired yet.
+## Current surfaces
+
+- `@agi` chat participant with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, and `/model`.
+- Sidebar and editor-panel chat over the local runtime.
+- Runtime-owned developer-session history.
+- Explicit approval prompts for privileged runtime actions.
+- Editor selection and surrounding-code context wrapped as untrusted data.
+- Editor context, model selection, diagnostics sharing, and diff proposals.
+- Inline completions, CodeLens, hover, diagnostics, terminal helpers, memory UI, and Desktop bridge integrations.
 
 ## Configuration highlights
 
-| Setting                                  | Default                               | What it does                                                                                         |
-| ---------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `agiWorkforce.apiEndpoint`               | `https://agiworkforce.com/api/llm/v1` | LLM API endpoint. Restricted in untrusted workspaces.                                                |
-| `agiWorkforce.model`                     | `auto-balanced`                       | Default model. Run **AGI Workforce: Select Model** to pick.                                          |
-| `agiWorkforce.fallbackToVscodeLm`        | `true`                                | Use VS Code Language Model API when no AGI Workforce key is set.                                     |
-| `agiWorkforce.inlineCompletions.enabled` | `true`                                | Inline ghost-text completions. Requires an API key and suppresses sensitive files.                   |
-| `agiWorkforce.useProviderStream`         | `false`                               | Private-beta AGI Cloud provider-stream path. Fails closed in VS Code until account sign-in is wired. |
-| `agiWorkforce.telemetryEnabled`          | `false`                               | Anonymous usage telemetry.                                                                           |
+| Setting                                  | Default            | Purpose                                                                                    |
+| ---------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
+| `agiWorkforce.cliPath`                   | `agi`              | Local CLI binary used to launch `app-server`.                                              |
+| `agiWorkforce.model`                     | catalog default    | Model selection forwarded to the runtime when explicit.                                    |
+| `agiWorkforce.inlineCompletions.enabled` | `true`             | Enables the separate inline-completion path.                                               |
+| `agiWorkforce.mcp.enabled`               | configured default | Enables MCP-related extension integration. Runtime MCP discovery remains app-server owned. |
+| `agiWorkforce.desktopBridge.enabled`     | configured default | Enables the explicit Desktop bridge.                                                       |
+| `agiWorkforce.telemetryEnabled`          | `false`            | Extension telemetry opt-in, also subject to VS Code telemetry settings.                    |
 
-## Keyboard shortcuts
+## Verification
 
-- `Cmd/Ctrl+Shift+A` — open chat
-- `Cmd/Ctrl+Shift+Alt+E` — explain selection
-- `Cmd/Ctrl+Shift+Alt+G` — agent mode
-- `Cmd/Ctrl+Shift+Alt+A` — ask about code
-- `Cmd/Ctrl+Shift+Alt+X` — explain error
-- `Cmd/Ctrl+Shift+Alt+T` — run terminal command
-- `Cmd/Ctrl+Shift+Alt+N` — new conversation
+```bash
+pnpm --filter agi-workforce typecheck
+pnpm --filter agi-workforce test
+pnpm --filter agi-workforce test:webview
+pnpm --filter agi-workforce lint
+pnpm --filter agi-workforce build
+```
 
-See the `Keyboard Shortcuts` editor for the full list.
+## Trust boundaries
 
-## Privacy
-
-- No telemetry is sent unless both VS Code's global `telemetry.telemetryLevel` setting **and** the extension-level `agiWorkforce.telemetryEnabled` setting are on. Both default to off for this extension.
-- Error messages and event properties are scrubbed for credentials (JWTs, Bearer tokens, OpenAI/Anthropic/Stripe/Slack/GitHub/Google/AWS keys) before any network call.
-- Settings are read from the **global** scope only when in an untrusted workspace; workspace overrides for endpoint URLs and similar are ignored.
-
-## Differentiators
-
-Most VS Code AI extensions lock you into one vendor. AGI Workforce lets you:
-
-- Switch providers mid-conversation (Claude → GPT → Llama in the same thread).
-- Use Local LLMs (Ollama, LM Studio) with zero cloud dependency.
-- Bring your own API keys — no subscription, no rate-limit ceiling beyond your own key's.
+- Workspace Trust gates privileged workspace behavior.
+- Webview messages are runtime validated before dispatch.
+- Local runtime processes are isolated by workspace root.
+- Editor and file content is untrusted model input.
+- The local runtime owns approval requests for destructive, external, privileged, or expensive actions.
 
 ## License
 
 Proprietary. © 2026 AGI Workforce. See `LICENSE`.
-
-## Issues / feedback
-
-- File issues at <https://github.com/agiworkforce/agiworkforce/issues>.
-- Or use the in-extension **AGI Workforce: Send Feedback** command.

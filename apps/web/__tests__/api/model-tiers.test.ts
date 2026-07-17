@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 
 // model-tiers.ts uses 'server-only' — already mocked globally in test/setup.ts
 import { canAccessModel, ECONOMY_MODELS, MODEL_TIER_REQUIREMENTS } from '@/lib/model-tiers';
@@ -26,6 +27,24 @@ const MAX_ONLY_MODELS = Object.entries(MODEL_TIER_REQUIREMENTS)
   .filter(([, tiers]) => !tiers.includes('pro'))
   .map(([model]) => model)
   .slice(0, 3);
+
+function requireCatalogModel(model: string | null | undefined, role: string): string {
+  if (!model) {
+    throw new Error(`The model catalog must expose a model for ${role}`);
+  }
+  return model;
+}
+
+const CURRENT_ANTHROPIC_DEFAULT = requireCatalogModel(
+  getProviderDefaultModel('anthropic'),
+  'the Anthropic default',
+);
+const CURRENT_OPENAI_DEFAULT = requireCatalogModel(
+  getProviderDefaultModel('openai'),
+  'the OpenAI default',
+);
+const CURRENT_ECONOMY_MODEL = requireCatalogModel(ECONOMY_SAMPLE[0], 'the Economy tier');
+const CURRENT_MAX_ONLY_MODEL = requireCatalogModel(MAX_ONLY_MODELS[0], 'the flagship tier');
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('canAccessModel — free tier', () => {
@@ -95,12 +114,12 @@ describe('canAccessModel — pro tier', () => {
     }
   });
 
-  it('allows claude-sonnet-4.6 for pro users', () => {
-    expect(canAccessModel('claude-sonnet-4.6', 'pro')).toBe(true);
+  it('allows the current Anthropic default for pro users', () => {
+    expect(canAccessModel(CURRENT_ANTHROPIC_DEFAULT, 'pro')).toBe(true);
   });
 
-  it('denies claude-opus-4.8 (max/enterprise only) for pro users', () => {
-    expect(canAccessModel('claude-opus-4.8', 'pro')).toBe(false);
+  it('denies a current max-only model for pro users', () => {
+    expect(canAccessModel(CURRENT_MAX_ONLY_MODEL, 'pro')).toBe(false);
   });
 });
 
@@ -129,11 +148,11 @@ describe('canAccessModel — basic tier', () => {
   });
 
   it('is case-insensitive for the basic tier name', () => {
-    expect(canAccessModel('gpt-5.4-mini', 'BASIC')).toBe(true);
+    expect(canAccessModel(CURRENT_ECONOMY_MODEL, 'BASIC')).toBe(true);
   });
 
   it('also accepts the legacy "hobby" tier name as an alias for basic', () => {
-    expect(canAccessModel('gpt-5.4-mini', 'hobby')).toBe(true);
+    expect(canAccessModel(CURRENT_ECONOMY_MODEL, 'hobby')).toBe(true);
   });
 });
 
@@ -157,15 +176,12 @@ describe('canAccessModel — max tier', () => {
     }
   });
 
-  it('allows claude-opus-4.8 for max users', () => {
-    // Catalog flagship_additions lists claude-opus-4.8 (4.6 and 4.7 retired).
-    expect(canAccessModel('claude-opus-4.8', 'max')).toBe(true);
+  it('allows a current max-only model for max users', () => {
+    expect(canAccessModel(CURRENT_MAX_ONLY_MODEL, 'max')).toBe(true);
   });
 
-  it('allows gpt-5.5 for max users', () => {
-    // Catalog flagship_additions: gpt-5.5 is the current top-tier OpenAI model
-    // (replaces o3 from the legacy roster).
-    expect(canAccessModel('gpt-5.5', 'max')).toBe(true);
+  it('allows the current OpenAI default for max users', () => {
+    expect(canAccessModel(CURRENT_OPENAI_DEFAULT, 'max')).toBe(true);
   });
 });
 
@@ -225,15 +241,14 @@ describe('canAccessModel — unknown models', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('canAccessModel — case insensitivity', () => {
   it('handles uppercase model names correctly', () => {
-    expect(canAccessModel('GPT-5.4-MINI', 'pro')).toBe(true);
-    expect(canAccessModel('CLAUDE-SONNET-4.6', 'pro')).toBe(true);
+    expect(canAccessModel(CURRENT_ECONOMY_MODEL.toUpperCase(), 'pro')).toBe(true);
+    expect(canAccessModel(CURRENT_ANTHROPIC_DEFAULT.toUpperCase(), 'pro')).toBe(true);
   });
 
   it('handles uppercase tier names correctly', () => {
-    expect(canAccessModel('gpt-5.4-mini', 'PRO')).toBe(true);
-    expect(canAccessModel('claude-sonnet-4.6', 'PRO')).toBe(true);
-    // Use the current flagship; claude-opus-4.8/4.7 are retired; 4.8 is canonical.
-    expect(canAccessModel('claude-opus-4.8', 'MAX')).toBe(true);
+    expect(canAccessModel(CURRENT_ECONOMY_MODEL, 'PRO')).toBe(true);
+    expect(canAccessModel(CURRENT_ANTHROPIC_DEFAULT, 'PRO')).toBe(true);
+    expect(canAccessModel(CURRENT_MAX_ONLY_MODEL, 'MAX')).toBe(true);
   });
 });
 

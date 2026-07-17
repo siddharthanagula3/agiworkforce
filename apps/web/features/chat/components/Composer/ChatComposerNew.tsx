@@ -22,6 +22,7 @@ import {
   Telescope,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { useBillingStore } from '@/stores/unified/auth';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
 import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
@@ -38,14 +39,15 @@ import { useChatStore } from '@shared/stores/chat-store';
 import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@/constants/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import type { ChatMode } from '@features/chat/types';
+import { useRouter } from 'next/navigation';
 import { FREE_TRIAL_MAX_INPUT_CHARS, getFreeTrialRemaining } from '../../stores/freeTrialStore';
 import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
-import { useProjectStore } from '@features/projects';
-import { useRouter } from 'next/navigation';
+
+/** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
+export type ComposerWorkMode = 'chat' | 'agiwork';
 
 interface ChatComposerProps {
   onSend: (
@@ -53,8 +55,10 @@ interface ChatComposerProps {
     attachments?: File[],
     skillId?: string,
     meta?: {
-      agentMode: ChatMode;
-      folderId: string | null;
+      /** Active mode at send time. 'agiwork' = project-scoped work chat. */
+      workMode: ComposerWorkMode;
+      /** Project scoping the send (threads into conversation creation). */
+      projectId: string | null;
       webSearchEnabled?: boolean;
       thinkingEnabled?: boolean;
       codeExecutionEnabled?: boolean;
@@ -77,8 +81,6 @@ interface ChatComposerProps {
   isGenerating?: boolean;
   placeholder?: string;
   disabled?: boolean;
-  /** Initial agent mode (defaults to 'solo') */
-  initialAgentMode?: ChatMode;
   /** Whether to enable ghost-text prompt completion (default: true) */
   promptCompletionEnabled?: boolean;
   /** Pre-fill the textarea with this text (e.g. from empty-state pills). */
@@ -120,6 +122,23 @@ interface ChatComposerProps {
     promptsUsed: number | null;
     promptLimit: number;
   };
+  /**
+   * "Project or folder" picker (Claude-composer parity). Provided only by hosts
+   * with real project data for a NEW chat (web /chat empty state). Selecting a
+   * project scopes the next created conversation (the host threads it into
+   * createConversation → POST projectId). On working-directory-capable surfaces
+   * (desktop) the same picker also offers a local folder; a chat is scoped to a
+   * project OR a folder, never both. Absent prop = no picker rendered.
+   */
+  projectPicker?: ComposerProjectPicker;
+}
+
+export interface ComposerProjectPicker {
+  /** Real projects from the host's project store (id + display name). */
+  projects: Array<{ id: string; name: string }>;
+  activeProjectId: string | null;
+  onSelectProject: (projectId: string | null) => void;
+  onCreateProject: () => void;
 }
 
 type StyleMode = 'normal' | 'concise' | 'formal' | 'explanatory';
@@ -178,7 +197,7 @@ const IMAGE_API_TO_PROVIDER: Record<string, ImageModelOption['provider']> = {
 
 // Image-generation models for the in-composer picker, derived entirely from the
 // canonical models.json catalog (single source of truth) — never hardcoded.
-// Adding a new image model is a models.curation.json edit (set modelType:'image'
+// Adding a new image model is a model-registry curation edit (set modelType:'image'
 // + imageApi); it then shows up here and routes correctly with ZERO code change.
 export const IMAGE_MODELS: ImageModelOption[] = getModels({ modelTypes: ['image'] })
   .map((m) => {
@@ -188,7 +207,7 @@ export const IMAGE_MODELS: ImageModelOption[] = getModels({ modelTypes: ['image'
   .filter((m): m is ImageModelOption => m !== null);
 
 // Default = the first image model in catalog order (the founder controls the
-// default purely by ordering models.curation.json — no id referenced in code).
+// default purely by ordering the curation file — no id referenced in code).
 const IMAGE_MODEL_DEFAULT = IMAGE_MODELS[0]?.id ?? '';
 
 /** Toggle row used in the + menu for connected send options. */
@@ -232,7 +251,6 @@ const ChatComposerNewComponent = ({
   isGenerating = false,
   placeholder = 'Ask anything. Type / for commands',
   disabled = false,
-  initialAgentMode = 'solo',
   promptCompletionEnabled = true,
   prefillText,
   onPrefillConsumed,
@@ -246,6 +264,7 @@ const ChatComposerNewComponent = ({
   onUpgradeRequest,
   freeTrial,
   onGenerateImage,
+  projectPicker,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
@@ -274,15 +293,34 @@ const ChatComposerNewComponent = ({
   const [activeTags, setActiveTags] = useState<ModeTag[]>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
-  // agentMode and selectedFolderId kept with safe defaults; state removed from UI
-  // but still forwarded via onSend meta to preserve the API contract.
-  const agentMode: ChatMode = initialAgentMode;
-  const selectedFolderId: string | null = null;
   // Cowork folder — local-only; handle is never forwarded to any API route.
   const folderName = useCoworkFolderStore((s) => s.folderName);
   const pickFolder = useCoworkFolderStore((s) => s.pickFolder);
   const clearFolder = useCoworkFolderStore((s) => s.clearFolder);
   const canPickFolder = supportsDirectoryPicker();
+  const router = useRouter();
+
+  // Work-mode segmented toggle (Chat | AGI Work) — claude.ai Chat/Cowork
+  // parity. 'agiwork' reveals the "Project or folder" picker row BELOW the
+  // composer and stamps workMode + projectId into the send meta; both are
+  // backed (conversation project_id persistence + server-side project-context
+  // injection), so the toggle is a real product mode, not a decorative tab.
+  // Rendered only when the host passes projectPicker (real project data).
+  const [workMode, setWorkMode] = useState<ComposerWorkMode>('chat');
+
+  // "Project or folder" picker state (rendered only when the host passes
+  // projectPicker — see the prop doc). The project selection lives in the
+  // host's store; only the open/search UI state is local.
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [projectQuery, setProjectQuery] = useState('');
+
+  // Entering with a preselected project (sidebar "New chat in project" /
+  // project-page handoff → ?projectId= → host store) lands the composer in
+  // AGI Work mode so the scoping is visible, never silent.
+  const pickerActiveProjectId = projectPicker?.activeProjectId ?? null;
+  useEffect(() => {
+    if (pickerActiveProjectId) setWorkMode('agiwork');
+  }, [pickerActiveProjectId]);
 
   // Platform capabilities (PLATFORM axis — does this surface expose the action at
   // all). Sourced from the shared capability matrix via the CapabilityProvider;
@@ -296,21 +334,6 @@ const ChatComposerNewComponent = ({
   const [codeExecutionEnabled, setCodeExecutionEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
-
-  // claude.ai-parity work-mode toggle (Chat | AGI Work). Segmented pill sits
-  // immediately right of the "+" in the composer bottom row. When 'agiwork', a
-  // Project selector row renders BELOW the composer (web = projects only; the
-  // local-folder variant is desktop-only). Kept in local state — the mode is a
-  // composer affordance and does not change the send contract today.
-  const [workMode, setWorkMode] = useState<'chat' | 'agiwork'>('chat');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [showProjectMenu, setShowProjectMenu] = useState(false);
-  const [projectQuery, setProjectQuery] = useState('');
-  const router = useRouter();
-  // Real projects from the shared store (hydrated from /api/projects by the page).
-  const projects = useProjectStore((s) => s.projects);
-  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
-  const projectMenuRef = useRef<HTMLDivElement>(null);
 
   // Image generation mode state
   const [imageMode, setImageMode] = useState(false);
@@ -344,15 +367,37 @@ const ChatComposerNewComponent = ({
   const providerCanWebSearch = providerSupportsWebSearch(selectedModelMeta?.provider);
   const modelSupportsSearch = (selectedModelCaps?.search ?? false) && providerCanWebSearch;
   // Deep Research is its own capability field in models.json, distinct from
-  // plain web search - values diverge in both directions (e.g. claude-haiku-4.5
-  // has search:true/research:false, gpt-5.5 has search:false/research:true).
+  // plain web search. Current Claude Haiku 4.5, for example, has
+  // search:true/research:false, so the two controls cannot share one flag.
   // Gating on modelSupportsSearch alone both wrongly exposes Research for
   // search-only models and wrongly blocks it for research-only models.
   // Deep Research forces web_search on server-side (applyResearchMode), so it needs
   // the same provider search path — gate it the same way to avoid a cosmetic toggle.
   const modelSupportsResearch = (selectedModelCaps?.research ?? false) && providerCanWebSearch;
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
-  const modelSupportsCodeExecution = selectedModelCaps?.codeExecution ?? false;
+  // Same both-signals rule as web search above: the catalog capability is
+  // necessary but not sufficient. Native-tier providers (anthropic/google/
+  // openai) run code on their own provider-hosted interpreter, so the catalog
+  // flag alone is enough for them. Everyone else executes via E2B, which the
+  // server only offers when the deployment's cut-over flag is on
+  // (AGI_E2B_EXECUTION=1, surfaced via /api/me feature_flags.code_execution) —
+  // gate those on BOTH signals so the "Run code" toggle is never a cosmetic
+  // dead control. The server's real gate is the inline check in
+  // request-processor.ts (~line 1239, `resolvedModelCaps?.codeExecution ?? true`);
+  // that check is deliberately MORE permissive than this one for models absent
+  // from the catalog (defaults to allowed, so a missing catalog entry never
+  // silently drops the tool), so this is not a byte-for-byte mirror — this
+  // client-side gate stays conservative (defaults to unavailable) so the
+  // toggle is never rendered as a control the model may not actually honor.
+  // Mirrored exactly by packages/ui/unified-chat/src/lib/codeExecutionAvailability.ts
+  // (desktop/mobile), which shares this file's 3-signal formula.
+  const deploymentCodeExecution = useBillingStore((s) => s.featureFlags?.code_execution ?? false);
+  const providerHasNativeCodeExecution = ['anthropic', 'google', 'openai'].includes(
+    (selectedModelMeta?.provider ?? '').toLowerCase(),
+  );
+  const modelSupportsCodeExecution =
+    (selectedModelCaps?.codeExecution ?? false) &&
+    (providerHasNativeCodeExecution || deploymentCodeExecution);
 
   // If the user switches to a model that can't search, clear the web-search
   // toggle so it never stays "on" for an unsupported model.
@@ -399,6 +444,7 @@ const ChatComposerNewComponent = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
+  const projectPickerRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -560,21 +606,54 @@ const ChatComposerNewComponent = ({
     [addFiles],
   );
 
+  const handleFileDrop = useCallback(
+    (files: File[]) => {
+      // Validate the file kind before model capability. A rejected executable,
+      // PDF, or other unsupported file must never be described as an image the
+      // selected model cannot read.
+      const hasImage = files.some((file) => file.type.startsWith('image/'));
+      if (!hasImage) {
+        addImageAttachments(files);
+        return;
+      }
+
+      // Check the free-trial gate before accepting image bytes so dropped files
+      // are never briefly added and then stripped by the cleanup effect below.
+      if (isFreeTrial) {
+        setLocalNotice(
+          'Attachments are not available on the free trial. Upgrade to attach photos & files.',
+        );
+        return;
+      }
+      if (!modelSupportsVision) {
+        setLocalNotice(
+          "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
+        );
+        return;
+      }
+      addImageAttachments(files);
+    },
+    [addImageAttachments, modelSupportsVision, isFreeTrial],
+  );
+
   // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
   // When the parent passes files dropped onto the message area, feed them into the
   // attachment hook and notify the parent so it can clear the pending state.
-  const [prevDroppedFiles, setPrevDroppedFiles] = useState(droppedFiles);
-  if (droppedFiles && droppedFiles.length > 0 && droppedFiles !== prevDroppedFiles) {
-    setPrevDroppedFiles(droppedFiles);
-    if (!modelSupportsVision) {
-      setLocalNotice(
-        "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
-      );
-    } else {
-      addImageAttachments(droppedFiles);
+  // This is an effect, not a render-time state update: render-phase updates can
+  // loop under concurrent React and produced act warnings in every unit test.
+  const lastDroppedFilesRef = useRef<File[] | null>(null);
+  useEffect(() => {
+    if (
+      !droppedFiles ||
+      droppedFiles.length === 0 ||
+      droppedFiles === lastDroppedFilesRef.current
+    ) {
+      return;
     }
+    lastDroppedFilesRef.current = droppedFiles;
+    handleFileDrop(droppedFiles);
     onDroppedFilesConsumed?.();
-  }
+  }, [droppedFiles, handleFileDrop, onDroppedFilesConsumed]);
 
   // Load real skills data on mount
   useEffect(() => {
@@ -616,8 +695,8 @@ const ChatComposerNewComponent = ({
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
         setShowMentions(false);
       }
-      if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
-        setShowProjectMenu(false);
+      if (projectPickerRef.current && !projectPickerRef.current.contains(e.target as Node)) {
+        setShowProjectPicker(false);
       }
     }
     // The composer textarea's onKeyDown only fires while the textarea has focus; once the
@@ -628,7 +707,7 @@ const ChatComposerNewComponent = ({
       setShowOverflowMenu(false);
       setShowStyleSubmenu(false);
       setShowMentions(false);
-      setShowProjectMenu(false);
+      setShowProjectPicker(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleEscapeKey);
@@ -658,6 +737,69 @@ const ChatComposerNewComponent = ({
     setShowOverflowMenu(false);
     setShowStyleSubmenu(false);
   }, []);
+
+  // ---------------------------------------------------------------------------
+  // "Project or folder" picker — derived state and handlers
+  // ---------------------------------------------------------------------------
+  const activePickerProject = projectPicker
+    ? (projectPicker.projects.find((p) => p.id === projectPicker.activeProjectId) ?? null)
+    : null;
+  // The folder half of the chip label only exists on working-directory surfaces;
+  // on web the cowork folder store is never populated through this control.
+  const pickerFolderName = canUseWorkingDirectory ? folderName : null;
+  const pickerHasSelection = Boolean(activePickerProject || pickerFolderName);
+  const pickerLabel = activePickerProject?.name ?? pickerFolderName ?? 'Project or folder';
+  const filteredPickerProjects = projectPicker
+    ? projectPicker.projects.filter((p) =>
+        p.name.toLowerCase().includes(projectQuery.trim().toLowerCase()),
+      )
+    : [];
+
+  const closeProjectPicker = useCallback(() => {
+    setShowProjectPicker(false);
+    setProjectQuery('');
+  }, []);
+
+  const handlePickProject = useCallback(
+    (projectId: string) => {
+      projectPicker?.onSelectProject(projectId);
+      // A chat is scoped to a project OR a local folder, never both.
+      clearFolder();
+      closeProjectPicker();
+    },
+    [projectPicker, clearFolder, closeProjectPicker],
+  );
+
+  const handleClearPickerSelection = useCallback(() => {
+    projectPicker?.onSelectProject(null);
+    clearFolder();
+  }, [projectPicker, clearFolder]);
+
+  const handlePickFolderFromPicker = useCallback(() => {
+    closeProjectPicker();
+    void pickFolder().then(() => {
+      // Only displace the project selection when a folder was actually chosen
+      // (pickFolder resolves without setting state if the user cancels).
+      if (useCoworkFolderStore.getState().folderName) {
+        projectPicker?.onSelectProject(null);
+      }
+    });
+  }, [closeProjectPicker, pickFolder, projectPicker]);
+
+  // Switching back to Chat clears the scope selection: what the chip shows is
+  // exactly what the next send carries — no hidden project sticking to a
+  // "Chat"-labeled composer.
+  const handleWorkModeChange = useCallback(
+    (mode: ComposerWorkMode) => {
+      setWorkMode(mode);
+      if (mode === 'chat') {
+        projectPicker?.onSelectProject(null);
+        clearFolder();
+        closeProjectPicker();
+      }
+    },
+    [projectPicker, clearFolder, closeProjectPicker],
+  );
 
   // Stable refs so handleInputChange never captures suggestion/clearSuggestion
   // directly in its dep array. Previously, including them caused the callback
@@ -821,8 +963,8 @@ const ChatComposerNewComponent = ({
       attachments.length > 0 ? attachments : undefined,
       selectedSkill?.id,
       {
-        agentMode,
-        folderId: selectedFolderId,
+        workMode,
+        projectId: pickerActiveProjectId,
         webSearchEnabled,
         thinkingEnabled,
         codeExecutionEnabled,
@@ -849,8 +991,8 @@ const ChatComposerNewComponent = ({
     imageAspectRatio,
     imageModelId,
     onGenerateImage,
-    agentMode,
-    selectedFolderId,
+    workMode,
+    pickerActiveProjectId,
     // web search / research / style toggles MUST be in the dep array: they are
     // read directly in the body, and omitting them (previous eslint-disable)
     // made handleSubmit close over STALE values — toggling "Web search" then
@@ -923,28 +1065,6 @@ const ChatComposerNewComponent = ({
    */
   const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
 
-  const handleFileDrop = useCallback(
-    (files: File[]) => {
-      // Check the free-trial gate first so dropped files are never briefly
-      // added and then silently stripped by the isFreeTrial cleanup effect
-      // above (flash-then-vanish) - show a clear message instead.
-      if (isFreeTrial) {
-        setLocalNotice(
-          'Attachments are not available on the free trial. Upgrade to attach photos & files.',
-        );
-        return;
-      }
-      if (!modelSupportsVision) {
-        setLocalNotice(
-          "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
-        );
-        return;
-      }
-      addImageAttachments(files);
-    },
-    [addImageAttachments, modelSupportsVision, isFreeTrial],
-  );
-
   // + button indicator: amber tint when any feature is active
   const hasOverflowActive =
     selectedSkill !== null ||
@@ -1000,8 +1120,11 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {/* Working Folder Chip — desktop-only capability; absent on web/mobile */}
-      {canUseWorkingDirectory && folderName && (
+      {/* Working Folder Chip — desktop-only capability; absent on web/mobile.
+          When the unified "Project or folder" picker is present its chip shows
+          the folder selection instead, so this standalone chip only renders on
+          surfaces without the picker. */}
+      {!projectPicker && canUseWorkingDirectory && folderName && (
         <div className="mb-2 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
             <FolderOpen className="h-3 w-3 shrink-0" />
@@ -1170,11 +1293,12 @@ const ChatComposerNewComponent = ({
                 <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
                   {
                     <>
-                      {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY below sm,
-                        where the inline segmented toggle is hidden to free composer-row
-                        width for the model selector. Keeps work-mode fully switchable on
-                        the narrow (mobile) composer instead of dropping the control. */}
-                      {!imageMode && (
+                      {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY
+                        below sm, where the inline segmented toggle is hidden to
+                        free composer-row width for the model selector. Keeps
+                        work-mode fully switchable on the narrow (mobile)
+                        composer instead of dropping the control. */}
+                      {projectPicker && !imageMode && !isFreeTrial && (
                         <div className="sm:hidden">
                           <div className="flex items-center gap-3 rounded-lg px-3 py-2">
                             <span className="flex-1 text-left text-sm">Mode</span>
@@ -1183,7 +1307,7 @@ const ChatComposerNewComponent = ({
                                 <button
                                   key={mode}
                                   type="button"
-                                  onClick={() => setWorkMode(mode)}
+                                  onClick={() => handleWorkModeChange(mode)}
                                   disabled={isLoading || composerDisabled}
                                   aria-pressed={workMode === mode}
                                   className={cn(
@@ -1266,8 +1390,12 @@ const ChatComposerNewComponent = ({
                         File System Access). Render-gated: ABSENT on web/mobile.
                         The browser-API `canPickFolder` check is NOT the platform
                         gate; it only disables when the desktop browser lacks the
-                        API. */}
-                      {canUseWorkingDirectory && (
+                        API. When the unified "Project or folder" picker is
+                        present, folder selection lives there ("Choose a
+                        different folder") — this legacy row only renders on
+                        surfaces without the picker so the control never
+                        appears twice. */}
+                      {!projectPicker && canUseWorkingDirectory && (
                         <button
                           type="button"
                           disabled={!canPickFolder}
@@ -1549,25 +1677,20 @@ const ChatComposerNewComponent = ({
               )}
             </div>
 
-            {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai parity.
-              Sits immediately right of the "+" button. All the old always-present
-              tool "pills" (Search / Research / Run code / Think / Incognito) moved
-              INTO the + menu, so the composer bottom row stays a SINGLE
-              non-wrapping line at every width (fixes the Send-button-drops-to-a-
-              second-line overflow bug).
-              NARROW WIDTHS: this ~135px toggle is `hidden ... sm:flex`, so below sm
-              (mobile, 375/320px) it is relocated into the + menu (see the "Mode" row
-              above). At those widths the toggle + style + model + mic + send cannot
-              coexist on one row, so — like claude.ai's mobile composer — the toggle and
-              style drop out of the row, leaving the model selector visible, tappable,
-              and clear of Send. */}
-            {!imageMode && (
+            {/* Work-mode segmented toggle (Chat | AGI Work) — claude.ai
+              Chat/Cowork parity, sitting immediately right of "+" (reference:
+              docs/design/ui-ux-reference-2026-07). Backed: 'agiwork' reveals
+              the below-composer "Project or folder" picker and the selection
+              threads through send meta → createConversation → server project
+              context. Hidden below sm (relocated into the + menu "Mode" row)
+              so the nowrap control row never squeezes out Send. */}
+            {projectPicker && !imageMode && !isFreeTrial && (
               <div className="hidden shrink-0 items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium sm:flex">
                 {(['chat', 'agiwork'] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setWorkMode(mode)}
+                    onClick={() => handleWorkModeChange(mode)}
                     disabled={isLoading || composerDisabled}
                     aria-pressed={workMode === mode}
                     className={cn(
@@ -1755,104 +1878,136 @@ const ChatComposerNewComponent = ({
         />
       </div>
 
-      {/* AGI Work project selector row — claude.ai Cowork "Project ⌄" parity.
-          Renders BELOW the composer when the work-mode toggle is 'agiwork'. On
-          web this lists the user's real Projects (from the shared project store,
-          hydrated from /api/projects). The local-folder variant is desktop-only.
-          NOTE: attaching the chosen project to the created conversation is a
-          server follow-up (createConversation does not yet accept projectId — see
-          WebChatPage). Today this selects/º navigates to the project context. */}
-      {workMode === 'agiwork' && !isFreeTrial && (
-        <div className="relative mt-2 flex items-center gap-2" ref={projectMenuRef}>
-          <span className="text-xs text-muted-foreground">Project</span>
-          <button
-            type="button"
-            onClick={() => setShowProjectMenu((v) => !v)}
-            className="flex h-8 min-w-0 items-center gap-1.5 rounded-lg border border-[var(--chat-glass-border)] bg-muted/40 px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/60"
-            aria-haspopup="listbox"
-            aria-expanded={showProjectMenu}
+      {/* AGI Work scope row — "Project or folder ▾" chip DIRECTLY BELOW the
+          composer (claude.ai Cowork reference layout: chips sit under the
+          prompt box, not inside the + menu). Rendered only in AGI Work mode
+          with host-provided project data; the popover opens DOWNWARD since
+          there is page space below the composer here. Web offers projects;
+          the local-folder action appears only on working-directory surfaces. */}
+      {projectPicker && workMode === 'agiwork' && !imageMode && !isFreeTrial && (
+        <div className="relative mt-2 flex items-center gap-2" ref={projectPickerRef}>
+          <div
+            className={cn(
+              'flex h-8 min-w-0 items-center rounded-full border transition-all',
+              pickerHasSelection
+                ? 'border-[var(--chat-accent-primary)]/40 bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary)]'
+                : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+            )}
           >
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span className="max-w-[200px] truncate">
-              {selectedProject ? selectedProject.name : 'Choose a project'}
-            </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-          </button>
-          {selectedProject && (
             <button
               type="button"
-              onClick={() => setSelectedProjectId(null)}
-              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
-              aria-label="Clear selected project"
+              onClick={() => {
+                setShowProjectPicker((prev) => !prev);
+                setProjectQuery('');
+              }}
+              disabled={isLoading || composerDisabled}
+              className={cn(
+                'flex h-full min-w-0 items-center gap-1.5 pl-2.5 text-xs font-medium',
+                pickerHasSelection ? 'pr-1' : 'pr-2.5',
+                (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label="Project or folder"
+              aria-expanded={showProjectPicker}
+              title={pickerHasSelection ? pickerLabel : undefined}
             >
-              <X className="h-3.5 w-3.5" />
+              {pickerFolderName ? (
+                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <Folder className="h-3.5 w-3.5 shrink-0" />
+              )}
+              <span className="max-w-[220px] truncate">{pickerLabel}</span>
+              <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
             </button>
-          )}
+            {pickerHasSelection && (
+              <button
+                type="button"
+                onClick={handleClearPickerSelection}
+                className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
+                aria-label="Clear project or folder selection"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
 
-          {showProjectMenu && (
-            <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+          {showProjectPicker && (
+            <div className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
               <input
                 type="text"
                 value={projectQuery}
                 onChange={(e) => setProjectQuery(e.target.value)}
-                placeholder="Search projects"
-                className="mb-1.5 w-full rounded-lg border border-border/60 bg-transparent px-2.5 py-1.5 text-xs outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
+                placeholder="Search projects..."
                 aria-label="Search projects"
+                autoFocus
+                className="mb-1.5 w-full rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-[var(--chat-accent-primary)]/40"
               />
               <div className="max-h-56 overflow-y-auto">
-                {projects
-                  .filter((p) => p.name.toLowerCase().includes(projectQuery.toLowerCase()))
-                  .slice(0, 20)
-                  .map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedProjectId(p.id);
-                        setShowProjectMenu(false);
-                        setProjectQuery('');
-                      }}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors',
-                        selectedProjectId === p.id
-                          ? 'bg-primary/10 text-primary'
-                          : 'hover:bg-muted/60',
-                      )}
-                    >
-                      <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="flex-1 truncate">{p.name}</span>
-                      {selectedProjectId === p.id && (
-                        <Check className="h-3 w-3 shrink-0 text-primary" />
-                      )}
-                    </button>
-                  ))}
-                {projects.filter((p) => p.name.toLowerCase().includes(projectQuery.toLowerCase()))
-                  .length === 0 && (
-                  <p className="px-2.5 py-2 text-xs text-muted-foreground">No projects found.</p>
+                {filteredPickerProjects.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    {projectPicker.projects.length === 0 ? 'No projects yet' : 'No projects found'}
+                  </div>
                 )}
+                {filteredPickerProjects.map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    onClick={() => handlePickProject(project.id)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
+                    {projectPicker.activeProjectId === project.id && (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-foreground" />
+                    )}
+                  </button>
+                ))}
               </div>
+
               <div className="my-1 border-t border-border/30" />
+
+              {/* Local folder — working-directory surfaces (desktop) only.
+                Render-gated by the capability matrix so web never shows a
+                folder option; canPickFolder only disables when the desktop
+                browser shell lacks the File System Access API. */}
+              {canUseWorkingDirectory && (
+                <button
+                  type="button"
+                  disabled={!canPickFolder}
+                  onClick={handlePickFolderFromPicker}
+                  title={
+                    canPickFolder ? undefined : 'Folder access is not supported in this browser'
+                  }
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                    !canPickFolder && 'cursor-not-allowed opacity-50',
+                  )}
+                >
+                  <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-left">Choose a different folder</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
-                  setShowProjectMenu(false);
-                  router.push('/projects?new=1');
+                  closeProjectPicker();
+                  projectPicker.onCreateProject();
                 }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
               >
-                <Plus className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1">Create new project</span>
+                <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="flex-1 text-left">Create new project</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => {
-                  setShowProjectMenu(false);
+                  closeProjectPicker();
                   router.push('/projects');
                 }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
               >
-                <Folder className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1">View all projects</span>
+                <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="flex-1 text-left">View all projects</span>
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             </div>
@@ -1878,8 +2033,12 @@ const ChatComposerNewComponent = ({
  *   settings modal at their pane (no inline lists); Web search toggle;
  *   Use style flyout.
  *
- * Removed from + menu: Focus Mode, Agent Mode, Project Context, Tools group,
- * Browse Directory. State kept with safe defaults so onSend meta is unchanged.
+ * Removed from + menu: Focus Mode, Agent Mode, Tools group, Browse Directory.
+ * Work mode returned as the BACKED (Chat | AGI Work) segmented toggle plus the
+ * below-composer "Project or folder" picker (projectPicker prop): the host
+ * supplies real projects, the selection threads through send meta into
+ * createConversation (conversation project_id), and the server injects the
+ * project's instructions/knowledge manifest — so neither control is cosmetic.
  */
 export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
   return (
@@ -1888,7 +2047,6 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.isGenerating === next.isGenerating &&
     prev.placeholder === next.placeholder &&
     prev.disabled === next.disabled &&
-    prev.initialAgentMode === next.initialAgentMode &&
     prev.promptCompletionEnabled === next.promptCompletionEnabled &&
     prev.prefillText === next.prefillText &&
     prev.onPrefillConsumed === next.onPrefillConsumed &&
@@ -1902,7 +2060,11 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.onUpgradeRequest === next.onUpgradeRequest &&
     prev.freeTrial?.enabled === next.freeTrial?.enabled &&
     prev.freeTrial?.promptsUsed === next.freeTrial?.promptsUsed &&
-    prev.freeTrial?.promptLimit === next.freeTrial?.promptLimit
+    prev.freeTrial?.promptLimit === next.freeTrial?.promptLimit &&
+    prev.projectPicker?.projects === next.projectPicker?.projects &&
+    prev.projectPicker?.activeProjectId === next.projectPicker?.activeProjectId &&
+    prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&
+    prev.projectPicker?.onCreateProject === next.projectPicker?.onCreateProject
   );
 });
 

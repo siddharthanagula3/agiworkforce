@@ -1,8 +1,8 @@
 /**
  * Chrome extension provider stream client.
  *
- * Thin wrapper around the shared `@agiworkforce/llm-runtime` SSE client
- * (`packages/llm-runtime/src/client/streamFromProvider.ts`). Keeps this
+ * Thin wrapper around the shared `@agiworkforce/provider-runtime` SSE client
+ * (`packages/ai/provider-runtime/src/client/streamFromProvider.ts`). Keeps this
  * surface's public API (types + `streamFromProvider` signature) stable for
  * its callers, and turns on structured paywall (429) detection, which this
  * surface has always had.
@@ -17,7 +17,7 @@
  * `/api/v1/providers/*` Next.js proxy forward to the api-gateway.
  */
 
-import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/llm-runtime';
+import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/provider-runtime';
 
 export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
 

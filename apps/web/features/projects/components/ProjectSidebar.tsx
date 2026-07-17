@@ -6,6 +6,8 @@ import { cn } from '@shared/lib/utils';
 import { useProjectStore } from '../stores/project-store';
 import { ProjectSettingsDialog } from './ProjectSettingsDialog';
 import type { Project } from '@features/projects/stores/project-store';
+import { webManagedCloudProjects } from '../services/managed-cloud-projects';
+import { toast } from 'sonner';
 
 // ---------------------------------------------------------------------------
 // Project Card
@@ -84,7 +86,7 @@ export function ProjectSidebar() {
   const {
     projects,
     activeProjectId,
-    createProject,
+    addProject,
     updateProject,
     removeProject: deleteProject,
     setActiveProject,
@@ -92,23 +94,28 @@ export function ProjectSidebar() {
 
   const [settingsProject, setSettingsProject] = useState<Project | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [newName, setNewName] = useState('');
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
+    if (isSubmitting) return;
     if (!newName.trim()) {
       setIsCreating(false);
       setNewName('');
       return;
     }
-    const id = createProject({
-      name: newName.trim(),
-      description: '',
-      instructions: '',
-      color: '#6366f1',
-    });
-    setActiveProject(id);
-    setNewName('');
-    setIsCreating(false);
+    setIsSubmitting(true);
+    try {
+      const project = await webManagedCloudProjects.createProject({ name: newName.trim() });
+      addProject(project);
+      setActiveProject(project.id);
+      setNewName('');
+      setIsCreating(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create project');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSelect = (id: string) => {
@@ -155,15 +162,16 @@ export function ProjectSidebar() {
               <input
                 autoFocus
                 value={newName}
+                disabled={isSubmitting}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreate();
+                  if (e.key === 'Enter') void handleCreate();
                   if (e.key === 'Escape') {
                     setIsCreating(false);
                     setNewName('');
                   }
                 }}
-                onBlur={handleCreate}
+                onBlur={() => void handleCreate()}
                 placeholder="Project name..."
                 className="w-full rounded-md border border-border/50 bg-muted/30 px-2.5 py-1.5 text-[13px] text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
               />

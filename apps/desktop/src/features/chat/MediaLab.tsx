@@ -24,49 +24,13 @@ import { useBillingStore } from '../../stores/auth';
 import { toast } from 'sonner';
 import { MediaGenerationProgress } from '@/features/media/MediaGenerationProgress';
 import type { MediaGenProvider } from '@/features/media/MediaGenerationProgress';
-import { getModelMetadataById } from '@agiworkforce/types';
-
-const GPT_IMAGE_MODEL_ID = getModelMetadataById('gpt-image-2')?.apiModelId ?? 'gpt-image-2';
-const IMAGEN_MODEL_ID = getModelMetadataById('imagen-4')?.apiModelId ?? 'imagen-4.0-generate-001';
-const IMAGEN_FAST_MODEL_ID =
-  getModelMetadataById('imagen-4-fast')?.apiModelId ?? 'imagen-4.0-fast-generate-001';
-const VEO_MODEL_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
-const VEO_DISPLAY_NAME = 'Veo 3.1';
-
-const imageProviders: Array<{
-  id: ImageProviderId;
-  label: string;
-  description: string;
-  model?: string;
-  badge?: string;
-}> = [
-  {
-    id: 'google_imagen',
-    label: 'Imagen 4 (Google)',
-    description: 'Photoreal and design-quality Google image generation',
-    model: IMAGEN_MODEL_ID,
-    badge: 'Recommended',
-  },
-  {
-    id: 'google_imagen_lite',
-    label: 'Imagen 4 Fast (Google)',
-    description: 'Fast Google image generation with current Imagen 4 routing',
-    model: IMAGEN_FAST_MODEL_ID,
-    badge: 'Fast',
-  },
-  {
-    id: 'dalle',
-    label: 'GPT Image 2 (OpenAI)',
-    description: 'Current OpenAI image generation and editing model',
-    model: GPT_IMAGE_MODEL_ID,
-  },
-  {
-    id: 'stable_diffusion',
-    label: 'Stable Diffusion XL',
-    description: 'Local/cheap SDXL with style presets',
-    model: 'stability-sdxl',
-  },
-];
+import {
+  DEFAULT_IMAGE_PROVIDER_ID,
+  IMAGE_PROVIDER_OPTIONS as imageProviders,
+  VIDEO_DISPLAY_NAME,
+  VIDEO_MODEL_ID,
+  VIDEO_PROVIDER_ID,
+} from '@/features/media/model-options';
 
 const imageSizes: { id: ImageSizeId; label: string; ratio: string }[] = [
   { id: 'large', label: 'Square', ratio: '1:1' },
@@ -92,7 +56,8 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [tab, setTab] = useState<'image' | 'video'>('image');
   const [imagePrompt, setImagePrompt] = useState('');
   const [imageNegative, setImageNegative] = useState('');
-  const [imageProvider, setImageProvider] = useState<ImageProviderId>('google_imagen');
+  const [imageProvider, setImageProvider] =
+    useState<ImageProviderId>(DEFAULT_IMAGE_PROVIDER_ID);
   const [imageSize, setImageSize] = useState<ImageSizeId>('large');
   const [imageQuality, setImageQuality] = useState<ImageQualityId>('premium');
   const [imageStyle, setImageStyle] = useState('photorealistic');
@@ -181,8 +146,8 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       durationSecs: videoDuration,
       resolution: videoResolution,
       style: videoStyle,
-      model: VEO_MODEL_ID,
-      provider: 'veo3',
+      model: VIDEO_MODEL_ID,
+      provider: VIDEO_PROVIDER_ID,
       plan,
     });
   };
@@ -196,7 +161,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             Media Lab
           </div>
           <p className="text-sm text-slate-400">
-            GPT Image 2, Imagen 4, SDXL, and {VEO_DISPLAY_NAME} with cost + quality hints.
+            Catalog-backed image and video generation with cost + quality hints.
           </p>
         </div>
         <Button
@@ -230,7 +195,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           onClick={() => setTab('video')}
         >
           <Clapperboard className="h-4 w-4" />
-          Video ({VEO_DISPLAY_NAME})
+          Video ({VIDEO_DISPLAY_NAME})
           {!videoAllowed && (
             <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] text-amber-300">
               Pro+
@@ -355,11 +320,12 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   (imageProvider === 'google_imagen' || imageProvider === 'google_imagen_lite'
                     ? 'google'
                     : imageProvider === 'dalle'
-                      ? 'gpt-image-2'
+                      ? 'openai'
                       : imageProvider === 'stable_diffusion'
                         ? 'stability'
                         : undefined) as MediaGenProvider | undefined
                 }
+                model={currentProviderModel}
                 prompt={imagePrompt}
               />
             )}
@@ -449,7 +415,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           >
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <Clapperboard className="h-4 w-4 text-purple-300" />
-              {VEO_DISPLAY_NAME} prompt
+              {VIDEO_DISPLAY_NAME} prompt
             </div>
             <textarea
               className="min-h-[120px] w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-hidden focus:border-purple-400"
@@ -530,7 +496,12 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             )}
 
             {loadingVideo && (
-              <MediaGenerationProgress type="video" provider="veo3" prompt={videoPrompt} />
+              <MediaGenerationProgress
+                type="video"
+                provider="google"
+                model={VIDEO_MODEL_ID}
+                prompt={videoPrompt}
+              />
             )}
             <Button
               type="submit"
@@ -540,7 +511,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               {loadingVideo ? 'Rendering…' : 'Render video'}
             </Button>
             <p className="text-xs text-slate-400">
-              {VEO_DISPLAY_NAME} uses the best available LLM + vision chain; auto-routes to Google
+              {VIDEO_DISPLAY_NAME} uses the best available LLM + vision chain; auto-routes to Google
               for video and Perplexity/Claude for planning if needed.
             </p>
           </form>
@@ -555,7 +526,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {latestVideos.length === 0 && (
                 <div className="col-span-full rounded-xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-slate-400">
-                  Kick off a {VEO_DISPLAY_NAME} render to see previews and download links.
+                  Kick off a {VIDEO_DISPLAY_NAME} render to see previews and download links.
                 </div>
               )}
               {latestVideos.map((job) => (
@@ -565,7 +536,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 >
                   <div className="flex items-center justify-between text-xs text-slate-300">
                     <span className="rounded-full bg-white/10 px-2 py-0.5">
-                      {job.model ?? VEO_DISPLAY_NAME}
+                      {job.model ?? VIDEO_DISPLAY_NAME}
                     </span>
                     <div className="flex items-center gap-2">
                       {job.latencyMs && (

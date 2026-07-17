@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
 import { listen, type UnlistenFn } from '../../lib/tauri-mock';
-import { codeEditing } from '@agiworkforce/api';
+import { codeEditing } from '@agiworkforce/desktop-command-client';
 import { cn } from '../../lib/utils';
 
 interface CodingCheckpoint {

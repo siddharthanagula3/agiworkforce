@@ -5,6 +5,7 @@ import {
   listCanonicalModels,
   normalizeModelId,
 } from '@agiworkforce/types';
+import { isPromoExpired } from '@agiworkforce/routing';
 import { logger } from '@/lib/logger';
 
 /**
@@ -12,11 +13,21 @@ import { logger } from '@/lib/logger';
  * Calculates cost in cents based on provider, model, and token usage.
  *
  * Single source of truth:
- * - model pricing: `packages/types/src/models.json`
- * - provider defaults: `packages/types/src/models.json`
+ * - model pricing: `packages/contracts/types/src/models.json`
+ * - provider defaults: `packages/contracts/types/src/models.json`
  *
  * Runtime overrides remain supported for emergency pricing patches, but
  * canonical pricing should be changed in the shared catalog.
+ *
+ * Promotional pricing: catalog entries may carry `promo_expires_at` +
+ * `post_promo_prices` (e.g. Sonnet 5's promo ends 2026-08-31). `getPricing`
+ * switches every rate field -- input, output, AND cached_input/cached_write,
+ * not just the headline input/output rates -- to the post-promo block once
+ * `isPromoExpired` (from `@agiworkforce/routing`, the same date-boundary
+ * logic `effectiveInputPrice`/`effectiveOutputPrice` use) says the cutoff has
+ * passed. The 1h cache-write rate is never read from the catalog at all --
+ * `calculateCost` derives it as 2x whatever `inputCostPer1MTokens` resolves
+ * to, so it inherits the promo/post-promo switch automatically.
  */
 
 export interface TokenUsage {
@@ -92,7 +103,12 @@ export class LLMCostCalculator {
    * Calculate cost in cents for token usage
    * @throws Never - returns 0 on error for safety
    */
-  static calculateCost(provider: string, model: string, usage: TokenUsage): number {
+  static calculateCost(
+    provider: string,
+    model: string,
+    usage: TokenUsage,
+    now: Date = new Date(),
+  ): number {
     try {
       // Validate inputs
       if (!provider || typeof provider !== 'string') {
@@ -127,7 +143,7 @@ export class LLMCostCalculator {
       );
       const cacheCreation5mTokens = cacheCreationTokens - cacheCreation1hTokens;
 
-      const pricing = this.getPricing(provider, model);
+      const pricing = this.getPricing(provider, model, now);
 
       // Split the prompt into billable (full-rate) input vs cached portions so each
       // token bills exactly once at the correct rate. For inclusive-prompt providers
@@ -179,20 +195,30 @@ export class LLMCostCalculator {
    * Get pricing for a model
    * Always returns valid pricing (never throws)
    */
-  static getPricing(provider: string, model: string): ModelPricing {
+  static getPricing(provider: string, model: string, now: Date = new Date()): ModelPricing {
     try {
       const canonicalModelId = normalizeModelId(model);
       if (canonicalModelId && runtimePricingOverrides[canonicalModelId]) {
         return runtimePricingOverrides[canonicalModelId];
       }
 
-      const metadata = getModelMetadataById(canonicalModelId ?? model);
+      const resolvedModelId = canonicalModelId ?? model;
+      const metadata = getModelMetadataById(resolvedModelId);
       if (metadata) {
+        // Once promo_expires_at has passed, bill every rate field -- not
+        // just input/output -- from post_promo_prices. Leaving cached_input/
+        // cached_write on the pre-promo top-level fields would keep
+        // undercharging cache reads/writes after the headline rate already
+        // reverted (the bug this whole method exists to fix).
+        const postPromo =
+          metadata.post_promo_prices && isPromoExpired(resolvedModelId, now)
+            ? metadata.post_promo_prices
+            : undefined;
         return {
-          inputCostPer1MTokens: metadata.inputCost,
-          outputCostPer1MTokens: metadata.outputCost,
-          cachedInputCostPer1MTokens: metadata.cached_input,
-          cachedWriteCostPer1MTokens: metadata.cached_write,
+          inputCostPer1MTokens: postPromo?.input ?? metadata.inputCost,
+          outputCostPer1MTokens: postPromo?.output ?? metadata.outputCost,
+          cachedInputCostPer1MTokens: postPromo?.cached_input ?? metadata.cached_input,
+          cachedWriteCostPer1MTokens: postPromo?.cached_write ?? metadata.cached_write,
           // Anthropic reports input_tokens disjoint from cache_read/cache_creation.
           cacheTokensDisjointFromInput: metadata.provider === 'anthropic',
         };
@@ -230,6 +256,7 @@ export class LLMCostCalculator {
     model: string,
     estimatedPromptTokens: number,
     estimatedCompletionTokens: number = 1000,
+    now: Date = new Date(),
   ): number {
     try {
       // Validate inputs
@@ -245,11 +272,16 @@ export class LLMCostCalculator {
         estimatedCompletionTokens = 1000; // Use default
       }
 
-      return this.calculateCost(provider, model, {
-        promptTokens: estimatedPromptTokens,
-        completionTokens: estimatedCompletionTokens,
-        totalTokens: estimatedPromptTokens + estimatedCompletionTokens,
-      });
+      return this.calculateCost(
+        provider,
+        model,
+        {
+          promptTokens: estimatedPromptTokens,
+          completionTokens: estimatedCompletionTokens,
+          totalTokens: estimatedPromptTokens + estimatedCompletionTokens,
+        },
+        now,
+      );
     } catch (error) {
       logger.error({ error, provider, model }, 'LLM cost calculator: Error in estimateCost');
       return 0;
@@ -260,9 +292,9 @@ export class LLMCostCalculator {
    * Get input cost per million tokens for a model
    * Used for prompt caching calculations
    */
-  static getInputCostPerMtok(provider: string, model: string): number {
+  static getInputCostPerMtok(provider: string, model: string, now: Date = new Date()): number {
     try {
-      return this.getPricing(provider, model).inputCostPer1MTokens;
+      return this.getPricing(provider, model, now).inputCostPer1MTokens;
     } catch {
       return FALLBACK_PRICING.inputCostPer1MTokens;
     }

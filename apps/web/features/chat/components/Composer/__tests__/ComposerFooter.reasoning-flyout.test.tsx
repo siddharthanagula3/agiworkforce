@@ -4,34 +4,41 @@
  * Verifies the picker's effort flyout against the REAL component + REAL
  * models.json `reasoning` blocks (jsdom render — the compiled-component
  * verification path allowed when the signed-in dev handshake is not exercised).
- * Mirrors the Playwright verification points (a)-(e):
- *   (a) OpenAI reasoning model (gpt-5.5) shows none/low/medium/high/xhigh —
- *       NOT max, NOT minimal.
- *   (b) non-reasoning model (gpt-4.1-nano) shows NO effort control.
+ * Mirrors the current-roster verification points:
+ *   (a) GPT-5.6 Sol shows its exact none/low/medium/high/xhigh/max ladder.
+ *   (b) non-reasoning model (gemini-3.1-flash-lite) shows NO effort control.
  *   (c) Anthropic Opus 4.8 shows low/medium/high/xhigh/max.
  *   (d) Haiku 4.5 now supports thinking (effort control present).
- *   (e) gpt-5.6-sol appears "Coming soon", aria-disabled, tabIndex -1.
+ *   (e) Fable 5 reasoning is mandatory and cannot be switched off.
+ *   (f) GPT-5.6 Sol is live/selectable, while a synthetic future preview is disabled.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import React from 'react';
 
 // Mutable selected model, controlled per-test.
-const sel = vi.hoisted(() => ({ id: 'gpt-5.5' }));
+const sel = vi.hoisted(() => ({ id: 'gpt-5.6-sol' }));
 
 const MODELS = vi.hoisted(() => [
   {
-    id: 'gpt-5.5',
-    name: 'GPT-5.5',
+    id: 'gpt-5.6-sol',
+    name: 'GPT-5.6 Sol',
     provider: 'OpenAI',
     providerKey: 'openai',
     description: 'Frontier',
   },
   {
-    id: 'gpt-4.1-nano',
-    name: 'GPT-4.1 Nano',
-    provider: 'OpenAI',
-    providerKey: 'openai',
+    id: 'claude-fable-5',
+    name: 'Claude Fable 5',
+    provider: 'Anthropic',
+    providerKey: 'anthropic',
+    description: 'Adaptive reasoning',
+  },
+  {
+    id: 'gemini-3.1-flash-lite',
+    name: 'Gemini 3.1 Flash Lite',
+    provider: 'Google',
+    providerKey: 'google',
     description: 'Cheap',
   },
   {
@@ -56,8 +63,8 @@ const MODELS = vi.hoisted(() => [
     description: 'Fast',
   },
   {
-    id: 'gpt-5.6-sol',
-    name: 'GPT-5.6 Sol',
+    id: 'future-preview-model',
+    name: 'Future Preview Model',
     provider: 'OpenAI',
     providerKey: 'openai',
     description: 'Frontier',
@@ -91,7 +98,7 @@ vi.mock('@/constants/llm', async (importOriginal) => {
   return {
     ...actual,
     getAllowedAutoModesForTier: () => ['auto-economy', 'auto-balanced', 'auto-premium'],
-    getBestAutoModeForTier: () => 'gpt-5.5',
+    getBestAutoModeForTier: () => 'gpt-5.6-sol',
     isModelAllowedForTier: () => true,
   };
 });
@@ -126,7 +133,7 @@ vi.mock('@/stores/chatStore', () => ({
   useChatStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ activeConversationId: null, messages: [] }),
 }));
-vi.mock('@agiworkforce/services', () => ({ assessModelSwitchCache: () => ({ warn: false }) }));
+vi.mock('@agiworkforce/routing', () => ({ assessModelSwitchCache: () => ({ warn: false }) }));
 
 vi.mock('@agiworkforce/ui', () => ({
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -182,17 +189,16 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     thinking.effort = 'medium';
   });
 
-  it('(a) OpenAI gpt-5.5 shows none/low/medium/high/xhigh — NOT max, NOT minimal', () => {
-    sel.id = 'gpt-5.5';
+  it('(a) GPT-5.6 Sol shows none/low/medium/high/xhigh/max', () => {
+    sel.id = 'gpt-5.6-sol';
     render(<ComposerFooter />);
     const chips = effortChipLabels();
-    expect(chips).toEqual(['None', 'Low', 'Medium', 'High', 'xHigh']);
-    expect(chips).not.toContain('Max');
+    expect(chips).toEqual(['None', 'Low', 'Medium', 'High', 'xHigh', 'Max']);
     expect(chips).not.toContain('Minimal');
   });
 
-  it('(b) non-reasoning gpt-4.1-nano shows NO effort control', () => {
-    sel.id = 'gpt-4.1-nano';
+  it('(b) non-reasoning gemini-3.1-flash-lite shows NO effort control', () => {
+    sel.id = 'gemini-3.1-flash-lite';
     render(<ComposerFooter />);
     expect(effortChipLabels()).toEqual([]);
     expect(screen.queryByRole('group', { name: /reasoning effort/i })).not.toBeInTheDocument();
@@ -223,14 +229,33 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     expect(effortChipLabels().length).toBeGreaterThan(0);
   });
 
-  it('(e) gpt-5.6-sol appears as a "Coming soon", non-selectable, non-focusable row', () => {
-    sel.id = 'gpt-5.5';
+  it('(e) Fable 5 shows mandatory reasoning without an off switch', () => {
+    sel.id = 'claude-fable-5';
+    thinking.enabled = false;
+    render(<ComposerFooter />);
+
+    expect(screen.getByText('Always on for this model')).toBeInTheDocument();
+    expect(screen.getByText('Always on')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Toggle extended thinking')).not.toBeInTheDocument();
+  });
+
+  it('(f) GPT-5.6 Sol is live, selected, and has no stale availability badge', () => {
+    sel.id = 'gpt-5.6-sol';
+    render(<ComposerFooter />);
+
+    const row = screen.getByRole('button', { name: 'GPT-5.6 Sol' });
+    expect(row).not.toBeDisabled();
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
+  });
+
+  it('keeps a synthetic future preview non-selectable and non-focusable', () => {
+    sel.id = 'gpt-5.6-sol';
     render(<ComposerFooter />);
     // coming_soon rows live in the "More models" group — expand it.
     fireEvent.click(screen.getByRole('button', { name: /more models/i }));
-    const row = screen.getByRole('button', { name: /gpt-5\.6 sol.*not yet available/i });
-    expect(row).toHaveAttribute('aria-disabled', 'true');
-    expect(row).toHaveAttribute('tabindex', '-1');
+    const row = screen.getByRole('button', { name: /future preview model.*not yet available/i });
+    expect(row).toBeDisabled();
     expect(screen.getByText('Coming soon')).toBeInTheDocument();
   });
 });

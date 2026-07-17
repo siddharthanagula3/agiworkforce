@@ -121,74 +121,85 @@ export function CollapsibleSources({ sources }: CollapsibleSourcesProps) {
       <Animated.View style={listStyle}>
         <View style={{ paddingHorizontal: 12, paddingBottom: 8, gap: 2 }}>
           {sources.map((source, index) => (
+            // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
+            // (docs/agent-context/known-flaws.md): a function-style `style` prop
+            // silently drops flexDirection/alignItems/padding in this stack, which
+            // would stack the number badge, source info, and link icon vertically
+            // instead of laying them out as a row. `children`-as-function keeps
+            // pressed state while every real style lives on a plain View.
             <Pressable
               key={`source-${index}`}
               onPress={() => handleSourcePress(source.url)}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'flex-start',
-                gap: 10,
-                paddingVertical: 8,
-                paddingHorizontal: 8,
-                borderRadius: 8,
-                backgroundColor: pressed ? hoverBg : themeColors.transparent,
-              })}
               accessibilityLabel={`Source ${index + 1}: ${source.title ?? getDomain(source.url)}`}
               accessibilityRole="link"
               accessibilityHint="Opens in browser"
             >
-              {/* Number badge */}
-              <View
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  backgroundColor: themeColors.accentSurface,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: 1,
-                }}
-              >
-                <Text
+              {({ pressed }) => (
+                <View
                   style={{
-                    fontSize: 10,
-                    fontWeight: '700',
-                    color: themeColors.teal,
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    paddingVertical: 8,
+                    paddingHorizontal: 8,
+                    borderRadius: 8,
+                    backgroundColor: pressed ? hoverBg : themeColors.transparent,
                   }}
                 >
-                  {index + 1}
-                </Text>
-              </View>
-
-              {/* Source info */}
-              <View style={{ flex: 1, gap: 2 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Globe size={12} color={themeColors.textMuted} />
-                  <Text
+                  {/* Number badge */}
+                  <View
                     style={{
-                      fontSize: 11,
-                      color: themeColors.textMuted,
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      backgroundColor: themeColors.accentSurface,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginTop: 1,
                     }}
-                    numberOfLines={1}
                   >
-                    {getDomain(source.url)}
-                  </Text>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: '700',
+                        color: themeColors.teal,
+                      }}
+                    >
+                      {index + 1}
+                    </Text>
+                  </View>
+
+                  {/* Source info */}
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Globe size={12} color={themeColors.textMuted} />
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          color: themeColors.textMuted,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {getDomain(source.url)}
+                      </Text>
+                    </View>
+                    {source.title && (
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: themeColors.textSecondary,
+                        }}
+                        numberOfLines={2}
+                      >
+                        {source.title}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* External link indicator */}
+                  <ExternalLink size={12} color={themeColors.textMuted} style={{ marginTop: 3 }} />
                 </View>
-                {source.title && (
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: themeColors.textSecondary,
-                    }}
-                    numberOfLines={2}
-                  >
-                    {source.title}
-                  </Text>
-                )}
-              </View>
-
-              {/* External link indicator */}
-              <ExternalLink size={12} color={themeColors.textMuted} style={{ marginTop: 3 }} />
+              )}
             </Pressable>
           ))}
         </View>

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ThumbsUp, ThumbsDown, MessageSquare, X, Send } from 'lucide-react';
-import { feedback } from '@agiworkforce/api';
+import { feedback } from '@agiworkforce/desktop-command-client';
 
 interface MessageFeedbackButtonsProps {
   messageId: string;

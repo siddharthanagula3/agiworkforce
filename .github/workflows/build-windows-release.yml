@@ -4,9 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to upload to (e.g., v1.1.5). Leave blank to use the latest release.'
+        description: 'Desktop release tag to upload to (e.g., v-desktop-1.2.0). Leave blank to use the latest stable desktop release.'
         required: false
         type: string
+
+concurrency:
+  # An empty input resolves dynamically to a tag inside the job, so keying by
+  # the raw input would allow an explicit-tag run to race a latest-stable run
+  # for the same release. Windows publication is rare; serialize it globally.
+  group: release-desktop-windows
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -22,37 +29,128 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
       - name: Resolve release tag
         id: resolve-tag
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
         run: |
-          if [ -n "${{ inputs.release_tag }}" ]; then
-            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+          if [ -n "$REQUESTED_TAG" ]; then
+            TAG="$REQUESTED_TAG"
           else
             TAG=$(curl -sf \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
-              | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
-            echo "tag=${TAG}" >> $GITHUB_OUTPUT
-            echo "Resolved latest release tag: ${TAG}"
+              "https://api.github.com/repos/${REPOSITORY}/releases?per_page=100" \
+              | node -e '
+                  let raw = "";
+                  process.stdin.on("data", (chunk) => { raw += chunk; });
+                  process.stdin.on("end", () => {
+                    const releases = JSON.parse(raw);
+                    const release = releases.find((item) =>
+                      !item.draft && !item.prerelease && /^v-desktop-/.test(item.tag_name)
+                    );
+                    if (!release) process.exit(1);
+                    process.stdout.write(release.tag_name);
+                  });
+                ')
           fi
 
-      - name: Get release ID
+          if ! printf '%s' "$TAG" | grep -Eq '^v-desktop-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'; then
+            echo "ERROR: expected a v-desktop-* release tag, got: $TAG" >&2
+            exit 1
+          fi
+
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v-desktop-}" >> "$GITHUB_OUTPUT"
+          echo "Resolved desktop release tag: ${TAG}"
+
+      - name: Verify target release is published
         id: get-release
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.resolve-tag.outputs.tag }}
         run: |
-          TAG="${{ steps.resolve-tag.outputs.tag }}"
           RELEASE_DATA=$(curl -sf \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}")
-          RELEASE_ID=$(echo "$RELEASE_DATA" | grep '"id"' | head -1 | tr -d ' "id:,')
-          echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
-          echo "Release ID for ${TAG}: ${RELEASE_ID}"
+            "https://api.github.com/repos/${REPOSITORY}/releases/tags/${RELEASE_TAG}")
+          printf '%s' "$RELEASE_DATA" | EXPECTED_TAG="$RELEASE_TAG" node -e '
+            let raw = "";
+            process.stdin.on("data", (chunk) => { raw += chunk; });
+            process.stdin.on("end", () => {
+              const release = JSON.parse(raw);
+              if (!Number.isInteger(release.id) || release.id <= 0) {
+                throw new Error("release id is missing");
+              }
+              if (release.tag_name !== process.env.EXPECTED_TAG) {
+                throw new Error(`release tag mismatch: ${release.tag_name}`);
+              }
+              if (release.draft) {
+                throw new Error(`refusing to attach Windows artifacts to draft ${release.tag_name}`);
+              }
+              process.stdout.write(`release_id=${release.id}\nprerelease=${Boolean(release.prerelease)}\n`);
+            });
+          ' >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the selected desktop release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.resolve-tag.outputs.tag }}
+
+      - name: Require selected tag to match desktop source versions
+        shell: bash
+        env:
+          VERSION: ${{ steps.resolve-tag.outputs.version }}
+          RELEASE_TAG: ${{ steps.resolve-tag.outputs.tag }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          TAURI_VERSION=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          CARGO_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' apps/desktop/src-tauri/Cargo.toml | head -1)
+          for source_version in "$PACKAGE_VERSION" "$TAURI_VERSION" "$CARGO_VERSION"; do
+            if [ "$source_version" != "$VERSION" ]; then
+              echo "ERROR: $RELEASE_TAG does not match desktop source version $source_version" >&2
+              exit 1
+            fi
+          done
+
+      - name: Require Windows release credentials
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ] || [ -z "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]; then
+            echo "ERROR: Tauri updater signing credentials are required before a Windows desktop release" >&2
+            exit 1
+          fi
+          if [ -z "$NEON_DATABASE_URL" ]; then
+            echo "ERROR: NEON_DATABASE_URL is required before a Windows desktop release" >&2
+            exit 1
+          fi
+          for name in \
+            AZURE_CLIENT_ID \
+            AZURE_CLIENT_SECRET \
+            AZURE_TENANT_ID \
+            AZURE_ARTIFACT_SIGNING_ENDPOINT \
+            AZURE_ARTIFACT_SIGNING_ACCOUNT \
+            AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: ${name} is required before a Windows desktop release" >&2
+              exit 1
+            fi
+          done
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
@@ -69,6 +167,10 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
         with:
           toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install pinned Azure Artifact Signing client
+        shell: bash
+        run: cargo install artifact-signing-cli --version 0.11.0 --locked
 
       # LLVM/Clang is pre-installed on windows-latest at C:\Program Files\LLVM
       # Required for rusqlite bundled-sqlcipher (uses bindgen at compile time)
@@ -97,7 +199,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          workspaces: apps/desktop/src-tauri
+          workspaces: 'apps/desktop/src-tauri -> target'
           cache-on-failure: true
 
       - name: Install JavaScript dependencies
@@ -108,6 +210,42 @@ jobs:
         run: |
           echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}"
           echo "::add-mask::${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}"
+
+      - name: Prepare Azure Artifact Signing configuration
+        id: windows-signing
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const endpoint = new URL(process.env.AZURE_ARTIFACT_SIGNING_ENDPOINT);
+          if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password) {
+            throw new Error('AZURE_ARTIFACT_SIGNING_ENDPOINT must be an HTTPS URL without credentials');
+          }
+          for (const name of [
+            'AZURE_ARTIFACT_SIGNING_ACCOUNT',
+            'AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE',
+          ]) {
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(process.env[name])) {
+              throw new Error(`${name} contains unsupported characters`);
+            }
+          }
+
+          const configPath = path.join(process.env.RUNNER_TEMP, 'tauri.windows.release.conf.json');
+          const signCommand = `artifact-signing-cli -e ${endpoint.href} %1`;
+          fs.writeFileSync(configPath, JSON.stringify({ bundle: { windows: { signCommand } } }));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `tauri_config=${configPath.replaceAll('\\', '/')}\n`);
+          console.log('Azure Artifact Signing release overlay prepared.');
+          NODE
 
       - name: Build web frontend
         shell: bash
@@ -120,19 +258,128 @@ jobs:
         run: pnpm --filter @agiworkforce/desktop run build:native-host
 
       - name: Build Tauri Windows app
-        # Builds NSIS installer (.exe) and uploads directly to the GitHub release.
+        # Build locally first. Uploading before Authenticode verification would
+        # expose an unsigned installer if certificate discovery regressed.
         # OCR feature excluded on Windows (requires Tesseract native library).
         # All other features (shell, updater, billing, devtools, vad, remote-databases) included.
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
           LIBCLANG_PATH: C:\Program Files\LLVM\bin
           CI: 'true'
         with:
-          releaseId: ${{ steps.get-release.outputs.release_id }}
-          args: -- --no-default-features --features shell,updater,billing,devtools,vad,remote-databases
+          projectPath: apps/desktop
+          args: --config "${{ steps.windows-signing.outputs.tauri_config }}" --bundles nsis -- --no-default-features --features shell,updater,billing,devtools,vad,remote-databases
+
+      - name: Verify Authenticode signatures before publication
+        shell: pwsh
+        run: |
+          $releaseRoot = 'target/release'
+          $executables = @(
+            Get-ChildItem -Path $releaseRoot -Filter '*.exe' -File -ErrorAction SilentlyContinue
+            Get-ChildItem -Path "$releaseRoot/bundle/nsis" -Filter '*.exe' -File -ErrorAction SilentlyContinue
+          ) | Sort-Object -Property FullName -Unique
+          if ($executables.Count -eq 0) {
+            throw 'no Windows executables were produced'
+          }
+          foreach ($executable in $executables) {
+            $signature = Get-AuthenticodeSignature -FilePath $executable.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "invalid Authenticode signature for $($executable.FullName): $($signature.Status)"
+            }
+            Write-Host "Verified Authenticode: $($executable.Name)"
+          }
+
+      - name: Upload verified Windows assets to the selected release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.resolve-tag.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          installers=(target/release/bundle/nsis/*.exe)
+          updater_signatures=(target/release/bundle/nsis/*.exe.sig)
+          if [ "${#installers[@]}" -ne 1 ] || [ "${#updater_signatures[@]}" -ne 1 ]; then
+            echo "ERROR: expected exactly one NSIS installer and updater signature" >&2
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" \
+            "${installers[0]}" \
+            "${updater_signatures[0]}" \
+            --clobber
+
+      - name: Install Neon database driver
+        shell: bash
+        run: npm install --no-save @neondatabase/serverless@1.1.0
+
+      - name: Publish Windows updater metadata
+        shell: bash
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          VERSION: ${{ steps.resolve-tag.outputs.version }}
+          TAG: ${{ steps.resolve-tag.outputs.tag }}
+          PRERELEASE: ${{ steps.get-release.outputs.prerelease }}
+          GITHUB_REPO: ${{ github.repository }}
+        run: |
+          shopt -s nullglob
+          installers=(target/release/bundle/nsis/*.exe)
+          updater_signatures=(target/release/bundle/nsis/*.exe.sig)
+          if [ "${#installers[@]}" -ne 1 ] || [ "${#updater_signatures[@]}" -ne 1 ]; then
+            echo "ERROR: updater installer/signature pair is incomplete" >&2
+            exit 1
+          fi
+
+          if [ "$PRERELEASE" = "true" ]; then
+            VERSION_WITHOUT_BUILD="${VERSION%%+*}"
+            PRERELEASE_ID="${VERSION_WITHOUT_BUILD#*-}"
+            PRERELEASE_ID="${PRERELEASE_ID%%.*}"
+            case "$PRERELEASE_ID" in
+              alpha|nightly|canary) CHANNEL="nightly" ;;
+              *) CHANNEL="beta" ;;
+            esac
+          else
+            CHANNEL="stable"
+          fi
+
+          archive_path="${installers[0]}"
+          signature=$(tr -d '\n' < "${updater_signatures[0]}")
+          file_name=$(basename "$archive_path")
+          file_size=$(stat -c%s "$archive_path")
+          pub_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          download_url="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/${file_name}"
+
+          node - "$download_url" "$signature" "$file_size" "$pub_date" "$CHANNEL" <<'NODE'
+          (async () => {
+            const { neon } = require('@neondatabase/serverless');
+            const [downloadUrl, signature, fileSize, pubDate, channel] = process.argv.slice(2);
+            const sql = neon(process.env.NEON_DATABASE_URL);
+            await sql`
+              select public.upsert_release(
+                ${process.env.VERSION},
+                ${'windows-x86_64'},
+                ${downloadUrl},
+                ${signature},
+                ${null},
+                ${pubDate},
+                ${Number(fileSize)},
+                ${null},
+                ${null},
+                ${process.env.PRERELEASE === 'true'},
+                ${false},
+                ${channel}
+              )
+            `;
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
 
       - name: Upload artifacts (backup / debugging)
         if: always()
@@ -140,13 +387,14 @@ jobs:
         with:
           name: windows-x64-installer
           path: |
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.exe.sig
           retention-days: 14
 
       - name: Report result
         shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.resolve-tag.outputs.tag }}
         run: |
-          echo "Windows installer built and uploaded to release ${{ steps.resolve-tag.outputs.tag }}"
-          echo "Website /download page will now serve the Windows installer automatically."
+          echo "Verified Windows installer uploaded to release ${RELEASE_TAG}."
+          echo "Windows updater metadata was ingested after the release asset became available."

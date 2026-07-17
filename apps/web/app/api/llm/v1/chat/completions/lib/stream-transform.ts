@@ -7,8 +7,12 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import type { StreamChunk } from '@agiworkforce/types';
-import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
+import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
+import {
+  finalizeManagedUsageRequest,
+  markManagedUsageClientDelivered,
+} from '@/lib/services/managed-usage-request-service';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { withSseHeartbeat } from './sse-heartbeat';
 import {
@@ -20,6 +24,92 @@ import {
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
+
+interface StreamBillingUsage {
+  inputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  cacheCreation1hInputTokens?: number;
+}
+
+async function settleStreamBilling(input: {
+  processed: ProcessedRequest;
+  userId: string;
+  provider: string;
+  model: string;
+  usage: StreamBillingUsage;
+  outcome?: 'completed' | 'failed';
+}): Promise<void> {
+  const { processed, userId, provider, model, usage } = input;
+  if (processed.freeTrial) return;
+
+  const totalTokens = usage.inputTokens + usage.outputTokens;
+  const actualCostCents =
+    input.outcome === 'failed'
+      ? 0
+      : totalTokens > 0
+        ? LLMCostCalculator.calculateCost(provider, model, {
+            promptTokens: usage.inputTokens,
+            completionTokens: usage.outputTokens,
+            totalTokens,
+            cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
+            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+          })
+        : processed.estimatedCostCents;
+
+  if (processed.managedUsage) {
+    await finalizeManagedUsageRequest({
+      ...processed.managedUsage,
+      outcome: input.outcome ?? 'completed',
+      actualCostCents,
+      usage: {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        reasoningTokens: usage.reasoningOutputTokens,
+        cacheReadTokens: usage.cacheReadInputTokens,
+        cacheWriteTokens: usage.cacheCreationInputTokens,
+        cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+      },
+    });
+    if (input.outcome !== 'failed') {
+      await markManagedUsageClientDelivered(processed.managedUsage).catch((error) => {
+        logger.warn(
+          { error, userId, requestId: processed.requestId },
+          'Managed usage delivery marker failed',
+        );
+      });
+    }
+    return;
+  }
+
+  const costDifference = actualCostCents - processed.estimatedCostCents;
+  if (totalTokens <= 0 || costDifference === 0) return;
+  const reconciliationKey = CreditService.generateIdempotencyKey(
+    userId,
+    'reconciliation',
+    processed.requestId,
+  );
+  await CreditService.settleCreditsDurably({
+    userId,
+    amountCents: costDifference,
+    description: `Credit adjustment (streaming): ${provider}/${model}`,
+    metadata: {
+      provider,
+      model,
+      type: 'streaming_reconciliation',
+      estimatedCostCents: processed.estimatedCostCents,
+      actualCostCents,
+      promptTokens: usage.inputTokens,
+      completionTokens: usage.outputTokens,
+      totalTokens,
+      requestId: processed.requestId,
+    },
+    idempotencyKey: reconciliationKey,
+  });
+}
 
 export async function buildStreamResponse(
   request: NextRequest,
@@ -53,6 +143,7 @@ export async function buildStreamResponse(
   let cacheCreationInputTokens: number | undefined;
   let cacheCreation1hInputTokens: number | undefined;
   let buffer = '';
+  let hasTerminalSentinel = false;
   const encoder = new TextEncoder();
   const streamStartedAt = Date.now();
   let firstTokenTimestampMs: number | null = null;
@@ -72,7 +163,7 @@ export async function buildStreamResponse(
         if (line.startsWith('data: ')) {
           const jsonStr = line.slice(6).trim();
           if (jsonStr === '[DONE]') {
-            processedLines.push(line);
+            hasTerminalSentinel = true;
             continue;
           }
 
@@ -251,7 +342,7 @@ export async function buildStreamResponse(
                   model: responseModelName,
                 };
               } else if (event.type === 'message_stop') {
-                processedLines.push('data: [DONE]');
+                hasTerminalSentinel = true;
                 continue;
               } else if (event.type === 'message_start') {
                 continue;
@@ -404,7 +495,9 @@ export async function buildStreamResponse(
       }
     },
     async flush(controller) {
-      if (buffer.trim()) {
+      if (buffer.trim() === 'data: [DONE]') {
+        hasTerminalSentinel = true;
+      } else if (buffer.trim()) {
         controller.enqueue(encoder.encode(buffer));
       }
 
@@ -422,45 +515,20 @@ export async function buildStreamResponse(
           );
         }
 
-        const totalTokens = inputTokens + outputTokens;
-
-        if (!freeTrial && totalTokens > 0) {
-          const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
-            promptTokens: inputTokens,
-            completionTokens: outputTokens,
-            totalTokens,
-            cacheReadInputTokens: cacheReadInputTokens || undefined,
-            cacheCreationInputTokens: cacheCreationInputTokens || undefined,
-            cacheCreation1hInputTokens: cacheCreation1hInputTokens || undefined,
-          });
-
-          const costDifference = actualCostCents - estimatedCostCents;
-
-          if (costDifference !== 0) {
-            const reconciliationKey = CreditService.generateIdempotencyKey(
-              userId,
-              'reconciliation',
-              requestId,
-            );
-            await CreditService.deductCredits(
-              userId,
-              costDifference,
-              `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,
-              {
-                provider: providerUsed,
-                model: modelUsed,
-                type: 'streaming_reconciliation',
-                estimatedCostCents,
-                actualCostCents,
-                promptTokens: inputTokens,
-                completionTokens: outputTokens,
-                totalTokens,
-                requestId,
-              },
-              reconciliationKey,
-            );
-          }
-        }
+        await settleStreamBilling({
+          processed,
+          userId,
+          provider: providerUsed,
+          model: modelUsed,
+          usage: {
+            inputTokens,
+            outputTokens,
+            reasoningOutputTokens,
+            cacheReadInputTokens,
+            cacheCreationInputTokens,
+            cacheCreation1hInputTokens,
+          },
+        });
       } catch (reconciliationError) {
         logger.error(
           {
@@ -475,6 +543,16 @@ export async function buildStreamResponse(
           },
           'CRITICAL: Credit reconciliation failed after streaming completed - may require manual adjustment',
         );
+        if (processed.managedUsage) throw reconciliationError;
+      }
+
+      // Never acknowledge a successful stream before its financial outcome
+      // is durable. Moving the provider's terminal marker behind settlement
+      // also makes retries deterministic: a failed settlement interrupts the
+      // stream instead of exposing a false success that the client will not
+      // retry.
+      if (hasTerminalSentinel) {
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       }
 
       // BILLING FIX (0044): reconcileUsage/increment_usage double-charged by
@@ -531,14 +609,14 @@ export async function buildStreamResponse(
 }
 
 /**
- * `buildStreamResponse`'s sibling for the `packages/providers/*` adapter
+ * `buildStreamResponse`'s sibling for the `packages/ai/providers/*` adapter
  * path (restructure Wave 2, task #34) -- Anthropic and Google so far (see
  * `ADAPTER_PROVIDERS` in route.ts). Consumes an `AsyncIterable<StreamChunk>`
  * (an adapter's `.stream()` result) instead of a raw upstream SSE
  * `ReadableStream`, reconstructing the SAME byte-stable legacy wire via
  * `OpenAIWireAssembler`'s `wireMode: 'legacy-web'` + `sseChunks()` (proven
  * against captured golden fixtures for each provider --
- * packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts,
+ * packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts,
  * apps/web/.../__tests__/stream-transform.google-byte-parity.test.ts).
  *
  * `buildStreamResponse` above is left completely untouched: every other
@@ -621,8 +699,8 @@ export async function buildAdapterStreamResponse(
 
   // Billing/analytics model id -- canonical (client-facing), matching
   // buildStreamResponse's `modelUsed` exactly (both read `chatRequest.model`,
-  // never the apiModelId `adapter-factory.ts`/`toCanonicalChatRequest` sent
-  // to the provider -- see canonical-request.ts's `toApiModelId` docstring).
+  // never the apiModelId `toCanonicalChatRequest` sent to the provider via
+  // the shared `toProviderApiModelId` boundary).
   const modelUsed = chatRequest.model;
   const providerUsed = provider;
   // Wire-visible model id -- identical rule to buildStreamResponse.
@@ -748,8 +826,27 @@ export async function buildAdapterStreamResponse(
         }
       }
 
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      controller.close();
+      // The provider failed mid-stream (after this 200 SSE response had
+      // already committed) -- ingest()'s 'error' case (see
+      // OpenAIWireAssembler) captured the classified message, but the
+      // stream itself still ends cleanly with [DONE] (see sseChunks()'s
+      // 'error' case and the additive `x_stream_error` wire marker it now
+      // emits). Without this log the failure was previously invisible
+      // server-side too -- `assembler.lastError` had zero production
+      // readers before this fix.
+      if (assembler.lastError !== null) {
+        logger.warn(
+          {
+            event: 'llm_stream_error_mid_stream',
+            requestId,
+            userId,
+            provider: providerUsed,
+            model: modelUsed,
+            error: assembler.lastError,
+          },
+          'Provider stream ended with a mid-stream error after the response had already committed',
+        );
+      }
 
       if (firstTokenTimestampMs === null) {
         logger.warn(
@@ -765,45 +862,21 @@ export async function buildAdapterStreamResponse(
       }
 
       try {
-        const totalTokens = usage.inputTokens + usage.outputTokens;
-
-        if (!freeTrial && totalTokens > 0) {
-          const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
-            promptTokens: usage.inputTokens,
-            completionTokens: usage.outputTokens,
-            totalTokens,
-            cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
-            cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
-            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
-          });
-
-          const costDifference = actualCostCents - estimatedCostCents;
-
-          if (costDifference !== 0) {
-            const reconciliationKey = CreditService.generateIdempotencyKey(
-              userId,
-              'reconciliation',
-              requestId,
-            );
-            await CreditService.deductCredits(
-              userId,
-              costDifference,
-              `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,
-              {
-                provider: providerUsed,
-                model: modelUsed,
-                type: 'streaming_reconciliation',
-                estimatedCostCents,
-                actualCostCents,
-                promptTokens: usage.inputTokens,
-                completionTokens: usage.outputTokens,
-                totalTokens,
-                requestId,
-              },
-              reconciliationKey,
-            );
-          }
-        }
+        await settleStreamBilling({
+          processed,
+          userId,
+          provider: providerUsed,
+          model: modelUsed,
+          usage: {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            reasoningOutputTokens: usage.reasoningOutputTokens,
+            cacheReadInputTokens: usage.cacheReadInputTokens,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens,
+            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+          },
+          outcome: assembler.lastError === null ? 'completed' : 'failed',
+        });
       } catch (reconciliationError) {
         logger.error(
           {
@@ -818,7 +891,14 @@ export async function buildAdapterStreamResponse(
           },
           'CRITICAL: Credit reconciliation failed after streaming completed - may require manual adjustment',
         );
+        if (processed.managedUsage) throw reconciliationError;
       }
+
+      // A successful terminal sentinel is emitted only after the financial
+      // outcome is durable. If settlement fails, start() rejects and the
+      // client sees an interrupted stream instead of a false success.
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
 
       // Fire-and-forget cost tracking + OTel attribute emit -- mirrors
       // buildStreamResponse's flush(); the stream is already closed by this
@@ -847,8 +927,23 @@ export async function buildAdapterStreamResponse(
       }
     },
     async cancel() {
-      // Best-effort: the underlying adapter's fetch/SSE connection is torn
-      // down by the caller-owned AbortSignal, not by this stream directly.
+      if (processed.managedUsage) {
+        await settleStreamBilling({
+          processed,
+          userId,
+          provider: providerUsed,
+          model: modelUsed,
+          usage: {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            reasoningOutputTokens: usage.reasoningOutputTokens,
+            cacheReadInputTokens: usage.cacheReadInputTokens,
+            cacheCreationInputTokens: usage.cacheCreationInputTokens,
+            cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+          },
+          outcome: 'failed',
+        });
+      }
     },
   });
 

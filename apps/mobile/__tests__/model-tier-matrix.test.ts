@@ -4,7 +4,7 @@
  * The requirement: the picker must NEVER show a model as selectable when the
  * account's tier can't use it — for EVERY model in the catalog against EVERY
  * tier, not just spot-checked pairs. The ground truth is the shared catalog
- * gate the server enforces (packages/types canAccessModelForSubscriptionTier)
+ * gate the server enforces (packages/contracts/types canAccessModelForSubscriptionTier)
  * plus the server's free-trial allowance for economy-list models
  * (apps/web/lib/free-trial-config.ts). Any drift between the mobile picker's
  * availability and that rule fails a specific cell here.

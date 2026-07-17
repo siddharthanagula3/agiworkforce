@@ -36,6 +36,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { applyConversationDeltas } from '../services/cloudSyncEngine';
+import type { ChatMessage, ConversationSummary } from '../types/chat';
 
 const mockDelete = api.delete as jest.MockedFunction<typeof api.delete>;
 const mockPut = api.put as jest.MockedFunction<typeof api.put>;
@@ -187,6 +188,32 @@ describe('cloud conversation rename durability', () => {
     expect(convTitle('c1')).toBe('Server-Renamed');
   });
 
+  it('setCloudConversations does not discard a previously observed server revision', () => {
+    seedCloud('c1', 'Old');
+    useChatCloudMessageStore.getState().patchCloudConversation('c1', { serverVersion: '7' });
+
+    useChatCloudMessageStore
+      .getState()
+      .setCloudConversations([
+        { id: 'c1', title: 'Fresh list', createdAt: T, updatedAt: T, messageCount: 0, pinned: false },
+      ]);
+
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((conversation) => conversation.id === 'c1')
+        ?.serverVersion,
+    ).toBe('7');
+  });
+
+  it('setCloudConversations preserves a dirty local create absent from the server snapshot', () => {
+    seedCloud('c-new', 'Not pushed yet');
+    useCloudSyncStateStore.getState().markConversationDirty('c-new');
+
+    useChatCloudMessageStore.getState().setCloudConversations([]);
+
+    expect(convExists('c-new')).toBe(true);
+    expect(convTitle('c-new')).toBe('Not pushed yet');
+  });
+
   it('applyConversationDeltas preserves a dirty rename, but a remote DELETE still wins', () => {
     seedCloud('c1', 'Old');
     useCloudSyncStateStore.getState().markConversationDirty('c1');
@@ -199,5 +226,44 @@ describe('cloud conversation rename durability', () => {
     // A tombstone delta MUST remove it even though it is dirty (delete wins).
     applyConversationDeltas([convDelta('c1', 'Old', T)]);
     expect(convExists('c1')).toBe(false);
+  });
+});
+
+describe('cloud sync payload persistence', () => {
+  function persistedCloudState(): {
+    conversations: ConversationSummary[];
+    messages: Record<string, ChatMessage[]>;
+  } {
+    const partialize = useChatCloudMessageStore.persist.getOptions().partialize;
+    if (!partialize) throw new Error('cloud store persistence must define partialize');
+    return partialize(useChatCloudMessageStore.getState()) as {
+      conversations: ConversationSummary[];
+      messages: Record<string, ChatMessage[]>;
+    };
+  }
+
+  it('persists a dirty conversation even when it falls outside the clean cache cap', () => {
+    for (let index = 0; index <= 200; index += 1) seedCloud(`c-${index}`);
+    useCloudSyncStateStore.getState().markConversationDirty('c-0');
+
+    expect(persistedCloudState().conversations.some((conversation) => conversation.id === 'c-0'))
+      .toBe(true);
+  });
+
+  it('persists a dirty message even when it falls outside the clean per-chat cap', () => {
+    seedCloud('c1');
+    const messages: ChatMessage[] = Array.from({ length: 101 }, (_, index) => ({
+      id: `m-${index}`,
+      conversationId: 'c1',
+      role: 'user',
+      content: `message ${index}`,
+      createdAt: new Date(index).toISOString(),
+    }));
+    useChatCloudMessageStore.getState().setCloudMessages('c1', messages);
+    useCloudSyncStateStore.getState().markMessageDirty('c1', 'm-0');
+
+    expect(persistedCloudState().messages['c1']?.some((message) => message.id === 'm-0')).toBe(
+      true,
+    );
   });
 });

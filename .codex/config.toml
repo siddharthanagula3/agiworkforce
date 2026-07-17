@@ -7,8 +7,7 @@
 # Chrome extension, VS Code extension, Express API gateway.
 
 # Model selection is intentionally left to the local Codex CLI/default profile.
-# Do not pin guessed model IDs here; repo model IDs live in packages/types/src/models.json.
-model_reasoning_effort = "xhigh"
+# Do not pin guessed model IDs here; repo model IDs live in packages/contracts/types/src/models.json.
 
 # History - persistent instructions applied to every session
 [history]
@@ -22,7 +21,7 @@ Follow AGI Workforce project rules:
 4. Rust: Follow Tauri v2 patterns. #[tauri::command] for invoke handlers. snake_case. deny(unsafe_code, dead_code, unused_imports, unused_variables, unused_mut). All warnings are errors.
 5. TypeScript: strict mode, named exports, absolute imports from src/. React: functional components only. Tailwind CSS 4 for styling. Zustand v5 + Immer for state.
 6. IPC Rule: All invoke() calls in TypeScript MUST use camelCase param keys. Tauri auto-converts from Rust snake_case. Snake_case in invoke() silently fails.
-7. Model IDs come from packages/types/src/models.json and provider capability metadata. Never invent, guess, or hardcode model IDs from training data.
+7. Model IDs come from packages/contracts/types/src/models.json and provider capability metadata. Never invent, guess, or hardcode model IDs from training data.
 8. Next.js 16 uses proxy.ts with an exported proxy function. Do not rename it back to middleware.ts.
 9. Local(Local LLMs,BYOK), and Cloud Mode are separate trust boundaries. Never silently route Local chats, files, or developer sessions to cloud Mode.
 10. Verify fast-moving facts from repo files, official docs, web search, or configured MCP/plugins before changing APIs, models, pricing, App Store rules, provider terms, framework behavior, or release claims.

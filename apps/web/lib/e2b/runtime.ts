@@ -14,11 +14,12 @@
  * defensive (optional chaining + try/catch) so an API-shape surprise degrades to
  * fail-closed.
  *
- * Session scope: when `conversationId` is passed, ONE sandbox + one code-context per
- * language is reused across every execution-tool call in the conversation (state
- * persists — variables/imports survive across turns). The mapping conversationId ->
- * sandboxId (+ context ids) lives in Redis (./session-store.ts) so it survives across
- * serverless invocations. `pauseE2BSession()` (called by the tool loop at turn end)
+ * Session scope: when an authenticated tenant/user/conversation scope is passed, ONE
+ * sandbox + one code-context per language is reused across every execution-tool call in
+ * that owned conversation (state persists — variables/imports survive across turns).
+ * The scoped mapping lives in Redis (./session-store.ts) so it survives across serverless
+ * invocations without allowing a conversation id alone to resume another user's sandbox.
+ * `pauseE2BSession()` (called by the tool loop at turn end)
  * stops billing while preserving state; the next request's `getE2BExecutor()` resumes
  * it via `Sandbox.connect()`, which auto-resumes a paused sandbox. `killE2BSession()`
  * (called on conversation delete, or as a safety net) releases it for good.
@@ -38,6 +39,7 @@ import {
   deleteE2BSession,
   type E2BSession,
   type StoredContext,
+  type E2BSessionScope,
 } from './session-store';
 
 /** Resource boundary: max ephemeral (no-conversationId) sandbox lifetime (ms) before E2B auto-kills it. */
@@ -85,15 +87,15 @@ const fail = (err: unknown): ExecutionResult => ({
  * a failure here just means the next request creates a fresh sandbox instead of
  * resuming — never surfaced to the model or the user.
  */
-export async function pauseE2BSession(conversationId: string): Promise<void> {
-  const session = await getE2BSession(conversationId);
+export async function pauseE2BSession(scope: E2BSessionScope): Promise<void> {
+  const session = await getE2BSession(scope);
   if (!session) return;
   const Sandbox = await importSandbox();
   if (!Sandbox) return;
   try {
     await Sandbox.pause(session.sandboxId);
   } catch (err) {
-    logger.warn({ err, conversationId }, '[e2b] pause failed');
+    logger.warn({ err, conversationId: scope.conversationId }, '[e2b] pause failed');
   }
 }
 
@@ -102,16 +104,16 @@ export async function pauseE2BSession(conversationId: string): Promise<void> {
  * safety net). Best-effort; also clears the Redis mapping so nothing tries to resume a
  * killed sandbox.
  */
-export async function killE2BSession(conversationId: string): Promise<void> {
-  const session = await getE2BSession(conversationId);
-  await deleteE2BSession(conversationId);
+export async function killE2BSession(scope: E2BSessionScope): Promise<void> {
+  const session = await getE2BSession(scope);
+  await deleteE2BSession(scope);
   if (!session) return;
   const Sandbox = await importSandbox();
   if (!Sandbox) return;
   try {
     await Sandbox.kill(session.sandboxId);
   } catch (err) {
-    logger.warn({ err, conversationId }, '[e2b] kill failed');
+    logger.warn({ err, conversationId: scope.conversationId }, '[e2b] kill failed');
   }
 }
 
@@ -120,12 +122,15 @@ export async function killE2BSession(conversationId: string): Promise<void> {
  * or the sandbox could not be created/resumed. ASYNC: creating/resuming the sandbox is
  * async. Fail-closed.
  *
- * When `conversationId` is provided, resumes the conversation's paused sandbox (if a
- * session mapping exists in Redis) instead of creating a new one, and reuses cached
- * code contexts per language so variables/imports persist across calls and turns.
+ * When an authenticated session scope is provided, resumes that owned conversation's
+ * paused sandbox (if a scoped mapping exists in Redis) instead of creating a new one,
+ * and reuses cached code contexts per language so variables/imports persist across calls
+ * and turns.
  */
-export async function getE2BExecutor(conversationId?: string): Promise<E2BExecutor | null> {
+export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecutor | null> {
   if (!e2bExecutionEnabled()) return null;
+
+  const conversationId = scope?.conversationId;
 
   // Dynamic import so the SDK only loads when E2B is actually used, and a missing
   // package fails closed rather than breaking the build/route.
@@ -134,7 +139,7 @@ export async function getE2BExecutor(conversationId?: string): Promise<E2BExecut
 
   type SandboxInstance = InstanceType<typeof Sandbox>;
 
-  const existingSession = conversationId ? await getE2BSession(conversationId) : null;
+  const existingSession = scope ? await getE2BSession(scope) : null;
 
   const sandboxTimeoutMs = conversationId ? E2B_CONVERSATION_TIMEOUT_MS : E2B_SANDBOX_TIMEOUT_MS;
   // Conversation-scoped sandboxes auto-PAUSE (not kill) if `sandboxTimeoutMs` is ever
@@ -188,9 +193,9 @@ export async function getE2BExecutor(conversationId?: string): Promise<E2BExecut
 
   /** Persist the (possibly updated) session mapping so the next call/turn can reuse it. */
   async function persistSession(): Promise<void> {
-    if (!conversationId) return;
+    if (!scope) return;
     const session: E2BSession = { sandboxId, contexts };
-    await saveE2BSession(conversationId, session);
+    await saveE2BSession(scope, session);
   }
 
   /** Get (or lazily create + cache) the code context for `language`. */
@@ -290,7 +295,7 @@ export async function getE2BExecutor(conversationId?: string): Promise<E2BExecut
       // (via pauseE2BSession) once at turn end so state survives to the next call/turn.
       // Only ephemeral (no-conversationId) callers kill immediately, unchanged from the
       // original per-call behavior.
-      if (conversationId) {
+      if (scope) {
         await persistSession();
         return;
       }

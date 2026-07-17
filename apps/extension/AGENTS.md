@@ -14,7 +14,7 @@ Read root `AGENTS.md`, then this file, then `apps/extension/README.md`.
 
 - Primary lane: `chrome-extension`.
 - Owned write path: `apps/extension/**`.
-- Read-only context: `packages/browser-tool/**` and Desktop native-messaging code.
+- Read-only context: `packages/tools/browser-tool/**` and Desktop native-messaging code.
 - Browser tool packages, Desktop native host code, shared contracts, and manifest permission policy outside this app require their owner lane or security review.
 
 ## High-Risk Areas

@@ -1,4 +1,4 @@
-import { chat } from '@agiworkforce/api';
+import { chat } from '@agiworkforce/desktop-command-client';
 import {
   AlertCircle,
   Check,

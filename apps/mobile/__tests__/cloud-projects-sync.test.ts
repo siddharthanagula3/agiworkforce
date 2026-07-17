@@ -58,6 +58,9 @@ const mockPost = api.post as jest.MockedFunction<typeof api.post>;
 
 const T = '2026-06-22T00:00:00.000Z';
 const PROJECTS_SYNC_PATH = '/api/projects/sync';
+const PUSH_PROJECT_ID = '01986b80-0000-7000-8000-000000000001';
+const TOMBSTONE_PROJECT_ID = '01986b80-0000-7000-8000-000000000002';
+const UNACKED_PROJECT_ID = '01986b80-0000-7000-8000-000000000003';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -106,6 +109,7 @@ function seedCloudProject(id: string, name = 'test project', deletedAt: string |
     createdAt: T,
     updatedAt: T,
     deletedAt,
+    serverVersion: '7',
   });
 }
 
@@ -131,6 +135,7 @@ beforeEach(() => {
       const projs = (body?.projects as Array<{ id: string }>) ?? [];
       return {
         applied: projs.map((p) => ({ id: p.id, server_version: '1' })),
+        conflicts: [],
         cursor: '1',
       } as never;
     }
@@ -304,19 +309,28 @@ describe('project sync — tombstone application', () => {
 
 describe('project sync — push', () => {
   it('pushes dirty cloud projects and clears the dirty queue on ack', async () => {
-    seedCloudProject('p-push', 'push me');
-    markProjectForSync('p-push');
-    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain('p-push');
+    seedCloudProject(PUSH_PROJECT_ID, 'push me');
+    markProjectForSync(PUSH_PROJECT_ID);
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(PUSH_PROJECT_ID);
 
     await syncNow();
 
     const projectCalls = mockPost.mock.calls.filter((c) => c[0] === PROJECTS_SYNC_PATH);
     expect(projectCalls).toHaveLength(1);
-    const body = projectCalls[0]![1] as { projects: Array<{ id: string; name: string }> };
+    const body = projectCalls[0]![1] as {
+      projects: Array<{
+        id: string;
+        name: string;
+        baseVersion: string;
+        updatedAt?: string;
+      }>;
+    };
     expect(body.projects).toHaveLength(1);
-    expect(body.projects[0]!.id).toBe('p-push');
+    expect(body.projects[0]!.id).toBe(PUSH_PROJECT_ID);
     expect(body.projects[0]!.name).toBe('push me');
-    expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain('p-push');
+    expect(body.projects[0]!.baseVersion).toBe('7');
+    expect(body.projects[0]!.updatedAt).toBeUndefined();
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain(PUSH_PROJECT_ID);
   });
 
   it('does NOT post to /api/projects/sync when dirty queue is empty', async () => {
@@ -327,8 +341,8 @@ describe('project sync — push', () => {
   });
 
   it('sends deletedAt for a tombstone project', async () => {
-    seedCloudProject('p-tomb', 'bye', T);
-    markProjectForSync('p-tomb');
+    seedCloudProject(TOMBSTONE_PROJECT_ID, 'bye', T);
+    markProjectForSync(TOMBSTONE_PROJECT_ID);
 
     await syncNow();
 
@@ -338,18 +352,21 @@ describe('project sync — push', () => {
     };
     expect(body.projects[0]!.deletedAt).toBe(T);
     // After ack, the entry should be hard-deleted from the cloud store.
-    expect(useCloudProjectStore.getState().projects.find((p) => p.id === 'p-tomb')).toBeUndefined();
+    expect(
+      useCloudProjectStore.getState().projects.find((p) => p.id === TOMBSTONE_PROJECT_ID),
+    ).toBeUndefined();
     // Dirty queue cleared.
-    expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain('p-tomb');
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain(TOMBSTONE_PROJECT_ID);
   });
 
   it('keeps a tombstone dirty when the server does NOT ack it', async () => {
-    seedCloudProject('p-unacked', 'retry me', T);
-    markProjectForSync('p-unacked');
+    seedCloudProject(UNACKED_PROJECT_ID, 'retry me', T);
+    markProjectForSync(UNACKED_PROJECT_ID);
 
     // Server returns empty applied list (simulates server rejection).
     mockPost.mockImplementation(async (path: string) => {
-      if ((path as string) === PROJECTS_SYNC_PATH) return { applied: [], cursor: '0' } as never;
+      if ((path as string) === PROJECTS_SYNC_PATH)
+        return { applied: [], conflicts: [], cursor: '0' } as never;
       if ((path as string) === '/api/memory/sync') return { applied: [], cursor: '0' } as never;
       return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
     });
@@ -357,11 +374,187 @@ describe('project sync — push', () => {
     await syncNow();
 
     // The dirty ref should persist so the next syncNow retries it.
-    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain('p-unacked');
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(UNACKED_PROJECT_ID);
     // The tombstone row stays in the cloud store (not hard-deleted until acked).
-    const entry = useCloudProjectStore.getState().projects.find((p) => p.id === 'p-unacked');
+    const entry = useCloudProjectStore.getState().projects.find((p) => p.id === UNACKED_PROJECT_ID);
     expect(entry).toBeDefined();
     expect(entry?.deletedAt).toBe(T);
+  });
+
+  it('accepts the server revision winner and clears a stale local edit on CAS conflict', async () => {
+    seedCloudProject(PUSH_PROJECT_ID, 'stale local edit');
+    markProjectForSync(PUSH_PROJECT_ID);
+
+    mockPost.mockImplementation(async (path: string) => {
+      if ((path as string) === PROJECTS_SYNC_PATH) {
+        return {
+          applied: [],
+          conflicts: [
+            {
+              id: PUSH_PROJECT_ID,
+              current: projectPullItem(PUSH_PROJECT_ID, '9', { name: 'server winner' }),
+            },
+          ],
+          cursor: '9',
+        } as never;
+      }
+      if ((path as string) === '/api/memory/sync') {
+        return { applied: [], cursor: '0' } as never;
+      }
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+
+    await syncNow();
+
+    expect(
+      useCloudProjectStore.getState().projects.find((p) => p.id === PUSH_PROJECT_ID),
+    ).toMatchObject({ name: 'server winner', serverVersion: '9' });
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain(PUSH_PROJECT_ID);
+  });
+
+  it('rebases a pre-CAS persisted edit instead of discarding it as a base-zero conflict', async () => {
+    seedCloudProject(PUSH_PROJECT_ID, 'legacy offline edit');
+    const legacy = useCloudProjectStore
+      .getState()
+      .projects.find((project) => project.id === PUSH_PROJECT_ID)!;
+    useCloudProjectStore.getState().upsertCloudProject({ ...legacy, serverVersion: undefined });
+    markProjectForSync(PUSH_PROJECT_ID);
+
+    mockPost.mockImplementation(async (path: string) => {
+      if ((path as string) === PROJECTS_SYNC_PATH) {
+        return {
+          applied: [],
+          conflicts: [
+            {
+              id: PUSH_PROJECT_ID,
+              current: projectPullItem(PUSH_PROJECT_ID, '9', { name: 'server baseline' }),
+            },
+          ],
+          cursor: '9',
+        } as never;
+      }
+      if ((path as string) === '/api/memory/sync') {
+        return { applied: [], cursor: '0' } as never;
+      }
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+
+    await syncNow();
+
+    const projectCall = mockPost.mock.calls.find((call) => call[0] === PROJECTS_SYNC_PATH)!;
+    expect(projectCall[1]).toMatchObject({
+      projects: [expect.objectContaining({ id: PUSH_PROJECT_ID, baseVersion: '0' })],
+    });
+    expect(
+      useCloudProjectStore.getState().projects.find((p) => p.id === PUSH_PROJECT_ID),
+    ).toMatchObject({ name: 'legacy offline edit', serverVersion: '9' });
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(PUSH_PROJECT_ID);
+  });
+
+  it('keeps an edit made while an acknowledged push is in flight and rebases its revision', async () => {
+    seedCloudProject(PUSH_PROJECT_ID, 'sent snapshot');
+    markProjectForSync(PUSH_PROJECT_ID);
+
+    mockPost.mockImplementation(async (path: string) => {
+      if ((path as string) === PROJECTS_SYNC_PATH) {
+        const current = useCloudProjectStore
+          .getState()
+          .projects.find((project) => project.id === PUSH_PROJECT_ID)!;
+        useCloudProjectStore
+          .getState()
+          .upsertCloudProject({ ...current, name: 'newer in-flight edit' });
+        return {
+          applied: [{ id: PUSH_PROJECT_ID, server_version: '8' }],
+          conflicts: [],
+          cursor: '8',
+        } as never;
+      }
+      if ((path as string) === '/api/memory/sync') {
+        return { applied: [], cursor: '0' } as never;
+      }
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+
+    await syncNow();
+
+    expect(
+      useCloudProjectStore.getState().projects.find((p) => p.id === PUSH_PROJECT_ID),
+    ).toMatchObject({ name: 'newer in-flight edit', serverVersion: '8' });
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(PUSH_PROJECT_ID);
+  });
+
+  it('keeps an edit made while a stale push is in flight and rebases onto the server winner', async () => {
+    seedCloudProject(PUSH_PROJECT_ID, 'sent stale snapshot');
+    markProjectForSync(PUSH_PROJECT_ID);
+
+    mockPost.mockImplementation(async (path: string) => {
+      if ((path as string) === PROJECTS_SYNC_PATH) {
+        const current = useCloudProjectStore
+          .getState()
+          .projects.find((project) => project.id === PUSH_PROJECT_ID)!;
+        useCloudProjectStore
+          .getState()
+          .upsertCloudProject({ ...current, name: 'newer in-flight edit' });
+        return {
+          applied: [],
+          conflicts: [
+            {
+              id: PUSH_PROJECT_ID,
+              current: projectPullItem(PUSH_PROJECT_ID, '9', { name: 'server winner' }),
+            },
+          ],
+          cursor: '9',
+        } as never;
+      }
+      if ((path as string) === '/api/memory/sync') {
+        return { applied: [], cursor: '0' } as never;
+      }
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+
+    await syncNow();
+
+    expect(
+      useCloudProjectStore.getState().projects.find((p) => p.id === PUSH_PROJECT_ID),
+    ).toMatchObject({ name: 'newer in-flight edit', serverVersion: '9' });
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(PUSH_PROJECT_ID);
+  });
+
+  it('treats a conflicting server tombstone as authoritative over an in-flight edit', async () => {
+    seedCloudProject(PUSH_PROJECT_ID, 'sent snapshot');
+    markProjectForSync(PUSH_PROJECT_ID);
+
+    mockPost.mockImplementation(async (path: string) => {
+      if ((path as string) === PROJECTS_SYNC_PATH) {
+        const current = useCloudProjectStore
+          .getState()
+          .projects.find((project) => project.id === PUSH_PROJECT_ID)!;
+        useCloudProjectStore
+          .getState()
+          .upsertCloudProject({ ...current, name: 'newer in-flight edit' });
+        return {
+          applied: [],
+          conflicts: [
+            {
+              id: PUSH_PROJECT_ID,
+              current: projectPullItem(PUSH_PROJECT_ID, '10', { deletedAt: T }),
+            },
+          ],
+          cursor: '10',
+        } as never;
+      }
+      if ((path as string) === '/api/memory/sync') {
+        return { applied: [], cursor: '0' } as never;
+      }
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+
+    await syncNow();
+
+    expect(
+      useCloudProjectStore.getState().projects.find((p) => p.id === PUSH_PROJECT_ID),
+    ).toBeUndefined();
+    expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain(PUSH_PROJECT_ID);
   });
 
   it('clears a dead ref (project absent from cloud store) without crashing', async () => {

@@ -2,20 +2,17 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type {
-  ModelAvailability,
-  ModelEnvironment,
-  RoutingDecision,
-  RoutingTaskType,
-} from '@agiworkforce/types';
+import type { ModelAvailability, ModelEnvironment, RoutingTaskType } from '@agiworkforce/types';
 import {
   MODEL_PRESETS,
   PROVIDER_LABELS,
   getDisplayModels,
   getModelMetadata,
+  isAutoModeModelId,
   normalizeModelId,
   type ModelMetadata,
 } from '@/constants/llm';
+import { getAutoRoutingProfiles } from '@agiworkforce/types';
 
 export interface AIModel {
   id: string;
@@ -41,7 +38,7 @@ export interface AIModel {
   unavailableReason?: string;
 }
 
-export type { RoutingDecision, RoutingTaskType };
+export type { RoutingTaskType };
 
 type PersistedModelState = {
   selectedModelId: string;
@@ -55,7 +52,6 @@ interface ModelState extends PersistedModelState {
   thinkingModeEnabled: boolean;
   availableModels: AIModel[];
   loading: boolean;
-  lastRoutingDecision: RoutingDecision | null;
   setSelectedModelId: (id: string) => void;
   setSelectedModel: (id: string, provider?: string | null) => void;
   selectModel: (id: string, provider?: string | null) => Promise<void>;
@@ -65,16 +61,9 @@ interface ModelState extends PersistedModelState {
   setThinkingBudget: (budget: number) => void;
   getSelectedModel: () => AIModel;
   getAvailableModels: () => Promise<AIModel[]>;
-  setLastRoutingDecision: (decision: RoutingDecision | null) => void;
 }
 
 const CHAT_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal']);
-const AUTO_MODE_DESCRIPTIONS: Record<string, string> = {
-  'auto-economy': 'Fastest, most cost-effective',
-  'auto-balanced': 'Best default for most conversations',
-  'auto-premium': 'Maximum quality when needed',
-};
-
 function describeModel(metadata: ModelMetadata): string {
   const bestFor = metadata.bestFor?.slice(0, 2).join(' · ');
   if (bestFor) {
@@ -116,12 +105,12 @@ function isCurrentModel(metadata: ModelMetadata): boolean {
 
 function buildAvailableModels(): AIModel[] {
   const seen = new Set<string>();
-  const autoModeEntries = (MODEL_PRESETS['managed_cloud'] ?? []).map((entry) => ({
-    id: entry.value,
-    name: entry.label,
+  const autoModeEntries = getAutoRoutingProfiles().map((profile) => ({
+    id: profile.id,
+    name: profile.label,
     provider: PROVIDER_LABELS['managed_cloud'] ?? 'Managed Cloud',
     providerKey: 'managed_cloud',
-    description: AUTO_MODE_DESCRIPTIONS[entry.value] ?? 'Best model selected automatically',
+    description: profile.description,
   }));
   const orderedIds = Object.entries(MODEL_PRESETS)
     .filter(([provider]) => provider !== 'managed_cloud')
@@ -184,7 +173,7 @@ function buildAvailableModels(): AIModel[] {
 export const AVAILABLE_MODELS: AIModel[] = buildAvailableModels();
 
 const DEFAULT_MODEL_ID =
-  AVAILABLE_MODELS.find((model) => model.id === 'auto-economy')?.id ??
+  AVAILABLE_MODELS.find((model) => model.id === getAutoRoutingProfiles()[0]?.id)?.id ??
   AVAILABLE_MODELS[0]?.id ??
   'auto-economy';
 
@@ -192,6 +181,9 @@ function resolveProvider(modelId: string, explicitProvider?: string | null): str
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
   if (explicitProvider) {
     return explicitProvider;
+  }
+  if (isAutoModeModelId(canonicalModelId)) {
+    return 'managed_cloud';
   }
   return getModelMetadata(canonicalModelId)?.provider ?? null;
 }
@@ -228,7 +220,6 @@ export const useModelStore = create<ModelState>()(
       thinkingBudget: 0,
       availableModels: AVAILABLE_MODELS,
       loading: false,
-      lastRoutingDecision: null,
 
       setSelectedModelId: (id) => {
         set((state) => ({
@@ -281,10 +272,6 @@ export const useModelStore = create<ModelState>()(
       },
 
       getAvailableModels: async () => AVAILABLE_MODELS,
-
-      setLastRoutingDecision: (decision) => {
-        set({ lastRoutingDecision: decision });
-      },
     }),
     {
       name: 'agi-model-store',

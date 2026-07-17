@@ -40,7 +40,10 @@ vi.mock('../../utils/localStorage', () => ({
 
 // Force cloud mode so createConversation takes the cloud-create path.
 vi.mock('../appModeStore', () => ({
-  useAppModeStore: { getState: vi.fn(() => ({})), subscribe: vi.fn(() => () => {}) },
+  useAppModeStore: {
+    getState: vi.fn(() => ({ mode: 'cloud' })),
+    subscribe: vi.fn(() => () => {}),
+  },
   selectPrivacyMode: vi.fn(() => 'managed'),
 }));
 

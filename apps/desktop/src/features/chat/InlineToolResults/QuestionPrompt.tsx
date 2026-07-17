@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { listen } from '@/lib/tauri-mock';
-import { agent } from '@agiworkforce/api';
+import { agent } from '@agiworkforce/desktop-command-client';
 import { HelpCircle, Check } from 'lucide-react';
 import type { ToolResultProps } from './index';
 

@@ -13,6 +13,9 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { getRoutingSlotModel } from '@agiworkforce/types';
+
+const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -132,7 +135,7 @@ async function transcribeViaServer(blob: Blob, language: string): Promise<string
   const form = new FormData();
   const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
   form.append('file', blob, `recording.${ext}`);
-  form.append('model', 'whisper-1');
+  form.append('model', CLOUD_TRANSCRIPTION_MODEL);
   if (language) form.append('language', language);
 
   const response = await fetch('/api/voice/transcribe', {

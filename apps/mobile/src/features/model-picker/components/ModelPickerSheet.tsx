@@ -14,8 +14,8 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
-import { useAgentControlStore } from '@/stores/agentControlStore';
-import { EFFORT_LABEL, type Effort } from '@agiworkforce/types';
+import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
+import { getModelReasoning } from '@agiworkforce/types';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
@@ -27,14 +27,44 @@ import {
 } from '@/src/features/model-picker/service';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 
-// Full UI effort axis, filtered per provider capability: OpenAI has no 'max'
-// effort (OPENAI_REASONING_EFFORT in @agiworkforce/types); everyone else
-// exposes the complete spectrum.
-const FULL_EFFORT_OPTIONS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+// Reasoning-effort chips are driven entirely by the selected model's catalog
+// metadata (models.json `reasoning.supportedEfforts`, see
+// docs/research/reasoning-effort-capability-matrix-2026-07-10.md) — never a
+// hardcoded per-provider list. The allowed set differs per model (e.g.
+// some routes omit higher efforts while others expose them), so a
+// global axis silently offered levels a model doesn't support and hid ones
+// it did.
+//
+// The shared `Effort` union (packages/contracts/types/design-system/effort.ts) is the
+// locked, 5-value request-wire vocabulary (low/medium/high/xhigh/max) used by
+// web/desktop. It deliberately stays untouched here — `PickerEffort`
+// (agentControlStore) is a mobile-local superset that also allows 'none' and
+// 'minimal', the two extra rungs several models expose.
+const EFFORT_LADDER_ORDER: readonly string[] = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
 
-function effortOptionsForProvider(providerId: string | undefined): readonly Effort[] {
-  if (providerId === 'openai') return ['low', 'medium', 'high', 'xhigh'];
-  return FULL_EFFORT_OPTIONS;
+const REASONING_EFFORT_LABEL: Readonly<Record<string, string>> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'xHigh',
+  max: 'Max',
+};
+
+/** Sort a model's `supportedEfforts` into a stable, ladder-order chip row. */
+function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
+  return [...efforts]
+    .sort((a, b) => EFFORT_LADDER_ORDER.indexOf(a) - EFFORT_LADDER_ORDER.indexOf(b))
+    .map((effort) => effort as PickerEffort);
 }
 
 function groupBySurface(
@@ -176,7 +206,7 @@ export function ModelPickerSheet({
       : (s.byProject.__default__?.effort ?? 'medium'),
   );
   const handleSelectEffort = useCallback(
-    (effort: Effort) => {
+    (effort: PickerEffort) => {
       if (conversationId) {
         useAgentControlStore.getState().setEffort(conversationId, effort);
       } else {
@@ -190,21 +220,47 @@ export function ModelPickerSheet({
     [cloudUnlocked, subscriptionTier],
   );
 
-  // Reasoning controls are capability-driven: only reasoning-capable models
-  // (capabilities.thinking in the shared catalog) show the effort selector,
-  // and the level set is filtered per provider. Auto modes route to capable
-  // models server-side, so they keep the full default axis.
-  const selectedModelDef = useMemo(
-    () => getModelByIdForCloudAccess(selectedModel, cloudUnlocked),
-    [selectedModel, cloudUnlocked],
+  // Reasoning controls are catalog-driven, per selected model id — including
+  // auto-mode ids, which also carry a `reasoning` block in models.json (no
+  // special-casing needed, and none baked in here survives a model rename).
+  // Only `control:'effort_levels'` renders the discrete chip row this sheet
+  // builds; 'always_on'/'thinking_toggle'/'thinking_budget' models use a
+  // different control shape (e.g. the per-model "With thinking" switch below,
+  // driven by ModelDef.supportsThinking) and are deliberately NOT shown here
+  // — see docs/research/reasoning-effort-capability-matrix-2026-07-10.md's
+  // control-type taxonomy for why each control needs a different affordance.
+  const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
+  const effortOptions = useMemo(
+    () => sortEffortLadder(selectedReasoning.supportedEfforts ?? []),
+    [selectedReasoning],
   );
   const selectedSupportsReasoning =
-    isAutoMode(selectedModel) || !!selectedModelDef?.supportsThinking;
-  const effortOptions = useMemo(
-    () =>
-      effortOptionsForProvider(isAutoMode(selectedModel) ? undefined : selectedModelDef?.provider),
-    [selectedModel, selectedModelDef],
-  );
+    selectedReasoning.capable &&
+    selectedReasoning.control === 'effort_levels' &&
+    effortOptions.length > 0;
+  const selectedRequiresReasoning =
+    selectedReasoning.capable && selectedReasoning.canDisableThinking === false;
+  // The effort row only ever renders for modelScope==='cloud' (below) — gate
+  // the clamp the same way so switching the LOCAL selected model (e.g. an
+  // on-device auto mode, which also resolves a `reasoning` block above) never
+  // silently rewrites the cloud effort default in the background while this
+  // sheet instance can't even show the control.
+  const showEffortControl = modelScope === 'cloud' && selectedSupportsReasoning;
+
+  // Keep the stored effort valid for whichever model is now selected: e.g. the
+  // user picks an effort supported by one route, then switches to a route that
+  // does not support it — without this, the stale value stays
+  // selected/sent for a model that doesn't support it. Falls back to the new
+  // model's own defaultEffort, or its first (lowest) rung if that's ever
+  // missing from its own supportedEfforts.
+  useEffect(() => {
+    if (!showEffortControl) return;
+    if (effortOptions.includes(selectedEffort)) return;
+    const fallback = effortOptions.includes(selectedReasoning.defaultEffort as PickerEffort)
+      ? (selectedReasoning.defaultEffort as PickerEffort)
+      : effortOptions[0];
+    if (fallback) handleSelectEffort(fallback);
+  }, [showEffortControl, effortOptions, selectedEffort, selectedReasoning, handleSelectEffort]);
   const modelList = useMemo(() => {
     if (modelScope === 'local') {
       return completeModelList.filter((model) => model.surface === 'local');
@@ -503,7 +559,7 @@ export function ModelPickerSheet({
               paddingTop: 0,
               paddingBottom: 0,
             }}
-            placeholder="Search models"
+            placeholder="Search models…"
             placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
@@ -522,7 +578,7 @@ export function ModelPickerSheet({
           ) : null}
         </View>
 
-        {modelScope === 'cloud' && selectedSupportsReasoning ? (
+        {showEffortControl ? (
           <View
             style={{
               marginHorizontal: 16,
@@ -535,6 +591,9 @@ export function ModelPickerSheet({
             <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
               Reasoning effort
             </Text>
+            {selectedRequiresReasoning ? (
+              <Text style={{ color: colors.textMuted, fontSize: 11 }}>Always on</Text>
+            ) : null}
             <View
               testID="model-picker-effort-selector"
               style={{
@@ -555,7 +614,7 @@ export function ModelPickerSheet({
                     key={effort}
                     onPress={() => handleSelectEffort(effort)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Reasoning effort ${EFFORT_LABEL[effort]}`}
+                    accessibilityLabel={`Reasoning effort ${REASONING_EFFORT_LABEL[effort] ?? effort}`}
                     accessibilityState={{ selected }}
                     style={{
                       flex: 1,
@@ -573,7 +632,7 @@ export function ModelPickerSheet({
                         fontWeight: '600',
                       }}
                     >
-                      {EFFORT_LABEL[effort]}
+                      {REASONING_EFFORT_LABEL[effort] ?? effort}
                     </Text>
                   </Pressable>
                 );
@@ -587,7 +646,7 @@ export function ModelPickerSheet({
           contentContainerStyle={{ paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
         >
-          {!query && modelScope !== 'cloud' ? (
+          {!query ? (
             <View style={{ marginBottom: 8 }}>
               {AUTO_MODES.map((mode) => (
                 <AutoModeRow
@@ -648,7 +707,7 @@ export function ModelPickerSheet({
               }}
             >
               <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: 'center' }}>
-                No models matching "{search}"
+                No models matching “{search}”
               </Text>
             </View>
           ) : null}

@@ -1,11 +1,4 @@
-/**
- * POST /api/chat/sync — conversation model COALESCE hardening.
- *
- * Desktop conversations have no `model` column, so a desktop push sends model=null.
- * The upsert must COALESCE model so a null push can never clobber a model another
- * client/device already set. project_id/pinned intentionally stay last-writer-wins
- * (null/false there are legit "unassign from project" / "unpin" intents).
- */
+/** POST /api/chat/sync — server-version CAS and optional-field ownership. */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const queryMock = vi.fn();
@@ -21,7 +14,14 @@ import { NextRequest } from 'next/server';
 
 beforeEach(() => {
   queryMock.mockReset();
-  queryMock.mockResolvedValue([{ id: 'x', server_version: '1' }]);
+  queryMock.mockResolvedValue([
+    {
+      kind: 'applied',
+      id: '0190a000-0000-7000-8000-0000000000cc',
+      server_version: '1',
+      current: null,
+    },
+  ]);
 });
 
 function postReq(body: unknown) {
@@ -32,16 +32,16 @@ function postReq(body: unknown) {
   });
 }
 
-describe('POST /api/chat/sync — conversation model COALESCE', () => {
-  it('COALESCEs model so a null-model push cannot clobber an existing model', async () => {
+describe('POST /api/chat/sync — revision CAS', () => {
+  it('uses server revisions/clocks and preserves fields omitted by Desktop', async () => {
     const res = await POST(
       postReq({
+        protocolVersion: 2,
         conversations: [
           {
             id: '0190a000-0000-7000-8000-0000000000cc',
             title: 'Desktop chat',
-            model: null, // desktop has no conversations.model column → pushes null
-            updatedAt: '2026-06-21T00:00:00.000Z',
+            baseVersion: '7',
           },
         ],
         messages: [],
@@ -50,13 +50,143 @@ describe('POST /api/chat/sync — conversation model COALESCE', () => {
     expect(res.status).toBe(200);
 
     const convCall = queryMock.mock.calls.find((c) =>
-      String(c[0]).includes('insert into web_conversations'),
+      String(c[0]).includes('update web_conversations'),
     );
     expect(convCall).toBeDefined();
     const sql = String(convCall![0]);
-    // The protection: model only updates when the pushed value is non-null.
-    expect(sql).toContain('coalesce(excluded.model, web_conversations.model)');
-    // project_id stays last-writer-wins (no coalesce) so un-assign propagates.
-    expect(sql).toContain('project_id = excluded.project_id');
+    // Desktop omits model/project/pinned because its SQLite row does not own them.
+    expect(sql).toContain('when incoming.has_model then incoming.model else existing.model');
+    expect(sql).toContain('existing.server_version = incoming.base_version');
+    expect(sql).toContain('updated_at = now()');
+    expect(sql).not.toContain('excluded.updated_at');
+  });
+
+  it('returns a non-disclosing conflict for a message id outside the tenant', async () => {
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: '0190a000-0000-7000-8000-0000000000dd',
+            conversationId: '0190a000-0000-7000-8000-0000000000cc',
+            role: 'user',
+            content: 'hello',
+          },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const messageCall = queryMock.mock.calls.find((call) =>
+      String(call[0]).includes('insert into web_messages'),
+    );
+    expect(messageCall).toBeDefined();
+    const sql = String(messageCall![0]);
+    expect(sql).toContain('current.id is null or owner.id is null');
+    expect(sql).not.toContain('current.id is null or owner.id is not null');
+  });
+
+  it('admits an artifact message owner only inside the same owned conversation', async () => {
+    const conversationId = '0190a000-0000-7000-8000-0000000000cc';
+    const messageId = '0190a000-0000-7000-8000-0000000000dd';
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        artifacts: [
+          {
+            id: '0190a000-0000-7000-8000-0000000000ee',
+            conversationId,
+            messageId,
+            artifactType: 'react',
+            content: 'export default function A() { return <div /> }',
+            baseVersion: '0',
+          },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const artifactCall = queryMock.mock.calls.find((call) =>
+      String(call[0]).includes('insert into web_artifacts'),
+    );
+    expect(artifactCall).toBeDefined();
+    const sql = String(artifactCall![0]);
+    expect(sql).toContain('source_message.id = incoming.message_id');
+    expect(sql).toContain('source_message.conversation_id = incoming.conversation_id');
+    expect(sql).toContain('source_parent.user_id = $1');
+    expect(sql).toContain('source_message.deleted_at is null');
+  });
+
+  it.each(['foreign', 'deleted'])(
+    'returns a non-disclosing conflict for a valid-looking %s artifact message UUID',
+    async () => {
+      const artifactId = '0190a000-0000-7000-8000-0000000000ee';
+      queryMock.mockResolvedValueOnce([
+        { kind: 'conflict', id: artifactId, server_version: null, current: null },
+      ]);
+      const res = await POST(
+        postReq({
+          protocolVersion: 2,
+          artifacts: [
+            {
+              id: artifactId,
+              conversationId: '0190a000-0000-7000-8000-0000000000cc',
+              messageId: '0190a000-0000-7000-8000-0000000000dd',
+              artifactType: 'react',
+              content: 'export default function A() { return <div /> }',
+              baseVersion: '0',
+            },
+          ],
+        }),
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({
+        applied: { artifacts: [] },
+        conflicts: { artifacts: [{ id: artifactId, current: null }] },
+      });
+    },
+  );
+
+  it('allows a later valid artifact-owner replay and keeps its ack idempotent', async () => {
+    const artifactId = '0190a000-0000-7000-8000-0000000000ee';
+    const requestBody = {
+      protocolVersion: 2 as const,
+      artifacts: [
+        {
+          id: artifactId,
+          conversationId: '0190a000-0000-7000-8000-0000000000cc',
+          messageId: '0190a000-0000-7000-8000-0000000000dd',
+          artifactType: 'react',
+          content: 'export default function A() { return <div /> }',
+          baseVersion: '0',
+        },
+      ],
+    };
+    queryMock
+      .mockResolvedValueOnce([
+        { kind: 'conflict', id: artifactId, server_version: null, current: null },
+      ])
+      .mockResolvedValueOnce([
+        { kind: 'applied', id: artifactId, server_version: '7', current: null },
+      ])
+      .mockResolvedValueOnce([
+        { kind: 'applied', id: artifactId, server_version: '7', current: null },
+      ]);
+
+    const rejected = await POST(postReq(requestBody));
+    expect(await rejected.json()).toMatchObject({ conflicts: { artifacts: [{ id: artifactId }] } });
+
+    const accepted = await POST(postReq(requestBody));
+    expect(await accepted.json()).toMatchObject({
+      applied: { artifacts: [{ id: artifactId, server_version: '7' }] },
+      conflicts: { artifacts: [] },
+    });
+
+    requestBody.artifacts[0]!.baseVersion = '7';
+    const replayed = await POST(postReq(requestBody));
+    expect(await replayed.json()).toMatchObject({
+      applied: { artifacts: [{ id: artifactId, server_version: '7' }] },
+      conflicts: { artifacts: [] },
+    });
   });
 });

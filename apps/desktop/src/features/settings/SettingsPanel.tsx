@@ -1,5 +1,5 @@
 import { isTauri, isCloudWeb, isDesktopUiDevLocal } from '@/lib/tauri-mock';
-import { notifications, models as modelsApi } from '@agiworkforce/api';
+import { notifications, models as modelsApi } from '@agiworkforce/desktop-command-client';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';

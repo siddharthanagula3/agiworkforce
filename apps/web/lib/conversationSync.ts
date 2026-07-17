@@ -45,7 +45,7 @@ export class ConversationSyncService {
     // assertion fails fast at construction rather than silently
     // enrolling that surface into the consumer chat-history realtime
     // channel. See `assertSurfaceCanSyncChats` in
-    // packages/types/src/suite-contracts.ts.
+    // packages/contracts/types/src/suite-contracts.ts.
     assertSurfaceCanSyncChats(origin);
     this.origin = origin;
   }

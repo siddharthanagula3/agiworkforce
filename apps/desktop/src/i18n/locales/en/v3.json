@@ -56,7 +56,8 @@
     "mode": {
       "local": "Local",
       "cloud": "Cloud",
-      "aria": "Switch between Local and Cloud"
+      "aria": "Switch between Local and Cloud",
+      "switchTo": "Switch to {{mode}}"
     },
     "groups": {
       "lastHour": "Last hour",
@@ -103,63 +104,6 @@
       "life": "Help me with ",
       "web": "Search the web for "
     }
-  },
-  "composer": {
-    "placeholder": "How can I help you today?",
-    "placeholderReply": "Reply, or ask a follow-up…",
-    "inputAriaLabel": "Chat message input",
-    "addAriaLabel": "Add files, skills, connectors…",
-    "modelAriaLabel": "Choose model",
-    "voiceAriaLabel": "Voice input settings",
-    "stopAriaLabel": "Stop generation",
-    "sendAriaLabel": "Send message",
-    "adaptive": "Adaptive",
-    "standard": "Standard",
-    "disclaimer": "AI can make mistakes. Please double-check responses."
-  },
-  "plusMenu": {
-    "addFiles": "Add files or photos",
-    "addProject": "Add to project",
-    "addGithub": "Add from GitHub",
-    "skills": "Skills",
-    "connectors": "Connectors",
-    "plugins": "Plugins",
-    "research": "Research",
-    "webSearch": "Web search",
-    "useStyle": "Use style",
-    "browseAll": "Browse all plugins",
-    "manageSkills": "Manage skills",
-    "addConnector": "Add connector"
-  },
-  "modelPopover": {
-    "primary": {
-      "premium": "Most capable for ambitious work",
-      "balanced": "Responsive everyday work",
-      "fast": "Fastest, most efficient"
-    },
-    "groups": {
-      "olderAnthropic": "Older Anthropic",
-      "otherProviders": "Other providers"
-    },
-    "tags": {
-      "local": "Local"
-    },
-    "thinking": "Adaptive thinking",
-    "thinkingDesc": "Thinks for more complex tasks",
-    "moreModels": "More models"
-  },
-  "micSettings": {
-    "title": "Voice input",
-    "source": "Source",
-    "loadingDevices": "Loading devices…",
-    "defaultMic": "Default microphone",
-    "microphone": "Microphone",
-    "holdToRecord": "Hold to record",
-    "holdToRecordDesc": "Tap to start, tap to stop when off",
-    "autoTrim": "Auto-trim silence",
-    "autoTrimDesc": "Cut leading/trailing pauses",
-    "footer": "On-device · Whisper-small",
-    "settings": "Settings"
   },
   "responseActions": {
     "copy": "Copy",
@@ -395,7 +339,11 @@
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
       "paused": "Paused",
-      "empty": "No scheduled tasks yet."
+      "empty": "No scheduled tasks yet.",
+      "pauseAria": "Pause scheduled task {{name}}",
+      "resumeAria": "Resume scheduled task {{name}}",
+      "deleteTitle": "Delete scheduled task?",
+      "deleteDescription": "Delete {{name}}. This cannot be undone."
     }
   },
   "time": {

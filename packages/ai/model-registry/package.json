@@ -1,0 +1,24 @@
+{
+  "name": "@agiworkforce/model-registry",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./generated/registry.ts",
+  "types": "./generated/registry.ts",
+  "exports": {
+    ".": "./generated/registry.ts",
+    "./registry.json": "./generated/registry.json"
+  },
+  "scripts": {
+    "generate": "node scripts/compile.mjs",
+    "check": "node scripts/compile.mjs --check",
+    "refresh": "node scripts/compile.mjs --refresh",
+    "test": "node --test tests/*.test.mjs && node scripts/compile.mjs --check",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "ajv": "^8.18.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3"
+  }
+}

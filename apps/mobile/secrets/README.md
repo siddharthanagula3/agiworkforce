@@ -10,12 +10,14 @@ Nothing in here is committed (`.gitignore` allows only this README + `.gitkeep`)
 | `asc-api-key.p8`                   | App Store Connect → Users and Access → Integrations → Keys  | `eas submit --platform ios`     |
 | `google-play-service-account.json` | Google Cloud Console → IAM → Service Accounts → Keys (JSON) | `eas submit --platform android` |
 
-For CI/server-side use, prefer storing these as EAS secrets:
+For EAS environments, store secret copies with the current environment-variable command:
 
 ```bash
-eas secret:create --scope project --name ASC_API_KEY_P8       --type file --value ./secrets/asc-api-key.p8
-eas secret:create --scope project --name PLAY_SERVICE_ACCOUNT --type file --value ./secrets/google-play-service-account.json
+eas env:create preview --scope project --name ASC_API_KEY_P8 --type file --visibility secret --value ./secrets/asc-api-key.p8
+eas env:create preview --scope project --name PLAY_SERVICE_ACCOUNT --type file --visibility secret --value ./secrets/google-play-service-account.json
 ```
 
-When EAS secrets are configured, the `*KeyPath` entries in `eas.json` can be replaced with EAS-secret refs.
+The checked-in submit profiles currently reference these local files. Do not delete the local
+copies until the profiles explicitly use the corresponding file-variable paths and that path has
+been verified in a non-production submission.
 See `apps/mobile/scripts/release/README.md` for the full founder action checklist.

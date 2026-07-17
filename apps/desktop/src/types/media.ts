@@ -2,8 +2,7 @@ export type ImageProviderId =
   | 'google_imagen'
   | 'google_imagen_lite'
   | 'dalle'
-  | 'stable_diffusion'
-  | 'midjourney';
+  | 'stable_diffusion';
 
 export type ImageSizeId = 'small' | 'medium' | 'large' | 'wide' | 'portrait';
 export type ImageQualityId = 'standard' | 'hd' | 'premium';
@@ -32,7 +31,7 @@ export interface GeneratedImageResult {
 }
 
 export type VideoResolutionId = '720p' | '1080p' | '4k';
-export type VideoProviderId = 'veo3' | 'google' | 'runway';
+export type VideoProviderId = 'google' | 'runway';
 
 export interface VideoGenerationPayload {
   prompt: string;

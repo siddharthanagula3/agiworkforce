@@ -8,7 +8,6 @@
 
 // AUDIT-FIX: vscode-reorg
 import * as vscode from 'vscode';
-import { type ConversationStore } from '../../data/conversationStore';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
 import { normalizeConfiguredModelId } from '../model-picker/modelConstants';
@@ -16,6 +15,7 @@ import { Config } from '../../platform/config';
 import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
 import { getWebviewContent, getNonce } from './webviewContent';
 import { parseWebviewMessage } from '../../protocol/webviewMessages';
+import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 
 // Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
@@ -38,18 +38,18 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
     context: vscode.ExtensionContext,
-    conversationStore?: ConversationStore,
     conversationTreeProvider?: ConversationTreeProvider,
     workspaceState?: vscode.Memento,
+    localRuntimes?: LocalRuntimePool,
     diffDecorationProvider?: DiffDecorationProvider,
   ) {
     this._stateManager = new ChatStateManager(
       secrets,
       context,
       (msg: ExtToWebviewMessage) => this._view?.webview.postMessage(msg),
-      conversationStore,
       conversationTreeProvider,
       workspaceState,
+      localRuntimes,
       diffDecorationProvider,
     );
   }

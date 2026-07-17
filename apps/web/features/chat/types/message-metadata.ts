@@ -150,6 +150,17 @@ export interface WebChatMessageMetadata {
    */
   finishReason?: string;
 
+  /**
+   * Classified payload from an additive `x_stream_error` delta: the provider
+   * failed mid-stream (after the response had already committed), so the
+   * turn otherwise looks like a clean completion. `code`/`retryable` are
+   * present when the provider adapter supplied them. Drives the "response
+   * may be incomplete" notice + regenerate affordance — see
+   * `hasStreamError`/`StreamErrorMessageLike` in
+   * features/chat/lib/continue-generation.ts.
+   */
+  streamError?: { message: string; code?: string; retryable?: boolean };
+
   // Safe replay metadata for regenerate. Raw skill bodies are intentionally not persisted.
   sendReplay?: SendReplayMetadata;
 

@@ -38,7 +38,7 @@ import type { ChatRequest, ProviderAdapter, StreamChunk } from '@agiworkforce/ty
 import type { ProcessedRequest } from './request-processor';
 
 /**
- * One entry per provider wired onto the `packages/providers/*` adapter path.
+ * One entry per provider wired onto the `packages/ai/providers/*` adapter path.
  * Keeps the streaming/non-streaming branches in route.ts identical in shape
  * for every adapter-backed provider instead of duplicating a provider-
  * specific try/catch block per provider (Anthropic's was hand-duplicated for
@@ -63,7 +63,7 @@ import type { ProcessedRequest } from './request-processor';
  * stream-transform.openai-byte-parity.test.ts), so it needs the DIFFERENT
  * `'openai-passthrough'` mode (team-lead RULING: Option B, preserve
  * fidelity). The 9 openai-compat providers join OpenAI on the same
- * `'openai-passthrough'` mode: each `packages/providers/{provider}` package
+ * `'openai-passthrough'` mode: each `packages/ai/providers/{provider}` package
  * is a thin config wrapper around the SAME `@agiworkforce/providers-openai`
  * translate/stream layer (see adapter-factory.ts's `buildCompatAdapter`
  * docstring), and none of their legacy files reshape their vendor's own

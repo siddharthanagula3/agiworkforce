@@ -1,6 +1,6 @@
 import {
-  getPickerModels,
-  PROVIDERS_IN_ORDER as PROVIDER_ORDER,
+  getAutoRoutingProfiles,
+  getPickerModelsForRuntimeProfile,
   PROVIDER_DISPLAY,
   normalizeModelId,
   providerLabels,
@@ -38,29 +38,24 @@ export interface AutoModeDef {
   tier: ModelTier;
 }
 
-export const AUTO_MODES: AutoModeDef[] = [
-  {
-    id: 'auto-economy',
-    name: 'Economy',
-    description: 'Best for cost',
-    icon: 'Zap',
-    tier: 'economy',
-  },
-  {
-    id: 'auto-balanced',
-    name: 'Balanced',
-    description: 'Best value',
-    icon: 'Scale',
-    tier: 'balanced',
-  },
-  {
-    id: 'auto-premium',
-    name: 'Best',
-    description: 'Most capable',
-    icon: 'Crown',
-    tier: 'premium',
-  },
-];
+const AUTO_MODE_ICONS: Readonly<Record<ModelTier, string>> = {
+  economy: 'Zap',
+  balanced: 'Scale',
+  premium: 'Crown',
+};
+
+/**
+ * Mobile-owned icon treatment over registry-owned Auto identity and copy.
+ * Model/routing knowledge must stay in the canonical registry; only visual
+ * presentation belongs in this platform adapter.
+ */
+export const AUTO_MODES: AutoModeDef[] = getAutoRoutingProfiles().map((profile) => ({
+  id: profile.id,
+  name: profile.label,
+  description: profile.description,
+  icon: AUTO_MODE_ICONS[profile.profile],
+  tier: profile.profile,
+}));
 
 const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>>> = {
   openai: { icon: 'Sparkles' },
@@ -74,7 +69,17 @@ const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>
   perplexity: { icon: 'Compass' },
 };
 
-const MOBILE_PROVIDER_IDS = PROVIDER_ORDER.filter((providerId) => providerId in PROVIDER_META);
+const MOBILE_PICKER_MODELS = getPickerModelsForRuntimeProfile('mobile/cloud-chat', {
+  // Some general-purpose, vision-capable models are cataloged as `code`
+  // because coding is their primary strength (for example Claude Sonnet 5).
+  // Mobile chat can still run them, so excluding the type hid a current model
+  // even though the registry admitted it to this runtime profile.
+  modelTypes: ['chat', 'reasoning', 'multimodal', 'search', 'code'],
+});
+
+const MOBILE_PROVIDER_IDS = Array.from(
+  new Set(MOBILE_PICKER_MODELS.map((model) => model.provider)),
+);
 
 export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => ({
   id: providerId,
@@ -85,10 +90,7 @@ export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => 
     PROVIDER_DISPLAY['custom-openai-compatible'].brandColor,
 }));
 
-export const MODEL_LIST: ModelDef[] = getPickerModels({
-  allowedProviders: MOBILE_PROVIDER_IDS,
-  modelTypes: ['chat', 'reasoning', 'multimodal', 'search'],
-}).map((model) => ({
+export const MODEL_LIST: ModelDef[] = MOBILE_PICKER_MODELS.map((model) => ({
   id: model.id,
   name: model.name,
   provider: model.provider,

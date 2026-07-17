@@ -42,14 +42,14 @@ const neonMock = vi.hoisted(() => {
   return { from, insert, state };
 });
 
-// routes/deviceAuth.ts uses getServiceClient() because the device-code
+// routes/deviceAuth.ts uses the explicit system client because the device-code
 // bootstrap flow starts before the CLI has a cloud account token.
 vi.mock('../../src/lib/neonClients', () => {
   const mockClient = {
     from: neonMock.from,
   };
   return {
-    getServiceClient: vi.fn(() => mockClient),
+    getSystemClient: vi.fn(() => mockClient),
     getUserClient: vi.fn(() => mockClient),
     getUserScopedClient: vi.fn(() => mockClient),
   };
@@ -101,7 +101,7 @@ describe('Device auth route mounts', () => {
 });
 
 describe('POST /auth/device/token — issued access_token carries `sub`', () => {
-  // P1-GW-RLS: NeonDatabaseAdapter.withUser() (packages/data-layer) decodes
+  // P1-GW-RLS: NeonDatabaseAdapter.withUser() (packages/platform/data-layer) decodes
   // `sub` from the token to bind Postgres RLS — a gateway-issued token
   // without it would throw there. This is the regression guard for that fix.
   const DEVICE_CODE = '11111111-1111-4111-8111-111111111111';

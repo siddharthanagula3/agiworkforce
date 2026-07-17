@@ -1,0 +1,103 @@
+{
+  "description": "Golden clock-free push-item mappings. Mutable conversations carry a server base revision; append-only messages carry no client timestamp.",
+  "conversationCases": [
+    {
+      "name": "full_record_maps_camelCase",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000001",
+        "title": "Quarterly plan",
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-02T00:00:00.000Z",
+        "messageCount": 2,
+        "pinned": true,
+        "model": "gpt-5.4",
+        "projectId": "018f6f2a-0000-7000-8000-000000000099",
+        "serverVersion": "12"
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000001",
+        "title": "Quarterly plan",
+        "model": "gpt-5.4",
+        "projectId": "018f6f2a-0000-7000-8000-000000000099",
+        "pinned": true,
+        "baseVersion": "12"
+      }
+    },
+    {
+      "name": "missing_optional_fields_null_out",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000002",
+        "title": "No model, no project",
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-01T00:00:00.000Z",
+        "messageCount": 0,
+        "pinned": false
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000002",
+        "title": "No model, no project",
+        "model": null,
+        "projectId": null,
+        "pinned": false,
+        "baseVersion": "0"
+      }
+    },
+    {
+      "name": "legacy_record_uses_zero_base_revision",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000003",
+        "title": "No updatedAt",
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "messageCount": 0,
+        "pinned": false
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000003",
+        "title": "No updatedAt",
+        "model": null,
+        "projectId": null,
+        "pinned": false,
+        "baseVersion": "0"
+      },
+      "note": "Persisted records created before protocol v2 have no serverVersion and therefore create with baseVersion 0."
+    }
+  ],
+  "messageCases": [
+    {
+      "name": "full_record_maps_camelCase",
+      "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000010",
+        "role": "assistant",
+        "content": "Here is the plan",
+        "model": "gpt-5.4",
+        "provider": "openai"
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000010",
+        "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+        "role": "assistant",
+        "content": "Here is the plan",
+        "model": "gpt-5.4",
+        "provider": "openai"
+      }
+    },
+    {
+      "name": "missing_optional_fields_null_out",
+      "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000011",
+        "role": "user",
+        "content": "hi there"
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000011",
+        "conversationId": "018f6f2a-0000-7000-8000-000000000001",
+        "role": "user",
+        "content": "hi there",
+        "model": null,
+        "provider": null
+      }
+    }
+  ]
+}

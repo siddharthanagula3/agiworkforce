@@ -34,7 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_subscriptions_google_purchase_token
   WHERE google_purchase_token IS NOT NULL;
 
 -- The plan_tier check constraint (last touched in migration 0030) predates
--- the 2026-07-02 pricing rename in packages/types/src/billing-catalog.ts,
+-- the 2026-07-02 pricing rename in packages/contracts/types/src/billing-catalog.ts,
 -- which replaced 'hobby' with 'basic' and added 'team'. Mobile IAP can
 -- purchase 'basic' and 'team' (apps/mobile/src/features/billing/iapProducts.ts),
 -- so without this the very first mobile-IAP upsert for those tiers would

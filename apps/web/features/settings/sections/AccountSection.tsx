@@ -112,9 +112,19 @@ export function AccountSection() {
   const handleDeleteSuccessContinue = useCallback(() => {
     setShowDeleteDialog(false);
     void (async () => {
-      await logout();
-      await clerkSignOut({ redirectUrl: '/' });
-      router.replace('/');
+      try {
+        await logout();
+        await clerkSignOut({ redirectUrl: '/' });
+      } catch (err) {
+        // The account is already deleted server-side at this point (this
+        // handler only runs after handleDeleteAccount succeeded) — if
+        // logout()/clerkSignOut() fail here (e.g. a network blip), fall back
+        // to a hard navigation instead of leaving the user stuck on a dead
+        // settings screen with no feedback and no way to reach '/'.
+        console.warn('[Account] Post-deletion sign-out failed, forcing navigation:', err);
+      } finally {
+        router.replace('/');
+      }
     })();
   }, [logout, clerkSignOut, router]);
 

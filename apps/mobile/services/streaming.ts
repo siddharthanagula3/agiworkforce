@@ -2,11 +2,6 @@ import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
 import { getModelMetadataById, type Effort, type Provider } from '@agiworkforce/types';
-import {
-  streamFromProvider,
-  type ProviderStreamProvider,
-  type StreamChunk as ProviderStreamChunk,
-} from '@/lib/providerStreamClient';
 import { getAuthToken } from './authSession';
 // Zero-leak chokepoint: the SSE call below targets OUR managed cloud
 // (`${API_URL}/api/llm/...`). Route it through guardedFetch so that, in Local
@@ -18,6 +13,25 @@ import { ApiPaywallError } from './api';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
+import {
+  parseToolStatusDelta,
+  parseToolResultDelta,
+  parseToolApprovalRequestDelta,
+} from '@agiworkforce/cloud-contracts';
+
+/**
+ * One chat-completions wire message. `tool_calls`/`tool_call_id` are only
+ * present on the reconstructed assistant tool-call turn and tool-result rows
+ * a tool-approval resume request replays (see `streamToolApprovalResume`) —
+ * every normal user/assistant/system turn omits them.
+ */
+export interface ChatWireMessage {
+  role: string;
+  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+  tool_calls?: unknown[];
+  tool_call_id?: string;
+}
 
 /** OpenAI-style tool_call fragment streamed by the server-tool path (Anthropic
  *  cloud chat auto-tools: web_search, code execution). Fragments accumulate by
@@ -29,8 +43,14 @@ export interface StreamToolCallFragment {
   function?: { name?: string; arguments?: string };
 }
 
-/** Tool lifecycle status event (`x_tool_status`). `type` distinguishes the
- *  server-tool family ('server_tool_use') from MCP ('mcp_tool_use'). */
+/**
+ * Tool lifecycle status event (`x_tool_status`). `type` distinguishes the
+ * server-tool family ('server_tool_use') from MCP ('mcp_tool_use').
+ * `processSseLine` validates the raw wire payload against the shared
+ * `ToolStatusPayloadSchema` cloud contract before it reaches `onDelta`; the
+ * fields stay optional here because a payload that fails validation is passed
+ * through UNCHANGED (defensive fallback) rather than dropped.
+ */
 export interface StreamToolStatus {
   type?: string;
   name?: string;
@@ -39,7 +59,7 @@ export interface StreamToolStatus {
   args?: unknown;
 }
 
-/** MCP tool result (`x_tool_result`). */
+/** MCP tool result (`x_tool_result`) — validated the same way as {@link StreamToolStatus}. */
 export interface StreamToolResult {
   tool_call_id: string;
   name?: string;
@@ -47,7 +67,11 @@ export interface StreamToolResult {
   is_error?: boolean;
 }
 
-/** MCP approval request (`x_tool_approval_request`) — emitted in manual mode. */
+/**
+ * MCP/connector approval request (`x_tool_approval_request`) — emitted in
+ * manual mode when a tool call is suspended awaiting the user's decision.
+ * Validated the same way as {@link StreamToolStatus}.
+ */
 export interface StreamToolApprovalRequest {
   tool_call_id: string;
   name: string;
@@ -60,7 +84,7 @@ export interface StreamToolApprovalRequest {
  * `uri` is the RELATIVE authed route `/api/files/{id}` on the cloud origin —
  * consumers resolve it against API_URL and attach the Bearer token when
  * fetching. Wire shape is validated by the shared cloud contract
- * (`GeneratedFileWireSchema` in `@agiworkforce/services`) at the point of
+ * (`GeneratedFileWireSchema` in `@agiworkforce/cloud-contracts`) at the point of
  * consumption (chatExecutionStore).
  */
 export interface StreamGeneratedFile {
@@ -91,6 +115,17 @@ export interface StreamDelta {
   x_search_results?: unknown;
   /** Durable descriptors for files generated in the E2B sandbox this turn. */
   x_generated_files?: { files?: StreamGeneratedFile[] };
+  /**
+   * Additive marker for a mid-stream provider failure (after the response
+   * had already committed a 200) — the classified error payload. The
+   * server still ends the stream cleanly with [DONE], so finish_reason
+   * alone cannot reliably signal this (see packages/ai/provider-protocol's
+   * openai-wire-compat.ts and packages/ui/unified-chat's hasStreamError doc
+   * comments for why). `code`/`retryable` are present when the provider
+   * adapter supplied them. Consumed by chatExecutionStore to persist
+   * metadata.streamError and drive the incomplete-response notice.
+   */
+  x_stream_error?: { message: string; code?: string; retryable?: boolean };
 }
 
 export interface StreamCallbacks {
@@ -124,6 +159,27 @@ const RECONNECT_DELAYS = [1_000, 2_500, 5_000];
  * sentinel so the caller can finalize. Shared by the streaming reader and the
  * non-streaming `response.text()` fallback so both parse identically.
  */
+/**
+ * Validate the known tool-event fields of a raw delta against the shared
+ * cloud contracts (packages/contracts/cloud-contracts/src/tool-events.ts)
+ * before it reaches the accumulator. A field that fails validation is left
+ * UNCHANGED (never dropped) — defensive fallback in case a future emitter
+ * drifts from the contract in a way this parser doesn't yet model; today
+ * every known emitter conforms (see the contract's own doc comment).
+ */
+function sanitizeToolEventFields(delta: StreamDelta): void {
+  if (delta.x_tool_status !== undefined) {
+    delta.x_tool_status = parseToolStatusDelta(delta.x_tool_status) ?? delta.x_tool_status;
+  }
+  if (delta.x_tool_result !== undefined) {
+    delta.x_tool_result = parseToolResultDelta(delta.x_tool_result) ?? delta.x_tool_result;
+  }
+  if (delta.x_tool_approval_request !== undefined) {
+    delta.x_tool_approval_request =
+      parseToolApprovalRequestDelta(delta.x_tool_approval_request) ?? delta.x_tool_approval_request;
+  }
+}
+
 function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
   const trimmed = line.trim();
   if (!trimmed || !trimmed.startsWith('data: ')) return false;
@@ -135,6 +191,7 @@ function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
     const parsed = JSON.parse(payload);
     const choice = parsed.choices?.[0];
     if (choice?.delta) {
+      sanitizeToolEventFields(choice.delta);
       callbacks.onDelta(choice.delta);
     }
     if (choice?.finish_reason) {
@@ -146,21 +203,28 @@ function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
   return false;
 }
 
+/** Chat-completions endpoint paths this client posts to. */
+const COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
+const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
+
 async function attemptStream(
   body: {
     model: string;
-    messages: Array<{
-      role: string;
-      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-    }>;
+    messages: ChatWireMessage[];
     stream: true;
+    operationId: string;
     thinking?: boolean;
     effort?: Effort;
     /** When true, the server injects its built-in web_search tool for this turn. */
     web_search?: boolean;
+    /** When true, the server injects its built-in E2B code-execution tool for this turn. */
+    code_execution?: boolean;
+    /** Present only on a tool-approval resume request — see `streamToolApprovalResume`. */
+    tool_approvals?: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
   },
   callbacks: StreamCallbacks,
   signal: AbortSignal,
+  path: string = COMPLETIONS_PATH,
 ): Promise<boolean> {
   const token = await getAuthToken();
 
@@ -169,19 +233,24 @@ async function attemptStream(
   // `thinking` fails Zod validation with HTTP 400 ("expected object, received
   // boolean"), which is the exact bug that made EVERY cloud chat reply silently
   // fail. Remap the boolean to thinking_mode; never send a bare boolean as thinking.
-  const { thinking, ...restBody } = body;
+  const { thinking, operationId, ...restBody } = body;
   const payload = {
     ...restBody,
     ...(typeof thinking === 'boolean' ? { thinking_mode: thinking } : {}),
   };
 
   const response = await guardedFetch(
-    `${API_URL}/api/llm/v1/chat/completions`,
+    `${API_URL}${path}`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
+        'Idempotency-Key': createManagedChatIdempotencyKey({
+          surface: 'mobile',
+          purpose: path === TOOL_APPROVAL_RESUME_PATH ? 'tool-resume' : 'send',
+          operationId,
+        }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(payload),
@@ -298,36 +367,6 @@ async function attemptStream(
   }
 }
 
-/**
- * Default-off feature flag: when `EXPO_PUBLIC_USE_PROVIDER_STREAM === '1'`,
- * `streamChat` will first try the api-gateway's `/api/v1/providers/:id/stream`
- * endpoint and fall back to the legacy `/api/llm/v1/chat/completions` path on
- * error.
- */
-const USE_PROVIDER_STREAM = process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM === '1';
-
-const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
-  'anthropic',
-  'openai',
-  'google',
-  'xai',
-  'deepseek',
-  'qwen',
-  'moonshot',
-  'ollama',
-]);
-
-const PROVIDER_STREAM_MAP: Partial<Record<Provider, ProviderStreamProvider>> = {
-  anthropic: 'anthropic',
-  openai: 'openai',
-  google: 'google',
-  xai: 'xai',
-  deepseek: 'deepseek',
-  qwen: 'qwen',
-  moonshot: 'moonshot',
-  ollama: 'ollama',
-};
-
 function resolveProviderFromModel(modelId: string | undefined): Provider {
   const metadata = getModelMetadataById(modelId);
   if (!metadata) {
@@ -336,114 +375,11 @@ function resolveProviderFromModel(modelId: string | undefined): Provider {
   return metadata.provider;
 }
 
-function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
-  const provider = resolveProviderFromModel(modelId);
-  const streamProvider = PROVIDER_STREAM_MAP[provider];
-  if (!streamProvider) {
-    throw new Error(`Provider stream is not available for provider: ${provider}`);
-  }
-  return streamProvider;
-}
-
-function getProviderOverride(): 'auto' | ProviderStreamProvider {
-  if (!__DEV__) return 'auto';
-  const raw = process.env.EXPO_PUBLIC_PROVIDER_STREAM_PROVIDER?.trim().toLowerCase();
-  if (!raw || raw === 'auto') return 'auto';
-  return VALID_PROVIDER_IDS.has(raw as ProviderStreamProvider)
-    ? (raw as ProviderStreamProvider)
-    : 'auto';
-}
-
-/**
- * Flatten the chat-completions content shape (string OR multimodal parts) down
- * to a single string for the provider-stream endpoint, which currently only
- * accepts text. Image parts are dropped with a `[image]` placeholder so the
- * conversation history remains coherent.
- */
-function flattenChatContent(
-  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>,
-): string {
-  if (typeof content === 'string') return content;
-  return content
-    .map((part) => (part.type === 'text' && part.text ? part.text : '[image]'))
-    .join('\n');
-}
-
-/**
- * Attempt a streaming reply via the api-gateway provider-stream endpoint.
- * Throws on transport / upstream error so the caller can fall back to the
- * legacy chat-completions path. Returns `true` on a clean stop.
- */
-async function attemptProviderStream(
-  body: {
-    model: string;
-    messages: Array<{
-      role: string;
-      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-    }>;
-    effort?: Effort;
-  },
-  callbacks: StreamCallbacks,
-  signal: AbortSignal,
-): Promise<boolean> {
-  const token = await getAuthToken();
-  if (!token) {
-    throw new Error('No cloud auth session for provider-stream path');
-  }
-
-  const override = getProviderOverride();
-  const providerId = override === 'auto' ? inferProviderFromModel(body.model) : override;
-
-  const flattened: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = body.messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
-    .map((m) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: flattenChatContent(m.content),
-    }));
-
-  const stream = streamFromProvider({
-    gatewayUrl: API_URL,
-    providerId,
-    authToken: token,
-    request: {
-      model: body.model,
-      messages: flattened,
-      ...(body.effort ? { effort: body.effort } : {}),
-    },
-    signal,
-  });
-
-  let sawError: { code?: string; message: string } | null = null;
-  let doneCalled = false;
-  for await (const chunk of stream as AsyncIterable<ProviderStreamChunk>) {
-    if (chunk.type === 'text-delta') {
-      if (chunk.delta) callbacks.onDelta({ content: chunk.delta });
-    } else if (chunk.type === 'thinking-delta') {
-      if (chunk.delta) callbacks.onDelta({ reasoning: chunk.delta });
-    } else if (chunk.type === 'error') {
-      sawError = { ...(chunk.code ? { code: chunk.code } : {}), message: chunk.message };
-    } else if (chunk.type === 'stop') {
-      if (sawError) {
-        throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
-      }
-      callbacks.onDelta({ finish_reason: chunk.reason });
-      doneCalled = true;
-      callbacks.onDone();
-      return true;
-    }
-  }
-  if (sawError) {
-    throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
-  }
-  if (!doneCalled) callbacks.onDone();
-  return true;
-}
-
 /**
  * Returns true if the error looks like a transient network interruption
  * (as opposed to a deliberate abort or an application-level HTTP error).
  *
- * NOTE: mobile intentionally does NOT use `@agiworkforce/llm-runtime`'s
+ * NOTE: mobile intentionally does NOT use `@agiworkforce/provider-runtime`'s
  * `classifyError` here. That classifier is tuned for provider-SDK error objects
  * (Anthropic/OpenAI shapes) and marks a bare RN `fetch` `TypeError` as
  * non-retryable — but on mobile a fetch `TypeError` IS the common transient
@@ -486,15 +422,15 @@ function isNetworkError(err: unknown): boolean {
 export async function streamChat(
   body: {
     model: string;
-    messages: Array<{
-      role: string;
-      content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
-    }>;
+    messages: ChatWireMessage[];
     stream: true;
+    operationId: string;
     thinking?: boolean;
     effort?: Effort;
     /** When true, the server injects its built-in web_search tool for this turn. */
     web_search?: boolean;
+    /** When true, the server injects its built-in E2B code-execution tool for this turn. */
+    code_execution?: boolean;
   },
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
@@ -541,50 +477,6 @@ export async function streamChat(
       callbacks.onDelta(delta);
     },
   };
-
-  // Feature-flagged: route through the api-gateway provider-stream endpoint
-  // first. Falls through to the legacy chat-completions path on failure so a
-  // misconfigured gateway never strands the user.
-  if (USE_PROVIDER_STREAM) {
-    try {
-      const ok = await attemptProviderStream(
-        {
-          model: body.model,
-          messages: body.messages,
-          ...(body.effort ? { effort: body.effort } : {}),
-        },
-        timedCallbacks,
-        combinedSignal,
-      );
-      if (ok) {
-        clearTimeout(timeoutId);
-        return;
-      }
-    } catch (err) {
-      if (signal?.aborted) {
-        // User-initiated cancel — silent by contract.
-        clearTimeout(timeoutId);
-        return;
-      }
-      if (timeoutController.signal.aborted) {
-        // Timeout/stall abort must SURFACE, or the store never resets and the
-        // composer sticks in the streaming state.
-        clearTimeout(timeoutId);
-        callbacks.onError(
-          new Error('The request timed out. Please check your connection and try again.'),
-        );
-        return;
-      }
-      // Reset the timeout for the legacy retry budget
-      console.warn('[streaming] provider-stream path failed, falling back to legacy:', err);
-      clearTimeout(timeoutId);
-      timeoutController = new AbortController();
-      timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
-      combinedSignal = signal
-        ? combineAbortSignals([signal, timeoutController.signal])
-        : timeoutController.signal;
-    }
-  }
 
   let lastNetworkError: Error | null = null;
 
@@ -693,4 +585,78 @@ export async function streamChat(
   callbacks.onError(
     lastNetworkError ?? new Error('Stream failed after maximum reconnect attempts'),
   );
+}
+
+/**
+ * Resume a suspended tool-approval turn: `POST /api/llm/v1/chat/completions/approve`
+ * with the full replayed thread (ending in the reconstructed assistant
+ * tool_call turn) plus `tool_approvals`, and stream the continuation into the
+ * SAME assistant message.
+ *
+ * DELIBERATELY SINGLE-ATTEMPT — unlike `streamChat`, this does NOT retry on a
+ * network drop. The `/approve` endpoint EXECUTES the approved tool calls
+ * (connector writes, MCP side effects); re-POSTing the same body after a mid-
+ * execution disconnect would risk double-executing an already-approved,
+ * side-effecting tool call. A dropped resume surfaces as an error so the user
+ * can explicitly retry (a fresh decision, not an automatic replay).
+ */
+export async function streamToolApprovalResume(
+  body: {
+    model: string;
+    messages: ChatWireMessage[];
+    stream: true;
+    operationId: string;
+    tool_approvals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
+  },
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  try {
+    assertRemoteChatAllowed(undefined, {
+      cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
+    });
+    ensureLlmGateOpen(resolveProviderFromModel(body.model));
+  } catch (err) {
+    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+    return;
+  }
+
+  const timeoutController = new AbortController();
+  let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
+  const combinedSignal = signal
+    ? combineAbortSignals([signal, timeoutController.signal])
+    : timeoutController.signal;
+
+  // Same rolling stall watchdog as streamChat: a healthy continuation keeps
+  // re-arming it; a socket that dies silently mid-stream aborts the pending read.
+  const rearmStallWatchdog = () => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
+  };
+  const timedCallbacks: StreamCallbacks = {
+    ...callbacks,
+    onActivity: rearmStallWatchdog,
+    onDelta: (delta) => {
+      rearmStallWatchdog();
+      callbacks.onDelta(delta);
+    },
+  };
+
+  try {
+    await attemptStream(body, timedCallbacks, combinedSignal, TOOL_APPROVAL_RESUME_PATH);
+    clearTimeout(timeoutId);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (signal?.aborted) {
+      // User-initiated cancel — silent by contract.
+      return;
+    }
+    if (timeoutController.signal.aborted) {
+      callbacks.onError(
+        new Error('The request timed out. Please check your connection and try again.'),
+      );
+      return;
+    }
+    callbacks.onError(err instanceof Error ? err : new Error(String(err)));
+  }
 }

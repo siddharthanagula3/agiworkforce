@@ -96,7 +96,9 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
+  getDefaultCloudModelIdForTier,
 } from '../src/features/model-picker/service';
+import { useTierStore } from '../src/features/billing/store';
 
 function renderDrawer() {
   return render(<DrawerContent {...({ navigation: { closeDrawer: mockCloseDrawer } } as never)} />);
@@ -318,7 +320,12 @@ describe('DrawerContent', () => {
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/chat');
     if (DEFAULT_CLOUD_MODEL_ID) {
-      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_CLOUD_MODEL_ID);
+      // Tier-aware default (regression: this used to be the raw
+      // DEFAULT_CLOUD_MODEL_ID probe model unconditionally — see
+      // model-picker-cloud-labels.test.ts for why that's wrong for the
+      // free/unresolved tier this test runs under).
+      const expectedDefault = getDefaultCloudModelIdForTier(useTierStore.getState().tier);
+      expect(useModelStore.getState().selectedModel).toBe(expectedDefault);
       expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
       expect(useChatAppModeStore.getState().appMode).toBe('cloud');
     }

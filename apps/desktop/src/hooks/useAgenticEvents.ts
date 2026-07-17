@@ -2,7 +2,7 @@ import { listen, UnlistenFn } from '../lib/tauri-mock';
 import { toast } from 'sonner';
 import { useEffect } from 'react';
 import { isTauri } from '../lib/tauri-mock';
-import { automation, browserExtension } from '@agiworkforce/api';
+import { automation, browserExtension } from '@agiworkforce/desktop-command-client';
 import {
   getMcpToolDisplayName,
   mapToolNameToActionType,

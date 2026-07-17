@@ -1,30 +1,12 @@
 /**
  * P1-GW-RLS invariant tests.
  *
- * Two realities coexist in the gateway's Neon query layer (src/lib/neonClients.ts):
- *
- *  1. RLS-GAP tables (most of them — no policy yet in apps/web/db/neon): their
- *     call sites use getServiceClient() directly, and the explicit
- *     `.eq('user_id', …)` filter each route applies is the SOLE
- *     tenant-isolation mechanism — there is no RLS to fall back on.
- *  2. RLS-covered tables (subscriptions, token_credits, credit_transactions —
- *     0037_rls_user_isolation.sql): their call sites use
- *     getUserScopedClient({ userId, token }), which binds Postgres RLS via
- *     NeonDatabaseAdapter.withUser(token) (packages/data-layer) as a REAL
- *     DB-level backstop BEHIND the same explicit filter. getUserScopedClient
- *     falls back to getServiceClient() — the RLS-GAP guarantee, not a
- *     regression — when the token can't be bound (empty, or a pre-rollout
- *     gateway device token minted before the `sub` claim was added).
- *
- * These tests encode all three:
- *  1. A comment-scan asserts no code falsely claims a table has an RLS
- *     backstop it doesn't have.
- *  2. A behavioural test proves the RLS-GAP path (getServiceClient) still
- *     emits the explicit user_id predicate as its sole isolation mechanism.
- *  3. A behavioural test proves getUserScopedClient threads a verified token
- *     into NeonDatabaseAdapter.withUser(), and fails SAFE — falls back to the
- *     RLS-GAP guarantee, never crashes, never silently drops the filter —
- *     when the token can't be bound.
+ * User-request database access must fail closed. Canonical user-owned tables
+ * run through getUserScopedClient(), which binds the verified bearer subject
+ * to the non-BYPASSRLS app role. A malformed token, subject mismatch, missing
+ * role, or failed scoped query must never retry with the privileged system
+ * connection. Pre-auth, worker-control-plane, and unverified shadow-schema
+ * operations use the separately named getSystemClient() boundary.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -49,39 +31,69 @@ function walk(dir: string): string[] {
   return out;
 }
 
-describe('P1-GW-RLS: no false RLS defense-in-depth claims remain', () => {
-  it('does not assert RLS as a tenant-isolation backstop anywhere in src/', () => {
+describe('P1-GW-RLS: gateway source ownership boundaries', () => {
+  it('contains no legacy getServiceClient call sites', () => {
     const srcDir = join(__dirname, '..', '..', 'src');
     const offenders: string[] = [];
 
-    // Phrases that falsely claim RLS provides tenant isolation / defense in
-    // depth. Honest negations ("RLS … is therefore NOT active", "no
-    // `user_id = auth.uid()` RLS backstop") and honest claims scoped to the
-    // verified getUserScopedClient/withUser path are allowed and must not
-    // match.
-    const banned = [
-      /RLS-bound/,
-      /RLS adds[- ]defense/i,
-      /RLS on `[^`]+`\s*(is then enforced|enforces|is the second line)/i,
-      /defense[- ]in[- ]depth\s*(?:so|because)?\s*(?:a|any)?\s*missing[- ]filter/i,
-    ];
-
     for (const file of walk(srcDir)) {
       const text = readFileSync(file, 'utf8');
-      for (const re of banned) {
-        if (re.test(text)) {
-          offenders.push(`${file}: matched ${re}`);
-        }
+      if (/\bgetServiceClient\b/.test(text)) {
+        offenders.push(file);
       }
     }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('requires an explicit purpose at every privileged system-client call site', () => {
+    const srcDir = join(__dirname, '..', '..', 'src');
+    const offenders = walk(srcDir).filter((file) =>
+      /\bgetSystemClient\s*\(\s*\)/.test(readFileSync(file, 'utf8')),
+    );
 
     expect(offenders).toEqual([]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. Behavioural: RLS-GAP tables — the explicit user_id filter is the sole
-//    isolation mechanism when a call site uses getServiceClient() directly.
+// 2. Canonical schema proof: every gateway-owned, user-scoped canonical table
+//    has ENABLE + FORCE RLS and at least one policy in ordered Neon migrations.
+// ---------------------------------------------------------------------------
+describe('P1-GW-RLS: canonical gateway tables have enforceable policies', () => {
+  it.each([
+    'desktop_devices',
+    'mobile_devices',
+    'sync_data',
+    'feedback',
+    'usage_events',
+    'organizations',
+    'organization_members',
+    'revoked_jwts',
+  ])('%s has ENABLE, FORCE, and a policy in canonical migration history', (table) => {
+    const migrationDir = join(__dirname, '..', '..', '..', '..', 'apps', 'web', 'db', 'neon');
+    const history = readdirSync(migrationDir)
+      .filter((entry) => entry.endsWith('.sql'))
+      .sort()
+      .map((entry) => readFileSync(join(migrationDir, entry), 'utf8'))
+      .join('\n');
+
+    expect(history).toMatch(
+      new RegExp(`ALTER\\s+TABLE\\s+public\\.${table}\\s+ENABLE\\s+ROW\\s+LEVEL\\s+SECURITY`, 'i'),
+    );
+    expect(history).toMatch(
+      new RegExp(`ALTER\\s+TABLE\\s+public\\.${table}\\s+FORCE\\s+ROW\\s+LEVEL\\s+SECURITY`, 'i'),
+    );
+    expect(history).toMatch(
+      new RegExp(`CREATE\\s+POLICY[\\s\\S]+?ON\\s+public\\.${table}\\b`, 'i'),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. Behavioural: user-scoped access never falls back to the privileged HTTP
+//    client. The mocked data-layer boundary represents the already-tested
+//    SET LOCAL ROLE + subject binding implementation.
 // ---------------------------------------------------------------------------
 const captured: { sql: string; params: unknown[] }[] = [];
 
@@ -103,7 +115,7 @@ vi.mock('@neondatabase/serverless', () => ({
 // createDatabaseClient()/withUser(), not the neon() HTTP driver mocked above.
 // Mock it at that boundary so these tests exercise getUserScopedClient's own
 // wiring/fallback logic without depending on data-layer's Pool internals —
-// those are covered by packages/data-layer's own adapter tests.
+// those are covered by packages/platform/data-layer's own adapter tests.
 // Each captured query also records which token bound it — the wiring-level
 // proof that getUserScopedClient never shares/reuses a mutable "current
 // identity" across calls (which would let user A's request see user B's
@@ -116,14 +128,14 @@ vi.mock('@agiworkforce/data-layer', () => ({
     withUser: (token: string) => {
       if (token === 'unbindable-token') {
         // Mirrors NeonDatabaseAdapter.withUser() throwing on a malformed / `sub`-less
-        // token (packages/data-layer/src/adapters/neon.ts's decodeJwtSub()).
+        // token (packages/platform/data-layer/src/adapters/neon.ts's decodeJwtSub()).
         throw new Error('withUser: cannot bind unverified/malformed token (test stub)');
       }
       if (token === 'app_rls-missing-token') {
         // withUser() itself succeeds (token decodes fine) but the bound
         // adapter's query() fails once it actually runs — mirrors
         // `SET LOCAL ROLE app_rls` failing at query time because the role is
-        // missing/ungranted on this database (packages/data-layer/src/adapters/
+        // missing/ungranted on this database (packages/platform/data-layer/src/adapters/
         // neon.ts's query()/execute() only touch the role inside the query,
         // not inside withUser()).
         return {
@@ -140,41 +152,31 @@ vi.mock('@agiworkforce/data-layer', () => ({
   })),
 }));
 
-const { getServiceClient, getUserScopedClient, _resetCloudDbForTests } =
-  await import('../../src/lib/neonClients');
+const { getSystemClient, getUserScopedClient, _resetCloudDbForTests } = await import(
+  '../../src/lib/neonClients'
+);
 
-describe('P1-GW-RLS: RLS-GAP tables — explicit user_id filter is the sole isolation mechanism', () => {
+describe('P1-GW-RLS: privileged system purposes are table constrained', () => {
   afterEach(() => {
     captured.length = 0;
     rlsCaptured.length = 0;
     _resetCloudDbForTests();
   });
 
-  it('emits a `user_id = $1` predicate for a representative RLS-GAP read via getServiceClient()', async () => {
-    const userId = 'tenant-A';
-    const db = getServiceClient();
+  it('allows the health client to inspect profiles but rejects user data tables', async () => {
+    const db = getSystemClient('gateway-health');
 
-    await db.from('conversations').select('id, title').eq('user_id', userId);
-
-    expect(captured).toHaveLength(1);
-    const { sql, params } = captured[0]!;
-    // The generated SQL MUST scope by user_id — there is no RLS to fall back on.
-    expect(sql).toMatch(/"user_id"\s*=\s*\$1/);
-    expect(params).toEqual([userId]);
+    await db.from('profiles').select('id', { count: 'exact', head: true });
+    expect(() => db.from('usage_events')).toThrow(/gateway-health.*usage_events|usage_events.*gateway-health/i);
   });
 
-  it('a query that omits the user_id filter produces NO scoping clause (proves there is no backstop for RLS-GAP tables)', async () => {
-    const db = getServiceClient();
+  it('allows only inventoried shadow tables on the compatibility client', () => {
+    const db = getSystemClient('shadow-schema-compatibility');
 
-    // Simulate a regression that forgot the ownership filter.
-    await db.from('conversations').select('id, title');
-
-    expect(captured).toHaveLength(1);
-    const { sql } = captured[0]!;
-    // No WHERE clause at all — without the explicit filter, every tenant's rows
-    // would be returned. This is exactly why the filter is load-bearing for
-    // every RLS-GAP call site.
-    expect(sql).not.toMatch(/WHERE/i);
+    expect(() => db.from('agent_approval_requests')).not.toThrow();
+    expect(() => db.from('desktop_devices')).toThrow(
+      /shadow-schema-compatibility.*desktop_devices|desktop_devices.*shadow-schema-compatibility/i,
+    );
   });
 });
 
@@ -183,7 +185,7 @@ describe('P1-GW-RLS: RLS-GAP tables — explicit user_id filter is the sole isol
 //    withUser(), and fails safe — falls back to the service-role path,
 //    never crashes, never silently drops the filter — when it can't.
 // ---------------------------------------------------------------------------
-describe('P1-GW-RLS: getUserScopedClient wiring + fail-safe fallback', () => {
+describe('P1-GW-RLS: getUserScopedClient is fail closed', () => {
   afterEach(() => {
     captured.length = 0;
     rlsCaptured.length = 0;
@@ -199,42 +201,28 @@ describe('P1-GW-RLS: getUserScopedClient wiring + fail-safe fallback', () => {
     expect(captured).toHaveLength(0); // did NOT fall back to the service client
   });
 
-  it('falls back to getServiceClient() — same explicit-filter guarantee, not a crash — when the token cannot be bound (e.g. no `sub` claim)', async () => {
-    const db = getUserScopedClient({ userId: 'tenant-A', token: 'unbindable-token' });
-
-    await db.from('subscriptions').select('plan_tier').eq('user_id', 'tenant-A');
-
-    expect(rlsCaptured).toHaveLength(0);
-    expect(captured).toHaveLength(1);
-    const { sql, params } = captured[0]!;
-    expect(sql).toMatch(/"user_id"\s*=\s*\$1/);
-    expect(params).toEqual(['tenant-A']);
+  it('throws before querying when the verified token cannot be bound', () => {
+    expect(() =>
+      getUserScopedClient({ userId: 'tenant-A', token: 'unbindable-token' }),
+    ).toThrow(/cannot bind|user-scoped database/i);
+    expect(captured).toHaveLength(0);
   });
 
-  it('falls back to getServiceClient() when auth.token is empty', async () => {
-    const db = getUserScopedClient({ userId: 'tenant-A', token: '' });
-
-    await db.from('subscriptions').select('plan_tier').eq('user_id', 'tenant-A');
-
-    expect(rlsCaptured).toHaveLength(0);
-    expect(captured).toHaveLength(1);
+  it('throws before querying when auth.token is empty', () => {
+    expect(() => getUserScopedClient({ userId: 'tenant-A', token: '' })).toThrow(
+      /token|required|user-scoped database/i,
+    );
+    expect(captured).toHaveLength(0);
   });
 
-  it('falls back to getServiceClient() mid-request — not a 503 — when withUser() succeeds but the bound query fails (e.g. `app_rls` missing/ungranted on this database)', async () => {
+  it('returns the scoped database error and never retries as system when app_rls is unavailable', async () => {
     const db = getUserScopedClient({ userId: 'tenant-A', token: 'app_rls-missing-token' });
 
     const result = await db.from('subscriptions').select('plan_tier').eq('user_id', 'tenant-A');
 
-    // The route must see a normal DbResult, not a rejected promise — this is
-    // the failure mode that would otherwise turn planGate (gates ALL cloud
-    // chat) and deduct_credits (a billing write) into hard failures if the
-    // RLS infrastructure isn't provisioned on this database.
-    expect(result.error).toBeNull();
+    expect(result.error?.message).toMatch(/app_rls/);
     expect(rlsCaptured).toHaveLength(0);
-    expect(captured).toHaveLength(1);
-    const { sql, params } = captured[0]!;
-    expect(sql).toMatch(/"user_id"\s*=\s*\$1/);
-    expect(params).toEqual(['tenant-A']);
+    expect(captured).toHaveLength(0);
   });
 
   it("binds independent identities per call — user A's client never sees user B's binding, even interleaved (proves no shared mutable RLS-scoping state)", async () => {

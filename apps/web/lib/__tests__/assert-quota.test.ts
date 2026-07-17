@@ -140,7 +140,7 @@ vi.mock('@agiworkforce/types', () => {
     general_balanced_pro: 'gpt-5.4-mini',
   };
   // Session/weekly/flagship-weekly budget helpers, mirroring the real
-  // packages/types/src/billing-catalog.ts formulas exactly (not imported via
+  // packages/contracts/types/src/billing-catalog.ts formulas exactly (not imported via
   // vi.importActual to avoid the broken SLOT_REGISTRY init noted above).
   // Only 'pro'/'max' have a monthlyUsageBudgetUsd here (10 / 75) — 'free' and
   // 'hobby' (which isn't a real BillingPlanTier and would normalize to

@@ -90,7 +90,7 @@ above — but do not block the port on translation.
   - Tailwind utility classes: `ring-ring`, `ring-offset-background`, `ring-offset-2`
 - Each surface has its own token system:
   - Mobile: `useThemeColors()` palette keys (`colors.agentSuccess`, `colors.textPrimary`, etc.)
-  - Web: same Tailwind token set as desktop (shared `packages/design-tokens`)
+  - Web: same Tailwind token set as desktop (shared `packages/ui/design-tokens`)
   - Chrome ext: Chrome extension theme API / CSS variables
   - VS Code ext: webview CSS variables or VS Code theme tokens
 

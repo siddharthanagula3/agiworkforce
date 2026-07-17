@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { StreamChunk } from '@agiworkforce/types';
-import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
+import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 
 /**
@@ -43,8 +43,8 @@ export interface AdapterLlmResponse {
  * requestedModel`, computed independently inside `buildNonStreamResponse`
  * from `processed`) -- so what's passed here never reaches the client.
  * `LLMCostCalculator`/`getModelMetadataById` resolve dot-form and
- * apiModelId-form ids to the same catalog entry either way (see
- * `canonical-request.ts`'s `toApiModelId` docstring), so this choice is
+ * apiModelId-form ids to the same catalog entry either way (see the shared
+ * `toProviderApiModelId` boundary), so this choice is
  * about matching the legacy code's literal logged/recorded string, not cost
  * correctness.
  *

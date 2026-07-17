@@ -1,14 +1,10 @@
-import { QueueFullError } from '@agiworkforce/runtime';
+import { QueueFullError } from '@agiworkforce/client-runtime';
 import { getExtensionTokensCss } from './tokens';
 import {
-  getCoreManualModelOptions,
   normalizeModelId,
   PROVIDER_DISPLAY,
-  CAPABILITY_LABEL,
-  getModelMetadataById,
-  getPickerModelTier,
   type ProviderId,
-  type CapabilityTier,
+  type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './sendQueue';
 import {
@@ -19,15 +15,33 @@ import {
   appendSvgString,
 } from './dom-helpers';
 import {
-  saveConversation,
+  activateConversation,
+  createBrowserConversationId,
+  getActiveConversation,
+  getConversation,
   listConversations,
   deleteConversation,
-  type HistoryMessage,
+  upsertConversation,
+  startNewConversation,
   type ConversationEntry,
 } from './features/background/conversation-history';
+import {
+  assignConversationOwner,
+  claimConversationOwner,
+  resolveBrowserConversationScope,
+} from './features/background/conversation-session';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
+import {
+  applyStreamFailure,
+  resolveComposerPrompt,
+  selectModelHistory,
+  shouldRebuildMessageDom,
+  trimChatMessages,
+  type SidePanelChatMessage,
+} from './features/side-panel/chat-state';
 import { setupVoiceInput } from './features/side-panel/voice';
 import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
+import { getChromeSurfaceAvailability } from './features/side-panel/surface-policy';
 import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
 import {
   Terminal,
@@ -67,13 +81,36 @@ import {
 import { isMemoryItem, MEMORY_STORAGE_KEY } from './background/memory-bridge';
 import { mountInviteCodeModal } from './features/cloud-bridge/InviteCodeModal';
 import {
+  CONTEXT_HANDOFF_STORAGE_KEY,
+  isPendingContextHandoff,
+  mountContextHandoffPreview,
+  type ContextHandoffActionResult,
+  type ContextHandoffPreviewController,
+} from './features/context-handoff';
+import {
   getAuthToken,
+  getManagedModelAccess,
   getRemainingFreePrompts,
-  storeSessionToken,
   clearAuthToken,
   FREE_TRIAL_PROMPT_LIMIT,
   FREE_TRIAL_MODEL,
+  type ManagedModelAccess,
 } from './features/cloud-bridge/freeTrialClient';
+import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
+import {
+  isClerkExtensionAuthConfigured,
+  observeClerkAuth,
+  openClerkSignIn,
+} from './features/cloud-bridge/clerkAuth';
+import {
+  formatManagedTierLabel,
+  getManagedCapabilityLabel,
+  getManagedModelBadgeLabel,
+  getManagedModelPickerOptions,
+  isFreeManagedTier,
+  reconcileManagedModelSelection,
+  type ManagedModelPickerOption,
+} from './features/cloud-bridge/managedModelPicker';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -98,6 +135,12 @@ let refreshCloudAccountUI: () => Promise<void> = async () => {
   /* no-op until buildUI() initialises the real implementation */
 };
 
+let refreshModelPickerUI: () => void = () => {
+  /* no-op until buildUI() initialises the real implementation */
+};
+let managedModelAccess: ManagedModelAccess | null = null;
+let cloudAccountRefreshGeneration = 0;
+
 /**
  * Side-panel UI message shape.
  *
@@ -110,21 +153,20 @@ let refreshCloudAccountUI: () => Promise<void> = async () => {
  *   - `timestamp` → canonical `createdAt` (here as Unix ms instead of ISO string)
  *   - `streaming` → canonical `isStreaming`
  */
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  streaming?: boolean;
-  error?: boolean;
-  timestamp: number;
-}
+type ChatMessage = SidePanelChatMessage;
 
 interface ChatChunk {
   type: 'CHAT_CHUNK';
+  clientInstanceId: string;
   id: string;
   text: string;
   done: boolean;
   error?: string;
+  routing?: {
+    modelKey: string;
+    taskType: RoutingTaskType;
+    reason: string;
+  };
 }
 
 export interface SharedSidePanelContext {
@@ -135,17 +177,24 @@ export interface SharedSidePanelContext {
   streamTimeoutHandle: ReturnType<typeof setTimeout> | null;
   /** Track how many messages have already been rendered to avoid full DOM rebuilds. */
   lastRenderedCount: number;
+  needsMessageRebuild: boolean;
   isConnected: boolean;
   /**
    * Whether extended thinking is enabled for the next outgoing message.
    * Persisted to chrome.storage.local as 'agi_thinking_enabled'.
-   * The value is forwarded to the desktop bridge as `extended_thinking: true` in
-   * the CHAT_MESSAGE payload. The bridge handles the provider-specific mapping.
-   * Phase 3 bridge: wire the desktop bridge to consume `extendedThinking`
-   * in the ChatRequest type and forward it to providers that support it
-   * (Anthropic thinking blocks, OpenAI reasoning effort, Gemini thinkingBudget).
+   * The Managed Cloud gateway owns provider-specific reasoning translation.
    */
   thinkingEnabled: boolean;
+  /** Per-turn Auto Economy override controlled by the Quick composer toggle. */
+  quickMode: boolean;
+  /** Model picker state and last successful Auto route are conversation scoped. */
+  conversationId: string;
+  conversationScope: string | null;
+  /** Invalidates delayed boot/history continuations after the user changes state. */
+  conversationGeneration: number;
+  selectedModel: string;
+  currentModelKey?: string;
+  previousTaskType?: RoutingTaskType;
 }
 
 function createSharedSidePanelContext(): SharedSidePanelContext {
@@ -156,31 +205,75 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     currentStreamId: null,
     streamTimeoutHandle: null,
     lastRenderedCount: 0,
+    needsMessageRebuild: false,
     isConnected: false,
     thinkingEnabled: false,
+    quickMode: false,
+    conversationId: createBrowserConversationId(),
+    conversationScope: null,
+    conversationGeneration: 0,
+    selectedModel: 'auto',
   };
 }
 
 const _ctx: SharedSidePanelContext = createSharedSidePanelContext();
+const SIDE_PANEL_CLIENT_INSTANCE_ID = crypto.randomUUID();
+let managedChatKeepalivePort: chrome.runtime.Port | null = null;
+let managedChatKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
+let contextHandoffPreview: ContextHandoffPreviewController | null = null;
+let activeContextHandoffId: string | null = null;
+let conversationScopePromise: Promise<string> | null = null;
 
-function getModelCapabilityTier(modelId: string): CapabilityTier | undefined {
-  const meta = getModelMetadataById(modelId);
-  if (!meta) return undefined;
-  switch (meta.qualityTier) {
-    case 'fast':
-      return 'fastest';
-    case 'balanced':
-      return 'balanced';
-    case 'best':
-      return 'most-capable';
-    default:
-      return undefined;
-  }
+async function getConversationScope(): Promise<string> {
+  if (_ctx.conversationScope) return _ctx.conversationScope;
+  conversationScopePromise ??= resolveBrowserConversationScope(SIDE_PANEL_CLIENT_INSTANCE_ID);
+  const scope = await conversationScopePromise;
+  _ctx.conversationScope ??= scope;
+  return _ctx.conversationScope;
 }
 
-function getModelProvider(modelId: string): ProviderId | undefined {
-  const meta = getModelMetadataById(modelId);
-  return meta?.provider as ProviderId | undefined;
+function persistCurrentConversationOwner(): void {
+  const conversationId = _ctx.conversationId;
+  const generation = _ctx.conversationGeneration;
+  void getConversationScope()
+    .then((scope) => {
+      if (_ctx.conversationId !== conversationId || _ctx.conversationGeneration !== generation) {
+        return;
+      }
+      return assignConversationOwner(scope, conversationId);
+    })
+    .catch((error) => {
+      console.warn('[SidePanel] Failed to persist window conversation owner:', error);
+    });
+}
+
+const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
+  'coding',
+  'reasoning',
+  'general',
+  'agentic',
+  'multimodal',
+  'research',
+  'computer-use',
+  'image_generation',
+  'creative_writing',
+  'long_context',
+  'simple_chat',
+]);
+
+function applyRoutingContinuation(routing: ChatChunk['routing']): void {
+  if (!routing) return;
+  if (
+    typeof routing.modelKey !== 'string' ||
+    routing.modelKey.length === 0 ||
+    routing.modelKey.length > 200 ||
+    !ROUTING_TASK_TYPES.has(routing.taskType)
+  ) {
+    console.warn('[SidePanel] Ignored malformed Managed Cloud routing metadata');
+    return;
+  }
+  _ctx.currentModelKey = routing.modelKey;
+  _ctx.previousTaskType = routing.taskType;
 }
 
 // Provider display order in the grouped picker.
@@ -200,33 +293,8 @@ const PROVIDER_GROUP_ORDER: ProviderId[] = [
   'agi-cloud',
 ];
 
-interface SidePanelModelOption {
-  value: string;
-  label: string;
-  provider?: ProviderId | string;
-  capability?: CapabilityTier;
-}
-
-const SIDE_PANEL_MODEL_OPTIONS: SidePanelModelOption[] = [
-  { value: 'auto', label: 'Best (auto)', provider: undefined, capability: undefined },
-  ...getCoreManualModelOptions().map((option) => ({
-    value: option.id,
-    label: option.label,
-    provider: getModelProvider(option.id),
-    capability: getModelCapabilityTier(option.id),
-  })),
-];
-
-const _modelBadgeCache: Record<string, string> = (() => {
-  const cache: Record<string, string> = { auto: 'Best (auto)' };
-  for (const opt of getCoreManualModelOptions()) {
-    cache[opt.id] = opt.label;
-  }
-  return cache;
-})();
-
 function getModelBadgeLabel(modelId: string): string {
-  return _modelBadgeCache[modelId] ?? modelId;
+  return getManagedModelBadgeLabel(modelId);
 }
 interface WebMCPToolEntry {
   name: string;
@@ -252,38 +320,88 @@ let currentPageHostname = '';
 
 type SidePanelTab = 'chat' | 'workflows' | 'computer-use';
 
-const STORAGE_KEY = 'agi_side_panel_messages';
 const MAX_STORED_MESSAGES = 50;
 
+function trimLiveMessages(): void {
+  if (trimChatMessages(_ctx.messages, MAX_STORED_MESSAGES) > 0) {
+    _ctx.lastRenderedCount = 0;
+    _ctx.needsMessageRebuild = true;
+  }
+}
+
 function saveMessages(): void {
-  const toSave = _ctx.messages.slice(-MAX_STORED_MESSAGES);
-  chrome.storage.local.set({ [STORAGE_KEY]: toSave }).catch((err) => {
+  persistCurrentConversationOwner();
+  const toSave = _ctx.messages
+    .filter((message) => !message.error)
+    .slice(-MAX_STORED_MESSAGES)
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+    }));
+  upsertConversation(_ctx.conversationId, toSave, {
+    selectedModel: _ctx.selectedModel,
+    currentModelKey: _ctx.currentModelKey,
+    previousTaskType: _ctx.previousTaskType,
+  }).catch((err) => {
     console.warn('[SidePanel] Failed to persist messages:', err);
   });
 }
 
 async function loadMessages(): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(STORAGE_KEY, (result) => {
-      if (chrome.runtime.lastError) {
-        resolve();
-        return;
-      }
-      const raw = result[STORAGE_KEY];
-      const stored = Array.isArray(raw) ? (raw as ChatMessage[]) : undefined;
-      if (stored && stored.length > 0) {
-        _ctx.messages.push(...stored.slice(-MAX_STORED_MESSAGES));
-        _ctx.lastRenderedCount = 0;
-      }
-      resolve();
-    });
-  });
+  const expectedGeneration = _ctx.conversationGeneration;
+  const scope = await getConversationScope();
+  if (_ctx.conversationGeneration !== expectedGeneration) return;
+  const lastActive = await getActiveConversation();
+  if (_ctx.conversationGeneration !== expectedGeneration) return;
+  const owner = await claimConversationOwner(scope, lastActive?.id);
+  if (_ctx.conversationGeneration !== expectedGeneration) return;
+  const ownedConversation = await getConversation(owner.conversationId);
+  if (_ctx.conversationGeneration !== expectedGeneration) return;
+  const active =
+    ownedConversation ??
+    (owner.seedConversationId && owner.seedConversationId === lastActive?.id
+      ? lastActive
+      : undefined);
+  _ctx.conversationId = owner.conversationId;
+  if (!active) return;
+  _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
+  _ctx.currentModelKey = active.routing.currentModelKey;
+  _ctx.previousTaskType = active.routing.previousTaskType;
+  refreshModelPickerUI();
+  _ctx.messages.push(
+    ...active.messages.slice(-MAX_STORED_MESSAGES).map((message) => ({
+      id: `h-${message.timestamp}-${crypto.randomUUID().slice(0, 6)}`,
+      ...message,
+    })),
+  );
+  _ctx.lastRenderedCount = 0;
+  _ctx.needsMessageRebuild = true;
 }
 
 function clearStoredMessages(): void {
-  chrome.storage.local.remove(STORAGE_KEY).catch((err) => {
+  _ctx.conversationGeneration += 1;
+  _ctx.conversationId = createBrowserConversationId();
+  persistCurrentConversationOwner();
+  _ctx.selectedModel = 'auto';
+  _ctx.currentModelKey = undefined;
+  _ctx.previousTaskType = undefined;
+  refreshModelPickerUI();
+  chrome.storage.local.remove('agi_model').catch(() => {});
+  startNewConversation().catch((err) => {
     console.warn('[SidePanel] Failed to clear stored messages:', err);
   });
+}
+
+function resetConversationView(): void {
+  _ctx.messages.length = 0;
+  _ctx.lastRenderedCount = 0;
+  _ctx.needsMessageRebuild = true;
+  _ctx.pendingPageContext = null;
+  clearStoredMessages();
+  updateContextButton();
+  updateSendButton();
+  renderMessages();
 }
 
 function injectStyles(): void {
@@ -299,6 +417,12 @@ function injectStyles(): void {
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    button:focus-visible,
+    [role="button"]:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--agi-ext-bg);
@@ -308,6 +432,72 @@ function injectStyles(): void {
       flex-direction: column;
       overflow: hidden;
       font-size: 13px;
+    }
+
+    /* ── Explicit Chrome → Desktop context handoff ── */
+    .sp-context-handoff-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: color-mix(in srgb, var(--agi-ext-bg) 88%, transparent);
+      backdrop-filter: blur(4px);
+    }
+    .sp-context-handoff-dialog {
+      width: min(100%, 440px);
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 16px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 12px;
+      background: var(--agi-ext-surface);
+      box-shadow: 0 18px 48px color-mix(in srgb, black 38%, transparent);
+    }
+    .sp-context-handoff-dialog h2 { font-size: 16px; color: var(--agi-ext-text); }
+    .sp-context-handoff-dialog p { line-height: 1.45; color: var(--agi-ext-text-muted); }
+    .sp-context-handoff-destination { color: var(--agi-ext-text) !important; font-weight: 600; }
+    .sp-context-handoff-preview {
+      max-height: 220px;
+      overflow: auto;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 8px;
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .sp-context-handoff-source { font-size: 11px; overflow-wrap: anywhere; }
+    .sp-context-handoff-redaction { color: var(--agi-ext-accent) !important; font-size: 12px; }
+    .sp-context-handoff-status { min-height: 18px; font-size: 12px; }
+    .sp-context-handoff-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .sp-context-handoff-actions button {
+      min-height: 34px;
+      padding: 7px 11px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 7px;
+      cursor: pointer;
+      color: var(--agi-ext-text);
+      background: var(--agi-ext-hover);
+    }
+    .sp-context-handoff-actions button:disabled { cursor: wait; opacity: 0.55; }
+    .sp-context-handoff-actions button:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
+    .sp-context-handoff-approve {
+      border-color: var(--agi-ext-accent) !important;
+      background: var(--agi-ext-accent) !important;
+      color: var(--agi-ext-bg) !important;
+      font-weight: 600;
     }
 
     /* ── Header ── */
@@ -448,25 +638,28 @@ function injectStyles(): void {
     }
     .sp-cmd-chip:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
 
-    /* ── Blocked / restricted-site state ── */
+    /* ── Restricted-page notice; chat remains available ── */
     #sp-blocked {
       display: none;
-      flex: 1;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      text-align: center;
-      padding: 32px 20px;
+      flex: none;
+      align-items: flex-start;
+      gap: 10px;
+      order: -1;
+      padding: 10px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 10px;
+      background: var(--agi-ext-surface);
     }
     #sp-blocked.visible { display: flex; }
     #sp-blocked-shield {
-      width: 48px;
-      height: 48px;
-      opacity: 0.35;
+      width: 20px;
+      height: 20px;
+      flex: 0 0 20px;
+      opacity: 0.65;
     }
-    #sp-blocked-title { font-size: 14px; font-weight: 600; color: var(--agi-ext-text-muted); }
-    #sp-blocked-desc { font-size: 11px; color: var(--agi-ext-text-muted); opacity: 0.7; line-height: 1.55; max-width: 200px; }
+    .sp-blocked-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    #sp-blocked-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-text); }
+    #sp-blocked-desc { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.45; }
 
     /* ── Message bubbles ── */
     .sp-msg {
@@ -1047,6 +1240,11 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       transition: background 0.12s, color 0.12s;
       user-select: none;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      font-family: inherit;
+      text-align: left;
     }
     .sp-attach-menu-item:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-attach-icon { font-size: 14px; flex-shrink: 0; }
@@ -1528,7 +1726,7 @@ function injectStyles(): void {
     #sp-model-selector-btn.open .sp-chevron { transform: rotate(180deg); }
     #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
     #sp-model-dropdown.open { display: block; }
-    .sp-model-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; font-size: 11px; color: var(--agi-ext-text-muted); }
+    .sp-model-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border: 0; border-radius: 5px; cursor: pointer; background: transparent; transition: background 0.12s; font: inherit; font-size: 11px; color: var(--agi-ext-text-muted); text-align: left; }
     .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-model-option.selected { color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); }
     .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
@@ -2892,13 +3090,16 @@ function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
   const chips = document.getElementById('sp-prompt-chips');
   const emptyEl = document.getElementById('sp-empty');
+  const restrictedPage =
+    document.getElementById('sp-blocked')?.classList.contains('visible') === true;
 
   if (_ctx.messages.length === 0) {
-    if (chips) chips.classList.remove('hidden');
+    if (chips) chips.classList.toggle('hidden', restrictedPage);
     if (emptyEl) emptyEl.classList.remove('hidden');
     // Remove all message nodes and reset counter
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
+    _ctx.needsMessageRebuild = false;
     return;
   }
 
@@ -2907,10 +3108,17 @@ function renderMessages(): void {
 
   // Only append messages that haven't been rendered yet — avoids full DOM rebuild on each
   // streaming chunk and preserves browser focus/scroll state for already-rendered bubbles.
-  if (_ctx.lastRenderedCount > _ctx.messages.length) {
+  if (
+    shouldRebuildMessageDom({
+      forceRebuild: _ctx.needsMessageRebuild,
+      renderedCount: _ctx.lastRenderedCount,
+      messageCount: _ctx.messages.length,
+    })
+  ) {
     // Messages were cleared — rebuild from scratch
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
+    _ctx.needsMessageRebuild = false;
   }
 
   for (let i = _ctx.lastRenderedCount; i < _ctx.messages.length; i++) {
@@ -3041,14 +3249,110 @@ function expandSlashCommand(
   return null;
 }
 
+function requestStreamCancellation(streamId: string): void {
+  chrome.runtime
+    .sendMessage({
+      type: 'CANCEL_STREAM',
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      id: streamId,
+    })
+    .catch(() => {
+      // The service worker may have restarted before receiving the cancellation.
+    });
+}
+
+function stopManagedChatKeepalive(): void {
+  if (managedChatKeepaliveTimer) {
+    clearInterval(managedChatKeepaliveTimer);
+    managedChatKeepaliveTimer = null;
+  }
+}
+
+function ensureManagedChatKeepalivePort(): chrome.runtime.Port | null {
+  if (managedChatKeepalivePort) return managedChatKeepalivePort;
+  try {
+    const port = chrome.runtime.connect({
+      name: createManagedChatPortName(SIDE_PANEL_CLIENT_INSTANCE_ID),
+    });
+    managedChatKeepalivePort = port;
+    port.onDisconnect.addListener(() => {
+      if (managedChatKeepalivePort !== port) return;
+      managedChatKeepalivePort = null;
+      stopManagedChatKeepalive();
+      const streamId = _ctx.currentStreamId;
+      if (streamId) {
+        handleStreamError(streamId, 'The extension service restarted. Please retry.');
+      }
+    });
+    return port;
+  } catch {
+    return null;
+  }
+}
+
+function startManagedChatKeepalive(): void {
+  stopManagedChatKeepalive();
+  const sendHeartbeat = (): void => {
+    const port = ensureManagedChatKeepalivePort();
+    try {
+      port?.postMessage({ type: 'MANAGED_CHAT_KEEPALIVE' });
+    } catch {
+      managedChatKeepalivePort = null;
+    }
+  };
+  sendHeartbeat();
+  managedChatKeepaliveTimer = setInterval(sendHeartbeat, 20_000);
+}
+
+function beginManagedStream(): string {
+  const streamId = `stream-${crypto.randomUUID()}`;
+  _ctx.currentStreamId = streamId;
+  _ctx.isStreaming = true;
+  startManagedChatKeepalive();
+  updateSendButton();
+  if (_ctx.streamTimeoutHandle) clearTimeout(_ctx.streamTimeoutHandle);
+  _ctx.streamTimeoutHandle = setTimeout(() => {
+    if (_ctx.isStreaming && _ctx.currentStreamId === streamId) {
+      requestStreamCancellation(streamId);
+      handleStreamError(streamId, 'Response timed out. Please try again.');
+    }
+  }, 90_000);
+  showThinking();
+  return streamId;
+}
+
+function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
+  const streamId = _ctx.currentStreamId;
+  if (streamId) requestStreamCancellation(streamId);
+  stopManagedChatKeepalive();
+  if (_ctx.streamTimeoutHandle) {
+    clearTimeout(_ctx.streamTimeoutHandle);
+    _ctx.streamTimeoutHandle = null;
+  }
+  if (streamId) {
+    const existing = _ctx.messages.find((message) => message.id === streamId);
+    if (existing) existing.streaming = false;
+  }
+  removeThinking();
+  _ctx.isStreaming = false;
+  _ctx.currentStreamId = null;
+  updateSendButton();
+  if (preservePartialOutput) {
+    saveMessages();
+    renderMessages();
+  }
+}
+
 function sendMessage(text: string): void {
-  if (!text.trim() || _ctx.isStreaming) return;
+  const prompt = resolveComposerPrompt(text, pendingAttachments.length);
+  if (!prompt || _ctx.isStreaming) return;
+  _ctx.conversationGeneration += 1;
 
   // Route through the shared priority send queue for backpressure /
   // cancellation parity with other surfaces. Drain immediately — current
   // behavior is direct send.
   try {
-    extensionSendQueue.enqueue({ value: text, mode: 'prompt' });
+    extensionSendQueue.enqueue({ value: prompt, mode: 'prompt' });
   } catch (err) {
     if (err instanceof QueueFullError) {
       console.warn('[SidePanel] queue lane full:', err.lane);
@@ -3058,11 +3362,20 @@ function sendMessage(text: string): void {
   }
   extensionSendQueue.dequeue();
 
-  const slashCmd = expandSlashCommand(text);
+  const slashCmd = expandSlashCommand(prompt);
   if (slashCmd?.captureContext) {
     // For context-requiring commands, auto-capture page context first
     const displayText = slashCmd.display;
     const actualPrompt = slashCmd.prompt;
+    // Claim the inputs that belong to this turn before the asynchronous page
+    // capture begins. Otherwise an attachment or manually selected context
+    // added while capture is pending can be consumed by the wrong request.
+    const pageContextAtAdmission = _ctx.pendingPageContext;
+    _ctx.pendingPageContext = null;
+    const attachmentsToSend = pendingAttachments.slice();
+    pendingAttachments.length = 0;
+    updateContextButton();
+    updateAttachmentPreview();
 
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}`,
@@ -3071,46 +3384,23 @@ function sendMessage(text: string): void {
       timestamp: Date.now(),
     };
     _ctx.messages.push(userMsg);
+    trimLiveMessages();
     saveMessages();
     renderMessages();
 
+    const streamId = beginManagedStream();
+
     capturePageContext()
       .then((capturedCtx) => {
-        if (capturedCtx) _ctx.pendingPageContext = capturedCtx;
+        if (_ctx.currentStreamId !== streamId) return;
+        const pageCtx = capturedCtx ?? pageContextAtAdmission;
 
-        const pageCtx = _ctx.pendingPageContext;
-        _ctx.pendingPageContext = null;
-        // Round-2 audit P0 #3 fix (2026-05-21): snapshot pendingAttachments
-        // BEFORE clearing so the wire payload below carries them. Prior
-        // behaviour cleared the buffer first, so attachments never reached
-        // the background handler.
-        const attachmentsToSend = pendingAttachments.slice();
-        pendingAttachments.length = 0;
-        updateContextButton();
-        updateAttachmentPreview();
-
-        const streamId = `a-${Date.now()}`;
-        _ctx.currentStreamId = streamId;
-        _ctx.isStreaming = true;
-        updateSendButton();
-
-        if (_ctx.streamTimeoutHandle) clearTimeout(_ctx.streamTimeoutHandle);
-        _ctx.streamTimeoutHandle = setTimeout(() => {
-          if (_ctx.isStreaming && _ctx.currentStreamId === streamId) {
-            handleStreamError(streamId, 'Response timed out. Please try again.');
-          }
-          _ctx.streamTimeoutHandle = null;
-        }, 90_000);
-
-        showThinking();
-
-        const history = _ctx.messages
-          .slice(0, -1)
-          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+        const history = selectModelHistory(_ctx.messages, userMsg.id);
 
         chrome.runtime.sendMessage(
           {
             type: 'CHAT_MESSAGE',
+            clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
             id: streamId,
             text: actualPrompt,
             pageContext: pageCtx ?? undefined,
@@ -3118,22 +3408,26 @@ function sendMessage(text: string): void {
             // Round-2 audit P0 #3 (2026-05-21): forward the snapshot taken
             // above so the model can see the user's images / pastes.
             attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-            // SECURITY (H-10 audit 2026-05-19): `apiKey:` stays off the
-            // CHAT_MESSAGE wire payload. Chrome chat remains bridge-scoped.
-            // Phase 3 bridge: bridge must consume extendedThinking and
-            // forward to providers that support it (Anthropic thinking blocks,
-            // OpenAI reasoning effort, Gemini thinkingBudget).
             extendedThinking: _ctx.thinkingEnabled || undefined,
+            modelSelection: _ctx.selectedModel,
+            quickMode: _ctx.quickMode || undefined,
+            currentModelKey: _ctx.currentModelKey,
+            previousTaskType: _ctx.previousTaskType,
           },
-          () => {
+          (response?: { success?: boolean; error?: string }) => {
             if (chrome.runtime.lastError) {
               handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
+            } else if (response?.success === false) {
+              handleStreamError(streamId, response.error ?? 'Managed Cloud request was rejected.');
             }
           },
         );
       })
       .catch((err) => {
         console.error('[SidePanel] Failed to capture page context for chat:', err);
+        if (_ctx.currentStreamId === streamId) {
+          handleStreamError(streamId, 'Unable to capture page context.');
+        }
       });
     return;
   }
@@ -3141,10 +3435,11 @@ function sendMessage(text: string): void {
   const userMsg: ChatMessage = {
     id: `u-${Date.now()}`,
     role: 'user',
-    content: text.trim(),
+    content: prompt,
     timestamp: Date.now(),
   };
   _ctx.messages.push(userMsg);
+  trimLiveMessages();
   saveMessages();
   renderMessages();
 
@@ -3157,30 +3452,15 @@ function sendMessage(text: string): void {
   updateContextButton();
   updateAttachmentPreview();
 
-  const streamId = `a-${Date.now()}`;
-  _ctx.currentStreamId = streamId;
-  _ctx.isStreaming = true;
-  updateSendButton();
-
-  // Safety timeout: if no chunks arrive within 90s, stop streaming to prevent stuck UI
-  if (_ctx.streamTimeoutHandle) clearTimeout(_ctx.streamTimeoutHandle);
-  _ctx.streamTimeoutHandle = setTimeout(() => {
-    if (_ctx.isStreaming && _ctx.currentStreamId === streamId) {
-      handleStreamError(streamId, 'Response timed out. Please try again.');
-    }
-    _ctx.streamTimeoutHandle = null;
-  }, 90_000);
-
-  showThinking();
+  const streamId = beginManagedStream();
 
   // Build conversation history (exclude the message we're about to send)
-  const history = _ctx.messages
-    .slice(0, -1)
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+  const history = selectModelHistory(_ctx.messages, userMsg.id);
 
   chrome.runtime.sendMessage(
     {
       type: 'CHAT_MESSAGE',
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
       text: userMsg.content,
       pageContext: pageCtx ?? undefined,
@@ -3188,35 +3468,32 @@ function sendMessage(text: string): void {
       // Round-2 audit P0 #3 (2026-05-21): forward the snapshot so attachments
       // actually reach the model.
       attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-      // SECURITY (H-10 audit 2026-05-19): `apiKey:` stays off the
-      // CHAT_MESSAGE wire payload. See chrome-HIGH-3.
-      // Phase 3 bridge: bridge must consume extendedThinking and
-      // forward to providers that support it (Anthropic thinking blocks,
-      // OpenAI reasoning effort, Gemini thinkingBudget).
       extendedThinking: _ctx.thinkingEnabled || undefined,
+      modelSelection: _ctx.selectedModel,
+      quickMode: _ctx.quickMode || undefined,
+      currentModelKey: _ctx.currentModelKey,
+      previousTaskType: _ctx.previousTaskType,
     },
-    () => {
+    (response?: { success?: boolean; error?: string }) => {
       if (chrome.runtime.lastError) {
         handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Extension error');
+      } else if (response?.success === false) {
+        handleStreamError(streamId, response.error ?? 'Managed Cloud request was rejected.');
       }
     },
   );
 }
 
 function handleStreamError(id: string, errorText: string): void {
+  if (_ctx.currentStreamId !== id) return;
+  stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
     _ctx.streamTimeoutHandle = null;
   }
   removeThinking();
-  const assistantMsg: ChatMessage = {
-    id,
-    role: 'assistant',
-    content: `Error: ${errorText}`,
-    error: true,
-    timestamp: Date.now(),
-  };
-  _ctx.messages.push(assistantMsg);
+  applyStreamFailure(_ctx.messages, id, errorText);
+  trimLiveMessages();
   saveMessages();
   renderMessages();
   _ctx.isStreaming = false;
@@ -3228,89 +3505,45 @@ function updateConnectionStatus(): void {
   const pill = document.getElementById('sp-status-pill');
   if (!pill) return;
   if (_ctx.isConnected) {
-    // Bridge is online (native or HTTP bridge connected).
     pill.className = 'connected';
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
-    pill.replaceChildren(dot, 'Bridge');
+    pill.replaceChildren(dot, 'Desktop tools');
   } else {
-    // No bridge — fail closed inside the extension boundary.
     pill.className = 'disconnected';
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
-    pill.replaceChildren(dot, 'Offline');
+    pill.replaceChildren(dot, 'Desktop optional');
   }
-  // Keep composer gate and model picker in sync whenever connection changes.
-  updateComposerGatedByConnection();
+  updateNativeBridgeAvailabilityUI();
 }
 
 /**
- * Gate the chat composer based on bridge availability.
- *
- * When the desktop bridge is offline:
- *  - The bridge-notice banner is shown above the input.
- *  - The textarea placeholder explains why input is blocked.
- *  - The send button is disabled (unless already streaming, which has its own stop).
- *  - The model picker is dimmed (selection is stored but has no immediate effect).
- *
- * When connected, all restrictions are lifted.  setBlockedState() may
- * separately disable the composer on restricted URLs; that takes precedence
- * because a restricted URL means AGI can't read the page at all.
+ * Native connectivity controls explicit Desktop/browser mechanics only.
+ * Managed Cloud chat and its model picker remain available independently.
  */
-function updateComposerGatedByConnection(): void {
+function updateNativeBridgeAvailabilityUI(): void {
   const notice = document.getElementById('sp-bridge-notice');
-  const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
-  const sendBtnEl = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
-  const modelWrap = document.querySelector('.sp-model-selector-wrap');
-
-  const offline = !_ctx.isConnected;
+  const availability = getChromeSurfaceAvailability({
+    nativeConnected: _ctx.isConnected,
+    restrictedPage: false,
+  });
 
   if (notice) {
-    notice.classList.toggle('visible', offline);
-  }
-
-  if (modelWrap) {
-    modelWrap.classList.toggle('bridge-offline', offline);
-  }
-
-  // Only change the input/send state when the page is NOT already blocked
-  // by setBlockedState (blocked = input.disabled set because of restricted URL).
-  // We detect this by checking if input is already disabled for a non-connection reason:
-  // setBlockedState sets placeholder to "Can't access this page" — if that is set, leave it.
-  if (inputEl && inputEl.placeholder !== "Can't access this page") {
-    if (offline) {
-      inputEl.placeholder = 'Start the AGI desktop app to enable chat…';
-    } else {
-      inputEl.placeholder = 'Ask anything... (/ for commands)';
-    }
-  }
-
-  // Disable send unless we're actively streaming (stop button must remain enabled)
-  if (sendBtnEl && sendBtnEl.getAttribute('data-mode') !== 'stop') {
-    sendBtnEl.disabled = offline;
+    notice.classList.toggle('visible', !availability.nativeTools);
   }
 }
 
-// BLOCKER-02b: show/hide the offline onboarding screen
-function setOfflineOnboardingVisible(visible: boolean): void {
+// Legacy Desktop-required onboarding is always hidden: native tools are optional.
+function hideLegacyOfflineOnboarding(): void {
   const el2 = document.getElementById('sp-offline-onboarding');
   const msgsEl = document.getElementById('sp-messages');
   if (!el2) return;
-  if (visible) {
-    el2.classList.add('visible');
-    // Hide other message-area content while onboarding is shown
-    if (msgsEl) {
-      msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap, #sp-empty').forEach((n) => {
-        (n as HTMLElement).style.display = 'none';
-      });
-    }
-  } else {
-    el2.classList.remove('visible');
-    if (msgsEl) {
-      msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap, #sp-empty').forEach((n) => {
-        (n as HTMLElement).style.display = '';
-      });
-    }
+  el2.classList.remove('visible');
+  if (msgsEl) {
+    msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap, #sp-empty').forEach((n) => {
+      (n as HTMLElement).style.display = '';
+    });
   }
 }
 
@@ -3401,12 +3634,14 @@ function updateSendButton(): void {
     btn.disabled = false;
     btn.setAttribute('data-mode', 'stop');
     btn.title = 'Stop generating';
+    btn.setAttribute('aria-label', 'Stop response');
     clearChildren(btn);
     btn.appendChild(renderIcon(Square, 14));
   } else {
     btn.disabled = false;
     btn.setAttribute('data-mode', 'send');
     btn.title = 'Send';
+    btn.setAttribute('aria-label', 'Send message');
     clearChildren(btn);
     btn.appendChild(renderIcon(ArrowUp, 16));
   }
@@ -3477,8 +3712,18 @@ function updateAttachmentPreview(): void {
       class: 'sp-attachment-thumb',
       src: dataUrl,
       alt: 'attachment',
+      width: '48',
+      height: '48',
     }) as HTMLImageElement;
-    const removeBtn = el('button', { class: 'sp-attachment-remove', title: 'Remove' }, '×');
+    const removeBtn = el(
+      'button',
+      {
+        class: 'sp-attachment-remove',
+        title: 'Remove',
+        'aria-label': `Remove attachment ${i + 1}`,
+      },
+      '×',
+    );
     const idx = i;
     removeBtn.addEventListener('click', () => {
       pendingAttachments.splice(idx, 1);
@@ -3552,42 +3797,43 @@ function isRestrictedUrl(url: string): boolean {
 }
 
 /**
- * Toggles the blocked-site overlay.  When blocked the composer is disabled so
- * the user can see that AGI cannot access the page content.
+ * Toggles the restricted-page notice. Managed Cloud chat remains available;
+ * only page context and browser automation are disabled.
  */
 function setBlockedState(blocked: boolean): void {
   const blockedEl = document.getElementById('sp-blocked');
   const promptChips = document.getElementById('sp-prompt-chips');
-  const msgsEl = document.getElementById('sp-messages');
   const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
-  const sendBtnEl = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
-  const composerBar = document.getElementById('sp-composer-bar');
 
   if (!blockedEl) return;
+  const availability = getChromeSurfaceAvailability({
+    nativeConnected: _ctx.isConnected,
+    restrictedPage: blocked,
+  });
 
   if (blocked) {
     blockedEl.classList.add('visible');
     if (promptChips) promptChips.classList.add('hidden');
-    if (msgsEl) {
-      msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
-    }
-    if (inputEl) {
-      inputEl.disabled = true;
-      inputEl.placeholder = "Can't access this page";
-    }
-    if (sendBtnEl) sendBtnEl.disabled = true;
-    if (composerBar) composerBar.style.opacity = '0.4';
+    _ctx.pendingPageContext = null;
   } else {
     blockedEl.classList.remove('visible');
-    if (inputEl) {
-      inputEl.disabled = false;
-      inputEl.placeholder = 'Ask anything... (/ for commands)';
-    }
-    if (sendBtnEl) sendBtnEl.disabled = false;
-    if (composerBar) composerBar.style.opacity = '';
     // Re-show prompt chips only if there are no messages yet
     if (promptChips && _ctx.messages.length === 0) promptChips.classList.remove('hidden');
   }
+  if (inputEl) {
+    inputEl.disabled = !availability.chat;
+    inputEl.placeholder = availability.pageContext
+      ? 'Ask anything... (/ for commands)'
+      : 'Ask anything (page context unavailable)';
+  }
+  updateContextButton();
+  if (contextBtn) {
+    contextBtn.disabled = !availability.pageContext;
+    contextBtn.title = availability.pageContext
+      ? 'Attach page content to next message'
+      : 'Page context is unavailable on this browser page';
+  }
+  updateSendButton();
 }
 
 /**
@@ -3995,7 +4241,7 @@ function buildUI(): void {
   const logoEl = el('div', { id: 'sp-logo' });
   // AGI brand mark: 12 spokes radiating from center (inner r=4.6, outer r=9).
   // Spoke at index 0 (12 o'clock) uses amber/terra accent; others inherit text
-  // color via currentColor. Geometry mirrors packages/ui/src/AgiMark.tsx.
+  // color via currentColor. Geometry mirrors packages/ui/ui/src/AgiMark.tsx.
   const logoSvg = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="AGI" role="img">
     <line x1="12" y1="7.4" x2="12" y2="3" stroke="var(--agi-ext-accent-secondary,#da7756)" stroke-width="1.5" stroke-linecap="round"/>
     <line x1="14.3" y1="8.016" x2="16.5" y2="4.206" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -4018,7 +4264,13 @@ function buildUI(): void {
   headerLeft.appendChild(titleWrap);
 
   const modelSelectorWrap = el('div', { class: 'sp-model-selector-wrap' });
-  const modelSelectorBtn = el('button', { id: 'sp-model-selector-btn' });
+  const modelSelectorBtn = el('button', {
+    id: 'sp-model-selector-btn',
+    type: 'button',
+    'aria-label': 'Select model',
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false',
+  });
   const modelBadge = document.createElement('span');
   modelBadge.id = 'sp-model-badge';
   modelBadge.textContent = 'AI Assistant';
@@ -4026,8 +4278,11 @@ function buildUI(): void {
   chevron.className = 'sp-chevron';
   chevron.textContent = '▾';
   modelSelectorBtn.replaceChildren(modelBadge, chevron);
-  const modelDropdownEl = el('div', { id: 'sp-model-dropdown' });
-  let currentModelValue = 'auto';
+  const modelDropdownEl = el('div', {
+    id: 'sp-model-dropdown',
+    role: 'menu',
+    'aria-label': 'Available models',
+  });
 
   /**
    * Provider ids that have a bundled SVG under icons/providers/. Kept in sync
@@ -4083,27 +4338,23 @@ function buildUI(): void {
    *  - 1-line capability sub-label (Fastest / Balanced / Most capable)
    *  - Checkmark on the selected item
    */
-  function buildModelOptionRow(m: SidePanelModelOption, isSelected: boolean): HTMLElement {
+  function buildModelOptionRow(m: ManagedModelPickerOption, isSelected: boolean): HTMLElement {
     const isAuto = m.value === 'auto';
-
-    // FREE-TIER MODEL GATING:
-    // Economy models (in tierAllowedModels.economy) are selectable by all users.
-    // Pro-additions and flagship models are visible but gated with an "Upgrade"
-    // badge. Clicking a gated model opens the pricing/waitlist page instead of
-    // selecting the model. The "auto" option is always freely selectable.
-    const pickerTier = isAuto ? 'economy' : getPickerModelTier(m.value);
-    const isPremiumGated = !isAuto && (pickerTier === 'balanced' || pickerTier === 'premium');
 
     const classes = [
       'sp-model-option',
       isSelected ? 'selected' : '',
       isAuto ? 'sp-model-option-auto' : '',
-      isPremiumGated ? 'premium-gated' : '',
     ]
       .filter(Boolean)
       .join(' ');
 
-    const opt = el('div', { class: classes });
+    const opt = el('button', {
+      class: classes,
+      type: 'button',
+      role: 'menuitemradio',
+      'aria-checked': String(isSelected),
+    });
 
     // Logo / dot
     if (isAuto) {
@@ -4115,6 +4366,8 @@ function buildUI(): void {
           class: 'sp-model-option-logo',
           src: logoUrl,
           alt: m.provider,
+          width: '16',
+          height: '16',
         }) as HTMLImageElement;
         img.addEventListener('error', () => {
           // Defensive: allowlisted icon unexpectedly missing from the bundle.
@@ -4139,8 +4392,10 @@ function buildUI(): void {
     const textBlock = el('div', { class: 'sp-model-option-text' });
     textBlock.appendChild(el('span', { class: 'sp-model-option-name' }, m.label));
     if (m.capability) {
-      const capLabel = CAPABILITY_LABEL[m.capability];
-      textBlock.appendChild(el('span', { class: 'sp-model-option-sublabel' }, capLabel));
+      const capabilityLabel = getManagedCapabilityLabel(m);
+      if (capabilityLabel) {
+        textBlock.appendChild(el('span', { class: 'sp-model-option-sublabel' }, capabilityLabel));
+      }
     } else if (isAuto) {
       textBlock.appendChild(
         el('span', { class: 'sp-model-option-sublabel' }, 'Automatic provider selection'),
@@ -4148,34 +4403,31 @@ function buildUI(): void {
     }
     opt.appendChild(textBlock);
 
-    if (isPremiumGated) {
-      // Show "Upgrade" badge instead of checkmark — clicking opens pricing page.
-      opt.appendChild(el('span', { class: 'sp-model-upgrade-tag' }, 'Upgrade'));
-      opt.addEventListener('click', () => {
-        // Close dropdown
-        modelDropdownEl.classList.remove('open');
-        modelSelectorBtn.classList.remove('open');
-        // Navigate to pricing/waitlist page
-        chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' }).catch(() => {});
-      });
-    } else {
-      // Checkmark for economy/auto (selectable) models
-      opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
-      opt.addEventListener('click', () => {
-        currentModelValue = m.value;
-        chrome.storage.local.set({ agi_model: m.value }).catch(() => {});
-        updateModelBadge(m.value);
-        renderModelDropdown();
-        modelDropdownEl.classList.remove('open');
-        modelSelectorBtn.classList.remove('open');
-      });
-    }
+    // Every rendered model came from authenticated server admission intersected
+    // with this extension build's capability catalog, so there is no second,
+    // stale client-side plan gate here.
+    opt.appendChild(el('span', { class: 'sp-model-option-check' }, isSelected ? '✓' : ''));
+    opt.addEventListener('click', () => {
+      if (_ctx.selectedModel !== m.value) {
+        _ctx.conversationGeneration += 1;
+        _ctx.currentModelKey = undefined;
+        _ctx.previousTaskType = undefined;
+      }
+      _ctx.selectedModel = m.value;
+      updateModelBadge(m.value);
+      renderModelDropdown();
+      modelDropdownEl.classList.remove('open');
+      modelSelectorBtn.classList.remove('open');
+      modelSelectorBtn.setAttribute('aria-expanded', 'false');
+      saveMessages();
+    });
 
     return opt;
   }
 
   function renderModelDropdown(): void {
     clearChildren(modelDropdownEl);
+    const modelOptions = getManagedModelPickerOptions(managedModelAccess);
 
     // 0. Provider count badge header
     const pickerHeader = el('div', { class: 'sp-model-picker-header' });
@@ -4183,7 +4435,9 @@ function buildUI(): void {
     // FIX (audit batch-222 [LOW] documentation drift, 2026-06-13): derive the
     // provider count from the actual model options instead of a hardcoded "13+".
     const providerCount = new Set(
-      SIDE_PANEL_MODEL_OPTIONS.map((o) => o.provider).filter((p): p is string => Boolean(p)),
+      modelOptions
+        .map((option) => option.provider)
+        .filter((provider): provider is string => Boolean(provider)),
     ).size;
     pickerHeader.appendChild(
       el('span', { class: 'provider-count-badge' }, `${providerCount} providers`),
@@ -4191,16 +4445,16 @@ function buildUI(): void {
     modelDropdownEl.appendChild(pickerHeader);
 
     // 1. "Best (auto)" as the first option, visually distinct
-    const autoOpt = SIDE_PANEL_MODEL_OPTIONS.find((m) => m.value === 'auto');
+    const autoOpt = modelOptions.find((model) => model.value === 'auto');
     if (autoOpt) {
-      modelDropdownEl.appendChild(buildModelOptionRow(autoOpt, currentModelValue === 'auto'));
+      modelDropdownEl.appendChild(buildModelOptionRow(autoOpt, _ctx.selectedModel === 'auto'));
     }
 
     // 2. Collect non-auto options grouped by provider
-    const nonAutoOptions = SIDE_PANEL_MODEL_OPTIONS.filter((m) => m.value !== 'auto');
+    const nonAutoOptions = modelOptions.filter((model) => model.value !== 'auto');
 
     // Build an ordered map of provider -> options
-    const grouped = new Map<string, SidePanelModelOption[]>();
+    const grouped = new Map<string, ManagedModelPickerOption[]>();
     for (const m of nonAutoOptions) {
       const provKey = m.provider ?? '__unknown__';
       if (!grouped.has(provKey)) grouped.set(provKey, []);
@@ -4217,7 +4471,7 @@ function buildUI(): void {
       const headerLabel = provDisplay?.label ?? pid;
       modelDropdownEl.appendChild(el('div', { class: 'sp-model-group-header' }, headerLabel));
       for (const m of opts) {
-        modelDropdownEl.appendChild(buildModelOptionRow(m, currentModelValue === m.value));
+        modelDropdownEl.appendChild(buildModelOptionRow(m, _ctx.selectedModel === m.value));
       }
     }
 
@@ -4232,7 +4486,7 @@ function buildUI(): void {
         ),
       );
       for (const m of opts) {
-        modelDropdownEl.appendChild(buildModelOptionRow(m, currentModelValue === m.value));
+        modelDropdownEl.appendChild(buildModelOptionRow(m, _ctx.selectedModel === m.value));
       }
     }
 
@@ -4240,12 +4494,17 @@ function buildUI(): void {
     const toggleRow = el('div', { class: 'sp-thinking-toggle-row' });
     const toggleLabel = el(
       'label',
-      { class: `sp-thinking-toggle-label${_ctx.thinkingEnabled ? ' active' : ''}` },
+      {
+        class: `sp-thinking-toggle-label${_ctx.thinkingEnabled ? ' active' : ''}`,
+        for: 'sp-thinking-toggle',
+      },
       'Extended thinking',
     );
     const toggleInput = el('input', {
+      id: 'sp-thinking-toggle',
       class: 'sp-thinking-toggle',
       type: 'checkbox',
+      'aria-label': 'Extended thinking',
     }) as HTMLInputElement;
     toggleInput.checked = _ctx.thinkingEnabled;
     toggleInput.addEventListener('change', () => {
@@ -4261,37 +4520,33 @@ function buildUI(): void {
     toggleRow.appendChild(toggleInput);
     modelDropdownEl.appendChild(toggleRow);
   }
+  refreshModelPickerUI = () => {
+    updateModelBadge(_ctx.selectedModel);
+    renderModelDropdown();
+  };
   modelSelectorBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpenNow = modelDropdownEl.classList.toggle('open');
     modelSelectorBtn.classList.toggle('open', isOpenNow);
+    modelSelectorBtn.setAttribute('aria-expanded', String(isOpenNow));
+    if (isOpenNow) {
+      modelDropdownEl.querySelector<HTMLButtonElement>('.sp-model-option.selected')?.focus();
+    }
   });
   document.addEventListener('click', (e: MouseEvent) => {
     if (!modelSelectorWrap.contains(e.target as Node)) {
       modelDropdownEl.classList.remove('open');
       modelSelectorBtn.classList.remove('open');
+      modelSelectorBtn.setAttribute('aria-expanded', 'false');
     }
   });
-  chrome.storage.local.get(['agi_model', 'agi_thinking_enabled'], (result) => {
+  chrome.storage.local.get(['agi_thinking_enabled'], (result) => {
     if (chrome.runtime.lastError) return;
-    const stored = result['agi_model'] as string | undefined;
-    if (stored) {
-      const resolved = normalizeModelId(stored) ?? stored;
-      // FREE-TIER GATE: if the previously stored model is premium-gated, reset
-      // to 'auto' so the user cannot bypass the tier check via stale storage.
-      const storedTier = getPickerModelTier(resolved);
-      if (storedTier === 'balanced' || storedTier === 'premium') {
-        currentModelValue = 'auto';
-        chrome.storage.local.remove('agi_model').catch(() => {});
-      } else {
-        currentModelValue = resolved;
-      }
-    }
     const storedThinking = result['agi_thinking_enabled'] as boolean | undefined;
     if (storedThinking !== undefined) {
       _ctx.thinkingEnabled = storedThinking;
     }
-    updateModelBadge(currentModelValue);
+    updateModelBadge(_ctx.selectedModel);
     renderModelDropdown();
   });
   modelSelectorWrap.appendChild(modelSelectorBtn);
@@ -4310,29 +4565,8 @@ function buildUI(): void {
   });
   newChatBtn.appendChild(renderIcon(FilePen, 16));
   newChatBtn.addEventListener('click', () => {
-    if (_ctx.streamTimeoutHandle) {
-      clearTimeout(_ctx.streamTimeoutHandle);
-      _ctx.streamTimeoutHandle = null;
-    }
-    if (_ctx.messages.length > 0) {
-      const toSave: HistoryMessage[] = _ctx.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        timestamp: m.timestamp,
-      }));
-      saveConversation(toSave).catch((err) =>
-        console.warn('[SidePanel] failed to save conversation to history:', err),
-      );
-    }
-    _ctx.messages.length = 0;
-    _ctx.lastRenderedCount = 0;
-    _ctx.isStreaming = false;
-    _ctx.currentStreamId = null;
-    _ctx.pendingPageContext = null;
-    clearStoredMessages();
-    updateContextButton();
-    updateSendButton();
-    renderMessages();
+    cancelCurrentManagedStream(false);
+    resetConversationView();
   });
   headerRight.appendChild(newChatBtn);
 
@@ -4382,9 +4616,18 @@ function buildUI(): void {
     }
     _ctx.messages.length = 0;
     _ctx.lastRenderedCount = 0;
+    _ctx.needsMessageRebuild = true;
     _ctx.isStreaming = false;
     _ctx.currentStreamId = null;
     _ctx.pendingPageContext = null;
+    _ctx.conversationGeneration += 1;
+    // Continue the selected history as a window-owned branch. Another open
+    // side panel may be viewing the same source entry and must not overwrite it.
+    _ctx.conversationId = createBrowserConversationId();
+    persistCurrentConversationOwner();
+    _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
+    _ctx.currentModelKey = entry.routing.currentModelKey;
+    _ctx.previousTaskType = entry.routing.previousTaskType;
     for (const hm of entry.messages) {
       _ctx.messages.push({
         id: `h-${hm.timestamp}-${Math.random().toString(36).slice(2, 5)}`,
@@ -4393,7 +4636,10 @@ function buildUI(): void {
         timestamp: hm.timestamp,
       });
     }
-    saveMessages();
+    activateConversation(entry.id).catch((err) =>
+      console.warn('[SidePanel] failed to activate browser conversation:', err),
+    );
+    refreshModelPickerUI();
     updateContextButton();
     updateSendButton();
     renderMessages();
@@ -4415,7 +4661,12 @@ function buildUI(): void {
   // bridge-URL, tools, and chat-action controls live exclusively in this drawer.
 
   const drawerOverlay = el('div', { id: 'sp-drawer-overlay' });
-  const drawer = el('div', { id: 'sp-drawer', role: 'dialog', 'aria-label': 'Settings' });
+  const drawer = el('div', {
+    id: 'sp-drawer',
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-label': 'Settings',
+  });
 
   function openDrawer(): void {
     drawerOverlay.classList.add('open');
@@ -4426,10 +4677,12 @@ function buildUI(): void {
     void refreshDrawerMemory();
     void refreshDrawerStats();
     void refreshDrawerTabInfo();
+    drawerClose.focus();
   }
   function closeDrawer(): void {
     drawerOverlay.classList.remove('open');
     drawer.classList.remove('open');
+    menuBtn.focus();
   }
 
   menuBtn.addEventListener('click', (e) => {
@@ -4441,6 +4694,12 @@ function buildUI(): void {
     }
   });
   drawerOverlay.addEventListener('click', closeDrawer);
+  drawer.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeDrawer();
+    }
+  });
 
   // ── Drawer header ──────────────────────────────────────────────────────────
   const drawerHeader = el('div', { id: 'sp-drawer-header' });
@@ -4490,7 +4749,14 @@ function buildUI(): void {
       const delBtn = el('button', { class: 'sp-drawer-history-delete', title: 'Delete' }, '✕');
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        const deletingCurrentConversation = entry.id === _ctx.conversationId;
+        if (deletingCurrentConversation) cancelCurrentManagedStream(false);
         deleteConversation(entry.id)
+          .then(() => {
+            if (deletingCurrentConversation) {
+              resetConversationView();
+            }
+          })
           .then(() => listConversations())
           .then((updated) => renderDrawerHistory(updated))
           .catch((err) => console.warn('[SidePanel] history delete failed:', err));
@@ -4542,29 +4808,8 @@ function buildUI(): void {
   drawerClearChatBtn.appendChild(document.createTextNode(' Clear'));
   drawerClearChatBtn.addEventListener('click', () => {
     closeDrawer();
-    if (_ctx.streamTimeoutHandle) {
-      clearTimeout(_ctx.streamTimeoutHandle);
-      _ctx.streamTimeoutHandle = null;
-    }
-    if (_ctx.messages.length > 0) {
-      const toSave: HistoryMessage[] = _ctx.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-        timestamp: m.timestamp,
-      }));
-      saveConversation(toSave).catch((err) =>
-        console.warn('[SidePanel] failed to save on clear:', err),
-      );
-    }
-    _ctx.messages.length = 0;
-    _ctx.lastRenderedCount = 0;
-    _ctx.isStreaming = false;
-    _ctx.currentStreamId = null;
-    _ctx.pendingPageContext = null;
-    clearStoredMessages();
-    updateContextButton();
-    updateSendButton();
-    renderMessages();
+    cancelCurrentManagedStream(false);
+    resetConversationView();
   });
   chatActionsRow.appendChild(drawerClearChatBtn);
 
@@ -5327,48 +5572,29 @@ function buildUI(): void {
     class: 'sp-cloud-signin-prompt',
     id: 'sp-cloud-signin-prompt',
   });
-  signinPrompt.appendChild(
-    el(
-      'span',
-      { class: 'sp-cloud-signin-desc' },
-      'Sign in to get 3 free cloud chat prompts routed through AGI economy models.',
-    ),
+  const signinDescription = el(
+    'span',
+    { class: 'sp-cloud-signin-desc' },
+    'Sign in to use AGI Managed Cloud chat.',
   );
+  signinPrompt.appendChild(signinDescription);
 
   const signinBtn = el('button', { class: 'sp-cloud-signin-btn', id: 'sp-cloud-signin-btn' });
   signinBtn.textContent = 'Sign in to AGI Cloud';
-  signinBtn.addEventListener('click', () => {
-    // Open the web sign-in page. After signing in, the user can copy their
-    // session token from the developer tools or the extension token page.
-    chrome.tabs.create({ url: 'https://agiworkforce.com/sign-in' }).catch(() => {});
+  signinBtn.addEventListener('click', async () => {
+    signinBtn.setAttribute('disabled', '');
+    signinBtn.textContent = 'Opening sign in…';
+    try {
+      await openClerkSignIn();
+    } catch (error) {
+      signinDescription.textContent =
+        error instanceof Error ? error.message : 'Unable to open AGI account sign-in.';
+    } finally {
+      signinBtn.removeAttribute('disabled');
+      signinBtn.textContent = 'Sign in to AGI Cloud';
+    }
   });
   signinPrompt.appendChild(signinBtn);
-
-  // Token paste row (for users who are already signed in on web)
-  const tokenRow = el('div', { class: 'sp-cloud-token-row' });
-  const tokenInput = el('input', {
-    type: 'password',
-    class: 'sp-cloud-token-input',
-    id: 'sp-cloud-token-input',
-    placeholder: 'Paste Clerk session token…',
-    autocomplete: 'off',
-    spellcheck: 'false',
-  }) as HTMLInputElement;
-  const tokenSaveBtn = el(
-    'button',
-    { class: 'sp-cloud-token-save-btn', id: 'sp-cloud-token-save-btn' },
-    'Save',
-  );
-  tokenRow.appendChild(tokenInput);
-  tokenRow.appendChild(tokenSaveBtn);
-  signinPrompt.appendChild(tokenRow);
-  signinPrompt.appendChild(
-    el(
-      'span',
-      { class: 'sp-cloud-token-hint' },
-      'Already signed in on agiworkforce.com? Copy your token from Account settings.',
-    ),
-  );
 
   // ── Signed-in view ───────────────────────────────────────────────────────
   const signedInView = el('div', {
@@ -5503,25 +5729,86 @@ function buildUI(): void {
   // Wire the module-level placeholder to the real implementation (which closes
   // over signinPrompt, signedInView, quotaWrap, quotaBadgeEl, etc.).
   refreshCloudAccountUI = async function (): Promise<void> {
+    const refreshGeneration = ++cloudAccountRefreshGeneration;
     const token = await getAuthToken();
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     if (!token) {
       // Signed out
+      managedModelAccess = null;
+      _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
+      _ctx.currentModelKey = undefined;
+      _ctx.previousTaskType = undefined;
+      signinDescription.textContent = isClerkExtensionAuthConfigured()
+        ? 'Sign in to use AGI Managed Cloud chat.'
+        : 'AGI account sign-in is not configured in this build.';
+      if (isClerkExtensionAuthConfigured()) signinBtn.removeAttribute('disabled');
+      else signinBtn.setAttribute('disabled', '');
       signinPrompt.style.display = '';
       signedInView.style.display = 'none';
       quotaWrap.style.display = 'none';
       quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
+      refreshModelPickerUI();
       return;
     }
 
-    // Signed in
+    let access: ManagedModelAccess;
+    try {
+      access = await getManagedModelAccess(token);
+    } catch (error) {
+      if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+      managedModelAccess = null;
+      _ctx.selectedModel = reconcileManagedModelSelection(_ctx.selectedModel, null);
+      _ctx.currentModelKey = undefined;
+      _ctx.previousTaskType = undefined;
+      refreshModelPickerUI();
+      quotaWrap.style.display = 'none';
+      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
+
+      if (error instanceof Error && error.message.includes('Authentication')) {
+        await clearAuthToken();
+        if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+        signinDescription.textContent = 'Your session expired. Sign in again to continue.';
+        signinPrompt.style.display = '';
+        signedInView.style.display = 'none';
+        return;
+      }
+
+      signinPrompt.style.display = 'none';
+      signedInView.style.display = '';
+      userTierEl.textContent = 'Account unavailable';
+      return;
+    }
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+
+    managedModelAccess = access;
+    const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
+    if (reconciledSelection !== _ctx.selectedModel) {
+      _ctx.conversationGeneration += 1;
+      _ctx.selectedModel = reconciledSelection;
+      _ctx.currentModelKey = undefined;
+      _ctx.previousTaskType = undefined;
+    }
+    refreshModelPickerUI();
+
+    // Signed in with server-verified admission.
     signinPrompt.style.display = 'none';
     signedInView.style.display = '';
-    quotaWrap.style.display = '';
+    userTierEl.textContent = formatManagedTierLabel(access.subscriptionTier);
+
+    if (!isFreeManagedTier(access.subscriptionTier)) {
+      quotaWrap.style.display = 'none';
+      quotaBadgeEl.classList.add('visible', 'has-prompts');
+      quotaBadgeEl.classList.remove('exhausted');
+      quotaBadgeEl.textContent = access.subscriptionTier.trim().toUpperCase();
+      return;
+    }
 
     const remaining = await getRemainingFreePrompts();
+    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const used = FREE_TRIAL_PROMPT_LIMIT - remaining;
     const pct = Math.round((used / FREE_TRIAL_PROMPT_LIMIT) * 100);
 
+    quotaWrap.style.display = '';
     quotaCount.textContent = `${remaining} / ${FREE_TRIAL_PROMPT_LIMIT} remaining`;
     (quotaBarFill as HTMLElement).style.width = `${pct}%`;
     if (remaining === 0) {
@@ -5544,18 +5831,6 @@ function buildUI(): void {
     }
   };
 
-  // Token save handler
-  tokenSaveBtn.addEventListener('click', async () => {
-    const raw = tokenInput.value.trim();
-    if (!raw) return;
-    await storeSessionToken(raw);
-    tokenInput.value = '';
-    await refreshCloudAccountUI();
-  });
-  tokenInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') tokenSaveBtn.click();
-  });
-
   // Sign-out handler
   signoutBtn.addEventListener('click', async () => {
     await clearAuthToken();
@@ -5566,6 +5841,17 @@ function buildUI(): void {
   quotaUpgradeBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://agiworkforce.com/pricing' }).catch(() => {});
   });
+
+  if (isClerkExtensionAuthConfigured()) {
+    void observeClerkAuth(() => {
+      void refreshCloudAccountUI();
+    }).catch((error) => {
+      console.warn('[SidePanel] Clerk auth listener failed:', error);
+    });
+  } else {
+    signinDescription.textContent = 'AGI account sign-in is not configured in this build.';
+    signinBtn.setAttribute('disabled', '');
+  }
 
   // Initial load
   void refreshCloudAccountUI();
@@ -5693,12 +5979,25 @@ function buildUI(): void {
   authBar.appendChild(statusPill);
   document.body.appendChild(authBar);
 
-  const tabBar = el('div', { id: 'sp-tab-bar' });
-  const chatTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'chat' }, 'Chat');
-  const workflowsTabBtn = el('button', { class: 'sp-tab', 'data-tab': 'workflows' }, 'Workflows');
+  const tabBar = el('div', { id: 'sp-tab-bar', role: 'tablist', 'aria-label': 'AGI views' });
+  const chatTabBtn = el(
+    'button',
+    { class: 'sp-tab', 'data-tab': 'chat', role: 'tab', 'aria-selected': 'false' },
+    'Chat',
+  );
+  const workflowsTabBtn = el(
+    'button',
+    { class: 'sp-tab', 'data-tab': 'workflows', role: 'tab', 'aria-selected': 'false' },
+    'Workflows',
+  );
   const cuTabBtn = el(
     'button',
-    { class: 'sp-tab sp-tab-active', 'data-tab': 'computer-use' },
+    {
+      class: 'sp-tab sp-tab-active',
+      'data-tab': 'computer-use',
+      role: 'tab',
+      'aria-selected': 'true',
+    },
     'Computer Use',
   );
   tabBar.appendChild(chatTabBtn);
@@ -5717,6 +6016,9 @@ function buildUI(): void {
     chatTabBtn.classList.toggle('sp-tab-active', tab === 'chat');
     workflowsTabBtn.classList.toggle('sp-tab-active', tab === 'workflows');
     cuTabBtn.classList.toggle('sp-tab-active', tab === 'computer-use');
+    chatTabBtn.setAttribute('aria-selected', String(tab === 'chat'));
+    workflowsTabBtn.setAttribute('aria-selected', String(tab === 'workflows'));
+    cuTabBtn.setAttribute('aria-selected', String(tab === 'computer-use'));
     if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
     if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
     cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
@@ -5736,7 +6038,12 @@ function buildUI(): void {
 
   const chatPanel = el('div', { id: 'sp-chat-panel' });
 
-  const msgsArea = el('div', { id: 'sp-messages' });
+  const msgsArea = el('div', {
+    id: 'sp-messages',
+    role: 'log',
+    'aria-live': 'polite',
+    'aria-relevant': 'additions',
+  });
   // #sp-empty: composer-first empty state (design-spec §8); hidden when messages present
   const emptyState = el('div', { id: 'sp-empty' });
   const emptyIcon = el('div', { id: 'sp-empty-icon' });
@@ -5761,7 +6068,11 @@ function buildUI(): void {
   );
   msgsArea.appendChild(emptyState);
 
-  const blockedState = el('div', { id: 'sp-blocked' });
+  const blockedState = el('div', {
+    id: 'sp-blocked',
+    role: 'status',
+    'aria-live': 'polite',
+  });
   const svgNS = 'http://www.w3.org/2000/svg';
   const shield = document.createElementNS(svgNS, 'svg');
   shield.id = 'sp-blocked-shield';
@@ -5793,16 +6104,18 @@ function buildUI(): void {
   shield.appendChild(shieldLine);
   shield.appendChild(shieldCircle);
   blockedState.appendChild(shield);
-  blockedState.appendChild(
-    createElementWith({ tag: 'div', id: 'sp-blocked-title', text: "Can't access this page" }),
+  const blockedCopy = el('div', { class: 'sp-blocked-copy' });
+  blockedCopy.appendChild(
+    createElementWith({ tag: 'div', id: 'sp-blocked-title', text: 'Page access unavailable' }),
   );
-  blockedState.appendChild(
+  blockedCopy.appendChild(
     createElementWith({
       tag: 'div',
       id: 'sp-blocked-desc',
-      text: 'Browser automation is not available on this page.',
+      text: "You can still chat, but AGI can't read or automate browser-internal pages.",
     }),
   );
+  blockedState.appendChild(blockedCopy);
   msgsArea.appendChild(blockedState);
 
   // BLOCKER-02b: offline onboarding — shown when bridge is unreachable on first open
@@ -6406,7 +6719,12 @@ function buildUI(): void {
   // Context button is now rendered as a persistent chip in the composer bar (see below).
   // The toolbar slot is intentionally empty for context; the chip is built inside inputArea.
 
-  const micBtn = el('button', { class: 'sp-tool-btn', id: 'sp-mic-btn', title: 'Voice input' });
+  const micBtn = el('button', {
+    class: 'sp-tool-btn',
+    id: 'sp-mic-btn',
+    title: 'Voice input',
+    'aria-label': 'Voice input',
+  });
   micBtn.appendChild(renderIcon(Mic, 16));
   toolbar.appendChild(micBtn);
 
@@ -6504,6 +6822,8 @@ function buildUI(): void {
     id: 'sp-input',
     placeholder: 'Type / for commands',
     rows: '1',
+    name: 'message',
+    'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
 
   inputEl.addEventListener('input', () => autoResizeInput(inputEl));
@@ -6519,7 +6839,7 @@ function buildUI(): void {
 
   // 2026-05-21 — paste-image support on the textarea. Captures clipboard image
   // items (screenshots, copied images) so users don't have to round-trip
-  // through the +menu. Mirrors `packages/unified-chat/ChatInput.tsx` and the
+  // through the +menu. Mirrors `packages/ui/unified-chat/ChatInput.tsx` and the
   // VS Code webview composer wire. Image-only kind, single readAsDataURL per
   // file, the existing 8-attachment cap below applies on append.
   inputEl.addEventListener('paste', (e: ClipboardEvent) => {
@@ -6543,16 +6863,13 @@ function buildUI(): void {
   const sendBtn = el('button', {
     id: 'sp-send-btn',
     title: 'Send (Cmd+Enter)',
+    'aria-label': 'Send message',
     'data-mode': 'send',
   });
   sendBtn.appendChild(renderIcon(ArrowUp, 16));
   sendBtn.addEventListener('click', () => {
     if (sendBtn.getAttribute('data-mode') === 'stop') {
-      // Cancel the active stream
-      if (_ctx.currentStreamId) {
-        chrome.runtime.sendMessage({ type: 'CANCEL_STREAM', id: _ctx.currentStreamId });
-      }
-      handleStreamError(_ctx.currentStreamId ?? 'cancelled', 'Cancelled.');
+      cancelCurrentManagedStream(true);
       return;
     }
     const text = inputEl.value;
@@ -6568,16 +6885,28 @@ function buildUI(): void {
     class: 'sp-attach-btn',
     id: 'sp-attach-btn',
     title: 'Add attachment',
+    'aria-label': 'Add attachment',
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false',
   });
   setText(attachBtn, '+');
 
-  const attachMenu = el('div', { id: 'sp-attach-menu' });
+  const attachMenu = el('div', {
+    id: 'sp-attach-menu',
+    role: 'menu',
+    'aria-label': 'Attachment options',
+  });
 
-  const screenshotItem = el('div', { class: 'sp-attach-menu-item' });
+  const screenshotItem = el('button', {
+    class: 'sp-attach-menu-item',
+    type: 'button',
+    role: 'menuitem',
+  });
   screenshotItem.appendChild(renderIcon(Camera, 16));
   screenshotItem.appendChild(document.createTextNode('Take a screenshot'));
   screenshotItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
     chrome.runtime.sendMessage(
       { type: 'CAPTURE_SCREENSHOT', format: 'png', quality: 90 },
       (resp: { success?: boolean; data?: string } | undefined) => {
@@ -6588,7 +6917,11 @@ function buildUI(): void {
     );
   });
 
-  const fileItem = el('div', { class: 'sp-attach-menu-item' });
+  const fileItem = el('button', {
+    class: 'sp-attach-menu-item',
+    type: 'button',
+    role: 'menuitem',
+  });
   fileItem.appendChild(renderIcon(FileImage, 16));
   fileItem.appendChild(document.createTextNode('Add an image'));
   const fileInput = el('input', {
@@ -6613,6 +6946,7 @@ function buildUI(): void {
   });
   fileItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
     fileInput.click();
   });
 
@@ -6624,11 +6958,14 @@ function buildUI(): void {
 
   attachBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    attachMenu.classList.toggle('open');
+    const isOpen = attachMenu.classList.toggle('open');
+    attachBtn.setAttribute('aria-expanded', String(isOpen));
+    if (isOpen) screenshotItem.focus();
   });
   document.addEventListener('click', (e: MouseEvent) => {
     if (!attachWrapper.contains(e.target as Node)) {
       attachMenu.classList.remove('open');
+      attachBtn.setAttribute('aria-expanded', 'false');
     }
   });
 
@@ -6689,40 +7026,72 @@ function buildUI(): void {
   actionModeToggle.addEventListener('click', () => {
     const current = actionModeToggle.getAttribute('data-mode') as 'ask' | 'act';
     const next = current === 'ask' ? 'act' : 'ask';
+    if (
+      next === 'act' &&
+      !window.confirm(
+        'Enable “Act without asking”? AGI may interact with approved pages without confirming each action. You can switch back to “Ask before acting” at any time.',
+      )
+    ) {
+      return;
+    }
     actionModeToggle.setAttribute('data-mode', next);
     actionModeToggle.textContent = next === 'act' ? 'Act without asking' : 'Ask before acting';
     chrome.runtime
       .sendMessage({ type: 'SET_ACTION_MODE', mode: next })
-      .catch((err: unknown) => console.warn('[SidePanel] Failed to set action mode:', err));
+      .then((response: { success?: boolean } | undefined) => {
+        if (response?.success === true) return;
+        actionModeToggle.setAttribute('data-mode', current);
+        actionModeToggle.textContent =
+          current === 'act' ? 'Act without asking' : 'Ask before acting';
+      })
+      .catch((err: unknown) => {
+        actionModeToggle.setAttribute('data-mode', current);
+        actionModeToggle.textContent =
+          current === 'act' ? 'Act without asking' : 'Ask before acting';
+        console.warn('[SidePanel] Failed to set action mode:', err);
+      });
   });
   composerBar.appendChild(actionModeToggle);
 
-  // W5-06: quick mode toggle — overrides model with fast-status slot for low-latency replies
+  // W5-06: per-turn Auto Economy override for lower-latency replies.
   const quickModeToggle = el('button', {
     id: 'sp-quick-mode-toggle',
-    title: 'Quick mode: use fast model for low-latency replies',
+    title: 'Quick mode: prioritize lower latency for each reply',
     'data-active': 'false',
   });
   quickModeToggle.textContent = 'Quick';
   chrome.storage.local.get({ agi_quick_mode: false }, (items) => {
     const active = items['agi_quick_mode'] === true;
+    _ctx.quickMode = active;
     quickModeToggle.setAttribute('data-active', active ? 'true' : 'false');
     quickModeToggle.classList.toggle('sp-quick-mode-active', active);
   });
   quickModeToggle.addEventListener('click', () => {
     const current = quickModeToggle.getAttribute('data-active') === 'true';
     const next = !current;
+    _ctx.quickMode = next;
     quickModeToggle.setAttribute('data-active', next ? 'true' : 'false');
     quickModeToggle.classList.toggle('sp-quick-mode-active', next);
     chrome.runtime
       .sendMessage({ type: 'SET_QUICK_MODE', enabled: next })
-      .catch((err: unknown) => console.warn('[SidePanel] Failed to set quick mode:', err));
+      .then((response: { success?: boolean } | undefined) => {
+        if (response?.success === true) return;
+        _ctx.quickMode = current;
+        quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
+        quickModeToggle.classList.toggle('sp-quick-mode-active', current);
+      })
+      .catch((err: unknown) => {
+        _ctx.quickMode = current;
+        quickModeToggle.setAttribute('data-active', current ? 'true' : 'false');
+        quickModeToggle.classList.toggle('sp-quick-mode-active', current);
+        console.warn('[SidePanel] Failed to set quick mode:', err);
+      });
   });
   composerBar.appendChild(quickModeToggle);
 
   const promptChipsRow = el('div', { id: 'sp-prompt-chips' });
   for (const cmd of ['/summarize', '/explain', '/extract', '/code']) {
-    const chip = el('span', { class: 'sp-cmd-chip' }, cmd);
+    const chip = el('button', { class: 'sp-cmd-chip', type: 'button' }, cmd);
     chip.addEventListener('click', () => sendMessage(cmd));
     promptChipsRow.appendChild(chip);
   }
@@ -6734,7 +7103,11 @@ function buildUI(): void {
   // triggers the same flow as the popup's manual reconnect.
   const bridgeNotice = el('div', { id: 'sp-bridge-notice' });
   const bridgeNoticeDot = el('span', { id: 'sp-bridge-notice-dot' });
-  const bridgeNoticeText = el('span', { id: 'sp-bridge-notice-text' }, 'Desktop not connected');
+  const bridgeNoticeText = el(
+    'span',
+    { id: 'sp-bridge-notice-text' },
+    'Desktop tools are optional and currently disconnected',
+  );
   const bridgeNoticeReconnect = el(
     'button',
     { id: 'sp-bridge-notice-reconnect', type: 'button' },
@@ -7121,7 +7494,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       updateConnectionStatus();
       if (nowConnected) {
         chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
-        setOfflineOnboardingVisible(false);
+        hideLegacyOfflineOnboarding();
       }
     }
     return;
@@ -7129,6 +7502,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
   const chunk = msg as ChatChunk;
   if (chunk.type !== 'CHAT_CHUNK') return;
+  if (chunk.clientInstanceId !== SIDE_PANEL_CLIENT_INSTANCE_ID) return;
   if (chunk.id !== _ctx.currentStreamId) return;
 
   if (chunk.error) {
@@ -7137,47 +7511,16 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     // response or a 401 auth failure so we can guide the user to upgrade/sign-in
     // rather than surfacing a confusing "request failed" message.
     if (chunk.error === '__QUOTA_EXCEEDED__') {
-      // Snap the local counter so the quota bar shows 0 immediately, then open
-      // the upgrade row in the cloud section without a full drawer toggle.
       void refreshCloudAccountUI();
-      // Remove the thinking bubble if still present.
-      removeThinking();
-      _ctx.isStreaming = false;
-      _ctx.currentStreamId = null;
-      updateSendButton();
-      // Show an inline assistant bubble explaining the limit, pointing user to drawer.
-      const limitMsg: ChatMessage = {
-        id: chunk.id,
-        role: 'assistant',
-        content:
-          "You've used all 3 free cloud prompts. Open the **AGI Cloud** section in the drawer to upgrade or enter an invite code.",
-        error: true,
-        timestamp: Date.now(),
-      };
-      if (!_ctx.messages.find((m) => m.id === chunk.id)) {
-        _ctx.messages.push(limitMsg);
-      }
-      renderMessages();
+      handleStreamError(
+        chunk.id,
+        'Your AGI Cloud usage limit has been reached. Open AGI Cloud settings to review your plan.',
+      );
       return;
     }
     if (chunk.error === '__AUTH_REQUIRED__') {
-      removeThinking();
-      _ctx.isStreaming = false;
-      _ctx.currentStreamId = null;
-      updateSendButton();
       void refreshCloudAccountUI();
-      const authMsg: ChatMessage = {
-        id: chunk.id,
-        role: 'assistant',
-        content:
-          'Sign in to AGI Cloud to send messages. Open the **AGI Cloud** section in the drawer.',
-        error: true,
-        timestamp: Date.now(),
-      };
-      if (!_ctx.messages.find((m) => m.id === chunk.id)) {
-        _ctx.messages.push(authMsg);
-      }
-      renderMessages();
+      handleStreamError(chunk.id, 'Sign in to AGI Cloud to send messages.');
       return;
     }
     handleStreamError(chunk.id, chunk.error);
@@ -7194,6 +7537,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       timestamp: Date.now(),
     };
     _ctx.messages.push(assistantMsg);
+    trimLiveMessages();
     renderMessages();
   } else {
     const existing = _ctx.messages.find((m) => m.id === chunk.id)!;
@@ -7202,6 +7546,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   }
 
   if (chunk.done) {
+    stopManagedChatKeepalive();
     if (_ctx.streamTimeoutHandle) {
       clearTimeout(_ctx.streamTimeoutHandle);
       _ctx.streamTimeoutHandle = null;
@@ -7210,6 +7555,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (existing) {
       existing.streaming = false;
     }
+    applyRoutingContinuation(chunk.routing);
     removeThinking();
     _ctx.isStreaming = false;
     _ctx.currentStreamId = null;
@@ -7238,6 +7584,7 @@ void (async () => {
   const onboardingDone = await isOnboardingComplete();
   if (!onboardingDone) {
     showOnboardingOverlay();
+    void checkPendingContextHandoff();
     // Defer bridge status until onboarding carousel is dismissed.
     // probeBridgeStatus() is invoked by the onComplete callback in buildUI().
     loadMessages()
@@ -7260,6 +7607,7 @@ void (async () => {
     .then(() => {
       // Check for pending chat from context menu (selection, summarize, explain, translate)
       checkPendingChat();
+      void checkPendingContextHandoff();
     })
     .catch((err) => {
       // Boot errors must not surface to the user, but log for debugging.
@@ -7290,23 +7638,13 @@ async function probeBridgeStatus(): Promise<void> {
       // Mark ever-connected so the onboarding screen is not shown on future
       // opens even if the desktop is temporarily closed.
       chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
-      setOfflineOnboardingVisible(false);
+      hideLegacyOfflineOnboarding();
     } else {
-      // BLOCKER-02b: not connected. Show offline onboarding on first use.
-      chrome.storage.local.get({ agi_ever_connected: false }, (items) => {
-        if (!items['agi_ever_connected']) {
-          setOfflineOnboardingVisible(true);
-        }
-      });
+      hideLegacyOfflineOnboarding();
     }
   } catch {
-    // Background not available (e.g. service worker restarting) — show
-    // onboarding only on first use; otherwise leave current state unchanged.
-    chrome.storage.local.get({ agi_ever_connected: false }, (items) => {
-      if (!items['agi_ever_connected']) {
-        setOfflineOnboardingVisible(true);
-      }
-    });
+    // A restarting native worker never blocks Managed Cloud chat.
+    hideLegacyOfflineOnboarding();
   }
 }
 
@@ -7355,8 +7693,65 @@ function checkPendingChat(): void {
   });
 }
 
+async function checkPendingContextHandoff(): Promise<void> {
+  let stored: Record<string, unknown>;
+  try {
+    stored = await chrome.storage.session.get(CONTEXT_HANDOFF_STORAGE_KEY);
+  } catch (error) {
+    console.error('[SidePanel] Failed to read pending context handoff:', error);
+    return;
+  }
+
+  const pending = stored[CONTEXT_HANDOFF_STORAGE_KEY];
+  if (!isPendingContextHandoff(pending)) {
+    if (pending !== undefined) {
+      await chrome.storage.session.remove(CONTEXT_HANDOFF_STORAGE_KEY).catch(() => {});
+    }
+    return;
+  }
+  if (activeContextHandoffId === pending.id) return;
+
+  contextHandoffPreview?.destroy();
+  activeContextHandoffId = pending.id;
+  contextHandoffPreview = mountContextHandoffPreview(document.body, pending, {
+    onApprove: async (): Promise<ContextHandoffActionResult> => {
+      try {
+        const response = (await chrome.runtime.sendMessage({
+          type: 'APPROVE_CONTEXT_HANDOFF',
+          handoffId: pending.id,
+        })) as ContextHandoffActionResult | undefined;
+        return (
+          response ?? {
+            success: false,
+            consumed: true,
+            error: 'AGI Desktop did not return a handoff result. Select the context again.',
+          }
+        );
+      } catch (error) {
+        return {
+          success: false,
+          consumed: true,
+          error: `${error instanceof Error ? error.message : 'The native handoff failed.'} Select the context again.`,
+        };
+      }
+    },
+    onCancel: async () => {
+      const response = (await chrome.runtime.sendMessage({
+        type: 'CANCEL_CONTEXT_HANDOFF',
+        handoffId: pending.id,
+      })) as ContextHandoffActionResult | undefined;
+      if (response?.success !== true) {
+        throw new Error(response?.error ?? 'Unable to cancel the context handoff.');
+      }
+    },
+  });
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && changes['agi_pending_chat']?.newValue) {
     checkPendingChat();
+  }
+  if (area === 'session' && changes[CONTEXT_HANDOFF_STORAGE_KEY]?.newValue) {
+    void checkPendingContextHandoff();
   }
 });

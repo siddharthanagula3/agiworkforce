@@ -43,6 +43,7 @@ vi.mock('../../utils/localStorage', () => ({
 
 // Import after mocks are in place
 import { dbIdToUuid, uuidToDbId, clearIdMappings, useChatStore } from '../chatStore';
+import { useAppModeStore } from '../../appModeStore';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ describe('chatStore ID mapping pruning (H51)', () => {
   beforeEach(() => {
     clearIdMappings();
     vi.clearAllMocks();
+    useAppModeStore.setState({ mode: 'local' });
   });
 
   describe('dbIdToUuid', () => {
@@ -294,6 +296,7 @@ describe('generateTitleFromMessage (H15)', () => {
 
 describe('chatStore action basics (H15)', () => {
   beforeEach(() => {
+    useAppModeStore.setState({ mode: 'local' });
     // Reset the store to a clean slate before each test
     useChatStore.setState({
       conversations: [],
@@ -326,6 +329,15 @@ describe('chatStore action basics (H15)', () => {
   });
 
   describe('createConversation', () => {
+    it('pins new Desktop conversations to the local-only execution boundary', () => {
+      const id = useChatStore.getState().createConversation('Private thread');
+      const conversation = useChatStore
+        .getState()
+        .conversations.find((candidate) => candidate.id === id);
+
+      expect(conversation?.executionMode).toBe('local_only');
+    });
+
     it('adds a new conversation to the conversations array', () => {
       const { createConversation } = useChatStore.getState();
       expect(useChatStore.getState().conversations).toHaveLength(0);
@@ -393,6 +405,12 @@ describe('chatStore action basics (H15)', () => {
       expect(forkId).not.toBe(sourceId);
       expect(state.activeConversationId).toBe(forkId);
       expect(state.conversations[0]?.title).toBe('Local thread (BYOK fork)');
+      expect(
+        state.conversations.find((conversation) => conversation.id === sourceId)?.executionMode,
+      ).toBe('local_only');
+      expect(
+        state.conversations.find((conversation) => conversation.id === forkId)?.executionMode,
+      ).toBe('byok');
       expect(state.messagesByConversation[sourceId]).toHaveLength(2);
       expect(state.messagesByConversation[forkId]).toHaveLength(2);
       expect(state.messagesByConversation[forkId]?.[0]?.pending).toBeUndefined();

@@ -38,50 +38,61 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   };
 
   return (
+    // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
+    // (docs/agent-context/known-flaws.md): a function-style `style` prop
+    // silently drops flexDirection/alignItems/padding in this stack, which
+    // would stack the badge above the title instead of beside it.
+    // `children`-as-function keeps pressed state while every real style
+    // lives on a plain View.
     <Pressable
       onPress={handlePress}
       accessibilityRole="link"
       accessibilityLabel={`${result.title}, ${hostname}`}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        paddingVertical: 8,
-        paddingHorizontal: 10,
-        borderRadius: 8,
-        backgroundColor: pressed ? colors.surfaceHover : 'transparent',
-      })}
     >
-      <View
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: 5,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: badgeColorFor(hostname),
-        }}
-      >
-        <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '700' }}>
-          {hostname.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text
-          numberOfLines={1}
-          style={{ fontSize: 12.5, color: colors.textPrimary, fontWeight: '500' }}
+      {({ pressed }) => (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            paddingVertical: 8,
+            paddingHorizontal: 10,
+            borderRadius: 8,
+            backgroundColor: pressed ? colors.surfaceHover : 'transparent',
+          }}
         >
-          {result.title}
-        </Text>
-        {result.snippet ? (
-          <Text numberOfLines={2} style={{ fontSize: 11, color: colors.textSecondary }}>
-            {result.snippet}
+          <View
+            style={{
+              width: 20,
+              height: 20,
+              borderRadius: 5,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: badgeColorFor(hostname),
+            }}
+          >
+            <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '700' }}>
+              {hostname.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              style={{ fontSize: 12.5, color: colors.textPrimary, fontWeight: '500' }}
+            >
+              {result.title}
+            </Text>
+            {result.snippet ? (
+              <Text numberOfLines={2} style={{ fontSize: 11, color: colors.textSecondary }}>
+                {result.snippet}
+              </Text>
+            ) : null}
+          </View>
+          <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted, flexShrink: 0 }}>
+            {hostname}
           </Text>
-        ) : null}
-      </View>
-      <Text numberOfLines={1} style={{ fontSize: 11, color: colors.textMuted, flexShrink: 0 }}>
-        {hostname}
-      </Text>
+        </View>
+      )}
     </Pressable>
   );
 }

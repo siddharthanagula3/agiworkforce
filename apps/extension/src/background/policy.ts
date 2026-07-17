@@ -24,7 +24,7 @@
  */
 
 import type { RunPageAction, ScheduledTask } from '../types';
-import { redactSecrets } from '@agiworkforce/utils';
+import { redactSecrets } from '@agiworkforce/utils/logger';
 
 // ─── Declarative message policy (Arch #1, audit 2026-05-19) ────────────────
 //
@@ -100,6 +100,8 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  APPROVE_CONTEXT_HANDOFF: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CANCEL_CONTEXT_HANDOFF: { senderClass: 'extension-page-only', allowsCrossTab: true },
   // ── Computer-use loop start — side panel / popup only. ─────────────────
   // Starting the CDP agent loop is a high-privilege action: it attaches
   // chrome.debugger to a live tab and makes outbound SSE calls to the AGI

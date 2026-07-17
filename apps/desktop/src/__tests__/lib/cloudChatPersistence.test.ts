@@ -14,7 +14,7 @@
  * The shared client factory is mocked so we assert the CONFIG the desktop seam
  * passes (base URL / fetch seam / token getter) without making a network call.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Simulate the real desktop (Tauri) runtime: Local mode is supported, so the
 // PA-3 coming-soon gate in appModeStore.setMode is the one that runs.
@@ -38,14 +38,14 @@ vi.mock('sonner', () => ({
 const { createClientMock } = vi.hoisted(() => ({
   createClientMock: vi.fn((_config?: unknown) => ({})),
 }));
-vi.mock('@agiworkforce/unified-chat', () => ({
-  createCloudChatPersistenceClient: createClientMock,
+vi.mock('@agiworkforce/cloud-contracts', () => ({
+  createManagedCloudChatClient: createClientMock,
 }));
 
 interface CapturedConfig {
   baseUrl: string;
   fetchImpl: unknown;
-  decorateHeaders?: unknown;
+  decorateMutationHeaders?: unknown;
   getAuthToken: () => Promise<string | null>;
 }
 
@@ -65,27 +65,12 @@ import { WEB_APP_URL } from '../../api/config';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { useAuthStore } from '../../stores/auth';
 
-const SETTINGS_KEY = 'agiworkforce-settings';
-
-/** Force a BYOK trust boundary by persisting a 'cloud' providerMode. */
-function setByokSettings(): void {
-  window.localStorage.setItem(
-    SETTINGS_KEY,
-    JSON.stringify({ state: { llmConfig: { providerMode: 'cloud' } } }),
-  );
-}
-
 beforeEach(() => {
   createClientMock.mockClear();
   toastInfo.mockClear();
   toastError.mockClear();
-  window.localStorage.removeItem(SETTINGS_KEY);
   useAppModeStore.setState({ mode: 'local' });
   useAuthStore.setState({ accessToken: 'desktop-clerk-token', isAuthenticated: true });
-});
-
-afterEach(() => {
-  window.localStorage.removeItem(SETTINGS_KEY);
 });
 
 describe('DCL-2 managed-cloud construction', () => {
@@ -109,7 +94,7 @@ describe('DCL-2 managed-cloud construction', () => {
     // The egress seam is guardedFetch itself (same module instance).
     expect(config.fetchImpl).toBe(guardedFetch);
     // Desktop has no CSRF: no header decoration.
-    expect(config.decorateHeaders).toBeUndefined();
+    expect(config.decorateMutationHeaders).toBeUndefined();
     // The auth token getter returns the desktop Clerk session token.
     await expect(config.getAuthToken()).resolves.toBe('desktop-clerk-token');
   });
@@ -133,8 +118,10 @@ describe('DCL-2 Local + BYOK never instantiate the cloud client', () => {
   });
 
   it('refuses in BYOK mode (user keys go client-direct, not via shared cloud)', () => {
-    setByokSettings();
-    useAppModeStore.setState({ mode: 'cloud' });
+    // BYOK is a per-conversation execution boundary inside the Local workspace.
+    // It must never be represented as global Cloud mode or inferred from the
+    // retired providerMode setting.
+    useAppModeStore.setState({ mode: 'local' });
     expect(isManagedCloudPersistenceActive()).toBe(false);
     expect(() => getDesktopCloudChatPersistenceClient()).toThrow(
       /managed-cloud persistence is unavailable/i,

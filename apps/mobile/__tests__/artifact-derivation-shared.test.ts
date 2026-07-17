@@ -1,12 +1,12 @@
 /**
- * Verifies that @agiworkforce/services artifact-derivation runs in the RN/Jest
+ * Verifies that @agiworkforce/artifacts derivation runs in the RN/Jest
  * environment (uuid v5 bundles without react-native-get-random-values) and
  * that mobile's delegation to deriveArtifacts produces the correct output.
  *
  * This test also exercises the mapping layer introduced in
  * src/features/artifacts/store.ts Step 1a of the shared-packages consolidation.
  */
-import { deriveArtifacts, computeDerivedArtifactId } from '@agiworkforce/services';
+import { deriveArtifacts, computeDerivedArtifactId } from '@agiworkforce/artifacts';
 import { deriveAndMapToMobileArtifacts } from '@/src/features/artifacts/store';
 
 const PYTHON_BLOCK = ['```python', 'import os', 'print(os.getcwd())', 'x = 1', 'y = 2', '```'].join(

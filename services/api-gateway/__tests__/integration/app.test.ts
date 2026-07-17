@@ -30,7 +30,7 @@ vi.mock('../../src/lib/neonClients', () => {
     })),
   };
   return {
-    getServiceClient: vi.fn(() => mockClient),
+    getSystemClient: vi.fn(() => mockClient),
     getUserClient: vi.fn(() => mockClient),
     getUserScopedClient: vi.fn(() => mockClient),
   };
@@ -190,21 +190,5 @@ describe('API Gateway Integration Tests', () => {
       expect(response.status).toBe(200);
       expect(response.body.contentType).toContain('application/json');
     });
-  });
-});
-
-/**
- * WebSocket Integration Test Stubs
- *
- * These would require a running server and ws library.
- */
-describe.skip('WebSocket Integration (requires server)', () => {
-  it('should establish WebSocket connection', () => {
-    // const ws = new WebSocket('ws://localhost:3000/ws');
-    // ws.on('open', () => { ... });
-  });
-
-  it('should handle WebSocket messages', () => {
-    // Placeholder for future WebSocket message handling tests
   });
 });

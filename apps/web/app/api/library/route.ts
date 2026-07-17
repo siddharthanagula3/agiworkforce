@@ -5,7 +5,7 @@ import {
   LibraryListQuerySchema,
   type LibraryItem,
   type LibraryListResponse,
-} from '@agiworkforce/services';
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -17,7 +17,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
  * GET /api/library — the user-scoped Library listing over `media_assets`
  * (generated images, code-interpreter outputs, document deliverables) that
  * powers the web `/library` page. Contract: `LibraryListResponseSchema` in
- * `@agiworkforce/services` cloud-contracts.
+ * `@agiworkforce/cloud-contracts` cloud-contracts.
  *
  * Auth: Clerk session cookie (browser) or `Authorization: Bearer <jwt>`
  * (desktop/mobile cloud later) — same dual path as sibling API routes.

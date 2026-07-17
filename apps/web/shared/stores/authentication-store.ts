@@ -16,125 +16,173 @@ import { hasClerkSessionCookie } from '@/lib/clerk-session';
  * Prevents data leaks between user sessions
  */
 async function cleanupAllStores(): Promise<void> {
-  try {
-    // Dynamically import stores to avoid circular dependencies
-    const [
-      { useWorkforceStore, cleanupWorkforceSubscription },
-      { useMissionStore, stopMissionCleanupInterval },
-      { useNotificationStore },
-      { useChatStore },
-      { useMultiAgentChatStore },
-      { useUsageWarningStore },
-      { useArtifactStore },
-      { useUIStore },
-      { useAppStore },
-      { useUserProfileStore },
-    ] = await Promise.all([
-      import('./workforce-store'),
-      import('./mission-control-store'),
-      import('./notification-store'),
-      import('./chat-store'),
-      import('./multi-agent-chat-store'),
-      import('./usage-warning-store'),
-      import('./artifact-store'),
-      import('./layout-store'),
-      import('./global-settings-store'),
-      import('./user-profile-store'),
-    ]);
+  // Each store's cleanup is fully independent (own dynamic import + reset)
+  // and runs via Promise.allSettled rather than Promise.all: this function's
+  // whole purpose is preventing cross-user data leaks, so one store failing
+  // to load (e.g. a stale chunk hash right after a deploy, or a transient
+  // network blip) or failing to reset must not silently skip cleanup for the
+  // other nine — a partial failure here is strictly better than an
+  // all-or-nothing one. Previously a single rejected import aborted the
+  // whole Promise.all, jumping straight to a catch-all that skipped every
+  // remaining reset AND the localStorage cleanup below it.
+  const tasks: Array<{ name: string; run: () => Promise<void> }> = [
+    {
+      name: 'workforce-store',
+      run: async () => {
+        const { useWorkforceStore, cleanupWorkforceSubscription } =
+          await import('./workforce-store');
+        useWorkforceStore.getState().reset();
+        cleanupWorkforceSubscription();
+      },
+    },
+    {
+      name: 'mission-control-store',
+      run: async () => {
+        const { useMissionStore, stopMissionCleanupInterval } =
+          await import('./mission-control-store');
+        useMissionStore.getState().reset();
+        stopMissionCleanupInterval();
+      },
+    },
+    {
+      name: 'notification-store',
+      run: async () => {
+        const { useNotificationStore } = await import('./notification-store');
+        useNotificationStore.getState().clearAll();
+      },
+    },
+    {
+      name: 'chat-store',
+      run: async () => {
+        const { useChatStore } = await import('./chat-store');
+        const chatState = useChatStore.getState();
+        if (typeof chatState.clearHistory === 'function') {
+          chatState.clearHistory();
+        } else if (
+          typeof (chatState as unknown as Record<string, unknown>)['reset'] === 'function'
+        ) {
+          (chatState as unknown as Record<string, unknown> & { reset: () => void }).reset();
+        } else {
+          logger.auth('Warning: Chat store has no clearHistory or reset method');
+        }
+      },
+    },
+    {
+      name: 'multi-agent-chat-store',
+      run: async () => {
+        const { useMultiAgentChatStore } = await import('./multi-agent-chat-store');
+        const multiAgentState = useMultiAgentChatStore.getState();
+        if (typeof multiAgentState.reset === 'function') {
+          multiAgentState.reset();
+        } else {
+          logger.auth('Warning: Multi-agent chat store has no reset method');
+        }
+      },
+    },
+    {
+      name: 'usage-warning-store',
+      run: async () => {
+        const { useUsageWarningStore } = await import('./usage-warning-store');
+        const usageState = useUsageWarningStore.getState();
+        if (typeof usageState.resetWarnings === 'function') {
+          usageState.resetWarnings();
+        } else if (typeof usageState.reset === 'function') {
+          usageState.reset();
+        } else {
+          logger.auth('Warning: Usage warning store has no reset method');
+        }
+      },
+    },
+    {
+      name: 'artifact-store',
+      run: async () => {
+        const { useArtifactStore } = await import('./artifact-store');
+        const artifactState = useArtifactStore.getState();
+        if (typeof artifactState.reset === 'function') {
+          artifactState.reset();
+        } else {
+          logger.auth('Warning: Artifact store has no reset method');
+        }
+      },
+    },
+    {
+      name: 'layout-store',
+      run: async () => {
+        const { useUIStore } = await import('./layout-store');
+        const layoutState = useUIStore.getState();
+        if (typeof layoutState.reset === 'function') {
+          layoutState.reset();
+        } else {
+          logger.auth('Warning: Layout store has no reset method');
+        }
+      },
+    },
+    {
+      name: 'global-settings-store',
+      run: async () => {
+        const { useAppStore } = await import('./global-settings-store');
+        const settingsState = useAppStore.getState();
+        if (typeof settingsState.reset === 'function') {
+          settingsState.reset();
+        } else {
+          logger.auth('Warning: Global settings store has no reset method');
+        }
+      },
+    },
+    {
+      name: 'user-profile-store',
+      run: async () => {
+        const { useUserProfileStore } = await import('./user-profile-store');
+        const profileState = useUserProfileStore.getState();
+        if (typeof profileState.reset === 'function') {
+          profileState.reset();
+        } else {
+          logger.auth('Warning: User profile store has no reset method');
+        }
+      },
+    },
+  ];
 
-    // Reset all stores with proper existence checks and logging
-    useWorkforceStore.getState().reset();
-    useMissionStore.getState().reset();
-    useNotificationStore.getState().clearAll();
+  // Each task's own name is baked into its rejection (rather than indexing
+  // back into `tasks` by position afterward) so the failure is attributable
+  // without relying on `results` and `tasks` staying index-aligned.
+  const results = await Promise.allSettled(
+    tasks.map((task) =>
+      task.run().catch((error: unknown) => {
+        logger.error(`Error cleaning up ${task.name} on logout:`, error);
+        throw error;
+      }),
+    ),
+  );
+  const failedCount = results.filter((result) => result.status === 'rejected').length;
 
-    // Chat store cleanup
-    const chatState = useChatStore.getState();
-    if (typeof chatState.clearHistory === 'function') {
-      chatState.clearHistory();
-    } else if (typeof (chatState as unknown as Record<string, unknown>)['reset'] === 'function') {
-      (chatState as unknown as Record<string, unknown> & { reset: () => void }).reset();
-    } else {
-      logger.auth('Warning: Chat store has no clearHistory or reset method');
+  // Clear persisted data from localStorage regardless of the per-store
+  // results above — this is synchronous, best-effort, and independent of
+  // any single store's in-memory reset succeeding.
+  const keysToRemove = [
+    'agi-chat-store',
+    'agi-notification-store',
+    'agi-multi-agent-chat-store',
+    'agi-usage-warning-store',
+    'agi-artifact-store',
+    'agi-layout-store',
+    'agi-settings-store',
+    'agi-user-profile-store',
+  ];
+  keysToRemove.forEach((key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch (_e) {
+      // Ignore localStorage errors
     }
+  });
 
-    // Multi-agent chat store cleanup
-    const multiAgentState = useMultiAgentChatStore.getState();
-    if (typeof multiAgentState.reset === 'function') {
-      multiAgentState.reset();
-    } else {
-      logger.auth('Warning: Multi-agent chat store has no reset method');
-    }
-
-    // Usage warning store cleanup
-    const usageState = useUsageWarningStore.getState();
-    if (typeof usageState.resetWarnings === 'function') {
-      usageState.resetWarnings();
-    } else if (typeof usageState.reset === 'function') {
-      usageState.reset();
-    } else {
-      logger.auth('Warning: Usage warning store has no reset method');
-    }
-
-    // Artifact store cleanup
-    const artifactState = useArtifactStore.getState();
-    if (typeof artifactState.reset === 'function') {
-      artifactState.reset();
-    } else {
-      logger.auth('Warning: Artifact store has no reset method');
-    }
-
-    // Layout store cleanup (prevents data leaks between users)
-    const layoutState = useUIStore.getState();
-    if (typeof layoutState.reset === 'function') {
-      layoutState.reset();
-    } else {
-      logger.auth('Warning: Layout store has no reset method');
-    }
-
-    // Global settings store cleanup
-    const settingsState = useAppStore.getState();
-    if (typeof settingsState.reset === 'function') {
-      settingsState.reset();
-    } else {
-      logger.auth('Warning: Global settings store has no reset method');
-    }
-
-    // User profile store cleanup
-    const profileState = useUserProfileStore.getState();
-    if (typeof profileState.reset === 'function') {
-      profileState.reset();
-    } else {
-      logger.auth('Warning: User profile store has no reset method');
-    }
-
-    // Stop mission cleanup interval
-    stopMissionCleanupInterval();
-
-    // Cleanup real-time subscriptions
-    cleanupWorkforceSubscription();
-
-    // Clear persisted data from localStorage
-    const keysToRemove = [
-      'agi-chat-store',
-      'agi-notification-store',
-      'agi-multi-agent-chat-store',
-      'agi-usage-warning-store',
-      'agi-artifact-store',
-      'agi-layout-store',
-      'agi-settings-store',
-      'agi-user-profile-store',
-    ];
-    keysToRemove.forEach((key) => {
-      try {
-        localStorage.removeItem(key);
-      } catch (_e) {
-        // Ignore localStorage errors
-      }
-    });
-
+  if (failedCount === 0) {
     logger.auth('All stores cleaned up on logout');
-  } catch (error) {
-    logger.error('Error cleaning up stores on logout:', error);
+  } else {
+    logger.auth(
+      `Store cleanup on logout completed with ${failedCount} of ${tasks.length} store(s) failing; see preceding errors`,
+    );
   }
 }
 

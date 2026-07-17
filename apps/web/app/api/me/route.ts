@@ -13,8 +13,17 @@ import type { ProfileRow } from '@/lib/server/neon-types';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { canAccessManualModelSelection } from '@agiworkforce/types';
-import type { MeResponse } from '@agiworkforce/services';
+import {
+  canAccessManualModelSelection,
+  SYNCED_APP_SURFACES,
+  type SyncedAppSurface,
+} from '@agiworkforce/types';
+import type { MeResponse } from '@agiworkforce/cloud-contracts';
+import { e2bCutoverEnabled } from '@/lib/e2b/gate';
+import {
+  buildMeCapabilityHandshake,
+  toWireCapabilityHandshake,
+} from '@/lib/services/capability-handshake-service';
 
 const PatchMeSchema = z.object({
   display_name: z.string().min(1).max(120).optional(),
@@ -88,7 +97,35 @@ async function handleGetMe(request: NextRequest) {
     const feature_flags = {
       beta_features: true,
       advanced_model_access: canAccessManualModelSelection(subscription?.plan_tier),
+      // Deployment capability, not a user entitlement: whether this deployment
+      // has the reachable E2B execution loop enabled (AGI_E2B_EXECUTION=1).
+      // The composer gates the "Run code" toggle on this so it is never a
+      // cosmetic dead control when the server would ignore code_execution.
+      code_execution: e2bCutoverEnabled(),
     };
+
+    // Optional `?surface=` lets a non-web caller (desktop, mobile — both
+    // already validate against this same MeResponseSchema) identify itself
+    // for the surface capability layer below. No existing caller sends this
+    // today, so every request keeps resolving to 'web' exactly as before —
+    // additive, not a behavior change for current clients.
+    const requestedSurface = new URL(request.url).searchParams.get('surface');
+    const surface: SyncedAppSurface = (SYNCED_APP_SURFACES as readonly string[]).includes(
+      requestedSurface ?? '',
+    )
+      ? (requestedSurface as SyncedAppSurface)
+      : 'web';
+
+    // First real consumer of the capability-handshake contract
+    // (`@agiworkforce/types` `capability-handshake/`, W5 discipline wave 1) —
+    // see `lib/services/capability-handshake-service.ts` for how each of the
+    // four policy layers is sourced from real, already-resolved data.
+    const capability_handshake = buildMeCapabilityHandshake({
+      userId,
+      tier: subscription?.plan_tier,
+      surface,
+      cloudExecutionDeploymentEnabled: feature_flags.code_execution,
+    });
 
     const plan = {
       tier: subscription?.plan_tier || 'free',
@@ -115,6 +152,7 @@ async function handleGetMe(request: NextRequest) {
       feature_flags,
       credits,
       routing_preferences,
+      capability_handshake: toWireCapabilityHandshake(capability_handshake),
     };
     return NextResponse.json(responseBody);
   } catch (error) {

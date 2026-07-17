@@ -143,8 +143,8 @@ export function getWebviewContent(
     }
     .brand-mark svg { display: block; width: 18px; height: 18px; }
 
-    /* Cloud identity pill — always-on "AGI Cloud" (cloud-only surface). */
-    .cloud-pill {
+    /* Workspace-local app-server identity. */
+    .runtime-pill {
       display: inline-flex;
       align-items: center;
       gap: 5px;
@@ -159,7 +159,7 @@ export function getWebviewContent(
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .cloud-pill-dot {
+    .runtime-pill-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
@@ -216,6 +216,12 @@ export function getWebviewContent(
     .icon-btn:hover {
       color: var(--text-primary);
       background: var(--bg-overlay);
+    }
+
+    button:focus-visible,
+    [role="menuitem"]:focus-visible {
+      outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
+      outline-offset: 2px;
     }
 
     /* ── Messages ── */
@@ -296,58 +302,6 @@ export function getWebviewContent(
       0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
       40% { opacity: 1; transform: scale(1); }
     }
-
-    /* ── API key prompt ── */
-    .api-key-banner {
-      background: rgba(33, 128, 141, 0.12);
-      border: 1px solid rgba(33, 128, 141, 0.3);
-      border-radius: var(--radius-md);
-      padding: 12px;
-      text-align: center;
-      margin: 12px;
-      flex-shrink: 0;
-    }
-
-    .api-key-banner p {
-      color: var(--text-secondary);
-      margin-bottom: 10px;
-      font-size: 12px;
-      line-height: 1.5;
-    }
-
-    .api-key-input-row {
-      display: flex;
-      gap: 6px;
-    }
-
-    .api-key-input {
-      flex: 1;
-      background: var(--bg-base);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--text-primary);
-      font-size: 12px;
-      padding: 6px 10px;
-      transition: border-color 0.15s;
-    }
-    .api-key-input:focus-visible {
-      outline: 2px solid var(--agi-vscode-focus);
-      outline-offset: 2px;
-      border-color: var(--accent-teal);
-    }
-
-    .save-key-btn {
-      background: var(--accent-teal);
-      border: none;
-      border-radius: 6px;
-      color: var(--agi-vscode-button-text);
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 6px 12px;
-      transition: opacity 0.15s;
-    }
-    .save-key-btn:hover { opacity: 0.85; }
 
     /* ── Input area / composer (design-spec §7) ── */
     .input-area {
@@ -504,6 +458,11 @@ export function getWebviewContent(
       color: var(--text-secondary);
       cursor: pointer;
       transition: background 0.1s;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      font-family: inherit;
     }
     .plus-menu-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
     .plus-menu-item .pm-icon { font-size: 13px; flex-shrink: 0; }
@@ -783,6 +742,11 @@ export function getWebviewContent(
       transition: background 120ms ease;
       color: var(--text-secondary);
       font-size: 12px;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      font-family: inherit;
+      text-align: left;
     }
     .tool-call__bar:hover { background: var(--bg-overlay); }
 
@@ -971,18 +935,15 @@ export function getWebviewContent(
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
       <span class="header-title">AGI</span>
-      <span class="cloud-pill"><span class="cloud-pill-dot"></span>AGI Cloud</span>
+      <span class="runtime-pill"><span class="runtime-pill-dot"></span>Local Runtime</span>
       <span class="provider-badge" id="providerBadge" style="display:none">
         <span class="provider-badge-dot" id="providerBadgeDot"></span>
         <span id="providerBadgeText"></span>
       </span>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="historyBtn" title="Chat history" aria-label="Chat history">
+      <button class="icon-btn" id="historyBtn" title="Developer session history" aria-label="Developer session history">
         <span class="codicon codicon-history" aria-hidden="true"></span>
-      </button>
-      <button class="icon-btn" id="cloudHistoryBtn" title="Cloud history (invite required)" aria-label="Cloud history">
-        <span class="codicon codicon-cloud" aria-hidden="true"></span>
       </button>
       <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
         <span class="codicon codicon-add" aria-hidden="true"></span>
@@ -1005,24 +966,15 @@ export function getWebviewContent(
     <span class="usage-text" id="meterText"></span>
     <span class="usage-reset" id="meterReset"></span>
     <button class="upgrade-btn" id="upgradeBtn" style="display:none">Upgrade</button>
-    <button class="meter-dismiss-btn" id="meterDismissBtn" title="Collapse meter">&#215;</button>
+    <button class="meter-dismiss-btn" id="meterDismissBtn" title="Collapse meter" aria-label="Collapse usage meter">&#215;</button>
   </div>
   <!-- ── Usage meter collapsed pill ── -->
   <div class="usage-meter-collapsed" id="usageMeterCollapsed" style="display:none">
     <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage meter">&#9660; Usage</button>
   </div>
 
-  <!-- ── Sign-in CTA (shown when not signed in) ── -->
-  <div class="api-key-banner" id="apiKeyBanner" style="display:none">
-    <p><strong>Sign in to AGI</strong><br/>
-       Your AGI Cloud workspace — chat, projects &amp; memory, across every device.</p>
-    <div class="api-key-input-row">
-      <button class="save-key-btn" id="signInBtn">Sign in to AGI Cloud</button>
-    </div>
-  </div>
-
   <!-- ── Messages ── -->
-  <div id="messages">
+  <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
       <div class="empty-state-headline">What to do first? Ask about<br/>this codebase or we can<br/>start writing code.</div>
       <div class="prompt-chips">
@@ -1043,12 +995,12 @@ export function getWebviewContent(
 
     <!-- Plus-menu popover -->
     <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or add context">
-      <div class="plus-menu-item" id="plusMenuUpload" role="menuitem" tabindex="0">
+      <button type="button" class="plus-menu-item" id="plusMenuUpload" role="menuitem">
         <span class="pm-icon codicon codicon-cloud-upload" aria-hidden="true"></span>&nbsp;Upload from computer
-      </div>
-      <div class="plus-menu-item" id="plusMenuPlanMode" role="menuitem" tabindex="0">
-        <span class="pm-icon codicon codicon-list-tree" aria-hidden="true"></span>&nbsp;Add context
-      </div>
+      </button>
+      <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
+        <span class="pm-icon codicon codicon-list-tree" aria-hidden="true"></span>&nbsp;Change agent mode
+      </button>
     </div>
 
     <!-- Model picker popover -->
@@ -1071,8 +1023,8 @@ export function getWebviewContent(
         </div>
       </div>
       <div class="composer-bottom">
-        <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">AGI Cloud · Auto</button>
+        <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">Local Runtime · Auto</button>
         <button class="mode-chip" id="modeChip" title="Agent mode">${modeLabel}</button>
         <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>${effortLabel}</button>
         <button id="sendBtn" title="Send (Cmd+Enter)" aria-label="Send"></button>
@@ -1096,8 +1048,6 @@ export function getWebviewContent(
     const modelPopoverEl = document.getElementById('modelPopover');
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
-    const apiKeyBanner = document.getElementById('apiKeyBanner');
-    const signInBtn = document.getElementById('signInBtn');
     const actionsBtn = document.getElementById('actionsBtn');
     const historyBtn = document.getElementById('historyBtn');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -1221,6 +1171,7 @@ export function getWebviewContent(
     let mentionStart = -1;
     let currentAssistantEl = null;
     let accumulatedContent = '';
+    let pendingAttachmentCount = 0;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     function addMessage(role, text) {
@@ -1236,6 +1187,8 @@ export function getWebviewContent(
       const div = document.createElement('div');
       div.className = 'typing-indicator';
       div.id = 'typingIndicator';
+      div.setAttribute('role', 'status');
+      div.setAttribute('aria-label', 'AGI is responding');
       for (let i = 0; i < 3; i++) {
         const dot = document.createElement('div');
         dot.className = 'typing-dot';
@@ -1254,6 +1207,8 @@ export function getWebviewContent(
       streaming = value;
       sendBtn.disabled = false;
       sendBtn.classList.toggle('streaming', value);
+      sendBtn.setAttribute('aria-label', value ? 'Stop response' : 'Send');
+      sendBtn.setAttribute('title', value ? 'Stop response' : 'Send (Cmd+Enter)');
       userInput.disabled = value;
     }
 
@@ -1273,6 +1228,7 @@ export function getWebviewContent(
       if (modelSelect) {
         var options = modelSelect.querySelectorAll('option');
         for (var i = 0; i < options.length; i++) {
+          if (options[i].disabled) continue;
           models.push({
             id: options[i].value,
             label: options[i].textContent || options[i].value,
@@ -1400,7 +1356,12 @@ export function getWebviewContent(
         return;
       }
 
-      const text = userInput.value.trim();
+      const typedText = userInput.value.trim();
+      const text = typedText || (pendingAttachmentCount === 1
+        ? 'Please analyze the attached file.'
+        : pendingAttachmentCount > 1
+          ? 'Please analyze the attached files.'
+          : '');
       if (!text) return;
 
       hideEmptyState();
@@ -1474,13 +1435,6 @@ export function getWebviewContent(
       });
     }
 
-    const cloudHistoryBtn = document.getElementById('cloudHistoryBtn');
-    if (cloudHistoryBtn) {
-      cloudHistoryBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'openCloudHistory' });
-      });
-    }
-
     if (newChatBtn) {
       newChatBtn.addEventListener('click', () => {
         vscode.postMessage({ type: 'newChat' });
@@ -1508,10 +1462,10 @@ export function getWebviewContent(
           vscode.postMessage({ type: 'openFilePicker' });
         });
       }
-      // "Plan mode" toggles mode chip
-      var plusMenuPlanMode = document.getElementById('plusMenuPlanMode');
-      if (plusMenuPlanMode) {
-        plusMenuPlanMode.addEventListener('click', () => {
+      // The menu label and action both open the agent-mode picker.
+      var plusMenuAgentMode = document.getElementById('plusMenuPlanMode');
+      if (plusMenuAgentMode) {
+        plusMenuAgentMode.addEventListener('click', () => {
           plusMenu.classList.remove('open');
           vscode.postMessage({ type: 'openModePicker' });
         });
@@ -1549,12 +1503,6 @@ export function getWebviewContent(
       vscode.postMessage({ type: 'openEffortPicker' });
     });
 
-    if (signInBtn) {
-      signInBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'signIn' });
-      });
-    }
-
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
     var composerCard = document.getElementById('composerCard');
     var attachmentStrip = document.getElementById('attachmentStrip');
@@ -1590,9 +1538,19 @@ export function getWebviewContent(
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
       removeBtn.className = 'attachment-chip__remove';
-      removeBtn.setAttribute('aria-label', 'Dismiss attachment chip');
+      removeBtn.setAttribute('aria-label', 'Remove attachment');
       removeBtn.textContent = '×';
       removeBtn.addEventListener('click', function() {
+        var attachId = chip.getAttribute('data-attachment-id');
+        if (attachId) {
+          // Host owns the pending file: removal must delete it there too.
+          vscode.postMessage({ type: 'removePendingAttachment', payload: { id: attachId } });
+          if (pendingAttachmentCount > 0) pendingAttachmentCount--;
+        } else if (chip.classList.contains('uploading')) {
+          // No host id yet — defer the removal until attachFilesAck assigns one.
+          chip.setAttribute('data-remove-requested', '1');
+          return;
+        }
         chip.remove();
         renderAttachmentStrip();
       });
@@ -1767,11 +1725,6 @@ export function getWebviewContent(
         currentAssistantEl = null;
       }
 
-      else if (msg.type === 'apiKeyStatus') {
-        apiKeyBanner.style.display = msg.payload.hasKey ? 'none' : 'flex';
-        apiKeyBanner.style.flexDirection = 'column';
-      }
-
       else if (msg.type === 'model') {
         // Match by comparing option.value directly rather than building a CSS
         // selector via string concat — a model id containing a quote/"]" would
@@ -1824,6 +1777,9 @@ export function getWebviewContent(
         toolCallStack = null;
         toolCallMap = {};
         setStreaming(false);
+        pendingAttachmentCount = 0;
+        if (attachmentStrip) attachmentStrip.replaceChildren();
+        renderAttachmentStrip();
       }
 
       else if (msg.type === 'addUserMessage') {
@@ -1846,12 +1802,20 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'attachFilesAck') {
-        // The host wrote each file to disk and added it to the context panel.
-        // Transition uploading chips → success, mark skipped → failed.
+        // The host accepted each file into its pending-attachment list.
+        // Transition uploading chips → success (carrying the host id so the
+        // X can truly remove the pending file), mark skipped → failed.
         var ack = msg.payload || { added: [], skipped: [] };
+        pendingAttachmentCount += (ack.added || []).length;
         var skippedByName = {};
         for (var s = 0; s < (ack.skipped || []).length; s++) {
           skippedByName[(ack.skipped[s] || {}).name] = (ack.skipped[s] || {}).reason || 'failed';
+        }
+        var addedIdsByName = {};
+        for (var a = 0; a < (ack.added || []).length; a++) {
+          var addedEntry = ack.added[a] || {};
+          if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
+          addedIdsByName[addedEntry.name].push(addedEntry.id);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
@@ -1864,8 +1828,25 @@ export function getWebviewContent(
             if (nameEl) nameEl.textContent = attachName + ' (' + skippedByName[attachName] + ')';
           } else {
             chipEl.classList.remove('uploading');
+            var idQueue = addedIdsByName[attachName];
+            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
+              // The user dismissed this chip while it was still uploading:
+              // honour it now that the host id exists.
+              vscode.postMessage({ type: 'removePendingAttachment', payload: { id: attachId } });
+              if (pendingAttachmentCount > 0) pendingAttachmentCount--;
+              chipEl.remove();
+            } else if (attachId) {
+              chipEl.setAttribute('data-attachment-id', attachId);
+            }
           }
         }
+        renderAttachmentStrip();
+      }
+
+      else if (msg.type === 'attachmentsConsumed') {
+        pendingAttachmentCount = 0;
+        if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
       }
 
@@ -1978,9 +1959,9 @@ export function getWebviewContent(
       wrapper.className = 'tool-call tool-call--pending';
       wrapper.dataset.id = toolUseId;
 
-      var bar = document.createElement('div');
+      var bar = document.createElement('button');
+      bar.type = 'button';
       bar.className = 'tool-call__bar';
-      bar.setAttribute('role', 'button');
       bar.setAttribute('aria-expanded', 'false');
 
       var iconEl = document.createElement('span');

@@ -242,27 +242,6 @@ describe('VSCODE-06 — @file injection (system-role trust elevation via file co
   });
 });
 
-// ─── VSCODE-02: agent mode trust guard (workspace trust check) ────────────────
-
-describe('VSCODE-02 — agent mode trust guard (prompt injection → auto file write)', () => {
-  it('system prompt contains the untrusted_file security notice', async () => {
-    // Import real module via mock (vscode mock is active)
-    const { AgentModePanel } = await import('../providers/agentModeProvider');
-    // Access static via cast — we need to call buildSystemPrompt via a live instance.
-    // We test the exported parseFileEdits / parseFileReads helpers as proxies.
-    const { parseFileEdits, parseFileReads } = await import('../providers/agentModeProvider');
-
-    // Patch parser should parse legitimate patches
-    const response = `Here is a fix:\n\`\`\`patch:src/foo.ts\n<<<<<<< SEARCH\nold\n=======\nnew\n>>>>>>> REPLACE\n\`\`\``;
-    const reads = parseFileReads('@read src/foo.ts');
-    expect(reads).toContain('src/foo.ts');
-
-    const edits = parseFileEdits('```edit:src/bar.ts\nnew content\n```');
-    expect(edits).toHaveLength(1);
-    expect(edits[0]?.filePath).toBe('src/bar.ts');
-  });
-});
-
 // ─── VSCODE-03: bridge token — readBridgeToken unit tests ────────────────────
 
 import { readBridgeToken } from '../features/desktop-bridge/desktopBridge';

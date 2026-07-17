@@ -6,5 +6,5 @@
     "declarationDir": "./out/types",
     "noEmit": false
   },
-  "references": [{ "path": "../../packages/types" }, { "path": "../../packages/runtime" }]
+  "references": [{ "path": "../../packages/contracts/types" }, { "path": "../../packages/client/client-runtime" }]
 }

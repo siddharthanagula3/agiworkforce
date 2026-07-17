@@ -2,7 +2,7 @@
  * Mobile OS Permission types
  *
  * Canonical enum for Mobile permission kinds.
- * Extraction to packages/types is deferred — no other surface needs this today
+ * Extraction to packages/contracts/types is deferred — no other surface needs this today
  * (v1 LOCAL ONLY; no cross-surface cloud sync of permission state).
  *
  * Permission levels follow the Apple/Android 4-state model. Not every kind

@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@agiworkforce/ui';
-import { assessModelSwitchCache } from '@agiworkforce/services';
+import { assessModelSwitchCache } from '@agiworkforce/routing';
 import { useChatStore } from '@/stores/chatStore';
 import {
   EFFORT_LABEL,
@@ -433,9 +433,11 @@ function ModelRow({
         : model.name;
 
   const rowContent = (
-    <div
+    <button
+      type="button"
+      disabled={isHardDisabled}
       className={[
-        'flex items-center gap-2 rounded px-3 py-1.5 transition-colors',
+        'flex w-full items-center gap-2 rounded px-3 py-1.5 text-left transition-colors',
         isComingSoon
           ? 'cursor-not-allowed opacity-45'
           : isEnvLocked
@@ -446,20 +448,7 @@ function ModelRow({
         isSelected ? 'bg-muted/40' : '',
       ].join(' ')}
       onClick={isLocked ? handleLockedClick : onSelect}
-      role="button"
-      tabIndex={isHardDisabled ? -1 : 0}
-      aria-disabled={isHardDisabled ? true : undefined}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          if (isHardDisabled) return;
-          if (isLocked) {
-            handleLockedClick();
-          } else {
-            onSelect?.();
-          }
-        }
-      }}
+      aria-pressed={isSelected && !isLocked}
       aria-label={ariaLabel}
       title={isComingSoon ? lockReason : undefined}
     >
@@ -510,7 +499,7 @@ function ModelRow({
       {isSelected && !isLocked && (
         <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
       )}
-    </div>
+    </button>
   );
 
   if (isOpusModel(model)) {
@@ -579,7 +568,7 @@ export function ComposerFooter({
 
   // Prompt-cache safety: switching the model mid-conversation resets the cache and re-bills
   // prior context at full input price (caching is per-model). Warn before committing such a
-  // switch. Logic lives in the shared @agiworkforce/services util (reused by all surfaces).
+  // switch. Logic lives in the shared @agiworkforce/routing policy (reused by all surfaces).
   //
   // Count only COMPLETED assistant turns in an ACTIVE conversation:
   //   - `activeConversationId` gate: an empty/new chat holds no cached prefix.
@@ -642,7 +631,9 @@ export function ComposerFooter({
   const selectedProviderKey = (lockModelSelector ? lockedDisplayModel : selectedModel).providerKey;
   const reasoning = reasoningFor(selectedModel);
   const supportsAdaptive = modelSupportsThinking(selectedModel);
-  const isAlwaysOn = reasoning.control === 'always_on';
+  const isAlwaysOn =
+    reasoning.control === 'always_on' ||
+    (reasoning.capable && reasoning.canDisableThinking === false);
   const effortChips = effortChipsFor(reasoning);
   const showThinkingSwitch = showsThinkingSwitch(reasoning);
   // Store efforts this model actually supports (for clamping the persisted pref).
@@ -828,7 +819,9 @@ export function ComposerFooter({
                   <div className="border-b border-border/40 px-3 py-1.5">
                     <input
                       className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-                      placeholder="Search models..."
+                      name="model-search"
+                      autoComplete="off"
+                      placeholder="Search models…"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       aria-label="Search models"

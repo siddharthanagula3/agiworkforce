@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getServiceClient } from '../lib/neonClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -156,8 +156,7 @@ router.post(
     const desktopId = randomUUID();
     const now = new Date().toISOString();
 
-    // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables none) — migration TODO; the explicit ownership check below is the sole isolation mechanism.
-    const db = getServiceClient();
+    const db = getUserScopedClient(user);
     const { error } = await db.from('desktop_devices').insert({
       id: desktopId,
       user_id: user.userId,
@@ -203,8 +202,7 @@ router.get(
       throw new AppError('Invalid desktop ID format', 400);
     }
 
-    // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables none) — migration TODO; the explicit ownership check below is the sole isolation mechanism.
-    const db = getServiceClient();
+    const db = getUserScopedClient(user);
     const { data: desktop, error } = await db
       .from('desktop_devices')
       .select('*')
@@ -257,8 +255,7 @@ router.post(
 
     const { type, payload } = commandSchema.parse(req.body);
 
-    // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables none) — migration TODO; the explicit ownership check below is the sole isolation mechanism.
-    const db = getServiceClient();
+    const db = getUserScopedClient(user);
     const { data: desktop, error } = await db
       .from('desktop_devices')
       .select('id, user_id')
@@ -310,8 +307,7 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
     throw new AppError('Unauthorized', 401);
   }
 
-  // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables none) — migration TODO; the explicit ownership check below is the sole isolation mechanism.
-  const db = getServiceClient();
+  const db = getUserScopedClient(user);
   const { data: devices, error } = await db
     .from('desktop_devices')
     .select('*')
@@ -357,8 +353,7 @@ router.post(
       throw new AppError('Invalid desktop ID format', 400);
     }
 
-    // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables none) — migration TODO; the explicit ownership check below is the sole isolation mechanism.
-    const db = getServiceClient();
+    const db = getUserScopedClient(user);
     const { data: desktop, error: fetchError } = await db
       .from('desktop_devices')
       .select('id, user_id')
@@ -409,8 +404,7 @@ router.delete(
       throw new AppError('Invalid desktop ID format', 400);
     }
 
-    // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables none) — migration TODO; the explicit ownership check below is the sole isolation mechanism.
-    const db = getServiceClient();
+    const db = getUserScopedClient(user);
     // First verify ownership
     const { data: desktop, error: fetchError } = await db
       .from('desktop_devices')

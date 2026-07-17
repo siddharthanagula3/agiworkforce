@@ -632,7 +632,7 @@ async function rateLimit(key: string): Promise<void> {
  * @throws CodedError with code 'TIMEOUT' if the command exceeds its timeout
  *
  * @example
- * const settings = await invoke<Settings>('get_settings');
+ * const status = await invoke<OnboardingStatus>('get_onboarding_status');
  * await invoke('file_write', { path: '/tmp/test.txt', content: 'Hello' });
  */
 export async function invoke<T = unknown>(command: string, args?: Json): Promise<T> {

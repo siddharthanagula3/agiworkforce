@@ -46,12 +46,14 @@ vi.mock('@/lib/server/neon-db', () => ({
 // CreditService mock — controlled per test
 const mockCheckAvailable = vi.fn();
 const mockDeductCredits = vi.fn();
+const mockSettleCreditsDurably = vi.fn();
 const mockGenerateIdempotencyKey = vi.fn(() => 'idempotency-key-abc');
 
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
+    settleCreditsDurably: (...args: unknown[]) => mockSettleCreditsDurably(...args),
     generateIdempotencyKey: (...args: Parameters<typeof mockGenerateIdempotencyKey>) =>
       mockGenerateIdempotencyKey(...args),
   },
@@ -112,6 +114,13 @@ describe('POST /api/v1/providers/[providerId]/stream', () => {
     mockCheckAvailable.mockResolvedValue(true);
     // Default: deduct succeeds
     mockDeductCredits.mockResolvedValue({ success: true, balance: 99 });
+    // Default: durable settlement (refund path) succeeds inline
+    mockSettleCreditsDurably.mockResolvedValue({
+      status: 'succeeded',
+      success: true,
+      remaining_cents: 99,
+      attempt_count: 1,
+    });
   });
 
   // ── 1. Unauthenticated request → 401 ──────────────────────────────────────
@@ -277,18 +286,27 @@ describe('POST /api/v1/providers/[providerId]/stream', () => {
       expect(body.error).toBe('Upstream error 422');
       expect(body.error).not.toContain('model not found');
 
-      // deductCredits must have been called twice:
-      //   1st: positive amount (pre-charge)
-      //   2nd: negative amount (refund)
-      expect(mockDeductCredits).toHaveBeenCalledTimes(2);
-      const [, secondCall] = mockDeductCredits.mock.calls;
-      // second call amount is negative (refund)
-      const refundAmount = secondCall?.[2] as number;
-      expect(refundAmount).toBeLessThan(0);
-      expect(secondCall?.[4]).toEqual(
-        expect.objectContaining({ provider: 'google', model: 'claude-sonnet-4-6' }),
+      // Production settles refunds durably (CreditService.settleCreditsDurably,
+      // via refundStreamReservation in the route), NOT a second deductCredits
+      // call — see apps/web/__tests__/billing/credit-settlement-callsites.test.ts
+      // (source-shape guard: this route has exactly 1 deductCredits call site
+      // and 1 settleCreditsDurably call site) and the sibling coverage in
+      // apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts.
+      expect(mockDeductCredits).toHaveBeenCalledTimes(1);
+      expect(mockSettleCreditsDurably).toHaveBeenCalledTimes(1);
+      expect(mockSettleCreditsDurably).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amountCents: -1,
+          description: 'Stream refund (upstream error)',
+          metadata: expect.objectContaining({
+            provider: 'google',
+            model: 'claude-sonnet-4-6',
+            type: 'refund',
+          }),
+          idempotencyKey: 'idempotency-key-abc',
+        }),
+        expect.anything(),
       );
-      expect(secondCall?.[5]).toBe('idempotency-key-abc');
     } finally {
       global.fetch = originalFetch;
     }

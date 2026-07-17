@@ -28,7 +28,7 @@ import {
   OUR_CLOUD_HOSTS as SHARED_OUR_CLOUD_HOSTS,
   isOurCloudHost as isSharedOurCloudHost,
   matchesCloudHost,
-} from '@agiworkforce/services';
+} from '@agiworkforce/trust-boundaries';
 import { API_URL, WS_URL } from '@/lib/constants';
 import { secureFetch, type SecureFetchOptions } from '@/services/secureFetch';
 
@@ -76,7 +76,7 @@ function hostOfConfig(urlString: string): string {
 /**
  * Config-derived managed-cloud hosts, discovered from the mobile config — NOT
  * invented. These are UNIONED on top of the shared floor
- * ({@link SHARED_OUR_CLOUD_HOSTS} from @agiworkforce/services) so a
+ * ({@link SHARED_OUR_CLOUD_HOSTS} from @agiworkforce/trust-boundaries) so a
  * non-default/staging deployment host still gets blocked in Local mode even if
  * it is not one of the shared apex domains.
  *

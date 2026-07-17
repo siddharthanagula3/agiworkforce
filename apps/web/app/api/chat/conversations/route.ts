@@ -17,6 +17,8 @@ import {
   requireCurrentUserId,
   type ChatConversationRow,
 } from '@/lib/server/neon-chat';
+import { assertSessionInvariants } from '@agiworkforce/types';
+import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-service';
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
@@ -139,6 +141,23 @@ async function handleCreateConversation(request: NextRequest) {
       // The id exists but is owned by another user — never leak or hijack it.
       throw createError.conflict('Conversation id already exists');
     }
+
+    // Session-taxonomy labeling (W5 discipline wave 1 stage 2): every web
+    // chat conversation is a `cloud_chat` AppSession. Asserting invariants
+    // here — at the actual persistence boundary, right after the insert
+    // succeeds — is additive: on the happy path it is silent and the
+    // response below is unchanged; a violation surfaces through the SAME
+    // catch block and error response this route already has.
+    assertSessionInvariants(
+      buildCloudChatSessionLabel({
+        conversationId: conversation.id,
+        ownerUserId: userId,
+        projectId: conversation.project_id,
+        createdAt: conversation.created_at,
+        updatedAt: conversation.updated_at,
+      }),
+    );
+
     return NextResponse.json({ conversation }, { status: 201 });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to create conversation');

@@ -13,7 +13,7 @@
  * Cap: last MAX_ARTIFACTS entries to prevent unbounded growth (mirrors
  * chatMessageStore's partialize strategy).
  *
- * Derivation is delegated to @agiworkforce/services `deriveArtifacts` — the
+ * Derivation is delegated to @agiworkforce/artifacts `deriveArtifacts` — the
  * ONE canonical place across web, desktop, and mobile (shared-packages-
  * consolidation-plan-2026-06-21.md §3). Mobile-specific PRESENTATION helpers
  * (kind mapping, accent colors, preview lines, age label) remain here.
@@ -21,8 +21,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { deriveArtifacts, applyArtifactDeltas } from '@agiworkforce/services';
-import type { CloudArtifact, ArtifactWireDelta } from '@agiworkforce/services';
+import { deriveArtifacts, applyArtifactDeltas } from '@agiworkforce/artifacts';
+import type { CloudArtifact } from '@agiworkforce/artifacts';
+import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 
 // ---------------------------------------------------------------------------

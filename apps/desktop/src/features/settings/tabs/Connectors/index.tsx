@@ -11,6 +11,15 @@ const LazyConnectorGallery = lazy(() =>
 const LazyMCPServerSettings = lazy(() =>
   import('../../MCPServerSettings').then((m) => ({ default: m.MCPServerSettings })),
 );
+// Live per-server connection/health status with reconnect/disconnect actions.
+// Its data source (useMcpStore refreshServers/refreshHealth + the
+// mcp_connect_server / mcp_disconnect_server commands) was already live, but
+// the component was mounted nowhere — connector health was invisible.
+const LazyConnectorHealthDashboard = lazy(() =>
+  import('@/features/connectors/ConnectorHealthDashboard').then((m) => ({
+    default: m.ConnectorHealthDashboard,
+  })),
+);
 
 function Fallback({ label = 'Loading connectors...' }: { label?: string }) {
   return (
@@ -27,6 +36,11 @@ export function ConnectorsTab() {
       <Suspense fallback={<Fallback />}>
         <LazyConnectorGallery />
       </Suspense>
+      <div className="pt-6 border-t border-border">
+        <Suspense fallback={<Fallback label="Loading connector health..." />}>
+          <LazyConnectorHealthDashboard />
+        </Suspense>
+      </div>
       <div className="pt-6 border-t border-border">
         <Suspense fallback={<Fallback label="Loading MCP servers..." />}>
           <LazyMCPServerSettings />

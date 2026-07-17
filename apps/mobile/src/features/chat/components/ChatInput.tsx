@@ -21,6 +21,7 @@ import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, radii } from '@/src/ui/theme';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
@@ -120,10 +121,11 @@ export function ChatInput({
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const subscriptionTier = useTierStore((s) => s.tier);
   const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const modelName = getShortDisplayName(selectedModel);
+  const modelName = getShortDisplayName(selectedModel, subscriptionTier);
 
   const applyTranscript = useCallback((transcript: string) => {
     const cleanedTranscript = cleanupVoiceDictation(transcript);
@@ -467,14 +469,18 @@ export function ChatInput({
       {/* Secondary chip row -- model + connectors. Temporary chat is a
           pre-conversation decision only, so its toggle lives on the
           empty-state header (chat.tsx), not here. Hidden while the composer
-          pill is in its recording/transcribing state. */}
+          pill is in its recording/transcribing state.
+          No extra left padding here: this row shares the same `px-4` outer
+          wrapper as ProjectSelectorBar (chat.tsx renders them as siblings),
+          so their pills line up on the same left edge. An earlier
+          `paddingLeft: 4` here pushed the model chip 4px right of the
+          "No project" pill above it -- a visible one-row misalignment. */}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
           gap: 4,
           marginBottom: 8,
-          paddingLeft: 4,
           display: isRecording || isTranscribing ? 'none' : 'flex',
         }}
       >

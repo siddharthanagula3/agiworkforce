@@ -16,9 +16,35 @@
  *   rename, provider re-attribution, or tier reshuffle either passes
  *   end-to-end or fails CI here, rather than in production.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAllowedModelsForTier, getRoutingSlotModel, modelsCatalog } from '@agiworkforce/types';
-import { HOBBY_ALLOWED_MODELS, resolveProvider } from '../../src/routes/llm';
+
+// enforcePlanTier hits `subscriptions` via getUserScopedClient — mock the
+// Neon client module so the dispatch tests below don't need a real DB.
+// Mirrors the `from(table) -> {select/eq/maybeSingle}` shape already used in
+// revocation.test.ts / deviceAuth.test.ts for the same module.
+const { tierState } = vi.hoisted(() => ({
+  tierState: { planTier: null as string | null, hasRow: true },
+}));
+
+vi.mock('../../src/lib/neonClients', () => ({
+  getUserScopedClient: vi.fn(() => ({
+    from: (_table: string) => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: () =>
+            Promise.resolve({
+              data: tierState.hasRow ? { plan_tier: tierState.planTier } : null,
+              error: null,
+            }),
+        }),
+      }),
+    }),
+  })),
+}));
+
+const { HOBBY_ALLOWED_MODELS, resolveProvider, enforcePlanTier } =
+  await import('../../src/routes/llm');
 
 describe('llm route — catalog-driven Hobby allow-list (P0-I)', () => {
   it('matches getAllowedModelsForTier("economy") from the shared catalog', () => {
@@ -84,7 +110,7 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
 
   it('resolves the Wave-2-widened cloud providers via the catalog', () => {
     // Restructure Wave 2 step 2 wired every cloud adapter from
-    // packages/providers into the gateway, so models from xAI, DeepSeek,
+    // packages/ai/providers into the gateway, so models from xAI, DeepSeek,
     // and Perplexity now resolve instead of failing closed. Local-device
     // providers (lmstudio, and ollama unless the server deploys one)
     // remain outside the managed proxy; catalog-unknown models still 400.
@@ -216,5 +242,100 @@ describe('llm route — edge-case stress (Phase 4 hardening)', () => {
     for (let i = 0; i < 1000; i++) {
       expect(resolveProvider(model)).toBe(expected);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enforcePlanTier — tier dispatch (round 3 fix)
+//
+// Before this fix, only 'free' and 'hobby' were checked explicitly; any
+// other plan_tier value (including 'basic'/'team', and any garbage string)
+// silently fell through to unrestricted, unbilled model access. These tests
+// pin the explicit allowlist: free blocked, hobby/basic restricted to the
+// economy set (unified — basic is the 2026-07-02 hobby rename), team gets
+// pro's unrestricted allowance, pro/max/enterprise unrestricted, and any
+// unrecognized tier fails closed exactly like free rather than falling
+// through.
+// ---------------------------------------------------------------------------
+
+describe('llm route — enforcePlanTier tier dispatch (round 3 fix)', () => {
+  const allowedHobbyModel = [...HOBBY_ALLOWED_MODELS][0]!;
+  const flagshipModel = 'claude-opus-4.8'; // excluded from HOBBY_ALLOWED_MODELS (see above)
+
+  beforeEach(() => {
+    tierState.planTier = null;
+    tierState.hasRow = true;
+  });
+
+  it('free tier is blocked with 403', async () => {
+    tierState.planTier = 'free';
+    await expect(enforcePlanTier('user-1', 'token', allowedHobbyModel)).rejects.toThrow(
+      /Upgrade to a paid plan/,
+    );
+  });
+
+  it('missing subscription row is treated as free and blocked with 403', async () => {
+    tierState.hasRow = false;
+    await expect(enforcePlanTier('user-1', 'token', allowedHobbyModel)).rejects.toThrow(
+      /Upgrade to a paid plan/,
+    );
+  });
+
+  it('hobby tier allows an economy model', async () => {
+    tierState.planTier = 'hobby';
+    await expect(enforcePlanTier('user-1', 'token', allowedHobbyModel)).resolves.toBe('hobby');
+  });
+
+  it('hobby tier rejects a flagship model with 403', async () => {
+    tierState.planTier = 'hobby';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).rejects.toThrow(
+      /requires a Pro plan/,
+    );
+  });
+
+  it('basic tier gets the identical restriction as hobby: allows an economy model', async () => {
+    tierState.planTier = 'basic';
+    await expect(enforcePlanTier('user-1', 'token', allowedHobbyModel)).resolves.toBe('basic');
+  });
+
+  it('basic tier gets the identical restriction as hobby: rejects a flagship model with 403', async () => {
+    tierState.planTier = 'basic';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).rejects.toThrow(
+      /requires a Pro plan/,
+    );
+  });
+
+  it('team tier gets the same unrestricted allowance as pro (flagship model allowed)', async () => {
+    tierState.planTier = 'team';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('team');
+  });
+
+  it('pro tier is unrestricted (flagship model allowed)', async () => {
+    tierState.planTier = 'pro';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('pro');
+  });
+
+  it('max tier is unrestricted (flagship model allowed)', async () => {
+    tierState.planTier = 'max';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('max');
+  });
+
+  it('enterprise tier is unrestricted (flagship model allowed)', async () => {
+    tierState.planTier = 'enterprise';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).resolves.toBe('enterprise');
+  });
+
+  it('an unrecognized plan_tier string fails closed with the same 403 as free, not an unrestricted fallthrough', async () => {
+    tierState.planTier = 'some-future-tier-nobody-added-yet';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).rejects.toThrow(
+      /Upgrade to a paid plan/,
+    );
+  });
+
+  it('an empty-string plan_tier fails closed with the same 403 as free', async () => {
+    tierState.planTier = '';
+    await expect(enforcePlanTier('user-1', 'token', flagshipModel)).rejects.toThrow(
+      /Upgrade to a paid plan/,
+    );
   });
 });

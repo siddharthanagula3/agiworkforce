@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { ErrorEvent } from '@sentry/nextjs';
 
-import { isSentryConfigured, redactDeep, scrubEvent } from '../sentry-shared';
+import {
+  hasTelemetryConsent,
+  isSentryConfigured,
+  redactDeep,
+  scrubEvent,
+  setTelemetryConsentCache,
+  TELEMETRY_CONSENT_STORAGE_KEY,
+} from '../sentry-shared';
 
 type Obj = Record<string, unknown>;
 
@@ -63,5 +70,38 @@ describe('sentry-shared PII scrub', () => {
   it('is default-disabled outside production (no DSN / not production)', () => {
     // Under vitest NODE_ENV is 'test', so Sentry must report not-configured.
     expect(isSentryConfigured()).toBe(false);
+  });
+});
+
+// Regression guard: instrumentation-client.ts must never call Sentry.init()
+// while the user's "Share crash and usage telemetry" toggle (default OFF)
+// hasn't explicitly synced to this device as opted-in — an opt-out that gets
+// silently ignored is a privacy defect, not a cosmetic bug.
+describe('telemetry consent cache (client-side Sentry gate)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('defaults to false (no telemetry) when nothing has been cached yet', () => {
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBeNull();
+    expect(hasTelemetryConsent()).toBe(false);
+  });
+
+  it('reflects true only after an explicit opt-in is cached', () => {
+    setTelemetryConsentCache(true);
+    expect(window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY)).toBe('true');
+    expect(hasTelemetryConsent()).toBe(true);
+  });
+
+  it('reverts to false once opt-out is cached again', () => {
+    setTelemetryConsentCache(true);
+    expect(hasTelemetryConsent()).toBe(true);
+    setTelemetryConsentCache(false);
+    expect(hasTelemetryConsent()).toBe(false);
+  });
+
+  it('treats a corrupted/unexpected stored value as no consent', () => {
+    window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, 'yes-please');
+    expect(hasTelemetryConsent()).toBe(false);
   });
 });

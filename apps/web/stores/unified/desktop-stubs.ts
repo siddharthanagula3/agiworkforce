@@ -10,7 +10,7 @@
  *
  * Each store hook still no-ops because the web bundle imports them through
  * `apps/web/stores/unified/index.ts` and the *callers* are runtime-gated
- * behind `isTauri()` / `isCloudWeb()` (see `packages/runtime/src/detect.ts`).
+ * behind `isTauri()` / `isCloudWeb()` (see `packages/client/client-runtime/src/detect.ts`).
  * If a future call reaches a stub on the web, the dev-only warn surfaces
  * the mistake without crashing the render.
  *

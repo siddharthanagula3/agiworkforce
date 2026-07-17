@@ -86,7 +86,6 @@ const requiredFiles = [
   'docs/marketing/README.md',
   'docs/support/README.md',
   'docs/legal/README.md',
-  'ios/README.md',
   '.github/pull_request_template.md',
   '.github/PULL_REQUEST_TEMPLATE/product-surface.md',
   '.github/PULL_REQUEST_TEMPLATE/refactor-move.md',
@@ -100,7 +99,13 @@ const requiredFiles = [
   'apps/extension/AGENTS.md',
   'apps/extension-vscode/AGENTS.md',
   'services/AGENTS.md',
-  'packages/providers/AGENTS.md',
+  'packages/ai/providers/AGENTS.md',
+  'tools/AGENTS.md',
+  'packages/ui/unified-chat/AGENTS.md',
+  'packages/contracts/cloud-contracts/AGENTS.md',
+  'packages/ai/provider-runtime/AGENTS.md',
+  'packages/ai/provider-protocol/AGENTS.md',
+  'packages/ai/model-registry/AGENTS.md',
   '.claude/README.md',
   '.codex/README.md',
   '.agents/README.md',
@@ -131,7 +136,7 @@ requireIncludes('docs/AGENTS.md', 'Verification');
 const agentCriticalRules = [
   'These rules must stay mirrored in `CLAUDE.md`',
   'Verify current facts from repo files, official docs, web search, or configured plugins/MCP',
-  'Read model IDs from `packages/types/src/models.json`',
+  'Read model IDs from `packages/contracts/types/src/models.json`',
   'Next.js 16 uses `proxy.ts`',
   'Local, BYOK, and Managed Cloud are separate trust boundaries.',
   'Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.',
@@ -249,7 +254,15 @@ for (const scopedAgentFile of [
   'apps/extension/AGENTS.md',
   'apps/extension-vscode/AGENTS.md',
   'services/AGENTS.md',
-  'packages/providers/AGENTS.md',
+  'packages/ai/providers/AGENTS.md',
+  'tools/AGENTS.md',
+  'packages/ui/unified-chat/AGENTS.md',
+  'packages/contracts/cloud-contracts/AGENTS.md',
+  'packages/ai/provider-runtime/AGENTS.md',
+  'packages/ai/provider-protocol/AGENTS.md',
+  // packages/ai/model-registry/AGENTS.md exists (another lane's in-flight file)
+  // but does not yet follow the four-marker scoped pattern — add it here
+  // once its owner aligns it; requiredFiles above already enforces existence.
 ]) {
   requireIncludes(scopedAgentFile, 'Read root `AGENTS.md`');
   requireIncludes(scopedAgentFile, 'Lane Contract');
@@ -333,6 +346,7 @@ if (commands) {
     'repoOrganization',
     'workspaceScripts',
     'boundaries',
+    'cloudContractOwnership',
     'structureConventions',
     'mobileHygiene',
     'serviceLayer',

@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Database, Download, Loader2, X } from 'lucide-react';
 import { isTauri } from '@/lib/tauri-mock';
 import { analyticsDeleteAllData } from '@/api/analytics';
-import { chat, cache, settings, onboarding } from '@agiworkforce/api';
+import { chat, cache, settings, onboarding } from '@agiworkforce/desktop-command-client';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';

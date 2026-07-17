@@ -5,6 +5,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import {
+  fetchLatestStableDesktopRelease,
+  selectDesktopInstallerAsset,
+  type DesktopDownloadPlatform,
+} from '@/lib/releases/github-desktop-releases';
 
 const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
 const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
@@ -89,54 +94,16 @@ async function handleDownload(request: NextRequest) {
     throw createError.validation('Invalid platform requested. Must be mac, windows, or linux.');
   }
 
-  // Fetch latest release from GitHub
-  const githubResponse = await fetch(
-    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`,
-    {
-      headers: {
-        Accept: 'application/vnd.github.v3+json',
-        'User-Agent': 'AGI-Workforce-Downloader',
-        ...(process.env['GITHUB_TOKEN']
-          ? { Authorization: `Bearer ${process.env['GITHUB_TOKEN']}` }
-          : {}),
-      },
-      next: { revalidate: 0 }, // No cache - always fetch latest release
-      signal: AbortSignal.timeout(10_000),
-    },
-  );
+  const release = await fetchLatestStableDesktopRelease({
+    owner: REPO_OWNER,
+    repo: REPO_NAME,
+    revalidateSeconds: 0,
+  });
+  if (!release) return fallbackToStatic(platform, request);
 
-  if (!githubResponse.ok) {
-    // Fallback to static files if GitHub fails
-    logger.warn(
-      { status: githubResponse.status, platform },
-      'GitHub API failed, falling back to static download',
-    );
-    return fallbackToStatic(platform, request);
-  }
+  const asset = selectDesktopInstallerAsset(release, platform as DesktopDownloadPlatform);
 
-  const release = await githubResponse.json();
-  type ReleaseAsset = { name: string; browser_download_url: string };
-  const assets = (release.assets || []) as ReleaseAsset[];
-
-  let asset: ReleaseAsset | undefined;
-  // Match assets to platform
-  if (platform === 'mac') {
-    // Prioritize .dmg, fallback to .app.tar.gz
-    asset =
-      assets.find((a: { name: string }) => a.name.endsWith('.dmg')) ||
-      assets.find((a: { name: string }) => a.name.endsWith('.app.tar.gz'));
-  } else if (platform === 'windows') {
-    asset = assets.find(
-      (a: { name: string }) =>
-        a.name.endsWith('.nsis.zip') || a.name.endsWith('.exe') || a.name.endsWith('.msi'),
-    );
-  } else if (platform === 'linux') {
-    asset = assets.find(
-      (a: { name: string }) => a.name.endsWith('.AppImage') || a.name.endsWith('.deb'),
-    );
-  }
-
-  if (asset && asset.browser_download_url) {
+  if (asset) {
     // Set clean filenames for downloads
     const cleanFilenames: Record<string, string> = {
       mac: 'agiworkforce.dmg',
@@ -144,7 +111,7 @@ async function handleDownload(request: NextRequest) {
       linux: 'agiworkforce.AppImage',
     };
 
-    const downloadUrl = asset.browser_download_url;
+    const downloadUrl = asset.browserDownloadUrl;
     if (!isExternalRedirectAllowed(downloadUrl)) {
       throw createError.serviceUnavailable('Release asset URL is not trusted');
     }

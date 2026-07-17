@@ -181,9 +181,9 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — packages/types ────────────────────────────────────────────
+  # ─── npm / pnpm — packages/contracts/types ────────────────────────────────────────────
   - package-ecosystem: 'npm'
-    directory: '/packages/types'
+    directory: '/packages/contracts/types'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -201,9 +201,9 @@ updates:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
 
-  # ─── npm / pnpm — packages/utils ────────────────────────────────────────────
+  # ─── npm / pnpm — packages/platform/utils ────────────────────────────────────────────
   - package-ecosystem: 'npm'
-    directory: '/packages/utils'
+    directory: '/packages/platform/utils'
     schedule:
       interval: 'weekly'
       day: 'monday'

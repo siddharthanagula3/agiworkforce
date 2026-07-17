@@ -7,6 +7,7 @@ import {
   toCanonicalGoogleThinking,
   buildGoogleChatRequest,
   computeAnthropicCacheConfig,
+  resolveWebOpenAIReasoningEffort,
 } from './canonical-request';
 import type { ProcessedRequest } from './request-processor';
 
@@ -222,6 +223,13 @@ describe('toCanonicalEffort', () => {
   });
 });
 
+describe('resolveWebOpenAIReasoningEffort', () => {
+  it('passes max through only when the canonical model metadata supports it', () => {
+    expect(resolveWebOpenAIReasoningEffort('openai', 'max', 'gpt-5.6-sol')).toBe('max');
+    expect(resolveWebOpenAIReasoningEffort('openai', 'max', 'gpt-5.5')).toBeUndefined();
+  });
+});
+
 describe('toCanonicalGoogleThinking', () => {
   it('returns undefined for non-google providers', () => {
     expect(toCanonicalGoogleThinking('anthropic', 'high')).toBeUndefined();
@@ -258,10 +266,18 @@ describe('toCanonicalGoogleThinking', () => {
     expect(toCanonicalGoogleThinking('google', 'xhigh')).toBeUndefined();
     expect(toCanonicalGoogleThinking('google', 'max')).toBeUndefined();
   });
+
+  it('does not infer a thinking-level wire contract from an unregistered model family name', () => {
+    expect(toCanonicalGoogleThinking('google', 'high', 'gemini-3-unregistered')).toEqual({
+      type: 'enabled',
+      budgetTokens: 24576,
+      includeThoughts: false,
+    });
+  });
 });
 
 describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
-  // Drives the REAL packages/providers/google translateChatRequest, not just
+  // Drives the REAL packages/ai/providers/google translateChatRequest, not just
   // the canonical ChatRequest this file produces -- the request-direction gap
   // this pins (includeThoughts defaulting to true in translateChatRequest,
   // which legacy google.ts never sent) only shows up at the actual Gemini

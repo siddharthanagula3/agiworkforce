@@ -4,7 +4,7 @@
  *
  * Reads lock files from the user's Claude memory locks directory, extracts any
  * model ID or version references, and compares them against:
- *   - packages/types/src/models.json  (canonical model catalog)
+ *   - packages/contracts/types/src/models.json  (canonical model catalog)
  *   - apps/desktop/src-tauri/Cargo.toml  (binary version)
  *
  * Exit 0 = aligned (or locks dir absent — skips gracefully in CI)
@@ -21,7 +21,7 @@ import { fileURLToPath } from 'url';
 import { homedir } from 'os';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../../');
-const MODELS_JSON = resolve(ROOT, 'packages/types/src/models.json');
+const MODELS_JSON = resolve(ROOT, 'packages/contracts/types/src/models.json');
 const CARGO_TOML = resolve(ROOT, 'apps/desktop/src-tauri/Cargo.toml');
 
 // Where Claude memory locks live (user home — not in repo)
@@ -92,7 +92,7 @@ function main() {
         driftItems.push({
           lockFile: filename,
           ref,
-          note: 'model ID not found in packages/types/src/models.json',
+          note: 'model ID not found in packages/contracts/types/src/models.json',
         });
       }
     }
@@ -110,7 +110,7 @@ function main() {
 
   console.warn('AP-09 WARN: lock-vs-build drift detected (non-blocking — informational only).');
   console.warn(
-    'These model IDs appear in lock files but are not in packages/types/src/models.json:',
+    'These model IDs appear in lock files but are not in packages/contracts/types/src/models.json:',
   );
   console.warn('Either update the lock file or add the model to models.json.\n');
 

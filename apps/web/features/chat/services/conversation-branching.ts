@@ -16,6 +16,11 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { chatPersistenceService } from './conversation-storage';
 import type { ChatSession } from '../types';
+import {
+  ManagedCloudBranchConversationRequestSchema,
+  ManagedCloudBranchConversationResponseSchema,
+  managedCloudBranchPath,
+} from '@agiworkforce/cloud-contracts';
 
 /**
  * Branch metadata stored in database
@@ -55,25 +60,6 @@ export interface BranchHistoryEntry {
   depth: number;
 }
 
-interface APIBranchRow {
-  id: string;
-  parent_session_id: string;
-  child_session_id: string;
-  branch_point_message_id: string;
-  branch_name: string | null;
-  created_by: string | null;
-  created_at: string;
-}
-
-interface APIConversationRow {
-  id: string;
-  user_id?: string;
-  title: string | null;
-  created_at: string;
-  updated_at: string;
-  is_active: boolean;
-}
-
 async function buildMutateHeaders(): Promise<HeadersInit> {
   const [token, csrf] = await Promise.all([getAuthToken(), getCsrfToken()]);
   return {
@@ -95,10 +81,16 @@ export class ConversationBranchingService {
     branchName?: string,
   ): Promise<ChatSession> {
     const headers = await buildMutateHeaders();
-    const res = await fetch('/api/chat/branch', {
+    const res = await fetch(managedCloudBranchPath(), {
       method: 'POST',
       headers,
-      body: JSON.stringify({ sessionId, branchPointMessageId, branchName }),
+      body: JSON.stringify(
+        ManagedCloudBranchConversationRequestSchema.parse({
+          sessionId,
+          branchPointMessageId,
+          branchName,
+        }),
+      ),
     });
 
     if (!res.ok) {
@@ -109,10 +101,7 @@ export class ConversationBranchingService {
       );
     }
 
-    const data = (await res.json()) as {
-      session: APIConversationRow;
-      branch: APIBranchRow;
-    };
+    const data = ManagedCloudBranchConversationResponseSchema.parse(await res.json());
 
     const s = data.session;
     return {
@@ -124,7 +113,7 @@ export class ConversationBranchingService {
       tokenCount: 0,
       cost: 0,
       isPinned: false,
-      isArchived: !s.is_active,
+      isArchived: false,
       tags: [],
       participants: [],
     };

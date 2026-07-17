@@ -21,7 +21,7 @@ export default [
       'node_modules/**',
       '**/node_modules/**',
       // ts-rs generated protocol bindings (see scripts/generate-protocol-types.mjs)
-      'packages/types/src/generated/**',
+      'packages/contracts/types/src/generated/**',
       '**/src-tauri/**',
       'target/**',
       '**/target/**',
@@ -379,8 +379,8 @@ export default [
     files: ['**/*.ts', '**/*.tsx'],
     ignores: [
       // The catalog SSOT itself — model IDs are LITERALLY the data here.
-      'packages/types/src/models.json',
-      'packages/types/src/model-catalog.ts',
+      'packages/contracts/types/src/models.json',
+      'packages/contracts/types/src/model-catalog.ts',
       // Tests can — and should — assert against literal model IDs to
       // pin the catalog SSOT. The harm is in production code paths.
       '**/*.test.ts',
@@ -416,7 +416,7 @@ export default [
           selector:
             'Literal[value=/^(gpt-[0-9]|claude-(?:opus|sonnet|haiku|[1-9])|gemini-[0-9]|grok-[0-9]|o[1-9]-[a-z])/]',
           message:
-            'Hardcoded model ID detected. Read from models.json via packages/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
+            'Hardcoded model ID detected. Read from models.json via packages/contracts/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
         },
         {
           // Deprecated-alias gate — PRD V5 lock #24, urgent action 2026-05-17.
@@ -441,7 +441,7 @@ export default [
           //     `resolveAutoModeModel()` from `@agiworkforce/types` (catalog-driven).
           selector: 'Literal[value=/^(kimi-k2-[^.]|deepseek-chat$|deepseek-reasoner$)/]',
           message:
-            'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Never hardcode model IDs: read from packages/types/src/models.json via @agiworkforce/types (getModelMetadataById / getRoutingSlotModel / resolveAutoModeModel / getDefaultModelFor) so routing stays catalog-driven.',
+            'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Never hardcode model IDs: read from packages/contracts/types/src/models.json via @agiworkforce/types (getModelMetadataById / getRoutingSlotModel / resolveAutoModeModel / getDefaultModelFor) so routing stays catalog-driven.',
         },
         {
           // Egress chokepoint (trust-boundary P0). A raw fetch() to an our-cloud
@@ -615,6 +615,20 @@ export default [
         requestAnimationFrame: 'readonly',
       },
     },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@agiworkforce/utils',
+              message:
+                'Chrome must import a browser-safe @agiworkforce/utils subpath; the root barrel also exports Node-only path containment code.',
+            },
+          ],
+        },
+      ],
+    },
   },
 
   // Node.js services
@@ -669,6 +683,16 @@ export default [
     },
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
+  // Webdriver scenarios intentionally emit step diagnostics that are captured
+  // as CI artifacts. Keep the production no-console rule strict without
+  // turning those test-runner logs into repository-wide lint failures.
+  {
+    files: ['apps/desktop/wdio/**/*.ts'],
+    rules: {
+      'no-console': 'off',
     },
   },
 
@@ -755,9 +779,9 @@ export default [
   // Migration tickets:
   //   FIXME: P1-MODEL-CATALOG-MIGRATION — replace hardcoded literals with
   //     getRoutingSlotModel() / getDefaultModelFor() / resolveAutoModeModel()
-  //     reads from packages/types model-catalog. Tracked across:
+  //     reads from packages/contracts/types model-catalog. Tracked across:
   //       - Wave 1   P0-G/I  → services/api-gateway routes (4 files)
-  //       - Wave 1   P0-J/K/L → packages/{routing,llm-normalize}
+  //       - Wave 1   P0-J/K/L → packages/{routing,provider-protocol}
   //       - Wave 2   model-id sweep → desktop / cli / mobile / web
   //   FIXME: P1-DATA-CLIENT-MIGRATION — route handlers use direct database
   //     clients instead of shared server data services. Tracked under Wave 1
@@ -776,7 +800,6 @@ export default [
       'apps/web/lib/llm-providers/google.ts',
       'apps/web/shared/config/supported-models.ts',
       'apps/web/shared/stores/chat-store.ts',
-      'apps/web/shared/stores/multi-agent-chat-store.ts',
       'apps/web/tests/fixtures/test-data-factory.ts',
       'apps/web/app/api/admin/directory-sync/route.ts',
       'apps/web/app/api/admin/security/route.ts',
@@ -791,11 +814,8 @@ export default [
       'apps/web/components/CommandPalette/CommandPalette.tsx',
       'apps/web/core/ai/llm/providers/anthropic-claude.ts',
       'apps/web/core/ai/llm/providers/google-gemini.ts',
-      'apps/web/core/ai/llm/providers/grok-ai.ts',
       'apps/web/core/ai/llm/unified-language-model.ts',
       'apps/web/core/ai/llm/user-ai-preferences.ts',
-      'apps/web/core/ai/orchestration/model-router.ts',
-      'apps/web/core/ai/tools/tool-invocation-handler.ts',
       'apps/web/core/security/api-abuse-prevention.ts',
       'apps/web/features/analytics/pages/AnalyticsDashboard.tsx',
       'apps/web/src/features/analytics/pages/AnalyticsDashboard.tsx', // Phase 5 web reorg mirror
@@ -811,7 +831,6 @@ export default [
       'apps/desktop/src/components/Settings/ComputerUseSettings.tsx',
       'apps/desktop/src/components/Workflows/AutomationBuilder.tsx',
       'apps/desktop/src/features/experimental/ModelComparisonView.tsx',
-      'apps/desktop/src/lib/modelRouter.ts',
       'apps/desktop/src/lib/tauri-mock.ts',
       'apps/desktop/src/runtime/WebRuntime.ts',
       'apps/desktop/src/stores/voiceModeStore.ts',
@@ -824,10 +843,9 @@ export default [
 
       // Shared packages.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-J/K/L)
-      'packages/llm-normalize/src/openai-reasoning-effort.ts',
-      'packages/providers/google/src/catalog.ts',
-      'packages/routing/src/classify.ts',
-      'packages/api/src/memoryImport.ts',
+      'packages/ai/providers/google/src/catalog.ts',
+      'packages/ai/routing/src/classify.ts',
+      'packages/client/desktop-command-client/src/memoryImport.ts',
 
       // Services — api-gateway routes.
       // FIXME: P1-MODEL-CATALOG-MIGRATION (Wave 1 P0-G/I)

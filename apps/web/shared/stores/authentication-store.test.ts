@@ -313,6 +313,41 @@ describe('Authentication Store', () => {
 
       expect(cleanupWorkforceSubscription).toHaveBeenCalled();
     });
+
+    it('cleans up the other stores even if one store fails during logout', async () => {
+      // AUDIT-FIX regression test: cleanupAllStores() used to await one
+      // Promise.all() over all 10 store dynamic imports, then reset them
+      // sequentially — a single rejected import (e.g. a stale chunk hash
+      // right after a deploy) or a throwing reset() aborted every cleanup
+      // scheduled after it in that fixed order, silently leaving the
+      // previous user's data in the other stores. Each store's cleanup is
+      // now an independent Promise.allSettled task, so a failure in one
+      // (notification-store here) must not block the others.
+      const { useNotificationStore } = await import('./notification-store');
+      const { cleanupWorkforceSubscription } = await import('./workforce-store');
+      const { stopMissionCleanupInterval } = await import('./mission-control-store');
+      const { logger } = await import('@shared/lib/logger');
+
+      vi.mocked(useNotificationStore.getState).mockImplementationOnce(() => {
+        throw new Error('notification store unavailable');
+      });
+      vi.mocked(mockAuthService.logout).mockResolvedValue({ error: null });
+
+      await useAuthStore.getState().logout();
+
+      expect(cleanupWorkforceSubscription).toHaveBeenCalled();
+      expect(stopMissionCleanupInterval).toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining('notification-store'),
+        expect.any(Error),
+      );
+
+      // logout() itself must still complete and clear auth state even
+      // though one store's cleanup task failed.
+      const state = useAuthStore.getState();
+      expect(state.isAuthenticated).toBe(false);
+      expect(state.user).toBeNull();
+    });
   });
 
   describe('Fetch User', () => {

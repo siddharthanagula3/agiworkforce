@@ -13,10 +13,10 @@
 //   )
 //
 // Sources of truth:
-//   - packages/types/src/models.json  → availability, tierAllowedModels,
+//   - packages/contracts/types/src/models.json  → availability, tierAllowedModels,
 //     providers[*].taskRouting, providers[*].defaultModel, modelPresets.
-//   - packages/types/src/model-catalog.ts → SLOT_REGISTRY (TS; the modelId
-//     literals are extracted from the SLOT_REGISTRY block by text).
+//   - packages/ai/model-registry/catalog/routing-policies.json → canonical slot
+//     assignments consumed by both generated routing and compatibility APIs.
 //
 // This makes "announced but non-routable" a CHECKED property, not a convention.
 // When a coming_soon model is provisioned, flip its availability to "live" (or
@@ -27,8 +27,11 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-const CATALOG = path.join(root, 'packages/types/src/models.json');
-const MODEL_CATALOG_TS = path.join(root, 'packages/types/src/model-catalog.ts');
+const CATALOG = path.join(root, 'packages/contracts/types/src/models.json');
+const ROUTING_POLICIES = path.join(
+  root,
+  'packages/ai/model-registry/catalog/routing-policies.json',
+);
 
 const catalog = JSON.parse(fs.readFileSync(CATALOG, 'utf8'));
 const models = catalog.models ?? {};
@@ -73,18 +76,12 @@ for (const [provider, entries] of Object.entries(catalog.modelPresets ?? {})) {
   }
 }
 
-// SLOT_REGISTRY modelIds — extracted from the TS source (no build needed).
-const ts = fs.readFileSync(MODEL_CATALOG_TS, 'utf8');
-const registryStart = ts.indexOf('export const SLOT_REGISTRY');
-if (registryStart === -1) {
-  console.error('FAIL: could not locate SLOT_REGISTRY in model-catalog.ts');
-  process.exit(1);
-}
-// The block ends at the first top-of-line `};` after the declaration.
-const registryEnd = ts.indexOf('\n};', registryStart);
-const registryBlock = ts.slice(registryStart, registryEnd === -1 ? undefined : registryEnd);
-for (const match of registryBlock.matchAll(/modelId:\s*'([^']+)'/gu)) {
-  refs.push({ id: match[1], where: 'SLOT_REGISTRY' });
+// Canonical routing slot model keys.
+const routingPolicies = JSON.parse(fs.readFileSync(ROUTING_POLICIES, 'utf8'));
+for (const [slot, definition] of Object.entries(routingPolicies.auto?.slots ?? {})) {
+  if (definition?.modelKey) {
+    refs.push({ id: definition.modelKey, where: `routingPolicies.auto.slots.${slot}` });
+  }
 }
 
 // ---- Enforce the invariant. ----
@@ -105,7 +102,7 @@ if (violations.length > 0) {
       `A coming_soon/unavailable model must not appear in any routable/tier set.\n` +
       violations.join('\n') +
       `\nFix: remove the id from the routable set, or flip its availability to "live"\n` +
-      `after a real 200 probe (packages/types/src/models.json).`,
+      `after a real 200 probe (packages/contracts/types/src/models.json).`,
   );
   process.exit(1);
 }

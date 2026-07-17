@@ -1,11 +1,13 @@
 /**
  * LLM Constants — thin shim over the canonical models.json (single source of truth)
  *
- * All model data lives in packages/types/src/models.json and is imported via
- * @agiworkforce/types. This file re-exports it with the same named exports
+ * Generated model data is consumed from packages/contracts/types/src/models.json through
+ * @agiworkforce/types. Authoring lives in packages/ai/model-registry/catalog; this
+ * file re-exports it with the same named exports
  * that the 29+ TS importers expect.
  *
- * To add a new model, edit packages/types/src/models.json — not this file.
+ * To add a new model, edit the model-registry curation/evidence inputs and run
+ * pnpm sync:models. Never edit the generated models.json directly.
  */
 
 import type { Provider } from '../types/provider';
@@ -67,6 +69,7 @@ export interface ModelMetadata {
     | 'search'
     | 'tts'
     | 'stt'
+    | 'embedding'
     | 'music';
   contextWindow: number;
   inputCost: number;

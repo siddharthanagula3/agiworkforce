@@ -12,7 +12,7 @@ import type { StreamChunk } from '@agiworkforce/types';
  * reproduces exactly the substrings it looks for.
  *
  * WHY THIS EXISTS: `createAnthropicAdapter(...).stream()`
- * (packages/providers/anthropic/src/index.ts) never throws -- upstream
+ * (packages/ai/providers/anthropic/src/index.ts) never throws -- upstream
  * failures (auth, rate limit, network) are caught internally and surfaced
  * as a clean `{type:'error', code, message, retryable}` chunk followed by
  * `{type:'stop', reason:'error'}`, so callers never have two different
@@ -27,7 +27,7 @@ import type { StreamChunk } from '@agiworkforce/types';
  * user's reservation is never refunded.
  *
  * Uses `classified.status` (via the chunk's `code` field, set from
- * `classifyError(err).status` in packages/providers/anthropic/src/index.ts)
+ * `classifyError(err).status` in packages/ai/providers/anthropic/src/index.ts)
  * rather than pattern-matching the Anthropic SDK's own raw error message --
  * the SDK's message text isn't verified to contain the substrings
  * `buildUpstreamErrorResponse` looks for, whereas the structured numeric
@@ -61,7 +61,7 @@ export function toUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>):
  * `'429'`/`'rate limit'`, `'402'`/`'insufficient credits'`,
  * `'404'`/`'not found'`) -- the exact numeric code is what has to be right;
  * nothing branches on the surrounding English wording. `chunk.code` is
- * `String(res.status)` (packages/providers/google/src/index.ts), so the
+ * `String(res.status)` (packages/ai/providers/google/src/index.ts), so the
  * `Number(chunk.code)` switch below gets that for free, same shape as
  * `toUpstreamError`.
  *

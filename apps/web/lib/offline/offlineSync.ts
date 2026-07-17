@@ -2,7 +2,7 @@
  * Offline Sync Manager (Web wrapper)
  *
  * Web-surface binding of the shared
- * `@agiworkforce/runtime/offline-sync` factory. Wires the canonical
+ * `@agiworkforce/client-runtime/offline-sync` factory. Wires the canonical
  * `OfflineSyncManager` to the web offline queue, real browser `window`
  * online/offline events, and `navigator.onLine`.
  *
@@ -11,7 +11,7 @@
  * surfaces now share the canonical factory; only adapters differ.
  */
 
-import { createOfflineSyncManager } from '@agiworkforce/runtime/offline-sync';
+import { createOfflineSyncManager } from '@agiworkforce/client-runtime/offline-sync';
 import { syncOfflineQueue, getQueuedItemCount, subscribeToQueueChanges } from './offlineQueue';
 import type { SyncManagerState, SyncSummary } from '@agiworkforce/types';
 import { SyncState } from '@agiworkforce/types';

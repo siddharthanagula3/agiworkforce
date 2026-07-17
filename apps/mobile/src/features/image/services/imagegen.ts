@@ -3,26 +3,21 @@
  *
  * Handles image generation requests to the API gateway. The set of supported
  * image models is owned by the gateway and the canonical model catalog
- * (`packages/types/src/models.json`); this client does not pin model IDs so it
+ * (`packages/contracts/types/src/models.json`); this client does not pin model IDs so it
  * cannot drift from the catalog. `request.model` is an optional override the
  * gateway validates server-side.
  */
 
 import { api } from '@/services/api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import type { ManagedMediaImageGenerationRequest } from '@agiworkforce/cloud-contracts';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface ImageGenRequest {
-  prompt: string;
-  model?: string;
-  size?: '256x256' | '512x512' | '1024x1024' | '1792x1024' | '1024x1792';
-  quality?: 'standard' | 'hd';
-  style?: 'natural' | 'vivid';
-  n?: number;
-}
+/** Canonical Web/Mobile/Desktop managed-media request; never redeclare it per surface. */
+export type ImageGenRequest = ManagedMediaImageGenerationRequest;
 
 export interface ImageGenResponse {
   success?: boolean;

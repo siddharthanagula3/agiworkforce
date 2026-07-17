@@ -65,12 +65,14 @@ vi.mock('@/lib/services/subscription-service', () => ({
 // ─── CreditService ──────────────────────────────────────────────────────────
 const mockCheckAvailable = vi.fn();
 const mockDeductCredits = vi.fn();
+const mockSettleCreditsDurably = vi.fn();
 const mockGetBalance = vi.fn();
 
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
+    settleCreditsDurably: (...args: unknown[]) => mockSettleCreditsDurably(...args),
     getBalance: (...args: unknown[]) => mockGetBalance(...args),
     generateIdempotencyKey: (userId: string, op: string, requestId: string) =>
       `${userId}:${op}:${requestId}`,
@@ -128,6 +130,11 @@ describe('POST /api/media/image/generate — credit deduction', () => {
     // Defaults: authenticated pro user via Clerk
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
+    mockSettleCreditsDurably.mockResolvedValue({
+      status: 'succeeded',
+      success: true,
+      attempt_count: 1,
+    });
 
     // Env vars
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
@@ -235,18 +242,17 @@ describe('POST /api/media/image/generate — credit deduction', () => {
 
       await POST(makeAuthedRequest({ prompt: 'a storm' }));
 
-      // Should have been called twice: once to reserve, once to refund
-      expect(mockDeductCredits).toHaveBeenCalledTimes(2);
-
-      // The refund call should pass a negative amount.
-      // Signature: deductCredits(userId, amountCents, description, metadata, ikey)
-      const refundCall = mockDeductCredits.mock.calls[1]!;
-      const refundAmount = refundCall[1] as number;
-      expect(refundAmount).toBeLessThan(0);
-
-      // Refund metadata should include type: refund
-      const refundMeta = refundCall[3] as Record<string, unknown>;
-      expect(refundMeta['type']).toBe('refund');
+      expect(mockDeductCredits).toHaveBeenCalledTimes(1);
+      expect(mockSettleCreditsDurably).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: TEST_USER.userId,
+          amountCents: expect.any(Number),
+          metadata: expect.objectContaining({ type: 'refund' }),
+          idempotencyKey: expect.any(String),
+        }),
+      );
+      const operation = mockSettleCreditsDurably.mock.calls[0]?.[0] as { amountCents: number };
+      expect(operation.amountCents).toBeLessThan(0);
     });
 
     it('returns a 422 response on provider failure (not 500)', async () => {

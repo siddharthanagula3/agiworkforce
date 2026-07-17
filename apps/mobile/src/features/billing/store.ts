@@ -19,7 +19,7 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
-import { parseMeResponse } from '@agiworkforce/services';
+import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 
 interface TierState {
   /** Current subscription tier, normalised via `normalizeBillingPlanTier`. */
@@ -28,6 +28,17 @@ interface TierState {
   isRefreshing: boolean;
   /** ISO timestamp of the last successful refresh, or null if never refreshed. */
   lastRefreshedAt: string | null;
+  /**
+   * Deployment capability (not a per-user entitlement): the reachable E2B
+   * code-execution loop is enabled on this deployment
+   * (`/api/me` `feature_flags.code_execution`, mirrors `AGI_E2B_EXECUTION=1`
+   * server-side). Defaults false until the first successful `refreshTier()` —
+   * a fresh install / offline cold-start must not show the "Run code" toggle
+   * before the deployment's real capability is known. Combined with the
+   * selected model's own `codeExecution` capability flag by callers (e.g.
+   * AddToChatSheet) so the toggle is never cosmetic.
+   */
+  codeExecutionAvailable: boolean;
   /**
    * Provider id of the first model used in the current conversation (e.g.
    * 'anthropic', 'openai').  Set to null when no conversation is active or
@@ -58,6 +69,7 @@ export const useTierStore = create<TierState>()(
       tier: 'free',
       isRefreshing: false,
       lastRefreshedAt: null,
+      codeExecutionAvailable: false,
       currentConversationProvider: null,
 
       refreshTier: async () => {
@@ -80,7 +92,11 @@ export const useTierStore = create<TierState>()(
           // a private interface that wrongly assumed a nested `user` envelope.
           const data = parseMeResponse(await api.get<unknown>('/api/me'));
           const tier = normalizeBillingPlanTier(data.plan.tier ?? null);
-          set({ tier, lastRefreshedAt: new Date().toISOString() });
+          set({
+            tier,
+            lastRefreshedAt: new Date().toISOString(),
+            codeExecutionAvailable: data.feature_flags.code_execution ?? false,
+          });
         } catch (err) {
           // Network failure or auth error — keep the cached tier, don't clear it.
           // The paywall path on the server is the authoritative gate; the client

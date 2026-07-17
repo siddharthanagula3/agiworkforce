@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { anthropicUsesAdaptiveThinking, buildThinkingConfig } from './request-processor';
+import {
+  anthropicUsesAdaptiveThinking,
+  buildThinkingConfig,
+  resolveRequestEffort,
+} from './request-processor';
 
 /**
  * Reasoning-effort-capability wave (2026-07-10): the Anthropic thinking request
@@ -77,5 +81,19 @@ describe('buildThinkingConfig (Anthropic)', () => {
         effort: 'high',
       }),
     ).toBeUndefined();
+  });
+});
+
+describe('resolveRequestEffort (catalog-driven)', () => {
+  it('preserves max for an OpenAI model whose registry entry supports it', () => {
+    expect(resolveRequestEffort('openai', 'gpt-5.6-sol', 'max')).toBe('max');
+  });
+
+  it('drops an effort not supported by the selected OpenAI model', () => {
+    expect(resolveRequestEffort('openai', 'gpt-5.5', 'max')).toBeUndefined();
+  });
+
+  it('does not attach reasoning effort to a catalog non-reasoning model', () => {
+    expect(resolveRequestEffort('openai', 'gpt-4.1-nano', 'high')).toBeUndefined();
   });
 });

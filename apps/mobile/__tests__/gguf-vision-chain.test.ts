@@ -60,7 +60,7 @@ jest.mock('expo-file-system/legacy', () => ({
 // Device capability probe touches React Native NativeModules (no native bridge
 // in Jest) — pin a text-only tier-3 device profile; the real selector logic
 // still chooses the tier from this snapshot.
-jest.mock('../../../packages/local-llm/src/capabilities', () => ({
+jest.mock('../../../packages/platform/local-llm/src/capabilities', () => ({
   detectCapabilities: jest.fn(async () => ({
     totalRAMMB: 6_000,
     osVersion: 'test-os',

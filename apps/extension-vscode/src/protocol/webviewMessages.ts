@@ -33,15 +33,6 @@ const sendMessage = z.object({
   }),
 });
 
-const setApiKey = z.object({
-  type: z.literal('setApiKey'),
-  payload: z.object({
-    key: z.string().min(1).max(4096),
-  }),
-});
-
-const clearApiKey = z.object({ type: z.literal('clearApiKey') });
-const signIn = z.object({ type: z.literal('signIn') });
 const ready = z.object({ type: z.literal('ready') });
 const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
@@ -57,13 +48,12 @@ const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
 const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const openHistory = z.object({ type: z.literal('openHistory') });
-const openCloudHistory = z.object({ type: z.literal('openCloudHistory') });
 const newChat = z.object({ type: z.literal('newChat') });
 
 /**
  * `attachFiles` carries dropped or pasted file payloads from the webview
  * composer. Each entry is a data URL with a sanitized name + content type so
- * the host can persist it to extension storage and add it to context.
+ * the host can forward it as bounded input on the next local turn.
  *
  * Per-entry size limits are enforced here so a hostile webview cannot post
  * unbounded payloads. The data URL ceiling is ~7 MB raw (10 MB base64) per
@@ -132,9 +122,6 @@ const proposeDiff = z.object({
 
 export const WebviewToExtSchema = z.discriminatedUnion('type', [
   sendMessage,
-  setApiKey,
-  clearApiKey,
-  signIn,
   ready,
   getModel,
   openSettings,
@@ -155,7 +142,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   proposeDiff,
   openFilePicker,
   openHistory,
-  openCloudHistory,
   newChat,
   attachFiles,
 ]);

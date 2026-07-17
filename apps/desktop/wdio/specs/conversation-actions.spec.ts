@@ -12,8 +12,12 @@
 // are collapsed into single `browser.execute()` calls that do the DOM
 // query/click/poll in-page (one WebDriver round trip instead of many).
 
+import * as fs from 'node:fs';
+
 const SCREEN_DIR =
   '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
+
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
 
 function clickSelector(selector: string) {
   return browser.execute((sel) => {

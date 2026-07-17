@@ -4,6 +4,14 @@ import { render } from '@testing-library/react-native';
 
 let lastModelPickerProps: { modelScope?: 'local' | 'cloud' | 'all' } | null = null;
 
+interface MockModelInstallState {
+  jobs: Record<string, unknown>;
+  installedModelIds: string[];
+  readySystemModelIds: string[];
+  hydrateInstalledModels: jest.Mock;
+  statusForModel: () => { status: string };
+}
+
 jest.mock('expo-router', () => ({
   useRouter: () => ({
     navigate: jest.fn(),
@@ -71,7 +79,7 @@ jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => {
 });
 
 jest.mock('../src/features/model-picker/installStore', () => ({
-  useModelInstallStore: (selector: (state: any) => unknown) =>
+  useModelInstallStore: (selector: (state: MockModelInstallState) => unknown) =>
     selector({
       jobs: {},
       installedModelIds: [],

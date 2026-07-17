@@ -65,9 +65,9 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 
 // Capture the ChatRequest passed to the adapter's stream() -- this is where
 // the fenced messages actually land post-migration (task #34: completion
-// route now goes through packages/providers/* adapters, not
+// route now goes through packages/ai/providers/* adapters, not
 // lib/llm-providers). `openAIWireRequestToChatRequest` itself is NOT mocked
-// -- it's a real, pure function from @agiworkforce/llm-normalize -- so the
+// -- it's a real, pure function from @agiworkforce/provider-protocol -- so the
 // route's actual message-fencing + wire-shape conversion both run for real;
 // only the network-calling boundary (adapter construction / stream drain) is
 // stubbed.

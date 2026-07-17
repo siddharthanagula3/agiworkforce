@@ -1,7 +1,7 @@
 /**
  * VS Code extension send-pipeline queue.
  *
- * Wraps `messageQueueManager` from `@agiworkforce/runtime` with a
+ * Wraps `messageQueueManager` from `@agiworkforce/client-runtime` with a
  * `vscode.Memento`-backed storage adapter so the `next` and `later` lanes
  * survive window-reload events. The backing store IS `ExtensionContext.
  * workspaceState` (persisted, workspace-scoped) — so callers must NOT enqueue
@@ -12,8 +12,8 @@
  * cached singleton.
  */
 
-import { createMessageQueue, type MessageQueue } from '@agiworkforce/runtime';
-import type { QueuedCommand } from '@agiworkforce/runtime';
+import { createMessageQueue, type MessageQueue } from '@agiworkforce/client-runtime';
+import type { QueuedCommand } from '@agiworkforce/client-runtime';
 
 const STORAGE_KEY = 'agiworkforce.queue.vscode';
 

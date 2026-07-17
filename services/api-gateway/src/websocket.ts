@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
-import { getServiceClient } from './lib/neonClients';
+import { getSystemClient, getUserScopedClient } from './lib/neonClients';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
@@ -444,12 +444,8 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
     ws.userId = userId;
 
     // SECURITY: Verify deviceId ownership before accepting it.
-    // Wave 1.5+ singleton sweep: post-JWT-verification user-scoped query.
-    // RLS-GAP: desktop_devices has no RLS policy yet (0013_devices.sql enables
-    // no RLS) — migration TODO. The `.eq('user_id', userId)` filter below is
-    // the SOLE tenant-isolation mechanism until a policy ships.
     if (typeof message.deviceId === 'string' && message.deviceId.length > 0) {
-      const wsUserDb = getServiceClient();
+      const wsUserDb = getUserScopedClient({ userId, token: message.token });
       const { data: desktop, error: desktopError } = await wsUserDb
         .from('desktop_devices')
         .select('id')
@@ -467,7 +463,10 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
           );
         }
 
-        const { data: pairing } = await wsUserDb
+        // device_pairings has no canonical migration. Keep its explicit user
+        // predicate behind the named compatibility boundary.
+        const pairingDb = getSystemClient('shadow-schema-compatibility');
+        const { data: pairing } = await pairingDb
           .from('device_pairings')
           .select('id')
           .eq('user_id', userId)

@@ -12,13 +12,13 @@ const summaryPath = path.join(outputDir, 'per-file-audit-ledger.md');
 const surfaceRoots = [
   { surface: 'cli', ownerLane: 'cli-app', prefix: 'apps/cli/src/' },
   { surface: 'rust-engine', ownerLane: 'rust-platform', prefix: 'crates/' },
-  { surface: 'shared-types', ownerLane: 'shared-contracts', prefix: 'packages/types/' },
-  { surface: 'shared-runtime', ownerLane: 'shared-runtime', prefix: 'packages/runtime/' },
-  { surface: 'shared-runtime', ownerLane: 'shared-runtime', prefix: 'packages/llm-runtime/' },
-  { surface: 'provider-adapters', ownerLane: 'provider-adapters', prefix: 'packages/providers/' },
-  { surface: 'provider-adapters', ownerLane: 'provider-adapters', prefix: 'packages/routing/' },
-  { surface: 'mcp-connectors', ownerLane: 'mcp-connectors', prefix: 'packages/mcp/' },
-  { surface: 'unified-chat', ownerLane: 'shared-runtime', prefix: 'packages/unified-chat/' },
+  { surface: 'shared-types', ownerLane: 'shared-contracts', prefix: 'packages/contracts/types/' },
+  { surface: 'shared-runtime', ownerLane: 'shared-runtime', prefix: 'packages/client/client-runtime/' },
+  { surface: 'shared-runtime', ownerLane: 'shared-runtime', prefix: 'packages/ai/provider-runtime/' },
+  { surface: 'provider-adapters', ownerLane: 'provider-adapters', prefix: 'packages/ai/providers/' },
+  { surface: 'provider-adapters', ownerLane: 'provider-adapters', prefix: 'packages/ai/routing/' },
+  { surface: 'mcp-connectors', ownerLane: 'mcp-connectors', prefix: 'packages/tools/mcp/' },
+  { surface: 'unified-chat', ownerLane: 'shared-runtime', prefix: 'packages/ui/unified-chat/' },
   { surface: 'services', ownerLane: 'services', prefix: 'services/' },
 ];
 

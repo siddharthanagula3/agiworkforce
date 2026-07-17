@@ -26,8 +26,8 @@ describe('mapProjectRow', () => {
     expect(mapped.metadata).toEqual({ foo: 'bar' });
 
     // Round-10 defaults · these columns are absent pre-migration.
-    expect(mapped.defaultPrivacyMode).toBe('local');
-    expect(mapped.defaultProviderMode).toBe('Local');
+    expect(mapped.defaultPrivacyMode).toBe('managed');
+    expect(mapped.defaultProviderMode).toBe('ManagedGateway');
     expect(mapped.allowedSurfaces).toEqual(['web', 'desktop', 'mobile']);
     expect(mapped.organizationId).toBeNull();
     expect(mapped.defaultModelId).toBeNull();
@@ -41,8 +41,8 @@ describe('mapProjectRow', () => {
     const mapped = mapProjectRow({
       ...baseLegacyRow,
       organization_id: 'org-xyz',
-      default_privacy_mode: 'byok',
-      default_provider_mode: 'DirectByok',
+      default_privacy_mode: 'managed',
+      default_provider_mode: 'ManagedNative',
       allowed_surfaces: ['web', 'mobile'],
       default_model_id: 'claude-opus-4-8',
       last_used_at: '2026-05-20T12:00:00Z',
@@ -51,8 +51,8 @@ describe('mapProjectRow', () => {
       imported_from: 'claude',
     });
 
-    expect(mapped.defaultPrivacyMode).toBe('byok');
-    expect(mapped.defaultProviderMode).toBe('DirectByok');
+    expect(mapped.defaultPrivacyMode).toBe('managed');
+    expect(mapped.defaultProviderMode).toBe('ManagedNative');
     expect(mapped.allowedSurfaces).toEqual(['web', 'mobile']);
     expect(mapped.organizationId).toBe('org-xyz');
     expect(mapped.defaultModelId).toBe('claude-opus-4-8');
@@ -72,10 +72,19 @@ describe('mapProjectRow', () => {
       allowed_surfaces: ['web', 'invalid-surface', 42],
     });
 
-    expect(mapped.defaultPrivacyMode).toBe('local');
-    expect(mapped.defaultProviderMode).toBe('Local');
+    expect(mapped.defaultPrivacyMode).toBe('managed');
+    expect(mapped.defaultProviderMode).toBe('ManagedGateway');
     expect(mapped.accentColor).toBeNull();
     expect(mapped.importedFrom).toBeNull();
+    expect(mapped.allowedSurfaces).toEqual(['web']);
+  });
+
+  it('does not expose developer-session or browser surfaces from Cloud project rows', () => {
+    const mapped = mapProjectRow({
+      ...baseLegacyRow,
+      allowed_surfaces: ['web', 'cli', 'vscode', 'chrome'],
+    });
+
     expect(mapped.allowedSurfaces).toEqual(['web']);
   });
 

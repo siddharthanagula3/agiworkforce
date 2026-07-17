@@ -60,17 +60,6 @@ export interface DeviceIntegration {
 }
 
 // ---------------------------------------------------------------------------
-// Connector types (used by Connectors page)
-// ---------------------------------------------------------------------------
-
-export interface ConnectorState {
-  /** Connector IDs that have been authorized via OAuth */
-  connectedConnectors: Record<string, boolean>;
-  /** Connector IDs that are toggled on (only relevant for connected ones) */
-  enabledConnectors: Record<string, boolean>;
-}
-
-// ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
 
@@ -81,22 +70,23 @@ interface IntegrationState {
   deviceLoading: boolean;
   error: string | null;
 
-  // Connector state
-  connectedConnectors: Record<string, boolean>;
-  enabledConnectors: Record<string, boolean>;
-
   fetchPlatforms: () => Promise<void>;
   connectPlatform: (platformId: string, config?: Record<string, string>) => Promise<void>;
   disconnectPlatform: (platformId: string) => Promise<void>;
   checkDeviceIntegrations: () => Promise<void>;
   clearError: () => void;
-
-  // Connector actions
-  connectConnector: (connectorId: string) => void;
-  disconnectConnector: (connectorId: string) => void;
-  toggleConnector: (connectorId: string, enabled: boolean) => void;
-  isConnectorConnected: (connectorId: string) => boolean;
-  isConnectorEnabled: (connectorId: string) => boolean;
+  /**
+   * Trust-boundary reset: `platforms` (connected/lastSynced/accountName) is
+   * scoped to the signed-in user and persisted to MMKV. Without this, a
+   * previously-connected account's "Connected" badges survive sign-out and
+   * are shown to whichever different account signs in next on this device.
+   * Called from useAuthStore.signOut() — see the trust-boundary reset block
+   * there (cloud sync / artifacts / memory / projects / settings / tier /
+   * push-token) for the sibling resets this mirrors. deviceIntegrations is
+   * intentionally untouched: it is OS-permission-derived, not persisted, and
+   * not account-scoped.
+   */
+  clearPlatformConnections: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,10 +143,6 @@ export const useIntegrationStore = create<IntegrationState>()(
       platformsLoading: false,
       deviceLoading: false,
       error: null,
-
-      // Connector state — empty by default, populated as users connect
-      connectedConnectors: {},
-      enabledConnectors: {},
 
       // ------------------------------------------------------------------
       // Platforms
@@ -302,43 +288,9 @@ export const useIntegrationStore = create<IntegrationState>()(
         }
       },
 
-      // ------------------------------------------------------------------
-      // Connectors (Cloud Storage, Productivity, Communication, Email)
-      // ------------------------------------------------------------------
-
-      connectConnector: (connectorId) => {
-        set((state) => ({
-          connectedConnectors: { ...state.connectedConnectors, [connectorId]: true },
-          enabledConnectors: { ...state.enabledConnectors, [connectorId]: true },
-        }));
-      },
-
-      disconnectConnector: (connectorId) => {
-        set((state) => {
-          const { [connectorId]: _c, ...restConnected } = state.connectedConnectors;
-          const { [connectorId]: _e, ...restEnabled } = state.enabledConnectors;
-          return {
-            connectedConnectors: restConnected,
-            enabledConnectors: restEnabled,
-          };
-        });
-      },
-
-      toggleConnector: (connectorId, enabled) => {
-        set((state) => ({
-          enabledConnectors: { ...state.enabledConnectors, [connectorId]: enabled },
-        }));
-      },
-
-      isConnectorConnected: (connectorId) => {
-        return !!get().connectedConnectors[connectorId];
-      },
-
-      isConnectorEnabled: (connectorId) => {
-        return !!get().enabledConnectors[connectorId];
-      },
-
       clearError: () => set({ error: null }),
+
+      clearPlatformConnections: () => set({ platforms: DEFAULT_PLATFORMS, error: null }),
     }),
     {
       name: 'integration-store',
@@ -362,8 +314,6 @@ export const useIntegrationStore = create<IntegrationState>()(
           ...rest,
           config: {} as Record<string, string>,
         })),
-        connectedConnectors: state.connectedConnectors,
-        enabledConnectors: state.enabledConnectors,
       }),
     },
   ),

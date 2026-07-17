@@ -16,7 +16,7 @@
  *
  * Settings NOT covered by this module:
  *   - `apiEndpoint` / `gatewayUrl` / `modelEndpoint` — see `utils/api.ts`
- *   - `cliPath` / `systemPrompt` / `agent.autoApply` — handled at use-site
+ *   - `systemPrompt` / `agent.autoApply` — handled at use-site
  *     with explicit Workspace Trust check
  */
 
@@ -47,6 +47,7 @@ const DEFAULTS = {
   desktopBridgePort: 8787,
   tier: 'byok',
   currentTier: 'unknown',
+  cliPath: 'agi',
 } as const;
 
 function get<T>(key: string, fallback: T): T {
@@ -160,6 +161,18 @@ export const Config = {
       .getConfiguration('agiWorkforce')
       .inspect<string>('currentTier');
     return inspected?.globalValue ?? DEFAULTS.currentTier;
+  },
+
+  /**
+   * Executable used for the workspace-scoped local developer runtime.
+   * Untrusted workspaces cannot replace it with a workspace-authored binary.
+   */
+  cliPath(): string {
+    const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<string>('cliPath');
+    if (!vscode.workspace.isTrusted) {
+      return inspected?.globalValue ?? inspected?.defaultValue ?? DEFAULTS.cliPath;
+    }
+    return get<string>('cliPath', DEFAULTS.cliPath);
   },
 } as const;
 

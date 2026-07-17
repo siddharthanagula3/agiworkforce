@@ -1,130 +1,126 @@
-/**
- * conversationTreeProvider.test.ts — Tests for ConversationTreeProvider logic
- *
- * Tests the tree item creation and refresh behavior.
- */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
+import type { ThreadSummary } from '@agiworkforce/types';
+import {
+  ConversationTreeItem,
+  ConversationTreeProvider,
+} from '../features/trees/conversationTreeProvider';
+import type { LocalRuntimeClient } from '../integrations/localRuntimeClient';
+import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 
-import { describe, it, expect, vi } from 'vitest';
-
-interface StoredConversation {
-  id: string;
-  title: string;
-  messages: Array<{ role: string; content: string; timestamp: number }>;
-  model: string;
-  createdAt: number;
-  updatedAt: number;
+function thread(id: string, updatedAt: string, cwd: string): ThreadSummary {
+  return {
+    id,
+    title: `Session ${id}`,
+    model: 'model-1',
+    cwd,
+    createdAt: updatedAt,
+    updatedAt,
+    createdBy: 'vscode',
+    status: 'idle',
+  };
 }
 
-describe('ConversationTreeItem creation', () => {
-  function createTreeItem(conversation: StoredConversation): {
-    label: string;
-    description: string;
-    tooltip: string;
-    contextValue: string;
-    command: { command: string; title: string; arguments: string[] };
-  } {
-    const diff = Date.now() - conversation.updatedAt;
-    const minutes = Math.floor(diff / 60_000);
-    const description = minutes < 1 ? 'just now' : `${minutes}m ago`;
+describe('ConversationTreeProvider', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.workspaceFolders = [
+      { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+      { name: 'b', index: 1, uri: vscode.Uri.file('/workspace/b') },
+    ];
+  });
 
-    return {
-      label: conversation.title,
-      description,
-      tooltip: conversation.messages[0]?.content.slice(0, 120) ?? 'Empty conversation',
-      contextValue: 'conversation',
-      command: {
-        command: 'agi-workforce.openConversation',
-        title: 'Open Conversation',
-        arguments: [conversation.id],
-      },
-    };
-  }
+  it('renders runtime-owned thread metadata and the open-session command', () => {
+    const summary = thread('one', new Date().toISOString(), '/workspace/a');
+    const item = new ConversationTreeItem(summary);
 
-  it('creates a tree item with correct label', () => {
-    const conv: StoredConversation = {
-      id: 'test-1',
-      title: 'My Chat',
-      messages: [{ role: 'user', content: 'Hello world', timestamp: Date.now() }],
-      model: 'auto',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    const item = createTreeItem(conv);
-    expect(item.label).toBe('My Chat');
+    expect(item.label).toBe('Session one');
+    expect(item.tooltip).toBe('model-1 · /workspace/a');
     expect(item.contextValue).toBe('conversation');
+    expect(item.command).toEqual(
+      expect.objectContaining({
+        command: 'agi-workforce.openConversation',
+        arguments: ['one'],
+      }),
+    );
   });
 
-  it('uses first message content as tooltip', () => {
-    const conv: StoredConversation = {
-      id: 'test-2',
-      title: 'Chat',
-      messages: [{ role: 'user', content: 'How to sort arrays?', timestamp: Date.now() }],
-      model: 'auto',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+  it('lists every workspace, sorts newest first, and routes reads to the owning runtime', async () => {
+    const a = {
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [thread('old', '2026-07-13T00:00:00Z', '/workspace/a')],
+      }),
+      readThread: vi
+        .fn()
+        .mockResolvedValue({
+          thread: thread('old', '2026-07-13T00:00:00Z', '/workspace/a'),
+          messages: [],
+        }),
     };
+    const b = {
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [thread('new', '2026-07-14T00:00:00Z', '/workspace/b')],
+      }),
+      readThread: vi
+        .fn()
+        .mockResolvedValue({
+          thread: thread('new', '2026-07-14T00:00:00Z', '/workspace/b'),
+          messages: [],
+        }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(
+        (cwd: string) => (cwd.endsWith('/a') ? a : b) as unknown as LocalRuntimeClient,
+      ),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
 
-    const item = createTreeItem(conv);
-    expect(item.tooltip).toBe('How to sort arrays?');
+    expect((await provider.getThreads()).map((value) => value.id)).toEqual(['new', 'old']);
+    await provider.readThread('old');
+
+    expect(a.readThread).toHaveBeenCalledWith('old');
+    expect(b.readThread).not.toHaveBeenCalled();
   });
 
-  it('shows "Empty conversation" for conversations with no messages', () => {
-    const conv: StoredConversation = {
-      id: 'test-3',
-      title: 'Empty',
-      messages: [],
-      model: 'auto',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+  it('archives through the owning runtime and refreshes the tree', async () => {
+    const runtime = {
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [thread('one', '2026-07-14T00:00:00Z', '/workspace/a')],
+      }),
+      archiveThread: vi.fn().mockResolvedValue(undefined),
     };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
+    const changed = vi.fn();
+    provider.onDidChangeTreeData(changed);
+    await provider.getThreads();
 
-    const item = createTreeItem(conv);
-    expect(item.tooltip).toBe('Empty conversation');
+    await expect(provider.archiveThread('one')).resolves.toBe(true);
+    expect(runtime.archiveThread).toHaveBeenCalledWith('one');
+    expect(changed).toHaveBeenCalledOnce();
   });
 
-  it('truncates tooltip to 120 characters', () => {
-    const longContent = 'A'.repeat(200);
-    const conv: StoredConversation = {
-      id: 'test-4',
-      title: 'Long',
-      messages: [{ role: 'user', content: longContent, timestamp: Date.now() }],
-      model: 'auto',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+  it('does not retain routing entries for threads removed from runtime history', async () => {
+    const runtime = {
+      listThreads: vi
+        .fn()
+        .mockResolvedValueOnce({
+          threads: [thread('removed', '2026-07-14T00:00:00Z', '/workspace/a')],
+        })
+        .mockResolvedValue({ threads: [] }),
+      readThread: vi.fn(),
     };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const provider = new ConversationTreeProvider(pool);
 
-    const item = createTreeItem(conv);
-    expect(item.tooltip.length).toBe(120);
-  });
+    await provider.getThreads();
+    await provider.getThreads();
 
-  it('links openConversation command with correct id', () => {
-    const conv: StoredConversation = {
-      id: 'abc-123',
-      title: 'Chat',
-      messages: [],
-      model: 'auto',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    const item = createTreeItem(conv);
-    expect(item.command.command).toBe('agi-workforce.openConversation');
-    expect(item.command.arguments).toEqual(['abc-123']);
-  });
-});
-
-describe('ConversationTreeProvider refresh', () => {
-  it('fires onDidChangeTreeData event on refresh', () => {
-    const fire = vi.fn();
-    const provider = {
-      _onDidChangeTreeData: { fire },
-      refresh() {
-        this._onDidChangeTreeData.fire();
-      },
-    };
-
-    provider.refresh();
-    expect(fire).toHaveBeenCalledTimes(1);
+    await expect(provider.readThread('removed')).resolves.toBeUndefined();
+    expect(runtime.readThread).not.toHaveBeenCalled();
   });
 });

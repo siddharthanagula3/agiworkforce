@@ -72,13 +72,18 @@ describe('modelStore', () => {
     });
 
     it('should select a model and provider', async () => {
+      const { getAllowedModelsForTier, getModelMetadata } = await import('../constants/llm');
       const { useModelStore } = await import('../stores/modelStore');
+      const modelId = getAllowedModelsForTier('max').find(
+        (candidate) => getModelMetadata(candidate)?.provider === 'openai',
+      );
+      expect(modelId).toBeDefined();
       const store = useModelStore.getState();
 
-      await store.selectModel('gpt-5.5', 'openai');
+      await store.selectModel(modelId!, 'openai');
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('gpt-5.5');
+      expect(state.selectedModel).toBe(modelId);
       expect(state.selectedProvider).toBe('openai');
     });
 
@@ -123,13 +128,16 @@ describe('modelStore', () => {
   });
 
   describe('tier restrictions', () => {
-    it('should allow gpt-5.5 on pro, max, and enterprise tiers (moved to pro_additions)', async () => {
-      const { isModelAllowedForTier } = await import('../constants/llm');
+    it('should allow current pro additions on pro, max, and enterprise tiers', async () => {
+      const { getAllowedModelsForTier, isModelAllowedForTier } = await import('../constants/llm');
+      const basicModels = new Set(getAllowedModelsForTier('basic'));
+      const proModel = getAllowedModelsForTier('pro').find((modelId) => !basicModels.has(modelId));
+      expect(proModel).toBeDefined();
 
-      expect(isModelAllowedForTier('gpt-5.5', 'free')).toBe(false);
-      expect(isModelAllowedForTier('gpt-5.5', 'pro')).toBe(true);
-      expect(isModelAllowedForTier('gpt-5.5', 'max')).toBe(true);
-      expect(isModelAllowedForTier('gpt-5.5', 'enterprise')).toBe(true);
+      expect(isModelAllowedForTier(proModel!, 'free')).toBe(false);
+      expect(isModelAllowedForTier(proModel!, 'pro')).toBe(true);
+      expect(isModelAllowedForTier(proModel!, 'max')).toBe(true);
+      expect(isModelAllowedForTier(proModel!, 'enterprise')).toBe(true);
     });
 
     it('should deny unknown phantom model ids on every managed-cloud tier', async () => {
@@ -139,15 +147,6 @@ describe('modelStore', () => {
       expect(isModelAllowedForTier('unknown-codex-phantom-model', 'pro')).toBe(false);
       expect(isModelAllowedForTier('unknown-codex-phantom-model', 'max')).toBe(false);
       expect(isModelAllowedForTier('unknown-codex-phantom-model', 'enterprise')).toBe(false);
-    });
-
-    it('should resolve the best allowed auto mode when no model is selected', async () => {
-      const { resolveEffectiveModelForTier } = await import('../stores/modelStore');
-
-      expect(resolveEffectiveModelForTier(null, 'basic')).toBe('auto-economy');
-      expect(resolveEffectiveModelForTier(null, 'pro')).toBe('auto-balanced');
-      expect(resolveEffectiveModelForTier(null, 'max')).toBe('auto-premium');
-      expect(resolveEffectiveModelForTier('gpt-5.5', 'basic')).toBe('gpt-5.5');
     });
 
     it('should downgrade stale manual selections when plan tier is basic', async () => {
@@ -368,14 +367,13 @@ describe('modelStore', () => {
 
 describe('LLM Constants', () => {
   describe('getModelMetadata', () => {
-    it('should return metadata for auto model (subscription-only)', async () => {
+    it('keeps Auto routing profiles separate from provider model metadata', async () => {
       const { getModelMetadata } = await import('../constants/llm');
 
-      // For subscription-only model, 'auto' is the primary model
-      const autoMetadata = getModelMetadata('auto');
-      expect(autoMetadata).not.toBeNull();
-      expect(autoMetadata?.provider).toBe('managed_cloud');
-      expect(autoMetadata?.name).toBe('Auto (Best Available)');
+      expect(getModelMetadata('auto')).toBeNull();
+      expect(getModelMetadata('auto-economy')).toBeNull();
+      expect(getModelMetadata('auto-balanced')).toBeNull();
+      expect(getModelMetadata('auto-premium')).toBeNull();
     });
 
     it('should return null for invalid model IDs', async () => {
@@ -383,23 +381,6 @@ describe('LLM Constants', () => {
 
       const result = getModelMetadata('non-existent-model');
       expect(result).toBeNull();
-    });
-
-    it('should include correct capabilities for auto model', async () => {
-      const { getModelMetadata } = await import('../constants/llm');
-
-      // Auto model should have full capabilities
-      const autoMetadata = getModelMetadata('auto');
-      expect(autoMetadata?.capabilities.streaming).toBe(true);
-      expect(autoMetadata?.capabilities.tools).toBe(true);
-      expect(autoMetadata?.capabilities.agentic).toBe(true);
-    });
-
-    it('should have correct context window for auto model', async () => {
-      const { getModelMetadata } = await import('../constants/llm');
-
-      const autoMetadata = getModelMetadata('auto');
-      expect(autoMetadata?.contextWindow).toBe(128_000);
     });
   });
 
@@ -435,6 +416,7 @@ describe('LLM Constants', () => {
         'search',
         'tts',
         'stt',
+        'embedding',
         'music',
       ];
 
@@ -455,15 +437,17 @@ describe('LLM Constants', () => {
   });
 
   describe('getProviderModels', () => {
-    it('should return models for managed_cloud provider', async () => {
+    it('does not expose Auto routing profiles as managed-cloud models', async () => {
       const { getProviderModels } = await import('../constants/llm');
 
       const managedCloudModels = getProviderModels('managed_cloud');
       managedCloudModels.forEach((model) => {
         expect(model.provider).toBe('managed_cloud');
       });
-      // Should have at least the 'auto' model
-      expect(managedCloudModels.length).toBeGreaterThan(0);
+      expect(managedCloudModels.map((model) => model.id)).not.toContain('auto');
+      expect(managedCloudModels.map((model) => model.id)).not.toContain('auto-economy');
+      expect(managedCloudModels.map((model) => model.id)).not.toContain('auto-balanced');
+      expect(managedCloudModels.map((model) => model.id)).not.toContain('auto-premium');
     });
 
     it('should return empty array for legacy providers', async () => {
@@ -477,11 +461,11 @@ describe('LLM Constants', () => {
   });
 
   describe('MODEL_CONTEXT_WINDOWS', () => {
-    it('should have context window for auto model (subscription-only)', async () => {
+    it('does not publish a fabricated context window for an Auto routing profile', async () => {
       const { MODEL_CONTEXT_WINDOWS } = await import('../constants/llm');
 
-      // For subscription-only model, only 'auto' is defined
-      expect(MODEL_CONTEXT_WINDOWS['auto']).toBe(128_000);
+      expect(MODEL_CONTEXT_WINDOWS['auto']).toBeUndefined();
+      expect(MODEL_CONTEXT_WINDOWS['auto-economy']).toBeUndefined();
     });
 
     it('should have getModelContextWindow fallback', async () => {

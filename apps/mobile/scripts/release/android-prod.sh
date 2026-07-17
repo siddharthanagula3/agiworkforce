@@ -28,14 +28,17 @@ EOF
   esac
 done
 
-bash "$(dirname "${BASH_SOURCE[0]}")/preflight.sh" "${PROFILE}"
-
-log "starting Android PRODUCTION build (AAB for Play Store)"
-eas_build android "${PROFILE}"
-log_ok "Android production build queued."
+bash "$(dirname "${BASH_SOURCE[0]}")/preflight.sh" "${PROFILE}" "${AUTO_SUBMIT}" android 1
 
 if [[ "${AUTO_SUBMIT}" == "1" ]]; then
-  log "submitting Android production AAB to Play Console (internal track, draft)..."
-  eas_submit android "${PROFILE}" --latest
-  log_ok "submitted as draft. Promote tracks (internal → closed → production) via Play Console."
+  log "starting Android PRODUCTION build with submission bound to this exact build"
+  eas_build android "${PROFILE}" --auto-submit
+  log_ok "Android production build and paired Play submission queued as a draft."
+  log "Promote tracks (internal → closed → production) via Play Console."
+else
+  log "starting Android PRODUCTION build (AAB for Play Store)"
+  eas_build android "${PROFILE}"
+  log_ok "Android production build queued."
+  log "submit it later with the exact build id:"
+  log "  pnpm --filter @agiworkforce/mobile release:android:prod:submit -- --build-id <id>"
 fi

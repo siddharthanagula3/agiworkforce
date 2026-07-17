@@ -10,6 +10,7 @@ import {
   type ImagenGenerationRequest,
   type ImagenServiceError,
 } from './google-imagen-service';
+import { getModelsForProvider } from '@agiworkforce/types';
 
 // Mock auth token (replaces former cloudDb.auth.getSession usage)
 vi.mock('@shared/lib/get-auth-token', () => ({
@@ -181,7 +182,34 @@ describe('Google Imagen Service', () => {
         model: 'imagen-4.0-generate-001',
       });
 
-      expect(result.cost).toBe(0.004); // 0.002 per image * 2
+      expect(result.cost).toBe(0.08); // Canonical Imagen 4 price: $0.04 per image
+    });
+
+    it('prices Imagen generations from the canonical model catalog', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            predictions: [
+              { bytesBase64Encoded: 'data', mimeType: 'image/png' },
+              { bytesBase64Encoded: 'data2', mimeType: 'image/png' },
+            ],
+          }),
+      });
+
+      const standardImagen = getModelsForProvider('google', { modelTypes: ['image'] }).find(
+        (model) => model.imageApi === 'imagen' && model.qualityTier === 'balanced',
+      );
+      expect(standardImagen?.imagePerImageCost).toBe(0.04);
+
+      const result = await googleImagenService.generateImage({
+        prompt: 'Test',
+        model: standardImagen?.id,
+        numberOfImages: 2,
+      });
+
+      expect(result.model).toBe(standardImagen?.apiModelId);
+      expect(result.cost).toBe(0.08);
     });
 
     it('should calculate tokens used from prompt length', async () => {
@@ -272,6 +300,25 @@ describe('Google Imagen Service', () => {
 
       expect(result.metadata.safetyRatings).toBeDefined();
       expect(result.metadata.safetyRatings?.[0]?.category).toBe('HARM_CATEGORY_VIOLENCE');
+    });
+  });
+
+  describe('getAvailableModels', () => {
+    it('projects the Imagen roster from the canonical model catalog', () => {
+      const expected = getModelsForProvider('google', {
+        includeDeprecated: false,
+        modelTypes: ['image'],
+      })
+        .filter((model) => model.imageApi === 'imagen')
+        .map((model) => ({
+          id: model.apiModelId ?? model.id,
+          name: model.name,
+          pricing: model.imagePerImageCost,
+        }));
+
+      expect(googleImagenService.getAvailableModels()).toEqual(
+        expected.map((model) => expect.objectContaining(model)),
+      );
     });
   });
 
@@ -403,10 +450,13 @@ describe('Google Imagen Service', () => {
 
     it('should have correct descriptions', () => {
       const models = googleImagenService.getAvailableModels();
+      const catalogModel = getModelsForProvider('google', { modelTypes: ['image'] }).find(
+        (model) => model.apiModelId === 'imagen-4.0-generate-001',
+      );
 
       const standardModel = models.find((m) => m.id === 'imagen-4.0-generate-001');
-      expect(standardModel?.name).toBe('Imagen 4.0 Standard');
-      expect(standardModel?.description).toContain('text-to-image');
+      expect(standardModel?.name).toBe(catalogModel?.name);
+      expect(standardModel?.description).toBe(catalogModel?.bestFor.join(', '));
     });
   });
 
@@ -473,7 +523,7 @@ describe('Google Imagen Service', () => {
         numberOfImages: 1,
       });
 
-      expect(result.cost).toBe(0.002);
+      expect(result.cost).toBe(0.04);
     });
 
     it('should have correct pricing for ultra model', async () => {
@@ -491,7 +541,7 @@ describe('Google Imagen Service', () => {
         numberOfImages: 1,
       });
 
-      expect(result.cost).toBe(0.004);
+      expect(result.cost).toBe(0.06);
     });
 
     it('should have correct pricing for fast model', async () => {
@@ -509,7 +559,7 @@ describe('Google Imagen Service', () => {
         numberOfImages: 1,
       });
 
-      expect(result.cost).toBe(0.001);
+      expect(result.cost).toBe(0.02);
     });
   });
 });

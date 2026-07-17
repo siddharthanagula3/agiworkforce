@@ -4,6 +4,16 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const { canonicalOpenAIModel } = vi.hoisted(() => ({
+  canonicalOpenAIModel: 'catalog-openai-default-model',
+}));
+
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  requireProviderDefaultModel: () => canonicalOpenAIModel,
+}));
+
 import { useMultiAgentChatStore, clearMessageFingerprintCache } from './multi-agent-chat-store';
 import type { ChatMessage, MessageReaction, AgentPresence } from './multi-agent-chat-store';
 
@@ -78,7 +88,7 @@ describe('Multi-Agent Chat Store', () => {
         const state = useMultiAgentChatStore.getState();
         const settings = state.conversations[id]!.settings;
 
-        expect(settings.model).toBe('gpt-4');
+        expect(settings.model).toBe(canonicalOpenAIModel);
         expect(settings.provider).toBe('openai');
         expect(settings.temperature).toBe(0.7);
         expect(settings.allowMultipleAgents).toBe(true);

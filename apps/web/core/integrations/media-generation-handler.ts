@@ -8,14 +8,34 @@ import {
   googleVeoService,
   type VeoGenerationRequest as GoogleVeoRequest,
 } from './google-veo-service';
-import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  isModelLive,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 
 const VIDEO_GENERATION_MODEL_ID = getRoutingSlotModel('video_generation');
 const IMAGE_GENERATION_MODEL_ID = getRoutingSlotModel('image_generation');
 const VEO_API_MODEL_ID =
   getModelMetadataById(VIDEO_GENERATION_MODEL_ID)?.apiModelId ?? VIDEO_GENERATION_MODEL_ID;
-const IMAGE_API_MODEL_ID =
-  getModelMetadataById(IMAGE_GENERATION_MODEL_ID)?.apiModelId ?? IMAGE_GENERATION_MODEL_ID;
+
+type ImageRouteProvider = 'google' | 'openai' | 'stability';
+
+function resolveImageModel(requestedModelId?: string): ModelMetadata {
+  const model = getModelMetadataById(requestedModelId ?? IMAGE_GENERATION_MODEL_ID);
+  if (!model || model.modelType !== 'image' || !isModelLive(model)) {
+    throw new Error(`Unknown or unavailable image model: ${requestedModelId ?? 'catalog default'}`);
+  }
+  return model;
+}
+
+function resolveImageRouteProvider(model: ModelMetadata): ImageRouteProvider {
+  if (model.imageApi === 'openai') return 'openai';
+  if (model.imageApi === 'gemini' || model.imageApi === 'imagen') return 'google';
+  if (model.imageApi === 'stability') return 'stability';
+  throw new Error(`Image model ${model.id} has no executable imageApi adapter`);
+}
 
 export interface ImageGenerationRequest {
   prompt: string;
@@ -28,10 +48,8 @@ export interface ImageGenerationRequest {
   steps?: number;
   guidance?: number;
   numberOfImages?: number;
-  model?:
-    | 'imagen-4.0-generate-001'
-    | 'imagen-4.0-ultra-generate-001'
-    | 'imagen-4.0-fast-generate-001';
+  /** Canonical or provider API model id resolved through the shared catalog. */
+  model?: string;
 }
 
 export interface VideoGenerationRequest {
@@ -100,13 +118,15 @@ export class MediaGenerationService {
   /** Generate images through the unified Next.js API. */
   async generateImage(request: ImageGenerationRequest): Promise<MediaGenerationResult> {
     try {
+      const selectedModel = resolveImageModel(request.model);
+      const routeProvider = resolveImageRouteProvider(selectedModel);
       const response = await fetch('/api/media/image/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: request.prompt,
-          provider: 'openai',
-          model: IMAGE_API_MODEL_ID,
+          provider: routeProvider,
+          model: selectedModel.id,
           size: request.size || '1024x1024',
           style: request.style,
           n: request.numberOfImages ?? 1,
@@ -123,6 +143,7 @@ export class MediaGenerationService {
       const data = (await response.json()) as {
         success: boolean;
         images?: Array<{ url?: string; b64_json?: string }>;
+        model?: string;
         cost_estimate?: number;
       };
 
@@ -146,7 +167,7 @@ export class MediaGenerationService {
         prompt: request.prompt,
         metadata: {
           size: request.size || '1024x1024',
-          model: IMAGE_API_MODEL_ID,
+          model: data.model ?? selectedModel.id,
           style: request.style,
         },
         cost: data.cost_estimate || 0,

@@ -6,7 +6,7 @@ import { useAuthStore } from '../../../stores/auth';
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { SettingsPanel } from '../SettingsPanel';
 
-vi.mock('@agiworkforce/api', () => ({
+vi.mock('@agiworkforce/desktop-command-client', () => ({
   chat: {
     clearLocalDatabase: vi.fn().mockResolvedValue(undefined),
   },
@@ -115,7 +115,6 @@ describe('SettingsPanel render stability', () => {
     });
     useAppModeStore.setState({
       mode: 'local',
-      planTier: 'free',
       hasOnboarded: true,
       hasSelectedMode: true,
     });
@@ -168,6 +167,16 @@ describe('SettingsPanel render stability', () => {
     expect(screen.getByRole('button', { name: /^Memory$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Usage$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Extensions$/i })).toBeInTheDocument();
+  });
+
+  it('shows the backend-owned account plan instead of the stale app-mode copy', async () => {
+    useAuthStore.setState({ plan: 'max', planDisplayName: 'Max' });
+    useAppModeStore.setState({ mode: 'cloud' });
+
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="general" />);
+
+    expect(await screen.findByText('max', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('free', { selector: 'span' })).not.toBeInTheDocument();
   });
 
   it('keeps cloud account deletion out of Local Mode privacy settings', async () => {

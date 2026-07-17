@@ -4,12 +4,12 @@
  * Verifies the managed-only settings delta-sync loop:
  *  - Managed-cloud gate: ZERO network I/O (GET and POST) in local mode.
  *  - Fresh-device guard: a device that has never edited any cloud-safe setting
- *    does NOT push defaults (which would clobber existing server settings via LWW).
+ *    does NOT push defaults before observing a server revision.
  *    It pulls the server state instead.
  *  - Cursor: settings cursor advances independently from chat/memory/project cursors.
  *  - Dirty detection: no POST when the cloud-safe projection is unchanged since last push.
  *  - Push: POST body contains only cloud-safe namespaces; cursor advances on ack.
- *  - LWW timestamp: POST body uses settingsUpdatedAt (real edit time), NOT push time.
+ *  - Conflict key: POST body uses the last observed server revision, never client time.
  *  - Pull: pulled namespaces are applied into the live useCloudSettingsStore.
  *  - Leak guard: toCloudSettings() NEVER emits secret/BYOK keys or forbidden namespaces.
  *  - Anti-churn: after pullSettings applies data, pushSettings does NOT re-push it
@@ -88,6 +88,14 @@ function emptyChatPull() {
 
 function settingsPushAck(cursor = '1') {
   return { applied: true, cursor };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 }
 
 // ── Setup ──────────────────────────────────────────────────────────────────────
@@ -201,7 +209,7 @@ describe('settings sync — managed gate', () => {
 // ── Fresh-device guard ─────────────────────────────────────────────────────────
 // The headline scenario: a new device that has never changed any cloud-safe setting
 // must NOT push its defaults (which would clobber the user's dark theme set on web
-// via server-side LWW). It must pull and adopt the server's dark theme.
+// without a base revision). It must pull and adopt the server's dark theme.
 
 describe('settings sync — fresh device guard', () => {
   it('does NOT POST when settingsUpdatedAt is null, and pulls + applies server state', async () => {
@@ -349,17 +357,16 @@ describe('settings sync — dirty detection and push', () => {
     expect(settingsPostCalls).toHaveLength(1);
     const body = settingsPostCalls[0]![1] as {
       settings: { appearance: { theme: string } };
-      updatedAt: string;
+      baseVersion: string;
     };
     expect(body.settings.appearance.theme).toBe('dark');
-    expect(body.updatedAt).toBeDefined();
+    expect(body.baseVersion).toBe('0');
   });
 
-  it('uses the real edit timestamp (settingsUpdatedAt) as the LWW updatedAt — not push time', async () => {
-    // Set a known timestamp before calling the setter.
-    const beforeEdit = Date.now();
+  it('uses the last observed server revision even when the local edit clock is future-skewed', async () => {
+    useSettingsSyncStateStore.getState().setSettingsCursor('41');
     useCloudSettingsStore.getState().setThemeMode('dark');
-    const afterEdit = Date.now();
+    useCloudSettingsStore.setState({ settingsUpdatedAt: '2999-01-01T00:00:00.000Z' });
 
     await syncNow();
 
@@ -367,11 +374,42 @@ describe('settings sync — dirty detection and push', () => {
       (c) => (c[0] as string) === SETTINGS_SYNC_PATH,
     );
     expect(settingsPostCalls).toHaveLength(1);
-    const body = settingsPostCalls[0]![1] as { updatedAt: string };
-    const postedAt = new Date(body.updatedAt).getTime();
-    // The posted updatedAt must be the edit time — between before and after the setter call.
-    expect(postedAt).toBeGreaterThanOrEqual(beforeEdit);
-    expect(postedAt).toBeLessThanOrEqual(afterEdit + 50); // +50ms for test timing slack
+    const body = settingsPostCalls[0]![1] as { baseVersion: string; updatedAt?: string };
+    expect(body.baseVersion).toBe('41');
+    expect(body.updatedAt).toBeUndefined();
+  });
+
+  it('pulls the server winner when a future-skewed local edit has a stale baseVersion', async () => {
+    useSettingsSyncStateStore.getState().setSettingsCursor('8');
+    useCloudSettingsStore.getState().setThemeMode('light');
+    useCloudSettingsStore.setState({ settingsUpdatedAt: '2999-01-01T00:00:00.000Z' });
+    mockPost.mockImplementation(async (path: string) => {
+      if (path === SETTINGS_SYNC_PATH) return { applied: false, cursor: '9' } as never;
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+    mockGet.mockImplementation(async (path: string) => {
+      if (path.startsWith(SETTINGS_SYNC_PATH)) {
+        return {
+          settings: { appearance: { theme: 'dark' } },
+          cursor: '9',
+          hasMore: false,
+        } as never;
+      }
+      if (path.startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      if (path.startsWith('/api/projects/sync')) return emptyProjectPull() as never;
+      return emptyChatPull() as never;
+    });
+
+    await syncNow();
+
+    expect(useCloudSettingsStore.getState().themeMode).toBe('dark');
+    expect(useSettingsSyncStateStore.getState().settingsCursor).toBe('9');
+    const body = mockPost.mock.calls.find((call) => call[0] === SETTINGS_SYNC_PATH)?.[1] as {
+      baseVersion: string;
+      updatedAt?: string;
+    };
+    expect(body).toMatchObject({ baseVersion: '8' });
+    expect(body.updatedAt).toBeUndefined();
   });
 
   it('clears the dirty baseline after a successful push so a second sync does not re-post', async () => {
@@ -441,6 +479,146 @@ describe('settings sync — dirty detection and push', () => {
 // ── Pull applies into the live store ──────────────────────────────────────────
 
 describe('settings sync — pull applies into useCloudSettingsStore', () => {
+  it('rebases a local edit made while the settings GET is in flight onto the server response', async () => {
+    const pullStarted = deferred<void>();
+    const pendingPull = deferred<ReturnType<typeof emptySettingsPull>>();
+    mockGet.mockImplementation(async (path: string) => {
+      if (path.startsWith(SETTINGS_SYNC_PATH)) {
+        pullStarted.resolve();
+        return pendingPull.promise as never;
+      }
+      if (path.startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      if (path.startsWith('/api/projects/sync')) return emptyProjectPull() as never;
+      return emptyChatPull() as never;
+    });
+
+    const sync = syncNow();
+    await pullStarted.promise;
+    useCloudSettingsStore.getState().setThemeMode('light');
+    pendingPull.resolve({
+      settings: {
+        appearance: { theme: 'dark' },
+        notifications: { enabled: false },
+      },
+      cursor: '2',
+      hasMore: false,
+    });
+    await sync;
+
+    expect(useCloudSettingsStore.getState().themeMode).toBe('light');
+    expect(useCloudSettingsStore.getState().notificationsEnabled).toBe(false);
+    expect(useSettingsSyncStateStore.getState().settingsCursor).toBe('2');
+  });
+
+  it('rebases an edit made during a rejected POST instead of letting the conflict pull erase it', async () => {
+    useSettingsSyncStateStore.getState().setSettingsCursor('8');
+    useCloudSettingsStore.getState().setThemeMode('light');
+    const pushStarted = deferred<void>();
+    const pendingPush = deferred<{ applied: boolean; cursor: string }>();
+    mockPost.mockImplementation(async (path: string, body: Record<string, unknown>) => {
+      if (path === SETTINGS_SYNC_PATH) {
+        pushStarted.resolve();
+        return pendingPush.promise as never;
+      }
+      const conversations = (body?.conversations as Array<{ id: string }>) ?? [];
+      const messages = (body?.messages as Array<{ id: string }>) ?? [];
+      return {
+        applied: {
+          conversations: conversations.map(({ id }) => ({ id, server_version: '1' })),
+          messages: messages.map(({ id }) => ({ id, server_version: '1' })),
+        },
+        cursor: '1',
+      } as never;
+    });
+    mockGet.mockImplementation(async (path: string) => {
+      if (path.startsWith(SETTINGS_SYNC_PATH)) {
+        return {
+          settings: {
+            appearance: { theme: 'dark' },
+            notifications: { enabled: false },
+          },
+          cursor: '9',
+          hasMore: false,
+        } as never;
+      }
+      if (path.startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      if (path.startsWith('/api/projects/sync')) return emptyProjectPull() as never;
+      return emptyChatPull() as never;
+    });
+
+    const sync = syncNow();
+    await pushStarted.promise;
+    useCloudSettingsStore.getState().setThemeMode('system');
+    pendingPush.resolve({ applied: false, cursor: '9' });
+    await sync;
+
+    expect(useCloudSettingsStore.getState().themeMode).toBe('system');
+    expect(useCloudSettingsStore.getState().notificationsEnabled).toBe(false);
+    expect(useSettingsSyncStateStore.getState().settingsCursor).toBe('9');
+
+    jest.clearAllMocks();
+    mockPost.mockImplementation(async (path: string) => {
+      if (path === SETTINGS_SYNC_PATH) return settingsPushAck('10') as never;
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+    mockGet.mockImplementation(async (path: string) => {
+      if (path.startsWith(SETTINGS_SYNC_PATH)) return emptySettingsPull('10') as never;
+      if (path.startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      if (path.startsWith('/api/projects/sync')) return emptyProjectPull() as never;
+      return emptyChatPull() as never;
+    });
+
+    await syncNow();
+
+    const retryBody = mockPost.mock.calls.find((call) => call[0] === SETTINGS_SYNC_PATH)?.[1] as {
+      settings: { appearance: { theme: string }; notifications: { enabled: boolean } };
+      baseVersion: string;
+    };
+    expect(retryBody.baseVersion).toBe('9');
+    expect(retryBody.settings.appearance.theme).toBe('system');
+    expect(retryBody.settings.notifications.enabled).toBe(false);
+  });
+
+  it('retains server fields unknown to Mobile when a later Mobile edit is pushed', async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if (path.startsWith(SETTINGS_SYNC_PATH)) {
+        return {
+          settings: { appearance: { theme: 'dark', webOnlyDensity: 'compact' } },
+          cursor: '3',
+          hasMore: false,
+        } as never;
+      }
+      if (path.startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      if (path.startsWith('/api/projects/sync')) return emptyProjectPull() as never;
+      return emptyChatPull() as never;
+    });
+    await syncNow();
+
+    useCloudSettingsStore.getState().setAccentColor('blue');
+    jest.clearAllMocks();
+    mockGet.mockImplementation(async (path: string) => {
+      if (path.startsWith(SETTINGS_SYNC_PATH)) return emptySettingsPull('4') as never;
+      if (path.startsWith('/api/memory/sync')) return emptyMemoryPull() as never;
+      if (path.startsWith('/api/projects/sync')) return emptyProjectPull() as never;
+      return emptyChatPull() as never;
+    });
+    mockPost.mockImplementation(async (path: string) => {
+      if (path === SETTINGS_SYNC_PATH) return settingsPushAck('4') as never;
+      return { applied: { conversations: [], messages: [] }, cursor: '0' } as never;
+    });
+
+    await syncNow();
+
+    const body = mockPost.mock.calls.find((call) => call[0] === SETTINGS_SYNC_PATH)?.[1] as {
+      settings: { appearance: Record<string, unknown> };
+    };
+    expect(body.settings.appearance).toMatchObject({
+      theme: 'dark',
+      accentColor: 'blue',
+      webOnlyDensity: 'compact',
+    });
+  });
+
   it('applies pulled appearance namespace: theme maps to themeMode', async () => {
     expect(useCloudSettingsStore.getState().themeMode).toBe('system');
 

@@ -49,7 +49,7 @@ function AppModeSection() {
   const isCloud = useAppModeStore(selectIsCloud);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
-  const planTier = useAppModeStore((state) => state.planTier);
+  const planTier = useAuthStore((state) => state.plan);
 
   return (
     <div>
@@ -116,7 +116,7 @@ function AppModeSection() {
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400 flex-1">
-            Plan: <span className="font-semibold capitalize">{planTier}</span>{' '}
+            Plan: <span className="font-semibold capitalize">{planTier ?? 'Loading'}</span>{' '}
             <span className="opacity-70">($20/mo)</span>
           </p>
           <button

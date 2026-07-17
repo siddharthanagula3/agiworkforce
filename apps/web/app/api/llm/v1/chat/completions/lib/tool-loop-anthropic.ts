@@ -1,7 +1,11 @@
 import 'server-only';
 
 import type { StreamChunk, ThinkingBlock } from '@agiworkforce/types';
-import { OpenAIWireAssembler } from '@agiworkforce/llm-normalize';
+import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
+import {
+  accumulateObservedProviderUsage,
+  type ObservedProviderUsage,
+} from '@/lib/services/managed-usage-accounting-service';
 import { startProviderStream } from './adapter-factory';
 import { ADAPTER_PROVIDERS } from './adapter-providers';
 import type { ProcessedRequest } from './request-processor';
@@ -19,6 +23,8 @@ import type { ProcessedRequest } from './request-processor';
 export interface ToolLoopStepSink {
   thinkingBlocks: ThinkingBlock[];
   text: string;
+  /** Request-scoped accumulator shared across every provider step. */
+  usage?: ObservedProviderUsage;
 }
 
 /**
@@ -174,10 +180,54 @@ export function chunksToOpenAiSse(
 ): ReadableStream<Uint8Array> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });
   const encoder = new TextEncoder();
+  let sawUsage = false;
+  let usageCommitted = false;
+  const streamUsage = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    cacheWrite1hTokens: 0,
+    reasoningTokens: 0,
+  };
+
+  const commitUsage = () => {
+    if (usageCommitted || !sawUsage || !sink?.usage) return;
+    usageCommitted = true;
+    accumulateObservedProviderUsage(sink.usage, streamUsage);
+  };
+
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for await (const chunk of chunks) {
+          if (chunk.type === 'usage') {
+            sawUsage = true;
+            // Some SDKs report input and output counters in separate updates;
+            // use the greatest observed final counter per dimension, then add
+            // the step exactly once when its stream terminates.
+            streamUsage.inputTokens = Math.max(streamUsage.inputTokens, chunk.inputTokens ?? 0);
+            streamUsage.outputTokens = Math.max(
+              streamUsage.outputTokens,
+              chunk.outputTokens ?? 0,
+            );
+            streamUsage.cacheReadTokens = Math.max(
+              streamUsage.cacheReadTokens,
+              chunk.cacheReadTokens ?? 0,
+            );
+            streamUsage.cacheWriteTokens = Math.max(
+              streamUsage.cacheWriteTokens,
+              chunk.cacheWriteTokens ?? 0,
+            );
+            streamUsage.cacheWrite1hTokens = Math.max(
+              streamUsage.cacheWrite1hTokens,
+              chunk.cacheWrite1hTokens ?? 0,
+            );
+            streamUsage.reasoningTokens = Math.max(
+              streamUsage.reasoningTokens,
+              chunk.reasoningTokens ?? 0,
+            );
+          }
           const wireEvents = assembler.sseChunks(chunk);
           if (wireEvents.length === 0) continue;
           const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
@@ -192,8 +242,12 @@ export function chunksToOpenAiSse(
           sink.thinkingBlocks = assembler.canonicalThinkingBlocks();
           sink.text = assembler.canonicalText();
         }
+        commitUsage();
         controller.close();
       } catch (err) {
+        // A provider can emit billable usage before a late stream failure.
+        // Preserve any counters already observed before surfacing the error.
+        commitUsage();
         controller.error(err);
       }
     },

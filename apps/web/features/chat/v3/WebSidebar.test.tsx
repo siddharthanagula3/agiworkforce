@@ -56,4 +56,12 @@ describe('WebSidebar', () => {
     expect(onNavigateView).toHaveBeenCalledWith('projects');
     expect(onOpenAccountMenu).toHaveBeenCalled();
   });
+
+  it('exposes the fully wired managed schedules screen from work navigation', () => {
+    const onNavigateView = vi.fn();
+    render(<WebSidebar mode="work" onModeChange={vi.fn()} onNavigateView={onNavigateView} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Schedules' }));
+    expect(onNavigateView).toHaveBeenCalledWith('schedules');
+  });
 });

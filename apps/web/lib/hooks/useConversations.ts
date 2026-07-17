@@ -4,33 +4,32 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import {
+  ManagedCloudConversationListResponseSchema,
+  ManagedCloudConversationResponseSchema,
+  ManagedCloudCreateConversationResponseSchema,
+  ManagedCloudDeleteConversationResponseSchema,
+  ManagedCloudUpdateConversationRequestSchema,
+  ManagedCloudUpdateConversationResponseSchema,
+  managedCloudConversationPath,
+  normalizeManagedCloudConversation,
+} from '@agiworkforce/cloud-contracts';
 
 const CONVERSATIONS_PAGE_SIZE = 50;
 
-// API response types
-interface ApiConversation {
-  id: string;
-  title: string;
-  model?: string | null;
-  project_id?: string | null;
-  pinned?: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ConversationsListResponse {
-  conversations: ApiConversation[];
-  hasMore?: boolean;
-  nextOffset?: number;
-}
-
-interface ApiMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  created_at: string;
-  model?: string;
-  metadata?: Message['metadata'];
+function toWebConversation(
+  wire: Parameters<typeof normalizeManagedCloudConversation>[0],
+): Conversation {
+  const conversation = normalizeManagedCloudConversation(wire);
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    model: conversation.model ?? null,
+    projectId: conversation.projectId,
+    isPinned: conversation.pinned,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+  };
 }
 
 interface UseConversationsReturn {
@@ -45,7 +44,11 @@ interface UseConversationsReturn {
   // Actions
   fetchConversations: () => Promise<void>;
   loadMoreConversations: () => Promise<void>;
-  createConversation: (title?: string, model?: string) => Promise<Conversation | null>;
+  createConversation: (
+    title?: string,
+    model?: string,
+    projectId?: string | null,
+  ) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (
     id: string,
@@ -118,22 +121,12 @@ export function useConversations(): UseConversationsReturn {
         throw new Error(errorData.error?.message || 'Failed to fetch conversations');
       }
 
-      const data: ConversationsListResponse = await response.json();
-      const conversationList: Conversation[] = (data.conversations || []).map(
-        (c: ApiConversation) => ({
-          id: c.id,
-          title: c.title,
-          model: c.model ?? null,
-          projectId: c.project_id ?? null,
-          isPinned: c.pinned ?? false,
-          createdAt: c.created_at,
-          updatedAt: c.updated_at,
-        }),
-      );
+      const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
+      const conversationList: Conversation[] = data.conversations.map(toWebConversation);
 
       setConversations(conversationList);
-      nextOffsetRef.current = data.nextOffset ?? conversationList.length;
-      setHasMoreConversations(Boolean(data.hasMore));
+      nextOffsetRef.current = data.nextOffset;
+      setHasMoreConversations(data.hasMore);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch conversations');
     } finally {
@@ -163,25 +156,15 @@ export function useConversations(): UseConversationsReturn {
         throw new Error(errorData.error?.message || 'Failed to load more conversations');
       }
 
-      const data: ConversationsListResponse = await response.json();
-      const newConversations: Conversation[] = (data.conversations || []).map(
-        (c: ApiConversation) => ({
-          id: c.id,
-          title: c.title,
-          model: c.model ?? null,
-          projectId: c.project_id ?? null,
-          isPinned: c.pinned ?? false,
-          createdAt: c.created_at,
-          updatedAt: c.updated_at,
-        }),
-      );
+      const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
+      const newConversations = data.conversations.map(toWebConversation);
 
       const existingIds = new Set(conversations.map((c) => c.id));
       const deduped = newConversations.filter((c) => !existingIds.has(c.id));
       setConversations([...conversations, ...deduped]);
 
-      nextOffsetRef.current = data.nextOffset ?? offset + newConversations.length;
-      setHasMoreConversations(Boolean(data.hasMore));
+      nextOffsetRef.current = data.nextOffset;
+      setHasMoreConversations(data.hasMore);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load more conversations');
     } finally {
@@ -198,9 +181,14 @@ export function useConversations(): UseConversationsReturn {
     setError,
   ]);
 
-  // Create a new conversation
+  // Create a new conversation, optionally scoped to a project (the API stores
+  // web_conversations.project_id and echoes it back as projectId).
   const createConversation = useCallback(
-    async (title?: string, model?: string): Promise<Conversation | null> => {
+    async (
+      title?: string,
+      model?: string,
+      projectId?: string | null,
+    ): Promise<Conversation | null> => {
       setLoading(true);
       setError(null);
 
@@ -209,7 +197,11 @@ export function useConversations(): UseConversationsReturn {
         const response = await fetch('/api/chat/conversations', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ title: title || 'New conversation', model }),
+          body: JSON.stringify({
+            title: title || 'New conversation',
+            model,
+            ...(projectId ? { projectId } : {}),
+          }),
         });
 
         if (!response.ok) {
@@ -217,15 +209,8 @@ export function useConversations(): UseConversationsReturn {
           throw new Error(errorData.error?.message || 'Failed to create conversation');
         }
 
-        const data = await response.json();
-        const conversation: Conversation = {
-          id: data.conversation.id,
-          title: data.conversation.title,
-          model: data.conversation.model ?? null,
-          projectId: data.conversation.project_id ?? null,
-          createdAt: data.conversation.created_at,
-          updatedAt: data.conversation.updated_at,
-        };
+        const data = ManagedCloudCreateConversationResponseSchema.parse(await response.json());
+        const conversation = toWebConversation(data.conversation);
 
         addConversation(conversation);
         setActiveConversation(conversation.id);
@@ -250,33 +235,31 @@ export function useConversations(): UseConversationsReturn {
 
       try {
         const headers = await getAuthHeaders();
-        const response = await fetch(`/api/chat/conversations/${id}`, { headers });
+        const response = await fetch(managedCloudConversationPath(id), { headers });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error?.message || 'Failed to load conversation');
         }
 
-        const data = await response.json();
-        const loadedConversation = data.conversation as ApiConversation | undefined;
-        if (loadedConversation) {
-          updateConversationInStore(id, {
-            title: loadedConversation.title,
-            model: loadedConversation.model ?? null,
-            projectId: loadedConversation.project_id ?? null,
-            isPinned: loadedConversation.pinned ?? false,
-            updatedAt: loadedConversation.updated_at,
-          });
-        }
+        const data = ManagedCloudConversationResponseSchema.parse(await response.json());
+        const loadedConversation = toWebConversation(data.conversation);
+        updateConversationInStore(id, {
+          title: loadedConversation.title,
+          model: loadedConversation.model,
+          projectId: loadedConversation.projectId,
+          isPinned: loadedConversation.isPinned,
+          updatedAt: loadedConversation.updatedAt,
+        });
 
         // Convert API messages to store format
-        const messages: Message[] = (data.messages || []).map((m: ApiMessage) => ({
+        const messages: Message[] = data.messages.map((m) => ({
           id: m.id,
           role: m.role,
           content: m.content,
           createdAt: m.created_at,
-          model: m.model,
-          metadata: m.metadata,
+          model: m.model ?? undefined,
+          metadata: (m.metadata ?? undefined) as Message['metadata'],
         }));
 
         // Atomically set active conversation and messages to avoid race conditions
@@ -306,10 +289,10 @@ export function useConversations(): UseConversationsReturn {
     ): Promise<boolean> => {
       try {
         const headers = await addCsrfHeaders(await getAuthHeaders());
-        const response = await fetch(`/api/chat/conversations/${id}`, {
+        const response = await fetch(managedCloudConversationPath(id), {
           method: 'PUT',
           headers,
-          body: JSON.stringify(updates),
+          body: JSON.stringify(ManagedCloudUpdateConversationRequestSchema.parse(updates)),
         });
 
         if (!response.ok) {
@@ -317,9 +300,9 @@ export function useConversations(): UseConversationsReturn {
           throw new Error(errorData.error?.message || 'Failed to update conversation');
         }
 
-        const data = await response.json();
+        const data = ManagedCloudUpdateConversationResponseSchema.parse(await response.json());
         updateConversationInStore(id, {
-          title: data.conversation.title,
+          title: data.conversation.title ?? 'Untitled',
           model: data.conversation.model ?? undefined,
           projectId: data.conversation.project_id ?? null,
           isPinned: data.conversation.pinned ?? false,
@@ -339,7 +322,7 @@ export function useConversations(): UseConversationsReturn {
     async (id: string): Promise<boolean> => {
       try {
         const headers = await addCsrfHeaders(await getAuthHeaders());
-        const response = await fetch(`/api/chat/conversations/${id}`, {
+        const response = await fetch(managedCloudConversationPath(id), {
           method: 'DELETE',
           headers,
         });
@@ -348,6 +331,8 @@ export function useConversations(): UseConversationsReturn {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error?.message || 'Failed to delete conversation');
         }
+
+        ManagedCloudDeleteConversationResponseSchema.parse(await response.json());
 
         deleteConversationFromStore(id);
         return true;

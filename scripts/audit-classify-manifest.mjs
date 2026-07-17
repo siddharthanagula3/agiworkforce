@@ -33,12 +33,12 @@ function categorize(p) {
   }
   // 3: LLM provider integrations
   if (
-    f.includes('packages/providers/') ||
-    f.includes('packages/llm-normalize/') ||
-    f.includes('packages/llm-runtime/') ||
-    f.includes('packages/local-llm/') ||
-    f.includes('packages/routing/') ||
-    f.includes('packages/unified-chat/') ||
+    f.includes('packages/ai/providers/') ||
+    f.includes('packages/ai/provider-protocol/') ||
+    f.includes('packages/ai/provider-runtime/') ||
+    f.includes('packages/platform/local-llm/') ||
+    f.includes('packages/ai/routing/') ||
+    f.includes('packages/ui/unified-chat/') ||
     /(openai|anthropic|ollama|deepseek|openrouter|groq|mistral|bedrock|lmstudio|perplexity|gemini)/.test(
       f,
     ) ||
@@ -62,10 +62,10 @@ function categorize(p) {
   if (/(\/db\/|\/neon\/|migration|schema|drizzle|\/data-layer\/)/.test(f)) return 6;
   // 7: shared contracts & types
   if (
-    f.includes('packages/types/') ||
-    f.includes('packages/api/') ||
+    f.includes('packages/contracts/types/') ||
+    f.includes('packages/client/desktop-command-client/') ||
     f.includes('agiworkforce-protocol') ||
-    f.includes('packages/compliance/') ||
+    f.includes('packages/contracts/compliance/') ||
     f.includes('packages/stores/') ||
     f.includes('packages/services/') ||
     f.includes('packages/')

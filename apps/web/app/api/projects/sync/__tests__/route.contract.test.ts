@@ -3,7 +3,7 @@
  *
  * Asserts the live route handlers' JSON output parses against the shared
  * `ProjectsSyncPullResponseSchema` / `ProjectsSyncPushResponseSchema` from
- * @agiworkforce/services — the schemas mobile's cloudSyncEngine validates
+ * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
  * pulled project pages with.
  */
 
@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   ProjectsSyncPullResponseSchema,
   ProjectsSyncPushResponseSchema,
-} from '@agiworkforce/services';
+} from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
@@ -88,20 +88,40 @@ describe('GET /api/projects/sync — shared cloud contract', () => {
     );
     expect(ProjectsSyncPullResponseSchema.safeParse(await res.json()).success).toBe(true);
   });
+
+  it('rejects a cursor outside the PostgreSQL bigint range before querying', async () => {
+    const res = await GET(
+      new Request('http://localhost:3000/api/projects/sync?since=9999999999999999999', {
+        method: 'GET',
+      }) as never,
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/projects/sync — shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('push ack parses against ProjectsSyncPushResponseSchema', async () => {
-    mockQuery.mockResolvedValueOnce([{ id: PROJ_ID, server_version: '5' }]);
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '5', current: null },
+    ]);
 
     const res = await POST(
       new Request('http://localhost:3000/api/projects/sync', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          projects: [{ id: PROJ_ID, name: 'Mobile launch', updatedAt: '2026-07-01T00:00:00.000Z' }],
+          projects: [
+            {
+              id: PROJ_ID,
+              name: 'Mobile launch',
+              baseVersion: '0',
+              updatedAt: '2999-01-01T00:00:00.000Z',
+            },
+          ],
         }),
       }) as never,
     );
@@ -110,6 +130,77 @@ describe('POST /api/projects/sync — shared cloud contract', () => {
     const parsed = ProjectsSyncPushResponseSchema.safeParse(await res.json());
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.cursor).toBe('5');
+    if (parsed.success) {
+      expect(parsed.data.cursor).toBe('5');
+      expect(parsed.data.conflicts).toEqual([]);
+    }
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('existing.server_version = incoming.base_version');
+    expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
+    const pushed = JSON.parse(String(params[1]));
+    expect(pushed[0].baseVersion).toBe('0');
+    expect(pushed[0].updatedAt).toBeUndefined();
+  });
+
+  it('returns the current server row when a stale baseVersion loses CAS', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'conflict', id: PROJ_ID, server_version: null, current: projectRow },
+    ]);
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [{ id: PROJ_ID, name: 'Stale edit', baseVersion: '2' }],
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      applied: [],
+      conflicts: [{ id: PROJ_ID, current: projectRow }],
+      cursor: '3',
+    });
+  });
+
+  it('executes a mixed compare-and-swap batch in one database round trip', async () => {
+    const secondId = '018f6f2a-0000-7000-8000-000000000022';
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '5', current: null },
+      {
+        kind: 'conflict',
+        id: secondId,
+        server_version: null,
+        current: { ...projectRow, id: secondId },
+      },
+    ]);
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [
+            { id: PROJ_ID, name: 'Applied', baseVersion: '3' },
+            { id: secondId, name: 'Stale', baseVersion: '2' },
+          ],
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const body = await res.json();
+    expect(body.applied).toEqual([{ id: PROJ_ID, server_version: '5' }]);
+    expect(body.conflicts).toEqual([{ id: secondId, current: { ...projectRow, id: secondId } }]);
+    expect(body.cursor).toBe('5');
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('jsonb_array_elements($2::jsonb)');
+    expect(params[0]).toBe('user_contract_1');
+    expect(JSON.parse(String(params[1]))).toHaveLength(2);
   });
 });

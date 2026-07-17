@@ -472,16 +472,15 @@ describe('handleMessage — CONNECTION_STATUS_CHANGED', () => {
     expect(automationState.connectionStatus).toBe('disconnected');
   });
 
-  it('syncs page context when connected', async () => {
+  it('does not sync page context merely because the native host connected', async () => {
     chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
     await dispatchMessage({ type: 'CONNECTION_STATUS_CHANGED', connected: true });
-    // sendMessage should have been called for SYNC_PAGE_CONTEXT
     const calls = (chromeMock.runtime.sendMessage as ReturnType<typeof vi.fn>).mock.calls;
     const syncCall = calls.find((c: unknown[]) => {
       const msg = c[0] as Record<string, unknown>;
       return msg.type === 'SYNC_PAGE_CONTEXT';
     });
-    expect(syncCall).toBeDefined();
+    expect(syncCall).toBeUndefined();
   });
 });
 

@@ -1,7 +1,7 @@
 import { getPlanPriceUsd, getPlanPriceInr, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 // 2026-07-02: 'hobby' (target $5/mo) and 'pro_plus' were removed from the
-// shared catalog (packages/types/src/billing-catalog.ts, commit 343457c8d,
+// shared catalog (packages/contracts/types/src/billing-catalog.ts, commit 343457c8d,
 // "no users, fresh start"). This file wasn't updated at the time, so it kept
 // referencing both — silently falling back to $0 via normalizeBillingPlanTier
 // (getPlanPriceUsd('hobby', ...) → unknown tier → 'free' → $0), while still

@@ -1,4 +1,4 @@
-import { dotfiles } from '@agiworkforce/api';
+import { dotfiles } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {

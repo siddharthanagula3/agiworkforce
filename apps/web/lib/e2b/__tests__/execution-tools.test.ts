@@ -13,7 +13,6 @@ import {
   isExecutionTool,
   e2bExecutionToolDefs,
   resolveCodeExecutionTools,
-  modelSupportsCodeExecution,
   routeExecutionTool,
   providerRoutesToE2B,
 } from '../execution-tools';
@@ -149,17 +148,6 @@ describe('resolveCodeExecutionTools — native-always / fail-closed', () => {
     for (const provider of ['openai', 'anthropic', 'google', 'deepseek', 'kimi', 'glm']) {
       const emitted = JSON.stringify(resolveCodeExecutionTools(provider));
       for (const name of e2bToolNames) expect(emitted).not.toContain(name);
-    }
-  });
-});
-
-describe('modelSupportsCodeExecution', () => {
-  it('only providers with a native interpreter can run code today', () => {
-    for (const p of ['openai', 'anthropic', 'google']) {
-      expect(modelSupportsCodeExecution(p)).toBe(true);
-    }
-    for (const p of ['deepseek', 'kimi', 'glm', 'minimax']) {
-      expect(modelSupportsCodeExecution(p)).toBe(false);
     }
   });
 });

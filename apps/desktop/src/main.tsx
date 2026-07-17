@@ -33,7 +33,7 @@ function AppToasters() {
       <Toaster />
       {/*
         Second, independent toast surface: several modules (App.tsx,
-        packages/unified-chat's AttachmentMenu, apps/desktop's
+        packages/ui/unified-chat's AttachmentMenu, apps/desktop's
         useFolderSelection, etc.) call `sonner`'s `toast.*` API directly,
         but sonner's own <Toaster/> was never mounted anywhere in this
         app — those calls previously fired into sonner's global store and

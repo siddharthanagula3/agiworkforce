@@ -8,14 +8,31 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 PROFILE="${1:-production}"
+REQUIRE_SUBMIT="${2:-1}"
+PLATFORM="${3:-all}"
+REQUIRE_CLEAN="${4:-1}"
 
-log "preflight for profile: ${PROFILE}"
+case "${REQUIRE_SUBMIT}" in
+  0|1) ;;
+  *) die "require-submit must be 0 or 1; got ${REQUIRE_SUBMIT}" ;;
+esac
+case "${REQUIRE_CLEAN}" in
+  0|1) ;;
+  *) die "require-clean must be 0 or 1; got ${REQUIRE_CLEAN}" ;;
+esac
+case "${PLATFORM}" in
+  ios|android|all) ;;
+  *) die "platform must be ios, android, or all; got ${PLATFORM}" ;;
+esac
+
+log "preflight for profile=${PROFILE} platform=${PLATFORM} submit=${REQUIRE_SUBMIT}"
 
 # --- Toolchain ------------------------------------------------------------
 
 require_cmd eas
 require_cmd git
 require_cmd jq
+require_cmd node
 
 EAS_VERSION="$(eas --version 2>/dev/null | head -n1 || true)"
 log "eas-cli: ${EAS_VERSION}"
@@ -39,39 +56,42 @@ require_file "${MOBILE_DIR}/eas.json"
 require_file "${MOBILE_DIR}/app.config.js"
 log_ok "eas.json + app.config.js present"
 
+EAS_PROJECT_ID="$({
+  cd "${MOBILE_DIR}"
+  node -e 'const id = require("./app.config.js").expo?.extra?.eas?.projectId; process.stdout.write(typeof id === "string" ? id : "")'
+})"
+if [[ ! "${EAS_PROJECT_ID}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; then
+  die "EAS project is not linked: run 'cd apps/mobile && eas init', then commit the generated expo.extra.eas.projectId UUID"
+fi
+log_ok "EAS project linked: ${EAS_PROJECT_ID}"
+
 # Confirm the profile exists.
 if ! jq -e ".build.\"${PROFILE}\"" "${MOBILE_DIR}/eas.json" >/dev/null; then
   die "profile '${PROFILE}' not defined in eas.json"
 fi
 log_ok "profile '${PROFILE}' defined in eas.json"
 
-# --- Submit credentials (production / preview only) ----------------------
+# --- Submit credentials (store beta / production only) ------------------
 
-if [[ "${PROFILE}" == "production" || "${PROFILE}" == "preview" ]]; then
-  log "checking submit credentials for App Store + Play uploads..."
+if [[ "${REQUIRE_SUBMIT}" == "1" && ("${PROFILE}" == "production" || "${PROFILE}" == "beta") ]]; then
+  log "checking ${PLATFORM} submit credentials..."
 
-  IOS_OK=1
-  for var in APPLE_ID ASC_APP_ID ASC_API_KEY_ID ASC_API_KEY_ISSUER_ID; do
-    if [[ -z "${!var:-}" ]]; then
-      log_warn "env ${var} not set — iOS submit will fail"
-      IOS_OK=0
+  if [[ "${PLATFORM}" == "ios" || "${PLATFORM}" == "all" ]]; then
+    ASC_APP_ID="$(jq -r '.submit.production.ios.ascAppId // empty' "${MOBILE_DIR}/eas.json")"
+    if [[ ! "${ASC_APP_ID}" =~ ^[0-9]+$ ]]; then
+      die "iOS store submission requires the non-secret numeric ascAppId in eas.json submit.production.ios"
     fi
-  done
-  if [[ ! -f "${SECRETS_DIR}/asc-api-key.p8" ]]; then
-    log_warn "missing ${SECRETS_DIR}/asc-api-key.p8 — iOS submit will fail"
-    IOS_OK=0
-  fi
-  [[ "${IOS_OK}" == "1" ]] && log_ok "iOS submit credentials present"
 
-  ANDROID_OK=1
-  if [[ ! -f "${SECRETS_DIR}/google-play-service-account.json" ]]; then
-    log_warn "missing ${SECRETS_DIR}/google-play-service-account.json — Android submit will fail"
-    ANDROID_OK=0
+    for var in ASC_API_KEY_ID ASC_API_KEY_ISSUER_ID; do
+      require_env "${var}"
+    done
+    require_file "${SECRETS_DIR}/asc-api-key.p8"
+    log_ok "iOS submit destination and credentials present"
   fi
-  [[ "${ANDROID_OK}" == "1" ]] && log_ok "Android submit credentials present"
 
-  if [[ "${IOS_OK}" == "0" || "${ANDROID_OK}" == "0" ]]; then
-    log_warn "submit credentials incomplete — build will still work, but ':submit' steps will fail until the founder action items in scripts/release/README.md are done"
+  if [[ "${PLATFORM}" == "android" || "${PLATFORM}" == "all" ]]; then
+    require_file "${SECRETS_DIR}/google-play-service-account.json"
+    log_ok "Android submit credentials present"
   fi
 fi
 
@@ -79,7 +99,7 @@ fi
 # Fail if any SPKI hashes in lib/pinning.ts are still placeholders.
 # Real pin provisioning is an ops task — see the runbook in lib/pinning.ts.
 
-if [[ "${PROFILE}" == "production" || "${PROFILE}" == "preview" ]]; then
+if [[ "${PROFILE}" == "production" || "${PROFILE}" == "beta" || "${PROFILE}" == "preview" ]]; then
   log "checking TLS SPKI pins..."
   if EXPO_PUBLIC_APP_ENV=production node "${MOBILE_DIR}/scripts/check-tls-pins.mjs"; then
     log_ok "TLS pins provisioned"
@@ -90,7 +110,7 @@ fi
 
 # --- Git ------------------------------------------------------------------
 
-if [[ "${PROFILE}" == "production" ]]; then
+if [[ "${REQUIRE_CLEAN}" == "1" ]]; then
   require_clean_git
   log_ok "git working tree is clean"
 fi

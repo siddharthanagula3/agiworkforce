@@ -108,7 +108,12 @@ describe('completions stream response timeout', () => {
 
     const { callbacks } = makeCallbacks();
     await streamChat(
-      { model: 'gpt-5.4-mini', messages: [{ role: 'user', content: 'hi' }], stream: true },
+      {
+        model: 'gpt-5.4-mini',
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000021',
+      },
       callbacks,
     );
 
@@ -157,7 +162,15 @@ describe('completions stream response timeout', () => {
     });
 
     const { deltas, callbacks } = makeCallbacks();
-    await streamChat({ model: 'gpt-5.4-mini', messages: [], stream: true }, callbacks);
+    await streamChat(
+      {
+        model: 'gpt-5.4-mini',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000022',
+      },
+      callbacks,
+    );
 
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(deltas.join('')).toBe('hello world');
@@ -185,7 +198,15 @@ describe('completions stream response timeout', () => {
     });
 
     const { deltas, callbacks } = makeCallbacks();
-    await streamChat({ model: 'gpt-5.4-mini', messages: [], stream: true }, callbacks);
+    await streamChat(
+      {
+        model: 'gpt-5.4-mini',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000023',
+      },
+      callbacks,
+    );
 
     expect(deltas.join('')).toBe('partial');
     expect(callbacks.onError).toHaveBeenCalledTimes(1);

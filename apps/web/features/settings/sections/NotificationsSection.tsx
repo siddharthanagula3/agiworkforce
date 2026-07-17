@@ -19,14 +19,16 @@ import { Switch } from '@agiworkforce/ui';
 
 const NAMESPACE = 'notifications';
 
-export type NotifKey =
-  | 'browserReplyReady'
-  | 'browserAgentDone'
-  | 'emailWeeklyDigest'
-  | 'emailProductUpdates'
-  | 'emailSecurityAlerts'
-  | 'mobilePushReplyReady'
-  | 'mobilePushAgentDone';
+// The former 'Email' and 'Mobile push' groups (emailSecurityAlerts,
+// emailWeeklyDigest, emailProductUpdates, mobilePushReplyReady,
+// mobilePushAgentDone) and 'browserAgentDone' are removed: none had a
+// backend consumer anywhere in the repo (no email sender, no push
+// dispatcher, and no agent-task-finished listener exists at all) — each
+// persisted a preference that nothing ever read, so toggling them changed
+// nothing. Re-add a group once its underlying send path actually exists.
+// 'browserReplyReady' is the one real, wired notification in this file
+// (consumed in WebChatPage.tsx) and is the only item left below.
+export type NotifKey = 'browserReplyReady';
 
 interface NotifSpec {
   id: NotifKey;
@@ -56,64 +58,6 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
         description:
           'Browser notification when a long-running response finishes while the tab is in the background.',
         defaultValue: true,
-      },
-      {
-        id: 'browserAgentDone',
-        label: 'Agent task finished',
-        description:
-          'Notify when a long-horizon agent task (AGI Code mode, AGI Work mode) finishes.',
-        defaultValue: true,
-      },
-    ],
-  },
-  {
-    heading: 'Email',
-    subheading: 'Sent to your account email address when hosted cloud is active.',
-    managedOnly: true,
-    items: [
-      {
-        id: 'emailSecurityAlerts',
-        label: 'Security alerts',
-        description:
-          'New sign-in from an unrecognized device or location. Always enabled for security.',
-        defaultValue: true,
-        managedOnly: true,
-      },
-      {
-        id: 'emailWeeklyDigest',
-        label: 'Weekly digest',
-        description: 'Saturday recap of your conversations and routing decisions.',
-        defaultValue: false,
-        managedOnly: true,
-      },
-      {
-        id: 'emailProductUpdates',
-        label: 'Product updates',
-        description:
-          'Get an email when a major model or feature ships. Low-volume; you can unsubscribe anytime.',
-        defaultValue: false,
-        managedOnly: true,
-      },
-    ],
-  },
-  {
-    heading: 'Mobile push',
-    subheading: 'Requires the AGI mobile app and hosted cloud.',
-    managedOnly: true,
-    items: [
-      {
-        id: 'mobilePushReplyReady',
-        label: 'Reply ready',
-        description: 'Push notification on your phone when a response finishes.',
-        defaultValue: false,
-        managedOnly: true,
-      },
-      {
-        id: 'mobilePushAgentDone',
-        label: 'Agent task finished',
-        description: 'Push notification when a background agent task completes.',
-        defaultValue: false,
-        managedOnly: true,
       },
     ],
   },

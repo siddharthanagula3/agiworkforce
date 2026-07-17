@@ -1,98 +1,94 @@
 const streamFromProviderMock = jest.fn();
-const secureFetchMock = jest.fn();
+const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
 
-async function* successfulProviderStream() {
-  yield { type: 'text-delta', delta: 'ok' };
-  yield { type: 'stop', reason: 'end_turn' };
-}
+const SSE = ['data: {"choices":[{"delta":{"content":"ok"}}]}', '', 'data: [DONE]', ''].join('\n');
 
 async function loadStreamingService() {
   jest.resetModules();
+  // A stale build-time flag must not route a paid mobile turn around the
+  // managed chat reservation/finalization contract.
   process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM = '1';
 
-  streamFromProviderMock.mockReset().mockImplementation(successfulProviderStream);
-  secureFetchMock.mockReset();
+  streamFromProviderMock.mockReset();
+  guardedFetchMock.mockReset().mockResolvedValue({
+    ok: true,
+    status: 200,
+    body: null,
+    text: async () => SSE,
+  } as unknown as Response);
   getAuthTokenMock.mockReset().mockResolvedValue('cloud-token');
 
   jest.doMock('@/lib/constants', () => ({
     API_URL: 'https://api.agi.test',
-    TIMEOUTS: { STREAMING: 60_000 },
+    TIMEOUTS: { STREAMING: 60_000, STREAM_STALL: 45_000 },
   }));
-
   jest.doMock('@/lib/providerStreamClient', () => ({
     streamFromProvider: streamFromProviderMock,
   }));
-
+  jest.doMock('@/lib/egressGuard', () => ({
+    guardedFetch: guardedFetchMock,
+  }));
   jest.doMock('../services/authSession', () => ({
     getAuthToken: getAuthTokenMock,
   }));
-
-  jest.doMock('../services/secureFetch', () => ({
-    secureFetch: secureFetchMock,
-  }));
-
   jest.doMock('../services/llmGate', () => ({
     ensureLlmGateOpen: jest.fn(),
   }));
-
   jest.doMock('../services/remoteChatGate', () => ({
     assertRemoteChatAllowed: jest.fn(),
   }));
-
   jest.doMock('@/src/features/waitlist/store', () => ({
-    useWaitlistStore: {
-      getState: () => ({ cloudUnlocked: true }),
-    },
+    useWaitlistStore: { getState: () => ({ cloudUnlocked: true }) },
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../services/streaming') as typeof import('../services/streaming');
 }
 
-describe('provider stream routing', () => {
+describe('managed mobile stream routing', () => {
   afterEach(() => {
     delete process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM;
     jest.dontMock('@/lib/constants');
     jest.dontMock('@/lib/providerStreamClient');
+    jest.dontMock('@/lib/egressGuard');
     jest.dontMock('../services/authSession');
-    jest.dontMock('../services/secureFetch');
     jest.dontMock('../services/llmGate');
     jest.dontMock('../services/remoteChatGate');
     jest.dontMock('@/src/features/waitlist/store');
   });
 
-  it.each([
-    ['grok-4.3', 'xai'],
-    ['deepseek-v4-flash', 'deepseek'],
-    ['qwen-max', 'qwen'],
-    ['kimi-k2.6', 'moonshot'],
-  ])('routes %s through the managed provider stream for %s', async (model, providerId) => {
+  it('uses the billed chat contract even when the retired provider-stream flag is set', async () => {
     const { streamChat } = await loadStreamingService();
     const callbacks = {
       onDelta: jest.fn(),
       onDone: jest.fn(),
       onError: jest.fn(),
     };
+    const operationId = '0190a000-0000-7000-8000-000000000031';
 
     await streamChat(
       {
-        model,
+        model: 'grok-4.3',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
+        operationId,
       },
       callbacks,
     );
 
-    expect(streamFromProviderMock).toHaveBeenCalledWith(
+    expect(streamFromProviderMock).not.toHaveBeenCalled();
+    expect(guardedFetchMock).toHaveBeenCalledWith(
+      'https://api.agi.test/api/llm/v1/chat/completions',
       expect.objectContaining({
-        gatewayUrl: 'https://api.agi.test',
-        providerId,
-        authToken: 'cloud-token',
-        request: expect.objectContaining({ model }),
+        method: 'POST',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer cloud-token',
+          'Idempotency-Key': `agi.chat.mobile.send.${operationId}`,
+        }),
       }),
+      { stream: true },
     );
-    expect(secureFetchMock).not.toHaveBeenCalled();
     expect(callbacks.onDone).toHaveBeenCalledTimes(1);
     expect(callbacks.onError).not.toHaveBeenCalled();
   });

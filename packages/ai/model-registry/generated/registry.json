@@ -1,0 +1,3902 @@
+{
+  "$schema": "../schema/registry.schema.json",
+  "schemaVersion": 1,
+  "models": {
+    "gpt-5.5": {
+      "identity": {
+        "key": "gpt-5.5",
+        "displayName": "GPT-5.5",
+        "provider": "openai",
+        "providerModelId": "gpt-5.5",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-5.6-sol": {
+      "identity": {
+        "key": "gpt-5.6-sol",
+        "displayName": "GPT-5.6 Sol",
+        "provider": "openai",
+        "providerModelId": "gpt-5.6-sol",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "July 9, 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-5.6-terra": {
+      "identity": {
+        "key": "gpt-5.6-terra",
+        "displayName": "GPT-5.6 Terra",
+        "provider": "openai",
+        "providerModelId": "gpt-5.6-terra",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "July 9, 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-5.6-luna": {
+      "identity": {
+        "key": "gpt-5.6-luna",
+        "displayName": "GPT-5.6 Luna",
+        "provider": "openai",
+        "providerModelId": "gpt-5.6-luna",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "July 9, 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "claude-fable-5": {
+      "identity": {
+        "key": "claude-fable-5",
+        "displayName": "Claude Fable 5",
+        "provider": "anthropic",
+        "providerModelId": "claude-fable-5",
+        "kind": "reasoning",
+        "familyPartner": "claude-sonnet-5"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "June 9, 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "claude-opus-4.8": {
+      "identity": {
+        "key": "claude-opus-4.8",
+        "displayName": "Claude 4.8 Opus",
+        "provider": "anthropic",
+        "providerModelId": "claude-opus-4-8",
+        "kind": "reasoning",
+        "familyPartner": "claude-sonnet-5"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "May 28, 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "claude-sonnet-5": {
+      "identity": {
+        "key": "claude-sonnet-5",
+        "displayName": "Claude Sonnet 5",
+        "provider": "anthropic",
+        "providerModelId": "claude-sonnet-5",
+        "kind": "code",
+        "familyPartner": "claude-opus-4.8"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "June 30, 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "claude-sonnet-4.6": {
+      "identity": {
+        "key": "claude-sonnet-4.6",
+        "displayName": "Claude 4.6 Sonnet",
+        "provider": "anthropic",
+        "providerModelId": "claude-sonnet-4-6",
+        "kind": "code",
+        "familyPartner": "claude-opus-4.8"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "February 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "claude-haiku-4.5": {
+      "identity": {
+        "key": "claude-haiku-4.5",
+        "displayName": "Claude 4.5 Haiku",
+        "provider": "anthropic",
+        "providerModelId": "claude-haiku-4-5",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "October 15, 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gemini-embedding-2": {
+      "identity": {
+        "key": "gemini-embedding-2",
+        "displayName": "Gemini Embedding 2",
+        "provider": "google",
+        "providerModelId": "gemini-embedding-2",
+        "kind": "embedding"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gemini-3.1-pro-preview": {
+      "identity": {
+        "key": "gemini-3.1-pro-preview",
+        "displayName": "Gemini 3.1 Pro",
+        "provider": "google",
+        "providerModelId": "gemini-3.1-pro-preview",
+        "kind": "reasoning",
+        "familyPartner": "gemini-3.1-flash-lite"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "February 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gemini-3.1-flash-lite": {
+      "identity": {
+        "key": "gemini-3.1-flash-lite",
+        "displayName": "Gemini 3.1 Flash Lite",
+        "provider": "google",
+        "providerModelId": "gemini-3.1-flash-lite",
+        "kind": "chat",
+        "familyPartner": "gemini-3.1-pro-preview"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "March 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gemini-3.1-flash-image": {
+      "identity": {
+        "key": "gemini-3.1-flash-image",
+        "displayName": "Gemini 3.1 Flash Image",
+        "provider": "google",
+        "providerModelId": "gemini-3.1-flash-image",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "March 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "grok-4.3": {
+      "identity": {
+        "key": "grok-4.3",
+        "displayName": "Grok 4.3",
+        "provider": "xai",
+        "providerModelId": "grok-4.3",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "deepseek-v4-flash": {
+      "identity": {
+        "key": "deepseek-v4-flash",
+        "displayName": "DeepSeek V4 Flash",
+        "provider": "deepseek",
+        "providerModelId": "deepseek-v4-flash",
+        "kind": "code",
+        "familyPartner": "deepseek-v4-pro"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "deepseek-v4-pro": {
+      "identity": {
+        "key": "deepseek-v4-pro",
+        "displayName": "DeepSeek V4 Pro",
+        "provider": "deepseek",
+        "providerModelId": "deepseek-v4-pro",
+        "kind": "reasoning",
+        "familyPartner": "deepseek-v4-flash"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "qwen-max": {
+      "identity": {
+        "key": "qwen-max",
+        "displayName": "Qwen Max",
+        "provider": "qwen",
+        "providerModelId": "qwen3-max",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "qwen-flash": {
+      "identity": {
+        "key": "qwen-flash",
+        "displayName": "Qwen Flash",
+        "provider": "qwen",
+        "providerModelId": "qwen3.5-flash",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "November 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "qwen-turbo": {
+      "identity": {
+        "key": "qwen-turbo",
+        "displayName": "Qwen Turbo",
+        "provider": "qwen",
+        "providerModelId": "qwen-turbo",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "deprecated",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": "2026-06-20",
+        "deprecated": true
+      },
+      "evidenceRefs": []
+    },
+    "qwen-coder-flash": {
+      "identity": {
+        "key": "qwen-coder-flash",
+        "displayName": "Qwen Coder Flash",
+        "provider": "qwen",
+        "providerModelId": "qwen3-coder-flash",
+        "kind": "code"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "qwen-coder-plus": {
+      "identity": {
+        "key": "qwen-coder-plus",
+        "displayName": "Qwen Coder Plus",
+        "provider": "qwen",
+        "providerModelId": "qwen3-coder-plus",
+        "kind": "code"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "kimi-k2.6": {
+      "identity": {
+        "key": "kimi-k2.6",
+        "displayName": "Kimi K2.6",
+        "provider": "moonshot",
+        "providerModelId": "kimi-k2.6",
+        "kind": "multimodal"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "mistral-large-3": {
+      "identity": {
+        "key": "mistral-large-3",
+        "displayName": "Mistral Large 3",
+        "provider": "mistral",
+        "providerModelId": "mistral-large-2512",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "December 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "mistral-medium-3": {
+      "identity": {
+        "key": "mistral-medium-3",
+        "displayName": "Mistral Medium 3.1",
+        "provider": "mistral",
+        "providerModelId": "mistral-medium-2508",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "May 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "mistral-small-3": {
+      "identity": {
+        "key": "mistral-small-3",
+        "displayName": "Mistral Small 4",
+        "provider": "mistral",
+        "providerModelId": "mistral-small-2603",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "codestral-2": {
+      "identity": {
+        "key": "codestral-2",
+        "displayName": "Codestral 2",
+        "provider": "mistral",
+        "providerModelId": "codestral-2508",
+        "kind": "code"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "pixtral-large": {
+      "identity": {
+        "key": "pixtral-large",
+        "displayName": "Pixtral Large",
+        "provider": "mistral",
+        "providerModelId": "pixtral-large-latest",
+        "kind": "multimodal"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "November 2024",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "sonar": {
+      "identity": {
+        "key": "sonar",
+        "displayName": "Sonar",
+        "provider": "perplexity",
+        "providerModelId": "sonar",
+        "kind": "search"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "sonar-reasoning": {
+      "identity": {
+        "key": "sonar-reasoning",
+        "displayName": "Sonar Reasoning",
+        "provider": "perplexity",
+        "providerModelId": "sonar-reasoning",
+        "kind": "search"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "sonar-reasoning-pro": {
+      "identity": {
+        "key": "sonar-reasoning-pro",
+        "displayName": "Sonar Reasoning Pro",
+        "provider": "perplexity",
+        "providerModelId": "sonar-reasoning-pro",
+        "kind": "search"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "sonar-pro": {
+      "identity": {
+        "key": "sonar-pro",
+        "displayName": "Sonar Pro",
+        "provider": "perplexity",
+        "providerModelId": "sonar-pro",
+        "kind": "search"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "sonar-deep-research": {
+      "identity": {
+        "key": "sonar-deep-research",
+        "displayName": "Sonar Deep Research",
+        "provider": "perplexity",
+        "providerModelId": "sonar-deep-research",
+        "kind": "search"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "imagen-4": {
+      "identity": {
+        "key": "imagen-4",
+        "displayName": "Imagen 4",
+        "provider": "google",
+        "providerModelId": "imagen-4.0-generate-001",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": "2026-08-17",
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "imagen-4-fast": {
+      "identity": {
+        "key": "imagen-4-fast",
+        "displayName": "Imagen 4 Fast",
+        "provider": "google",
+        "providerModelId": "imagen-4.0-fast-generate-001",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2026",
+        "deprecationDate": "2026-08-17",
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "runway-gen-4": {
+      "identity": {
+        "key": "runway-gen-4",
+        "displayName": "Runway Gen-4",
+        "provider": "runway",
+        "providerModelId": "gen4_turbo",
+        "kind": "video"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "imagen-4-ultra": {
+      "identity": {
+        "key": "imagen-4-ultra",
+        "displayName": "Imagen 4 Ultra",
+        "provider": "google",
+        "providerModelId": "imagen-4.0-ultra-generate-001",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": "2026-08-17",
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "ideogram-2": {
+      "identity": {
+        "key": "ideogram-2",
+        "displayName": "Ideogram 2.0",
+        "provider": "managed_cloud",
+        "providerModelId": "ideogram-2.0",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "veo-3": {
+      "identity": {
+        "key": "veo-3",
+        "displayName": "Veo 3.1",
+        "provider": "google",
+        "providerModelId": "veo-3.1-generate-preview",
+        "kind": "video"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "stable-diffusion-xl": {
+      "identity": {
+        "key": "stable-diffusion-xl",
+        "displayName": "Stable Diffusion XL",
+        "provider": "managed_cloud",
+        "providerModelId": "stable-diffusion-xl-1024-v1-0",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "deprecated",
+        "availability": "live",
+        "released": "July 2023",
+        "deprecationDate": null,
+        "deprecated": true
+      },
+      "evidenceRefs": []
+    },
+    "stable-image-core": {
+      "identity": {
+        "key": "stable-image-core",
+        "displayName": "Stable Image Core",
+        "provider": "managed_cloud",
+        "providerModelId": "stable-image-core",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "March 2024",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-image-2": {
+      "identity": {
+        "key": "gpt-image-2",
+        "displayName": "GPT Image 2",
+        "provider": "openai",
+        "providerModelId": "gpt-image-2",
+        "kind": "image"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "tts-1": {
+      "identity": {
+        "key": "tts-1",
+        "displayName": "OpenAI TTS Standard",
+        "provider": "openai",
+        "providerModelId": "tts-1",
+        "kind": "tts"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "November 2023",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "tts-1-hd": {
+      "identity": {
+        "key": "tts-1-hd",
+        "displayName": "OpenAI TTS HD",
+        "provider": "openai",
+        "providerModelId": "tts-1-hd",
+        "kind": "tts"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "November 2023",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "whisper-1": {
+      "identity": {
+        "key": "whisper-1",
+        "displayName": "Whisper",
+        "provider": "openai",
+        "providerModelId": "whisper-1",
+        "kind": "stt"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "September 2022",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "nvidia/llama-3.3-70b-instruct": {
+      "identity": {
+        "key": "nvidia/llama-3.3-70b-instruct",
+        "displayName": "Llama 3.3 70B Instruct",
+        "provider": "nvidia_nim",
+        "providerModelId": "nvidia/llama-3.3-70b-instruct",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2024",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "groq-llama-3.3-70b": {
+      "identity": {
+        "key": "groq-llama-3.3-70b",
+        "displayName": "Llama 3.3 70B (Groq)",
+        "provider": "groq",
+        "providerModelId": "llama-3.3-70b-versatile",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "deprecated",
+        "availability": "live",
+        "released": "2024",
+        "deprecationDate": "2026-08-16",
+        "deprecated": true
+      },
+      "evidenceRefs": []
+    },
+    "groq-llama-3.1-8b": {
+      "identity": {
+        "key": "groq-llama-3.1-8b",
+        "displayName": "Llama 3.1 8B Instant (Groq)",
+        "provider": "groq",
+        "providerModelId": "llama-3.1-8b-instant",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "deprecated",
+        "availability": "live",
+        "released": "2024",
+        "deprecationDate": "2026-08-16",
+        "deprecated": true
+      },
+      "evidenceRefs": []
+    },
+    "meta-llama/llama-3.3-70b-instruct:free": {
+      "identity": {
+        "key": "meta-llama/llama-3.3-70b-instruct:free",
+        "displayName": "Llama 3.3 70B Instruct (Free)",
+        "provider": "open_router",
+        "providerModelId": "meta-llama/llama-3.3-70b-instruct:free",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2024",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "mistralai/mistral-small-3.1-24b-instruct:free": {
+      "identity": {
+        "key": "mistralai/mistral-small-3.1-24b-instruct:free",
+        "displayName": "Mistral Small 3.1 24B (Free)",
+        "provider": "open_router",
+        "providerModelId": "mistralai/mistral-small-3.1-24b-instruct:free",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "qwen/qwen3-coder:free": {
+      "identity": {
+        "key": "qwen/qwen3-coder:free",
+        "displayName": "Qwen3 Coder (Free)",
+        "provider": "open_router",
+        "providerModelId": "qwen/qwen3-coder:free",
+        "kind": "code"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "nvidia/llama-3.3-nemotron-super-49b-v1:free": {
+      "identity": {
+        "key": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
+        "displayName": "Nemotron Super 49B (Free)",
+        "provider": "open_router",
+        "providerModelId": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-5.4-mini": {
+      "identity": {
+        "key": "gpt-5.4-mini",
+        "displayName": "GPT-5.4 Mini",
+        "provider": "openai",
+        "providerModelId": "gpt-5.4-mini",
+        "kind": "reasoning",
+        "familyPartner": "gpt-5.5"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "March 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-5.4-nano": {
+      "identity": {
+        "key": "gpt-5.4-nano",
+        "displayName": "GPT-5.4 Nano",
+        "provider": "openai",
+        "providerModelId": "gpt-5.4-nano",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "March 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gpt-4.1-nano": {
+      "identity": {
+        "key": "gpt-4.1-nano",
+        "displayName": "GPT-4.1 Nano",
+        "provider": "openai",
+        "providerModelId": "gpt-4.1-nano",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2025",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "gemini-3.5-flash": {
+      "identity": {
+        "key": "gemini-3.5-flash",
+        "displayName": "Gemini 3.5 Flash",
+        "provider": "google",
+        "providerModelId": "gemini-3.5-flash",
+        "kind": "multimodal",
+        "familyPartner": "gemini-3.1-pro-preview"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "May 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "glm-5.2": {
+      "identity": {
+        "key": "glm-5.2",
+        "displayName": "GLM-5.2",
+        "provider": "zhipu",
+        "providerModelId": "glm-5.2",
+        "kind": "reasoning"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "June 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "qwen-3.5-plus": {
+      "identity": {
+        "key": "qwen-3.5-plus",
+        "displayName": "Qwen 3.5 Plus",
+        "provider": "qwen",
+        "providerModelId": "qwen3.5-plus",
+        "kind": "multimodal"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "April 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "nvidia/nemotron-3-ultra-550b-a55b": {
+      "identity": {
+        "key": "nvidia/nemotron-3-ultra-550b-a55b",
+        "displayName": "NVIDIA Nemotron 3 Ultra 550B",
+        "provider": "nvidia_nim",
+        "providerModelId": "nvidia/nemotron-3-ultra-550b-a55b",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "June 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "nvidia/nemotron-3-super-120b-a12b": {
+      "identity": {
+        "key": "nvidia/nemotron-3-super-120b-a12b",
+        "displayName": "NVIDIA Nemotron 3 Super 120B",
+        "provider": "nvidia_nim",
+        "providerModelId": "nvidia/nemotron-3-super-120b-a12b",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "June 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
+    "nvidia/nemotron-3-nano-30b-a3b": {
+      "identity": {
+        "key": "nvidia/nemotron-3-nano-30b-a3b",
+        "displayName": "NVIDIA Nemotron 3 Nano 30B",
+        "provider": "nvidia_nim",
+        "providerModelId": "nvidia/nemotron-3-nano-30b-a3b",
+        "kind": "chat"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "June 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    }
+  },
+  "providerModelKeys": {
+    "openai": [
+      "gpt-5.5",
+      "gpt-5.6-sol",
+      "gpt-5.6-terra",
+      "gpt-5.6-luna",
+      "gpt-image-2",
+      "tts-1",
+      "tts-1-hd",
+      "whisper-1",
+      "gpt-5.4-mini",
+      "gpt-5.4-nano",
+      "gpt-4.1-nano"
+    ],
+    "anthropic": [
+      "claude-fable-5",
+      "claude-opus-4.8",
+      "claude-sonnet-5",
+      "claude-sonnet-4.6",
+      "claude-haiku-4.5"
+    ],
+    "google": [
+      "gemini-embedding-2",
+      "gemini-3.1-pro-preview",
+      "gemini-3.1-flash-lite",
+      "gemini-3.1-flash-image",
+      "imagen-4",
+      "imagen-4-fast",
+      "imagen-4-ultra",
+      "veo-3",
+      "gemini-3.5-flash"
+    ],
+    "xai": ["grok-4.3"],
+    "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro"],
+    "qwen": [
+      "qwen-max",
+      "qwen-flash",
+      "qwen-turbo",
+      "qwen-coder-flash",
+      "qwen-coder-plus",
+      "qwen-3.5-plus"
+    ],
+    "moonshot": ["kimi-k2.6"],
+    "mistral": [
+      "mistral-large-3",
+      "mistral-medium-3",
+      "mistral-small-3",
+      "codestral-2",
+      "pixtral-large"
+    ],
+    "perplexity": [
+      "sonar",
+      "sonar-reasoning",
+      "sonar-reasoning-pro",
+      "sonar-pro",
+      "sonar-deep-research"
+    ],
+    "runway": ["runway-gen-4"],
+    "managed_cloud": ["ideogram-2", "stable-diffusion-xl", "stable-image-core"],
+    "nvidia_nim": [
+      "nvidia/llama-3.3-70b-instruct",
+      "nvidia/nemotron-3-ultra-550b-a55b",
+      "nvidia/nemotron-3-super-120b-a12b",
+      "nvidia/nemotron-3-nano-30b-a3b"
+    ],
+    "groq": ["groq-llama-3.3-70b", "groq-llama-3.1-8b"],
+    "open_router": [
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "mistralai/mistral-small-3.1-24b-instruct:free",
+      "qwen/qwen3-coder:free",
+      "nvidia/llama-3.3-nemotron-super-49b-v1:free"
+    ],
+    "zhipu": ["glm-5.2"]
+  },
+  "routes": {
+    "openai/gpt-5.5": {
+      "modelKey": "gpt-5.5",
+      "provider": "openai",
+      "providerModelId": "gpt-5.5",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/gpt-5.6-sol": {
+      "modelKey": "gpt-5.6-sol",
+      "provider": "openai",
+      "providerModelId": "gpt-5.6-sol",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/gpt-5.6-terra": {
+      "modelKey": "gpt-5.6-terra",
+      "provider": "openai",
+      "providerModelId": "gpt-5.6-terra",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/gpt-5.6-luna": {
+      "modelKey": "gpt-5.6-luna",
+      "provider": "openai",
+      "providerModelId": "gpt-5.6-luna",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "anthropic/claude-fable-5": {
+      "modelKey": "claude-fable-5",
+      "provider": "anthropic",
+      "providerModelId": "claude-fable-5",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "anthropic/claude-opus-4.8": {
+      "modelKey": "claude-opus-4.8",
+      "provider": "anthropic",
+      "providerModelId": "claude-opus-4-8",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "anthropic/claude-sonnet-5": {
+      "modelKey": "claude-sonnet-5",
+      "provider": "anthropic",
+      "providerModelId": "claude-sonnet-5",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "anthropic/claude-sonnet-4.6": {
+      "modelKey": "claude-sonnet-4.6",
+      "provider": "anthropic",
+      "providerModelId": "claude-sonnet-4-6",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "anthropic/claude-haiku-4.5": {
+      "modelKey": "claude-haiku-4.5",
+      "provider": "anthropic",
+      "providerModelId": "claude-haiku-4-5",
+      "harnessId": "anthropic/messages",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/gemini-embedding-2": {
+      "modelKey": "gemini-embedding-2",
+      "provider": "google",
+      "providerModelId": "gemini-embedding-2",
+      "harnessId": "google/embeddings",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/gemini-3.1-pro-preview": {
+      "modelKey": "gemini-3.1-pro-preview",
+      "provider": "google",
+      "providerModelId": "gemini-3.1-pro-preview",
+      "harnessId": "google/generate-content",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/gemini-3.1-flash-lite": {
+      "modelKey": "gemini-3.1-flash-lite",
+      "provider": "google",
+      "providerModelId": "gemini-3.1-flash-lite",
+      "harnessId": "google/generate-content",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/gemini-3.1-flash-image": {
+      "modelKey": "gemini-3.1-flash-image",
+      "provider": "google",
+      "providerModelId": "gemini-3.1-flash-image",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "xai/grok-4.3": {
+      "modelKey": "grok-4.3",
+      "provider": "xai",
+      "providerModelId": "grok-4.3",
+      "harnessId": "xai/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "deepseek/deepseek-v4-flash": {
+      "modelKey": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "providerModelId": "deepseek-v4-flash",
+      "harnessId": "deepseek/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "deepseek/deepseek-v4-pro": {
+      "modelKey": "deepseek-v4-pro",
+      "provider": "deepseek",
+      "providerModelId": "deepseek-v4-pro",
+      "harnessId": "deepseek/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "qwen/qwen-max": {
+      "modelKey": "qwen-max",
+      "provider": "qwen",
+      "providerModelId": "qwen3-max",
+      "harnessId": "qwen/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "qwen/qwen-flash": {
+      "modelKey": "qwen-flash",
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-flash",
+      "harnessId": "qwen/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "qwen/qwen-turbo": {
+      "modelKey": "qwen-turbo",
+      "provider": "qwen",
+      "providerModelId": "qwen-turbo",
+      "harnessId": "qwen/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": false
+    },
+    "qwen/qwen-coder-flash": {
+      "modelKey": "qwen-coder-flash",
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-flash",
+      "harnessId": "qwen/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "qwen/qwen-coder-plus": {
+      "modelKey": "qwen-coder-plus",
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-plus",
+      "harnessId": "qwen/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "moonshot/kimi-k2.6": {
+      "modelKey": "kimi-k2.6",
+      "provider": "moonshot",
+      "providerModelId": "kimi-k2.6",
+      "harnessId": "moonshot/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "mistral/mistral-large-3": {
+      "modelKey": "mistral-large-3",
+      "provider": "mistral",
+      "providerModelId": "mistral-large-2512",
+      "harnessId": "mistral/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "mistral/mistral-medium-3": {
+      "modelKey": "mistral-medium-3",
+      "provider": "mistral",
+      "providerModelId": "mistral-medium-2508",
+      "harnessId": "mistral/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "mistral/mistral-small-3": {
+      "modelKey": "mistral-small-3",
+      "provider": "mistral",
+      "providerModelId": "mistral-small-2603",
+      "harnessId": "mistral/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "mistral/codestral-2": {
+      "modelKey": "codestral-2",
+      "provider": "mistral",
+      "providerModelId": "codestral-2508",
+      "harnessId": "mistral/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "mistral/pixtral-large": {
+      "modelKey": "pixtral-large",
+      "provider": "mistral",
+      "providerModelId": "pixtral-large-latest",
+      "harnessId": "mistral/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "perplexity/sonar": {
+      "modelKey": "sonar",
+      "provider": "perplexity",
+      "providerModelId": "sonar",
+      "harnessId": "perplexity/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "perplexity/sonar-reasoning": {
+      "modelKey": "sonar-reasoning",
+      "provider": "perplexity",
+      "providerModelId": "sonar-reasoning",
+      "harnessId": "perplexity/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "perplexity/sonar-reasoning-pro": {
+      "modelKey": "sonar-reasoning-pro",
+      "provider": "perplexity",
+      "providerModelId": "sonar-reasoning-pro",
+      "harnessId": "perplexity/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "perplexity/sonar-pro": {
+      "modelKey": "sonar-pro",
+      "provider": "perplexity",
+      "providerModelId": "sonar-pro",
+      "harnessId": "perplexity/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "perplexity/sonar-deep-research": {
+      "modelKey": "sonar-deep-research",
+      "provider": "perplexity",
+      "providerModelId": "sonar-deep-research",
+      "harnessId": "perplexity/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/imagen-4": {
+      "modelKey": "imagen-4",
+      "provider": "google",
+      "providerModelId": "imagen-4.0-generate-001",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/imagen-4-fast": {
+      "modelKey": "imagen-4-fast",
+      "provider": "google",
+      "providerModelId": "imagen-4.0-fast-generate-001",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "runway/runway-gen-4": {
+      "modelKey": "runway-gen-4",
+      "provider": "runway",
+      "providerModelId": "gen4_turbo",
+      "harnessId": "runway/media",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/imagen-4-ultra": {
+      "modelKey": "imagen-4-ultra",
+      "provider": "google",
+      "providerModelId": "imagen-4.0-ultra-generate-001",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "managed_cloud/ideogram-2": {
+      "modelKey": "ideogram-2",
+      "provider": "managed_cloud",
+      "providerModelId": "ideogram-2.0",
+      "harnessId": "managed-cloud/gateway",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/veo-3": {
+      "modelKey": "veo-3",
+      "provider": "google",
+      "providerModelId": "veo-3.1-generate-preview",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "managed_cloud/stable-diffusion-xl": {
+      "modelKey": "stable-diffusion-xl",
+      "provider": "managed_cloud",
+      "providerModelId": "stable-diffusion-xl-1024-v1-0",
+      "harnessId": "managed-cloud/gateway",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": false
+    },
+    "managed_cloud/stable-image-core": {
+      "modelKey": "stable-image-core",
+      "provider": "managed_cloud",
+      "providerModelId": "stable-image-core",
+      "harnessId": "managed-cloud/gateway",
+      "trustModes": ["managed_cloud"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/gpt-image-2": {
+      "modelKey": "gpt-image-2",
+      "provider": "openai",
+      "providerModelId": "gpt-image-2",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/tts-1": {
+      "modelKey": "tts-1",
+      "provider": "openai",
+      "providerModelId": "tts-1",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/tts-1-hd": {
+      "modelKey": "tts-1-hd",
+      "provider": "openai",
+      "providerModelId": "tts-1-hd",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/whisper-1": {
+      "modelKey": "whisper-1",
+      "provider": "openai",
+      "providerModelId": "whisper-1",
+      "harnessId": "openai/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "nvidia_nim/nvidia/llama-3.3-70b-instruct": {
+      "modelKey": "nvidia/llama-3.3-70b-instruct",
+      "provider": "nvidia_nim",
+      "providerModelId": "nvidia/llama-3.3-70b-instruct",
+      "harnessId": "nvidia-nim/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "groq/groq-llama-3.3-70b": {
+      "modelKey": "groq-llama-3.3-70b",
+      "provider": "groq",
+      "providerModelId": "llama-3.3-70b-versatile",
+      "harnessId": "groq/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": false
+    },
+    "groq/groq-llama-3.1-8b": {
+      "modelKey": "groq-llama-3.1-8b",
+      "provider": "groq",
+      "providerModelId": "llama-3.1-8b-instant",
+      "harnessId": "groq/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": false
+    },
+    "open_router/meta-llama/llama-3.3-70b-instruct:free": {
+      "modelKey": "meta-llama/llama-3.3-70b-instruct:free",
+      "provider": "open_router",
+      "providerModelId": "meta-llama/llama-3.3-70b-instruct:free",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "open_router/mistralai/mistral-small-3.1-24b-instruct:free": {
+      "modelKey": "mistralai/mistral-small-3.1-24b-instruct:free",
+      "provider": "open_router",
+      "providerModelId": "mistralai/mistral-small-3.1-24b-instruct:free",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "open_router/qwen/qwen3-coder:free": {
+      "modelKey": "qwen/qwen3-coder:free",
+      "provider": "open_router",
+      "providerModelId": "qwen/qwen3-coder:free",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "open_router/nvidia/llama-3.3-nemotron-super-49b-v1:free": {
+      "modelKey": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
+      "provider": "open_router",
+      "providerModelId": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
+      "harnessId": "open-router/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/gpt-5.4-mini": {
+      "modelKey": "gpt-5.4-mini",
+      "provider": "openai",
+      "providerModelId": "gpt-5.4-mini",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/gpt-5.4-nano": {
+      "modelKey": "gpt-5.4-nano",
+      "provider": "openai",
+      "providerModelId": "gpt-5.4-nano",
+      "harnessId": "openai/responses",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "openai/gpt-4.1-nano": {
+      "modelKey": "gpt-4.1-nano",
+      "provider": "openai",
+      "providerModelId": "gpt-4.1-nano",
+      "harnessId": "openai/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/gemini-3.5-flash": {
+      "modelKey": "gemini-3.5-flash",
+      "provider": "google",
+      "providerModelId": "gemini-3.5-flash",
+      "harnessId": "google/generate-content",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "zhipu/glm-5.2": {
+      "modelKey": "glm-5.2",
+      "provider": "zhipu",
+      "providerModelId": "glm-5.2",
+      "harnessId": "zhipu/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "qwen/qwen-3.5-plus": {
+      "modelKey": "qwen-3.5-plus",
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-plus",
+      "harnessId": "qwen/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b": {
+      "modelKey": "nvidia/nemotron-3-ultra-550b-a55b",
+      "provider": "nvidia_nim",
+      "providerModelId": "nvidia/nemotron-3-ultra-550b-a55b",
+      "harnessId": "nvidia-nim/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "nvidia_nim/nvidia/nemotron-3-super-120b-a12b": {
+      "modelKey": "nvidia/nemotron-3-super-120b-a12b",
+      "provider": "nvidia_nim",
+      "providerModelId": "nvidia/nemotron-3-super-120b-a12b",
+      "harnessId": "nvidia-nim/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "nvidia_nim/nvidia/nemotron-3-nano-30b-a3b": {
+      "modelKey": "nvidia/nemotron-3-nano-30b-a3b",
+      "provider": "nvidia_nim",
+      "providerModelId": "nvidia/nemotron-3-nano-30b-a3b",
+      "harnessId": "nvidia-nim/chat-completions",
+      "trustModes": ["byok"],
+      "availability": "live",
+      "selectable": true
+    }
+  },
+  "harnesses": {
+    "managed-cloud/gateway": {
+      "provider": "managed_cloud",
+      "apiFamily": "managed_gateway",
+      "adapter": "services/api-gateway",
+      "trustModes": ["managed_cloud"],
+      "features": { "webSearch": { "providerSupport": "agi", "implementation": "implemented" } }
+    },
+    "ollama/chat": {
+      "provider": "ollama",
+      "apiFamily": "ollama_chat",
+      "adapter": "@agiworkforce/providers-ollama",
+      "trustModes": ["local"],
+      "features": {}
+    },
+    "openai/responses": {
+      "provider": "openai",
+      "apiFamily": "responses",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "webSearch": { "providerSupport": "native", "implementation": "unwired" },
+        "toolDiscovery": { "providerSupport": "native", "implementation": "unwired" },
+        "mcp": { "providerSupport": "native", "implementation": "unwired" },
+        "memory": { "providerSupport": "agi", "implementation": "unwired" },
+        "codeExecution": { "providerSupport": "native", "implementation": "unwired" },
+        "imageGeneration": { "providerSupport": "native", "implementation": "unwired" }
+      }
+    },
+    "openai/chat-completions": {
+      "provider": "openai",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "openai/media": {
+      "provider": "openai",
+      "apiFamily": "media",
+      "adapter": "@agiworkforce/providers-openai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "anthropic/messages": {
+      "provider": "anthropic",
+      "apiFamily": "messages",
+      "adapter": "@agiworkforce/providers-anthropic",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "webSearch": { "providerSupport": "native", "implementation": "implemented" },
+        "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" }
+      }
+    },
+    "google/generate-content": {
+      "provider": "google",
+      "apiFamily": "generate_content",
+      "adapter": "@agiworkforce/providers-google",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {
+        "webSearch": { "providerSupport": "native", "implementation": "implemented" },
+        "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" }
+      }
+    },
+    "google/media": {
+      "provider": "google",
+      "apiFamily": "media",
+      "adapter": "@agiworkforce/providers-google",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "google/embeddings": {
+      "provider": "google",
+      "apiFamily": "embed_content",
+      "adapter": "desktop-google-batch",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "xai/chat-completions": {
+      "provider": "xai",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-xai",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "deepseek/chat-completions": {
+      "provider": "deepseek",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-deepseek",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "qwen/chat-completions": {
+      "provider": "qwen",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-qwen",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "moonshot/chat-completions": {
+      "provider": "moonshot",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-moonshot",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "mistral/chat-completions": {
+      "provider": "mistral",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-mistral",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "zhipu/chat-completions": {
+      "provider": "zhipu",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-zhipu",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "perplexity/chat-completions": {
+      "provider": "perplexity",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-perplexity",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": { "webSearch": { "providerSupport": "native", "implementation": "implemented" } }
+    },
+    "groq/chat-completions": {
+      "provider": "groq",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-groq",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "open-router/chat-completions": {
+      "provider": "open_router",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-openrouter",
+      "trustModes": ["byok"],
+      "features": {}
+    },
+    "nvidia-nim/chat-completions": {
+      "provider": "nvidia_nim",
+      "apiFamily": "chat_completions",
+      "adapter": "desktop-direct-api",
+      "trustModes": ["byok"],
+      "features": {}
+    },
+    "runway/media": {
+      "provider": "runway",
+      "apiFamily": "media",
+      "adapter": "managed-media",
+      "trustModes": ["managed_cloud"],
+      "features": {}
+    }
+  },
+  "runtimeProfiles": {
+    "web/cloud-chat": {
+      "family": "consumer",
+      "surface": "web",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "features": {
+        "webSearch": { "implementation": "implemented" },
+        "toolDiscovery": { "implementation": "partial" },
+        "memory": { "implementation": "partial" },
+        "codeExecution": { "implementation": "partial" },
+        "imageGeneration": { "implementation": "implemented" }
+      },
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions",
+        "managed-cloud/gateway",
+        "openai/media",
+        "google/media",
+        "runway/media"
+      ]
+    },
+    "desktop/cloud-chat": {
+      "family": "consumer",
+      "surface": "desktop",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "unwired",
+      "features": {},
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions"
+      ]
+    },
+    "desktop/byok-chat": {
+      "family": "consumer",
+      "surface": "desktop",
+      "executionMode": "local",
+      "trustMode": "byok",
+      "status": "implemented",
+      "features": {},
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions",
+        "open-router/chat-completions",
+        "nvidia-nim/chat-completions"
+      ]
+    },
+    "desktop/local-chat": {
+      "family": "consumer",
+      "surface": "desktop",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "partial",
+      "features": {},
+      "allowedHarnessIds": []
+    },
+    "mobile/cloud-chat": {
+      "family": "consumer",
+      "surface": "mobile",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "features": {
+        "webSearch": { "implementation": "implemented" },
+        "toolDiscovery": { "implementation": "unwired" },
+        "memory": { "implementation": "partial" },
+        "imageGeneration": { "implementation": "implemented" }
+      },
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions",
+        "managed-cloud/gateway",
+        "openai/media",
+        "google/media",
+        "runway/media"
+      ]
+    },
+    "mobile/local-chat": {
+      "family": "consumer",
+      "surface": "mobile",
+      "executionMode": "local",
+      "trustMode": "on_device",
+      "status": "partial",
+      "features": {},
+      "allowedHarnessIds": []
+    },
+    "cli/byok-chat": {
+      "family": "developer",
+      "surface": "cli",
+      "executionMode": "local",
+      "trustMode": "byok",
+      "status": "implemented",
+      "features": {},
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions",
+        "open-router/chat-completions",
+        "nvidia-nim/chat-completions"
+      ]
+    },
+    "cli/managed-chat": {
+      "family": "developer",
+      "surface": "cli",
+      "executionMode": "local",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "features": {},
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions"
+      ]
+    },
+    "cli/local-chat": {
+      "family": "developer",
+      "surface": "cli",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "partial",
+      "features": {},
+      "allowedHarnessIds": []
+    },
+    "vscode/byok-chat": {
+      "family": "developer",
+      "surface": "vscode",
+      "executionMode": "local",
+      "trustMode": "byok",
+      "status": "unwired",
+      "features": {},
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions",
+        "open-router/chat-completions",
+        "nvidia-nim/chat-completions"
+      ]
+    },
+    "vscode/managed-chat": {
+      "family": "developer",
+      "surface": "vscode",
+      "executionMode": "local",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "features": {},
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions"
+      ]
+    },
+    "vscode/local-chat": {
+      "family": "developer",
+      "surface": "vscode",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "unwired",
+      "features": {},
+      "allowedHarnessIds": []
+    },
+    "chrome/managed-chat": {
+      "family": "browser",
+      "surface": "chrome",
+      "executionMode": "cloud",
+      "trustMode": "managed_cloud",
+      "status": "implemented",
+      "features": { "webSearch": { "implementation": "implemented" } },
+      "allowedHarnessIds": [
+        "openai/responses",
+        "openai/chat-completions",
+        "anthropic/messages",
+        "google/generate-content",
+        "xai/chat-completions",
+        "deepseek/chat-completions",
+        "qwen/chat-completions",
+        "moonshot/chat-completions",
+        "mistral/chat-completions",
+        "zhipu/chat-completions",
+        "perplexity/chat-completions",
+        "groq/chat-completions"
+      ]
+    },
+    "chrome/browser-task": {
+      "family": "browser",
+      "surface": "chrome",
+      "executionMode": "local",
+      "trustMode": "local",
+      "status": "implemented",
+      "features": {},
+      "allowedHarnessIds": []
+    }
+  },
+  "capabilities": {
+    "gpt-5.5": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gpt-5.6-sol": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gpt-5.6-terra": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gpt-5.6-luna": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "claude-fable-5": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "claude-opus-4.8": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "claude-sonnet-5": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "claude-sonnet-4.6": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "claude-haiku-4.5": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gemini-embedding-2": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": true,
+      "videoInput": true,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "gemini-3.1-pro-preview": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gemini-3.1-flash-lite": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "gemini-3.1-flash-image": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "grok-4.3": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "deepseek-v4-flash": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "deepseek-v4-pro": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "qwen-max": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "qwen-flash": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "qwen-turbo": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "qwen-coder-flash": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "qwen-coder-plus": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "kimi-k2.6": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "mistral-large-3": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "mistral-medium-3": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "mistral-small-3": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "codestral-2": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "pixtral-large": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "sonar": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "sonar-reasoning": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": false,
+      "reasoning": true
+    },
+    "sonar-reasoning-pro": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": false,
+      "reasoning": true
+    },
+    "sonar-pro": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "sonar-deep-research": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": false,
+      "reasoning": true
+    },
+    "imagen-4": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "imagen-4-fast": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "runway-gen-4": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": true,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "imagen-4-ultra": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "ideogram-2": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "veo-3": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": true,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "stable-diffusion-xl": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "stable-image-core": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "gpt-image-2": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": true,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "tts-1": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": true,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "tts-1-hd": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": true,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "whisper-1": {
+      "textInput": false,
+      "imageInput": false,
+      "audioInput": true,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
+    "nvidia/llama-3.3-70b-instruct": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "groq-llama-3.3-70b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "groq-llama-3.1-8b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "meta-llama/llama-3.3-70b-instruct:free": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "mistralai/mistral-small-3.1-24b-instruct:free": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "qwen/qwen3-coder:free": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "nvidia/llama-3.3-nemotron-super-49b-v1:free": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gpt-5.4-mini": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gpt-5.4-nano": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "gpt-4.1-nano": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "gemini-3.5-flash": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "glm-5.2": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "qwen-3.5-plus": {
+      "textInput": true,
+      "imageInput": true,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": true
+    },
+    "nvidia/nemotron-3-ultra-550b-a55b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "nvidia/nemotron-3-super-120b-a12b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    },
+    "nvidia/nemotron-3-nano-30b-a3b": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": true,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": false,
+      "streaming": true,
+      "structuredOutput": true,
+      "functionCalling": true,
+      "reasoning": false
+    }
+  },
+  "pricing": {
+    "gpt-5.5": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 5,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 0.5
+    },
+    "gpt-5.6-sol": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 5,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 6.25
+    },
+    "gpt-5.6-terra": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2.5,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.25,
+      "cacheWritePerMillion": 3.125
+    },
+    "gpt-5.6-luna": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1,
+      "outputPerMillion": 6,
+      "cacheReadPerMillion": 0.1,
+      "cacheWritePerMillion": 1.25
+    },
+    "claude-fable-5": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 10,
+      "outputPerMillion": 50,
+      "cacheReadPerMillion": 1,
+      "cacheWritePerMillion": 12.5,
+      "cacheWrite1hPerMillion": 20
+    },
+    "claude-opus-4.8": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 5,
+      "outputPerMillion": 25,
+      "cacheReadPerMillion": 0.5,
+      "cacheWritePerMillion": 6.25,
+      "cacheWrite1hPerMillion": 10
+    },
+    "claude-sonnet-5": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 10,
+      "cacheReadPerMillion": 0.2,
+      "cacheWritePerMillion": 2.5,
+      "cacheWrite1hPerMillion": 4,
+      "promoExpiresAt": "2026-08-31",
+      "postPromoPrices": {
+        "input": 3,
+        "output": 15,
+        "cached_input": 0.3,
+        "cached_write": 3.75,
+        "cached_write_1h": 6
+      }
+    },
+    "claude-sonnet-4.6": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 3,
+      "outputPerMillion": 15,
+      "cacheReadPerMillion": 0.3
+    },
+    "claude-haiku-4.5": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1,
+      "outputPerMillion": 5,
+      "cacheReadPerMillion": 0.1,
+      "cacheWritePerMillion": 1.25,
+      "cacheWrite1hPerMillion": 2
+    },
+    "gemini-embedding-2": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.2,
+      "outputPerMillion": 0
+    },
+    "gemini-3.1-pro-preview": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 12,
+      "cacheReadPerMillion": 0.2
+    },
+    "gemini-3.1-flash-lite": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.25,
+      "outputPerMillion": 1.5,
+      "cacheReadPerMillion": 0.025
+    },
+    "gemini-3.1-flash-image": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.039,
+      "outputPerMillion": 0
+    },
+    "grok-4.3": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1.25,
+      "outputPerMillion": 2.5
+    },
+    "deepseek-v4-flash": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.14,
+      "outputPerMillion": 0.28,
+      "cacheReadPerMillion": 0.0028
+    },
+    "deepseek-v4-pro": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.435,
+      "outputPerMillion": 0.87,
+      "cacheReadPerMillion": 0.003625
+    },
+    "qwen-max": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1.2,
+      "outputPerMillion": 6
+    },
+    "qwen-flash": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.4
+    },
+    "qwen-turbo": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.05,
+      "outputPerMillion": 0.2
+    },
+    "qwen-coder-flash": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.05,
+      "outputPerMillion": 0.3
+    },
+    "qwen-coder-plus": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 2
+    },
+    "kimi-k2.6": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.95,
+      "outputPerMillion": 4,
+      "cacheReadPerMillion": 0.16
+    },
+    "mistral-large-3": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.5,
+      "outputPerMillion": 1.5
+    },
+    "mistral-medium-3": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 2
+    },
+    "mistral-small-3": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.3
+    },
+    "codestral-2": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 0.9
+    },
+    "pixtral-large": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 6
+    },
+    "sonar": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1,
+      "outputPerMillion": 1
+    },
+    "sonar-reasoning": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1,
+      "outputPerMillion": 5
+    },
+    "sonar-reasoning-pro": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 8
+    },
+    "sonar-pro": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 3,
+      "outputPerMillion": 15
+    },
+    "sonar-deep-research": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 2,
+      "outputPerMillion": 8
+    },
+    "imagen-4": {
+      "currency": "USD",
+      "unit": "per_image",
+      "inputPerMillion": 0,
+      "outputPerMillion": 40,
+      "imagePerImage": 0.04
+    },
+    "imagen-4-fast": {
+      "currency": "USD",
+      "unit": "per_image",
+      "inputPerMillion": 0,
+      "outputPerMillion": 20,
+      "imagePerImage": 0.02
+    },
+    "runway-gen-4": {
+      "currency": "USD",
+      "unit": "per_second",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "videoPerSecond": 0.05,
+      "videoPerSecondByResolution": { "720p": 0.05 }
+    },
+    "imagen-4-ultra": {
+      "currency": "USD",
+      "unit": "per_image",
+      "inputPerMillion": 0,
+      "outputPerMillion": 80,
+      "imagePerImage": 0.06
+    },
+    "ideogram-2": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 20
+    },
+    "veo-3": {
+      "currency": "USD",
+      "unit": "per_second",
+      "inputPerMillion": 0,
+      "outputPerMillion": 750,
+      "videoPerSecond": 0.4,
+      "videoPerSecondByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 }
+    },
+    "stable-diffusion-xl": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 4
+    },
+    "stable-image-core": {
+      "currency": "USD",
+      "unit": "per_image",
+      "inputPerMillion": 0,
+      "outputPerMillion": 30,
+      "imagePerImage": 0.03
+    },
+    "gpt-image-2": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 8,
+      "outputPerMillion": 30,
+      "cacheReadPerMillion": 2
+    },
+    "tts-1": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 15,
+      "outputPerMillion": 0
+    },
+    "tts-1-hd": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 30,
+      "outputPerMillion": 0
+    },
+    "whisper-1": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.006,
+      "outputPerMillion": 0
+    },
+    "nvidia/llama-3.3-70b-instruct": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "groq-llama-3.3-70b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.59,
+      "outputPerMillion": 0.79
+    },
+    "groq-llama-3.1-8b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.05,
+      "outputPerMillion": 0.08
+    },
+    "meta-llama/llama-3.3-70b-instruct:free": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "mistralai/mistral-small-3.1-24b-instruct:free": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "qwen/qwen3-coder:free": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "nvidia/llama-3.3-nemotron-super-49b-v1:free": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "gpt-5.4-mini": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.75,
+      "outputPerMillion": 4.5,
+      "cacheReadPerMillion": 0.075
+    },
+    "gpt-5.4-nano": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.2,
+      "outputPerMillion": 1.25,
+      "cacheReadPerMillion": 0.02
+    },
+    "gpt-4.1-nano": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.1,
+      "outputPerMillion": 0.4,
+      "cacheReadPerMillion": 0.03
+    },
+    "gemini-3.5-flash": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1.5,
+      "outputPerMillion": 9,
+      "cacheReadPerMillion": 0.15
+    },
+    "glm-5.2": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 1.4,
+      "outputPerMillion": 4.4,
+      "cacheReadPerMillion": 0.26
+    },
+    "qwen-3.5-plus": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0.4,
+      "outputPerMillion": 2.4,
+      "cacheReadPerMillion": 0.05
+    },
+    "nvidia/nemotron-3-ultra-550b-a55b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "nvidia/nemotron-3-super-120b-a12b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    },
+    "nvidia/nemotron-3-nano-30b-a3b": {
+      "currency": "USD",
+      "unit": "per_million_tokens",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0
+    }
+  },
+  "limits": {
+    "gpt-5.5": { "contextTokens": 1050000 },
+    "gpt-5.6-sol": {
+      "contextTokens": 1050000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-02-16"
+    },
+    "gpt-5.6-terra": {
+      "contextTokens": 1050000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-02-16"
+    },
+    "gpt-5.6-luna": {
+      "contextTokens": 1050000,
+      "maxInputTokens": 922000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-02-16"
+    },
+    "claude-fable-5": {
+      "contextTokens": 1000000,
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-01"
+    },
+    "claude-opus-4.8": {
+      "contextTokens": 1000000,
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-01"
+    },
+    "claude-sonnet-5": {
+      "contextTokens": 1000000,
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2026-01"
+    },
+    "claude-sonnet-4.6": { "contextTokens": 200000 },
+    "claude-haiku-4.5": {
+      "contextTokens": 200000,
+      "maxInputTokens": 200000,
+      "maxOutputTokens": 64000,
+      "knowledgeCutoff": "2025-02"
+    },
+    "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
+    "gemini-3.1-pro-preview": { "contextTokens": 2000000 },
+    "gemini-3.1-flash-lite": { "contextTokens": 1000000 },
+    "gemini-3.1-flash-image": { "contextTokens": 1000000 },
+    "grok-4.3": { "contextTokens": 1000000 },
+    "deepseek-v4-flash": { "contextTokens": 1000000 },
+    "deepseek-v4-pro": { "contextTokens": 1000000 },
+    "qwen-max": { "contextTokens": 1000000 },
+    "qwen-flash": { "contextTokens": 1000000 },
+    "qwen-turbo": { "contextTokens": 1000000 },
+    "qwen-coder-flash": { "contextTokens": 1000000 },
+    "qwen-coder-plus": { "contextTokens": 1000000 },
+    "kimi-k2.6": { "contextTokens": 262144 },
+    "mistral-large-3": { "contextTokens": 262000 },
+    "mistral-medium-3": { "contextTokens": 131072 },
+    "mistral-small-3": { "contextTokens": 131072 },
+    "codestral-2": { "contextTokens": 256000 },
+    "pixtral-large": { "contextTokens": 131072 },
+    "sonar": { "contextTokens": 128000 },
+    "sonar-reasoning": { "contextTokens": 128000 },
+    "sonar-reasoning-pro": { "contextTokens": 128000 },
+    "sonar-pro": { "contextTokens": 200000 },
+    "sonar-deep-research": { "contextTokens": 128000 },
+    "imagen-4": { "contextTokens": 4000 },
+    "imagen-4-fast": { "contextTokens": 4000 },
+    "runway-gen-4": { "contextTokens": 4000 },
+    "imagen-4-ultra": { "contextTokens": 4000 },
+    "ideogram-2": { "contextTokens": 4000 },
+    "veo-3": { "contextTokens": 4000 },
+    "stable-diffusion-xl": { "contextTokens": 4000 },
+    "stable-image-core": { "contextTokens": 4000 },
+    "gpt-image-2": { "contextTokens": 4000 },
+    "tts-1": { "contextTokens": 4096 },
+    "tts-1-hd": { "contextTokens": 4096 },
+    "whisper-1": {},
+    "nvidia/llama-3.3-70b-instruct": { "contextTokens": 131072 },
+    "groq-llama-3.3-70b": { "contextTokens": 131072 },
+    "groq-llama-3.1-8b": { "contextTokens": 131072 },
+    "meta-llama/llama-3.3-70b-instruct:free": { "contextTokens": 131072 },
+    "mistralai/mistral-small-3.1-24b-instruct:free": { "contextTokens": 128000 },
+    "qwen/qwen3-coder:free": { "contextTokens": 262144 },
+    "nvidia/llama-3.3-nemotron-super-49b-v1:free": { "contextTokens": 131072 },
+    "gpt-5.4-mini": { "contextTokens": 400000 },
+    "gpt-5.4-nano": {
+      "contextTokens": 400000,
+      "maxInputTokens": 272000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2025-08-31"
+    },
+    "gpt-4.1-nano": { "contextTokens": 1047576 },
+    "gemini-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
+    "glm-5.2": { "contextTokens": 1000000 },
+    "qwen-3.5-plus": { "contextTokens": 1000000 },
+    "nvidia/nemotron-3-ultra-550b-a55b": { "contextTokens": 1000000 },
+    "nvidia/nemotron-3-super-120b-a12b": { "contextTokens": 131072 },
+    "nvidia/nemotron-3-nano-30b-a3b": { "contextTokens": 1000000 }
+  },
+  "benchmarks": {
+    "gpt-5.5": { "swebench": 84.5, "humaneval": 98, "mmlu": 92.5, "gpqa": 86, "aime": 92 },
+    "gpt-5.6-sol": {},
+    "gpt-5.6-terra": {},
+    "gpt-5.6-luna": {},
+    "claude-fable-5": {},
+    "claude-opus-4.8": {},
+    "claude-sonnet-5": {},
+    "claude-sonnet-4.6": {
+      "swebench": 78.5,
+      "humaneval": 96.2,
+      "mmlu": 89.5,
+      "gpqa": 76,
+      "aime": 88
+    },
+    "claude-haiku-4.5": { "swebench": 45, "humaneval": 88, "mmlu": 85, "gpqa": 55, "aime": 40 },
+    "gemini-embedding-2": {},
+    "gemini-3.1-pro-preview": {
+      "swebench": 74.2,
+      "humaneval": 93.5,
+      "mmlu": 89.5,
+      "gpqa": 91.9,
+      "aime": 95
+    },
+    "gemini-3.1-flash-lite": {
+      "swebench": 76.2,
+      "humaneval": 91,
+      "mmlu": 88.6,
+      "gpqa": 60,
+      "aime": 88
+    },
+    "gemini-3.1-flash-image": {},
+    "grok-4.3": { "swebench": 68, "humaneval": 96.5, "mmlu": 91.5, "gpqa": 80, "aime": 82 },
+    "deepseek-v4-flash": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
+    "deepseek-v4-pro": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
+    "qwen-max": { "swebench": 58, "humaneval": 93, "mmlu": 88, "gpqa": 65, "aime": 60 },
+    "qwen-flash": { "swebench": 25, "humaneval": 70, "mmlu": 75, "gpqa": 35, "aime": 25 },
+    "qwen-turbo": { "swebench": 28, "humaneval": 72, "mmlu": 76, "gpqa": 38, "aime": 28 },
+    "qwen-coder-flash": { "swebench": 40, "humaneval": 82, "mmlu": 70, "gpqa": 35, "aime": 25 },
+    "qwen-coder-plus": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
+    "kimi-k2.6": { "swebench": 80.2, "humaneval": 96, "mmlu": 89, "gpqa": 86, "aime": 99 },
+    "mistral-large-3": { "swebench": 55, "humaneval": 92, "mmlu": 88, "gpqa": 68, "aime": 62 },
+    "mistral-medium-3": { "swebench": 42, "humaneval": 85, "mmlu": 84, "gpqa": 55, "aime": 45 },
+    "mistral-small-3": {},
+    "codestral-2": { "swebench": 48, "humaneval": 90, "mmlu": 72 },
+    "pixtral-large": {},
+    "sonar": { "mmlu": 75 },
+    "sonar-reasoning": { "mmlu": 82, "gpqa": 55 },
+    "sonar-reasoning-pro": { "mmlu": 85, "gpqa": 62 },
+    "sonar-pro": { "mmlu": 88 },
+    "sonar-deep-research": { "mmlu": 88 },
+    "imagen-4": {},
+    "imagen-4-fast": {},
+    "runway-gen-4": {},
+    "imagen-4-ultra": {},
+    "ideogram-2": {},
+    "veo-3": {},
+    "stable-diffusion-xl": {},
+    "stable-image-core": {},
+    "gpt-image-2": {},
+    "tts-1": {},
+    "tts-1-hd": {},
+    "whisper-1": {},
+    "nvidia/llama-3.3-70b-instruct": {},
+    "groq-llama-3.3-70b": {},
+    "groq-llama-3.1-8b": {},
+    "meta-llama/llama-3.3-70b-instruct:free": {},
+    "mistralai/mistral-small-3.1-24b-instruct:free": {},
+    "qwen/qwen3-coder:free": {},
+    "nvidia/llama-3.3-nemotron-super-49b-v1:free": {},
+    "gpt-5.4-mini": {},
+    "gpt-5.4-nano": {},
+    "gpt-4.1-nano": {},
+    "gemini-3.5-flash": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
+    "glm-5.2": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
+    "qwen-3.5-plus": { "swebench": 70, "humaneval": 94, "mmlu": 90, "gpqa": 78, "aime": 88 },
+    "nvidia/nemotron-3-ultra-550b-a55b": {},
+    "nvidia/nemotron-3-super-120b-a12b": {},
+    "nvidia/nemotron-3-nano-30b-a3b": {}
+  },
+  "evidence": [
+    {
+      "id": "verification/2026-07-15/1",
+      "date": "2026-07-15",
+      "verifiedBy": "official-openai-anthropic-current-roster-live-probes",
+      "status": "CORRECTION",
+      "notes": "Corrected the current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic model metadata and minimal Messages requests returned HTTP 200 for claude-fable-5, claude-opus-4-8, claude-sonnet-5, and claude-haiku-4-5; official model, effort, and pricing pages confirm context/output limits, reasoning controls, and 5-minute/1-hour prompt-cache rates. Sonnet 5 introductory prices expire 2026-08-31. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
+    },
+    {
+      "id": "verification/2026-07-15/2",
+      "date": "2026-07-15",
+      "verifiedBy": "official-google-gemini-embedding-docs",
+      "status": "CORRECTION",
+      "notes": "Replaced the Desktop Google Batch app-owned gemini-embedding-001 default with the current gemini-embedding-2 model in the canonical registry. Official Google Gemini Embeddings documentation lists gemini-embedding-2 as the latest multimodal embedding model (April 2026), with text, image, video, audio, and PDF input, an 8,192-token input limit, flexible 128-3,072 dimensions, $0.20 per 1M standard text-input tokens, and $0.10 per 1M Batch text-input tokens. Embedding spaces are incompatible with gemini-embedding-001, so data migration/re-embedding remains an explicit application concern rather than an alias redirect. Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/embeddings and ai.google.dev/gemini-api/docs/pricing."
+    },
+    {
+      "id": "verification/2026-07-15/3",
+      "date": "2026-07-15",
+      "verifiedBy": "official-google-runway-video-pricing-docs",
+      "status": "CORRECTION",
+      "notes": "Moved Web video reservations onto canonical per-second model pricing. Official Google Gemini API pricing lists Veo 3.1 Standard at $0.40/second for 720p and 1080p and $0.60/second for 4k; the Veo guide requires 8-second output for 1080p/4k. Official Runway pricing lists gen4_turbo at 5 credits/second with credits costing $0.01 ($0.05/second). Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/pricing, ai.google.dev/gemini-api/docs/veo, docs.dev.runwayml.com/guides/pricing, and docs.dev.runwayml.com/api-details/api_changelog."
+    },
+    {
+      "id": "verification/2026-07-14/4",
+      "date": "2026-07-14",
+      "verifiedBy": "official-openai-docs-gpt-5.4-nano",
+      "status": "CORRECTION",
+      "notes": "Replaced legacy gpt-5-nano with current gpt-5.4-nano. Official OpenAI model documentation confirms exact ID gpt-5.4-nano, model type reasoning, snapshot gpt-5.4-nano-2026-03-17, 400K context, 272K maximum input, 128K maximum output, text+image input, text output, Responses + Chat Completions + Batch support, and reasoning efforts none/low/medium/high/xhigh. Official pricing is $0.20 input, $0.02 cached input, and $1.25 output per 1M tokens. AGI selects the Responses path for this reasoning model. Provider-native web search and hosted tools remain false in the legacy global capability flags until each application route actually wires them; those features belong in the future route/harness registry rather than intrinsic model metadata."
+    },
+    {
+      "id": "verification/2026-07-11/5",
+      "date": "2026-07-11",
+      "verifiedBy": "websearch-enable-2026-07-11",
+      "status": "CORRECTION",
+      "notes": "Founder directive: capabilities.search must be true only for models that GENUINELY produce web results today, false for every model where it would be a cosmetic no-op. Traced the full request path (apps/web/lib/web-search-support.ts + request-processor.ts appendWebSearchTool + each provider's translate/wire layer), not just the provider allowlist. Anthropic (claude-opus-4.8/claude-sonnet-4.6/claude-haiku-4.5) and Google (gemini-3.1-pro-preview/gemini-3.1-flash-lite/gemini-3.5-flash) confirmed working end-to-end: web_search_20260209 / google_search survive translate.ts untouched into the wire call; gemini-3.5-flash additionally has a live-recorded groundingMetadata integration test. Kept search:true — no change. OpenAI (gpt-5.5/gpt-5.6-*/gpt-5.4-mini/gpt-5-nano/gpt-4.1-nano) confirmed NOT working on the web route: adapter-factory.ts hardcodes useResponsesApi:false, and packages/ai/providers/openai/src/translate.ts's OPENAI_RESPONSES_ONLY_TOOL_TYPES strips web_search_preview before the wire (it is Responses-API-only) — every OpenAI model was already search:false; left unchanged, but do NOT flip any OpenAI model true until the web route grows a real Responses-API path. CORRECTED 4 cosmetic-true models to false: grok-4.3 (xai), qwen-max and qwen-3.5-plus (qwen), kimi-k2.6 (moonshot) — appendWebSearchTool has no injection branch for xai/qwen/moonshot (confirmed by request-processor.web-search.test.ts and web-search-support.test.ts, which already document xai/qwen/moonshot as no-wired-path providers), and repo-wide search found zero wiring of any provider's real native mechanism either (xAI Agent Tools web_search/x_search tool -- the older search_parameters flag it replaces was retired by xAI on 2026-01-12; Qwen DashScope enable_search request param; Moonshot builtin_function $web_search tool -- all real, current, documented APIs per provider docs, just not called anywhere in this codebase). These 4 are the WP4 target list: wiring any of them up requires provider-specific request shaping (a boolean param for Qwen, a tool-array entry for Moonshot, a tool-array entry for xAI), not one generic mechanism. apps/desktop/src/__tests__/modelRouter.test.ts:42-45 asserts grok-4.3 capabilities.search===true on the premise 'Grok has built-in real-time data access' -- that premise is stale (xAI search has never been automatic; it always required an explicit opt-in mechanism, and AGI never wired one up); flagged for the desktop owner to update, not changed here (out of this pass's scope)."
+    },
+    {
+      "id": "verification/2026-06-03/6",
+      "date": "2026-06-03",
+      "verifiedBy": "official-docs-model-repair",
+      "status": "PASS",
+      "notes": "OpenAI verified from official OpenAI developer documentation before catalog repair: gpt-5.5 is the latest text/agent flagship, gpt-5.4-mini remains the latest mini-family model, and gpt-image-2 is the latest GPT Image model available to this product catalog. Anthropic verified from platform.claude.com/docs: current Claude API IDs are claude-opus-4-8, claude-sonnet-4-6, and claude-haiku-4-5-20251001 / alias claude-haiku-4-5. Google verified from ai.google.dev and deepmind.google: gemini-3.5-flash is a current Gemini API model with 1M input context, 64K output, function calling, structured output, Search as a tool, and code execution; Standard pricing is $1.50 input, $9.00 output, and $0.15 cached input per 1M tokens. Google media routes verified from official docs: Imagen 4 Fast API ID is imagen-4.0-fast-generate-001 and Veo 3.1 API ID is veo-3.1-generate-preview. AGI keeps unverified OpenAI video IDs out of the selectable catalog and routes video generation to verified Google Veo 3.1 rather than carrying stale video IDs."
+    },
+    {
+      "id": "verification/2026-06-20/7",
+      "date": "2026-06-20",
+      "verifiedBy": "catalog-cleanup-2026-06-20",
+      "status": "PARTIAL",
+      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
+    },
+    {
+      "id": "verification/2026-06-20/8",
+      "date": "2026-06-20",
+      "verifiedBy": "research-agent-2026-06-20",
+      "status": "PASS",
+      "notes": "GLM-5.2 contextWindow confirmed 1M (was 200K). Groq llama-3.3-70b-versatile and llama-3.1-8b-instant marked deprecated (shutdown 2026-08-16). Qwen API IDs updated to Qwen3 generation: qwen-max→qwen3-max, qwen-flash→qwen3.5-flash, qwen-coder-plus→qwen3-coder-plus, qwen-coder-flash→qwen3-coder-flash. qwen-3.6-plus renamed to qwen-3.5-plus (apiModelId qwen3.6-plus did not exist; correct ID is qwen3.5-plus). qwen-turbo marked deprecated (absorbed by qwen3.5-flash). NVIDIA Nemotron models updated to Nemotron 3 family: ultra-253b→nemotron-3-ultra-550b-a55b, super-49b→nemotron-3-super-120b-a12b, nano-8b→nemotron-3-nano-30b-a3b (all 1M ctx). Grok-4.3, DeepSeek V4, Kimi K2.6 confirmed current — no changes needed. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, alibabacloud DashScope."
+    },
+    {
+      "id": "verification/2026-06-23/9",
+      "date": "2026-06-23",
+      "verifiedBy": "screenshot-verified-openai-compare-2026-06-23",
+      "status": "PASS",
+      "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com): gpt-5-nano = $0.05 input / $0.01 cached / $0.40 output, 400K ctx, reasoning tokens SUPPORTED (released Aug 2025, still served); gpt-4.1-nano = $0.10 input / $0.03 cached / $0.40 output, 1,047,576 ctx, NO reasoning tokens, fine-tuning supported (released Apr 2025, still served). Added to tierAllowedModels.economy and modelPresets.openai. Prior catalog had no nano tier (cheapest OpenAI was gpt-5.4-mini at $0.75/$4.50). For fixed-price cost control prefer gpt-4.1-nano (cannot emit reasoning tokens). Release dates from public launch info (GPT-5 nano Aug 2025, GPT-4.1 nano Apr 2025); the Compare page shows knowledge-cutoff, not release."
+    },
+    {
+      "id": "verification/2026-07-09/10",
+      "date": "2026-07-09",
+      "verifiedBy": "research-agent-2026-07-09",
+      "status": "PASS",
+      "notes": "Added GPT-5.6 family (GA 2026-07-09), verified from developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (platform.openai.com/docs/models now 301s to this host). Exact API IDs gpt-5.6-sol/-terra/-luna; bare alias gpt-5.6 routes to Sol per the sol page. All: 1,050,000 ctx, 128K max output, reasoning+vision+tools+streaming, knowledge cutoff 2026-02-16. Pricing per 1M: sol $5/$0.50/$30, terra $2.50/$0.25/$15, luna $1/$0.10/$6. No dated snapshot IDs published yet for 5.6 (do not invent). computerUse/codeExecution enumerated on the terra page (web search, file search, image generation, code interpreter, computer use, MCP); carried to sol/luna as family-level API tools pending per-page enumeration. gpt-5.5 NOT deprecated: still listed as Default frontier model with gpt-5.5 + gpt-5.5-2026-04-23 IDs; 5.6 launched alongside, not replacing. Benchmarks intentionally omitted for 5.6 (none published on the model pages)."
+    },
+    {
+      "id": "verification/2026-07-10/11",
+      "date": "2026-07-10",
+      "verifiedBy": "live-api-verification-2026-07-10",
+      "status": "CORRECTION",
+      "notes": "REVERTED the gpt-5.6 family (sol/terra/luna) added 2026-07-09 — LIVE curl to api.openai.com/v1/chat/completions with a real key returns HTTP 404 'model does not exist' for gpt-5.6-sol/-terra/-luna and bare gpt-5.6. The 2026-07-09 'verified from developers.openai.com' claim was a documentation hallucination, not provisioned models. Confirmed REAL and retained: gpt-5.5 (HTTP 200 with max_completion_tokens; the earlier 400 was the max_tokens-vs-max_completion_tokens param, not model absence), gpt-5.4/-mini/-nano/-pro, gpt-5-nano, gpt-4.1-nano. Latest real OpenAI flagship in this account = gpt-5.5. Lesson: verify model IDs against a live API call, not just doc pages."
+    },
+    {
+      "id": "verification/2026-07-10/12",
+      "date": "2026-07-10",
+      "verifiedBy": "reasoning-effort-capability-wave-2026-07-10",
+      "status": "PASS",
+      "notes": "Added additive per-model `reasoning` capability blocks (control/supportedEfforts/defaultEffort/canDisableThinking/thinkingBudget/request paths) for every served model, sourced from docs/research/reasoning-effort-capability-matrix-2026-07-10.md (live-probed 2026-07-10). Fixed claude-haiku-4.5 capabilities.thinking false->true (live 200 with thinking_tokens; control=thinking_budget classic enabled+budget, NOT adaptive). Added GPT-5.6 family (sol/terra/luna) as availability:\"coming_soon\" (LIVE 404 on our key 2026-07-10 — NOT provisioned); bare gpt-5.6 will alias to Sol at GA (no canonicalization alias added this wave — the family is non-routable while coming_soon); kept OUT of tierAllowedModels/modelPresets/SLOT_REGISTRY/taskRouting/defaultModel (enforced by new check:availability-invariant). 5.6 reasoning ladder none/low/medium/high/xhigh/max (max above xhigh). Ultra (multi_agent.enabled + max_concurrent_subagents, beta responses_multi_agent=v1), Pro (reasoning.mode:\"pro\"), persistent reasoning (reasoning.context), and programmatic tool calling (tool type programmatic_tool_calling + allowed_callers) are RESPONSES-API-ONLY and INERT this wave — our web chat route uses /chat/completions, so the at-GA wave must add a Responses path for those four; effort/vision/tools work on the existing chat path. Added inert tierPolicy.minTier authored data (NOT used to derive tierAllowedModels this wave — all budget models stay available for testing per founder). Gemini 3.x request path migrated to thinkingConfig.thinkingLevel (thinkingBudget kept as legacy fallback). 5.6 pricing/limits from founder screenshot corpus (Addendum D): ctx 1,050,000, max output 128K, knowledge cutoff 2026-02-16; short-context per-1M sol 5/0.5/30 (cache write 6.25), terra 2.5/0.25/15 (3.125), luna 1/0.1/6 (1.25); INERT longContext price tier sol 10/1/45, terra 5/0.5/22.5, luna 2/0.2/9 (5.6-only additive sub-block, applied by the AT-GA metering wave). reasoningDots sol 5 / terra 4 / luna 3."
+    }
+  ],
+  "policies": {
+    "auto": {
+      "kind": "routing_policy",
+      "defaultAlias": "auto-balanced",
+      "fallbackSlot": "workhorse_general",
+      "profileOrder": ["economy", "balanced", "premium"],
+      "tierMaximumProfiles": {
+        "free": "economy",
+        "pro": "balanced",
+        "max": "premium",
+        "enterprise": "premium",
+        "byok": "premium"
+      },
+      "tierAllowedSlots": {
+        "free": ["workhorse_general"],
+        "pro": [
+          "workhorse_general",
+          "general_balanced",
+          "escalation_coding",
+          "coding_balanced",
+          "reasoning_economy",
+          "reasoning_balanced",
+          "creative_balanced",
+          "multimodal_balanced",
+          "long_context_balanced",
+          "search_fast",
+          "search_premium",
+          "computer_use_balanced",
+          "image_generation"
+        ],
+        "max": [
+          "workhorse_general",
+          "general_balanced",
+          "flagship_general",
+          "escalation_coding",
+          "coding_balanced",
+          "flagship_coding",
+          "reasoning_economy",
+          "reasoning_balanced",
+          "creative_balanced",
+          "creative_premium",
+          "multimodal_balanced",
+          "long_context_balanced",
+          "search_fast",
+          "search_premium",
+          "computer_use_balanced",
+          "computer_use_premium",
+          "image_generation"
+        ],
+        "enterprise": [
+          "workhorse_general",
+          "general_balanced",
+          "flagship_general",
+          "escalation_coding",
+          "coding_balanced",
+          "flagship_coding",
+          "reasoning_economy",
+          "reasoning_balanced",
+          "creative_balanced",
+          "creative_premium",
+          "multimodal_balanced",
+          "long_context_balanced",
+          "search_fast",
+          "search_premium",
+          "computer_use_balanced",
+          "computer_use_premium",
+          "image_generation"
+        ],
+        "byok": [
+          "workhorse_general",
+          "general_balanced",
+          "flagship_general",
+          "escalation_coding",
+          "coding_balanced",
+          "flagship_coding",
+          "reasoning_economy",
+          "reasoning_balanced",
+          "creative_balanced",
+          "creative_premium",
+          "multimodal_balanced",
+          "long_context_balanced",
+          "search_fast",
+          "search_premium",
+          "computer_use_balanced",
+          "computer_use_premium",
+          "image_generation"
+        ]
+      },
+      "providerPolicies": {
+        "usOnly": {
+          "allowedTiers": ["max", "enterprise"],
+          "excludedProviders": ["deepseek", "qwen", "moonshot", "zhipu", "minimax"]
+        }
+      },
+      "aliases": {
+        "auto": {
+          "profile": "balanced",
+          "label": "Auto",
+          "description": "Automatically select an eligible route for the task",
+          "selectable": false
+        },
+        "auto-economy": {
+          "profile": "economy",
+          "label": "Economy",
+          "description": "Lowest-cost eligible route for the task",
+          "selectable": true
+        },
+        "auto-balanced": {
+          "profile": "balanced",
+          "label": "Balanced",
+          "description": "Best balance of capability, latency, and cost",
+          "selectable": true
+        },
+        "auto-premium": {
+          "profile": "premium",
+          "label": "Best",
+          "description": "Most capable eligible route for the task",
+          "selectable": true
+        }
+      },
+      "continuity": {
+        "preserveExplicitSelection": true,
+        "preferCurrentModelWhenEligible": true,
+        "preferCurrentRouteForCache": true,
+        "reevaluateOnTaskChange": true
+      },
+      "tasks": {
+        "simple_chat": {
+          "requiredCapabilities": ["textInput", "textOutput"],
+          "requiredHarnessFeatures": [],
+          "preferredSlots": {
+            "economy": ["workhorse_general"],
+            "balanced": ["general_balanced", "workhorse_general"],
+            "premium": ["general_balanced", "flagship_general", "workhorse_general"]
+          },
+          "benchmarkWeights": { "mmlu": 1 }
+        },
+        "general": {
+          "requiredCapabilities": ["textInput", "textOutput"],
+          "requiredHarnessFeatures": [],
+          "preferredSlots": {
+            "economy": ["workhorse_general"],
+            "balanced": ["general_balanced", "workhorse_general"],
+            "premium": ["flagship_general", "general_balanced", "workhorse_general"]
+          },
+          "benchmarkWeights": { "mmlu": 1 }
+        },
+        "coding": {
+          "requiredCapabilities": ["textInput", "textOutput", "functionCalling"],
+          "requiredHarnessFeatures": [],
+          "preferredSlots": {
+            "economy": ["escalation_coding", "workhorse_general"],
+            "balanced": ["coding_balanced", "escalation_coding", "workhorse_general"],
+            "premium": ["flagship_coding", "coding_balanced", "escalation_coding"]
+          },
+          "benchmarkWeights": { "swebench": 0.7, "humaneval": 0.3 }
+        },
+        "reasoning": {
+          "requiredCapabilities": ["textInput", "textOutput", "reasoning"],
+          "requiredHarnessFeatures": [],
+          "preferredSlots": {
+            "economy": ["reasoning_economy", "workhorse_general"],
+            "balanced": ["reasoning_balanced", "reasoning_economy"],
+            "premium": ["reasoning_balanced", "flagship_general", "reasoning_economy"]
+          },
+          "benchmarkWeights": { "gpqa": 0.55, "aime": 0.45 }
+        },
+        "creative_writing": {
+          "requiredCapabilities": ["textInput", "textOutput"],
+          "requiredHarnessFeatures": [],
+          "preferredSlots": {
+            "economy": ["workhorse_general"],
+            "balanced": ["creative_balanced", "general_balanced"],
+            "premium": ["creative_premium", "creative_balanced"]
+          },
+          "benchmarkWeights": {}
+        },
+        "multimodal": {
+          "requiredCapabilities": ["textInput", "imageInput", "textOutput"],
+          "requiredHarnessFeatures": [],
+          "preferredSlots": {
+            "economy": ["workhorse_general"],
+            "balanced": ["multimodal_balanced", "workhorse_general"],
+            "premium": ["multimodal_balanced", "workhorse_general"]
+          },
+          "benchmarkWeights": {}
+        },
+        "long_context": {
+          "requiredCapabilities": ["textInput", "textOutput"],
+          "requiredHarnessFeatures": [],
+          "minimumContextTokens": 50000,
+          "preferredSlots": {
+            "economy": ["workhorse_general"],
+            "balanced": ["long_context_balanced", "workhorse_general"],
+            "premium": ["long_context_balanced", "flagship_general", "workhorse_general"]
+          },
+          "benchmarkWeights": {}
+        },
+        "research": {
+          "requiredCapabilities": ["textInput", "textOutput"],
+          "requiredHarnessFeatures": ["webSearch"],
+          "preferredSlots": {
+            "economy": ["search_fast"],
+            "balanced": ["search_fast"],
+            "premium": ["search_premium", "search_fast"]
+          },
+          "benchmarkWeights": {}
+        },
+        "agentic": {
+          "requiredCapabilities": ["textInput", "textOutput", "functionCalling"],
+          "requiredHarnessFeatures": ["toolDiscovery"],
+          "preferredSlots": {
+            "economy": ["workhorse_general"],
+            "balanced": ["general_balanced", "coding_balanced"],
+            "premium": ["flagship_general", "flagship_coding"]
+          },
+          "benchmarkWeights": { "swebench": 0.5, "mmlu": 0.5 }
+        },
+        "computer-use": {
+          "requiredCapabilities": ["textInput", "imageInput", "textOutput", "functionCalling"],
+          "requiredHarnessFeatures": ["computerUse"],
+          "preferredSlots": {
+            "economy": ["computer_use_balanced"],
+            "balanced": ["computer_use_balanced"],
+            "premium": ["computer_use_premium", "computer_use_balanced"]
+          },
+          "benchmarkWeights": { "osWorldVerified": 1 }
+        },
+        "image_generation": {
+          "requiredCapabilities": ["imageOutput"],
+          "requiredHarnessFeatures": [],
+          "preferredSlots": {
+            "economy": ["image_generation"],
+            "balanced": ["image_generation"],
+            "premium": ["image_generation"]
+          },
+          "benchmarkWeights": {}
+        }
+      },
+      "slots": {
+        "general_fast": { "modelKey": "gemini-3.1-flash-lite" },
+        "workhorse_general": { "modelKey": "gemini-3.1-flash-lite" },
+        "general_balanced": { "modelKey": "gpt-5.6-terra" },
+        "general_premium": { "modelKey": "gemini-3.5-flash" },
+        "flagship_general": { "modelKey": "gpt-5.6-sol" },
+        "coding_fast": { "modelKey": "deepseek-v4-flash" },
+        "coding_premium": { "modelKey": "gpt-5.6-sol" },
+        "escalation_coding": { "modelKey": "glm-5.2" },
+        "coding_balanced": { "modelKey": "claude-sonnet-5" },
+        "flagship_coding": { "modelKey": "claude-opus-4.8" },
+        "reasoning_premium": { "modelKey": "deepseek-v4-flash" },
+        "reasoning_economy": { "modelKey": "deepseek-v4-flash" },
+        "reasoning_balanced": { "modelKey": "kimi-k2.6" },
+        "creative_writing": { "modelKey": "claude-sonnet-5" },
+        "creative_writing_premium": { "modelKey": "claude-opus-4.8" },
+        "creative_balanced": { "modelKey": "claude-sonnet-5" },
+        "creative_premium": { "modelKey": "claude-opus-4.8" },
+        "vision_fast": { "modelKey": "gemini-3.1-flash-lite" },
+        "vision_premium": { "modelKey": "gemini-3.5-flash" },
+        "multimodal_balanced": { "modelKey": "gemini-3.5-flash" },
+        "long_context_balanced": { "modelKey": "gemini-3.1-pro-preview" },
+        "search_fast": { "modelKey": "sonar" },
+        "search_premium": { "modelKey": "sonar-deep-research" },
+        "browser_dom": { "modelKey": "claude-sonnet-5" },
+        "computer_use": { "modelKey": "claude-sonnet-5" },
+        "computer_use_balanced": { "modelKey": "claude-sonnet-5" },
+        "computer_use_premium": { "modelKey": "claude-opus-4.8" },
+        "image_generation": { "modelKey": "gemini-3.1-flash-image" },
+        "video_generation": { "modelKey": "veo-3" },
+        "embedding_default": { "modelKey": "gemini-embedding-2" },
+        "voice_transcription": { "modelKey": "whisper-1" },
+        "voice_rewrite": { "modelKey": "gemini-3.1-flash-lite" },
+        "general_balanced_pro": { "modelKey": "gpt-5.6-terra" },
+        "coding_premium_pro": { "modelKey": "claude-sonnet-5" },
+        "reasoning_premium_pro": { "modelKey": "kimi-k2.6" },
+        "multimodal_pro": { "modelKey": "gemini-3.5-flash" },
+        "long_context_pro": { "modelKey": "gemini-3.1-pro-preview" },
+        "flagship_coding_pro_plus": { "modelKey": "claude-opus-4.8" },
+        "flagship_general_pro_plus": { "modelKey": "gpt-5.6-sol" },
+        "video_generation_pro_plus": { "modelKey": "veo-3" }
+      }
+    },
+    "legacyTiers": {
+      "economy": [
+        "gpt-5.6-luna",
+        "gemini-3.1-flash-lite",
+        "deepseek-v4-flash",
+        "claude-haiku-4.5",
+        "qwen-3.5-plus",
+        "kimi-k2.6",
+        "glm-5.2",
+        "sonar"
+      ],
+      "pro_additions": [
+        "gpt-5.6-terra",
+        "claude-sonnet-5",
+        "gemini-3.5-flash",
+        "gemini-3.1-pro-preview",
+        "deepseek-v4-pro",
+        "qwen-max",
+        "sonar-deep-research"
+      ],
+      "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-4.8", "grok-4.3"]
+    }
+  }
+}

@@ -22,15 +22,17 @@
  *
  * Wave 4: the PURE apply/cursor logic below (conversation/message delta apply,
  * memory delta apply, push-item mapping, cursor arithmetic, settings push/pull
- * gating) delegates to @agiworkforce/services' sync-apply module — the same
+ * gating) delegates to @agiworkforce/sync — the same
  * rules desktop's Rust cloud_sync.rs implements natively and keeps in sync
- * with via golden-fixture replay (packages/services/src/sync-apply/__fixtures__).
+ * with via golden-fixture replay (packages/client/sync/src/__fixtures__).
  * What stays here is mobile-only glue: Zustand store access (the "port"
  * adapters below), scheduling, egress-guarded transport, and Zod validation.
  * Project apply and memory/project push mapping were intentionally NOT
  * extracted — see the inline scope notes at each call site.
  */
 import { api } from './api';
+import { managedCloudProjects } from './managedCloudProjects';
+import type { ProjectSyncPushItem } from '@agiworkforce/cloud-contracts';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
@@ -45,7 +47,7 @@ import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateSt
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
 import type { ChatMessage } from '@/types/chat';
 // Wire shapes + pure apply/cursor logic come from the shared cloud contracts
-// and sync-apply modules (packages/services) — the same schemas the web
+// and sync-apply modules (@agiworkforce/sync) — the same schemas the web
 // routes' contract tests enforce server-side, and the same apply rules
 // desktop's Rust engine replays via golden fixtures. Every pull/push response
 // is still validated here, so a server-shape drift throws into syncNow()'s
@@ -55,20 +57,29 @@ import {
   ChatSyncPushResponseSchema,
   MemorySyncPullResponseSchema,
   MemorySyncPushResponseSchema,
-  ProjectsSyncPullResponseSchema,
-  ProjectsSyncPushResponseSchema,
+  MANAGED_CLOUD_SETTINGS_SYNC_PATH,
   SettingsSyncPullResponseSchema,
+  SettingsSyncPushRequestSchema,
   SettingsSyncPushResponseSchema,
   type ConversationWireDelta,
   type MessageWireDelta,
+  CloudSafeSettingsSchema,
+  type CloudSafeSettings,
+} from '@agiworkforce/cloud-contracts';
+import {
   applyConversationDeltas as applyConversationDeltasCore,
   applyMessageDeltas as applyMessageDeltasCore,
   toConversationPushItem,
+  conversationSyncContentMatches,
   toMessagePushItem,
   isSyncableMessageRole,
   mapMemoryWireDelta,
   applyMemoryDeltas,
+  toMemoryPushItem,
+  memorySyncContentMatches,
   mapProjectWireDelta,
+  mergeCloudSafeSettings,
+  rebaseCloudSafeSettings,
   shouldPushSettings,
   shouldApplyPulledSettings,
   selectNextCursor,
@@ -76,12 +87,10 @@ import {
   type SyncConversationRecord,
   type MessageStorePort,
   type MessagePushItem,
-} from '@agiworkforce/services';
+} from '@agiworkforce/sync';
 
 const SYNC_PATH = '/api/chat/sync';
 const MEMORY_SYNC_PATH = '/api/memory/sync';
-const PROJECTS_SYNC_PATH = '/api/projects/sync';
-const SETTINGS_SYNC_PATH = '/api/settings/sync';
 /** Safety bound on the pull pagination loop (each page is up to 500 rows). */
 const PULL_PAGE_GUARD = 50;
 
@@ -100,7 +109,7 @@ export function isManagedSyncEnabled(): boolean {
 
 // ── Port adapters over the Zustand cloud stores ─────────────────────────────
 //
-// The pure apply rules live in @agiworkforce/services' sync-apply module;
+// The pure apply rules live in @agiworkforce/sync;
 // these adapters are the mobile-specific glue that satisfies its port
 // interfaces against chatCloudMessageStore. Each method does a live
 // `.getState()` read/write (never a cached snapshot), so a mutation from an
@@ -120,6 +129,7 @@ const conversationPort: ConversationStorePort = {
       pinned: c.pinned,
       model: c.model,
       projectId: c.projectId,
+      serverVersion: c.serverVersion,
     };
   },
   insert: (record) => {
@@ -132,6 +142,7 @@ const conversationPort: ConversationStorePort = {
       pinned: record.pinned,
       model: record.model,
       projectId: record.projectId,
+      serverVersion: record.serverVersion,
     });
   },
   patch: (id, patch) => {
@@ -204,9 +215,9 @@ const messagePort: MessageStorePort = {
 
 /**
  * Applies pulled conversation deltas via the shared sync-apply rule (see
- * @agiworkforce/services' conversations.ts: tombstone-remove, LWW upsert,
- * dirty-title preserve). Exported (not just used internally) — kept as a
- * named export with this exact one-argument signature because
+ * @agiworkforce/sync conversations.ts: tombstone-remove, server-revision
+ * upsert, complete dirty-mutation preservation). Exported (not just used
+ * internally) — kept as a named export with this exact one-argument signature because
  * apps/mobile/__tests__/cloud-delete-rename-durability.test.ts imports and
  * calls it directly.
  */
@@ -250,10 +261,11 @@ async function push(): Promise<void> {
 
   // Conversations are sent first (the server upserts them before messages, so a
   // new conversation's messages pass the ownership EXISTS check in one round-trip).
-  const conversations = dirtyConversationIds
+  const conversationSnapshots = dirtyConversationIds
     .map((id) => conversationPort.get(id))
-    .filter((c): c is SyncConversationRecord => Boolean(c))
-    .map((c) => toConversationPushItem(c));
+    .filter((c): c is SyncConversationRecord => Boolean(c));
+  const conversations = conversationSnapshots.map((c) => toConversationPushItem(c));
+  const sentConversationById = new Map(conversationSnapshots.map((c) => [c.id, c]));
 
   const cloud = useChatCloudMessageStore.getState();
 
@@ -284,38 +296,64 @@ async function push(): Promise<void> {
   }
 
   let ackedMessageIds = new Set<string>();
+  const resolvedConversationIds = new Set<string>();
+  const resolvedMessageIds = new Set<string>();
   if (conversations.length > 0 || messages.length > 0) {
     const res = ChatSyncPushResponseSchema.parse(
-      await api.post<unknown>(SYNC_PATH, { conversations, messages }),
+      await api.post<unknown>(
+        SYNC_PATH,
+        { protocolVersion: 2, conversations, messages },
+      ),
     );
     ackedMessageIds = new Set(res.applied.messages.map((m) => m.id));
+    for (const applied of res.applied.conversations) {
+      const sent = sentConversationById.get(applied.id);
+      const latest = conversationPort.get(applied.id);
+      if (latest) conversationPort.patch(applied.id, { serverVersion: applied.server_version });
+      if (!latest || (sent && conversationSyncContentMatches(sent, latest))) {
+        resolvedConversationIds.add(applied.id);
+      }
+    }
+    for (const conflict of res.conflicts.conversations) {
+      const sent = sentConversationById.get(conflict.id);
+      const latest = conversationPort.get(conflict.id);
+      if (!conflict.current || conflict.current.deleted_at) {
+        conversationPort.remove(conflict.id);
+        resolvedConversationIds.add(conflict.id);
+        continue;
+      }
+      const needsLegacyRebase = sent?.serverVersion === undefined;
+      if (sent && latest && (needsLegacyRebase || !conversationSyncContentMatches(sent, latest))) {
+        conversationPort.patch(conflict.id, {
+          ...latest,
+          serverVersion: conflict.current.server_version,
+        });
+      } else {
+        applyConversationDeltasCore(conversationPort, [conflict.current], []);
+        resolvedConversationIds.add(conflict.id);
+      }
+    }
+    for (const conflict of res.conflicts.messages) {
+      if (conflict.current) {
+        applyMessageDeltas([conflict.current]);
+        resolvedMessageIds.add(conflict.id);
+      }
+    }
   }
 
-  // Conversations are LWW and dependency-free: clearing every attempted ref is safe
-  // (a no-op re-push achieves nothing; a stale local copy is repaired by the next
-  // pull). Messages: clear only refs the server ACKED (persisted) plus dead refs. An
-  // attempted-but-unacked message — its parent conversation isn't on the server yet —
-  // stays dirty so a later push retries it once the conversation lands. Never drop it.
+  // Clear a conversation only after an exact-snapshot ACK or deterministic server
+  // winner. An edit made while the request was in flight keeps its dirty ref and is
+  // rebased onto the returned revision. Messages clear only after an identity ACK or
+  // conflict winner; an unacked orphan stays dirty until its parent reaches the server.
   const clearedMessageRefs = [
     ...deadRefs,
-    ...buildableRefs.filter((ref) => ackedMessageIds.has(ref.messageId)),
+    ...buildableRefs.filter(
+      (ref) => ackedMessageIds.has(ref.messageId) || resolvedMessageIds.has(ref.messageId),
+    ),
   ];
-  useCloudSyncStateStore.getState().clearDirty(dirtyConversationIds, clearedMessageRefs);
-}
-
-// ── Memory push body (camelCase to /api/memory/sync) ──────────────────────────
-
-/** Shape for POST /api/memory/sync — server expects camelCase. */
-interface MemoryPushItem {
-  id: string;
-  content: string;
-  category?: string | null;
-  source?: string;
-  /** Server-side column/schema support is pending — sent best-effort. */
-  pinned?: boolean;
-  isDeleted?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  useCloudSyncStateStore
+    .getState()
+    .clearDirty([...resolvedConversationIds], clearedMessageRefs);
 }
 
 // ── Memory pull ────────────────────────────────────────────────────────────────
@@ -332,7 +370,8 @@ async function pullMemory(): Promise<void> {
       // both steps are the shared sync-apply rule (memory.ts); the engine's
       // only job is to read the current entries and write the merged result.
       const current: CloudMemoryEntry[] = useCloudMemoryStore.getState().entries;
-      const merged = applyMemoryDeltas(current, memories.map(mapMemoryWireDelta));
+      const dirtyIds = useMemorySyncStateStore.getState().dirtyMemoryIds;
+      const merged = applyMemoryDeltas(current, memories.map(mapMemoryWireDelta), dirtyIds);
       useCloudMemoryStore.setState({ entries: merged });
     }
     cursor = selectNextCursor(cursor, res.cursor);
@@ -353,7 +392,7 @@ async function pushMemory(): Promise<void> {
   // Separate live entries from dead refs (entry vanished from store — skip, clear).
   const liveIds: string[] = [];
   const deadIds: string[] = [];
-  const payload: MemoryPushItem[] = [];
+  const payload = [] as ReturnType<typeof toMemoryPushItem>[];
 
   for (const id of dirtyMemoryIds) {
     const entry = entryById.get(id);
@@ -363,56 +402,64 @@ async function pushMemory(): Promise<void> {
     }
     liveIds.push(id);
     // Deleted entries are sent as tombstones; the server applies the soft-delete.
-    payload.push({
-      id: entry.id,
-      content: entry.content,
-      category: entry.category,
-      source: entry.source,
-      pinned: entry.pinned,
-      isDeleted: entry.isDeleted,
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-    });
+    payload.push(toMemoryPushItem(entry));
   }
 
   // Dead refs: clear immediately (nothing to push).
   const ackedIds = new Set<string>();
+  const resolvedIds = new Set<string>();
   if (payload.length > 0) {
     const res = MemorySyncPushResponseSchema.parse(
-      await api.post<unknown>(MEMORY_SYNC_PATH, { memories: payload }),
+      await api.post<unknown>(
+        MEMORY_SYNC_PATH,
+        { protocolVersion: 2, memories: payload },
+      ),
     );
     for (const applied of res.applied) {
       ackedIds.add(applied.id);
+      const sent = entryById.get(applied.id);
+      const latest = useCloudMemoryStore.getState().entries.find((entry) => entry.id === applied.id);
+      if (latest) {
+        useCloudMemoryStore
+          .getState()
+          .upsertCloudMemory({ ...latest, serverVersion: applied.server_version });
+      }
+      if (!latest || (sent && memorySyncContentMatches(sent, latest))) {
+        resolvedIds.add(applied.id);
+      }
+    }
+    for (const conflict of res.conflicts) {
+      const sent = entryById.get(conflict.id);
+      const latest = useCloudMemoryStore.getState().entries.find((entry) => entry.id === conflict.id);
+      if (!conflict.current || conflict.current.is_deleted) {
+        useCloudMemoryStore.getState().hardDeleteCloudMemory(conflict.id);
+        resolvedIds.add(conflict.id);
+        continue;
+      }
+      const serverWinner = mapMemoryWireDelta(conflict.current);
+      const needsLegacyRebase = sent?.serverVersion === undefined;
+      if (sent && latest && (needsLegacyRebase || !memorySyncContentMatches(sent, latest))) {
+        useCloudMemoryStore
+          .getState()
+          .upsertCloudMemory({ ...latest, serverVersion: serverWinner.serverVersion });
+      } else {
+        useCloudMemoryStore.getState().upsertCloudMemory(serverWinner);
+        resolvedIds.add(conflict.id);
+      }
     }
   }
 
   // Hard-delete tombstones that the server acked.
   for (const id of liveIds) {
     const entry = entryById.get(id);
-    if (entry?.isDeleted && ackedIds.has(id)) {
+    if (entry?.isDeleted && ackedIds.has(id) && resolvedIds.has(id)) {
       useCloudMemoryStore.getState().hardDeleteCloudMemory(id);
     }
   }
 
   // Clear dirty queue for: dead refs + server-acked live refs.
-  const toClear = [...deadIds, ...liveIds.filter((id) => ackedIds.has(id))];
+  const toClear = [...deadIds, ...resolvedIds];
   useMemorySyncStateStore.getState().clearMemoryDirty(toClear);
-}
-
-// ── Project push body (camelCase to /api/projects/sync) ───────────────────────
-
-/** Shape for POST /api/projects/sync — server expects camelCase. */
-interface ProjectPushItem {
-  id: string;
-  name: string;
-  description?: string | null;
-  instructions?: string | null;
-  color?: string | null;
-  isArchived?: boolean;
-  metadata?: Record<string, unknown> | null;
-  createdAt?: string;
-  updatedAt: string;
-  deletedAt?: string | null;
 }
 
 // ── Project pull ───────────────────────────────────────────────────────────────
@@ -420,16 +467,32 @@ interface ProjectPushItem {
 async function pullProjects(): Promise<void> {
   let cursor = useProjectSyncStateStore.getState().projectCursor;
   for (let page = 0; page < PULL_PAGE_GUARD; page += 1) {
-    const res = ProjectsSyncPullResponseSchema.parse(
-      await api.get<unknown>(`${PROJECTS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
-    );
+    const res = await managedCloudProjects.pullProjects(cursor);
     const items = res.projects;
     if (items.length > 0) {
       // Map wire snake_case → client camelCase via the shared mapping (projects.ts).
       // The upsert/tombstone REDUCER stays store-owned (cloudProjectStore also
       // clears activeProjectId on a tombstone — see projects.ts's scope note).
       const deltas: CloudProject[] = items.map(mapProjectWireDelta);
-      useCloudProjectStore.getState().applyCloudProjectDeltas(deltas);
+      const dirtyIds = new Set(useProjectSyncStateStore.getState().dirtyProjectIds);
+      const preserved: CloudProject[] = [];
+      const authoritative: CloudProject[] = [];
+      for (const delta of deltas) {
+        const local = useCloudProjectStore.getState().projects.find((p) => p.id === delta.id);
+        if (dirtyIds.has(delta.id) && local && delta.deletedAt === null) {
+          // A local edit happened after the snapshot sent by this sync. Preserve
+          // that edit, but advance its CAS base to the latest server revision.
+          preserved.push({ ...local, serverVersion: delta.serverVersion });
+        } else {
+          authoritative.push(delta);
+        }
+      }
+      if (authoritative.length > 0) {
+        useCloudProjectStore.getState().applyCloudProjectDeltas(authoritative);
+      }
+      for (const project of preserved) {
+        useCloudProjectStore.getState().upsertCloudProject(project);
+      }
     }
     cursor = selectNextCursor(cursor, res.cursor);
     useProjectSyncStateStore.getState().setProjectCursor(cursor);
@@ -449,7 +512,7 @@ async function pushProjects(): Promise<void> {
   // Separate live projects from dead refs (project vanished from store — skip, clear).
   const liveIds: string[] = [];
   const deadIds: string[] = [];
-  const payload: ProjectPushItem[] = [];
+  const payload: ProjectSyncPushItem[] = [];
 
   for (const id of dirtyProjectIds) {
     const project = projectById.get(id);
@@ -467,34 +530,82 @@ async function pushProjects(): Promise<void> {
       color: project.color,
       isArchived: project.isArchived,
       metadata: project.metadata,
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt,
+      baseVersion: project.serverVersion ?? '0',
       deletedAt: project.deletedAt,
     });
   }
 
   // Dead refs: clear immediately (nothing to push).
   const ackedIds = new Set<string>();
+  const resolvedConflictIds = new Set<string>();
   if (payload.length > 0) {
-    const res = ProjectsSyncPushResponseSchema.parse(
-      await api.post<unknown>(PROJECTS_SYNC_PATH, { projects: payload }),
-    );
+    const res = await managedCloudProjects.pushProjects({ projects: payload });
     for (const applied of res.applied) {
       ackedIds.add(applied.id);
+      const sent = projectById.get(applied.id);
+      const latest = useCloudProjectStore.getState().projects.find((p) => p.id === applied.id);
+      if (latest) {
+        useCloudProjectStore
+          .getState()
+          .upsertCloudProject({ ...latest, serverVersion: applied.server_version });
+      }
+      if (sent && latest && projectSyncContentMatches(sent, latest)) {
+        resolvedConflictIds.add(applied.id);
+      }
+    }
+    for (const conflict of res.conflicts) {
+      const sent = projectById.get(conflict.id);
+      const latest = useCloudProjectStore.getState().projects.find((p) => p.id === conflict.id);
+      if (!conflict.current) {
+        useCloudProjectStore.getState().hardDeleteCloudProject(conflict.id);
+        resolvedConflictIds.add(conflict.id);
+        continue;
+      }
+      const serverWinner = mapProjectWireDelta(conflict.current);
+      if (serverWinner.deletedAt !== null) {
+        // Deletion is authoritative across every Managed Cloud surface. Never
+        // resurrect a project merely because a local edit raced the tombstone.
+        useCloudProjectStore.getState().applyCloudProjectDeltas([serverWinner]);
+        resolvedConflictIds.add(conflict.id);
+        continue;
+      }
+      const needsLegacyRebase = sent?.serverVersion === undefined;
+      if (sent && latest && (needsLegacyRebase || !projectSyncContentMatches(sent, latest))) {
+        useCloudProjectStore
+          .getState()
+          .upsertCloudProject({ ...latest, serverVersion: serverWinner.serverVersion });
+      } else {
+        useCloudProjectStore.getState().applyCloudProjectDeltas([serverWinner]);
+        resolvedConflictIds.add(conflict.id);
+      }
     }
   }
 
   // Hard-delete tombstones that the server acked.
   for (const id of liveIds) {
     const project = projectById.get(id);
-    if (project?.deletedAt !== null && ackedIds.has(id)) {
+    if (project?.deletedAt !== null && ackedIds.has(id) && resolvedConflictIds.has(id)) {
       useCloudProjectStore.getState().hardDeleteCloudProject(id);
     }
   }
 
   // Clear dirty queue for: dead refs + server-acked live refs.
-  const toClear = [...deadIds, ...liveIds.filter((id) => ackedIds.has(id))];
+  const toClear = [...deadIds, ...resolvedConflictIds];
   useProjectSyncStateStore.getState().clearProjectDirty(toClear);
+}
+
+/** Compare only fields carried by the project sync mutation, not local clocks/revisions. */
+function projectSyncContentMatches(left: CloudProject, right: CloudProject): boolean {
+  return (
+    left.id === right.id &&
+    left.name === right.name &&
+    left.description === right.description &&
+    left.instructions === right.instructions &&
+    left.color === right.color &&
+    left.isArchived === right.isArchived &&
+    JSON.stringify(left.metadata) === JSON.stringify(right.metadata) &&
+    left.deletedAt === right.deletedAt
+  );
 }
 
 // ── Settings push ───────────────────────────────────────────────────────────────
@@ -505,50 +616,68 @@ async function pushProjects(): Promise<void> {
  *
  * 1. `settingsUpdatedAt !== null` — null means this device has never changed any
  *    cloud-safe setting (factory defaults). A fresh device must NOT push defaults
- *    before pulling, as that would clobber the user's existing cloud settings via
- *    server-side LWW. Only real edits (stamped by cloud-safe setters) are pushed.
+ *    before pulling, because it has not observed a server revision. Only real
+ *    edits (stamped by cloud-safe setters) are pushed.
  *
  * 2. Snapshot-diff: the current cloud projection serializes differently from
  *    `lastPushedSnapshot`. Skips the POST when nothing changed since last push
  *    (prevents redundant network I/O on background sync cycles).
  *
- * The `updatedAt` in the push body is `settingsUpdatedAt` (the time the user last
- * changed a setting on this device), NOT `new Date()`. This is the LWW version
- * key: sending the real edit time lets the server correctly order concurrent edits
- * from multiple surfaces. Sending push-time would make "whichever synced last wins"
- * instead of "last writer wins."
- *
- * After a successful push (applied=true or applied=false for a stale LWW skip),
- * advances the settings cursor and updates the baseline snapshot so the pull path
- * can detect whether re-pushing after a pull would create churn.
+ * `settingsUpdatedAt` remains a local-only dirty marker. It never crosses the wire
+ * and never participates in conflict resolution. The push uses the last observed
+ * server revision as `baseVersion`.
  */
-async function pushSettings(): Promise<void> {
+function parseSettingsSnapshot(serialized: string): CloudSafeSettings {
+  if (!serialized) return {};
+  try {
+    const parsed = CloudSafeSettingsSchema.safeParse(JSON.parse(serialized));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
+}
+
+async function pushSettings(): Promise<CloudSettings> {
   const storeSnapshot = useCloudSettingsStore.getState();
   const { settingsUpdatedAt } = storeSnapshot;
   const current = toCloudSettings(storeSnapshot);
   const currentJson = JSON.stringify(current);
-  const { lastPushedSnapshot } = useSettingsSyncStateStore.getState();
+  const {
+    lastPushedSnapshot,
+    serverSnapshot,
+    settingsCursor: baseVersion,
+  } = useSettingsSyncStateStore.getState();
 
-  if (!shouldPushSettings(settingsUpdatedAt, currentJson, lastPushedSnapshot)) return;
+  if (!shouldPushSettings(settingsUpdatedAt, currentJson, lastPushedSnapshot)) return current;
 
-  const res = SettingsSyncPushResponseSchema.parse(
-    await api.post<unknown>(SETTINGS_SYNC_PATH, {
-      settings: current,
-      // Use the real local-edit time as the LWW key (not push time). This lets the
-      // server correctly resolve concurrent edits from multiple surfaces.
-      updatedAt: settingsUpdatedAt,
-    }),
+  // Mobile owns only a subset of each namespace. Carry forward the complete
+  // server document so a theme edit cannot erase Desktop/Web-only keys.
+  const outgoing = mergeCloudSafeSettings(
+    parseSettingsSnapshot(serverSnapshot),
+    current as CloudSafeSettings,
   );
 
-  // Advance cursor regardless of applied (LWW skipped = server cursor still moves).
-  const newCursor = res.cursor;
-  useSettingsSyncStateStore
-    .getState()
-    .setSettingsCursor(
-      selectNextCursor(useSettingsSyncStateStore.getState().settingsCursor, newCursor),
-    );
-  // Mark the snapshot as pushed so we don't re-push on the next cycle.
+  const res = SettingsSyncPushResponseSchema.parse(
+    await api.post<unknown>(
+      MANAGED_CLOUD_SETTINGS_SYNC_PATH,
+      SettingsSyncPushRequestSchema.parse({ settings: outgoing, baseVersion }),
+    ),
+  );
+
+  // Only an accepted compare-and-swap owns the returned revision. On conflict,
+  // retain the old cursor so the following pull can retrieve the server winner.
+  if (res.applied) {
+    useSettingsSyncStateStore
+      .getState()
+      .setSettingsCursor(
+        selectNextCursor(useSettingsSyncStateStore.getState().settingsCursor, res.cursor),
+      );
+    useSettingsSyncStateStore.getState().setServerSnapshot(JSON.stringify(outgoing));
+  }
+  // The attempted local projection is the three-way-merge base. On a conflict,
+  // that attempt loses to the server winner; only edits made after it are replayed.
   useSettingsSyncStateStore.getState().setLastPushedSnapshot(currentJson);
+  return current;
 }
 
 // ── Settings pull ───────────────────────────────────────────────────────────────
@@ -561,10 +690,12 @@ async function pushSettings(): Promise<void> {
  * snapshot so the next pushSettings() call does not re-push what was just pulled
  * (which would create an infinite churn loop).
  */
-async function pullSettings(): Promise<void> {
+async function pullSettings(localRequestBase: CloudSettings): Promise<void> {
   const cursor = useSettingsSyncStateStore.getState().settingsCursor;
   const res = SettingsSyncPullResponseSchema.parse(
-    await api.get<unknown>(`${SETTINGS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`),
+    await api.get<unknown>(
+      `${MANAGED_CLOUD_SETTINGS_SYNC_PATH}?since=${encodeURIComponent(cursor)}`,
+    ),
   );
 
   const pulledSettings = res.settings;
@@ -572,14 +703,28 @@ async function pullSettings(): Promise<void> {
 
   // Only apply if the server returned a new cursor (something changed).
   if (shouldApplyPulledSettings(advancedCursor, cursor, Object.keys(pulledSettings).length)) {
-    // Apply pulled cloud-safe namespaces into the live settings store (LWW).
-    applyCloudSettings(pulledSettings as CloudSettings);
+    const dirtyMarkerBeforeApply = useCloudSettingsStore.getState().settingsUpdatedAt;
+    const localCurrent = toCloudSettings(useCloudSettingsStore.getState());
+    const rebased = rebaseCloudSafeSettings(
+      pulledSettings,
+      localRequestBase as CloudSafeSettings,
+      localCurrent as CloudSafeSettings,
+    );
 
-    // After applying, recompute the cloud projection from the now-updated store
-    // and set it as the new baseline — prevents treating the pull as a local change
-    // that triggers a redundant push on the next cycle.
-    const freshSnapshot = toCloudSettings(useCloudSettingsStore.getState());
-    useSettingsSyncStateStore.getState().setLastPushedSnapshot(JSON.stringify(freshSnapshot));
+    // Apply the server winner first so we can record a local-surface baseline,
+    // then replay only edits made while the request was in flight.
+    applyCloudSettings(pulledSettings as CloudSettings);
+    const serverLocalProjection = toCloudSettings(useCloudSettingsStore.getState());
+    applyCloudSettings(rebased.localChanges as CloudSettings);
+
+    const syncState = useSettingsSyncStateStore.getState();
+    syncState.setLastPushedSnapshot(JSON.stringify(serverLocalProjection));
+    syncState.setServerSnapshot(JSON.stringify(pulledSettings));
+    useCloudSettingsStore
+      .getState()
+      ._setSettingsUpdatedAt(
+        rebased.hasLocalChanges ? (dirtyMarkerBeforeApply ?? new Date().toISOString()) : null,
+      );
   }
 
   useSettingsSyncStateStore.getState().setSettingsCursor(advancedCursor);
@@ -622,8 +767,8 @@ export async function syncNow(): Promise<void> {
     // Runs LAST (most sensitive — allowlist-gated). Uses its own cursor
     // (settingsSyncStateStore) — independent from all other cursors.
     // Push uses snapshot-diff dirty detection (no per-setter hooks needed).
-    await pushSettings();
-    await pullSettings();
+    const settingsRequestBase = await pushSettings();
+    await pullSettings(settingsRequestBase);
     useCloudSyncStateStore.getState().setStatus('idle');
     useCloudSyncStateStore.setState({ lastSyncAt: Date.now() });
   } catch (err) {

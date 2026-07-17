@@ -28,6 +28,11 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Turborepo --affected needs the actual merge base. Two commits are
+          # insufficient for multi-commit pull requests and silently degrade
+          # affected selection to a full or incorrect graph.
+          fetch-depth: 0
 
       - name: Conflict-marker gate
         run: python3 scripts/check-no-conflict-markers.py
@@ -68,7 +73,7 @@ jobs:
         # Wave 1.5 prevention layer: ESLint `no-restricted-syntax` rule
         # (eslint.config.mjs §"PREVENTION LAYER") flags hardcoded model
         # IDs + direct cloud database clients across TS/JS.
-        run: pnpm lint
+        run: pnpm exec turbo run lint --affected
 
       - name: Hardcoded-model-id gate (Rust)
         # Wave 1.5 prevention layer (CLAUDE.md §"Critical rules" #1).
@@ -103,7 +108,7 @@ jobs:
 
       - name: Lock-vs-build drift check (AP-09, advisory)
         # R27-PARITY: compares model ID references in Claude memory lock files
-        # against packages/types/src/models.json. Lock files live in ~/.claude/
+        # against packages/contracts/types/src/models.json. Lock files live in ~/.claude/
         # (user home — not in repo), so this step exits 0 (skip) in CI and is
         # only substantive when run locally by a developer. Exit 2 = drift
         # warnings; non-blocking (continue-on-error).
@@ -111,10 +116,10 @@ jobs:
         continue-on-error: true
 
       - name: Type check
-        run: pnpm typecheck:all
+        run: pnpm exec turbo run typecheck --affected
 
       - name: Test
-        run: pnpm test
+        run: pnpm exec turbo run test --affected
 
       - name: Test (webview HTML rendering — jsdom)
         # F-01 regression gate: parses the rendered webview <script> bodies
@@ -140,14 +145,30 @@ jobs:
             p/owasp-top-ten
         continue-on-error: true
 
-      - name: Build packages
-        run: |
-          pnpm --filter @agiworkforce/api-gateway build
-          pnpm --filter @agiworkforce/signaling-server build
-          pnpm --filter @agiworkforce/extension build
+      - name: Build affected deployable JavaScript surfaces
+        run: >-
+          pnpm exec turbo run build --affected
+          --filter=@agiworkforce/api-gateway
+          --filter=@agiworkforce/signaling-server
+          --filter=@agiworkforce/extension
+          --filter=@agiworkforce/web
+          --filter=agi-workforce
 
-      - name: Build web app
-        run: pnpm --filter @agiworkforce/web build
+      - name: Package browser and VS Code release artifacts
+        # The package commands enforce release-only contents. Running only the
+        # normal build would miss stale Chrome ZIP entries and leaked VSIX
+        # source maps/configuration files.
+        env:
+          # Public, non-routable contract fixtures. Real release values live in
+          # the protected release environment; CI proves manifest injection and
+          # validation without producing a publishable authenticated artifact.
+          CLERK_PUBLISHABLE_KEY: pk_live_ci_contract_fixture
+          CLERK_FRONTEND_API: https://clerk-ci.invalid
+          CLERK_SYNC_HOST: https://clerk-ci.invalid
+          CHROME_EXTENSION_PUBLIC_KEY: ci-contract-public-key-not-for-release
+        run: |
+          pnpm --filter @agiworkforce/extension package
+          pnpm --filter agi-workforce package
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@1fbea72663f6d4c03efaab13560c8a24cfd2a7cc # v1.9.0
@@ -169,8 +190,14 @@ jobs:
       - name: Verify Rust toolchain
         run: rustup show active-toolchain && rustc --version && cargo --version
 
+      - name: Verify generated protocol bindings are current
+        # Generates into an isolated staging directory and compares against the
+        # checked-in TypeScript bindings. A failed exporter must never erase the
+        # last known-good bindings used by downstream packages.
+        run: pnpm check:protocol-types
+
       - name: Build native messaging host sidecar
-        run: pnpm --filter @agiworkforce/desktop run build:native-host -- --profile debug
+        run: pnpm exec turbo run build:native-host --filter=@agiworkforce/desktop -- --profile debug
 
       - name: Dependency audit (Rust) — critical (blocking)
         run: cargo install cargo-audit --version 0.22.1 --locked --quiet && cargo audit --deny warnings
@@ -431,8 +458,8 @@ jobs:
   # FIX-009 (Sprint 4): Windows-only bugs (path separators, native APIs,
   # cfg(target_os = "windows") branches) used to surface only at release
   # time when the macos/linux jobs had already passed. This smoke job
-  # catches them at PR time. Released binaries can't ship without it
-  # passing — see release-desktop.yml `needs: windows-smoke`.
+  # catches them at PR time before maintainers invoke the separate Windows
+  # packaging workflow.
   windows-smoke:
     name: Windows Rust smoke (cargo check + tests, --skip linux-only)
     runs-on: windows-latest

@@ -1,0 +1,297 @@
+const MIN_INTERVAL_MS = 60_000;
+const MAX_INTERVAL_MS = 365 * 24 * 60 * 60 * 1000;
+const MAX_CRON_LENGTH = 256;
+const SEARCH_YEARS = 6;
+
+type CronFieldName = 'minute' | 'hour' | 'day of month' | 'month' | 'day of week';
+
+interface CronField {
+  readonly values: ReadonlySet<number>;
+  readonly sorted: readonly number[];
+  readonly wildcard: boolean;
+}
+
+export interface ParsedCronExpression {
+  readonly minute: CronField;
+  readonly hour: CronField;
+  readonly dayOfMonth: CronField;
+  readonly month: CronField;
+  readonly dayOfWeek: CronField;
+}
+
+export interface ScheduleTiming {
+  scheduleType: 'cron' | 'once' | 'interval';
+  cronExpression?: string | null;
+  executeAt?: string | null;
+  intervalMs?: number | null;
+  timezone: string;
+}
+
+export type ProductRecurrence = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval';
+
+export interface CronFormInput {
+  recurrence: Exclude<ProductRecurrence, 'once' | 'interval'>;
+  timeOfDay?: string;
+  daysOfWeek?: readonly number[];
+  dayOfMonth?: number | null;
+  cronExpression?: string | null;
+}
+
+function assertFiniteDate(value: Date, label: string): void {
+  if (!Number.isFinite(value.getTime())) throw new Error(`${label} must be a valid timestamp`);
+}
+
+export function validateTimeZone(timezone: string): string {
+  if (typeof timezone !== 'string' || timezone.length === 0 || timezone.length > 100) {
+    throw new Error('A valid IANA time zone is required');
+  }
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date(0));
+  } catch {
+    throw new Error(`Unknown IANA time zone: ${timezone}`);
+  }
+  return timezone;
+}
+
+function parseCronField(
+  source: string,
+  name: CronFieldName,
+  min: number,
+  max: number,
+  normalize: (value: number) => number = (value) => value,
+): CronField {
+  const wildcard = source === '*';
+  const values = new Set<number>();
+  const segments = source.split(',');
+  if (segments.length === 0 || segments.some((segment) => segment.length === 0)) {
+    throw new Error(`Invalid ${name} field`);
+  }
+
+  for (const segment of segments) {
+    const stepParts = segment.split('/');
+    if (stepParts.length > 2) throw new Error(`Invalid ${name} step`);
+    const [base = '', stepText] = stepParts;
+    const step = stepText === undefined ? 1 : Number(stepText);
+    if (!Number.isInteger(step) || step <= 0 || step > max - min + 1) {
+      throw new Error(`Invalid ${name} step`);
+    }
+
+    let start: number;
+    let end: number;
+    if (base === '*') {
+      start = min;
+      end = max;
+    } else if (/^\d+$/.test(base)) {
+      start = Number(base);
+      end = stepText === undefined ? start : max;
+    } else {
+      const match = /^(\d+)-(\d+)$/.exec(base);
+      if (!match) throw new Error(`Invalid ${name} field`);
+      start = Number(match[1]);
+      end = Number(match[2]);
+    }
+
+    if (start < min || end > max || start > end) {
+      throw new Error(`${name} must be between ${min} and ${max}`);
+    }
+    for (let value = start; value <= end; value += step) values.add(normalize(value));
+  }
+
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length === 0) throw new Error(`Invalid ${name} field`);
+  return { values, sorted, wildcard };
+}
+
+function maxDaysInMonth(month: number): number {
+  if (month === 2) return 29;
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+export function parseCronExpression(expression: string): ParsedCronExpression {
+  if (expression.length > MAX_CRON_LENGTH) throw new Error('Cron expression is too long');
+  const fields = expression.trim().split(/\s+/);
+  if (fields.length !== 5) throw new Error('Cron expression must contain exactly five fields');
+
+  const parsed: ParsedCronExpression = {
+    minute: parseCronField(fields[0]!, 'minute', 0, 59),
+    hour: parseCronField(fields[1]!, 'hour', 0, 23),
+    dayOfMonth: parseCronField(fields[2]!, 'day of month', 1, 31),
+    month: parseCronField(fields[3]!, 'month', 1, 12),
+    dayOfWeek: parseCronField(fields[4]!, 'day of week', 0, 7, (value) =>
+      value === 7 ? 0 : value,
+    ),
+  };
+
+  // With both DOM and DOW restricted, standard cron uses OR semantics, so a
+  // valid weekday can still make `31 2 1` executable. With wildcard DOW, the
+  // requested day must physically exist in at least one selected month.
+  if (!parsed.dayOfMonth.wildcard && parsed.dayOfWeek.wildcard) {
+    const canOccur = parsed.month.sorted.some((month) =>
+      parsed.dayOfMonth.sorted.some((day) => day <= maxDaysInMonth(month)),
+    );
+    if (!canOccur) throw new Error('Cron expression can never occur');
+  }
+
+  return parsed;
+}
+
+function parseTimeOfDay(timeOfDay: string | undefined): { hour: number; minute: number } {
+  const match = /^(\d{2}):(\d{2})$/.exec(timeOfDay ?? '');
+  if (!match) throw new Error('timeOfDay must use HH:MM format');
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) throw new Error('timeOfDay is outside the valid range');
+  return { hour, minute };
+}
+
+export function buildCronExpression(input: CronFormInput): string {
+  if (input.recurrence === 'custom') {
+    const cron = input.cronExpression?.trim() ?? '';
+    parseCronExpression(cron);
+    return cron;
+  }
+
+  const { hour, minute } = parseTimeOfDay(input.timeOfDay);
+  let cron: string;
+  if (input.recurrence === 'daily') {
+    cron = `${minute} ${hour} * * *`;
+  } else if (input.recurrence === 'weekly') {
+    const days = [...new Set(input.daysOfWeek ?? [])].sort((a, b) => a - b);
+    if (days.length === 0 || days.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) {
+      throw new Error('Weekly schedules require at least one valid day of week');
+    }
+    cron = `${minute} ${hour} * * ${days.join(',')}`;
+  } else {
+    const day = input.dayOfMonth;
+    if (typeof day !== 'number' || !Number.isInteger(day) || day < 1 || day > 31) {
+      throw new Error('Monthly schedules require a day of month from 1 to 31');
+    }
+    cron = `${minute} ${hour} ${day} * *`;
+  }
+  parseCronExpression(cron);
+  return cron;
+}
+
+interface LocalDateParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  dayOfWeek: number;
+}
+
+function localParts(formatter: Intl.DateTimeFormat, date: Date): LocalDateParts {
+  const values: Record<string, number> = {};
+  for (const part of formatter.formatToParts(date)) {
+    if (part.type !== 'literal') values[part.type] = Number(part.value);
+  }
+  const year = values['year']!;
+  const month = values['month']!;
+  const day = values['day']!;
+  return {
+    year,
+    month,
+    day,
+    hour: values['hour']!,
+    minute: values['minute']!,
+    dayOfWeek: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
+  };
+}
+
+function compareLocalMinute(left: LocalDateParts, right: LocalDateParts): number {
+  const leftParts = [left.year, left.month, left.day, left.hour, left.minute];
+  const rightParts = [right.year, right.month, right.day, right.hour, right.minute];
+  for (let index = 0; index < leftParts.length; index += 1) {
+    const difference = leftParts[index]! - rightParts[index]!;
+    if (difference !== 0) return difference;
+  }
+  return 0;
+}
+
+function dateMatches(cron: ParsedCronExpression, parts: LocalDateParts): boolean {
+  if (!cron.month.values.has(parts.month)) return false;
+  const dom = cron.dayOfMonth.values.has(parts.day);
+  const dow = cron.dayOfWeek.values.has(parts.dayOfWeek);
+  if (!cron.dayOfMonth.wildcard && !cron.dayOfWeek.wildcard) return dom || dow;
+  return dom && dow;
+}
+
+function nextAllowedMinuteDelta(current: number, allowed: readonly number[]): number {
+  const later = allowed.find((value) => value > current);
+  return later === undefined ? 60 - current + allowed[0]! : later - current;
+}
+
+function nextCronOccurrence(expression: string, timezone: string, after: Date): Date {
+  const cron = parseCronExpression(expression);
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: validateTimeZone(timezone),
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const originParts = localParts(formatter, after);
+  let candidate = new Date(Math.floor(after.getTime() / 60_000) * 60_000 + 60_000);
+  const limit = new Date(candidate);
+  limit.setUTCFullYear(limit.getUTCFullYear() + SEARCH_YEARS);
+
+  while (candidate <= limit) {
+    const parts = localParts(formatter, candidate);
+    if (!dateMatches(cron, parts) || !cron.hour.values.has(parts.hour)) {
+      const delta = 60 - parts.minute || 60;
+      candidate = new Date(candidate.getTime() + delta * 60_000);
+      continue;
+    }
+
+    if (cron.minute.values.has(parts.minute)) {
+      // A DST fall-back repeats a wall-clock hour. One schedule occurrence is
+      // one wall-clock minute, so a candidate must be later in local wall time,
+      // not merely later in UTC. This also skips a repeated time that was
+      // already passed before the clock moved backward.
+      if (compareLocalMinute(parts, originParts) > 0) return candidate;
+    }
+    candidate = new Date(
+      candidate.getTime() + nextAllowedMinuteDelta(parts.minute, cron.minute.sorted) * 60_000,
+    );
+  }
+
+  throw new Error('Cron expression has no occurrence within the supported horizon');
+}
+
+export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Date = after): Date {
+  assertFiniteDate(after, 'after');
+  assertFiniteDate(now, 'now');
+  validateTimeZone(timing.timezone);
+
+  if (timing.scheduleType === 'once') {
+    const executeAt = new Date(timing.executeAt ?? '');
+    assertFiniteDate(executeAt, 'executeAt');
+    if (executeAt <= now) throw new Error('One-time schedule must be in the future');
+    return executeAt;
+  }
+
+  if (timing.scheduleType === 'interval') {
+    const intervalMs = timing.intervalMs;
+    if (
+      typeof intervalMs !== 'number' ||
+      !Number.isInteger(intervalMs) ||
+      intervalMs < MIN_INTERVAL_MS ||
+      intervalMs > MAX_INTERVAL_MS
+    ) {
+      throw new Error('Interval must be between one minute and 365 days');
+    }
+    let timestamp = after.getTime() + intervalMs;
+    if (timestamp <= now.getTime()) {
+      timestamp += (Math.floor((now.getTime() - timestamp) / intervalMs) + 1) * intervalMs;
+    }
+    return new Date(timestamp);
+  }
+
+  const expression = timing.cronExpression?.trim();
+  if (!expression) throw new Error('Cron schedule requires cronExpression');
+  const searchAfter = after > now ? after : now;
+  return nextCronOccurrence(expression, timing.timezone, searchAfter);
+}

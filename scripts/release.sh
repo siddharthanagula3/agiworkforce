@@ -1,47 +1,89 @@
 #!/usr/bin/env bash
-# release.sh — Create and publish a GitHub release with agiworkforce.dmg
-# Usage: bash scripts/release.sh [version]
-# Example: bash scripts/release.sh v1.1.6
+# Create the canonical desktop product tag. GitHub Actions owns validation,
+# signing, artifact creation, updater ingestion, and release publication.
+#
+# Usage:
+#   bash scripts/release.sh [version]          # validate and print the plan
+#   bash scripts/release.sh [version] --yes    # create and push the tag
 
 set -euo pipefail
 
-VERSION="${1:-}"
-if [[ -z "$VERSION" ]]; then
-  VERSION="v$(python3 -c "import json; d=json.load(open('apps/desktop/src-tauri/tauri.conf.json')); print(d['version'])")"
+VERSION=""
+CONFIRM=0
+for arg in "$@"; do
+  case "$arg" in
+    --yes) CONFIRM=1 ;;
+    --help|-h)
+      sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    -*)
+      echo "ERROR: unknown option: $arg" >&2
+      exit 2
+      ;;
+    *)
+      if [ -n "$VERSION" ]; then
+        echo "ERROR: provide at most one desktop version" >&2
+        exit 2
+      fi
+      VERSION="$arg"
+      ;;
+  esac
+done
+
+if [ -z "$VERSION" ]; then
+  VERSION=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+fi
+VERSION="${VERSION#v-desktop-}"
+VERSION="${VERSION#v}"
+
+if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'; then
+  echo "ERROR: invalid desktop SemVer: $VERSION" >&2
+  exit 1
 fi
 
-DMG_SRC="target/release/bundle/dmg/AGI Workforce_${VERSION#v}_aarch64.dmg"
-DMG_OUT="target/release/bundle/dmg/agiworkforce.dmg"
+TAG="v-desktop-${VERSION}"
+PACKAGE_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+TAURI_VERSION=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+CARGO_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' apps/desktop/src-tauri/Cargo.toml | head -1)
+for source_version in "$PACKAGE_VERSION" "$TAURI_VERSION" "$CARGO_VERSION"; do
+  if [ "$source_version" != "$VERSION" ]; then
+    echo "ERROR: $TAG does not match desktop source version $source_version" >&2
+    exit 1
+  fi
+done
 
-echo "==> Creating release $VERSION"
-echo "==> Source DMG: $DMG_SRC"
+if [ -n "$(git status --porcelain)" ]; then
+  echo "ERROR: refusing to tag a dirty working tree" >&2
+  exit 1
+fi
+if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+  echo "ERROR: local tag already exists: $TAG" >&2
+  exit 1
+fi
+if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+  echo "ERROR: remote tag already exists: $TAG" >&2
+  exit 1
+fi
 
-# 1. Verify DMG exists, then copy + rename to agiworkforce.dmg
-[[ -f "$DMG_SRC" ]] || { echo "ERROR: DMG not found at $DMG_SRC"; exit 1; }
-cp "$DMG_SRC" "$DMG_OUT"
-echo "==> Renamed to agiworkforce.dmg"
+VERSION_WITHOUT_BUILD="${VERSION%%+*}"
+if [[ "$VERSION_WITHOUT_BUILD" == *-* ]]; then
+  CHANNEL="prerelease"
+else
+  CHANNEL="stable"
+fi
 
-# 2. Create and push git tag
-git tag -a "$VERSION" -m "Release $VERSION"
-git push origin "$VERSION"
-echo "==> Pushed tag $VERSION"
+echo "Desktop release plan"
+echo "  tag:     $TAG"
+echo "  channel: $CHANNEL"
+echo "  commit:  $(git rev-parse HEAD)"
+echo "  action:  .github/workflows/release-desktop.yml"
 
-# 3. Create GitHub release with agiworkforce.dmg attached
-gh release create "$VERSION" \
-  "$DMG_OUT#AGI Workforce macOS (Apple Silicon)" \
-  --title "AGI Workforce $VERSION" \
-  --notes "## What's new in $VERSION
+if [ "$CONFIRM" != "1" ]; then
+  echo "Validation only; re-run with --yes to create and push the tag."
+  exit 0
+fi
 
-### Bug fixes
-- Agent mode no longer silently activates when accessibility permissions are not granted — falls back to standard LLM chat with a toast notification
-- Fixed: asking the agent to 'search' no longer opens Google in a browser — uses the \`search_web\` tool directly
-- Fixed: raw JSON payloads no longer appear in chat after web search or browser tool calls
-- Fixed: tool approval dialog now shows parameters as readable key/value pairs instead of raw JSON
-- Improved: agent now always writes a natural-language synthesis after running any tool
-
-### Download
-Download **agiworkforce.dmg** below (macOS Apple Silicon — signed & notarized)"
-
-echo ""
-echo "==> Release $VERSION published!"
-echo "==> Download URL: https://github.com/\$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/download/$VERSION/agiworkforce.dmg"
+git tag -a "$TAG" -m "Release desktop $VERSION"
+git push origin "$TAG"
+echo "Pushed $TAG; the canonical desktop release workflow is now responsible for publication."

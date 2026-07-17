@@ -13,7 +13,7 @@ Kind: tool adapter
 
 - Track reusable team agent TOML and sanitized project configuration.
 - Do not track local conversations, memories, credentials, or model-provider secrets.
-- Keep Codex-specific wording aligned with the tool-neutral repo rules and current `packages/types/src/models.json` catalog policy.
+- Keep Codex-specific wording aligned with the tool-neutral repo rules and current `packages/contracts/types/src/models.json` catalog policy.
 
 ## Verification
 

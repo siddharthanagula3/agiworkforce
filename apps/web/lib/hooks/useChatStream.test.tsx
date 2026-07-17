@@ -459,6 +459,74 @@ describe('useChatStream', () => {
       expect(assistantMsg?.metadata?.finishReason).toBe('length');
     });
 
+    it('captures an additive x_stream_error delta into metadata.streamError and still persists the partial content', async () => {
+      // Mid-stream provider failure (packages/ai/provider-protocol's openai-wire-compat.ts
+      // sseChunks() 'error' case): the server still sends a clean [DONE], so this
+      // is the ONLY signal distinguishing it from a normal completion.
+      mockSseStream([
+        { choices: [{ delta: { content: 'partial answer before' } }] },
+        {
+          choices: [
+            {
+              delta: {
+                x_stream_error: {
+                  message: 'Anthropic API overloaded',
+                  code: '529',
+                  retryable: true,
+                },
+              },
+              finish_reason: 'error',
+            },
+          ],
+        },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('long question', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.streamError).toEqual({
+        message: 'Anthropic API overloaded',
+        code: '529',
+        retryable: true,
+      });
+      // The partial content that DID stream is never discarded or replaced.
+      expect(assistantMsg?.content).toBe('partial answer before');
+    });
+
+    it('accepts a bare-string x_stream_error defensively (wraps it as {message})', async () => {
+      mockSseStream([
+        { choices: [{ delta: { content: 'partial' } }] },
+        { choices: [{ delta: { x_stream_error: 'rate limited' }, finish_reason: 'error' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('hi', { conversationId: TEMP_CONVERSATION.id });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.streamError).toEqual({ message: 'rate limited' });
+    });
+
+    it('does NOT record streamError on a normal completion (no x_stream_error delta)', async () => {
+      mockSseStream([
+        { choices: [{ delta: { content: 'complete answer' }, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('hello', { conversationId: TEMP_CONVERSATION.id });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.streamError).toBeUndefined();
+    });
+
     it('records the FINAL finish_reason, not an intermediate tool_calls, on normal completion', async () => {
       mockSseStream([
         { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
@@ -551,7 +619,7 @@ describe('useChatStream', () => {
             createdAt: '2026-07-01T00:00:00.000Z',
           },
           {
-            id: 'assistant-1',
+            id: '0190a000-0000-7000-8000-0000000000aa',
             role: 'assistant',
             content: 'Once upon a time',
             createdAt: '2026-07-01T00:00:01.000Z',
@@ -569,14 +637,14 @@ describe('useChatStream', () => {
 
       const { result } = renderHook(() => useChatStream());
       await act(async () => {
-        await result.current.continueGeneration('assistant-1');
+        await result.current.continueGeneration('0190a000-0000-7000-8000-0000000000aa');
       });
 
       const state = useChatStore.getState();
       const assistantMessages = state.messages.filter((m) => m.role === 'assistant');
       // Append-not-replace: still exactly ONE assistant bubble, same id.
       expect(assistantMessages).toHaveLength(1);
-      expect(assistantMessages[0]?.id).toBe('assistant-1');
+      expect(assistantMessages[0]?.id).toBe('0190a000-0000-7000-8000-0000000000aa');
       expect(assistantMessages[0]?.content).toBe('Once upon a time, the story continued.');
       // The continuable marker clears on normal completion (re-offered only if
       // it truncates again).
@@ -620,7 +688,7 @@ describe('useChatStream', () => {
             createdAt: '2026-07-01T00:00:00.000Z',
           },
           {
-            id: 'assistant-1',
+            id: '0190a000-0000-7000-8000-0000000000bb',
             role: 'assistant',
             content: 'part one',
             createdAt: '2026-07-01T00:00:01.000Z',
@@ -635,10 +703,12 @@ describe('useChatStream', () => {
 
       const { result } = renderHook(() => useChatStream());
       await act(async () => {
-        await result.current.continueGeneration('assistant-1');
+        await result.current.continueGeneration('0190a000-0000-7000-8000-0000000000bb');
       });
 
-      const assistantMsg = useChatStore.getState().messages.find((m) => m.id === 'assistant-1');
+      const assistantMsg = useChatStore
+        .getState()
+        .messages.find((m) => m.id === '0190a000-0000-7000-8000-0000000000bb');
       expect(assistantMsg?.content).toBe('part one part two');
       expect(assistantMsg?.metadata?.finishReason).toBe('length');
     });
@@ -755,5 +825,25 @@ describe('useChatStream', () => {
     expect(assistantMessage?.content).not.toContain('⚠');
     expect(state.error).toBe('Provider overloaded');
     expect(consoleErrorSpy).not.toHaveBeenCalled();
+  });
+
+  it('binds a Managed Cloud send to the durable assistant turn id', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }]);
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('hello', { conversationId: TEMP_CONVERSATION.id });
+    });
+
+    const assistant = useChatStore
+      .getState()
+      .messages.find((message) => message.role === 'assistant');
+    const llmCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+    expect(assistant?.id).toBeTruthy();
+    expect((llmCall?.[1]?.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      `agi.chat.web.send.${assistant?.id}`,
+    );
   });
 });

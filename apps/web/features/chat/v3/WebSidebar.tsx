@@ -8,13 +8,13 @@ import {
   FolderOpen,
   Box,
   Sliders,
-  RefreshCw,
   GitBranch,
   Repeat,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
   Settings,
+  CalendarClock,
 } from 'lucide-react';
 import { useBillingStore } from '@/stores/unified/auth';
 import type { ChatHostConversation } from '@agiworkforce/unified-chat';
@@ -98,9 +98,9 @@ function navItemsForMode(mode: V3Mode): NavItem[] {
   if (mode === 'work') {
     return [
       { id: 'cw-projects', label: 'Projects', icon: FolderOpen },
-      { id: 'cw-scheduled', label: 'Scheduled', icon: RefreshCw },
       { id: 'cw-artifacts', label: 'Live artifacts', icon: Box },
       { id: 'cw-dispatch', label: 'Dispatch', icon: GitBranch, beta: true },
+      { id: 'schedules', label: 'Schedules', icon: CalendarClock },
       { id: 'customize', label: 'Customize', icon: Sliders },
     ];
   }
@@ -116,6 +116,7 @@ function navItemsForMode(mode: V3Mode): NavItem[] {
 const RAIL_ITEMS: { id: string; icon: React.ElementType; title: string }[] = [
   { id: 'projects', icon: FolderOpen, title: 'Projects' },
   { id: 'artifacts', icon: Box, title: 'Artifacts' },
+  { id: 'schedules', icon: CalendarClock, title: 'Schedules' },
   { id: 'customize', icon: Sliders, title: 'Customize' },
   { id: 'settings', icon: Settings, title: 'Settings' },
 ];
@@ -191,9 +192,9 @@ export function WebSidebar({
         artifacts: 'artifacts',
         customize: 'customize-home',
         'cw-projects': 'work-projects',
-        'cw-scheduled': 'work-scheduled',
         'cw-artifacts': 'work-artifacts',
         'cw-dispatch': 'work-dispatch',
+        schedules: 'schedules',
         routines: 'code',
         settings: 'voice-settings',
       };

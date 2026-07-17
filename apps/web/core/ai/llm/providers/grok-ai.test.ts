@@ -130,13 +130,11 @@ describe('GrokProvider', () => {
       expect(models).toEqual([...SUPPORTED_GROK_IMAGE_MODELS]);
     });
 
-    it('should return only current catalog agent models', () => {
+    it('should derive agent models from the shared catalog roster', () => {
       const models = GrokProvider.getAgentModels();
 
-      expect(models).toContain('grok-4.3');
-      expect(models).not.toContain('grok-4-fast');
-      expect(models).not.toContain('grok-4-fast-reasoning');
-      expect(models.length).toBeGreaterThan(0);
+      expect(models).toEqual([...SUPPORTED_GROK_MODELS]);
+      expect(GrokProvider.getAgentModels.toString()).not.toContain('grok-4.3');
     });
   });
 

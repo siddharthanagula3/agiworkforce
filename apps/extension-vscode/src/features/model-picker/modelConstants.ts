@@ -1,7 +1,7 @@
 /**
  * modelConstants.ts — catalog-derived model metadata for the VS Code extension
  *
- * Single source of truth lives in `packages/types/src/models.json`.
+ * Single source of truth lives in `packages/contracts/types/src/models.json`.
  * This module adapts that shared catalog into the small, UI-friendly shape
  * the extension needs for pickers, token tracking, and context budgeting.
  */
@@ -33,7 +33,7 @@ export interface ModelPickerOption {
    * (`coming_soon` / `unavailable`) are DISPLAY-ONLY: the webview renders them
    * disabled with a "Coming soon" suffix (mirrors the web picker) and they are
    * never selectable or routable — same invariant as
-   * `getSelectableModels()` vs `getDisplayModels()` in packages/types.
+   * `getSelectableModels()` vs `getDisplayModels()` in packages/contracts/types.
    */
   availability: ModelAvailability;
 }

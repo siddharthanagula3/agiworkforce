@@ -8,7 +8,7 @@
 -- [Tranche-1] Security floor — supersedes the earlier draft of this migration.
 -- Two correctness fixes vs the draft:
 --   1. GUC ALIGNMENT: policies now read `request.jwt.claim.sub`, the GUC the
---      data-layer adapter actually binds (packages/data-layer/src/adapters/
+--      data-layer adapter actually binds (packages/platform/data-layer/src/adapters/
 --      neon.ts: `SET LOCAL request.jwt.claim.sub = ...`). The draft read
 --      `app.user_id`, which no code ever set, so every policy denied all rows.
 --   2. EXPLICIT WITH CHECK on every policy so cross-tenant INSERT/UPDATE are

@@ -8,7 +8,7 @@
  *
  * Cloud projects arrive exclusively from the AGI Cloud API delta-sync endpoint
  * (`GET /api/projects/sync?since=<cursor>`). They are identified by UUIDv7 IDs
- * generated client-side and reconciled server-side by last-writer-wins (updatedAt).
+ * generated client-side and reconciled by a server-owned monotonic revision.
  *
  * Shape matches the frozen web contract wire format (camelCase client side,
  * snake_case on the wire — handled by the sync engine).
@@ -34,7 +34,7 @@ export interface CloudProject {
   metadata: Record<string, unknown> | null;
   /** Always 'mobile' for locally-created entries; may be 'web'/'desktop' for pulled entries. */
   source: 'mobile' | 'desktop' | 'web';
-  /** ISO 8601 string. LWW key: server accepts the latest updatedAt. */
+  /** ISO 8601 display timestamp. Never used for cross-device conflict resolution. */
   createdAt: string;
   updatedAt: string;
   /**
@@ -43,6 +43,11 @@ export interface CloudProject {
    * it hard-removed locally.
    */
   deletedAt: string | null;
+  /**
+   * Last server-owned revision observed for this row. Missing only on persisted
+   * records written by pre-CAS app versions; those fail closed as revision `0`.
+   */
+  serverVersion?: string;
 }
 
 // ── Store interface ────────────────────────────────────────────────────────

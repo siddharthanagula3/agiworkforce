@@ -9,7 +9,7 @@
  * streaming service, keeping the tests fast and deterministic.
  */
 
-import { act } from '@testing-library/react-native';
+import { act, waitFor } from '@testing-library/react-native';
 
 // Mock all external dependencies before importing the store
 jest.mock('../services/authSession', () => ({
@@ -64,18 +64,22 @@ jest.mock('../services/remoteChatGate', () => {
   };
 });
 
-jest.mock('@agiworkforce/local-llm', () => ({
-  localGenerate: jest.fn(),
-  getCapabilities: jest.fn().mockResolvedValue({
-    totalRAMMB: 8192,
-    osVersion: 'test',
-    thermalThrottled: false,
-    tier1Available: false,
-    tier1Runtime: null,
-    tier2Available: true,
-    tier3Available: true,
-  }),
-}));
+jest.mock('@agiworkforce/local-llm', () => {
+  const actual = jest.requireActual('@agiworkforce/local-llm');
+  return {
+    ...actual,
+    localGenerate: jest.fn(),
+    getCapabilities: jest.fn().mockResolvedValue({
+      totalRAMMB: 8192,
+      osVersion: 'test',
+      thermalThrottled: false,
+      tier1Available: false,
+      tier1Runtime: null,
+      tier2Available: true,
+      tier3Available: true,
+    }),
+  };
+});
 
 jest.mock('../storage/installedModels', () => ({
   listInstalledModels: jest.fn().mockResolvedValue([]),
@@ -98,6 +102,9 @@ jest.mock('../lib/mmkv', () => ({
 
 // Import after mocks are established
 import { useChatStore } from '../stores/chatStore';
+import { api } from '../services/api';
+import { useChatMessageStore } from '../stores/chat/chatMessageStore';
+import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
@@ -113,6 +120,7 @@ import {
 import type { StreamCallbacks } from '../services/streaming';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
+const mockApiDelete = api.delete as jest.MockedFunction<typeof api.delete>;
 const mockRemoteDisabledReason = getRemoteChatDisabledReason as jest.MockedFunction<
   typeof getRemoteChatDisabledReason
 >;
@@ -163,6 +171,7 @@ function resetStore() {
     toolAccess: 'auto',
     features: { webSearch: true, imageGen: true, health: false },
   });
+  useChatCloudMessageStore.setState({ conversations: [], messages: {} });
 }
 
 const CONV_ID = 'test-conv-123';
@@ -826,6 +835,47 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('cloud invite path', () => {
+    it('writes an in-flight Cloud turn only to the Cloud message repository', async () => {
+      const now = new Date().toISOString();
+      useChatMessageStore.setState({ conversations: [], messages: {} });
+      useChatCloudMessageStore.setState({
+        conversations: [
+          {
+            id: CONV_ID,
+            title: 'Cloud-only owner',
+            updatedAt: now,
+            createdAt: now,
+            messageCount: 0,
+            pinned: false,
+            model: CLOUD_MODEL,
+            provider: 'cloud_managed',
+            executionMode: 'cloud',
+          },
+        ],
+        messages: { [CONV_ID]: [] },
+      });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockRemoteDisabledReason.mockReturnValue(null);
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            callbacks.onDelta({ content: 'Cloud-owned answer' });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Stay in Cloud storage', CLOUD_MODEL);
+      });
+
+      expect(useChatMessageStore.getState().messages[CONV_ID]).toBeUndefined();
+      expect(useChatCloudMessageStore.getState().messages[CONV_ID]).toEqual([
+        expect.objectContaining({ role: 'user', content: 'Stay in Cloud storage' }),
+        expect.objectContaining({ role: 'assistant', content: 'Cloud-owned answer' }),
+      ]);
+    });
+
     it('does not fall back to local generation for locked cloud models', async () => {
       seedCloudConversation();
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
@@ -865,6 +915,110 @@ describe('chatStore — streaming state', () => {
       const assistantMsg = [...msgs].reverse().find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('Cloud answer');
       expect(assistantMsg?.metadata?.localMode).toBeUndefined();
+    });
+
+    it('resolves a Cloud Auto profile to a concrete admitted model and preserves provenance', async () => {
+      seedCloudConversation('auto-balanced');
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockRemoteDisabledReason.mockReturnValue(null);
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDelta({ content: 'Auto-routed answer' });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Explain this simply', 'auto-balanced');
+      });
+
+      expect(capturedBody?.model).toEqual(expect.any(String));
+      expect(capturedBody?.model).not.toBe('auto-balanced');
+      const messages = getState().messages[CONV_ID] ?? [];
+      const userMessage = messages.find((message) => message.role === 'user');
+      const assistantMessage = messages.find((message) => message.role === 'assistant');
+      expect(userMessage?.model).toBe('auto-balanced');
+      expect(userMessage?.metadata).toEqual(
+        expect.objectContaining({
+          requestedModel: 'auto-balanced',
+          resolvedModel: capturedBody?.model,
+        }),
+      );
+      expect(assistantMessage?.model).toBe(capturedBody?.model);
+      expect(assistantMessage?.metadata).toEqual(
+        expect.objectContaining({
+          requestedModel: 'auto-balanced',
+          resolvedModel: capturedBody?.model,
+        }),
+      );
+    });
+
+    it('deletes the replaced Cloud tail remotely before regenerating it', async () => {
+      const now = new Date().toISOString();
+      const userId = '0190a000-0000-7000-8000-000000000010';
+      const assistantId = '0190a000-0000-7000-8000-000000000011';
+      useChatMessageStore.setState({ conversations: [], messages: {} });
+      useChatCloudMessageStore.setState({
+        conversations: [
+          {
+            id: CONV_ID,
+            title: 'Cloud retry',
+            updatedAt: now,
+            createdAt: now,
+            messageCount: 2,
+            pinned: false,
+            model: CLOUD_MODEL,
+            provider: 'cloud_managed',
+            executionMode: 'cloud',
+          },
+        ],
+        messages: {
+          [CONV_ID]: [
+            {
+              id: userId,
+              conversationId: CONV_ID,
+              role: 'user',
+              content: 'retry this',
+              createdAt: now,
+              model: CLOUD_MODEL,
+            },
+            {
+              id: assistantId,
+              conversationId: CONV_ID,
+              role: 'assistant',
+              content: 'old answer',
+              createdAt: now,
+              model: CLOUD_MODEL,
+            },
+          ],
+        },
+      });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockApiDelete.mockResolvedValue(undefined);
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            callbacks.onDelta({ content: 'new answer' });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      act(() => {
+        getState().retryMessage(CONV_ID, assistantId);
+      });
+
+      await waitFor(() => {
+        expect(mockApiDelete).toHaveBeenCalledTimes(2);
+        expect(
+          useChatCloudMessageStore.getState().messages[CONV_ID]?.at(-1)?.content,
+        ).toBe('new answer');
+      });
+      expect(useChatMessageStore.getState().messages[CONV_ID]).toBeUndefined();
     });
   });
 

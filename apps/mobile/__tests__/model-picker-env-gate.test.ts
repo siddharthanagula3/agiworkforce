@@ -155,8 +155,13 @@ describe('applyEnvironmentGate', () => {
 // ---------------------------------------------------------------------------
 
 describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
-  // gpt-5.4-mini is DEFAULT_CLOUD_MODEL_ID and always present in the unlocked list.
-  const TARGET_ID = 'gpt-5.4-mini';
+  function getCurrentCloudTargetId(): string {
+    const targetId = getModelListForCloudAccess(true).find(
+      (model) => model.surface === 'cloud_managed',
+    )?.id;
+    expect(targetId).toBeDefined();
+    return targetId!;
+  }
 
   beforeEach(() => {
     // Restore default passthrough behaviour before each test.
@@ -172,11 +177,12 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
   });
 
   it('(c) a cloud model with requiresEnvironment:e2b is locked in getModelListForCloudAccess(true) even when cloudUnlocked', () => {
+    const targetId = getCurrentCloudTargetId();
     // Inject requiresEnvironment:'e2b' onto the target model ID.
     const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
     mockGetModelMetadataById.mockImplementation((id) => {
       const base = actual.getModelMetadataById(id);
-      if (id === TARGET_ID && base) {
+      if (id === targetId && base) {
         return { ...base, requiresEnvironment: 'e2b' as const };
       }
       return base;
@@ -185,7 +191,7 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
     // cloudUnlocked:true rebuilds models via toCloudModelDef at call time —
     // the mock is in effect when that call hits getModelMetadataById.
     const models = getModelListForCloudAccess(true);
-    const target = models.find((m) => m.id === TARGET_ID);
+    const target = models.find((m) => m.id === targetId);
 
     expect(target).toBeDefined();
     expect(target!.availability).toBe('locked');
@@ -193,10 +199,11 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
   });
 
   it('(c) non-targeted cloud models are unaffected by the injected requiresEnvironment', () => {
+    const targetId = getCurrentCloudTargetId();
     const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
     mockGetModelMetadataById.mockImplementation((id) => {
       const base = actual.getModelMetadataById(id);
-      if (id === TARGET_ID && base) {
+      if (id === targetId && base) {
         return { ...base, requiresEnvironment: 'e2b' as const };
       }
       return base;
@@ -204,7 +211,7 @@ describe('getModelListForCloudAccess — environment gating wiring (c)', () => {
 
     const models = getModelListForCloudAccess(true);
     const otherCloudModels = models.filter(
-      (m) => m.surface === 'cloud_managed' && m.id !== TARGET_ID,
+      (m) => m.surface === 'cloud_managed' && m.id !== targetId,
     );
 
     // All other cloud models should be 'ready' when cloudUnlocked:true.

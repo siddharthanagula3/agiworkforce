@@ -1,11 +1,11 @@
 /**
  * Byte parity between the legacy `buildStreamResponse` (unmodified,
  * apps/web/lib/llm-providers raw-fetch passthrough + reshape) and the new
- * adapter-path `buildAdapterStreamResponse` (packages/providers/anthropic +
+ * adapter-path `buildAdapterStreamResponse` (packages/ai/providers/anthropic +
  * OpenAIWireAssembler), for the SAME rich event scenario -- text, server-
  * managed web_search, thinking, and tool_use -- used in
  * stream-transform.golden.test.ts (structural `toEqual`, key-order-blind)
- * and packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts
+ * and packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts
  * (assembler-level only, no route/billing wiring).
  *
  * This suite closes the gap those two leave: an ACTUAL side-by-side byte

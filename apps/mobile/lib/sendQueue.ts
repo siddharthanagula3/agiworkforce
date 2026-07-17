@@ -14,7 +14,7 @@ import {
   createKvStorageAdapter,
   createMessageQueue,
   type MessageQueue,
-} from '@agiworkforce/runtime';
+} from '@agiworkforce/client-runtime';
 import { storage } from '@/lib/mmkv';
 
 const QUEUE_STORAGE_KEY = 'agiworkforce.queue.mobile';

@@ -25,18 +25,12 @@ export interface PromptCacheRequest {
  * Source of truth is `capabilities.caching` in models.json (derived during
  * `pnpm sync:models` from the presence of a cached-read price). We also accept a
  * non-null `cached_input` directly as a fallback for catalog entries that carry
- * pricing but predate the capability flag. This replaces the old
- * `claude-`/`gpt-` string-prefix heuristic, which silently excluded
- * Gemini 2.5+/3.x and DeepSeek/Zhipu/Moonshot models that also cache.
+ * pricing but predate the capability flag. Unknown models are treated as not
+ * cache-capable; a model name is not evidence of a provider feature.
  */
 function modelSupportsCaching(model: string): boolean {
   const meta = getModelMetadataById(model);
-  if (!meta) {
-    // Unknown to the catalog: fall back to the legacy markers so behavior never
-    // silently regresses for a model the catalog hasn't picked up yet.
-    const lower = model.toLowerCase();
-    return lower.includes('claude-') || lower.includes('gpt-');
-  }
+  if (!meta) return false;
   return meta.capabilities?.caching === true || meta.cached_input != null;
 }
 

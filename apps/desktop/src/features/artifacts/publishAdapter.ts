@@ -2,7 +2,7 @@
  * Desktop Artifact Publish Adapter
  *
  * Tauri-specific implementation of the LocalFileWriter contract required by
- * @agiworkforce/services publishArtifact. Writes the artifact content to
+ * @agiworkforce/artifacts publishArtifact. Writes the artifact content to
  * `<app_data_dir>/artifacts/<artifact-id>.<ext>` and returns the resulting
  * `file://` URL.
  *
@@ -18,9 +18,9 @@
 
 import { appDataDir, join } from '@tauri-apps/api/path';
 import { writeTextFile, mkdir } from '@tauri-apps/plugin-fs';
-import { publishArtifact as corePublishArtifact } from '@agiworkforce/services';
-import type { PublishResult } from '@agiworkforce/services';
-import type { PublishableArtifact } from '@agiworkforce/services';
+import { publishArtifact as corePublishArtifact } from '@agiworkforce/artifacts';
+import type { PublishResult } from '@agiworkforce/artifacts';
+import type { PublishableArtifact } from '@agiworkforce/artifacts';
 
 // Re-export for convenience so ArtifactPanel does not import from two places.
 export type { PublishResult };

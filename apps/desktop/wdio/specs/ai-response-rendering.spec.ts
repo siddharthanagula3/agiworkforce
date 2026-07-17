@@ -5,8 +5,12 @@
 // blockquotes, lists, and incremental/streaming render behavior. Part of the
 // Application checklist row #7 (docs/agent-context/desktop-qa-checklist.md).
 
+import * as fs from 'node:fs';
+
 const SCREEN_DIR =
   '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/5c2cae99-6834-4da9-92a9-3df91afbf448/scratchpad/desktop-qa-screens';
+
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
 
 const MARKDOWN_PROMPT =
   'Output exactly and only the following markdown, verbatim, with no extra commentary before or after:\n\n' +
@@ -171,14 +175,9 @@ describe('AGI Desktop AI response rendering (real Ollama send, real DOM inspecti
     console.log('STRUCTURAL_CHECKS', JSON.stringify(structuralChecks));
 
     expect(structuralChecks).not.toBeNull();
-    // KNOWN GAP (DESKTOP-MARKDOWN-NO-HEADING-01): MessageBubble.tsx's
-    // hand-rolled renderContent() has no markdown heading (#/##/###) support
-    // at all -- confirmed by source (zero h1/h2/h3 usage in the file) and by
-    // this live response, where "# Heading One" rendered as plain text with
-    // no h1/h2/h3 wrapper. Asserting the current (broken) behavior so this
-    // spec stays a real regression guard for everything else; flip to
-    // `toBe(true)` once heading support is added.
-    expect(structuralChecks!.hasHeading).toBe(false);
+    // DESKTOP-MARKDOWN-NO-HEADING-01: the shared renderer must preserve ATX
+    // headings as semantic h1/h2/h3 elements, not visual-only generic divs.
+    expect(structuralChecks!.hasHeading).toBe(true);
     expect(structuralChecks!.hasBold).toBe(true);
     expect(structuralChecks!.hasItalic).toBe(true);
     expect(structuralChecks!.hasInlineCode).toBe(true);

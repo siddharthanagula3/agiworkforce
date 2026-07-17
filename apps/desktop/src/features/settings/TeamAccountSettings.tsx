@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
-import { auth } from '@agiworkforce/api';
+import { auth } from '@agiworkforce/desktop-command-client';
 import { Button } from '@/components/ui/Button';
 import { useTeamStore } from '../../stores/teamStore';
 import { useProjectStore } from '../../stores/projectStore';

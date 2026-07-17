@@ -20,7 +20,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { buildLocalToByokHandoffDraft, type LocalToByokHandoffPreview } from '@agiworkforce/utils';
-import { LocalByokHandoffDialog as PackageLocalByokHandoffDialog } from '@agiworkforce/unified-chat';
+import {
+  LocalByokHandoffDialog as PackageLocalByokHandoffDialog,
+  useChatModelStore,
+} from '@agiworkforce/unified-chat';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useChatStore } from '../../stores/chat/chatStore';
 
@@ -39,6 +42,8 @@ export function LocalByokHandoffDialog({
   const forkConversationForByok = useChatStore((state) => state.forkConversationForByok);
   const selectConversation = useChatStore((state) => state.selectConversation);
   const setProviderMode = useSettingsStore((state) => state.setProviderMode);
+  const availableModels = useChatModelStore((state) => state.models);
+  const selectedModelId = useChatModelStore((state) => state.selectedModelId);
   const [preview, setPreview] = useState<LocalToByokHandoffPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,14 +92,25 @@ export function LocalByokHandoffDialog({
   }, [conversationId, handoffContext]);
 
   const isBlocked = preview?.redactionReport.blocked ?? false;
+  const byokModels = availableModels.filter((model) => model.isByok && !model.isLocal);
+  const targetModel =
+    byokModels.find((model) => model.id === selectedModelId) ?? byokModels.at(0) ?? null;
+  const handoffError =
+    error ??
+    (!isLoading && !targetModel
+      ? 'Configure a BYOK provider key in Models & Keys before creating this fork.'
+      : null);
 
   const handleCreateFork = () => {
-    if (!preview || isBlocked) return;
+    if (!preview || isBlocked || !targetModel) return;
 
     const forkId = forkConversationForByok(conversationId, {
       title: `${conversationTitle} (BYOK fork)`,
+      model: targetModel.id,
+      provider: targetModel.provider,
     });
     setProviderMode('cloud');
+    useChatModelStore.getState().selectModel(targetModel.id);
     selectConversation(forkId);
     toast.success('Created a BYOK fork. The original Local thread is unchanged.');
     onClose();
@@ -108,9 +124,10 @@ export function LocalByokHandoffDialog({
       }}
       preview={preview}
       isBuilding={isLoading}
-      error={error}
+      error={handoffError}
       onConfirm={handleCreateFork}
       confirmLabel="Create BYOK fork"
+      targetProviderLabel={targetModel?.provider}
     />
   );
 }

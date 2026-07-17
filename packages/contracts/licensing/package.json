@@ -1,0 +1,27 @@
+{
+  "name": "@agiworkforce/licensing",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./org-policy": "./src/org-policy.ts",
+    "./test-support": "./src/test-support.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "generate:fixtures": "tsx scripts/generate-fixtures.ts",
+    "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "zod": "^4.4.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "vitest": "^4.1.8"
+  }
+}
