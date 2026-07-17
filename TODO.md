@@ -371,11 +371,27 @@ agi-work-wiring teammate frees apps/web:
   discipline wave 1 lands.
 - Optimize for the 10–20 year horizon; no quick wins.
 
-## Gateway failover follow-ups (from the 2026-07-17 managed-failover landing)
+## Gateway failover follow-ups (updated 2026-07-17 after the caller map)
 
-- CLIENT EMISSION: no surface emits `x-agi-fallback-models` yet — web/desktop/
-  mobile should forward `resolveAutoRoute().fallbacks` model keys (max 4) on
-  managed auto sends; until then the gateway failover path is inert-but-pinned.
+- CALLER MAP (verified from source): the ONLY real express-gateway caller is
+  extension computer-use (pinned slot, explicit — correctly no header). ALL
+  managed-auto chat traffic terminates in the WEB TWIN route
+  (`apps/web` /api/llm/v1), which resolves auto server-side
+  (resolveWebCloudModelRoute) and executes providers in-process — and
+  currently IGNORES the resolver's `.fallbacks`.
+- FAILOVER OWNERSHIP DECISION (founder/architecture): either (a) wire the web
+  twin's request-processor to consume `.fallbacks` in-process (failover where
+  the traffic actually is — cheapest, no topology change), or (b) migrate
+  managed clients to the gateway origin so the landed gateway failover serves
+  them. Until one lands, gateway failover has no production traffic.
+- WHEN a surface adopts the gateway for auto chat: emission is one line —
+  forward `resolveAutoRoute().fallbacks[].modelKey` (max 4) as
+  `x-agi-fallback-models`, omit for explicit/empty. Extension managed chat
+  (managedChatRouting.ts) already computes full plans client-side — cheapest
+  future adopter.
+- LIVE-QA: verify api.agiworkforce.com deployment currency — the
+  missing-Idempotency-Key break (fixed 0908b4bd9) suggests the deployed
+  gateway may predate the billing contract.
 - LEDGER METADATA: the billing reservation row records the PLANNED primary
   (reserve precedes attempts); settlement cost + usage_events reflect the
   actual serving model. Cosmetic mismatch on rotated requests — decide if
