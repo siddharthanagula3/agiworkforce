@@ -141,22 +141,32 @@ describe('on-device catalog: qwen3-vl-2b multimodal entry (P6)', () => {
 });
 
 describe('on-device catalog: lfm2-vl tier-2 option (P6, gated off)', () => {
-  it('is recorded as the true 450M identity, gated off, and carries no fabricated download URL', () => {
+  it('is recorded as the true 450M identity, gated off, with verified artifact fields', () => {
     const model = getModelById('lfm2-vl-450m');
     expect(model).toBeDefined();
     expect(model!.family).toBe('lfm2-vl');
     expect(model!.paramCountB).toBe(0.45);
     expect(model!.fileSizeBytes).toBe(648_917_376);
     expect(model!.shipsInV1).toBe(false);
-    // No resolve-tag URL was verifiable, so none is recorded (no fabrication).
-    expect(model!.downloadUrl).toBeUndefined();
-    expect(model!.executorchPreset).toBeUndefined();
+    // Verified 2026-07-16 against the installed react-native-executorch
+    // 0.8.4's own modelUrls.js AND the live HF LFS pointer (sha256 + size).
+    expect(model!.downloadUrl).toContain(
+      'react-native-executorch-lfm-2.5/resolve/v0.8.0/lfm2.5-VL-450M',
+    );
+    expect(model!.checksum).toBe(
+      'c3aeead4499cb1c19de48d4216f3b2e9216b27770d768ea4650dbcaa1a998a9b',
+    );
+    expect(model!.executorchPreset?.modelName).toBe('lfm2.5-vl-450m-quantized');
     expect(model!.license).toContain('LFM Open License');
   });
 
-  it('does not claim vision-in — tier-2 has no image-passing plumbing yet', () => {
+  it('claims vision-in NOMINALLY only — effective vision stays install-gated', () => {
+    // Tier-2 image plumbing ships (tier2.ts mediaPath path); the honest
+    // runtime capability is effectiveTier2VisionIn (multimodal.ts), which is
+    // false until the model is actually installed — pinned in
+    // tier2-vision.test.ts.
     const model = getModelById('lfm2-vl-450m')!;
-    expect(model.capabilities.visionIn).toBe(false);
+    expect(model.capabilities.visionIn).toBe(true);
   });
 
   it('no stale lfm2-vl-1.6b id remains in the catalog', () => {

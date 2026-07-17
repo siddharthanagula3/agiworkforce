@@ -3,9 +3,12 @@ import type { GenerateOptions, GenerateResult } from './types';
 
 // react-native-executorch 0.8.4 exports LLMModule (not ETLLMModule).
 // LLMModule wraps LLMController and provides generate(), configure(), interrupt().
+// Multimodal (VLM) presets load with `capabilities:['vision']` and take the
+// image as `mediaPath` on a user message (the controller extracts it and calls
+// the native `generateMultimodal`).
 interface LLMModuleInstance {
   generate: (
-    messages: Array<{ role: string; content: string }>,
+    messages: Array<{ role: string; content: string; mediaPath?: string }>,
     tools?: object[],
   ) => Promise<string>;
   configure: (config: {
@@ -32,10 +35,40 @@ interface LLMModuleStatic {
       modelSource: string;
       tokenizerSource: string;
       tokenizerConfigSource: string;
+      capabilities?: readonly string[];
     },
     onDownloadProgress?: (progress: number) => void,
     tokenCallback?: (token: string) => void,
   ) => Promise<LLMModuleInstance>;
+}
+
+/**
+ * Runtime metadata for ExecuTorch VLM presets, keyed by preset `modelName`.
+ * `ExecutorchPreset` (the shared catalog contract) carries only the four
+ * source fields; the vision `capabilities` flag and the model card's
+ * recommended sampling settings live here, MIRRORING react-native-executorch
+ * 0.8.4's own exported preset constants (`LFM2_5_VL_450M_QUANTIZED` in
+ * constants/modelUrls.js) — verify against the package export when upgrading.
+ */
+const EXECUTORCH_VLM_PRESETS: Record<
+  string,
+  { capabilities: readonly string[]; generationConfig?: Readonly<Record<string, number>> }
+> = {
+  'lfm2.5-vl-450m-quantized': {
+    capabilities: ['vision'],
+    // LiquidAI's LFM2-VL model card sampling settings — without them the model
+    // often produces generic / repetitive responses (package modelUrls.js).
+    generationConfig: { temperature: 0.1, minP: 0.15, repetitionPenalty: 1.05 },
+  },
+};
+
+/** VLM metadata for a preset, or undefined for text-only presets. */
+export function executorchVlmPresetInfo(
+  modelName: string,
+):
+  | { capabilities: readonly string[]; generationConfig?: Readonly<Record<string, number>> }
+  | undefined {
+  return EXECUTORCH_VLM_PRESETS[modelName];
 }
 
 let _llmModuleOverride: LLMModuleStatic | null = null;
@@ -58,8 +91,19 @@ function getLLMModuleClass(): LLMModuleStatic | null {
 
 let _instance: LLMModuleInstance | null = null;
 let _loadedPresetName: string | null = null;
+let _loadedPresetVision = false;
 let _loadPromise: Promise<void> | null = null;
 let _loadGeneration = 0;
+
+/**
+ * True when the CURRENTLY LOADED tier-2 model was loaded with the vision
+ * capability — the tier-2 analog of `tier3IsMultimodalReady`. False before any
+ * load and for text-only presets, so image routing can never claim a vision
+ * path that is not actually live.
+ */
+export function tier2IsVisionReady(): boolean {
+  return _instance !== null && _loadedPresetVision;
+}
 
 export async function tier2LoadModel(
   preset: ExecutorchPreset,
@@ -80,14 +124,19 @@ export async function tier2LoadModel(
       _instance.delete();
       _instance = null;
       _loadedPresetName = null;
+      _loadedPresetVision = false;
     }
 
+    // VLM presets load with their vision capability and the model card's
+    // sampling settings; text-only presets are byte-for-byte unchanged.
+    const vlmInfo = executorchVlmPresetInfo(preset.modelName);
     const nextInstance = await LLMModule.fromModelName(
       {
         modelName: preset.modelName,
         modelSource: preset.modelSource,
         tokenizerSource: preset.tokenizerSource,
         tokenizerConfigSource: preset.tokenizerConfigSource,
+        ...(vlmInfo ? { capabilities: vlmInfo.capabilities } : {}),
       },
       onDownloadProgress,
     );
@@ -95,8 +144,12 @@ export async function tier2LoadModel(
       nextInstance.delete();
       return;
     }
+    if (vlmInfo?.generationConfig) {
+      nextInstance.configure({ generationConfig: vlmInfo.generationConfig });
+    }
     _instance = nextInstance;
     _loadedPresetName = preset.modelName;
+    _loadedPresetVision = vlmInfo?.capabilities.includes('vision') ?? false;
   })();
 
   try {
@@ -136,14 +189,27 @@ export async function tier2Generate(
   opts.signal?.addEventListener('abort', abortHandler, { once: true });
 
   try {
-    const messages: Array<{ role: string; content: string }> = [];
+    const messages: Array<{ role: string; content: string; mediaPath?: string }> = [];
     if (opts.systemPrompt) {
       messages.push({ role: 'system', content: opts.systemPrompt });
     }
     for (const m of opts.messages ?? []) {
       messages.push({ role: m.role, content: m.content });
     }
-    messages.push({ role: 'user', content: opts.prompt });
+
+    // Attach the current turn's image only when the loaded model actually has
+    // the vision capability (capability honesty — images are silently ignored
+    // by text-only presets, matching the GenerateOptions contract). The
+    // ExecuTorch controller accepts `file://` or absolute paths, NOT `data:`
+    // URLs (unlike llama.rn), and takes one mediaPath per message.
+    const mediaPath = _loadedPresetVision
+      ? opts.images?.find((uri) => uri.startsWith('file://') || uri.startsWith('/'))
+      : undefined;
+    messages.push(
+      mediaPath
+        ? { role: 'user', content: opts.prompt, mediaPath }
+        : { role: 'user', content: opts.prompt },
+    );
 
     const text = await instance.generate(messages, opts.tools as object[] | undefined);
     const aborted = !!opts.signal?.aborted;
@@ -161,5 +227,6 @@ export function tier2Release(): void {
     _instance.delete();
     _instance = null;
     _loadedPresetName = null;
+    _loadedPresetVision = false;
   }
 }

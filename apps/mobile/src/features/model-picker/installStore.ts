@@ -4,6 +4,8 @@ import {
   getModelById as getCatalogModelById,
   getSystemModelForTier1Runtime,
   hasRunnableGgufArtifacts,
+  hasSufficientRAMForMultimodal,
+  isMultimodalModel,
   tier2LoadModel,
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel } from '@agiworkforce/types';
@@ -33,10 +35,36 @@ export interface ModelInstallJob {
 interface ModelInstallState {
   installedModelIds: string[];
   readySystemModelIds: string[];
+  /**
+   * Device RAM from the native capability probe, captured on hydrate.
+   * `null` until detection has run; treated as 0 (fail-closed) by the
+   * multimodal RAM gate, matching the package's default-deny posture.
+   */
+  totalRAMMB: number | null;
   jobs: Record<string, ModelInstallJob>;
   hydrateInstalledModels: () => Promise<void>;
   prepareModel: (model: ModelDef) => Promise<void>;
   statusForModel: (model: ModelDef) => ModelInstallJob;
+}
+
+/**
+ * Honest disabled-state reason for the tier-3 multimodal RAM gate
+ * (restructure §8 device gates). Shown instead of hiding the row.
+ */
+export const MULTIMODAL_RAM_LOCK_REASON =
+  'This device needs at least 3.5 GB of RAM to run on-device vision models.';
+
+/**
+ * RAM gate for tier-3 llama.rn multimodal rows (base GGUF + mmproj loaded
+ * together). Applies only to mmproj-backed vision models — text-only and
+ * tier-2 rows are governed by their own runtime gates. Fail-closed on an
+ * unknown RAM reading.
+ */
+function multimodalRamLock(model: ModelDef, totalRAMMB: number | null): ModelInstallJob | null {
+  const catalogModel = getCatalogModelById(model.id);
+  if (!catalogModel || !isMultimodalModel(catalogModel)) return null;
+  if (hasSufficientRAMForMultimodal(totalRAMMB ?? 0)) return null;
+  return { status: 'locked', progress: 0, error: MULTIMODAL_RAM_LOCK_REASON };
 }
 
 function clampProgress(progress: number): number {
@@ -53,10 +81,16 @@ function defaultStatusForModel(
   model: ModelDef,
   installedModelIds: string[],
   readySystemModelIds: string[],
+  totalRAMMB: number | null,
 ): ModelInstallJob {
   if (model.availability === 'locked') {
     return { status: 'locked', progress: 0, error: model.lockReason };
   }
+  // Device RAM gate before install/ready states: an under-provisioned device
+  // sees an honest disabled row (with the reason), never a download button
+  // for a model it cannot load.
+  const ramLock = multimodalRamLock(model, totalRAMMB);
+  if (ramLock) return ramLock;
   if (installedModelIds.includes(model.id)) {
     return { status: 'ready', progress: 1 };
   }
@@ -140,6 +174,7 @@ function installedRecordFor(model: ModelDef): InstalledModel {
 export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
   installedModelIds: [],
   readySystemModelIds: [],
+  totalRAMMB: null,
   jobs: {},
 
   hydrateInstalledModels: async () => {
@@ -149,10 +184,29 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
     ]);
     const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
     const readySystemModelIds = systemModel ? [systemModel.id] : [];
-    set({ installedModelIds: installed.map((model) => model.id), readySystemModelIds });
+    set({
+      installedModelIds: installed.map((model) => model.id),
+      readySystemModelIds,
+      totalRAMMB: caps?.totalRAMMB ?? null,
+    });
   },
 
   prepareModel: async (model) => {
+    // Authoritative RAM re-check (not just the hydrate-time snapshot) so a
+    // below-threshold device can never start a multimodal download even if
+    // the UI raced hydration.
+    if (getCatalogModelById(model.id) && isMultimodalModel(getCatalogModelById(model.id)!)) {
+      const caps = await getCapabilities().catch(() => null);
+      const ramLock = multimodalRamLock(model, caps?.totalRAMMB ?? get().totalRAMMB);
+      if (ramLock) {
+        set((state) => ({
+          totalRAMMB: caps?.totalRAMMB ?? state.totalRAMMB,
+          jobs: { ...state.jobs, [model.id]: ramLock },
+        }));
+        throw new Error(MULTIMODAL_RAM_LOCK_REASON);
+      }
+    }
+
     if (model.availability === 'locked' || model.surface !== 'local') {
       set((state) => ({
         jobs: {
@@ -258,7 +312,12 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
   statusForModel: (model) => {
     return (
       get().jobs[model.id] ??
-      defaultStatusForModel(model, get().installedModelIds, get().readySystemModelIds)
+      defaultStatusForModel(
+        model,
+        get().installedModelIds,
+        get().readySystemModelIds,
+        get().totalRAMMB,
+      )
     );
   },
 }));
