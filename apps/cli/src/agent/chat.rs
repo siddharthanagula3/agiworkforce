@@ -226,6 +226,110 @@ impl AgentSession {
     /// live in `agiworkforce_agent_core::run_turn`, driven through the
     /// `TurnHostAdapter` below. The public signature and the emitted event
     /// cadence are byte-for-byte unchanged.
+    /// Re-resolve the Auto route for an interactive turn
+    /// (AUTO-ROUTER-MIGRATION-01, CLI clause). The pre-fix interactive path
+    /// resolved Auto once at launch with a hardcoded Coding task; now every
+    /// turn classifies through the canonical taxonomy and re-resolves with
+    /// previous-route continuity, mirroring the app-server host's typed-turn
+    /// path (`resolve_auto_thread_model`). Sessions without Auto state are
+    /// untouched.
+    ///
+    /// Best-effort: a resolver failure or stale trust state keeps the current
+    /// model — a turn must never fail because routing policy is unavailable.
+    pub(crate) fn re_resolve_auto_route_for_turn(&mut self, user_input: &str) {
+        let Some(previous) = self.managed_auto_routing().cloned() else {
+            return;
+        };
+
+        let has_image_attachment = !self.pending_image_blocks.is_empty();
+        let task_type =
+            crate::routing::classify::classify_turn_task(user_input, has_image_attachment);
+        let tier = self.auto_routing_tier.clone().unwrap_or_else(|| {
+            if previous.trust_mode == agiworkforce_model_registry::TrustMode::Byok {
+                "byok".to_string()
+            } else {
+                "free".to_string()
+            }
+        });
+
+        let selection = match crate::model_catalog::resolve_auto_model_with_context(
+            &previous.selection,
+            task_type,
+            &tier,
+            previous.trust_mode,
+            Some(previous.model_key.as_str()),
+            Some(crate::routing::classify::registry_task_type(
+                previous.task_type,
+            )),
+        ) {
+            Ok(selection) => selection,
+            Err(error) => {
+                self.emit_auto_route_notice(format!(
+                    "Auto routing kept {} (re-resolution failed: {error})",
+                    self.model
+                ));
+                return;
+            }
+        };
+
+        let model_before = self.model.clone();
+        // Trust handling mirrors the app-server host's apply_auto_thread_model:
+        // Managed keeps Provider::ManagedCloud and never installs direct
+        // upstream fallbacks; BYOK switches through the catalog and installs
+        // the direct chain. A stale-state mismatch skips rather than failing
+        // the turn.
+        match previous.trust_mode {
+            agiworkforce_model_registry::TrustMode::ManagedCloud => {
+                if !matches!(self.provider, crate::models::Provider::ManagedCloud) {
+                    return;
+                }
+                self.model = selection.provider_model_id.clone();
+                self.fallback_chain = None;
+            }
+            agiworkforce_model_registry::TrustMode::Byok => {
+                if self.privacy_mode != super::PrivacyMode::Byok {
+                    return;
+                }
+                if self.switch_model(&selection.provider_model_id).is_err() {
+                    return;
+                }
+                let chain_ids: Vec<String> =
+                    std::iter::once(selection.provider_model_id.clone())
+                        .chain(selection.fallback_provider_model_ids.iter().cloned())
+                        .collect();
+                self.fallback_chain = Some(crate::routing::fallback::FallbackChain::parse(
+                    &chain_ids.join(","),
+                ));
+            }
+            agiworkforce_model_registry::TrustMode::Local
+            | agiworkforce_model_registry::TrustMode::OnDevice => return,
+        }
+
+        if self.model != model_before {
+            self.emit_auto_route_notice(format!(
+                "Auto route: {:?} -> {}/{}",
+                task_type, selection.upstream_provider, selection.provider_model_id
+            ));
+        }
+
+        self.set_managed_auto_routing(Some(
+            crate::runtime::session::ManagedSessionAutoRouting {
+                selection: previous.selection,
+                model_key: selection.model_key,
+                task_type: crate::routing::classify::developer_task_type(task_type),
+                trust_mode: previous.trust_mode,
+            },
+        ));
+    }
+
+    fn emit_auto_route_notice(&self, notice: String) {
+        if crate::tui::tui_active() {
+            crate::tui::push_tui_notice(notice);
+        } else if !self.quiet {
+            eprintln!("  {}", notice.dimmed());
+        }
+    }
+
     pub async fn send(
         &mut self,
         config: &CliConfig,
@@ -239,6 +343,11 @@ impl AgentSession {
         self.consume_byok_handoff(user_input);
         self.consume_managed_handoff(user_input);
         self.validate_privacy_boundary()?;
+
+        // Auto sessions: classify this turn and re-resolve the route before
+        // anything downstream reads `self.model` (compaction limits, request
+        // construction, cost attribution).
+        self.re_resolve_auto_route_for_turn(user_input);
 
         // Context compaction: if above 90%, shrink to 70%
         let usage = compaction::context_usage(&self.messages, &self.model);
@@ -1839,6 +1948,126 @@ impl TurnHost for TurnHostAdapter<'_> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    // -----------------------------------------------------------------------
+    // Interactive per-turn Auto re-resolution (AUTO-ROUTER-MIGRATION-01, CLI
+    // clause): every Auto turn classifies through the canonical taxonomy and
+    // feeds the registry resolver with previous-route continuity, instead of
+    // the launch-time Coding hardcode.
+    // -----------------------------------------------------------------------
+
+    fn byok_auto_session() -> AgentSession {
+        let ctx = crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: Vec::new(),
+            monorepo_type: None,
+            package_manager: None,
+            containerization: Vec::new(),
+            editor_configs: Vec::new(),
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
+        session.quiet = true;
+        session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "auto-turn-test",
+            chrono::Utc::now(),
+        ));
+        session.auto_routing_tier = Some("byok".to_string());
+        session.set_managed_auto_routing(Some(
+            crate::runtime::session::ManagedSessionAutoRouting {
+                selection: "auto-premium".to_string(),
+                model_key: "claude-opus-4.8".to_string(),
+                task_type:
+                    agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
+                trust_mode: agiworkforce_model_registry::TrustMode::Byok,
+            },
+        ));
+        session
+    }
+
+    #[test]
+    fn interactive_auto_turn_classifies_and_feeds_the_resolver() {
+        let mut session = byok_auto_session();
+
+        // An untyped creative turn must re-classify — NOT stay on the Coding
+        // hardcode — and the model must be exactly what the canonical resolver
+        // returns for that task with the same continuity inputs.
+        session.re_resolve_auto_route_for_turn("write a poem about the sea");
+
+        let state = session
+            .managed_auto_routing()
+            .expect("auto state must persist across re-resolution")
+            .clone();
+        assert_eq!(
+            state.task_type,
+            agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::CreativeWriting,
+            "untyped creative turn must not stay Coding-hardcoded"
+        );
+
+        let expected = crate::model_catalog::resolve_auto_model_with_context(
+            "auto-premium",
+            agiworkforce_model_registry::RoutingTaskType::CreativeWriting,
+            "byok",
+            agiworkforce_model_registry::TrustMode::Byok,
+            Some("claude-opus-4.8"),
+            Some(agiworkforce_model_registry::RoutingTaskType::Coding),
+        )
+        .expect("BYOK creative route should be available");
+        assert_eq!(session.model, expected.provider_model_id);
+        assert_eq!(state.model_key, expected.model_key);
+        assert_eq!(state.selection, "auto-premium", "selection is sticky");
+        assert_eq!(
+            state.trust_mode,
+            agiworkforce_model_registry::TrustMode::Byok,
+            "trust mode is immutable across turns"
+        );
+    }
+
+    #[test]
+    fn interactive_auto_turn_respects_an_explicitly_coding_turn() {
+        let mut session = byok_auto_session();
+
+        session.re_resolve_auto_route_for_turn("why does this function throw a TypeError?");
+
+        let state = session.managed_auto_routing().expect("auto state").clone();
+        assert_eq!(
+            state.task_type,
+            agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding
+        );
+    }
+
+    #[test]
+    fn non_auto_sessions_are_untouched_by_per_turn_re_resolution() {
+        let ctx = crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: Vec::new(),
+            monorepo_type: None,
+            package_manager: None,
+            containerization: Vec::new(),
+            editor_configs: Vec::new(),
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
+        session.quiet = true;
+        let model_before = session.model.clone();
+
+        session.re_resolve_auto_route_for_turn("write a poem about the sea");
+
+        assert_eq!(session.model, model_before);
+        assert!(session.managed_auto_routing().is_none());
+    }
 
     fn pre_tool_hook_config(command: &str) -> hooks::HooksConfig {
         let mut hooks_by_event = HashMap::new();

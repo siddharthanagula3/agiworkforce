@@ -51,6 +51,7 @@ pub async fn run_repl(
     disallowed_tools: Vec<String>,
     mcp_config_options: crate::mcp::McpConfigLoadOptions,
     agent_name: Option<String>,
+    auto_route_seed: Option<crate::routing::classify::AutoRouteSeed>,
 ) -> Result<()> {
     let provider_override = crate::models::selection_provider_override(
         model,
@@ -119,6 +120,14 @@ pub async fn run_repl(
         (None, None) => {
             session.enable_managed_session()?;
         }
+    }
+
+    // `--auto` launches install the resolved launch route + tier so every
+    // interactive turn re-classifies and re-resolves with continuity
+    // (AUTO-ROUTER-MIGRATION-01 CLI clause; see AgentSession::send).
+    if let Some(seed) = auto_route_seed {
+        session.auto_routing_tier = Some(seed.tier);
+        session.set_managed_auto_routing(Some(seed.state));
     }
 
     // P0-1 fix: do NOT block REPL startup on MCP server connection or OAuth.
