@@ -50,6 +50,7 @@
     "workspace-analytics"
   ],
   "cloudContractsModules": [
+    "agent-events",
     "capability-handshake",
     "connectors",
     "conversations",
@@ -65,5 +66,5 @@
     "tool-approval-resume",
     "tool-events"
   ],
-  "generatedProtocolTypeCount": 257
+  "generatedProtocolTypeCount": 270
 }

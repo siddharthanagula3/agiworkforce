@@ -23,6 +23,7 @@ const cloudModules = [
   'conversations',
   'managed-cloud-chat-client',
   'tool-events',
+  'agent-events',
   'tool-approval-resume',
   'connectors',
   'capability-handshake',
@@ -45,6 +46,7 @@ const cloudMovedFiles = [
   '__tests__/sync.test.ts',
   '__tests__/tool-approval-resume.test.ts',
   '__tests__/tool-events.test.ts',
+  '__tests__/agent-events.test.ts',
   '__tests__/capability-handshake.test.ts',
   ...cloudModules.map((moduleName) => `${moduleName}.ts`),
 ];

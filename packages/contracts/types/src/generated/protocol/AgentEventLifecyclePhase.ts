@@ -4,4 +4,4 @@
  * Stream-lifecycle moments that are neither content nor a terminal
  * [`AgentEventStopReason`].
  */
-export type AgentEventLifecyclePhase = 'started' | 'heartbeat';
+export type AgentEventLifecyclePhase = 'started' | 'heartbeat' | 'paused' | 'resumed';
