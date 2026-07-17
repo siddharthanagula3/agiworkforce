@@ -205,8 +205,11 @@ requireIncludes('scripts/release.sh', 'v-desktop-${VERSION}');
 requireIncludes('vercel.json', '"path": "/api/cron/reset-credits"');
 requireIncludes('vercel.json', '"source": "/v1/chat/completions"');
 requireIncludes('vercel.json', 'pnpm install --frozen-lockfile');
-requireIncludes('apps/web/vercel.json', 'pnpm install --frozen-lockfile');
-requireNotIncludes('apps/web/vercel.json', '--no-frozen-lockfile');
+// The Vercel project's Root Directory is the repo root, so the ROOT
+// vercel.json is the only one Vercel reads (apps/web/vercel.json was dead
+// config and was deleted 2026-07-17 — see WEB-API-HOST-REWRITES-INERT-01).
+requireIncludes('vercel.json', 'pnpm install --frozen-lockfile');
+requireNotIncludes('vercel.json', '--no-frozen-lockfile');
 requireIncludes('apps/web/scripts/build-with-chat.sh', 'SCRIPT_DIR=');
 requireNotIncludes('apps/web/scripts/build-with-chat.sh', 'cd ../..');
 
