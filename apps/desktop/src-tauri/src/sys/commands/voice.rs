@@ -13,7 +13,6 @@ use crate::features::speech::{
 use crate::features::speech::{BargeInDetector, SharedVad};
 use crate::sys::account::{get_access_token, get_api_base_url};
 use crate::sys::commands::settings_v2::SettingsServiceState;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -106,25 +105,10 @@ impl Default for LocalPiperState {
     }
 }
 
-/// Holds state for an active cpal audio recording session.
-///
-/// Uses `std::sync::Mutex` because `cpal::Stream` is not `Send` -- the stream
-/// itself lives on a dedicated OS thread and we only store it here so it is not
-/// dropped prematurely. The `stop_flag` + `samples` are shared with the audio
-/// callback via `Arc`.
-pub struct AudioRecordingState {
-    /// When set to `true`, the audio callback stops pushing samples.
-    pub stop_flag: Arc<std::sync::atomic::AtomicBool>,
-    /// Accumulated f32 mono samples at the device's native sample rate.
-    pub samples: Arc<std::sync::Mutex<Vec<f32>>>,
-    /// The sample rate reported by the input device (needed for WAV encoding).
-    pub sample_rate: u32,
-    /// Number of channels reported by the input device.
-    pub channels: u16,
-    /// Join handle for the dedicated OS thread that owns the cpal::Stream.
-    /// We keep this so the stream stays alive until we join the thread.
-    pub thread_handle: Option<std::thread::JoinHandle<()>>,
-}
+// The native capture session state now lives in
+// `features/speech/dictation/capture.rs` (plan stage 3); `CaptureHandle`
+// replaces the old `AudioRecordingState`.
+use crate::features::speech::dictation::CaptureHandle;
 
 pub struct VoiceState {
     pub settings: Arc<Mutex<VoiceSettings>>,
@@ -143,7 +127,7 @@ pub struct VoiceState {
     pub local_piper: Arc<RwLock<LocalPiperState>>,
     /// Active AGI Dictation recording session (if any).
     /// Uses `std::sync::Mutex` because cpal::Stream is not Send.
-    pub recording: Arc<std::sync::Mutex<Option<AudioRecordingState>>>,
+    pub recording: Arc<std::sync::Mutex<Option<CaptureHandle>>>,
 }
 
 impl VoiceState {
@@ -261,6 +245,21 @@ pub async fn voice_transcribe_blob(
         return Err(format!("Invalid audio format: {}", format));
     }
 
+    // Explicit-mode adapter (plan stage 3, boundary contract): the caller's
+    // provider string is parsed fail-closed BEFORE any temp file is written —
+    // an unknown value errors, and `deepgram` (streaming-only) is refused
+    // explicitly. Previously both silently fell back to the settings
+    // provider, and a BYOK OpenAI selection without a key silently rerouted
+    // the audio to managed cloud. Audio never crosses a boundary the user did
+    // not explicitly select.
+    let explicit_mode = match provider.as_deref() {
+        Some(raw) => Some(
+            crate::features::speech::dictation::parse_transcription_mode(raw)
+                .map_err(|e| e.to_string())?,
+        ),
+        None => None,
+    };
+
     let temp_dir = std::env::temp_dir();
     let temp_file = temp_dir.join(format!("voice_{}.{}", uuid::Uuid::new_v4(), format));
 
@@ -268,67 +267,81 @@ pub async fn voice_transcribe_blob(
         .map_err(|e| format!("Failed to write temp file: {}", e))?;
 
     let result = {
+        use crate::features::speech::dictation::TranscriptionMode;
+
         let voice_state = state.lock().await;
         let settings = voice_state.settings.lock().await;
 
-        let use_openai_direct = provider.as_deref() == Some("openai_whisper");
-
-        let effective_provider = match provider.as_deref() {
-            Some("local_whisper") | Some("local") => VoiceProvider::Local,
-            Some("deepgram") => {
-                tracing::warn!(
-                    "[voice] Deepgram uses real-time streaming, not blob transcription. \
-                     Falling back to managed cloud for this request."
-                );
-                settings.provider.clone()
-            }
-            Some(_) | None => settings.provider.clone(),
-        };
-        let effective_language = language.or_else(|| settings.language.clone());
-        let overridden = VoiceSettings {
-            provider: effective_provider,
-            model: settings.model.clone(),
-            language: effective_language,
-        };
-        drop(settings);
-
-        if use_openai_direct {
-            // Retrieve the user's OpenAI API key from SettingsService
-            let api_key = {
-                let svc = settings_state
-                    .service
-                    .lock()
-                    .map_err(|e| format!("Failed to lock settings service: {}", e))?;
-                svc.get_api_key("openai").unwrap_or_else(|e| {
-                    tracing::warn!("[voice] Failed to retrieve OpenAI API key: {}", e);
-                    String::new()
-                })
-            };
-
-            if api_key.is_empty() {
-                tracing::debug!("[voice] No OpenAI key in settings, falling back to managed cloud");
-                transcribe_with_cloud(&temp_file, &overridden, &voice_state.client).await
-            } else {
-                transcribe_with_openai_direct(
-                    &temp_file,
-                    &overridden,
-                    &voice_state.client,
-                    &api_key,
-                )
-                .await
-            }
-        } else {
-            match overridden.provider {
-                VoiceProvider::Cloud => {
-                    transcribe_with_cloud(&temp_file, &overridden, &voice_state.client).await
-                }
+        // When no provider is passed, the user's stored voice settings (an
+        // explicit configuration) decide. The Err arm flows through `result`
+        // so the temp-file cleanup below still runs.
+        let mode_result: Result<TranscriptionMode, String> = match explicit_mode {
+            Some(mode) => Ok(mode),
+            None => match settings.provider {
+                VoiceProvider::Cloud => Ok(TranscriptionMode::Managed),
+                VoiceProvider::Local => Ok(TranscriptionMode::Local),
                 VoiceProvider::WebSpeech => {
                     Err("Web Speech API transcription must be done from frontend".to_string())
                 }
-                VoiceProvider::Local => {
-                    let local_whisper = voice_state.local_whisper.read().await;
-                    transcribe_with_local_whisper(&temp_file, &local_whisper, overridden.language)
+            },
+        };
+
+        match mode_result {
+            Err(error) => Err(error),
+            Ok(mode) => {
+                let effective_language = language.or_else(|| settings.language.clone());
+                let overridden = VoiceSettings {
+                    provider: match mode {
+                        TranscriptionMode::Local => VoiceProvider::Local,
+                        TranscriptionMode::Managed | TranscriptionMode::ByokOpenai => {
+                            VoiceProvider::Cloud
+                        }
+                    },
+                    model: settings.model.clone(),
+                    language: effective_language,
+                };
+                drop(settings);
+
+                match mode {
+                    TranscriptionMode::ByokOpenai => {
+                        // Retrieve the user's OpenAI API key from SettingsService
+                        let api_key = {
+                            let svc = settings_state
+                                .service
+                                .lock()
+                                .map_err(|e| format!("Failed to lock settings service: {}", e))?;
+                            svc.get_api_key("openai").unwrap_or_else(|e| {
+                                tracing::warn!("[voice] Failed to retrieve OpenAI API key: {}", e);
+                                String::new()
+                            })
+                        };
+
+                        if api_key.is_empty() {
+                            // BYOK without a key fails closed — never silently
+                            // reroute the audio to managed cloud.
+                            Err(crate::features::speech::dictation::missing_byok_openai_key_error())
+                        } else {
+                            transcribe_with_openai_direct(
+                                &temp_file,
+                                &overridden,
+                                &voice_state.client,
+                                &api_key,
+                            )
+                            .await
+                        }
+                    }
+                    TranscriptionMode::Managed => {
+                        transcribe_with_cloud(&temp_file, &overridden, &voice_state.client).await
+                    }
+                    TranscriptionMode::Local => {
+                        let local_whisper = voice_state.local_whisper.read().await;
+                        transcribe_with_local_whisper(
+                            &temp_file,
+                            &local_whisper,
+                            overridden.language,
+                        )
                         .await
+                    }
                 }
             }
         }
@@ -1972,64 +1985,26 @@ fn resample_linear(samples: &[f32], src_rate: u32, target_rate: u32) -> Vec<f32>
     out
 }
 
-/// Build a cpal input stream for any sized sample type, converting to mono
-/// f32 into the shared buffer. The device's ACTUAL sample format decides `T`
-/// (see the dispatch in `speech_start_recording`); assuming f32 broke every
-/// device whose default input config is i16/u16 (common on Windows WASAPI
-/// and many USB microphones).
-fn build_dictation_input_stream<T>(
-    device: &cpal::Device,
-    config: &cpal::StreamConfig,
-    channels: usize,
-    stop_flag: Arc<std::sync::atomic::AtomicBool>,
-    samples: Arc<std::sync::Mutex<Vec<f32>>>,
-) -> Result<cpal::Stream, cpal::BuildStreamError>
-where
-    T: cpal::SizedSample,
-    f32: cpal::FromSample<T>,
-{
-    use cpal::Sample;
-
-    device.build_input_stream(
-        config,
-        move |data: &[T], _: &cpal::InputCallbackInfo| {
-            if stop_flag.load(std::sync::atomic::Ordering::Relaxed) {
-                return;
-            }
-            // Convert to f32 and downmix to mono if multi-channel.
-            let mono: Vec<f32> = if channels > 1 {
-                data.chunks(channels)
-                    .map(|chunk| {
-                        chunk
-                            .iter()
-                            .map(|sample| f32::from_sample(*sample))
-                            .sum::<f32>()
-                            / channels as f32
-                    })
-                    .collect()
-            } else {
-                data.iter().map(|sample| f32::from_sample(*sample)).collect()
-            };
-            if let Ok(mut buf) = samples.lock() {
-                buf.extend_from_slice(&mono);
-            }
-        },
-        |err| {
-            tracing::error!("[dictation] Audio stream error: {}", err);
-        },
-        None,
-    )
+/// List audio input devices for the dictation microphone picker.
+#[tauri::command]
+pub async fn dictation_list_input_devices(
+) -> Result<Vec<crate::features::speech::dictation::InputDeviceInfo>, String> {
+    crate::features::speech::dictation::list_input_devices()
 }
 
 /// Start audio recording for AGI Dictation.
 ///
-/// Opens the system default input device via cpal, spawns a dedicated OS thread
-/// (because `cpal::Stream` is not `Send`), and begins collecting mono f32 samples
-/// into a shared buffer.  Emits `voice:recording:started` so the frontend overlay
+/// Capture mechanics (device selection, sample-format dispatch, bounded
+/// buffering, device-loss recovery) live in
+/// `features/speech/dictation/capture.rs`. `device` selects a microphone by
+/// name; when absent — or when the preferred device no longer exists — the
+/// system default is used and the substitution is reported in the started
+/// event payload. Emits `voice:recording:started` so the frontend overlay
 /// appears.
 #[tauri::command]
 pub async fn speech_start_recording(
     _provider: String,
+    device: Option<String>,
     app_handle: AppHandle,
     state: State<'_, Arc<Mutex<VoiceState>>>,
 ) -> Result<(), String> {
@@ -2046,112 +2021,9 @@ pub async fn speech_start_recording(
         }
     }
 
-    // Query default input device on the current thread to get config,
-    // then spawn a dedicated OS thread for the stream.
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .ok_or_else(|| "No default audio input device found".to_string())?;
-
-    let device_name = device.name().unwrap_or_else(|_| "Unknown".to_string());
-    tracing::info!("[dictation] Using audio input device: {}", device_name);
-
-    let supported_config = device
-        .default_input_config()
-        .map_err(|e| format!("Failed to get input device config: {}", e))?;
-
-    let sample_rate = supported_config.sample_rate().0;
-    let channels = supported_config.channels();
-    let sample_format = supported_config.sample_format();
-    tracing::info!(
-        "[dictation] Audio config: {} Hz, {} channel(s), {:?} samples",
-        sample_rate,
-        channels,
-        sample_format
-    );
-
-    let stop_flag = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let samples: Arc<std::sync::Mutex<Vec<f32>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
-
-    let stop_flag_stream = stop_flag.clone();
-    let stop_flag_poll = stop_flag.clone();
-    let samples_cb = samples.clone();
-    let ch = channels as usize;
-
-    // Spawn a dedicated OS thread for the cpal stream (not Send).
-    let config_for_stream: cpal::StreamConfig = supported_config.into();
-    let thread_handle = std::thread::spawn(move || {
-        // Dispatch on the device's actual sample format instead of assuming
-        // f32 — the previous f32-only build failed on i16/u16 devices.
-        let stream_result = match sample_format {
-            cpal::SampleFormat::F32 => build_dictation_input_stream::<f32>(
-                &device,
-                &config_for_stream,
-                ch,
-                stop_flag_stream,
-                samples_cb,
-            ),
-            cpal::SampleFormat::I16 => build_dictation_input_stream::<i16>(
-                &device,
-                &config_for_stream,
-                ch,
-                stop_flag_stream,
-                samples_cb,
-            ),
-            cpal::SampleFormat::U16 => build_dictation_input_stream::<u16>(
-                &device,
-                &config_for_stream,
-                ch,
-                stop_flag_stream,
-                samples_cb,
-            ),
-            cpal::SampleFormat::I32 => build_dictation_input_stream::<i32>(
-                &device,
-                &config_for_stream,
-                ch,
-                stop_flag_stream,
-                samples_cb,
-            ),
-            cpal::SampleFormat::U8 => build_dictation_input_stream::<u8>(
-                &device,
-                &config_for_stream,
-                ch,
-                stop_flag_stream,
-                samples_cb,
-            ),
-            cpal::SampleFormat::F64 => build_dictation_input_stream::<f64>(
-                &device,
-                &config_for_stream,
-                ch,
-                stop_flag_stream,
-                samples_cb,
-            ),
-            other => {
-                tracing::error!("[dictation] Unsupported input sample format: {:?}", other);
-                return;
-            }
-        };
-
-        match stream_result {
-            Ok(stream) => {
-                if let Err(e) = stream.play() {
-                    tracing::error!("[dictation] Failed to start audio stream: {}", e);
-                    return;
-                }
-                tracing::info!("[dictation] Audio recording stream started");
-                // Keep the thread (and hence the stream) alive until stop_flag is set.
-                // Poll at 50 ms intervals.
-                while !stop_flag_poll.load(std::sync::atomic::Ordering::Relaxed) {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                }
-                // Stream is dropped here when thread exits, stopping capture.
-                tracing::info!("[dictation] Audio recording stream stopped");
-            }
-            Err(e) => {
-                tracing::error!("[dictation] Failed to build input stream: {}", e);
-            }
-        }
-    });
+    let handle = crate::features::speech::dictation::start_capture(device.as_deref())?;
+    let device_name = handle.device_name.clone();
+    let requested_device_honored = handle.requested_device_honored;
 
     // Wait briefly for the stream to begin capturing, so the caller doesn't
     // get Ok before the thread has actually started. Best-effort, and async
@@ -2164,23 +2036,70 @@ pub async fn speech_start_recording(
             .recording
             .lock()
             .map_err(|e| format!("Recording lock poisoned: {}", e))?;
-
-        // Use the same stop_flag reference. Note: stop_flag_cb was moved into the
-        // thread closure, but we cloned stop_flag before that move.
-        *guard = Some(AudioRecordingState {
-            stop_flag: stop_flag.clone(),
-            samples: samples.clone(),
-            sample_rate,
-            channels,
-            thread_handle: Some(thread_handle),
-        });
+        *guard = Some(handle);
     }
 
-    let _ = app_handle.emit("voice:recording:started", &_provider);
-    tracing::info!(
-        "[dictation] Recording session started (provider={})",
-        _provider
+    let _ = app_handle.emit(
+        "voice:recording:started",
+        serde_json::json!({
+            "provider": _provider,
+            "device": device_name,
+            "requestedDeviceHonored": requested_device_honored,
+        }),
     );
+    tracing::info!(
+        "[dictation] Recording session started (provider={}, device={})",
+        _provider,
+        device_name
+    );
+    Ok(())
+}
+
+/// Wait (bounded) for the capture thread to finish after its stop flag has
+/// been set. The capture thread polls every 50 ms, so this normally returns
+/// almost immediately — but a wedged audio driver must not hold a Tokio
+/// worker hostage with an unbounded join().
+async fn settle_capture_thread(handle: Option<std::thread::JoinHandle<()>>) {
+    if let Some(handle) = handle {
+        let mut waited_ms = 0u64;
+        while !handle.is_finished() && waited_ms < 2_000 {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            waited_ms += 25;
+        }
+        if handle.is_finished() {
+            let _ = handle.join();
+        } else {
+            tracing::warn!(
+                "[dictation] capture thread did not stop within 2s; detaching (samples captured so far are used)"
+            );
+        }
+    }
+}
+
+/// Cancel an active recording, discarding the captured audio without
+/// transcribing it. No-op error if nothing is recording.
+#[tauri::command]
+pub async fn speech_cancel_recording(
+    app_handle: AppHandle,
+    state: State<'_, Arc<Mutex<VoiceState>>>,
+) -> Result<(), String> {
+    let voice_state = state.lock().await;
+    let recording = {
+        let mut guard = voice_state
+            .recording
+            .lock()
+            .map_err(|e| format!("Recording lock poisoned: {}", e))?;
+        guard.take()
+    };
+    let recording = recording.ok_or_else(|| "No active recording session to cancel".to_string())?;
+
+    recording
+        .stop_flag
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    settle_capture_thread(recording.thread_handle).await;
+
+    let _ = app_handle.emit("voice:recording:stopped", ());
+    tracing::info!("[dictation] Recording session cancelled; audio discarded");
     Ok(())
 }
 
@@ -2196,7 +2115,14 @@ pub async fn speech_stop_and_transcribe(
     language: String,
     app_handle: AppHandle,
     state: State<'_, Arc<Mutex<VoiceState>>>,
+    settings_state: State<'_, SettingsServiceState>,
 ) -> Result<SpeechTranscriptResult, String> {
+    // Resolve the explicit transcription mode BEFORE touching the audio:
+    // an unknown provider must fail closed without transcribing anywhere
+    // (previously it silently fell back to the settings provider).
+    use crate::features::speech::dictation::{parse_transcription_mode, TranscriptionMode};
+    let mode = parse_transcription_mode(&_provider).map_err(|e| e.to_string())?;
+
     let _ = app_handle.emit("voice:recording:stopped", ());
 
     let voice_state = state.lock().await;
@@ -2212,36 +2138,37 @@ pub async fn speech_stop_and_transcribe(
 
     let recording = recording.ok_or_else(|| "No active recording session to stop".to_string())?;
 
-    // Signal the recording thread to stop
+    // Signal the recording thread to stop and wait for it (bounded).
     recording
         .stop_flag
         .store(true, std::sync::atomic::Ordering::SeqCst);
+    settle_capture_thread(recording.thread_handle).await;
 
-    // Wait for the recording thread, bounded to 2 seconds. The capture thread
-    // polls the stop flag every 50 ms, so it normally finishes almost
-    // immediately — but a wedged audio driver must not be able to hold this
-    // command (and its Tokio worker) hostage with an unbounded join().
-    if let Some(handle) = recording.thread_handle {
-        let mut waited_ms = 0u64;
-        while !handle.is_finished() && waited_ms < 2_000 {
-            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
-            waited_ms += 25;
-        }
-        if handle.is_finished() {
-            let _ = handle.join();
-        } else {
-            tracing::warn!(
-                "[dictation] capture thread did not stop within 2s; detaching (samples captured so far are used)"
-            );
-        }
+    if recording
+        .device_lost
+        .load(std::sync::atomic::Ordering::SeqCst)
+    {
+        // Device removal mid-capture: the transcript is still produced from
+        // the samples captured before the loss (recovery, not data loss).
+        tracing::warn!(
+            "[dictation] input device '{}' was lost during capture; transcribing partial audio",
+            recording.device_name
+        );
     }
 
     // Extract collected samples
-    let raw_samples = recording
-        .samples
-        .lock()
-        .map_err(|e| format!("Samples lock poisoned: {}", e))?
-        .clone();
+    let (raw_samples, truncated) = {
+        let mut sink = recording
+            .sink
+            .lock()
+            .map_err(|e| format!("Samples lock poisoned: {}", e))?;
+        (sink.take_samples(), sink.truncated())
+    };
+    if truncated {
+        tracing::warn!(
+            "[dictation] capture hit the bounded-buffer cap; trailing audio was dropped"
+        );
+    }
 
     if raw_samples.is_empty() {
         return Err("No audio data was captured. Check microphone permissions.".to_string());
@@ -2274,15 +2201,13 @@ pub async fn speech_stop_and_transcribe(
         wav_bytes.len()
     );
 
-    // Route through existing transcription backend
+    // Route through the explicitly selected mode adapter — never a fallback.
     let settings = voice_state.settings.lock().await;
-    let effective_provider = match _provider.as_str() {
-        "local" | "local_whisper" => VoiceProvider::Local,
-        "cloud" | "managed_cloud" | "managedcloud" | "" => VoiceProvider::Cloud,
-        _ => settings.provider.clone(),
-    };
     let effective_settings = VoiceSettings {
-        provider: effective_provider.clone(),
+        provider: match mode {
+            TranscriptionMode::Local => VoiceProvider::Local,
+            TranscriptionMode::Managed | TranscriptionMode::ByokOpenai => VoiceProvider::Cloud,
+        },
         model: settings.model.clone(),
         language: if language.is_empty() {
             settings.language.clone()
@@ -2292,11 +2217,11 @@ pub async fn speech_stop_and_transcribe(
     };
     drop(settings);
 
-    let transcription = match effective_provider {
-        VoiceProvider::Cloud => {
+    let transcription = match mode {
+        TranscriptionMode::Managed => {
             transcribe_with_cloud(&temp_file, &effective_settings, &voice_state.client).await
         }
-        VoiceProvider::Local => {
+        TranscriptionMode::Local => {
             let local_whisper = voice_state.local_whisper.read().await;
             transcribe_with_local_whisper(
                 &temp_file,
@@ -2305,8 +2230,27 @@ pub async fn speech_stop_and_transcribe(
             )
             .await
         }
-        VoiceProvider::WebSpeech => {
-            Err("Web Speech API cannot be used for backend transcription".to_string())
+        TranscriptionMode::ByokOpenai => {
+            let api_key = {
+                let svc = settings_state
+                    .service
+                    .lock()
+                    .map_err(|e| format!("Failed to lock settings service: {}", e))?;
+                svc.get_api_key("openai").unwrap_or_default()
+            };
+            if api_key.is_empty() {
+                // BYOK without a key fails closed — the audio must never be
+                // silently rerouted to managed cloud.
+                Err(crate::features::speech::dictation::missing_byok_openai_key_error())
+            } else {
+                transcribe_with_openai_direct(
+                    &temp_file,
+                    &effective_settings,
+                    &voice_state.client,
+                    &api_key,
+                )
+                .await
+            }
         }
     };
 
@@ -2315,7 +2259,10 @@ pub async fn speech_stop_and_transcribe(
 
     match transcription {
         Ok(vt) => {
-            tracing::info!("[dictation] Transcription complete: {} chars", vt.text.len());
+            tracing::info!(
+                "[dictation] Transcription complete: {} chars",
+                vt.text.len()
+            );
             let _ = app_handle.emit("voice:transcription:complete", &vt);
             Ok(SpeechTranscriptResult {
                 text: vt.text,
