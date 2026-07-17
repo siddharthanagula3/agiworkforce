@@ -2,7 +2,7 @@
 // check-model-catalog-integrity.mjs
 //
 // E7 / P1-CATALOG class-guard: the single source of truth for model IDs is
-// packages/types/src/models.json. This guard fails if NON-TEST TypeScript
+// packages/contracts/types/src/models.json. This guard fails if NON-TEST TypeScript
 // shipping code OR hand-maintained doc files (.md/.mdx) reference a model ID
 // that is NOT in the canonical catalog (i.e. a removed/ghost/drifted ID). It
 // is the durable backstop that stops the recurring catalog-drift class recorded
@@ -26,11 +26,11 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-const CATALOG = path.join(root, 'packages/types/src/models.json');
+const CATALOG = path.join(root, 'packages/contracts/types/src/models.json');
 const CATALOG_INPUTS = [
   CATALOG,
-  path.join(root, 'packages/types/src/models.curation.json'),
-  path.join(root, 'packages/types/src/models.synced.json'),
+  path.join(root, 'packages/ai/model-registry/catalog/models.curation.json'),
+  path.join(root, 'packages/ai/model-registry/catalog/models.synced.json'),
 ];
 
 // Deprecated, removed, or unverified model IDs that must not appear in selectable
@@ -47,6 +47,7 @@ const REMOVED_SELECTABLE_MODEL_IDS = new Set([
   'gemini-3-pro-preview',
   'glm-4.7',
   'gpt-5-codex',
+  'gpt-5-nano',
   'gpt-5-pro',
   'gpt-5-pro-2026-01',
   'gpt-5.4',
@@ -55,7 +56,6 @@ const REMOVED_SELECTABLE_MODEL_IDS = new Set([
   'gpt-5.4-codex-medium',
   'gpt-5.4-codex-high',
   'gpt-5.4-codex-xhigh',
-  'gpt-5.4-nano',
   'gpt-5.4-pro',
   'grok-4-1-fast',
   'grok-4-1-fast-reasoning',
@@ -84,8 +84,8 @@ const DISALLOWED_SUBSTRING = [
   'claude-opus-4-7',
   'claude-opus-4-6-mini',
   'gpt-5.4-codex',
-  'gpt-5.4-nano',
   'gpt-5.4-pro',
+  'gpt-5-nano',
 ];
 // TOKEN list: removed ids that ARE a prefix of a VALID id (bare `gpt-5.4` vs the valid
 // `gpt-5.4-mini`) -> match ONLY as a whole token (bounded by non-id chars).
@@ -284,7 +284,7 @@ if (violations.length > 0) {
     'Model-catalog integrity check FAILED — removed/ghost model IDs in live TS or doc files:',
   );
   console.error(
-    '(IDs must come from packages/types/src/models.json — fix the site or update DISALLOWED if the ID was re-added.)\n',
+    '(IDs must come from packages/contracts/types/src/models.json — fix the site or update DISALLOWED if the ID was re-added.)\n',
   );
   for (const v of violations) {
     console.error(`- ${v.file}:${v.line}  [${v.id}]  ${v.text}`);

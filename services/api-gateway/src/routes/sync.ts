@@ -19,7 +19,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getServiceClient } from '../lib/neonClients';
+import { getSystemClient, getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -97,18 +97,16 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
     throw new AppError('user_id mismatch', 403);
   }
 
-  // RLS-GAP: sync_data has no RLS policy (0013_devices.sql enables none) —
-  // migration TODO. Same gap applies to `device_pairings` (no migration
-  // record anywhere in the repo) at every getServiceClient() call site in
-  // this file. Explicit `.eq('user_id', …)` filters are the SOLE
-  // tenant-isolation mechanism until policies ship.
-  const db = getServiceClient();
+  const db = getUserScopedClient(user);
 
   // SECURITY (H11): Validate device_id ownership — prevent cross-user device contamination
   const rawDeviceId = (req.headers['x-device-id'] as string | undefined) ?? batch.device_id;
   let deviceId: string | undefined;
   if (rawDeviceId) {
-    const { data: pairing } = await db
+    // device_pairings has no canonical migration; its explicit user_id
+    // predicate remains on the named compatibility boundary.
+    const pairingDb = getSystemClient('shadow-schema-compatibility');
+    const { data: pairing } = await pairingDb
       .from('device_pairings')
       .select('id')
       .eq('user_id', user.userId)
@@ -231,8 +229,7 @@ router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, r
   const since = typeof sinceRaw === 'string' ? sinceRaw : new Date(0).toISOString();
   const deviceId = req.headers['x-device-id'] as string | undefined;
 
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+  const db = getUserScopedClient(user);
   // Query sync data from Neon
   let query = db
     .from('sync_data')
@@ -282,8 +279,7 @@ router.post(
     const resolution = conflictResolutionSchema.parse(req.body);
     const deviceId = req.headers['x-device-id'] as string | undefined;
 
-    // Wave 1.5+ singleton sweep: user-scoped client.
-    const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+    const db = getUserScopedClient(user);
     // For now, just insert the resolved data as a new entry
     // Full implementation would update existing entry with version check
     const { error } = await db.from('sync_data').insert({
@@ -317,8 +313,7 @@ router.get('/status', createRateLimiter('sync-status'), async (req: Request, res
     throw new AppError('Unauthorized', 401);
   }
 
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+  const db = getUserScopedClient(user);
   // Get counts for this user
   const { count: pendingCount } = await db
     .from('sync_data')
@@ -357,8 +352,7 @@ router.post(
 
     const registration = deviceRegistrationSchema.parse(req.body);
 
-    // Wave 1.5+ singleton sweep: user-scoped client.
-    const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+    const db = getUserScopedClient(user);
 
     // Store device registration in sync_data as a special type
     // Full implementation would have a dedicated devices table
@@ -406,8 +400,7 @@ router.delete(
       throw new AppError('Device ID required', 400);
     }
 
-    // Wave 1.5+ singleton sweep: user-scoped client.
-    const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+    const db = getUserScopedClient(user);
     // Delete device registration and all sync data for this device
     const { error } = await db
       .from('sync_data')
@@ -446,8 +439,7 @@ router.post('/push', createRateLimiter('sync-legacy'), async (req: Request, res:
     throw new AppError('Unauthorized', 401);
   }
 
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+  const db = getUserScopedClient(user);
   const { error } = await db.from('sync_data').insert({
     user_id: user.userId,
     device_id: deviceId,
@@ -485,8 +477,7 @@ router.get('/pull', createRateLimiter('sync-legacy'), async (req: Request, res: 
 
   const sinceDate = new Date(since).toISOString();
 
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+  const db = getUserScopedClient(user);
   let query = db
     .from('sync_data')
     .select('*')
@@ -527,8 +518,7 @@ router.delete('/clear', createRateLimiter('sync-legacy'), async (req: Request, r
     throw new AppError('Unauthorized', 401);
   }
 
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getServiceClient(); // RLS-GAP: see POST /batch handler above
+  const db = getUserScopedClient(user);
   const { error } = await db.from('sync_data').delete().eq('user_id', user.userId);
 
   if (error) {

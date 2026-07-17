@@ -12,6 +12,7 @@ export interface ImageGenerationData {
     size?: string;
   }>;
   provider?: string;
+  model?: string;
   cost?: number;
   success?: boolean;
   error?: string;
@@ -26,6 +27,7 @@ export interface VideoGenerationData {
   durationSecs?: number;
   resolution?: string;
   provider?: string;
+  model?: string;
   cost?: number;
   cost_estimate?: number;
   costEstimate?: number;
@@ -42,18 +44,15 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
     const prompt = data?.prompt ?? '';
     const provider = data?.provider as string | undefined;
     const mappedProvider =
-      provider === 'openai'
-        ? 'gpt-image-2'
-        : provider === 'google'
-          ? 'google'
-          : provider === 'stability'
-            ? 'stability'
-            : undefined;
+      provider === 'openai' || provider === 'google' || provider === 'stability'
+        ? provider
+        : undefined;
     return (
       <div className="mt-3">
         <MediaGenerationProgress
           type="image"
-          provider={mappedProvider as 'gpt-image-2' | 'google' | 'stability' | undefined}
+          provider={mappedProvider}
+          model={data?.model}
           prompt={prompt}
         />
       </div>
@@ -171,14 +170,15 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
     const mappedProvider =
       provider === 'runway'
         ? 'runway'
-        : provider === 'google' || provider === 'veo3'
-          ? 'veo3'
+        : provider === 'google'
+          ? 'google'
           : undefined;
     return (
       <div className="mt-3">
         <MediaGenerationProgress
           type="video"
-          provider={mappedProvider as 'runway' | 'veo3' | undefined}
+          provider={mappedProvider}
+          model={data?.model}
           prompt={prompt}
         />
       </div>

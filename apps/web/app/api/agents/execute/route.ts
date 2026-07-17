@@ -23,7 +23,7 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { getTaskModelForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
-import { openAIWireRequestToChatRequest } from '@agiworkforce/llm-normalize';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
@@ -121,7 +121,7 @@ function estimateCostCents(messages: Array<{ content: string }>): number {
  * Billing flow:
  * 1. Pre-flight: Check user has enough credits (estimated cost)
  * 2. Stream: Execute LLM call
- * 3. Post-flight: Deduct actual cost based on real token counts
+ * 3. Post-flight: Persist the charge through the durable settlement queue
  */
 async function handler(request: NextRequest) {
   // AUDIT-008-006: Enforce CSRF protection for credit-deducting endpoint
@@ -278,13 +278,13 @@ async function handler(request: NextRequest) {
       'Agent execution started',
     );
 
-    // Wrap the stream to track token usage and deduct credits after completion
+    // Wrap the stream to persist the charge after completion.
     const trackingStream = new TransformStream({
       transform(chunk, controller) {
         controller.enqueue(chunk);
       },
       async flush() {
-        // After streaming completes, deduct the estimated cost.
+        // After streaming completes, settle the estimated cost.
         // In a production system, we'd parse SSE events for actual token counts.
         // For now, deduct the conservative estimate.
         try {
@@ -294,23 +294,24 @@ async function handler(request: NextRequest) {
             requestId,
           );
 
-          const result = await CreditService.deductCredits(
+          const result = await CreditService.settleCreditsDurably({
             userId,
-            estimatedCents,
-            `${selectedProvider}/${selectedModel} agent execution`,
-            {
+            amountCents: estimatedCents,
+            description: `${selectedProvider}/${selectedModel} agent execution`,
+            metadata: {
               provider: selectedProvider,
               model: selectedModel,
               employeeId: employeeId || 'general',
+              type: 'agent_execution_settlement',
               requestId,
             },
             idempotencyKey,
-          );
+          });
 
-          if (!result.success) {
+          if (result.status !== 'succeeded') {
             logger.warn(
-              { userId, error: result.error, requestId },
-              'Post-stream credit deduction failed (request already served)',
+              { userId, status: result.status, code: result.code, error: result.error, requestId },
+              'Post-stream credit settlement was not completed inline',
             );
           } else {
             logger.info(
@@ -324,10 +325,12 @@ async function handler(request: NextRequest) {
             );
           }
         } catch (error) {
-          // Log but don't fail - the response was already streamed
+          // The durable service already retried and emitted an unrecorded
+          // settlement event. The response was already streamed, so this
+          // boundary can only preserve operator-visible evidence.
           logger.error(
-            { error, userId, requestId },
-            'Error deducting credits after agent execution',
+            { event: 'agent_credit_settlement_unrecorded', error, userId, requestId },
+            'Error persisting credits after agent execution',
           );
         }
       },

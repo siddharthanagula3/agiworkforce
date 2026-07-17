@@ -1,0 +1,323 @@
+import type { OnDeviceModel } from '@agiworkforce/types';
+import type { DeviceCapabilities } from './types';
+
+// Executorch CDN prefix and version tag — these mirror the constants baked into
+// react-native-executorch 0.8.4's modelUrls.ts. If the package is upgraded,
+// verify these match the new VERSION_TAG so artifact URLs stay in sync.
+const ET_URL_PREFIX = 'https://huggingface.co/software-mansion/react-native-executorch';
+// Mirrors react-native-executorch 0.8.4 `constants/versions.ts`
+// (`VERSION_TAG = 'resolve/v0.8.0'`). The `resolve/` segment is the HuggingFace
+// raw-file ref path — without it the URL resolves to the repo's HTML file
+// browser instead of the .pte bytes, so model download fails.
+const ET_VERSION_TAG = 'resolve/v0.8.0';
+
+// Qwen3-VL-2B-Instruct GGUF artifacts (official Qwen HuggingFace repo).
+// Verified 2026-07-09 from huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF:
+// the /raw/main LFS pointers and the /api/models/.../tree/main JSON both report
+// the sha256 + byte sizes below (cross-checked, two independent endpoints).
+// License on the repo is apache-2.0. The Q4_K_M weight file is the base GGUF;
+// the mmproj file is the SEPARATE vision projector required by llama.rn
+// `initMultimodal` — vision input is only effective once BOTH are installed.
+const QWEN3_VL_2B_GGUF_URL =
+  'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf';
+const QWEN3_VL_2B_GGUF_SHA256 = '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae';
+const QWEN3_VL_2B_GGUF_BYTES = 1_107_409_952;
+const QWEN3_VL_2B_MMPROJ_URL =
+  'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf';
+const QWEN3_VL_2B_MMPROJ_SHA256 =
+  'f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82';
+const QWEN3_VL_2B_MMPROJ_BYTES = 445_053_216;
+
+const CATALOG: OnDeviceModel[] = [
+  {
+    id: 'qwen3-4b-instruct-2507',
+    displayName: 'AGI Standard',
+    family: 'qwen3',
+    paramCountB: 4.0,
+    fileSizeBytes: 2_147_483_648, // ~2 GB Q4
+    supportedRuntimes: ['executorch', 'llama-rn'],
+    contextWindow: 262_144,
+    capabilities: {
+      text: true,
+      visionIn: false,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    license: 'Apache-2.0',
+    role: 'default',
+    shipsInV1: true,
+    executorchPreset: {
+      modelName: 'qwen3-4b-quantized',
+      modelSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/qwen-3-4B/quantized/qwen3_4b_8da4w.pte`,
+      tokenizerSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/tokenizer.json`,
+      tokenizerConfigSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/tokenizer_config.json`,
+    },
+  },
+  {
+    id: 'qwen2.5-vl-3b-instruct',
+    displayName: 'AGI Vision Pack',
+    family: 'qwen2.5-vl',
+    paramCountB: 3.0,
+    fileSizeBytes: 1_932_735_283, // ~1.8 GB Q4 estimate
+    supportedRuntimes: ['executorch', 'llama-rn'],
+    contextWindow: 32_768,
+    capabilities: {
+      text: true,
+      visionIn: true,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    // Keep hidden until exact checkpoint license and runnable artifacts are verified.
+    license: 'Unverified',
+    role: 'premium-vision-pack',
+    shipsInV1: false,
+  },
+  {
+    // P6 primary local multimodal SLM (monorepo-restructure §8). Apache-2.0,
+    // official Qwen GGUF + mmproj vision projector, runs through the tier-3
+    // llama.rn path via `initMultimodal` (requires `ctx_shift:false`).
+    // `visionIn:true` here is the NOMINAL capability; the effective vision
+    // capability is gated on the mmproj artifact being installed — see
+    // `effectiveVisionIn` in ./multimodal.ts and the tier-3 runtime.
+    id: 'qwen3-vl-2b-instruct',
+    displayName: 'AGI Vision Pack',
+    family: 'qwen3-vl',
+    paramCountB: 2.0,
+    fileSizeBytes: QWEN3_VL_2B_GGUF_BYTES, // 1.11 GB Q4_K_M (verified)
+    supportedRuntimes: ['llama-rn'],
+    contextWindow: 262_144, // max_position_embeddings from the base model config (verified)
+    capabilities: {
+      text: true,
+      visionIn: true,
+      audioIn: false,
+      // Conservative: text-with-image reasoning is the verified path. Tool calls
+      // and structured output through the llama.rn multimodal GGUF route are not
+      // device-verified, so they are not advertised as capabilities here.
+      toolCalls: false,
+      structuredOutput: false,
+    },
+    license: 'Apache-2.0',
+    role: 'premium-vision-pack',
+    // Artifacts are fully verified (URLs + sha256 + byte sizes, cross-checked)
+    // and the full software path is wired and tested with mocked native layers:
+    // gguf+mmproj install (apps/mobile services/modelDownload + installStore),
+    // picker selectability (`isSelectableLocalCatalogModel` accepts verified
+    // llama-rn GGUF rows), tier-3 `initMultimodal` lifecycle, and vision
+    // routing. The ONLY remaining ship gate is device QA: real on-device
+    // `initMultimodal` execution, vision output quality, and the RAM/thermal
+    // matrix (restructure §8 checklist). Flip to true after device QA passes.
+    shipsInV1: false,
+    downloadUrl: QWEN3_VL_2B_GGUF_URL,
+    checksum: QWEN3_VL_2B_GGUF_SHA256,
+    format: 'gguf',
+    mmprojUrl: QWEN3_VL_2B_MMPROJ_URL,
+    mmprojChecksum: QWEN3_VL_2B_MMPROJ_SHA256,
+    mmprojSizeBytes: QWEN3_VL_2B_MMPROJ_BYTES,
+  },
+  {
+    // P6 tier-2 low-RAM vision backup option (monorepo-restructure §8). GATED OFF.
+    // CORRECTED 2026-07-15 (founder-confirmed naming fix, not a re-litigation of
+    // the model choice): this row previously carried id `lfm2-vl-1.6b` /
+    // paramCountB 1.6, but the size/checksum actually recorded and verified here
+    // have always been the react-native-executorch-hosted LFM2.5-VL-**450M**
+    // preset (`lfm2.5-vl-450m-quantized`), not the 1.6B one. The TRUE 1.6B
+    // artifact does exist and was independently verified 2026-07-15 —
+    // `lfm2.5-VL-1.6B/quantized/lfm2_5_vl_1_6b_8da4w_xnnpack.pte`,
+    // 2,427,656,704 bytes, sha256
+    // 5f942c856acfe1a4d0b5f8d30bd752b5552bcf20bc6dfa6f3253896b2456d0c4 — but at
+    // 2.4GB it is LARGER than the 1.1GB Qwen3-VL-2B primary model, which
+    // contradicts the "low-RAM tier-2 backup" product intent the founder's
+    // decision was naming. This row is therefore kept as the 450M model (id,
+    // paramCountB, and displayName corrected to match; size/checksum were
+    // already correct) — do not "fix" the id back to 1.6b without re-verifying
+    // which artifact the product intent actually wants.
+    // Both artifacts confirmed via direct HF `curl -I` against
+    // huggingface.co/software-mansion/react-native-executorch-lfm-2.5
+    // (x-linked-size/x-linked-etag), independent of react-native-executorch's
+    // own modelUrls.js (installed at ^0.8.4; also cross-checked).
+    // CAPABILITY HONESTY: `visionIn` is false, not true — unlike the Qwen3-VL-2B
+    // tier-3 row (where `effectiveVisionIn` gates a REAL, already-shipped
+    // llama.rn `initMultimodal` runtime on mmproj presence), tier-2's
+    // `LLMModule` wrapper (tier2.ts) has NO image-passing plumbing at all today
+    // — no `capabilities:['vision']` forwarded to `fromModelName`, no
+    // `mediaPath`/`imagePath` on generate. Claiming visionIn:true here would be
+    // a capability with no code path that could ever make it true. Flip to true
+    // only once that plumbing ships AND is device-verified (tracked as a
+    // deferred follow-up, not built this pass: backup path, shipsInV1:false,
+    // no device QA scheduled).
+    // No downloadUrl/executorchPreset recorded: still no verified `resolve/<tag>/`
+    // URL construction from this package version confirmed safe to hardcode
+    // beyond the raw HEAD check above, and the vision plumbing it would enable
+    // does not exist yet — adding a preset now would be speculative wiring, not
+    // a real capability. LFM Open License v1.0 permits free commercial use only
+    // up to $10M annual revenue and must be re-reviewed at scale.
+    id: 'lfm2-vl-450m',
+    displayName: 'AGI Vision Lite',
+    family: 'lfm2-vl',
+    paramCountB: 0.45,
+    fileSizeBytes: 648_917_376, // verified quantized .pte (executorch host)
+    supportedRuntimes: ['executorch'],
+    contextWindow: 32_768,
+    capabilities: {
+      text: true,
+      visionIn: false,
+      audioIn: false,
+      toolCalls: false,
+      structuredOutput: false,
+    },
+    license: 'LFM Open License v1.0 (free commercial use capped at $10M annual revenue)',
+    role: 'premium-vision-pack',
+    shipsInV1: false,
+  },
+  {
+    id: 'gemma4-e4b-instruct',
+    displayName: 'AGI Premium Multimodal',
+    family: 'gemma4',
+    paramCountB: 4.5, // 4.5B effective / 8B with embeddings
+    fileSizeBytes: 4_294_967_296, // ~4 GB Q4 — premium devices only; busts 2.5 GB universal budget
+    supportedRuntimes: ['litert-lm'],
+    contextWindow: 128_000,
+    capabilities: {
+      text: true,
+      visionIn: true,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    license: 'Unverified',
+    role: 'premium-multimodal-alt',
+    shipsInV1: false,
+  },
+  {
+    id: 'llama-3.2-1b-instruct-spinquant',
+    displayName: 'AGI Lite',
+    family: 'llama3.2',
+    paramCountB: 1.0,
+    fileSizeBytes: 1_181_116_006, // ~1.1 GB SpinQuant variant
+    supportedRuntimes: ['executorch', 'llama-rn'],
+    contextWindow: 131_072,
+    capabilities: {
+      text: true,
+      visionIn: false,
+      audioIn: false,
+      toolCalls: false,
+      structuredOutput: false,
+    },
+    license: 'Llama Community',
+    role: 'lite-mode',
+    shipsInV1: true,
+    liteMode: true,
+    executorchPreset: {
+      modelName: 'llama-3.2-1b-spinquant',
+      modelSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/llama-3.2-1B/spinquant/llama3_2_spinquant.pte`,
+      tokenizerSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/tokenizer.json`,
+      tokenizerConfigSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/tokenizer_config.json`,
+    },
+  },
+  {
+    id: 'apple-foundation-models',
+    displayName: 'Apple Intelligence',
+    family: 'apple-fm',
+    paramCountB: 3.0, // ~3B system model
+    fileSizeBytes: 0, // OS-resident — not downloaded
+    supportedRuntimes: ['apple-foundation-models'],
+    contextWindow: 4_096, // Apple FM public context cap (Wave 1-2 budgeting task #30)
+    capabilities: {
+      text: true,
+      visionIn: true,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    license: 'Apple Entitlement',
+    role: 'system-multimodal',
+    shipsInV1: true,
+  },
+  {
+    id: 'gemini-nano-aicore',
+    displayName: 'Gemini Nano',
+    family: 'gemini-nano',
+    paramCountB: 1.8, // Nano v2 approximate
+    fileSizeBytes: 0, // OS-resident via AICore — not downloaded
+    supportedRuntimes: ['aicore'],
+    contextWindow: 1_024, // AICore Prompt API limit on Nano
+    capabilities: {
+      text: true,
+      visionIn: true,
+      audioIn: false,
+      toolCalls: false,
+      structuredOutput: false,
+    },
+    license: 'Google AICore',
+    role: 'system-multimodal',
+    shipsInV1: true,
+  },
+  {
+    id: 'phi-4-mini-instruct',
+    displayName: 'Phi-4 Mini (Internal)',
+    family: 'phi4-mini',
+    paramCountB: 3.8,
+    fileSizeBytes: 2_415_919_104, // ~2.25 GB Q4
+    supportedRuntimes: ['executorch', 'llama-rn'],
+    contextWindow: 16_384,
+    capabilities: {
+      text: true,
+      visionIn: false,
+      audioIn: false,
+      toolCalls: true,
+      structuredOutput: true,
+    },
+    license: 'MIT',
+    role: 'internal-eval-hedge',
+    shipsInV1: false,
+  },
+];
+
+export function getModelById(id: string): OnDeviceModel | undefined {
+  return CATALOG.find((m) => m.id === id);
+}
+
+export function getModelsForRole(role: OnDeviceModel['role']): OnDeviceModel[] {
+  return CATALOG.filter((m) => m.role === role);
+}
+
+export function getShippableModels(): OnDeviceModel[] {
+  return CATALOG.filter((m) => m.shipsInV1);
+}
+
+export function getDefaultModel(): OnDeviceModel {
+  const model = CATALOG.find((m) => m.role === 'default');
+  if (!model) throw new Error('No default on-device model in catalog — catalog is corrupted');
+  return model;
+}
+
+export function getLiteModeModel(): OnDeviceModel | undefined {
+  return CATALOG.find((m) => m.liteMode === true);
+}
+
+const TIER_ONE_CATALOG_RUNTIME = {
+  foundation_models: 'apple-foundation-models',
+  aicore: 'aicore',
+} as const;
+
+/**
+ * Resolve the OS-resident model owned by the local catalog for the active
+ * Tier-1 runtime. Consumers must not duplicate the system model IDs: the
+ * catalog is the only owner of those identities and runtime capabilities.
+ */
+export function getSystemModelForTier1Runtime(
+  runtime: DeviceCapabilities['tier1Runtime'],
+): OnDeviceModel | undefined {
+  if (!runtime) return undefined;
+
+  const catalogRuntime = TIER_ONE_CATALOG_RUNTIME[runtime];
+  return CATALOG.find(
+    (model) =>
+      model.shipsInV1 &&
+      model.role === 'system-multimodal' &&
+      model.fileSizeBytes <= 0 &&
+      model.supportedRuntimes.includes(catalogRuntime),
+  );
+}

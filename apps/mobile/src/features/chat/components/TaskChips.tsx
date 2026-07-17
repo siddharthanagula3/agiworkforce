@@ -64,38 +64,53 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
         const active = activeChip === chip.type;
         const contentColor = active ? colors.teal : colors.textSecondary;
         return (
+          // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
+          // (docs/agent-context/known-flaws.md): a function-style `style` prop
+          // silently drops flexDirection/alignItems/padding in this stack, which
+          // would stack the icon above the label instead of beside it inside the
+          // pill. `children`-as-function keeps pressed state while every real
+          // style lives on a plain View.
           <Pressable
             key={chip.type}
             onPress={() => handlePress(chip.type)}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              height: 34,
-              paddingHorizontal: 12,
-              borderWidth: 1,
-              borderRadius: 999,
-              borderColor: active ? colors.accentBorder : pressed ? colors.border : colors.border,
-              backgroundColor: active
-                ? colors.accentSurface
-                : pressed
-                  ? colors.surfaceHover
-                  : colors.transparent,
-            })}
             accessibilityLabel={`${chip.label} mode`}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
           >
-            <chip.Icon size={14} color={contentColor} strokeWidth={1.75} />
-            <Text
-              style={{
-                fontSize: 13,
-                color: contentColor,
-                fontWeight: active ? '500' : '400',
-              }}
-            >
-              {chip.label}
-            </Text>
+            {({ pressed }) => (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  height: 34,
+                  paddingHorizontal: 12,
+                  borderWidth: 1,
+                  borderRadius: 999,
+                  borderColor: active
+                    ? colors.accentBorder
+                    : pressed
+                      ? colors.border
+                      : colors.border,
+                  backgroundColor: active
+                    ? colors.accentSurface
+                    : pressed
+                      ? colors.surfaceHover
+                      : colors.transparent,
+                }}
+              >
+                <chip.Icon size={14} color={contentColor} strokeWidth={1.75} />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: contentColor,
+                    fontWeight: active ? '500' : '400',
+                  }}
+                >
+                  {chip.label}
+                </Text>
+              </View>
+            )}
           </Pressable>
         );
       })}

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/voice/transcribe/route';
+import { getRoutingSlotModel } from '@agiworkforce/types';
 
 // Mock server-only module
 vi.mock('server-only', () => ({}));
@@ -217,26 +218,24 @@ describe('POST /api/voice/transcribe', () => {
     expect(options.method).toBe('POST');
   });
 
-  it('should use whisper-1 as the default model when model is not specified', async () => {
+  it('uses the canonical voice-routing model when model is not specified', async () => {
     const request = makeFormDataRequest(); // no model specified
     await POST(request);
 
     expect(mockFetch).toHaveBeenCalledOnce();
-    // The FormData body sent to OpenAI should include model=whisper-1
-    // We can verify this by checking the body is a FormData instance
     const [, options] = mockFetch.mock.calls[0] as [string, { body: FormData }];
     expect(options.body).toBeInstanceOf(FormData);
     const forwardedModel = (options.body as FormData).get('model');
-    expect(forwardedModel).toBe('whisper-1');
+    expect(forwardedModel).toBe(getRoutingSlotModel('voice_transcription'));
   });
 
-  it('should forward a custom model when specified', async () => {
+  it('rejects an app-owned phantom transcription model in favor of the canonical voice model', async () => {
     const request = makeFormDataRequest({ model: 'whisper-large-v3' });
     await POST(request);
 
     const [, options] = mockFetch.mock.calls[0] as [string, { body: FormData }];
     const forwardedModel = (options.body as FormData).get('model');
-    expect(forwardedModel).toBe('whisper-large-v3');
+    expect(forwardedModel).toBe(getRoutingSlotModel('voice_transcription'));
   });
 
   it('should forward language parameter when provided', async () => {

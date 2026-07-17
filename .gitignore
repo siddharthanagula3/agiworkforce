@@ -135,6 +135,11 @@ $RECYCLE.BIN/
 *.rej
 .temp/
 .tmp/
+/tmp/
+
+# Generated review and export deliverables are preserved locally but are not
+# source inputs to the monorepo build graph.
+/outputs/
 
 # --- Application data ---
 apps/desktop/src-tauri/agiworkforce.db
@@ -242,3 +247,6 @@ reports/generated/
 tasks/release-hardening/
 /qa-inchat.png
 /qa-inchat-split.png
+
+# Recycle-bin archive (files staged for founder review before deletion; recoverable)
+_archive/

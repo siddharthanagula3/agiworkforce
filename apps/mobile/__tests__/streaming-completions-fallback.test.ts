@@ -103,6 +103,7 @@ describe('completions stream fallback (RN null response.body)', () => {
         model: 'gpt-5.4-mini',
         messages: [{ role: 'user', content: 'hi' }],
         stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000001',
         thinking: true,
       },
       callbacks,
@@ -112,6 +113,10 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(deltas.join('')).toBe('2 plus 2 = 4.');
     expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+    const init = guardedFetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      'agi.chat.mobile.send.0190a000-0000-7000-8000-000000000001',
+    );
   });
 
   it('maps boolean thinking → thinking_mode (never sends a bare boolean `thinking`)', async () => {
@@ -125,7 +130,13 @@ describe('completions stream fallback (RN null response.body)', () => {
 
     const { callbacks } = makeCallbacks();
     await streamChat(
-      { model: 'gpt-5.4-mini', messages: [], stream: true, thinking: false },
+      {
+        model: 'gpt-5.4-mini',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000002',
+        thinking: false,
+      },
       callbacks,
     );
 
@@ -152,10 +163,66 @@ describe('completions stream fallback (RN null response.body)', () => {
     } as unknown as Response);
 
     const { deltas, callbacks } = makeCallbacks();
-    await streamChat({ model: 'gpt-5.4-mini', messages: [], stream: true }, callbacks);
+    await streamChat(
+      {
+        model: 'gpt-5.4-mini',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000003',
+      },
+      callbacks,
+    );
 
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(deltas.join('')).toBe('2 plus 2 = 4.');
     expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses one operation identity across automatic network retries', async () => {
+    jest.useFakeTimers();
+    try {
+      const { streamChat } = await loadStreamingService();
+      guardedFetchMock
+        .mockRejectedValueOnce(new TypeError('Network request failed'))
+        .mockRejectedValueOnce(new TypeError('Load failed'))
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          body: null,
+          text: async () => SSE,
+        } as unknown as Response);
+
+      const { callbacks } = makeCallbacks();
+      const operationId = '0190a000-0000-7000-8000-000000000004';
+      const completion = streamChat(
+        {
+          model: 'gpt-5.4-mini',
+          messages: [{ role: 'user', content: 'retry me safely' }],
+          stream: true,
+          operationId,
+        },
+        callbacks,
+      );
+
+      await jest.advanceTimersByTimeAsync(0);
+      expect(guardedFetchMock).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1_000);
+      expect(guardedFetchMock).toHaveBeenCalledTimes(2);
+      await jest.advanceTimersByTimeAsync(2_500);
+      await completion;
+
+      expect(callbacks.onError).not.toHaveBeenCalled();
+      expect(guardedFetchMock).toHaveBeenCalledTimes(3);
+      const keys = guardedFetchMock.mock.calls.map(
+        ([, init]) => (init as RequestInit).headers as Record<string, string>,
+      );
+      expect(keys.map((headers) => headers['Idempotency-Key'])).toEqual([
+        `agi.chat.mobile.send.${operationId}`,
+        `agi.chat.mobile.send.${operationId}`,
+        `agi.chat.mobile.send.${operationId}`,
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

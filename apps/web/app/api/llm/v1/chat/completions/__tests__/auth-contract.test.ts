@@ -106,7 +106,7 @@ function makeRequest(headers: Record<string, string> = {}): NextRequest {
 }
 
 type AuthErrorBody = {
-  error?: { message?: string; type?: string; code?: string };
+  error?: { message?: string; type?: string; code?: string; contract_version?: string };
 };
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -178,5 +178,30 @@ describe('POST /api/llm/v1/chat/completions · auth contract', () => {
     expect(response.status).toBe(401);
     const body = (await response.json()) as AuthErrorBody;
     expect(body.error?.code).toBe('invalid_api_key');
+  });
+
+  it('rejects an authenticated managed request without an Idempotency-Key', async () => {
+    mockGetClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1', email: 'user@example.com' });
+    mockGetSubscription.mockResolvedValueOnce({
+      id: 'subscription-1',
+      status: 'active',
+      plan_tier: 'pro',
+      stripe_price_id: 'price-pro',
+      current_period_start: new Date().toISOString(),
+      current_period_end: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+
+    const response = await POST(makeRequest({ Authorization: 'Bearer valid-token' }));
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('X-AGI-Chat-Contract-Version')).toBe('2026-07-15');
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'idempotency_key_required',
+        contract_version: '2026-07-15',
+      },
+    });
+    expect(mockCheckAvailable).not.toHaveBeenCalled();
+    expect(mockSendRequest).not.toHaveBeenCalled();
   });
 });

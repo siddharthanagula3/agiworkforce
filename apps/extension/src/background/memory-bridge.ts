@@ -4,7 +4,7 @@
  * Persistence: chrome.storage.local ONLY — device-scoped, never synced.
  * v1 LOCAL ONLY rule: no cloud sync, no writes to consumer chat tables.
  *
- * Schema: structural subtype of packages/types/src/memory.ts::Memory.
+ * Schema: structural subtype of packages/contracts/types/src/memory.ts::Memory.
  * MemoryItem = Pick<Memory, 'id'|'content'|'createdAt'> & { updatedAt: string }
  * — uses the canonical field names and semantics from @agiworkforce/types.
  * — updatedAt is required (canonical Memory has it optional); enforced at write.

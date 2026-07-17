@@ -108,7 +108,7 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       planId: 'pro',
       label: 'Pro',
       price: '$20/mo',
-      billingInterval: 'Monthly or annual ($204/yr)',
+      billingInterval: 'Monthly or annual ($200/yr)',
       usageCapacity: 'Higher hosted capacity per month',
       bestFor: 'Professionals and small teams',
       ctaLabel: 'Get started',
@@ -128,13 +128,13 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
     {
       planId: 'team',
       label: 'Team',
-      price: '$25/seat/mo',
-      billingInterval: 'Monthly or annual ($240/seat/yr)',
+      price: '$30/seat/mo',
+      billingInterval: 'Monthly or annual ($299/seat/yr)',
       usageCapacity: 'Shared capacity pool across seats',
       bestFor: 'Collaborative teams needing shared context',
-      ctaLabel: 'Join waitlist',
+      ctaLabel: 'Get started',
       ctaHref: '/pricing',
-      waitlist: true,
+      waitlist: false,
     },
   ],
   api: [
@@ -159,7 +159,7 @@ export const MARKETING = {
   skills: { count: 150, display: '150+', label: 'AI Skills' },
   categories: { count: 23, display: '23', label: 'Skill Categories' },
   tools: { count: 0, display: 'Tool-ready', label: 'Agent Tools' },
-  // 60 catalog entries in packages/types/src/models.json (2026-06-03) minus
+  // 60 catalog entries in packages/contracts/types/src/models.json (2026-06-03) minus
   // 4 Auto-routing presets and 4 "(via OpenRouter)" duplicates = 52 unique
   // models. '50+' is the defensible floor; re-verify after pnpm sync:models.
   models: { count: 50, display: '50+', label: 'Models' },

@@ -972,10 +972,9 @@ export const useVoiceModeStore = create<VoiceModeState>()(
 // transcribing/preview feedback UI), `features/settings/VoiceSettings.tsx`
 // (hotkey/provider/language settings), the global dictation hotkey
 // (`hooks/useVoiceHotkey.ts`), and the Quick Query voice request
-// (`App.tsx` `handleVoiceInputRequest`). A separate, legacy
-// `useVoiceInputStore` also exists in `stores/voiceInputStore.ts` — that one
-// has no live UI observer and must not be used for new wiring. See
-// docs/agent-context/known-flaws.md, DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01.
+// (`App.tsx` `handleVoiceInputRequest`). This is now the only Desktop
+// `useVoiceInputStore`; the disconnected duplicate was removed under
+// DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01.
 
 type VoiceInputMode = 'idle' | 'listening' | 'transcribing' | 'processing' | 'preview';
 export type PostProcessingMode = 'ai' | 'basic' | 'none';

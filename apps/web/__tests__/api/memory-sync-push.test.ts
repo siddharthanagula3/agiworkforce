@@ -2,7 +2,7 @@
  * POST /api/memory/sync — delta-push semantics + back-compat trigger.
  *
  * Guards:
- *  - push UPSERTs by id with last-writer-wins (excluded.updated_at >= existing),
+ *  - push compare-and-swaps by server_version (client clocks never participate),
  *  - user_id is forced server-side (RLS WITH CHECK backstop) — never from the body,
  *  - is_deleted carries the tombstone so deletes propagate,
  *  - a no-`memories` body still returns the legacy { synced, conflicts } shape,
@@ -23,7 +23,9 @@ import { NextRequest } from 'next/server';
 
 beforeEach(() => {
   queryMock.mockReset();
-  queryMock.mockResolvedValue([{ id: 'x', server_version: '7' }]);
+  queryMock.mockResolvedValue([
+    { kind: 'applied', id: '0190a000-0000-7000-8000-000000000abc', server_version: '7', current: null },
+  ]);
 });
 
 function postReq(body: unknown | undefined) {
@@ -35,39 +37,41 @@ function postReq(body: unknown | undefined) {
 }
 
 describe('POST /api/memory/sync — delta push', () => {
-  it('UPSERTs memories by id with last-writer-wins and forces user_id server-side', async () => {
+  it('compare-and-swaps memories by server revision and forces user_id server-side', async () => {
     const res = await POST(
       postReq({
+        protocolVersion: 2,
         memories: [
           {
             id: '0190a000-0000-7000-8000-000000000abc',
             content: 'User prefers terse answers',
             category: 'preference',
             source: 'mobile',
-            updatedAt: '2026-06-22T00:00:00.000Z',
+            baseVersion: '6',
           },
         ],
       }),
     );
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.applied).toEqual([{ id: 'x', server_version: '7' }]);
+    expect(body.protocolVersion).toBe(2);
+    expect(body.applied).toEqual([
+      { id: '0190a000-0000-7000-8000-000000000abc', server_version: '7' },
+    ]);
+    expect(body.conflicts).toEqual([]);
     expect(body.cursor).toBe('7');
 
     const call = queryMock.mock.calls.find((c) =>
-      String(c[0]).includes('insert into user_memories'),
+      String(c[0]).includes('update user_memories'),
     );
     expect(call).toBeDefined();
     const sql = String(call![0]);
-    // LWW guard: only apply when the pushed row is at least as new.
-    expect(sql).toContain('excluded.updated_at >= user_memories.updated_at');
-    // user_id ownership guard in the UPDATE branch.
-    expect(sql).toContain('user_memories.user_id = $2');
-    // tombstone propagates.
-    expect(sql).toContain('is_deleted = excluded.is_deleted');
+    expect(sql).toContain('existing.server_version = incoming.base_version');
+    expect(sql).toContain('updated_at = now()');
+    expect(sql).not.toContain('excluded.updated_at');
     // user_id param is the SESSION user, never from the body.
     const params = call![1] as unknown[];
-    expect(params[1]).toBe('u1');
+    expect(params[0]).toBe('u1');
   });
 
   it('falls back to the legacy { synced, conflicts } trigger when no memories are sent', async () => {

@@ -28,7 +28,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
+import { validateHttpsMcpUrl } from '@/lib/mcp-url-validation';
 
 export const runtime = 'nodejs';
 export const WEB_MCP_PRIVATE_BETA_ENV = 'AGI_WEB_MCP_PRIVATE_BETA';
@@ -38,35 +38,15 @@ interface ConnectBody {
   config?: McpServerConfig;
 }
 
+// Open by default (2026-07-11), mirroring the managed-compute public-alpha
+// kill-switch pattern (lib/managed-compute-gate.ts): the env var is retained
+// ONLY for incident response — set AGI_WEB_MCP_PRIVATE_BETA=0 (or
+// 'false'/'off') to re-gate. The route keeps auth + CSRF + rate-limit +
+// https-only + SSRF DNS validation regardless; this flag was the only thing
+// making the connectors-page "Inspect MCP server" primary CTA a dead control.
 function isWebMcpPrivateBetaEnabled(): boolean {
-  return process.env[WEB_MCP_PRIVATE_BETA_ENV] === '1';
-}
-
-async function validateHttpUrl(raw: unknown): Promise<URL> {
-  if (typeof raw !== 'string') {
-    throw createError.validation('config.url must be a string');
-  }
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw createError.validation('config.url is not a valid URL');
-  }
-  if (parsed.protocol !== 'https:') {
-    throw createError.validation('config.url must use https');
-  }
-  try {
-    await assertResolvedPublicHostname(parsed.toString());
-  } catch (err) {
-    if (err instanceof EgressPolicyError) {
-      throw createError.validation('config.url targets a private or unsafe network address');
-    }
-    throw err;
-  }
-  if (parsed.username !== '' || parsed.password !== '') {
-    throw createError.validation('config.url must not include embedded credentials');
-  }
-  return parsed;
+  const raw = process.env[WEB_MCP_PRIVATE_BETA_ENV]?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }
 
 async function handleConnect(request: NextRequest) {
@@ -109,7 +89,7 @@ async function handleConnect(request: NextRequest) {
       'Stdio MCP transports must be configured via the api-gateway, not the web /api/mcp route.',
     );
   }
-  await validateHttpUrl(body.config.url);
+  await validateHttpsMcpUrl(body.config.url, 'config.url');
 
   let handle;
   try {

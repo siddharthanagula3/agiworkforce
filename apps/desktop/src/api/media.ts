@@ -105,9 +105,7 @@ export async function generateVideo(
     durationSecs: response.duration_secs,
     costEstimate: response.cost_estimate,
     latencyMs: response.latency_ms,
-    provider:
-      response.provider ??
-      (payload.provider === 'veo3' ? 'google' : (payload.provider ?? 'google')),
+    provider: response.provider ?? payload.provider ?? 'google',
     model: response.model ?? payload.model,
   };
 }

@@ -5,7 +5,7 @@
  * SettingsConnector contract). Renders the same connector catalog the web and
  * desktop surfaces use, with real official brand logos — no initial-tiles.
  *
- * Logo resolution order (mirrors ConnectorLogo.tsx in packages/ui):
+ * Logo resolution order (mirrors ConnectorLogo.tsx in packages/ui/ui):
  *   1. react-native-svg path from the ICON_PATHS map (simple-icons v16 glyphs)
  *   2. Official brand-asset URL via RN <Image source={{ uri }}> with onError
  *      fallback (mirrors CONNECTOR_LOGO_URLS in ConnectorLogo.tsx)
@@ -359,7 +359,7 @@ const CATALOG: ConnectorEntry[] = [
 const CATEGORIES = Array.from(new Set(CATALOG.map((c) => c.category)));
 
 // ---------------------------------------------------------------------------
-// ConnectorLogo — RN equivalent of packages/ui ConnectorLogo.tsx
+// ConnectorLogo — RN equivalent of packages/ui/ui ConnectorLogo.tsx
 // ---------------------------------------------------------------------------
 
 function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?: string }) {
@@ -448,6 +448,15 @@ function ConnectorLogo({ id, name, iconBg }: { id: string; name: string; iconBg?
 // ConnectorCard
 // ---------------------------------------------------------------------------
 
+// Row geometry as named constants, shared with the divider inset below the
+// list so the two can never drift apart. ROW_ICON_SIZE mirrors ConnectorLogo's
+// hardcoded 40x40 tile (see ConnectorLogo above).
+const ROW_PADDING_X = 16;
+const ROW_PADDING_Y = 13;
+const ROW_ICON_SIZE = 40;
+const ROW_ICON_GAP = 12;
+const ROW_DIVIDER_INSET = ROW_PADDING_X + ROW_ICON_SIZE + ROW_ICON_GAP;
+
 function ConnectorCard({
   entry,
   connected,
@@ -465,46 +474,85 @@ function ConnectorCard({
     : 'Connected';
 
   return (
+    // No `style` prop on Pressable itself — deliberately. In this stack
+    // (nativewind 4.2.3 + react-native-css-interop 0.2.3), a Pressable's
+    // function-style `style={({pressed}) => ({...})}` callback silently
+    // drops properties (confirmed for flexDirection/alignItems; paddingX/Y
+    // are suspected the same way — the icon rendering flush against the
+    // card's clipped rounded edge is consistent with paddingHorizontal being
+    // dropped there too). Using Pressable's `children`-as-function form
+    // instead routes pressed state through a completely different code path:
+    // every real style below is a plain object literal on a plain View,
+    // which has been verified to render correctly throughout this file.
+    // See known-flaws MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01.
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${entry.name}. ${connected ? 'Connected' : 'Connect'}`}
-      style={({ pressed }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        gap: 12,
-        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-      })}
     >
-      <ConnectorLogo id={entry.id} name={entry.name} iconBg={entry.iconBg} />
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text
-          numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
-        >
-          {entry.name}
-        </Text>
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-          {connected ? connectedLabel : entry.description}
-        </Text>
-      </View>
-      {connected ? (
-        <CheckCircle size={18} color={colors.teal} />
-      ) : (
+      {({ pressed }) => (
         <View
           style={{
-            paddingHorizontal: 11,
-            paddingVertical: 5,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: colors.border,
+            paddingHorizontal: ROW_PADDING_X,
+            paddingVertical: ROW_PADDING_Y,
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
           }}
         >
-          <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '600' }}>
-            Connect
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: ROW_ICON_GAP }}>
+            <ConnectorLogo id={entry.id} name={entry.name} iconBg={entry.iconBg} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.textPrimary, fontSize: 15, fontWeight: '600' }}
+              >
+                {entry.name}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}
+              >
+                {connected ? connectedLabel : entry.description}
+              </Text>
+            </View>
+            {connected ? (
+              // Status badge, not a button — tonal green circle so a connected
+              // row reads as "state" rather than "action". No chevron: there
+              // is no per-connector detail screen to navigate into yet
+              // (tracked gap).
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.successSurface,
+                  borderWidth: 1,
+                  borderColor: colors.successBorder,
+                }}
+              >
+                <CheckCircle size={15} color={colors.agentSuccess} />
+              </View>
+            ) : (
+              // Filled, high-contrast pill — same inverse treatment as the
+              // active filter chip below, so the one actionable control on
+              // the screen is unambiguous at a glance.
+              <View
+                style={{
+                  height: 30,
+                  paddingHorizontal: 16,
+                  borderRadius: 15,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.textPrimary,
+                }}
+              >
+                <Text style={{ color: colors.background, fontSize: 13, fontWeight: '700' }}>
+                  Connect
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       )}
     </Pressable>
@@ -548,7 +596,17 @@ function WaitlistPlaceholder() {
 // Screen
 // ---------------------------------------------------------------------------
 
-export default function CloudConnectorsScreen() {
+export default function CloudConnectorsScreen({
+  backHref = '/(app)/(tabs)/settings',
+}: {
+  /**
+   * Fallback destination when there's no navigation stack to pop (e.g. a
+   * deep link straight into this screen). Reached from two routes:
+   * settings/cloud-connectors (Settings entry) and (app)/connectors (chat
+   * "Add to Chat" entry) — each passes its own sensible fallback.
+   */
+  backHref?: string;
+} = {}) {
   const colors = useThemeColors();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
@@ -642,7 +700,7 @@ export default function CloudConnectorsScreen() {
   }, [activeFilter, search, connectionFor]);
 
   return (
-    <SettingsScreenShell title="Connectors">
+    <SettingsScreenShell title="Connectors" backHref={backHref}>
       <SettingsInfo
         title="Connect your tools to AGI Cloud"
         body="Connect your apps and services so AGI can access and act on your data. Each connector uses server-side OAuth — your credentials never leave AGI Cloud."
@@ -782,7 +840,13 @@ export default function CloudConnectorsScreen() {
               {visibleEntries.map((entry, idx) => (
                 <View key={entry.id}>
                   {idx > 0 && (
-                    <View style={{ height: 1, backgroundColor: colors.border, marginLeft: 66 }} />
+                    <View
+                      style={{
+                        height: 1,
+                        backgroundColor: colors.border,
+                        marginLeft: ROW_DIVIDER_INSET,
+                      }}
+                    />
                   )}
                   <ConnectorCard
                     entry={entry}

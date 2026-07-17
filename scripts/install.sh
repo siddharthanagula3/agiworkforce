@@ -6,6 +6,8 @@
 #   --version VERSION    Install a specific version (default: latest)
 #   --no-modify-path     Skip adding to PATH
 #   --install-dir DIR    Custom install directory (default: ~/.agi/bin)
+#
+# Requires `cosign` to verify the release workflow's keyless Sigstore signature.
 
 set -euo pipefail
 
@@ -80,7 +82,14 @@ detect_platform() {
 # ── Version resolution ────────────────────────────────────────────────────────
 resolve_version() {
   if [ -n "$VERSION" ]; then
-    echo "$VERSION"
+    if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+      echo "${TAG_PREFIX}${VERSION}"
+    elif [[ "$VERSION" =~ ^v-cli-[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+      echo "$VERSION"
+    else
+      echo -e "${RED}Invalid CLI version: ${VERSION}. Expected X.Y.Z or v-cli-X.Y.Z.${NC}" >&2
+      exit 1
+    fi
     return
   fi
 
@@ -96,9 +105,8 @@ resolve_version() {
     | head -1)
 
   if [ -z "$latest" ]; then
-    echo -e "${YELLOW}Could not fetch latest CLI version. Defaulting to ${TAG_PREFIX}1.0.0${NC}" >&2
-    echo "${TAG_PREFIX}1.0.0"
-    return
+    echo -e "${RED}Could not resolve a signed CLI release.${NC}" >&2
+    exit 1
   fi
 
   echo "$latest"
@@ -120,8 +128,17 @@ download_binary() {
   # (no version in filename — version is in the tag/path). Match that.
   local filename="${ARCHIVE_BASENAME}-${platform}.${ext}"
   local url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
+  local checksums_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS"
+  local signature_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS.sigstore.json"
   local tmpdir
   tmpdir=$(mktemp -d)
+
+  if ! command -v cosign >/dev/null 2>&1; then
+    echo -e "${RED}cosign is required to verify AGI CLI release provenance.${NC}" >&2
+    echo "Install Cosign from https://docs.sigstore.dev/cosign/system_config/installation/ and retry." >&2
+    rm -rf "$tmpdir"
+    exit 1
+  fi
 
   echo -e "${BLUE}Downloading ${BOLD}${BINARY_NAME}${NC}${BLUE} ${version} for ${platform}...${NC}"
   echo -e "${CYAN}  ${url}${NC}"
@@ -138,6 +155,43 @@ download_binary() {
     rm -rf "$tmpdir"
     exit 1
   fi
+
+  if ! curl -fsSL -o "${tmpdir}/SHA256SUMS" "$checksums_url" \
+    || ! curl -fsSL -o "${tmpdir}/SHA256SUMS.sigstore.json" "$signature_url"; then
+    echo -e "${RED}Release signature metadata is missing; refusing to install unverified bytes.${NC}" >&2
+    rm -rf "$tmpdir"
+    exit 1
+  fi
+
+  local certificate_identity="https://github.com/${GITHUB_REPO}/.github/workflows/release-cli.yml@refs/tags/${version}"
+  if ! cosign verify-blob \
+    --bundle "${tmpdir}/SHA256SUMS.sigstore.json" \
+    --certificate-identity "$certificate_identity" \
+    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+    "${tmpdir}/SHA256SUMS" >/dev/null; then
+    echo -e "${RED}Release provenance verification failed; refusing to install.${NC}" >&2
+    rm -rf "$tmpdir"
+    exit 1
+  fi
+
+  local expected_checksum actual_checksum
+  expected_checksum=$(awk -v filename="$filename" '$2 == filename || $2 == "*" filename { print $1; exit }' "${tmpdir}/SHA256SUMS")
+  if [ -z "$expected_checksum" ]; then
+    echo -e "${RED}The signed checksum manifest does not contain ${filename}.${NC}" >&2
+    rm -rf "$tmpdir"
+    exit 1
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual_checksum=$(sha256sum "${tmpdir}/${filename}" | awk '{print $1}')
+  else
+    actual_checksum=$(shasum -a 256 "${tmpdir}/${filename}" | awk '{print $1}')
+  fi
+  if [ "$actual_checksum" != "$expected_checksum" ]; then
+    echo -e "${RED}Archive checksum verification failed; refusing to install.${NC}" >&2
+    rm -rf "$tmpdir"
+    exit 1
+  fi
+  echo -e "${GREEN}Verified release provenance and SHA-256 checksum.${NC}"
 
   # Extract
   mkdir -p "$INSTALL_DIR"

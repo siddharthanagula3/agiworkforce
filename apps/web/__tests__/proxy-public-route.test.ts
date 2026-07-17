@@ -75,6 +75,22 @@ describe('web proxy', () => {
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });
 
+  it('protects the schedule manager and preserves its requested URL', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/schedules?view=active'),
+      {} as never,
+    );
+
+    expect(clerkState.clerkPaths).toEqual([]);
+    expect(response?.status).toBe(307);
+    expect(response?.headers.get('Location')).toBe(
+      'http://localhost/login?redirectTo=%2Fschedules%3Fview%3Dactive',
+    );
+  });
+
   it('keeps public health checks out of Clerk session middleware', async () => {
     clerkState.clerkPaths = [];
     const { proxy } = await import('../proxy');

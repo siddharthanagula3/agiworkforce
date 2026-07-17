@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
-import { ArrowUpFromLine, Cloud, Database, Download, Link2, Trash2 } from 'lucide-react-native';
+import { ArrowUpFromLine, Cloud, Database, Download, Trash2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { exportAllUserData } from '@/services/dsarExport';
 import { useThemeColors } from '@/src/ui/theme';
@@ -105,16 +105,9 @@ export default function DataControlsScreen() {
         >
           <Download size={19} color={colors.textSecondary} />
           <Text style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
-            {exporting ? 'Exporting...' : 'Export Local Data'}
+            {exporting ? 'Exporting…' : 'Export Local Data'}
           </Text>
         </Pressable>
-        <SettingsRow
-          label="Shared Links"
-          icon={Link2}
-          onPress={() =>
-            router.push('/(app)/settings/shared-links' as Parameters<typeof router.push>[0])
-          }
-        />
         <SettingsRow
           label="Storage"
           icon={Trash2}

@@ -7,7 +7,6 @@ import { promisify } from 'util';
 import { SidebarProvider } from '../features/sidebar-webview/sidebarProvider';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
-import { ConversationStore } from '../data/conversationStore';
 import {
   ConversationTreeProvider,
   ConversationTreeItem,
@@ -15,11 +14,10 @@ import {
 } from '../features/trees';
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
 import { loadFacts, addFact, updateFact, deleteFact, clearFacts } from '../memory/memoryStore';
-import { AgentModePanel } from '../providers/agentModeProvider';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
+import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { ModelMetricsPanel } from '../features/model-picker/modelMetrics';
 import { getDesktopBridge } from '../features/desktop-bridge';
-import { getCheckpointManager } from '../data/checkpointManager';
 import { showOriginalContext, getPatchOutputChannel } from '../integrations/patchEngine';
 import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../integrations/tierResolver';
@@ -84,8 +82,8 @@ function sessionHistoryRelativeTime(timestamp: number): string {
 
 export interface CommandDeps {
   sidebarProvider: SidebarProvider;
-  conversationStore: ConversationStore;
   conversationTreeProvider: ConversationTreeProvider;
+  localRuntimes: LocalRuntimePool;
   contextPanelProvider: ContextPanelProvider;
   memoryTreeProvider: MemoryTreeProvider;
   diffDecorationProvider: DiffDecorationProvider;
@@ -95,8 +93,8 @@ export interface CommandDeps {
 export function setupCommands(context: vscode.ExtensionContext, deps: CommandDeps): void {
   const {
     sidebarProvider,
-    conversationStore,
     conversationTreeProvider,
+    localRuntimes,
     contextPanelProvider,
     memoryTreeProvider,
     diffDecorationProvider,
@@ -228,15 +226,22 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.openChatInEditor', () => {
-      ChatEditorPanel.createOrShow(context.extensionUri, context.secrets, context);
-    }),
-
-    register('agi-workforce.agentMode', () => {
-      AgentModePanel.createOrShow(
+      ChatEditorPanel.createOrShow(
         context.extensionUri,
         context.secrets,
         context,
-        Config.agentPlanMode(),
+        localRuntimes,
+        conversationTreeProvider,
+      );
+    }),
+
+    register('agi-workforce.agentMode', () => {
+      ChatEditorPanel.createOrShow(
+        context.extensionUri,
+        context.secrets,
+        context,
+        localRuntimes,
+        conversationTreeProvider,
       );
     }),
 
@@ -406,23 +411,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     // ── conversation commands ───────────────────────────────────────────────────
     register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
-      const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.conversation.id;
-      const conversation = conversationStore.get(id);
-      if (conversation === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: Conversation not found.');
+      const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.thread.id;
+      const session = await conversationTreeProvider.readThread(id);
+      if (session === undefined) {
+        vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
         return;
       }
 
       const lines: string[] = [
-        `# ${conversation.title}`,
+        `# ${session.thread.title}`,
         '',
-        `*Model: ${conversation.model} · ${conversation.messages.length} messages*`,
+        `*Model: ${session.thread.model ?? 'configured model'} · ${session.messages.length} messages*`,
         '',
       ];
-      for (const msg of conversation.messages) {
+      for (const msg of session.messages) {
         if (msg.role === 'system') continue;
         const heading = msg.role === 'user' ? '**You**' : '**AGI Workforce**';
-        lines.push(`${heading}`, '', msg.content, '');
+        lines.push(`${heading}`, '', msg.text, '');
       }
 
       try {
@@ -438,13 +443,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.deleteConversation', async (item: ConversationTreeItem) => {
       const choice = await vscode.window.showWarningMessage(
-        `Delete conversation "${item.conversation.title}"?`,
+        `Archive developer session "${item.thread.title}"?`,
         { modal: true },
-        'Delete',
+        'Archive',
       );
-      if (choice === 'Delete') {
-        conversationStore.delete(item.conversation.id);
-        conversationTreeProvider.refresh();
+      if (choice === 'Archive') {
+        const archived = await conversationTreeProvider.archiveThread(item.thread.id);
+        if (!archived) {
+          vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
+        }
       }
     }),
 
@@ -453,7 +460,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.showSessionsHistory', async () => {
-      const conversations = conversationStore.getAll();
+      const conversations = await conversationTreeProvider.getThreads();
 
       if (conversations.length === 0) {
         const choice = await vscode.window.showInformationMessage(
@@ -468,15 +475,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       const items: (vscode.QuickPickItem & { conversationId?: string })[] = conversations.map(
         (conv) => {
-          const msgCount = conv.messages.filter((m) => m.role !== 'system').length;
-          const relativeTime = sessionHistoryRelativeTime(conv.updatedAt);
+          const relativeTime = sessionHistoryRelativeTime(Date.parse(conv.updatedAt));
           return {
             label: `$(comment) ${conv.title}`,
             description: relativeTime,
-            detail:
-              msgCount > 0
-                ? `${msgCount} message${msgCount !== 1 ? 's' : ''} · ${conv.model}`
-                : conv.model,
+            detail: `${conv.status} · ${conv.model ?? 'configured model'} · ${conv.cwd ?? 'workspace'}`,
             conversationId: conv.id,
           };
         },
@@ -666,122 +669,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    // ── checkpoint commands ─────────────────────────────────────────────────────
-    register('agi-workforce.createCheckpoint', async () => {
-      const mgr = getCheckpointManager();
-      if (mgr === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
-        return;
-      }
-
-      const label = await vscode.window.showInputBox({
-        title: 'AGI Workforce — Create Checkpoint',
-        prompt: 'Enter a label for this checkpoint',
-        placeHolder: 'e.g. Before refactoring auth module',
-        ignoreFocusOut: true,
-        validateInput: (v) => (v.trim() === '' ? 'Label cannot be empty.' : undefined),
-      });
-
-      if (label === undefined) return;
-
-      const id = await mgr.createCheckpoint(label.trim());
-      if (id !== undefined) {
-        vscode.window.showInformationMessage(
-          `AGI Workforce: Checkpoint "${label.trim()}" created.`,
-        );
-      } else {
-        vscode.window.showWarningMessage(
-          'AGI Workforce: Could not create checkpoint. Git may not be available.',
-        );
-      }
-    }),
-
-    register('agi-workforce.restoreCheckpoint', async () => {
-      const mgr = getCheckpointManager();
-      if (mgr === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
-        return;
-      }
-
-      const checkpoints = mgr.listCheckpoints();
-      if (checkpoints.length === 0) {
-        vscode.window.showInformationMessage('AGI Workforce: No checkpoints available.');
-        return;
-      }
-
-      const items = checkpoints.map((c) => ({
-        label: c.label,
-        description: new Date(c.createdAt).toLocaleString(),
-        detail: c.stashRef === '' ? 'Clean working tree' : `Ref: ${c.stashRef}`,
-        id: c.id,
-      }));
-
-      const picked = await vscode.window.showQuickPick(items, {
-        title: 'AGI Workforce — Restore Checkpoint',
-        placeHolder: 'Select a checkpoint to restore',
-        matchOnDescription: true,
-      });
-
-      if (picked === undefined) return;
-
-      const confirmed = await vscode.window.showWarningMessage(
-        `Restore to checkpoint "${picked.label}"?\n\n` +
-          `THIS WILL:\n` +
-          `  • Discard ALL uncommitted changes\n` +
-          `  • Permanently DELETE untracked files (no undo for those)\n\n` +
-          `A safety stash will be created so committed work can be recovered with "git stash list".`,
-        { modal: true },
-        'Restore',
-      );
-
-      if (confirmed === 'Restore') {
-        await mgr.restoreCheckpoint(picked.id);
-      }
-    }),
-
-    register('agi-workforce.listCheckpoints', async () => {
-      const mgr = getCheckpointManager();
-      if (mgr === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: Checkpoint manager not available.');
-        return;
-      }
-
-      const checkpoints = mgr.listCheckpoints();
-      if (checkpoints.length === 0) {
-        vscode.window.showInformationMessage('AGI Workforce: No checkpoints available.');
-        return;
-      }
-
-      const items = checkpoints.map((c) => ({
-        label: c.label,
-        description: new Date(c.createdAt).toLocaleString(),
-        detail: c.stashRef === '' ? 'Clean working tree' : `Ref: ${c.stashRef}`,
-        id: c.id,
-      }));
-
-      const picked = await vscode.window.showQuickPick(items, {
-        title: `AGI Workforce — ${checkpoints.length} Checkpoint(s)`,
-        placeHolder: 'Select a checkpoint to restore, or press Escape to dismiss',
-        matchOnDescription: true,
-      });
-
-      if (picked === undefined) return;
-
-      const confirmed = await vscode.window.showWarningMessage(
-        `Restore to checkpoint "${picked.label}"?\n\n` +
-          `THIS WILL:\n` +
-          `  • Discard ALL uncommitted changes\n` +
-          `  • Permanently DELETE untracked files (no undo for those)\n\n` +
-          `A safety stash will be created so committed work can be recovered with "git stash list".`,
-        { modal: true },
-        'Restore',
-      );
-
-      if (confirmed === 'Restore') {
-        await mgr.restoreCheckpoint(picked.id);
-      }
-    }),
-
     // ── git commands ────────────────────────────────────────────────────────────
     // PR-3B (F-12, F-19): replace `terminal.sendText` with `execFile('git', [...])`
     // so the user's shell config (aliases, profile, RC-file sourcing) cannot
@@ -902,10 +789,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       ModelMetricsPanel.createOrShow(context.extensionUri, context);
     }),
 
-    register('agi-workforce.rewindLast', () => {
-      sidebarProvider.rewindLast();
-    }),
-
     register('agi-workforce.openActionSheet', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
       const currentMode = Config.agentMode();
@@ -927,16 +810,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           label: '$(mention) Mention file from project',
           description: 'Open file picker and insert mention into @agi chat',
           detail: 'mention-file-project',
-        },
-        {
-          label: '$(discard) Rewind last message',
-          description: 'Remove the last AI reply from chat (does not undo file edits)',
-          detail: 'rewind',
-        },
-        {
-          label: '$(git-stash-pop) Restore checkpoint…',
-          description: 'Revert file changes to a saved checkpoint',
-          detail: 'restore-checkpoint',
         },
         {
           label: '$(trash) Clear conversation',
@@ -994,12 +867,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           }
           break;
         }
-        case 'rewind':
-          await vscode.commands.executeCommand('agi-workforce.rewindLast');
-          break;
-        case 'restore-checkpoint':
-          await vscode.commands.executeCommand('agi-workforce.restoreCheckpoint');
-          break;
         case 'clear':
           sidebarProvider.resetConversation();
           sidebarProvider.reveal();
@@ -1048,8 +915,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
               detail: 'ask',
             },
             {
-              label: '$(robot) Edit automatically',
-              description: 'Edits run without confirmation',
+              label: '$(robot) Auto safe operations',
+              description: 'Safe reads run automatically; writes and commands require approval',
               detail: 'auto',
             },
             {
@@ -1171,8 +1038,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           picked: currentMode === 'ask',
         },
         {
-          label: '$(symbol-misc) Edit automatically',
-          description: 'AGI will edit your selected text or the whole file',
+          label: '$(symbol-misc) Auto safe operations',
+          description: 'Safe reads run automatically; writes and commands require approval',
           detail: 'auto',
           picked: currentMode === 'auto',
         },

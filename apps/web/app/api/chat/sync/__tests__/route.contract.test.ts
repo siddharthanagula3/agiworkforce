@@ -3,13 +3,13 @@
  *
  * Asserts the live route handlers' JSON output parses against the shared
  * `ChatSyncPullResponseSchema` / `ChatSyncPushResponseSchema` from
- * @agiworkforce/services — the schemas mobile's cloudSyncEngine validates
+ * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
  * every pulled page with. If the route's response shape drifts, this fails
  * first, before any client breaks in production.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ChatSyncPullResponseSchema, ChatSyncPushResponseSchema } from '@agiworkforce/services';
+import { ChatSyncPullResponseSchema, ChatSyncPushResponseSchema } from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
@@ -131,6 +131,13 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('99');
   });
+
+  it('rejects a cursor outside the PostgreSQL bigint range before querying', async () => {
+    const res = await GET(makeGet('9999999999999999999'));
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/chat/sync — shared cloud contract', () => {
@@ -138,14 +145,17 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
 
   it('push ack parses against ChatSyncPushResponseSchema', async () => {
     mockQuery
-      .mockResolvedValueOnce([{ id: CONV_ID, server_version: '45' }]) // conversation upsert
-      .mockResolvedValueOnce([{ id: MSG_ID, server_version: '46' }]); // message insert
+      .mockResolvedValueOnce([
+        { kind: 'applied', id: CONV_ID, server_version: '45', current: null },
+      ])
+      .mockResolvedValueOnce([
+        { kind: 'applied', id: MSG_ID, server_version: '46', current: null },
+      ]);
 
     const res = await POST(
       makePost({
-        conversations: [
-          { id: CONV_ID, title: 'Quarterly plan', updatedAt: '2026-07-02T00:00:00.000Z' },
-        ],
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, title: 'Quarterly plan', baseVersion: '0' }],
         messages: [{ id: MSG_ID, conversationId: CONV_ID, role: 'user', content: 'hello' }],
       }),
     );
@@ -155,6 +165,31 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('46');
+  });
+
+  it('explicitly rejects a legacy mutable push instead of comparing client clocks', async () => {
+    const res = await POST(
+      makePost({
+        conversations: [{ id: CONV_ID, title: 'stale', updatedAt: '2999-01-01T00:00:00.000Z' }],
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ requiredProtocolVersion: 2 });
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('rejects duplicate entity ids before querying', async () => {
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [
+          { id: CONV_ID, title: 'one', baseVersion: '0' },
+          { id: CONV_ID, title: 'two', baseVersion: '0' },
+        ],
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('empty push ack parses', async () => {

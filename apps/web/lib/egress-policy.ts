@@ -27,7 +27,7 @@ const ALLOWED_HOSTNAMES = [
   // and a `*_BASE_URL` override is validated here (request-processor.ts:validateEgressUrl)
   // before the adapter is built — without `.ai` on the allowlist a plain Moonshot send 403s
   // with "Provider endpoint not in approved egress allowlist". The moonshot adapter's own
-  // SSRF allowlist already permits both hosts (packages/providers/moonshot/src/index.ts).
+  // SSRF allowlist already permits both hosts (packages/ai/providers/moonshot/src/index.ts).
   'api.moonshot.cn',
   'api.moonshot.ai',
   'api.stripe.com',

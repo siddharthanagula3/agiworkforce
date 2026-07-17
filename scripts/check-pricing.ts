@@ -3,7 +3,7 @@
  * check-pricing.ts
  *
  * Weekly cron: scrape provider pricing pages, diff against the local
- * `packages/types/src/models.json`, and (when run with `--open-pr`) open
+ * `packages/contracts/types/src/models.json`, and (when run with `--open-pr`) open
  * an auto-PR with the proposed pricing update.
  *
  * Triggered by:
@@ -39,7 +39,7 @@ const __dirname = (() => {
 })();
 
 const REPO_ROOT = join(__dirname, '..');
-const MODELS_JSON_PATH = join(REPO_ROOT, 'packages/types/src/models.json');
+const MODELS_JSON_PATH = join(REPO_ROOT, 'packages/contracts/types/src/models.json');
 
 // ============================================================================
 // Provider scraper config

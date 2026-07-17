@@ -42,7 +42,7 @@ import { useWaitlistStore } from '../src/features/waitlist/store';
 // ---------------------------------------------------------------------------
 
 const LITE_MODEL_ID = 'llama-3.2-1b-instruct-spinquant';
-const CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
+const CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 const SELECTABLE_MODEL_IDS = LOCAL_MODEL_LIST.map((model) => model.id);
 const SECOND_SELECTABLE_MODEL_ID = SELECTABLE_MODEL_IDS.find((id) => id !== LITE_MODEL_ID);
 
@@ -113,7 +113,7 @@ describe('modelStore', () => {
       expect(getState().recentModels[0]).toBe(CLOUD_MODEL_ID);
     });
 
-    it('selects the shared OpenAI probe model after invite access', () => {
+    it('selects the registry-owned shared default after cloud access is unlocked', () => {
       useWaitlistStore.setState({ cloudUnlocked: true });
       if (!DEFAULT_CLOUD_MODEL_ID) {
         throw new Error('Expected a default cloud model for the mobile cloud picker.');
@@ -121,8 +121,7 @@ describe('modelStore', () => {
 
       getState().setModel(DEFAULT_CLOUD_MODEL_ID);
 
-      expect(DEFAULT_CLOUD_MODEL_ID).toBe('gpt-5.4-mini');
-      expect(getState().selectedModel).toBe('gpt-5.4-mini');
+      expect(getState().selectedModel).toBe(DEFAULT_CLOUD_MODEL_ID);
       expect(getState().selectedProvider).toBe('cloud_managed');
     });
 
@@ -261,6 +260,22 @@ describe('modelStore', () => {
       getState().setThinkingMode(false);
 
       expect(getState().thinkingModeEnabled).toBe(false);
+    });
+
+    it('initializes mandatory Fable 5 reasoning and refuses to turn it off', () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+
+      getState().setModel('claude-fable-5');
+
+      expect(getState().thinkingModeEnabled).toBe(true);
+      expect(getState().thinkingEnabledPerModel['claude-fable-5']).toBe(true);
+      expect(getState().isThinkingEnabledForSelected()).toBe(true);
+
+      getState().toggleThinkingForModel('claude-fable-5');
+      getState().setThinkingMode(false);
+
+      expect(getState().thinkingModeEnabled).toBe(true);
+      expect(getState().thinkingEnabledPerModel['claude-fable-5']).toBe(true);
     });
   });
 });

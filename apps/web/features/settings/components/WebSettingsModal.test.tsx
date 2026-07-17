@@ -9,8 +9,10 @@ import { WebSettingsModal } from './WebSettingsModal';
  *     rows (GET /api/connectors) and GitHub App installations
  *     (GET /api/github/installations) — github cannot have a user_connectors
  *     row, the installation IS its real signal;
- *   - no Connect buttons anywhere (POST /api/connectors 501s every non-local
- *     connector, so a Connect button would be a dead control);
+ *   - no catalog Connect buttons anywhere (POST /api/connectors 501s every
+ *     non-local catalog connector, so a Connect button would be a dead control);
+ *   - custom remote MCP connectors use their real persisted
+ *     POST /api/connectors/custom flow;
  *   - local-only (exclusive) connectors never render on web.
  */
 
@@ -92,8 +94,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
   });
 
-  it('surfaces the honest not-yet-supported error for custom connectors (never a fake success)', async () => {
-    stubFetch();
+  it('persists custom connectors through the real custom MCP endpoint', async () => {
+    const fetchMock = stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
     await screen.findByRole('table');
 
@@ -109,10 +111,20 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
-    expect(
-      await screen.findByText(
-        'Custom connectors are not yet supported on web. Remote MCP servers are configured by the operator today.',
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/connectors/custom',
+        expect.objectContaining({
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': 'csrf-token',
+          },
+          body: JSON.stringify({ name: 'My MCP', url: 'https://mcp.example.com' }),
+        }),
       ),
-    ).toBeTruthy();
+    );
+    await waitFor(() => expect(screen.queryByPlaceholderText('My connector')).toBeNull());
   });
 });

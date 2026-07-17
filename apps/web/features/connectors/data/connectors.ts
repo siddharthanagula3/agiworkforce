@@ -57,7 +57,7 @@ export function getConnectorAvailabilityLabel(connector: Connector): string {
     case 'ready':
       return 'Ready';
     case 'request_access':
-      return 'Request access';
+      return 'Coming soon';
     case 'planned':
       return `Phase ${connector.phase}`;
     case 'exclusive':
@@ -130,10 +130,11 @@ export const CONNECTORS: Connector[] = [
   {
     id: 'github',
     name: 'GitHub',
-    description: 'Search repos, create PRs, manage issues, push code, and review changes.',
+    description:
+      'Read PR diffs, comment on issues and PRs, and post PR reviews via the GitHub App.',
     category: 'Developer',
     authType: 'oauth',
-    actionCount: 10,
+    actionCount: 3,
     phase: 1,
     iconBg: 'from-gray-700 to-gray-900',
     iconText: 'GH',

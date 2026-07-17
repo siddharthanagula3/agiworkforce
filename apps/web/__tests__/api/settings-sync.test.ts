@@ -71,6 +71,16 @@ describe('filterCloudSafeSettings — leak guards', () => {
     });
   });
 
+  it('drops prototype-pollution keys recursively', () => {
+    const dirty = JSON.parse(
+      '{"appearance":{"theme":"dark","__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}}}}',
+    );
+    const safe = filterCloudSafeSettings(dirty);
+
+    expect(safe).toEqual({ appearance: { theme: 'dark' } });
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+  });
+
   it('only allows the documented cloud-safe namespaces', () => {
     const all: Record<string, unknown> = {};
     for (const ns of CLOUD_SAFE_SETTINGS_NAMESPACES) all[ns] = { ok: true };
@@ -90,11 +100,11 @@ describe('scrubSecrets', () => {
 });
 
 describe('POST /api/settings/sync — push', () => {
-  it('merges only cloud-safe namespaces (jsonb ||) with LWW, forcing user_id', async () => {
+  it('merges only cloud-safe namespaces when baseVersion matches, forcing user_id', async () => {
     const res = await POST(
       postReq({
         settings: { appearance: { theme: 'dark' }, byok: { anthropic: 'sk-LEAK' } },
-        updatedAt: '2026-06-22T00:00:00.000Z',
+        baseVersion: '2',
       }),
     );
     expect(res.status).toBe(200);
@@ -106,14 +116,39 @@ describe('POST /api/settings/sync — push', () => {
     );
     expect(call).toBeDefined();
     const sql = String(call![0]);
-    expect(sql).toContain('user_settings.settings || excluded.settings'); // merge, preserve secrets already stored
-    expect(sql).toContain('excluded.updated_at >= user_settings.updated_at'); // LWW
+    expect(sql).toContain('user_settings.server_version = $3::bigint');
+    expect(sql).not.toContain('excluded.updated_at >= user_settings.updated_at');
+    // A narrow Mobile/Desktop namespace must not replace sibling keys owned by
+    // another surface. The server merges each incoming namespace object.
+    expect(sql).toContain('jsonb_each($2::jsonb)');
+    expect(sql).toContain("coalesce(user_settings.settings, '{}'::jsonb) -> incoming.key");
     // The stored JSONB param must NOT contain the byok secret.
     const stored = JSON.parse(String((call![1] as unknown[])[1]));
     expect(stored.byok).toBeUndefined();
     expect(stored.appearance).toEqual({ theme: 'dark' });
     // user_id forced server-side.
     expect((call![1] as unknown[])[0]).toBe('u1');
+    expect((call![1] as unknown[])[2]).toBe('2');
+  });
+
+  it('rejects a stale baseVersion even when the client clock is far in the future', async () => {
+    queryMock.mockReset();
+    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([{ server_version: '9' }]);
+
+    const res = await POST(
+      postReq({
+        settings: { appearance: { theme: 'poisoned' } },
+        baseVersion: '8',
+        updatedAt: '2999-01-01T00:00:00.000Z',
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ applied: false, cursor: '9' });
+    const mutation = queryMock.mock.calls[0]!;
+    expect(String(mutation[0])).toContain('user_settings.server_version = $3::bigint');
+    expect(mutation[1]).toEqual(['u1', JSON.stringify({ appearance: { theme: 'poisoned' } }), '8']);
+    expect(JSON.stringify(mutation)).not.toContain('2999-01-01');
   });
 });
 

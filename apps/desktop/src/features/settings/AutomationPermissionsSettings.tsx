@@ -1,4 +1,4 @@
-import { automation } from '@agiworkforce/api';
+import { automation } from '@agiworkforce/desktop-command-client';
 import { Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

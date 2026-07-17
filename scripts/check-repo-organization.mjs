@@ -29,6 +29,8 @@ const allowedRootFiles = new Set([
   'Cargo.lock',
   'Cargo.toml',
   'LICENSE',
+  'deny.toml',
+  'rust-toolchain.toml',
   'ONBOARDING.md',
   'PLAN.md',
   'README.md',
@@ -51,6 +53,7 @@ const allowedRootFiles = new Set([
   'pnpm-workspace.yaml',
   'skills-lock.json',
   'tsconfig.base.json',
+  'turbo.json',
   'vercel.json',
 ]);
 
@@ -102,7 +105,7 @@ const allowedRootDirs = new Set([
   'dev-scripts',
   'docs',
   'examples',
-  'ios',
+  'infrastructure',
   'node_modules',
   'packages',
   'patches',
@@ -110,6 +113,7 @@ const allowedRootDirs = new Set([
   'scripts',
   'services',
   'tasks',
+  'tools',
 ]);
 
 function isGitIgnored(entryName) {

@@ -1,10 +1,22 @@
 import { isCloudManagedModelId } from '@/src/features/model-picker/service';
+import { isAutoModeModelId } from '@agiworkforce/types';
 import type { ConversationSummary } from '@/types/chat';
 
 export type ConversationExecutionMode = 'local' | 'cloud';
 
 export function executionModeForModel(modelId?: string | null): ConversationExecutionMode {
   return modelId && isCloudManagedModelId(modelId) ? 'cloud' : 'local';
+}
+
+/**
+ * Auto is a routing policy, not a trust boundary. It must stay inside the
+ * active conversation boundary; explicit models may request a boundary switch.
+ */
+export function executionModeForSelection(
+  modelId: string | null | undefined,
+  activeMode: ConversationExecutionMode,
+): ConversationExecutionMode {
+  return isAutoModeModelId(modelId) ? activeMode : executionModeForModel(modelId);
 }
 
 export function providerForExecutionMode(

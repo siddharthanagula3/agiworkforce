@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Code2, Globe, Loader2, RefreshCw, ShieldOff } from 'lucide-react';
-import { browserExtension, type ExtensionStatusDiagnostics } from '@agiworkforce/api';
+import { browserExtension, type ExtensionStatusDiagnostics } from '@agiworkforce/desktop-command-client';
 import { cn } from '@/lib/utils';
 import { isTauri } from '@/lib/tauri-mock';
 import { useIsMounted } from '@/hooks/useIsMounted';
@@ -98,7 +98,7 @@ interface BridgeStatusCardProps {
  * Renders Chrome + VS Code bridge health in the connector hub.
  *
  * Derived from the Tauri `extension_status` diagnostics payload exposed via
- * `@agiworkforce/api`'s `browserExtension.extensionStatus()`. PLAN.md section 6:
+ * `@agiworkforce/desktop-command-client`'s `browserExtension.extensionStatus()`. PLAN.md section 6:
  * "Add Chrome and VS Code bridge status to connector hub."
  *
  * Both bridges share the same `.ipc_token` and the same desktop transport

@@ -19,7 +19,7 @@ jest.mock('expo-router', () => ({
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (effect: () => void) => {
     const React = require('react');
-    React.useEffect(effect, []);
+    React.useEffect(() => effect(), [effect]);
   },
 }));
 
@@ -156,6 +156,7 @@ import ChatTabScreen from '../app/(app)/(tabs)/chat';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useModelStore } from '../src/features/model-picker/store';
+import { useTierStore } from '../src/features/billing/store';
 import { DEFAULT_LOCAL_MODEL_ID } from '../src/features/model-picker/service';
 import { generateImage, getGeneratedImageUri } from '../src/features/image/services/imagegen';
 
@@ -167,6 +168,7 @@ describe('Chat tab mode toggle', () => {
     jest.clearAllMocks();
     mockChatInputOnSend = undefined;
     useChatAppModeStore.setState({ appMode: 'local' });
+    useTierStore.setState({ tier: 'pro' });
     useModelStore.setState({
       selectedModel: DEFAULT_LOCAL_MODEL_ID,
       selectedProvider: 'local',
@@ -212,6 +214,28 @@ describe('Chat tab mode toggle', () => {
     expect(queryByTestId('project-selector-bar')).toBeTruthy();
     // No sign-in redirect needed since cloud is already unlocked.
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('keeps a registry Auto profile selected inside the Cloud boundary', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({
+      joined: true,
+      email: 'tester@example.com',
+      country: 'US',
+      rank: 1,
+      joinedAt: new Date().toISOString(),
+      cloudUnlocked: true,
+      inviteId: undefined,
+      inviteCode: undefined,
+      cloudUnlockedAt: new Date().toISOString(),
+    });
+    useModelStore.setState({ selectedModel: 'auto-balanced', selectedProvider: 'local' });
+
+    render(<ChatTabScreen />);
+
+    await waitFor(() => {
+      expect(useModelStore.getState().selectedModel).toBe('auto-balanced');
+    });
   });
 
   it('keeps Local selected and routes to sign-in when cloud is not unlocked (public alpha, no invite/waitlist gate)', async () => {
@@ -285,6 +309,7 @@ describe('Chat tab mode toggle', () => {
     await waitFor(() => {
       expect(mockGenerateImage).toHaveBeenCalledWith({
         prompt: 'a red circle on a white background',
+        model: expect.any(String),
       });
     });
     await waitFor(() => {
@@ -295,5 +320,43 @@ describe('Chat tab mode toggle', () => {
       );
     });
     expect(mockFailImageGeneration).not.toHaveBeenCalled();
+  });
+
+  it('routes a natural-language image request to image generation', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({
+      joined: true,
+      email: 'tester@example.com',
+      country: 'US',
+      rank: 1,
+      joinedAt: new Date().toISOString(),
+      cloudUnlocked: true,
+      inviteId: undefined,
+      inviteCode: undefined,
+      cloudUnlockedAt: new Date().toISOString(),
+    });
+    mockGenerateImage.mockResolvedValue({
+      success: true,
+      images: [{ url: 'https://example.com/observatory.png' }],
+      model: 'registry-selected-image-model',
+    });
+    mockGetGeneratedImageUri.mockReturnValue('https://example.com/observatory.png');
+
+    render(<ChatTabScreen />);
+    await mockChatInputOnSend?.('Create an image of a blue observatory on Mars');
+
+    await waitFor(() => {
+      expect(mockBeginImageGeneration).toHaveBeenCalledWith(
+        'conv-1',
+        'Create an image of a blue observatory on Mars',
+        'Create an image of a blue observatory on Mars',
+        expect.any(String),
+      );
+    });
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(mockGenerateImage).toHaveBeenCalledWith({
+      prompt: 'Create an image of a blue observatory on Mars',
+      model: expect.any(String),
+    });
   });
 });

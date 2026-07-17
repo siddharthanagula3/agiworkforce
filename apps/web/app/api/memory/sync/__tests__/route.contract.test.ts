@@ -3,13 +3,13 @@
  *
  * Asserts the live route handlers' JSON output parses against the shared
  * `MemorySyncPullResponseSchema` / `MemorySyncPushResponseSchema` from
- * @agiworkforce/services — the schemas mobile's cloudSyncEngine validates
+ * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
  * pulled memory pages with. The legacy status/trigger paths (no `since`, no
  * `memories`) are separate back-compat shapes and are out of contract scope.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MemorySyncPullResponseSchema, MemorySyncPushResponseSchema } from '@agiworkforce/services';
+import { MemorySyncPullResponseSchema, MemorySyncPushResponseSchema } from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
@@ -85,24 +85,38 @@ describe('GET /api/memory/sync?since= — shared cloud contract', () => {
     );
     expect(MemorySyncPullResponseSchema.safeParse(await res.json()).success).toBe(true);
   });
+
+  it('rejects a cursor outside the PostgreSQL bigint range before querying', async () => {
+    const res = await GET(
+      new Request('http://localhost:3000/api/memory/sync?since=9999999999999999999', {
+        method: 'GET',
+      }) as never,
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/memory/sync { memories } — shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('push ack parses against MemorySyncPushResponseSchema', async () => {
-    mockQuery.mockResolvedValueOnce([{ id: MEM_ID, server_version: '9' }]);
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: MEM_ID, server_version: '9', current: null },
+    ]);
 
     const res = await POST(
       new Request('http://localhost:3000/api/memory/sync', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          protocolVersion: 2,
           memories: [
             {
               id: MEM_ID,
               content: 'User prefers dark mode',
-              updatedAt: '2026-07-01T00:00:00.000Z',
+              baseVersion: '0',
             },
           ],
         }),
@@ -114,5 +128,17 @@ describe('POST /api/memory/sync { memories } — shared cloud contract', () => {
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('9');
+  });
+
+  it('explicitly rejects a legacy mutable push', async () => {
+    const res = await POST(
+      new Request('http://localhost:3000/api/memory/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ memories: [{ id: MEM_ID, content: 'x', updatedAt: '2999-01-01' }] }),
+      }) as never,
+    );
+    expect(res.status).toBe(409);
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 });

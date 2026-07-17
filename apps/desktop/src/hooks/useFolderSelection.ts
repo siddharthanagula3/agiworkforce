@@ -1,6 +1,6 @@
 /**
  * useFolderSelection — desktop-only glue between the shared composer's
- * "Select folder" action (packages/unified-chat's `AttachmentMenu`, rendered
+ * "Select folder" action (packages/ui/unified-chat's `AttachmentMenu`, rendered
  * inside `ChatInput`/`ChatInterface`) and the native folder-picker flow.
  *
  * Mirrors `features/chat/FolderSelector.tsx`'s scoping flow (native Tauri

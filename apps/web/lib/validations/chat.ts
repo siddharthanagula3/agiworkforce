@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { listCanonicalModels, normalizeModelId, type ModelType } from '@agiworkforce/types';
-import { MAX_MESSAGE_LENGTH } from './llm';
+import {
+  ManagedCloudCreateConversationRequestSchema,
+  ManagedCloudCreateMessageRequestSchema,
+  ManagedCloudUpdateConversationRequestSchema,
+} from '@agiworkforce/cloud-contracts';
 
 /**
  * Chat validation schemas
@@ -29,32 +33,19 @@ function isSupportedModel(val: string): val is SupportedModel {
 }
 
 // AUDIT-008-002: Validation schema for conversation updates
-export const UpdateConversationSchema = z.object({
-  title: z.string().max(500, 'Title must be 500 characters or less').optional(),
+export const UpdateConversationSchema = ManagedCloudUpdateConversationRequestSchema.extend({
   model: z
     .string()
     .refine(isSupportedModel, {
       message: 'Invalid model specified',
     })
     .optional(),
-  projectId: z.string().max(200, 'Project ID must be 200 characters or less').nullable().optional(),
-  /** Pin or unpin the conversation. Persisted in web_conversations.pinned. */
-  pinned: z.boolean().optional(),
 });
 
 export type UpdateConversationInput = z.infer<typeof UpdateConversationSchema>;
 
 // AUDIT-008-003: Validation schema for conversation creation
-export const CreateConversationSchema = z.object({
-  // Offline-first clients (mobile/desktop) generate a UUIDv7 id locally so the
-  // conversation has a stable cloud identity before the round-trip. Optional:
-  // web omits it and the DB default (gen_random_uuid) applies.
-  id: z.string().uuid().optional(),
-  title: z
-    .string()
-    .max(500, 'Title must be 500 characters or less')
-    .optional()
-    .default('New conversation'),
+export const CreateConversationSchema = ManagedCloudCreateConversationRequestSchema.extend({
   model: z
     .string()
     .refine(isSupportedModel, {
@@ -62,31 +53,13 @@ export const CreateConversationSchema = z.object({
     })
     .optional()
     .default('auto'),
-  projectId: z.string().max(200, 'Project ID must be 200 characters or less').nullable().optional(),
-  // Temporary Chat (mobile/desktop Cloud mode): excluded from indefinite
-  // retention, purged by the cron job after ~30 days. See
-  // docs/products/agi-mobile/volume-23-settings.md ("Temporary Chat").
-  isTemporary: z.boolean().optional().default(false),
 });
 
 export type CreateConversationInput = z.infer<typeof CreateConversationSchema>;
 
 // Valid message roles
-const MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
-type MessageRole = (typeof MESSAGE_ROLES)[number];
-
 // AUDIT-008-004: Validation schema for message creation
-// Max content length: shared with the llm gateway via MAX_MESSAGE_LENGTH.
-export const CreateMessageSchema = z.object({
-  id: z.string().uuid('Message ID must be a valid UUID').optional(),
-  content: z
-    .string()
-    .min(1, 'Message content is required')
-    .max(
-      MAX_MESSAGE_LENGTH,
-      `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH.toLocaleString()} characters`,
-    )
-    .refine((val) => val.trim().length > 0, 'Message content cannot be only whitespace'),
+export const CreateMessageSchema = ManagedCloudCreateMessageRequestSchema.extend({
   model: z
     .string()
     .refine(isSupportedModel, {
@@ -94,15 +67,6 @@ export const CreateMessageSchema = z.object({
     })
     .optional()
     .default('auto'),
-  role: z
-    .string()
-    .refine((val): val is MessageRole => MESSAGE_ROLES.includes(val as MessageRole), {
-      message: 'Invalid role specified',
-    })
-    .optional()
-    .default('user'),
-  metadata: z.record(z.string(), z.unknown()).optional().default({}),
-  skipLlm: z.boolean().optional().default(false),
 });
 
 export type CreateMessageInput = z.infer<typeof CreateMessageSchema>;

@@ -12,7 +12,7 @@ Running `npx expo install --check` will warn:
 
 This warning is **accepted**. Do NOT downgrade React in mobile to
 19.2.0 — that would force a fork against the rest of the workspace
-and likely break shared packages like `@agiworkforce/runtime`,
+and likely break shared packages like `@agiworkforce/client-runtime`,
 `@agiworkforce/types`, and the React 19 transition the desktop is on.
 
 Re-evaluate this exception when:

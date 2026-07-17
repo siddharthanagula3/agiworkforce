@@ -15,7 +15,7 @@
 import { logger } from '../lib/logger';
 
 // ---------------------------------------------------------------------------
-// Audit types (mirrors AuditEvent from packages/types/src/audit.ts)
+// Audit types (mirrors AuditEvent from packages/contracts/types/src/audit.ts)
 // ---------------------------------------------------------------------------
 
 type AuditSurface = 'desktop' | 'mobile' | 'web' | 'cli' | 'vscode';

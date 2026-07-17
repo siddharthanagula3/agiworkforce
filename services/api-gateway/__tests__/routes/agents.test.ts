@@ -56,11 +56,8 @@ vi.mock('../../src/lib/neonClients', () => {
   testState.profileEq.mockReturnValue(profileQuery);
   testState.profileSelect.mockReturnValue(profileQuery);
 
-  // P1-GW-RLS (Wave 4): desktop_devices/agent_approval_requests have no RLS
-  // policy coverage (RLS-GAP), so routes/agents.ts now calls
-  // getServiceClient() for everything, same as middleware/auth.ts's
-  // kill-switch profiles lookup. Dispatch on table name so both see the
-  // right chain — testState.from already handles the two data tables.
+  // Canonical profile/device reads use the user-scoped client. The unowned
+  // approval compatibility table uses the explicit system client.
   const serviceClient = {
     from: vi.fn((table: string) => {
       if (table === 'profiles') {
@@ -71,7 +68,8 @@ vi.mock('../../src/lib/neonClients', () => {
   };
 
   return {
-    getServiceClient: vi.fn(() => serviceClient),
+    getUserScopedClient: vi.fn(() => serviceClient),
+    getSystemClient: vi.fn(() => serviceClient),
   };
 });
 

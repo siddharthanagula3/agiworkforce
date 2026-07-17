@@ -79,7 +79,8 @@ describe('POST /api/mcp security gate', () => {
     });
   });
 
-  it('fails closed unless Web MCP private beta is explicitly enabled', async () => {
+  it('fails closed when the incident-response kill-switch is explicitly disabled', async () => {
+    process.env[WEB_MCP_PRIVATE_BETA_ENV] = '0';
     const response = await POST(postMcp('https://mcp.example.com'));
     const body = await response.json();
 
@@ -99,8 +100,7 @@ describe('POST /api/mcp security gate', () => {
     expect(mcpMocks.connectMcpServer).not.toHaveBeenCalled();
   });
 
-  it('connects only after beta gate and public DNS validation pass', async () => {
-    process.env[WEB_MCP_PRIVATE_BETA_ENV] = '1';
+  it('is open by default but connects only after public DNS validation passes', async () => {
     dnsMocks.lookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
 
     const response = await POST(postMcp('https://mcp.example.com'));

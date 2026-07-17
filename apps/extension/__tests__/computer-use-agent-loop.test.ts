@@ -372,7 +372,9 @@ describe('computer-use agent loop — one round-trip', () => {
     // Override chrome.storage.local.get to return nothing
     chromeMock.storage.local.get = vi.fn().mockResolvedValue({});
 
-    await expect(runAgentLoop('Do something', 42)).rejects.toThrow(/no auth token available/);
+    await expect(runAgentLoop('Do something', 42)).rejects.toThrow(
+      /no authenticated AGI Cloud session is available/,
+    );
 
     // fetch should not have been called
     expect(fetchMock).not.toHaveBeenCalled();

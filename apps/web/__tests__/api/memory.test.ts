@@ -151,11 +151,13 @@ describe('Memory API', () => {
     });
 
     it('should authenticate successfully with valid session', async () => {
+      // Cookie-session test: no Authorization header. A placeholder Bearer
+      // string here would be a present-but-unverifiable credential, which
+      // getClerkAuthUser now rejects outright rather than falling back to
+      // the (also-mocked) cookie session — see WEB-AUTH-BEARER-COOKIE-
+      // PRINCIPAL-DIVERGENCE-01. This test is about the session path.
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
-        headers: {
-          Authorization: 'Bearer valid-jwt-token',
-        },
       });
 
       const response = await GET(request);

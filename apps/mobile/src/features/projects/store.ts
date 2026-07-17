@@ -78,6 +78,7 @@ export const useProjectStore = create<ProjectState>()(
             createdAt: now,
             updatedAt: now,
             deletedAt: null,
+            serverVersion: '0',
           });
           markProjectForSync(id);
           return id;

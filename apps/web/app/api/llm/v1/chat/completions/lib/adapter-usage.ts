@@ -38,7 +38,7 @@ export function createUsageAccumulator(): UsageAccumulator {
  * assignment (last-write-wins), matching the legacy code's handling of
  * those same fields exactly -- it never `Math.max`'d them either.
  *
- * `translateAnthropicStream` (packages/providers/anthropic/src/stream.ts)
+ * `translateAnthropicStream` (packages/ai/providers/anthropic/src/stream.ts)
  * only ever yields one combined `usage` chunk per stream today, so the
  * choice between `Math.max` and plain assignment is moot for Anthropic
  * specifically -- kept defensive for whatever provider adopts this path next.

@@ -97,9 +97,6 @@ export function providerRoutesToE2B(provider: string): boolean {
   return p !== 'anthropic' && p !== 'google';
 }
 
-/** Providers that expose a NATIVE (provider-executed) code interpreter today. */
-const NATIVE_CODE_EXECUTION_PROVIDERS = new Set(['anthropic', 'google', 'openai']);
-
 /**
  * Code-execution router. Returns the tools to attach when `code_execution` is
  * requested. Providers with a NATIVE (provider-executed) interpreter use it; providers
@@ -130,15 +127,6 @@ export function resolveCodeExecutionTools(provider: string): unknown[] {
   }
   // No native interpreter and no reachable E2B execution loop → fail-closed.
   return [];
-}
-
-/**
- * Whether a model can run code at all today: only providers with a native interpreter
- * (anthropic/google/openai), since the E2B execution path is not reachable in prod.
- * Surfaces use this to gray out the code-execution affordance for no-native providers.
- */
-export function modelSupportsCodeExecution(provider: string): boolean {
-  return NATIVE_CODE_EXECUTION_PROVIDERS.has(provider.toLowerCase());
 }
 
 /**

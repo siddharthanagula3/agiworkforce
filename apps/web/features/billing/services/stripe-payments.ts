@@ -11,6 +11,27 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 // Employee purchase functions removed - hiring is now free
 
 /**
+ * Extract a human-readable message from an API error response. Routes
+ * wrapped in withErrorHandler (apps/web/lib/error-handler.ts) return
+ * `{ error: { code, message }, requestId }` - `error` is an OBJECT, not a
+ * string. Reading `body.error` directly and passing it to `new Error(...)`
+ * silently stringifies it to the literal text "[object Object]" (confirmed
+ * live on the pricing page's "Get Pro" button before this fix). Falls back
+ * to a plain-string `error` field for any route not yet on that wrapper.
+ */
+function extractErrorMessage(body: unknown, fallback: string): string {
+  if (body && typeof body === 'object') {
+    const err = (body as { error?: unknown }).error;
+    if (typeof err === 'string' && err) return err;
+    if (err && typeof err === 'object') {
+      const message = (err as { message?: unknown }).message;
+      if (typeof message === 'string' && message) return message;
+    }
+  }
+  return fallback;
+}
+
+/**
  * Open Stripe Customer Portal for subscription management
  */
 // Updated: Jan 17th 2026 - Added authorization header
@@ -32,7 +53,7 @@ export async function openBillingPortal(customerId: string): Promise<void> {
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to open billing portal');
+    throw new Error(extractErrorMessage(error, 'Failed to open billing portal'));
   }
 
   const { url } = await response.json();
@@ -165,7 +186,9 @@ async function upgradeToPlan(data: {
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || `Failed to create ${data.plan.toUpperCase()} subscription`);
+    throw new Error(
+      extractErrorMessage(error, `Failed to create ${data.plan.toUpperCase()} subscription`),
+    );
   }
 
   const { url } = await response.json();
@@ -202,7 +225,7 @@ export async function upgradePlanMidCycle(data: {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error ?? `Failed to upgrade to ${data.plan}`);
+    throw new Error(extractErrorMessage(err, `Failed to upgrade to ${data.plan}`));
   }
 
   const result = await response.json();

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import { computeDerivedArtifactId } from '@agiworkforce/services';
+import { computeDerivedArtifactId } from '@agiworkforce/artifacts';
 import { ArtifactsPanel } from './ArtifactsPanel';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store';

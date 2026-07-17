@@ -21,16 +21,27 @@
  *      per-request from the authenticated userId and is never cached across users.
  *
  *   2. REMOTE MCP CONNECTORS: an operator-provided `connectorId → MCP endpoint`
- *      map (optional config file, mirroring lib/mcp-tool-executor's operator MCP
- *      config). Gated on an active `user_connectors` row for that connectorId.
+ *      map from the validated CONNECTOR_MCP_SERVERS_JSON environment value.
+ *      Gated on an active `user_connectors` row for that connectorId.
  *      The endpoint + auth live in the operator config server-side; user-supplied
  *      values never flow here. Dormant until an operator configures the map.
+ *
+ *   3. USER'S OWN CUSTOM MCP CONNECTORS: `user_custom_connectors` rows added by
+ *      the user via /api/connectors/custom (Claude.ai-style "add a remote MCP
+ *      server"). Unlike sources 1–2, this table IS a real per-user credential
+ *      store (url + optionally an encrypted bearer token), so — unlike the
+ *      operator-mapped catalog/handle caches — nothing here is ever shared
+ *      across users; the provider-facing serverId is namespaced with the
+ *      row's short id, while credentialed catalog/handle caches are keyed by
+ *      authenticated user id + immutable row uuid. Every tool call re-scopes
+ *      to the authenticated userId before that cache can be used.
  *
  * SECURITY:
  *   - Remote endpoints pass DNS-resolution SSRF validation
  *     (assertResolvedPublicHostname) — private/link-local hosts are rejected and
  *     logged, never crash the request.
- *   - Auth material is server-side only (installation token / operator headers).
+ *   - Auth material is server-side only (installation token / operator headers /
+ *     the user's own encrypted bearer token, decrypted only at connect time).
  *   - Per-user tool count is capped (MAX_CONNECTOR_TOOLS_PER_USER).
  *   - Execution errors surface as tool-result errors, never as 500s.
  *   - The execution path re-validates authorization (defense-in-depth) so a model
@@ -40,8 +51,6 @@
 
 import 'server-only';
 
-import { existsSync, readFileSync } from 'fs';
-import { resolve } from 'path';
 import { z } from 'zod';
 
 import {
@@ -58,9 +67,11 @@ import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-po
 import {
   getInstallationAccessToken,
   getPrDiff,
+  isGitHubAppConfigured,
   postIssueComment,
   postPrReview,
 } from '@/lib/github-app';
+import { decryptConnectorToken } from '@/lib/custom-connector-crypto';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 
 /** Hard ceiling on connector tools injected per user, across all connectors. */
@@ -68,6 +79,18 @@ export const MAX_CONNECTOR_TOOLS_PER_USER = 32;
 
 /** serverId reserved for the first-party GitHub built-in connector. */
 const GITHUB_SERVER_ID = 'github';
+
+/**
+ * serverId prefix reserved for a user's own custom remote MCP connectors
+ * (`user_custom_connectors` rows, see /api/connectors/custom). serverIds in
+ * this namespace are `custom-<short_id>` — a 10-hex-char identifier (never
+ * the row's full uuid `id`; see the "Why short_id" note further down) which
+ * by construction never contains an underscore, so it never collides with
+ * the `mcp__<serverId>__<tool>` qualified-name parser
+ * (parseQualifiedToolName in lib/mcp-tool-executor.ts requires the serverId
+ * segment to contain no underscore).
+ */
+const CUSTOM_SERVER_PREFIX = 'custom-';
 
 const PG_UNDEFINED_TABLE = '42P01';
 
@@ -162,16 +185,21 @@ const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
   },
 ];
 
-async function getUserGithubInstallations(
+export async function getUserGithubInstallations(
   userId: string,
 ): Promise<{ installationId: number; login: string }[]> {
+  // Minting is lazy (getInstallationAccessToken caches into access_token_enc on
+  // first use), so a usable installation is any row PLUS mintable app creds —
+  // requiring a cached token here would deadlock fresh installs out of ever
+  // being offered.
+  if (!isGitHubAppConfigured()) return [];
   const db = getNeonDb();
   let rows: GithubInstallationRow[];
   try {
     rows = await db.query<GithubInstallationRow>(
       `select installation_id, account_login
          from github_installations
-        where user_id = $1 and access_token_enc is not null
+        where user_id = $1
         order by created_at asc`,
       [userId],
     );
@@ -301,7 +329,10 @@ async function executeGithubTool(
 
 const remoteConnectorEntrySchema = z.object({
   connectorId: z.string().min(1).max(100),
-  url: z.string().url(),
+  url: z
+    .string()
+    .url()
+    .refine((value) => new URL(value).protocol === 'https:', 'MCP endpoint must use HTTPS'),
   headers: z.record(z.string(), z.string()).optional().default({}),
   enabled: z.boolean().optional().default(true),
 });
@@ -314,42 +345,25 @@ type RemoteConnectorEntry = z.infer<typeof remoteConnectorEntrySchema>;
 
 let _mapCache: Map<string, RemoteConnectorEntry> | null = null;
 
-function resolveConnectorMapPath(): string | null {
-  const candidates = [
-    process.env['CONNECTOR_MCP_MAP_PATH'],
-    resolve(process.cwd(), 'connector-mcp-servers.json'),
-  ].filter(Boolean) as string[];
-  for (const candidate of candidates) {
-    const abs = resolve(candidate);
-    if (existsSync(abs)) return abs;
-  }
-  return null;
-}
-
 /**
  * Load the operator connector→MCP map. Reserved built-in ids (github) are
  * ignored if an operator tries to redefine them. Cached for the process
- * lifetime; returns an empty map when no config file is present.
+ * lifetime; returns an empty map when the environment value is absent.
  */
 function loadConnectorMcpMap(): Map<string, RemoteConnectorEntry> {
   if (_mapCache !== null) return _mapCache;
 
   const map = new Map<string, RemoteConnectorEntry>();
   const inline = process.env['CONNECTOR_MCP_SERVERS_JSON'];
-  const path = resolveConnectorMapPath();
 
   try {
-    let raw: unknown = null;
-    if (inline) {
-      raw = JSON.parse(inline);
-    } else if (path) {
-      raw = JSON.parse(readFileSync(path, 'utf-8'));
-    }
+    const raw: unknown = inline ? JSON.parse(inline) : null;
     if (raw) {
       const parsed = remoteConnectorFileSchema.parse(raw);
       for (const entry of parsed.connectors) {
         if (!entry.enabled) continue;
         if (entry.connectorId === GITHUB_SERVER_ID) continue; // reserved built-in
+        if (entry.connectorId.startsWith(CUSTOM_SERVER_PREFIX)) continue; // reserved for per-user custom connectors
         map.set(entry.connectorId, entry);
       }
       logger.info({ count: map.size }, '[user-connector] loaded operator connector MCP map');
@@ -365,6 +379,17 @@ function loadConnectorMcpMap(): Map<string, RemoteConnectorEntry> {
 /** TEST-ONLY: reset the cached connector map so env changes take effect. */
 export function __resetConnectorMcpMapCacheForTests(): void {
   _mapCache = null;
+}
+
+/**
+ * Connector ids the operator has mapped to remote MCP endpoints (enabled
+ * entries only). /api/connectors uses this to decide which non-local
+ * connectors can honestly be enabled: a user_connectors row only has runtime
+ * effect for ids in this map (the github built-in is gated on installations
+ * instead).
+ */
+export function getOperatorMappedConnectorIds(): Set<string> {
+  return new Set(loadConnectorMcpMap().keys());
 }
 
 function entryToMcpConfig(entry: RemoteConnectorEntry): McpServerConfig {
@@ -514,6 +539,294 @@ async function executeRemoteConnectorTool(
   }
 }
 
+// ─── User's own custom remote MCP connectors (per-user credentialed) ───────
+//
+// Unlike the operator-mapped remote connectors above (operator-credentialed,
+// safe to share a catalog/handle across users), rows here belong to exactly
+// one user (RLS-enforced in Postgres) and carry that user's OWN, possibly
+// secret, bearer token. The catalog/handle caches below are therefore keyed
+// by authenticated `user_id` + immutable row uuid (never by the user-scoped
+// `short_id` alone), and every lookup re-scopes by `user_id` at read time so a
+// guessed identifier can never reach another user's connector.
+//
+// Why `short_id` and not the row's `id` (uuid)? The serverId namespace below
+// is embedded verbatim in the provider-facing function name
+// (`mcp__custom-<X>__<toolName>` — see catalogToConnectorToolDefs), and
+// OpenAI-family providers cap function names at 64 chars. A 36-char uuid
+// would alone burn 50 of those before the tool name even starts. `short_id`
+// is a 10-hex-char identifier allocated at insert time
+// (app/api/connectors/custom/route.ts's allocateShortId), unique per
+// (user_id, short_id) at the DB level.
+
+interface CustomConnectorRow {
+  id: string;
+  short_id: string;
+  name: string;
+  url: string;
+  transport: string;
+  auth_header_enc: string | null;
+}
+
+function customServerId(shortId: string): string {
+  return `${CUSTOM_SERVER_PREFIX}${shortId}`;
+}
+
+function customShortIdFromServerId(serverId: string): string | null {
+  return serverId.startsWith(CUSTOM_SERVER_PREFIX)
+    ? serverId.slice(CUSTOM_SERVER_PREFIX.length)
+    : null;
+}
+
+async function getUserCustomConnectorRows(userId: string): Promise<CustomConnectorRow[]> {
+  const db = getNeonDb();
+  try {
+    return await db.query<CustomConnectorRow>(
+      `select id, short_id, name, url, transport, auth_header_enc
+         from user_custom_connectors
+        where user_id = $1`,
+      [userId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) return [];
+    throw error;
+  }
+}
+
+/** Auth-material-free view of a user's custom connectors, for API responses
+ * (/api/connectors, /api/connectors/custom) — never includes auth_header_enc. */
+export interface UserCustomConnectorSummary {
+  /** Row uuid — the list/DELETE key. */
+  id: string;
+  /**
+   * 10-hex chat-facing id: the tool loop's serverId is `custom-<shortId>`
+   * (see the "why short_id" note above — a uuid would overflow OpenAI's
+   * 64-char function-name cap). API responses expose this so clients can
+   * correlate a directory row with the tool calls it produces in chat.
+   */
+  shortId: string;
+  name: string;
+  url: string;
+  transport: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getUserCustomConnectorSummaries(
+  userId: string,
+): Promise<UserCustomConnectorSummary[]> {
+  const db = getNeonDb();
+  try {
+    const rows = await db.query<{
+      id: string;
+      short_id: string;
+      name: string;
+      url: string;
+      transport: string;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `select id, short_id, name, url, transport, created_at, updated_at
+         from user_custom_connectors
+        where user_id = $1
+        order by created_at desc`,
+      [userId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      shortId: r.short_id,
+      name: r.name,
+      url: r.url,
+      transport: r.transport,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+  } catch (error) {
+    if (isUndefinedTable(error)) return [];
+    throw error;
+  }
+}
+
+function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
+  const headers: Record<string, string> = {};
+  if (row.auth_header_enc) {
+    try {
+      headers['Authorization'] = `Bearer ${decryptConnectorToken(row.auth_header_enc)}`;
+    } catch (err) {
+      logger.warn(
+        { rowId: row.id, error: err instanceof Error ? err.message : err },
+        '[user-connector] failed to decrypt custom connector token — connecting without auth',
+      );
+    }
+  }
+  return {
+    url: row.url,
+    transport: row.transport === 'sse' ? 'sse' : 'streamable-http',
+    headers,
+  };
+}
+
+// Per-row catalog cache. Keyed by row id (already 1:1 with a single user's
+// credentials), TTL matches the operator remote-connector cache. The authenticated
+// user id remains part of the key as defense-in-depth against row-id/key mistakes.
+interface CustomCatalogState {
+  catalog: McpToolCatalog | null;
+  expiresAt: number;
+}
+const _customCatalogCache = new Map<string, CustomCatalogState>();
+const CUSTOM_CATALOG_TTL_MS = 60_000;
+
+// Execution handle cache. Per-row — NEVER shared across users.
+const _customHandles = new Map<string, McpServerHandle>();
+
+function customConnectorCacheKey(userId: string, rowId: string): string {
+  return `${encodeURIComponent(userId)}:${encodeURIComponent(rowId)}`;
+}
+
+/**
+ * Evict the cached catalog and close the open MCP handle for a deleted custom
+ * connector, so the connection is released immediately instead of leaking
+ * until process restart. Safe no-op for unknown ids. Called by the custom
+ * connectors DELETE route; the execute path re-validates ownership in the DB
+ * on every call, so this is resource hygiene, not a security gate.
+ */
+export async function evictCustomConnectorCaches(userId: string, rowId: string): Promise<void> {
+  const cacheKey = customConnectorCacheKey(userId, rowId);
+  _customCatalogCache.delete(cacheKey);
+  const handle = _customHandles.get(cacheKey);
+  if (handle) {
+    _customHandles.delete(cacheKey);
+    await handle.close().catch(() => undefined);
+  }
+}
+
+async function buildCustomConnectorCatalog(
+  userId: string,
+  row: CustomConnectorRow,
+): Promise<McpToolCatalog | null> {
+  const now = Date.now();
+  const cacheKey = customConnectorCacheKey(userId, row.id);
+  const cached = _customCatalogCache.get(cacheKey);
+  if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
+
+  // SSRF: reject private/link-local endpoints (DNS-resolution check). A
+  // connector saved when the endpoint was public could still be repointed
+  // via DNS since save time, so re-check on every catalog build.
+  try {
+    await assertResolvedPublicHostname(row.url);
+  } catch (err) {
+    if (err instanceof EgressPolicyError) {
+      logger.warn(
+        { rowId: row.id },
+        '[user-connector] custom connector endpoint blocked by SSRF policy',
+      );
+      _customCatalogCache.set(cacheKey, {
+        catalog: null,
+        expiresAt: now + CUSTOM_CATALOG_TTL_MS,
+      });
+      return null;
+    }
+    throw err;
+  }
+
+  const serverId = customServerId(row.short_id);
+  try {
+    const { catalog, handles } = await buildMcpToolCatalog({
+      [serverId]: customRowToMcpConfig(row),
+    });
+    for (const h of handles) {
+      const old = _customHandles.get(cacheKey);
+      _customHandles.set(cacheKey, h);
+      if (old && old !== h) await old.close().catch(() => undefined);
+    }
+    _customCatalogCache.set(cacheKey, { catalog, expiresAt: now + CUSTOM_CATALOG_TTL_MS });
+    return catalog;
+  } catch (err) {
+    logger.warn(
+      { rowId: row.id, error: err instanceof Error ? err.message : err },
+      '[user-connector] failed to build custom connector catalog',
+    );
+    _customCatalogCache.set(cacheKey, {
+      catalog: null,
+      expiresAt: now + CUSTOM_CATALOG_TTL_MS,
+    });
+    return null;
+  }
+}
+
+async function executeCustomConnectorTool(
+  userId: string,
+  shortId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<ConnectorExecResult> {
+  // Re-validate ownership at execution time (defense-in-depth, mirrors the
+  // remote-connector re-check): only ever act on a row owned by this user.
+  const db = getNeonDb();
+  let rows: CustomConnectorRow[];
+  try {
+    rows = await db.query<CustomConnectorRow>(
+      `select id, short_id, name, url, transport, auth_header_enc
+         from user_custom_connectors
+        where short_id = $1 and user_id = $2`,
+      [shortId, userId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) rows = [];
+    else throw error;
+  }
+  const row = rows[0];
+  if (!row) {
+    return {
+      handled: true,
+      content: 'This custom connector is no longer connected for this account.',
+      isError: true,
+    };
+  }
+
+  try {
+    const cacheKey = customConnectorCacheKey(userId, row.id);
+    let handle = _customHandles.get(cacheKey);
+    if (!handle) {
+      await assertResolvedPublicHostname(row.url);
+      handle = await connectMcpServer({
+        serverName: customServerId(row.short_id),
+        config: customRowToMcpConfig(row),
+      });
+      _customHandles.set(cacheKey, handle);
+    }
+    const result = await handle.callTool(toolName, args);
+    const text = result.content
+      .map((block) => {
+        if (block.type === 'text') return block.text;
+        if (block.type === 'resource')
+          return block.resource.text ?? `[resource: ${block.resource.uri}]`;
+        if (block.type === 'image') return '[image result]';
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+    return { handled: true, content: text || '(no output)', isError: result.isError === true };
+  } catch (err) {
+    if (err instanceof EgressPolicyError) {
+      logger.warn(
+        { rowId: row.id },
+        '[user-connector] custom connector endpoint blocked by SSRF policy at execution',
+      );
+      return {
+        handled: true,
+        content: 'Connector endpoint blocked by security policy.',
+        isError: true,
+      };
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn(
+      { rowId: row.id, toolName, error: msg },
+      '[user-connector] custom connector tool execution failed',
+    );
+    return { handled: true, content: `Connector tool error: ${msg}`, isError: true };
+  }
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -543,6 +856,15 @@ export async function loadUserConnectorToolDefs(userId: string): Promise<WebMcpT
       }
     }
 
+    // 3. The user's own custom remote MCP connectors (per-user credentialed,
+    // persisted via /api/connectors/custom). Each row independently degrades
+    // to no tools on failure (buildCustomConnectorCatalog never throws).
+    const customRows = await getUserCustomConnectorRows(userId);
+    for (const row of customRows) {
+      const catalog = await buildCustomConnectorCatalog(userId, row);
+      if (catalog) defs.push(...catalogToConnectorToolDefs(catalog));
+    }
+
     if (defs.length > MAX_CONNECTOR_TOOLS_PER_USER) {
       logger.info(
         { userId, total: defs.length, cap: MAX_CONNECTOR_TOOLS_PER_USER },
@@ -563,9 +885,10 @@ export async function loadUserConnectorToolDefs(userId: string): Promise<WebMcpT
 /**
  * Build a per-user connector tool executor bound to `userId`. The tool loop
  * calls it before the operator MCP dispatch: it returns `handled: true` for
- * connector-owned tools (github built-in / operator-mapped remote connectors)
- * and `handled: false` for anything else so the caller falls through to the
- * operator MCP executor. Authorization is re-validated per call.
+ * connector-owned tools (github built-in / operator-mapped remote connectors /
+ * the user's own custom remote MCP connectors) and `handled: false` for
+ * anything else so the caller falls through to the operator MCP executor.
+ * Authorization is re-validated per call.
  */
 export function makeUserConnectorExecutor(
   userId: string,
@@ -579,6 +902,11 @@ export function makeUserConnectorExecutor(
 
     if (serverId === GITHUB_SERVER_ID) {
       return executeGithubTool(userId, toolName, args);
+    }
+
+    const customShortId = customShortIdFromServerId(serverId);
+    if (customShortId !== null) {
+      return executeCustomConnectorTool(userId, customShortId, toolName, args);
     }
 
     const map = loadConnectorMcpMap();

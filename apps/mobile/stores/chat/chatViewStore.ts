@@ -16,6 +16,8 @@ export interface ChatFeatures {
   webSearch: boolean;
   imageGen: boolean;
   health: boolean;
+  /** Server-side code execution (E2B sandbox) for this turn — cloud only. */
+  codeExecution: boolean;
 }
 
 export interface ConversationSearchResult {
@@ -172,7 +174,7 @@ export const useChatViewStore = create<ViewState>()(
       chatMode: 'chat',
       chatStyle: 'normal',
       toolAccess: 'auto',
-      features: { webSearch: true, imageGen: true, health: false },
+      features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
 
       searchConversations: (query: string) => {
         const trimmed = query.trim();

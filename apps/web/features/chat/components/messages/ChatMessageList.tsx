@@ -25,9 +25,13 @@ import { InlinePaywallCard } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
-import { ChevronDown, ArrowRight } from 'lucide-react';
+import { ChevronDown, ArrowRight, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { isMessageContinuable } from '../../lib/continue-generation';
+import {
+  isMessageContinuable,
+  hasStreamError,
+  getStreamErrorMessage,
+} from '../../lib/continue-generation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -410,6 +414,26 @@ const ChatMessageListComponent = ({
    */
   const showContinue = Boolean(onContinue && !isLoading && isMessageContinuable(lastMessage));
 
+  /**
+   * Mid-stream provider failure (additive `x_stream_error` — see
+   * hasStreamError's doc comment): the turn otherwise looks like a clean
+   * completion, so this is the ONLY signal that tells the user their answer
+   * may be cut off for a reason other than the model finishing normally.
+   * Offered only on the last message, only once streaming has actually
+   * stopped (unlike isMessageContinuable, hasStreamError does not check
+   * isStreaming itself — it stays a pure metadata read — so this checks it
+   * explicitly, same safety bar), and mutually exclusive with Continue (a
+   * turn that failed mid-stream never lands on a continuable finish_reason
+   * in practice, but guard explicitly rather than relying on that).
+   */
+  const showStreamErrorNotice = Boolean(
+    onRegenerate &&
+    !isLoading &&
+    !lastMessage?.isStreaming &&
+    !showContinue &&
+    hasStreamError(lastMessage),
+  );
+
   /** Show follow-up suggestions when last message is a completed assistant reply */
   const showFollowUps =
     onSendMessage &&
@@ -550,6 +574,33 @@ const ChatMessageListComponent = ({
             </div>
           )}
 
+          {/* Mid-stream error notice · same placement as Continue Generation,
+              below the last assistant message. The turn's partial content
+              (if any) is left exactly as it streamed — this only ADDS a
+              visible signal that it may be incomplete, it never replaces
+              the message. */}
+          {showStreamErrorNotice && lastMessage && (
+            <div className="px-4 pt-1 md:px-12 lg:px-20">
+              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-1.5 text-xs text-muted-foreground">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-hidden="true" />
+                <span>
+                  {getStreamErrorMessage(lastMessage)
+                    ? `Response may be incomplete: ${getStreamErrorMessage(lastMessage)}`
+                    : 'This response may be incomplete — the connection to the model was interrupted.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRegenerate?.(lastMessage.id)}
+                  className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+                  aria-label="Regenerate this response"
+                >
+                  <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                  Retry
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Typing indicator while waiting for the first streaming chunk */}
           <AnimatePresence>
             {showTypingIndicator && (
@@ -633,6 +684,9 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
         // Continue affordance: a finishReason patch can arrive on its own store
         // update (after the isStreaming flip), so it must invalidate the memo.
         prevMeta?.finishReason === nextMeta?.finishReason &&
+        // Stream-error notice: same "arrives via its own patch after isStreaming
+        // flips" timing as finishReason above.
+        prevMeta?.streamError === nextMeta?.streamError &&
         prevMeta?.tools?.length === nextMeta?.tools?.length &&
         prevMeta?.tools?.at(-1)?.status === nextMeta?.tools?.at(-1)?.status &&
         prevMeta?.isSearching === nextMeta?.isSearching &&

@@ -74,6 +74,12 @@ beforeEach(() => {
 });
 
 describe('ProjectSettingsDialog — delete fires a real server request', () => {
+  it('does not expose the deferred emoji picker as an enabled no-op button', () => {
+    renderDialog();
+
+    expect(screen.queryByRole('button', { name: /choose emoji/i })).toBeNull();
+  });
+
   it('sends DELETE /api/projects/[id], then removes locally and toasts success', async () => {
     const fetchMock = vi
       .fn()

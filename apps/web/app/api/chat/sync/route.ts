@@ -5,11 +5,12 @@
  *   GET  /api/chat/sync?since=<server_version cursor>
  *        → conversations + messages + artifacts with server_version > cursor (incl.
  *          tombstones), scoped to the authenticated user, plus the next cursor.
- *   POST /api/chat/sync  { conversations: [...], messages: [...], artifacts: [...] }
- *        → idempotent UPSERT by id (= cloud_id). user_id is set SERVER-SIDE from the
+ *   POST /api/chat/sync  { protocolVersion: 2, conversations, messages, artifacts }
+ *        → server-version compare-and-swap for mutable rows and identity-based
+ *          idempotency for append-only messages. user_id is set SERVER-SIDE from the
  *          verified session (never from the body); RLS WITH CHECK is the backstop.
- *          Conversation/artifact metadata = last-writer-wins (by updated_at); messages
- *          are append-only (only a deleted_at tombstone may change an existing message).
+ *          The server owns update/deletion timestamps; messages are append-only (only a
+ *          deleted_at tombstone may change an existing message).
  *          Artifacts (0039) are the third synced entity — managed-only; the cloud row's
  *          id is the deterministic derived_id for derived artifacts. See
  *          docs/plans/artifact-cloud-sync-design-2026-06-21.md.
@@ -19,7 +20,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ChatSyncPushRequestSchema,
+  ServerVersionSchema,
+  type ArtifactWireDelta,
+  type ConversationWireDelta,
+  type MessageWireDelta,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -30,16 +37,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 const MAX_CONVERSATIONS_PULL = 500;
 const MAX_MESSAGES_PULL = 1000;
 const MAX_ARTIFACTS_PULL = 500;
-const MAX_CONVERSATIONS_PUSH = 500;
-const MAX_MESSAGES_PUSH = 2000;
-const MAX_ARTIFACTS_PUSH = 500;
 
-// Wire shapes come from the shared cloud contract (single source of truth,
-// enforced by route.contract.test.ts and consumed at runtime by mobile's
-// cloudSyncEngine). Do not redeclare row types here — restructure Wave 4.
-type ConversationDelta = import('@agiworkforce/services').ConversationWireDelta;
-type MessageDelta = import('@agiworkforce/services').MessageWireDelta;
-type ArtifactDelta = import('@agiworkforce/services').ArtifactWireDelta;
+type ConversationDelta = ConversationWireDelta;
+type MessageDelta = MessageWireDelta;
+type ArtifactDelta = ArtifactWireDelta;
 
 // ---------------------------------------------------------------------------
 // Pull
@@ -55,8 +56,11 @@ async function handlePull(request: NextRequest) {
 
   const url = new URL(request.url);
   const sinceRaw = url.searchParams.get('since') ?? '0';
-  // server_version is a bigint; parse defensively and clamp to a non-negative integer.
-  const since = /^\d{1,19}$/.test(sinceRaw) ? sinceRaw : '0';
+  const parsedSince = ServerVersionSchema.safeParse(sinceRaw);
+  if (!parsedSince.success) {
+    throw createError.validation('Invalid chat sync cursor', parsedSince.error);
+  }
+  const since = parsedSince.data;
 
   try {
     const conversations = await db.query<ConversationDelta>(
@@ -125,53 +129,12 @@ async function handlePull(request: NextRequest) {
 // Push
 // ---------------------------------------------------------------------------
 
-const PushConversationSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().max(500),
-  model: z.string().max(200).nullable().optional(),
-  projectId: z.string().max(200).nullable().optional(),
-  pinned: z.boolean().optional(),
-  createdAt: z.string().datetime().optional(),
-  updatedAt: z.string().datetime(),
-  deletedAt: z.string().datetime().nullable().optional(),
-});
-
-const PushMessageSchema = z.object({
-  id: z.string().uuid(),
-  conversationId: z.string().uuid(),
-  role: z.enum(['user', 'assistant', 'system']),
-  content: z.string().max(1_000_000),
-  model: z.string().max(200).nullable().optional(),
-  provider: z.string().max(200).nullable().optional(),
-  inputTokens: z.number().int().nonnegative().optional(),
-  outputTokens: z.number().int().nonnegative().optional(),
-  costCents: z.number().nonnegative().optional(),
-  metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  createdAt: z.string().datetime().optional(),
-  deletedAt: z.string().datetime().nullable().optional(),
-});
-
-const PushArtifactSchema = z.object({
-  id: z.string().uuid(),
-  conversationId: z.string().uuid(),
-  messageId: z.string().uuid().nullable().optional(),
-  title: z.string().max(500).nullable().optional(),
-  artifactType: z.string().max(50),
-  language: z.string().max(50).nullable().optional(),
-  content: z.string().max(2_000_000),
-  currentVersion: z.number().int().positive().optional(),
-  pinned: z.boolean().optional(),
-  tags: z.array(z.string().max(100)).max(50).optional(),
-  createdAt: z.string().datetime().optional(),
-  updatedAt: z.string().datetime(),
-  deletedAt: z.string().datetime().nullable().optional(),
-});
-
-const PushBodySchema = z.object({
-  conversations: z.array(PushConversationSchema).max(MAX_CONVERSATIONS_PUSH).optional(),
-  messages: z.array(PushMessageSchema).max(MAX_MESSAGES_PUSH).optional(),
-  artifacts: z.array(PushArtifactSchema).max(MAX_ARTIFACTS_PUSH).optional(),
-});
+type BatchRow<T> = {
+  kind: 'applied' | 'conflict';
+  id: string;
+  server_version: string | null;
+  current: T | null;
+};
 
 async function handlePush(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
@@ -190,7 +153,18 @@ async function handlePush(request: NextRequest) {
   } catch {
     throw createError.validation('Invalid JSON body');
   }
-  const parsed = PushBodySchema.safeParse(rawBody);
+  if (isLegacyMutablePush(rawBody)) {
+    return syncProtocolUpgradeRequired();
+  }
+  if (isLegacyNoopPush(rawBody)) {
+    return NextResponse.json({
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [], artifacts: [] },
+      conflicts: { conversations: [], messages: [], artifacts: [] },
+      cursor: '0',
+    });
+  }
+  const parsed = ChatSyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid sync payload', parsed.error);
   }
@@ -201,148 +175,323 @@ async function handlePush(request: NextRequest) {
     messages: [] as Array<{ id: string; server_version: string }>,
     artifacts: [] as Array<{ id: string; server_version: string }>,
   };
+  const conflicts = {
+    conversations: [] as Array<{ id: string; current: ConversationDelta | null }>,
+    messages: [] as Array<{ id: string; current: MessageDelta | null }>,
+    artifacts: [] as Array<{ id: string; current: ArtifactDelta | null }>,
+  };
 
   try {
-    // Conversations: UPSERT, last-writer-wins on metadata. user_id is forced to the
-    // session user, so a client can never write another user's row (RLS WITH CHECK
-    // is the DB-level backstop).
-    for (const c of conversations) {
-      const rows = await db.query<{ id: string; server_version: string }>(
+    if (conversations.length > 0) {
+      const rows = await db.query<BatchRow<ConversationDelta>>(
         `
-          insert into web_conversations
-            (id, user_id, title, model, project_id, pinned, created_at, updated_at, deleted_at)
-          values ($1, $2, $3, $4, $5, $6, coalesce($7::timestamptz, now()), $8::timestamptz, $9::timestamptz)
-          on conflict (id) do update set
-            title = excluded.title,
-            -- A conversation always has a model; a client that doesn't track it
-            -- (desktop has no conversations.model column) pushes null. COALESCE so a
-            -- null push can never clobber a model another client/device already set.
-            -- (project_id/pinned keep last-writer-wins: null/false there are legit
-            -- "unassign from project" / "unpin" intents that must propagate.)
-            model = coalesce(excluded.model, web_conversations.model),
-            project_id = excluded.project_id,
-            pinned = excluded.pinned,
-            updated_at = excluded.updated_at,
-            deleted_at = excluded.deleted_at
-          where web_conversations.user_id = $2
-            and excluded.updated_at >= web_conversations.updated_at
-          returning id, server_version
-        `,
-        [
-          c.id,
-          userId,
-          c.title,
-          c.model ?? null,
-          c.projectId ?? null,
-          c.pinned ?? false,
-          c.createdAt ?? null,
-          c.updatedAt,
-          c.deletedAt ?? null,
-        ],
-      );
-      if (rows[0]) applied.conversations.push(rows[0]);
-    }
-
-    // Messages: append-only. Insert new messages whose parent conversation the
-    // caller owns; on conflict, only a deleted_at tombstone may change (content
-    // and the rest are immutable).
-    for (const m of messages) {
-      const rows = await db.query<{ id: string; server_version: string }>(
-        `
-          insert into web_messages
-            (id, conversation_id, role, content, model, provider,
-             input_tokens, output_tokens, cost_cents, metadata, created_at, updated_at, deleted_at)
-          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb,
-                 coalesce($11::timestamptz, now()), now(), $12::timestamptz
-          where exists (
-            select 1 from web_conversations
-            where id = $2 and user_id = $13 and deleted_at is null
+          with input as materialized (
+            select (item ->> 'id')::uuid as id,
+                   item ->> 'title' as title,
+                   item ->> 'model' as model,
+                   item ? 'model' as has_model,
+                   item ->> 'projectId' as project_id,
+                   item ? 'projectId' as has_project_id,
+                   coalesce((item ->> 'pinned')::boolean, false) as pinned,
+                   item ? 'pinned' as has_pinned,
+                   (item ->> 'baseVersion')::bigint as base_version,
+                   coalesce((item ->> 'isDeleted')::boolean, false) as should_delete
+              from jsonb_array_elements($2::jsonb) as source(item)
+          ), updated as (
+            update web_conversations as existing
+               set title = incoming.title,
+                   model = case when incoming.has_model then incoming.model else existing.model end,
+                   project_id = case when incoming.has_project_id then incoming.project_id else existing.project_id end,
+                   pinned = case when incoming.has_pinned then incoming.pinned else existing.pinned end,
+                   updated_at = now(),
+                   deleted_at = case when incoming.should_delete then now() else null end
+              from input as incoming
+             where existing.id = incoming.id
+               and existing.user_id = $1
+               and existing.server_version = incoming.base_version
+               and (existing.deleted_at is null or incoming.should_delete)
+            returning existing.id, existing.server_version
+          ), inserted as (
+            insert into web_conversations
+              (id, user_id, title, model, project_id, pinned, created_at, updated_at, deleted_at)
+            select incoming.id, $1, incoming.title, incoming.model, incoming.project_id,
+                   incoming.pinned, now(), now(),
+                   case when incoming.should_delete then now() else null end
+              from input as incoming
+             where incoming.base_version = 0
+            on conflict (id) do nothing
+            returning id, server_version
+          ), applied_rows as materialized (
+            select id, server_version from updated
+            union all select id, server_version from inserted
+          ), conflict_rows as (
+            select incoming.id,
+                   case when current.id is null then null else jsonb_build_object(
+                     'id', current.id::text, 'title', current.title, 'model', current.model,
+                     'project_id', current.project_id, 'pinned', current.pinned,
+                     'created_at', current.created_at, 'updated_at', current.updated_at,
+                     'deleted_at', current.deleted_at,
+                     'server_version', current.server_version::text
+                   ) end as current
+              from input as incoming
+              left join web_conversations as current
+                on current.id = incoming.id and current.user_id = $1
+             where not exists (select 1 from applied_rows where applied_rows.id = incoming.id)
           )
-          on conflict (id) do update set
-            deleted_at = excluded.deleted_at,
-            updated_at = now()
-          where excluded.deleted_at is not null
-          returning id, server_version
+          select 'applied'::text as kind, id::text, server_version::text, null::jsonb as current
+            from applied_rows
+          union all
+          select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [
-          m.id,
-          m.conversationId,
-          m.role,
-          m.content,
-          m.model ?? null,
-          m.provider ?? null,
-          m.inputTokens ?? 0,
-          m.outputTokens ?? 0,
-          m.costCents ?? 0,
-          JSON.stringify(m.metadata ?? {}),
-          m.createdAt ?? null,
-          m.deletedAt ?? null,
-          userId,
-        ],
+        [userId, JSON.stringify(conversations)],
       );
-      if (rows[0]) applied.messages.push(rows[0]);
+      collectBatchRows(rows, applied.conversations, conflicts.conversations);
     }
 
-    // Artifacts: UPSERT, last-writer-wins by updated_at. user_id is forced to the
-    // session user; the parent conversation must be owned by the caller. RLS WITH
-    // CHECK is the DB-level backstop. A null updated_at can never clobber a newer row.
-    for (const a of artifacts) {
-      const rows = await db.query<{ id: string; server_version: string }>(
+    if (messages.length > 0) {
+      const rows = await db.query<BatchRow<MessageDelta>>(
         `
-          insert into web_artifacts
-            (id, user_id, conversation_id, message_id, title, artifact_type, language,
-             content, current_version, pinned, tags, created_at, updated_at, deleted_at)
-          select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                 coalesce($12::timestamptz, now()), $13::timestamptz, $14::timestamptz
-          where exists (
-            select 1 from web_conversations where id = $3 and user_id = $2
+          with input as materialized (
+            select (item ->> 'id')::uuid as id,
+                   (item ->> 'conversationId')::uuid as conversation_id,
+                   item ->> 'role' as role, item ->> 'content' as content,
+                   item ->> 'model' as model, item ->> 'provider' as provider,
+                   coalesce((item ->> 'inputTokens')::integer, 0) as input_tokens,
+                   coalesce((item ->> 'outputTokens')::integer, 0) as output_tokens,
+                   coalesce((item ->> 'costCents')::numeric, 0) as cost_cents,
+                   coalesce(item -> 'metadata', '{}'::jsonb) as metadata,
+                   coalesce((item ->> 'isDeleted')::boolean, false) as should_delete
+              from jsonb_array_elements($2::jsonb) as source(item)
+          ), inserted as (
+            insert into web_messages
+              (id, conversation_id, role, content, model, provider, input_tokens,
+               output_tokens, cost_cents, metadata, created_at, updated_at, deleted_at)
+            select incoming.id, incoming.conversation_id, incoming.role, incoming.content,
+                   incoming.model, incoming.provider, incoming.input_tokens,
+                   incoming.output_tokens, incoming.cost_cents, incoming.metadata,
+                   now(), now(), case when incoming.should_delete then now() else null end
+              from input as incoming
+             where exists (
+               select 1 from web_conversations parent
+                where parent.id = incoming.conversation_id and parent.user_id = $1
+                  and parent.deleted_at is null
+             )
+            on conflict (id) do nothing
+            returning id, server_version
+          ), tombstoned as (
+            update web_messages as existing
+               set deleted_at = now(), updated_at = now()
+              from input as incoming, web_conversations as parent
+             where incoming.should_delete
+               and existing.id = incoming.id
+               and existing.conversation_id = incoming.conversation_id
+               and existing.deleted_at is null
+               and parent.id = existing.conversation_id and parent.user_id = $1
+            returning existing.id, existing.server_version
+          ), idempotent as (
+            select existing.id, existing.server_version
+              from input as incoming
+              join web_messages as existing on existing.id = incoming.id
+              join web_conversations as parent
+                on parent.id = existing.conversation_id and parent.user_id = $1
+             where existing.conversation_id = incoming.conversation_id
+               and (
+                 (incoming.should_delete and existing.deleted_at is not null)
+                 or (
+                   not incoming.should_delete and existing.deleted_at is null
+                   and existing.role = incoming.role and existing.content = incoming.content
+                   and existing.model is not distinct from incoming.model
+                   and existing.provider is not distinct from incoming.provider
+                   and existing.input_tokens = incoming.input_tokens
+                   and existing.output_tokens = incoming.output_tokens
+                   and existing.cost_cents = incoming.cost_cents
+                   and coalesce(existing.metadata, '{}'::jsonb) = incoming.metadata
+                 )
+               )
+          ), applied_rows as materialized (
+            select id, server_version from inserted
+            union all select id, server_version from tombstoned
+            union all select id, server_version from idempotent
+          ), conflict_rows as (
+            select incoming.id,
+                   case when current.id is null or owner.id is null then null else jsonb_build_object(
+                     'id', current.id::text, 'conversation_id', current.conversation_id::text,
+                     'role', current.role, 'content', current.content, 'model', current.model,
+                     'provider', current.provider, 'input_tokens', current.input_tokens,
+                     'output_tokens', current.output_tokens, 'cost_cents', current.cost_cents,
+                     'metadata', current.metadata, 'created_at', current.created_at,
+                     'updated_at', current.updated_at, 'deleted_at', current.deleted_at,
+                     'server_version', current.server_version::text
+                   ) end as current
+              from input as incoming
+              left join web_messages as current on current.id = incoming.id
+             left join web_conversations as owner
+                on owner.id = current.conversation_id and owner.user_id = $1
+             where not exists (select 1 from applied_rows where applied_rows.id = incoming.id)
           )
-          on conflict (id) do update set
-            title = excluded.title,
-            artifact_type = excluded.artifact_type,
-            language = excluded.language,
-            content = excluded.content,
-            current_version = excluded.current_version,
-            pinned = excluded.pinned,
-            tags = excluded.tags,
-            message_id = coalesce(excluded.message_id, web_artifacts.message_id),
-            updated_at = excluded.updated_at,
-            deleted_at = excluded.deleted_at
-          where web_artifacts.user_id = $2
-            and excluded.updated_at >= web_artifacts.updated_at
-          returning id, server_version
+          select 'applied'::text as kind, id::text, server_version::text, null::jsonb as current
+            from applied_rows
+          union all
+          select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [
-          a.id,
-          userId,
-          a.conversationId,
-          a.messageId ?? null,
-          a.title ?? null,
-          a.artifactType,
-          a.language ?? null,
-          a.content,
-          a.currentVersion ?? 1,
-          a.pinned ?? false,
-          a.tags ?? [],
-          a.createdAt ?? null,
-          a.updatedAt,
-          a.deletedAt ?? null,
-        ],
+        [userId, JSON.stringify(messages)],
       );
-      if (rows[0]) applied.artifacts.push(rows[0]);
+      collectBatchRows(rows, applied.messages, conflicts.messages);
     }
 
+    if (artifacts.length > 0) {
+      const rows = await db.query<BatchRow<ArtifactDelta>>(
+        `
+          with input as materialized (
+            select (item ->> 'id')::uuid as id,
+                   (item ->> 'conversationId')::uuid as conversation_id,
+                   nullif(item ->> 'messageId', '')::uuid as message_id,
+                   item ->> 'title' as title, item ->> 'artifactType' as artifact_type,
+                   item ->> 'language' as language, item ->> 'content' as content,
+                   coalesce((item ->> 'currentVersion')::integer, 1) as current_version,
+                   coalesce((item ->> 'pinned')::boolean, false) as pinned,
+                   coalesce(array(select jsonb_array_elements_text(item -> 'tags')), '{}') as tags,
+                   (item ->> 'baseVersion')::bigint as base_version,
+                   coalesce((item ->> 'isDeleted')::boolean, false) as should_delete
+              from jsonb_array_elements($2::jsonb) as source(item)
+          ), valid_input as materialized (
+            select incoming.*
+              from input as incoming
+             where incoming.message_id is null or exists (
+               select 1
+                 from web_messages as source_message
+                 join web_conversations as source_parent
+                   on source_parent.id = source_message.conversation_id
+                where source_message.id = incoming.message_id
+                  and source_message.conversation_id = incoming.conversation_id
+                  and source_parent.user_id = $1
+                  and source_parent.deleted_at is null
+                  and source_message.deleted_at is null
+             )
+          ), updated as (
+            update web_artifacts as existing
+               set title = incoming.title, artifact_type = incoming.artifact_type,
+                   language = incoming.language, content = incoming.content,
+                   current_version = incoming.current_version, pinned = incoming.pinned,
+                   tags = incoming.tags,
+                   message_id = coalesce(incoming.message_id, existing.message_id),
+                   updated_at = now(),
+                   deleted_at = case when incoming.should_delete then now() else null end
+              from valid_input as incoming, web_conversations as parent
+             where existing.id = incoming.id and existing.user_id = $1
+               and existing.server_version = incoming.base_version
+               and existing.conversation_id = incoming.conversation_id
+               and (existing.deleted_at is null or incoming.should_delete)
+               and parent.id = incoming.conversation_id and parent.user_id = $1
+            returning existing.id, existing.server_version
+          ), inserted as (
+            insert into web_artifacts
+              (id, user_id, conversation_id, message_id, title, artifact_type, language,
+               content, current_version, pinned, tags, created_at, updated_at, deleted_at)
+            select incoming.id, $1, incoming.conversation_id, incoming.message_id,
+                   incoming.title, incoming.artifact_type, incoming.language, incoming.content,
+                   incoming.current_version, incoming.pinned, incoming.tags, now(), now(),
+                   case when incoming.should_delete then now() else null end
+              from valid_input as incoming
+             where incoming.base_version = 0 and exists (
+               select 1 from web_conversations parent
+                where parent.id = incoming.conversation_id and parent.user_id = $1
+                  and parent.deleted_at is null
+             )
+            on conflict (id) do nothing
+            returning id, server_version
+          ), applied_rows as materialized (
+            select id, server_version from updated union all select id, server_version from inserted
+          ), conflict_rows as (
+            select incoming.id,
+                   case when current.id is null then null else jsonb_build_object(
+                     'id', current.id::text, 'conversation_id', current.conversation_id::text,
+                     'message_id', current.message_id::text, 'title', current.title,
+                     'artifact_type', current.artifact_type, 'language', current.language,
+                     'content', current.content, 'current_version', current.current_version,
+                     'pinned', current.pinned, 'tags', current.tags,
+                     'created_at', current.created_at, 'updated_at', current.updated_at,
+                     'deleted_at', current.deleted_at,
+                     'server_version', current.server_version::text
+                   ) end as current
+              from input as incoming
+              left join web_artifacts as current on current.id = incoming.id and current.user_id = $1
+             where not exists (select 1 from applied_rows where applied_rows.id = incoming.id)
+          )
+          select 'applied'::text as kind, id::text, server_version::text, null::jsonb as current
+            from applied_rows
+          union all
+          select 'conflict'::text, id::text, null::text, current from conflict_rows
+        `,
+        [userId, JSON.stringify(artifacts)],
+      );
+      collectBatchRows(rows, applied.artifacts, conflicts.artifacts);
+    }
+
+    const conflictRows = [
+      ...conflicts.conversations.flatMap((c) => (c.current ? [c.current] : [])),
+      ...conflicts.messages.flatMap((c) => (c.current ? [c.current] : [])),
+      ...conflicts.artifacts.flatMap((c) => (c.current ? [c.current] : [])),
+    ];
     const cursor = maxServerVersion(
       '0',
       applied.conversations,
       applied.messages,
       applied.artifacts,
+      conflictRows,
     );
-    return NextResponse.json({ applied, cursor });
+    return NextResponse.json({ protocolVersion: 2, applied, conflicts, cursor });
   } catch (error) {
     logger.error({ error, userId }, 'Cloud sync push failed');
     throw createError.internal('Failed to push sync changes');
   }
+}
+
+function collectBatchRows<T>(
+  rows: Array<BatchRow<T>>,
+  applied: Array<{ id: string; server_version: string }>,
+  conflicts: Array<{ id: string; current: T | null }>,
+): void {
+  for (const row of rows) {
+    if (row.kind === 'applied' && row.server_version !== null) {
+      applied.push({ id: row.id, server_version: row.server_version });
+    } else if (row.kind === 'conflict') {
+      conflicts.push({ id: row.id, current: row.current });
+    } else {
+      throw new Error('Chat sync database returned an invalid batch result');
+    }
+  }
+}
+
+function isLegacyMutablePush(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const body = value as Record<string, unknown>;
+  if (body['protocolVersion'] === 2) return false;
+  return ['conversations', 'messages', 'artifacts'].some(
+    (key) => Array.isArray(body[key]) && body[key].length > 0,
+  );
+}
+
+function isLegacyNoopPush(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const body = value as Record<string, unknown>;
+  if ('protocolVersion' in body) return false;
+  return ['conversations', 'messages', 'artifacts'].every(
+    (key) => body[key] === undefined || (Array.isArray(body[key]) && body[key].length === 0),
+  );
+}
+
+function syncProtocolUpgradeRequired(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: 'SYNC_PROTOCOL_UPGRADE_REQUIRED',
+        message: 'Upgrade this client before pushing Managed Cloud chat changes.',
+      },
+      requiredProtocolVersion: 2,
+    },
+    { status: 409 },
+  );
 }
 
 // ---------------------------------------------------------------------------

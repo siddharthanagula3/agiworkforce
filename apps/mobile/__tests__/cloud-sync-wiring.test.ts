@@ -2,7 +2,7 @@
  * Cloud sync WIRING integration (P2 Phase 1).
  *
  * Proves the live send path is wired to the sync engine end-to-end: a cloud-mode
- * send mirrors the finalized turn into the REAL cloud store, marks the conversation
+ * send writes the finalized turn into the REAL cloud store, marks the conversation
  * + messages dirty with UUIDv7 ids, and a subsequent syncNow() pushes them to
  * /api/chat/sync. Local sends are untouched (no cloud-store writes, no dirty queue).
  *
@@ -52,10 +52,14 @@ jest.mock('../services/remoteChatGate', () => {
   };
 });
 
-jest.mock('@agiworkforce/local-llm', () => ({
-  localGenerate: jest.fn(),
-  getCapabilities: jest.fn().mockResolvedValue({ tier2Available: true, tier3Available: true }),
-}));
+jest.mock('@agiworkforce/local-llm', () => {
+  const actual = jest.requireActual('@agiworkforce/local-llm');
+  return {
+    ...actual,
+    localGenerate: jest.fn(),
+    getCapabilities: jest.fn().mockResolvedValue({ tier2Available: true, tier3Available: true }),
+  };
+});
 
 jest.mock('../storage/installedModels', () => ({
   listInstalledModels: jest.fn().mockResolvedValue([]),
@@ -120,24 +124,19 @@ beforeEach(() => {
     _p: string,
     body: { conversations?: Array<{ id: string }>; messages?: Array<{ id: string }> },
   ) => ({
+    protocolVersion: 2,
     applied: {
       conversations: (body?.conversations ?? []).map((c) => ({ id: c.id, server_version: '1' })),
       messages: (body?.messages ?? []).map((m) => ({ id: m.id, server_version: '1' })),
       artifacts: [],
     },
+    conflicts: { conversations: [], messages: [], artifacts: [] },
     cursor: '1',
   })) as never);
 });
 
-describe('cloud in-flight visibility (merged view)', () => {
-  it('surfaces a local in-flight assistant the cloud store does not yet hold', () => {
-    // Regression for the split-brain bug behind "cloud chat shows no feedback".
-    // The live stream path writes the assistant placeholder / streamed content /
-    // timeout error to the LOCAL store, while the cloud store only receives the
-    // mirrored USER message until the turn COMPLETES. A blind {...local, ...cloud}
-    // merge let the cloud copy win and HID the in-flight assistant — so the typing
-    // indicator, streamed reply, and timeout error were all invisible. The merged
-    // view the chat screen reads must include the local-only assistant turn.
+describe('cloud repository authority', () => {
+  it('ignores legacy Local residue for a Cloud-owned conversation', () => {
     const userMsg: ChatMessage = {
       id: 'msg-user-1',
       conversationId: CONV_ID,
@@ -154,7 +153,7 @@ describe('cloud in-flight visibility (merged view)', () => {
       createdAt: '2026-01-01T00:00:01.000Z',
     };
 
-    // Cloud store owns the conversation but holds only the mirrored user message.
+    // Cloud store owns the conversation and is the only transcript authority.
     useChatCloudMessageStore.getState().addCloudConversation({
       id: CONV_ID,
       title: 'Cloud Chat',
@@ -167,25 +166,112 @@ describe('cloud in-flight visibility (merged view)', () => {
     });
     useChatCloudMessageStore.getState().setCloudMessages(CONV_ID, [userMsg]);
 
-    // The live send/stream path wrote the in-flight assistant into the LOCAL store.
+    // Simulate stale data left by the pre-migration split-brain writer.
     useChatMessageStore.setState({ messages: { [CONV_ID]: [userMsg, assistantInFlight] } });
 
-    // The cloud store alone would hide the assistant (only the user is mirrored
-    // before completion)...
-    expect(useChatCloudMessageStore.getState().messages[CONV_ID]?.map((m) => m.role)).toEqual([
-      'user',
-    ]);
-
-    // ...but the merged view the chat screen reads includes the in-flight assistant,
-    // ordered by createdAt.
+    // Combined reads do not union the residue back into the Cloud transcript.
     const merged = useChatStore.getState().messages[CONV_ID] ?? [];
-    expect(merged.map((m) => m.role)).toEqual(['user', 'assistant']);
-    expect(merged.find((m) => m.role === 'assistant')?.isStreaming).toBe(true);
+    expect(merged.map((m) => m.role)).toEqual(['user']);
+    expect(merged.find((m) => m.role === 'assistant')).toBeUndefined();
   });
 });
 
 describe('cloud send → sync write-through', () => {
-  it('mirrors the finalized turn into the cloud store with UUIDv7 ids and marks it dirty', async () => {
+  it('keeps image-generation state and UUIDv7 identities only in the Cloud repository', () => {
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: CONV_ID,
+      title: 'Cloud Image',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: 0,
+      pinned: false,
+      model: 'auto-balanced',
+      executionMode: 'cloud',
+    });
+
+    const assistantId = useChatStore
+      .getState()
+      .beginImageGeneration(
+        CONV_ID,
+        'Create an image',
+        'a blue observatory',
+        'gemini-3.1-flash-image',
+      );
+    useChatStore.getState().completeImageGeneration(CONV_ID, assistantId, {
+      imageUrl: 'https://example.com/observatory.png',
+      model: 'gemini-3.1-flash-image',
+    });
+
+    expect(useChatMessageStore.getState().messages[CONV_ID]).toBeUndefined();
+    const cloudMessages = useChatCloudMessageStore.getState().messages[CONV_ID] ?? [];
+    expect(cloudMessages).toHaveLength(2);
+    for (const message of cloudMessages) expect(isUuidV7(message.id)).toBe(true);
+    expect(cloudMessages[1]).toEqual(
+      expect.objectContaining({
+        id: assistantId,
+        type: 'image',
+        imageUrl: 'https://example.com/observatory.png',
+        imageGenStatus: 'completed',
+      }),
+    );
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === CONV_ID)?.model,
+    ).toBe('auto-balanced');
+  });
+
+  it('forks a Cloud conversation wholly inside the Cloud repository', async () => {
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: CONV_ID,
+      title: 'Cloud Source',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: 1,
+      pinned: false,
+      model: CLOUD_MODEL,
+      executionMode: 'cloud',
+    });
+    useChatCloudMessageStore.getState().setCloudMessages(CONV_ID, [
+      {
+        id: '0190a000-0000-7000-8000-000000000002',
+        conversationId: CONV_ID,
+        role: 'user',
+        content: 'source message',
+        createdAt: new Date().toISOString(),
+        model: CLOUD_MODEL,
+      },
+    ]);
+    mockPost.mockImplementationOnce((async (
+      _path: string,
+      body: { id: string; title: string },
+    ) => ({
+      conversation: {
+        id: body.id,
+        title: body.title,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        project_id: null,
+        pinned: false,
+        is_temporary: false,
+        model: CLOUD_MODEL,
+      },
+    })) as never);
+
+    const forkId = await useChatStore.getState().forkConversation(CONV_ID);
+
+    expect(useChatMessageStore.getState().conversations).toHaveLength(0);
+    expect(useChatMessageStore.getState().messages[forkId]).toBeUndefined();
+    expect(useChatCloudMessageStore.getState().conversations.some((c) => c.id === forkId)).toBe(
+      true,
+    );
+    const forkMessages = useChatCloudMessageStore.getState().messages[forkId] ?? [];
+    expect(forkMessages).toHaveLength(1);
+    expect(forkMessages[0]).toEqual(
+      expect.objectContaining({ conversationId: forkId, content: 'source message' }),
+    );
+    expect(isUuidV7(forkMessages[0]!.id)).toBe(true);
+  });
+
+  it('writes the finalized turn into the cloud store with UUIDv7 ids and marks it dirty', async () => {
     // A real cloud conversation lives in the cloud store (created via the REST path).
     useChatCloudMessageStore.getState().addCloudConversation({
       id: CONV_ID,

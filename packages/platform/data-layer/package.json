@@ -1,0 +1,36 @@
+{
+  "name": "@agiworkforce/data-layer",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Neon + Clerk data-layer boundary for AGI Workforce",
+  "exports": "./src/index.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
+  },
+  "dependencies": {
+    "@agiworkforce/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@clerk/backend": ">=3.0.0",
+    "@neondatabase/serverless": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@clerk/backend": {
+      "optional": true
+    },
+    "@neondatabase/serverless": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@clerk/backend": "^3.4.13",
+    "@neondatabase/serverless": "^1.1.0",
+    "vitest": "^4.1.8"
+  }
+}

@@ -4,9 +4,9 @@
  * Renders the shared @agiworkforce/ui SettingsModal shell for desktop CLOUD mode.
  * Pattern mirrors apps/web/features/settings/components/WebSettingsModal.tsx:
  *   - sectionContent maps section keys → existing desktop tab components (fully wired, IPC/store-backed)
- *   - A DesktopSettingsDataAdapter bridges connectorsStore + skillMarketplaceStore into the
- *     SettingsDataAdapter contract, so the shared Connectors/Skills/Plugins panels render
- *     with real desktop data and connect/disconnect actions.
+ *   - A DesktopSettingsDataAdapter bridges the cloud connectors API + skillMarketplaceStore into
+ *     the SettingsDataAdapter contract, so the shared Connectors/Skills/Plugins panels render
+ *     with real data and connect/disconnect actions.
  *
  * LOCAL mode: NOT used here. App.tsx continues to render SettingsPanel for local mode.
  * CLOUD mode: App.tsx swaps in this component so web + desktop share the same modal shell.
@@ -16,7 +16,9 @@
  *   account      → AccountTab (cloud account, usage dashboard, team)
  *   privacy      → PrivacyTab (master password, data export, crash reporting, governance)
  *   memory       → MemoryTab  (MemoryEditor from unified-chat)
- *   connectors   → built-in ConnectorsPanel (adapter-driven from connectorsStore)
+ *   connectors   → built-in ConnectorsPanel (adapter-driven from api/cloudConnectors.ts —
+ *                  a real client of web's /api/connectors, NOT local Tauri connector state;
+ *                  see stores/connectorsStore.ts for the separate LOCAL-mode gallery)
  *   skills       → built-in SkillsPanel    (adapter-driven from skillMarketplaceStore)
  *   plugins      → built-in PluginsPanel   (adapter-driven from skillMarketplaceStore)
  *   billing      → DesktopBillingSection   (minimal wired panel — see below)
@@ -30,10 +32,21 @@
 
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SettingsModal } from '@agiworkforce/ui';
-import type { SettingsDataAdapter, SettingsSkill, SettingsConnector } from '@agiworkforce/ui';
+import type {
+  SettingsDataAdapter,
+  SettingsSkill,
+  SettingsConnector,
+  ConnectedConnector,
+} from '@agiworkforce/ui';
 
 import { CONNECTORS } from '../connectors/connectorDefinitions';
-import { useConnectorsStore } from '../../stores/connectorsStore';
+import {
+  listConnectors as fetchCloudConnectorState,
+  connectConnector as apiConnectConnector,
+  disconnectConnector as apiDisconnectConnector,
+  type CloudConnectorEntry,
+} from '../../api/cloudConnectors';
+import { openExternalUrl } from '../../utils/navigation';
 import { useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
 import {
   createDefaultWindowPreferences,
@@ -217,20 +230,70 @@ const COLOR_TO_GRADIENT: Record<string, string> = {
   cyan: 'from-cyan-500 to-cyan-600',
 };
 
-/** Map desktop's ConnectorDef[] → shared SettingsConnector[] */
-const DESKTOP_SETTINGS_CONNECTORS: SettingsConnector[] = CONNECTORS.map((c, idx) => ({
-  id: c.id,
-  name: c.name,
-  description: c.description,
-  category: c.category,
-  authType: c.authType,
-  // actionCount used as rough popularity rank; comingSoon connectors get 0
-  actionCount: c.comingSoon ? 0 : Math.max(0, CONNECTORS.length - idx),
-  // comingSoon → phase 2 so the shared shell renders "Soon"
-  phase: c.comingSoon ? 2 : 1,
-  iconBg: COLOR_TO_GRADIENT[c.color] ?? 'from-gray-500 to-gray-600',
-  iconText: c.name.slice(0, 2).toUpperCase(),
-}));
+/**
+ * Desktop's static catalog (apps/desktop/src/features/connectors/connectorDefinitions.ts)
+ * and the server's connector-id namespace (VALID_CONNECTOR_IDS in
+ * apps/web/app/api/connectors/route.ts) mostly agree, but four desktop ids
+ * differ from what the server — and its `user_connectors.connector_id` rows —
+ * expect: three underscore/hyphen mismatches and one outright rename
+ * (microsoft_teams → teams). Reconciled here rather than by renaming the
+ * catalog ids, since local Tauri/MCP connect flows key on the catalog id as-is.
+ * Every other desktop id that has no server counterpart (e.g. figma, canva,
+ * vercel, atlassian — see the audit note below) is intentionally left
+ * unmapped: it will never appear in `available`, so it correctly renders
+ * "Coming soon" without needing an entry here.
+ */
+const DESKTOP_TO_SERVER_CONNECTOR_ID: Record<string, string> = {
+  google_calendar: 'google-calendar',
+  google_drive: 'google-drive',
+  google_sheets: 'google-sheets',
+  microsoft_teams: 'teams',
+};
+
+const SERVER_TO_DESKTOP_CONNECTOR_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(DESKTOP_TO_SERVER_CONNECTOR_ID).map(([desktopId, serverId]) => [
+    serverId,
+    desktopId,
+  ]),
+);
+
+/** Desktop catalog id → server connector id, for POST/DELETE calls and the `available` lookup. */
+function toServerConnectorId(desktopId: string): string {
+  return DESKTOP_TO_SERVER_CONNECTOR_ID[desktopId] ?? desktopId;
+}
+
+/** Server connector id (from GET /api/connectors) → desktop catalog id, for display/matching. */
+function toDesktopConnectorId(serverId: string): string {
+  return SERVER_TO_DESKTOP_CONNECTOR_ID[serverId] ?? serverId;
+}
+
+/**
+ * Maps desktop's ConnectorDef[] (names/logos/categories — static catalog
+ * metadata) → shared SettingsConnector[], gated by the server's `available`
+ * ids so "Connect" only lights up for connectors the cloud backend can
+ * actually enable right now (see listConnectors() in api/cloudConnectors.ts).
+ * Everything else renders "Coming soon" instead of a fake-connectable entry.
+ */
+function toSettingsConnectors(availableIds: ReadonlySet<string>): SettingsConnector[] {
+  return CONNECTORS.map((c, idx) => {
+    const canConnect = availableIds.has(toServerConnectorId(c.id));
+    return {
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      category: c.category,
+      authType: c.authType,
+      // actionCount used as rough popularity rank; comingSoon connectors get 0
+      actionCount: c.comingSoon ? 0 : Math.max(0, CONNECTORS.length - idx),
+      // comingSoon → phase 2 so the shared shell renders "Soon"
+      phase: c.comingSoon ? 2 : 1,
+      iconBg: COLOR_TO_GRADIENT[c.color] ?? 'from-gray-500 to-gray-600',
+      iconText: c.name.slice(0, 2).toUpperCase(),
+      canConnect,
+      statusLabel: canConnect ? undefined : 'Coming soon',
+    };
+  });
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -273,29 +336,81 @@ export function DesktopCloudSettingsModal({
     if (open) setActiveSection(resolveSection(initialTab));
   }, [open, initialTab]);
 
-  // ── Connected connectors (from desktop connectorsStore) ──────────────────
-  const connectedIds = useConnectorsStore((s) => s.connectedIds);
-  const connectorConnect = useConnectorsStore((s) => s.connect);
-  const connectorDisconnect = useConnectorsStore((s) => s.disconnect);
+  // ── Connectors (CLOUD state — real client of web's /api/connectors) ──────
+  // Trust boundary: this section reflects server truth, not local Tauri MCP
+  // connector state (see stores/connectorsStore.ts, which stays wired to the
+  // LOCAL settings' ConnectorGallery only — never blended in here).
+  const [cloudConnectors, setCloudConnectors] = useState<CloudConnectorEntry[]>([]);
+  const [availableConnectorIds, setAvailableConnectorIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [connectorsLoading, setConnectorsLoading] = useState(false);
+  const [hasLoadedConnectors, setHasLoadedConnectors] = useState(false);
 
-  const connectedConnectors = useMemo(
-    () => connectedIds.map((id) => ({ connectorId: id })),
-    [connectedIds],
+  useEffect(() => {
+    if (!open || activeSection !== 'connectors' || hasLoadedConnectors || connectorsLoading) {
+      return;
+    }
+    let cancelled = false;
+    setConnectorsLoading(true);
+    fetchCloudConnectorState()
+      .then(({ connectors, available }) => {
+        if (cancelled) return;
+        setCloudConnectors(connectors);
+        setAvailableConnectorIds(new Set(available));
+        setHasLoadedConnectors(true);
+      })
+      .catch((err) => {
+        // Non-fatal: leave hasLoadedConnectors false so re-opening this
+        // section retries instead of pinning a stale/empty list.
+        console.error('[DesktopCloudSettingsModal] Failed to load cloud connectors:', err);
+      })
+      .finally(() => {
+        if (!cancelled) setConnectorsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeSection, hasLoadedConnectors, connectorsLoading]);
+
+  // cloudConnectors always holds server-shaped rows (server id space); the
+  // adapter surface (connectedConnectors / SettingsConnector.id) always uses
+  // desktop's catalog id space. Translate exactly at these two boundaries —
+  // see toServerConnectorId/toDesktopConnectorId above.
+  const connectedConnectors: ConnectedConnector[] = useMemo(
+    () =>
+      cloudConnectors.map((c) => ({
+        connectorId: toDesktopConnectorId(c.connectorId),
+        connectedAt: c.connectedAt || undefined,
+        status: 'connected' as const,
+      })),
+    [cloudConnectors],
   );
 
-  const connectConnector = useCallback(
-    async (id: string) => {
-      await connectorConnect(id);
-    },
-    [connectorConnect],
-  );
+  const connectConnector = useCallback(async (id: string) => {
+    const serverId = toServerConnectorId(id);
+    const result = await apiConnectConnector(serverId);
+    if (result.status === 'connected') {
+      setCloudConnectors((prev) => [
+        ...prev.filter((c) => c.connectorId !== serverId),
+        result.connector,
+      ]);
+      return;
+    }
+    if (result.status === 'install-required') {
+      await openExternalUrl(result.installUrl);
+      throw new Error(
+        'Opened the install page in your browser. Finish there, then reopen Settings to refresh.',
+      );
+    }
+    throw new Error(result.message);
+  }, []);
 
-  const disconnectConnector = useCallback(
-    async (id: string) => {
-      await connectorDisconnect(id);
-    },
-    [connectorDisconnect],
-  );
+  const disconnectConnector = useCallback(async (id: string) => {
+    const serverId = toServerConnectorId(id);
+    await apiDisconnectConnector(serverId);
+    setCloudConnectors((prev) => prev.filter((c) => c.connectorId !== serverId));
+  }, []);
 
   // ── Skills (from skillMarketplaceStore) ──────────────────────────────────
   const marketplaceSkills = useSkillMarketplaceStore((s) => s.skills);
@@ -321,10 +436,15 @@ export function DesktopCloudSettingsModal({
     [marketplaceSkills],
   );
 
+  const settingsConnectors: SettingsConnector[] = useMemo(
+    () => toSettingsConnectors(availableConnectorIds),
+    [availableConnectorIds],
+  );
+
   // ── Data adapter ─────────────────────────────────────────────────────────
   const adapter: SettingsDataAdapter = useMemo(
     () => ({
-      connectors: DESKTOP_SETTINGS_CONNECTORS,
+      connectors: settingsConnectors,
       connectedConnectors,
       connectConnector,
       disconnectConnector,
@@ -335,7 +455,14 @@ export function DesktopCloudSettingsModal({
       plugins: [],
       pluginsLoading: false,
     }),
-    [connectedConnectors, connectConnector, disconnectConnector, skills, skillsLoading],
+    [
+      settingsConnectors,
+      connectedConnectors,
+      connectConnector,
+      disconnectConnector,
+      skills,
+      skillsLoading,
+    ],
   );
 
   // ── GeneralTab props (mirrors SettingsPanel wiring) ──────────────────────

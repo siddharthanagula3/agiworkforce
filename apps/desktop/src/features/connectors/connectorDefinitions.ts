@@ -444,7 +444,6 @@ export const CONNECTORS: ConnectorDef[] = [
     provider: 'sentry',
     category: 'Development',
     color: 'purple',
-    comingSoon: true,
     authType: 'api_key',
     apiKeyPlaceholder: 'sntrys_...',
     docsUrl: 'https://docs.sentry.io/api/',
@@ -458,7 +457,6 @@ export const CONNECTORS: ConnectorDef[] = [
     provider: 'cloudflare',
     category: 'DevOps',
     color: 'orange',
-    comingSoon: true,
     authType: 'api_key',
     apiKeyPlaceholder: 'API token...',
     docsUrl: 'https://developers.cloudflare.com/api/',
@@ -1019,3 +1017,50 @@ export const CONNECTORS: ConnectorDef[] = [
 export const CONNECTOR_DIRECTORY = CONNECTORS.filter((c) => !c.comingSoon);
 
 export const FEATURED_CONNECTORS = CONNECTOR_DIRECTORY.filter((c) => c.featured);
+
+// ─────────────────────────────────────────────
+// Custom remote MCP connectors
+// ─────────────────────────────────────────────
+//
+// `CustomRemoteMcpConnectorDialog.tsx` adds a user-supplied remote MCP
+// server directly into the MCP config under a `custom-<slug>` key — it has
+// no entry in this static catalog (there's nothing to catalog ahead of
+// time) and no OAuth/API-key credential row, so it can never be looked up
+// via `connectorById`. `buildCustomMcpConnectorDef` synthesizes a minimal,
+// honest `ConnectorDef` on the fly from the server id alone (the only data
+// available once connected — `DesktopMcpServerConfig` has no stored display
+// name), so the gallery's "Connected" section and Configure view can render
+// these entries instead of silently dropping them.
+export const CUSTOM_MCP_SERVER_PREFIX = 'custom-';
+
+export function isCustomMcpConnectorId(id: string): boolean {
+  return id.startsWith(CUSTOM_MCP_SERVER_PREFIX);
+}
+
+function titleCaseSlug(slug: string): string {
+  return slug
+    .split('-')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+export function buildCustomMcpConnectorDef(serverId: string): ConnectorDef {
+  const slug = serverId.startsWith(CUSTOM_MCP_SERVER_PREFIX)
+    ? serverId.slice(CUSTOM_MCP_SERVER_PREFIX.length)
+    : serverId;
+
+  return {
+    id: serverId,
+    name: titleCaseSlug(slug) || 'Custom connector',
+    icon: '\u{1F50C}',
+    description: 'Custom remote MCP server',
+    // Reuses the existing Model Context Protocol brand icon
+    // (CONNECTOR_BRAND_ICONS['modelcontextprotocol'] in ConnectorGallery.tsx)
+    // as the "generic MCP icon" for these entries.
+    provider: 'modelcontextprotocol',
+    category: 'Automation',
+    color: 'slate',
+    authType: 'mcp_remote',
+  };
+}

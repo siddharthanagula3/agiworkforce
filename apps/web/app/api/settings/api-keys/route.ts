@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createHash, randomBytes } from 'crypto';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -12,6 +11,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { ApiKeyService } from '@/lib/services/api-key-service';
 
 const CreateKeySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be at most 100 characters'),
@@ -83,21 +83,9 @@ async function handleCreate(request: NextRequest) {
     throw createError.validation('You may not have more than 20 active API keys at once');
   }
 
-  // Generate a high-entropy random key: prefix "agi_" + 40 hex chars.
-  const rawKey = `agi_${randomBytes(20).toString('hex')}`;
-  const keyPrefix = rawKey.slice(0, 8);
-  const keyHash = createHash('sha256').update(rawKey).digest('hex');
-
-  const [row] = await db.query<ApiKeyRow>(
-    `insert into public.api_keys (user_id, name, key_hash, key_prefix, scopes)
-     values ($1, $2, $3, $4, $5)
-     returning id, user_id, name, key_hash, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_at`,
-    [userId, name, keyHash, keyPrefix, []],
-  );
-
-  if (!row) {
-    throw createError.internal('Failed to create API key');
-  }
+  // Argon2id-hashed sk_live_<keyId>_<secret> key, verified via ApiKeyService
+  // in lib/api-auth.ts's Bearer-token path.
+  const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(db, userId, name);
 
   logger.info({ userId, keyId: row.id }, 'API key created');
 

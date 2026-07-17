@@ -16,6 +16,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
+import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import {
   getNeonChatDb,
   requireCurrentUserId,
@@ -180,7 +181,7 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   // conversation is already soft-deleted regardless of this outcome, and Redis's own
   // TTL (session-store.ts) is the safety net if this ever throws.
   try {
-    await killE2BSession(id);
+    await killE2BSession(managedCloudE2BSessionScope(userId, id));
   } catch (error) {
     logger.warn({ error, conversationId: id }, '[e2b] failed to release sandbox on delete');
   }

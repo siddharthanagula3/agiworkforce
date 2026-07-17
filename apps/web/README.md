@@ -20,7 +20,7 @@ Criticality: high
 
 This is an app, not a package. Other apps and packages must not import from `apps/web`.
 
-Runtime API boundaries live under `app/api`, `api`, `lib`, and shared packages. Reusable contracts belong in `packages/types`, `packages/runtime`, `packages/providers`, or `packages/unified-chat`.
+Runtime API boundaries live under `app/api`, `api`, `lib`, and shared packages. Reusable contracts belong in `packages/contracts/types`, `packages/client/client-runtime`, `packages/ai/providers`, or `packages/ui/unified-chat`.
 
 ## What Belongs Here
 

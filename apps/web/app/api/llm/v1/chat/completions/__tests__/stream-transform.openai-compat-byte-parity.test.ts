@@ -9,7 +9,7 @@
  * response.body` in `streamRequest()` with ZERO internal reshaping --
  * identical to `openai.ts`'s own pattern, which is what makes
  * `wireMode: 'openai-passthrough'` the correct mode for all 10 (not just
- * OpenAI). Each `packages/providers/{provider}` package is a thin config
+ * OpenAI). Each `packages/ai/providers/{provider}` package is a thin config
  * wrapper around `@agiworkforce/providers-openai`'s translate/stream layer
  * (see adapter-factory.ts's `buildCompatAdapter` docstring), so this suite
  * verifies the SHARED wire-shape machinery serves every provider string

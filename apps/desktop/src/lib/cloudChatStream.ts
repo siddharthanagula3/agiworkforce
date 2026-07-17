@@ -12,6 +12,7 @@
  */
 
 import { sendCloudMessage } from '../api/cloudApi';
+import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
 
 // ---------------------------------------------------------------------------
 // Event Dispatcher — mirrors Tauri emit() for cloud web mode
@@ -133,6 +134,15 @@ export async function startCloudChatStream(options: StartCloudChatStreamOptions)
           conversationId = nextConversationId;
         }
       },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      createManagedChatIdempotencyKey({
+        surface: 'desktop',
+        purpose: 'send',
+        operationId: messageId.replace(/^cloud_/, ''),
+      }),
     ).catch((err) => {
       // Catch any unhandled errors from sendCloudMessage itself
       const error = err instanceof Error ? err : new Error(String(err));

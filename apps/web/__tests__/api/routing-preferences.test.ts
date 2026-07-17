@@ -94,17 +94,22 @@ beforeEach(() => {
 });
 
 describe('GET /api/me/routing-preferences', () => {
-  function buildBearerRequest() {
+  // Cookie-session request: no Authorization header. This suite mocks
+  // @clerk/nextjs/server's auth() (the cookie path) but never mocks
+  // @clerk/backend's verifyToken, so a placeholder Bearer header here would
+  // be a present-but-unverifiable credential — getClerkAuthUser now rejects
+  // that outright rather than falling back to the mocked cookie session
+  // (WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01).
+  function buildSessionRequest() {
     return new NextRequest('http://localhost/api/me/routing-preferences', {
       method: 'GET',
-      headers: { Authorization: 'Bearer mock-jwt' },
     });
   }
 
   it('returns the stored routing_preferences object', async () => {
     mockQuery.mockResolvedValueOnce([{ routing_preferences: { us_only: true } }]);
 
-    const response = await GET(buildBearerRequest());
+    const response = await GET(buildSessionRequest());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ us_only: true });
   });
@@ -112,7 +117,7 @@ describe('GET /api/me/routing-preferences', () => {
   it('returns empty object when routing_preferences is null', async () => {
     mockQuery.mockResolvedValueOnce([{ routing_preferences: null }]);
 
-    const response = await GET(buildBearerRequest());
+    const response = await GET(buildSessionRequest());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({});
   });
@@ -120,7 +125,7 @@ describe('GET /api/me/routing-preferences', () => {
   it('returns empty object when no profile row exists', async () => {
     mockQuery.mockResolvedValueOnce([]);
 
-    const response = await GET(buildBearerRequest());
+    const response = await GET(buildSessionRequest());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({});
   });
@@ -128,7 +133,7 @@ describe('GET /api/me/routing-preferences', () => {
   it('returns empty object on DB error (fail-open)', async () => {
     mockQuery.mockRejectedValueOnce(new Error('pg connection refused'));
 
-    const response = await GET(buildBearerRequest());
+    const response = await GET(buildSessionRequest());
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({});
   });
@@ -136,17 +141,17 @@ describe('GET /api/me/routing-preferences', () => {
   it('rejects unauthenticated requests with 401', async () => {
     mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
-    const response = await GET(buildBearerRequest());
+    const response = await GET(buildSessionRequest());
     expect(response.status).toBe(401);
   });
 });
 
 describe('PUT /api/me/routing-preferences', () => {
+  // See buildSessionRequest() above — same rationale, no Authorization header.
   function buildPutRequest(body: unknown) {
     return new NextRequest('http://localhost/api/me/routing-preferences', {
       method: 'PUT',
       headers: {
-        Authorization: 'Bearer mock-jwt',
         'Content-Type': 'application/json',
         'x-csrf-token': 'mock',
       },
@@ -213,7 +218,6 @@ describe('PUT /api/me/routing-preferences', () => {
     const request = new NextRequest('http://localhost/api/me/routing-preferences', {
       method: 'PUT',
       headers: {
-        Authorization: 'Bearer mock-jwt',
         'Content-Type': 'application/json',
         'x-csrf-token': 'mock',
       },

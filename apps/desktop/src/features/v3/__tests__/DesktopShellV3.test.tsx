@@ -1,20 +1,58 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSettingsDialogStore } from '../../../stores/settings/dialog';
 import { useUnifiedAuthStore } from '../../../stores/auth';
+import { useAppModeStore } from '../../../stores/appModeStore';
+import { useProjectStore } from '../../../stores/projectStore';
+import { useSidecarStore } from '../../../stores/chat';
 import { DesktopShellV3 } from '../DesktopShellV3';
 
-const unifiedChatMock = vi.hoisted(() => ({
-  chatInterfaceProps: [] as Array<Record<string, unknown>>,
-  setDraftContent: vi.fn(),
-  budgetState: {
-    budget: {
-      enabled: false,
+const unifiedChatMock = vi.hoisted(() => {
+  const state = {
+    draftContent: '',
+    chatInterfaceProps: [] as Array<Record<string, unknown>>,
+    autoSend: vi.fn(),
+    budgetState: {
+      budget: {
+        enabled: false,
+      },
+      percentage: 0,
     },
-    percentage: 0,
-  },
+  };
+  return {
+    ...state,
+    setDraftContent: vi.fn((content: string) => {
+      state.draftContent = content;
+    }),
+    appendDraftContent: vi.fn((content: string) => {
+      state.draftContent = state.draftContent ? `${state.draftContent}\n\n${content}` : content;
+    }),
+    getDraftContent: () => state.draftContent,
+    resetDraft: () => {
+      state.draftContent = '';
+    },
+  };
+});
+
+const nativeHandoffMock = vi.hoisted(() => ({
+  listeners: new Map<string, (event: { payload: unknown }) => void>(),
+  listen: vi.fn(),
+  invoke: vi.fn(),
+  unlisten: vi.fn(),
+}));
+
+vi.mock('../../../lib/tauri-mock', () => ({
+  isTauri: true,
+  isCloudWeb: false,
+  isDesktopUiDevLocal: false,
+  supportsLocalAppMode: true,
+  isTauriContext: () => true,
+  listen: nativeHandoffMock.listen,
+  invoke: nativeHandoffMock.invoke,
+  emit: vi.fn().mockResolvedValue(undefined),
+  once: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -39,6 +77,10 @@ vi.mock('react-i18next', () => ({
         'sidebar.nav.dispatch': 'Dispatch',
         'sidebar.signIn': 'Sign in',
         'sidebar.cloudSync': 'Cloud sync',
+        'sidebar.mode.local': 'Local',
+        'sidebar.mode.cloud': 'Cloud',
+        'sidebar.mode.aria': 'Switch between Local and Cloud',
+        'sidebar.mode.switchTo': `Switch to ${params?.['mode'] ?? ''}`,
         'common.search': 'Search',
         'common.settings': 'Settings',
         'common.beta': 'Beta',
@@ -65,8 +107,22 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('../../updates', () => ({
+  UpdatePill: () => null,
+}));
+
 vi.mock('@agiworkforce/unified-chat', async () => {
   const React = await vi.importActual<typeof import('react')>('react');
+  const sharedStoreState = {
+    setDraftContent: unifiedChatMock.setDraftContent,
+    appendDraftContent: unifiedChatMock.appendDraftContent,
+  };
+  const useChatStore = (selector: (state: typeof sharedStoreState) => unknown) =>
+    selector(sharedStoreState);
+  useChatStore.getState = () => ({
+    setDraftContent: unifiedChatMock.setDraftContent,
+    appendDraftContent: unifiedChatMock.appendDraftContent,
+  });
   return {
     // Passthrough provider — the shell wraps its tree in <CapabilityProvider
     // platform="desktop">. The mock just renders children so the shell mounts.
@@ -77,6 +133,11 @@ vi.mock('@agiworkforce/unified-chat', async () => {
       return React.createElement(
         'div',
         { 'data-testid': 'chat-interface' },
+        React.createElement('textarea', {
+          'aria-label': 'Shared composer draft',
+          onChange: (event: { target: { value: string } }) =>
+            unifiedChatMock.setDraftContent(event.target.value),
+        }),
         props['emptyStateSlot'] as ReactNode,
       );
     },
@@ -95,9 +156,7 @@ vi.mock('@agiworkforce/unified-chat', async () => {
           : null,
       ),
     QuickChips: () => React.createElement('div', { 'data-testid': 'quick-chips' }),
-    useChatStore: (
-      selector: (state: { setDraftContent: typeof unifiedChatMock.setDraftContent }) => unknown,
-    ) => selector({ setDraftContent: unifiedChatMock.setDraftContent }),
+    useChatStore,
     selectBudget: (state: typeof unifiedChatMock.budgetState) => state.budget,
     selectBudgetPercentage: (state: typeof unifiedChatMock.budgetState) => state.percentage,
     useBudgetStore: (selector: (state: typeof unifiedChatMock.budgetState) => unknown) =>
@@ -108,7 +167,25 @@ vi.mock('@agiworkforce/unified-chat', async () => {
 describe('DesktopShellV3 duplication ownership', () => {
   beforeEach(() => {
     unifiedChatMock.chatInterfaceProps.length = 0;
+    unifiedChatMock.resetDraft();
     unifiedChatMock.setDraftContent.mockClear();
+    unifiedChatMock.appendDraftContent.mockClear();
+    unifiedChatMock.autoSend.mockClear();
+    nativeHandoffMock.listeners.clear();
+    nativeHandoffMock.listen.mockReset();
+    nativeHandoffMock.invoke.mockReset();
+    nativeHandoffMock.unlisten.mockReset();
+    nativeHandoffMock.listen.mockImplementation(
+      async (eventName: string, callback: (event: { payload: unknown }) => void) => {
+        nativeHandoffMock.listeners.set(eventName, callback);
+        return nativeHandoffMock.unlisten;
+      },
+    );
+    nativeHandoffMock.invoke.mockImplementation(async (command: string) => {
+      if (command === 'extension_clear_selected_context_handoff') return true;
+      if (command.includes('project')) return [];
+      return undefined;
+    });
     useSettingsDialogStore.setState({
       settingsOpen: false,
       settingsInitialTab: 'general',
@@ -121,6 +198,13 @@ describe('DesktopShellV3 duplication ownership', () => {
       plan: null,
       accessToken: null,
       refreshToken: null,
+    });
+    useAppModeStore.setState({ mode: 'local' });
+    useSidecarStore.setState({ sidebarCollapsed: false });
+    useProjectStore.setState({
+      projects: [],
+      activeProjectId: null,
+      loadProjects: async () => {},
     });
   });
 
@@ -141,6 +225,53 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(unifiedChatMock.chatInterfaceProps[0]?.['sidebarSlot']).toBeNull();
     expect(unifiedChatMock.chatInterfaceProps[0]?.['enableSearchOverlay']).toBe(false);
     expect(unifiedChatMock.chatInterfaceProps[0]?.['emptyStateSlot']).toBeTruthy();
+  });
+
+  it('requires an explicit review before adding authenticated Chrome context to the composer', async () => {
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Shared composer draft' }), {
+      target: { value: 'Keep my typed request' },
+    });
+    expect(unifiedChatMock.getDraftContent()).toBe('Keep my typed request');
+
+    await waitFor(() => {
+      expect(nativeHandoffMock.listeners.has('extension:selected_text_query')).toBe(true);
+    });
+
+    await act(async () => {
+      nativeHandoffMock.listeners.get('extension:selected_text_query')?.({
+        payload: {
+          text: 'The reviewed selection',
+          context_url: 'https://example.com/private',
+          tab_id: 17,
+          selected_at: Date.now(),
+        },
+      });
+    });
+
+    expect(screen.getByRole('dialog', { name: 'Review browser context' })).toBeInTheDocument();
+    expect(screen.getByText('The reviewed selection')).toBeInTheDocument();
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+    expect(screen.getByText('https://example.com/private')).toBeInTheDocument();
+    expect(screen.getByText('Authenticated Chrome handoff')).toBeInTheDocument();
+    expect(screen.getByText('Local Desktop only')).toBeInTheDocument();
+    expect(unifiedChatMock.appendDraftContent).not.toHaveBeenCalled();
+    expect(unifiedChatMock.autoSend).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept context' }));
+
+    await waitFor(() => {
+      expect(unifiedChatMock.appendDraftContent).toHaveBeenCalledTimes(1);
+    });
+    const insertedDraft = String(unifiedChatMock.appendDraftContent.mock.calls[0]?.[0]);
+    expect(insertedDraft).toContain('The reviewed selection');
+    expect(insertedDraft).toContain('https://example.com/private');
+    expect(unifiedChatMock.getDraftContent()).toBe(`Keep my typed request\n\n${insertedDraft}`);
+    expect(unifiedChatMock.autoSend).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('dialog', { name: 'Review browser context' }),
+    ).not.toBeInTheDocument();
   });
 
   it('creates and selects a conversation through the host bridge', () => {
@@ -175,6 +306,15 @@ describe('DesktopShellV3 duplication ownership', () => {
 
     expect(useSettingsDialogStore.getState().settingsOpen).toBe(true);
     expect(useSettingsDialogStore.getState().settingsInitialTab).toBe('general');
+  });
+
+  it('names collapsed mode and account controls by the action they perform', () => {
+    useSidecarStore.setState({ sidebarCollapsed: true });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    expect(screen.getByRole('button', { name: 'Switch to Cloud' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
   it('treats a local storage owner as signed out in the sidebar', () => {

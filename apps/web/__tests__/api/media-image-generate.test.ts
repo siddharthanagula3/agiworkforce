@@ -29,6 +29,15 @@ vi.mock('@agiworkforce/types', async () => {
             modelType: 'image',
             imagePerImageCost: 0.04,
           },
+          {
+            id: 'imagen-4-fast',
+            apiModelId: 'imagen-4.0-fast-generate-001',
+            imageApi: 'imagen',
+            name: 'Imagen 4 Fast',
+            provider: 'google',
+            modelType: 'image',
+            imagePerImageCost: 0.02,
+          },
         ];
       }
       return actual.getModelsForProvider(provider, options);
@@ -136,6 +145,7 @@ vi.mock('@/lib/error-handler', async () => {
 const mockCheckAvailable = vi.fn();
 const mockGetBalance = vi.fn();
 const mockDeductCredits = vi.fn();
+const mockSettleCreditsDurably = vi.fn();
 const mockGenerateIdempotencyKey = vi.fn();
 
 vi.mock('@/lib/services/credit-service', () => ({
@@ -143,6 +153,7 @@ vi.mock('@/lib/services/credit-service', () => ({
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     getBalance: (...args: unknown[]) => mockGetBalance(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
+    settleCreditsDurably: (...args: unknown[]) => mockSettleCreditsDurably(...args),
     generateIdempotencyKey: (...args: unknown[]) => mockGenerateIdempotencyKey(...args),
   },
 }));
@@ -214,6 +225,11 @@ describe('POST /api/media/image/generate', () => {
     mockCheckAvailable.mockResolvedValue(true);
     mockGetBalance.mockResolvedValue({ credits_remaining_cents: 10000 });
     mockDeductCredits.mockResolvedValue({ success: true });
+    mockSettleCreditsDurably.mockResolvedValue({
+      status: 'succeeded',
+      success: true,
+      attempt_count: 1,
+    });
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
 
     // Set required env vars
@@ -486,6 +502,32 @@ describe('POST /api/media/image/generate', () => {
       expect(response.status).toBe(400);
       expect(data.error.code).toBe('provider_unavailable');
     });
+
+    it('accepts free-form style direction used by cross-surface clients', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://example.com/styled.png' }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a product photo',
+          provider: 'openai',
+          style: 'photorealistic',
+        }),
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it('rejects unknown client fields instead of silently stripping contract drift', async () => {
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a cat', provider: 'openai', plan: 'enterprise' }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   // =========================================================================
@@ -577,6 +619,29 @@ describe('POST /api/media/image/generate', () => {
       expect(data.provider).toBe('google');
       expect(data.images[0].b64_json).toBe('base64imagedata==');
     });
+
+    it('accepts a provider API model id but prices and dispatches through its catalog model', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          predictions: [{ bytesBase64Encoded: 'fastbase64==' }],
+        }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a fast concept sketch',
+          provider: 'google',
+          model: 'imagen-4.0-fast-generate-001',
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(String(mockFetch.mock.calls[0]?.[0])).toContain(
+        '/models/imagen-4.0-fast-generate-001:predict',
+      );
+      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 2);
+    });
   });
 
   // =========================================================================
@@ -607,6 +672,8 @@ describe('POST /api/media/image/generate', () => {
       expect(data.success).toBe(true);
       expect(data.provider).toBe('stability');
       expect(data.images[0].b64_json).toBe('stabilitybase64data==');
+      expect(data.model).toBe('stable-image-core');
+      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 3);
     });
   });
 

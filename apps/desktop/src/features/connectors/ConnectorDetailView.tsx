@@ -8,7 +8,7 @@
  *   - Permission dropdown: Always allow / Needs approval / Blocked
  *
  * Persistence: Hybrid (local vault in Tauri, Neon-backed managed cloud).
- * Storage adapter: packages/unified-chat/src/lib/connectorPermissionStore.ts
+ * Storage adapter: packages/ui/unified-chat/src/lib/connectorPermissionStore.ts
  */
 
 import { useCallback, useEffect, useState } from 'react';

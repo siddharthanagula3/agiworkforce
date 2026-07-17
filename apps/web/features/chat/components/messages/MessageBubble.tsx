@@ -57,11 +57,11 @@ const MarkdownContent = dynamic(
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
-import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforce/services';
+import { extractTrailingUnclosedBlock, isRenderableArtifact } from '@agiworkforce/artifacts';
 import { useStreamingArtifactSync } from '../../hooks/use-streaming-artifact';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore, type GeneratedFileMetadataEntry } from '@/stores/chatStore';
-import { useToolApprovalResolver } from '@/lib/hooks/useChatStream';
+import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
@@ -301,8 +301,29 @@ const MessageBubbleComponent = function MessageBubble({
     },
     [resolveToolApproval, message.id],
   );
+  // Resend re-runs the whole exchange from the original user message (same
+  // mechanism as the Regenerate button) -- the only way to get a fresh,
+  // resolvable tool call once the suspended turn's in-memory state is gone.
+  // useCallback keeps its identity stable across renders, matching
+  // handleApproveTool/handleRejectTool, so ToolTimeline's memo comparator
+  // can compare it by reference instead of always re-rendering.
+  const handleResendTool = useCallback(() => {
+    onRegenerate?.(message.id);
+  }, [onRegenerate, message.id]);
+  // `pendingTurns` (the registry resolveToolApproval consults) is process-
+  // memory-only and doesn't survive a reload, even though a persisted
+  // awaiting_approval card does. Without this, the Approve/Reject buttons
+  // below would render live-wired but silently no-op (Finding 1). Only
+  // meaningful when a resolver context exists at all -- a standalone render
+  // with no provider isn't "expired", it just never had approval wired.
+  const approvalTurnExpired = Boolean(resolveToolApproval) && !isApprovalTurnLive(message.id);
   const approvalHandlers = resolveToolApproval
-    ? { onApprove: handleApproveTool, onReject: handleRejectTool }
+    ? {
+        onApprove: handleApproveTool,
+        onReject: handleRejectTool,
+        expired: approvalTurnExpired,
+        onResend: onRegenerate ? handleResendTool : undefined,
+      }
     : {};
 
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);

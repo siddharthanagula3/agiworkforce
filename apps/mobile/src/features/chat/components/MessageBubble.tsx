@@ -7,8 +7,9 @@ import {
   Platform,
 } from 'react-native';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
-import { memo, useCallback, useMemo, useState } from 'react';
-import { Clock, FileText, Download } from 'lucide-react-native';
+import { memo, useCallback, useMemo } from 'react';
+import { useRecyclingState } from '@shopify/flash-list';
+import { Clock, FileText, Download, AlertCircle, RefreshCw } from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
@@ -39,6 +40,11 @@ import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
+import {
+  hasMessageStreamError,
+  getMessageStreamErrorMessage,
+} from '@/src/features/chat/utils/messageStreamError';
+import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
@@ -89,6 +95,15 @@ interface MessageBubbleProps {
   onRetryMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
+  /** Called when the user allows/denies an MCP/connector tool call awaiting
+   *  approval (`x_tool_approval_request`) rendered in this message's
+   *  ToolCallTimeline. Distinct from `onApprove`/`onReject` above, which drive
+   *  the unrelated risk-action `ApprovalCard` (file_delete/command/etc.). */
+  onResolveToolApproval?: (
+    messageId: string,
+    toolCallId: string,
+    decision: 'approved' | 'rejected',
+  ) => void;
 }
 
 /**
@@ -106,6 +121,7 @@ export const MessageBubble = memo(function MessageBubble({
   onRetryMessage,
   onEditMessage,
   onReaction,
+  onResolveToolApproval,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
@@ -114,12 +130,24 @@ export const MessageBubble = memo(function MessageBubble({
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
   const hasReasoning =
     isAssistant && message.reasoning !== undefined && modelSupportsThinking(message.model);
-  const [expandedArtifact, setExpandedArtifact] = useState<Artifact | null>(null);
-  const [fullScreenImageUrl, setFullScreenImageUrl] = useState<string | null>(null);
-  const [showExportSheet, setShowExportSheet] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [editText, setEditText] = useState('');
-  const [reaction, setReaction] = useState<ReactionType>(null);
+  // FlashList v2 recycles component instances across list items for
+  // performance -- bare useState here would bleed a PRIOR message's UI state
+  // (an expanded artifact, an open export sheet, a half-typed edit draft)
+  // onto whichever message this instance now renders after a recycle.
+  // editModalVisible/editText are the sharpest case: a recycled instance
+  // stuck mid-edit would show one message's draft text inside another
+  // message's bubble -- a real correctness bug, not just a visual glitch.
+  // useRecyclingState resets each field whenever message.id changes.
+  const [expandedArtifact, setExpandedArtifact] = useRecyclingState<Artifact | null>(null, [
+    message.id,
+  ]);
+  const [fullScreenImageUrl, setFullScreenImageUrl] = useRecyclingState<string | null>(null, [
+    message.id,
+  ]);
+  const [showExportSheet, setShowExportSheet] = useRecyclingState(false, [message.id]);
+  const [editModalVisible, setEditModalVisible] = useRecyclingState(false, [message.id]);
+  const [editText, setEditText] = useRecyclingState('', [message.id]);
+  const [reaction, setReaction] = useRecyclingState<ReactionType>(null, [message.id]);
   const { width } = useWindowDimensions();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const reducedMotion = useReducedMotion();
@@ -127,11 +155,11 @@ export const MessageBubble = memo(function MessageBubble({
 
   const handleExpandArtifact = useCallback((artifact: Artifact) => {
     setExpandedArtifact(artifact);
-  }, []);
+  }, [setExpandedArtifact]);
 
   const handleCloseArtifact = useCallback(() => {
     setExpandedArtifact(null);
-  }, []);
+  }, [setExpandedArtifact]);
 
   const handleApprove = useCallback((id: string) => onApprove?.(id), [onApprove]);
 
@@ -140,21 +168,34 @@ export const MessageBubble = memo(function MessageBubble({
     [onReject],
   );
 
+  const handleResolveToolApproval = useCallback(
+    (toolCallId: string, decision: 'approved' | 'rejected') =>
+      onResolveToolApproval?.(message.id, toolCallId, decision),
+    [onResolveToolApproval, message.id],
+  );
+
+  // `pendingApprovalTurns` (the registry resolveToolApproval consults) is
+  // process-memory-only and doesn't survive a cold start, even though a
+  // persisted awaiting_approval tool call does. Without this, the Allow/Deny
+  // buttons below would render live-wired but silently no-op (Finding 1).
+  // Only meaningful when a resolver is actually wired at all.
+  const approvalTurnExpired = Boolean(onResolveToolApproval) && !isApprovalTurnLive(message.id);
+
   const handleImagePress = useCallback((url: string) => {
     setFullScreenImageUrl(url);
-  }, []);
+  }, [setFullScreenImageUrl]);
 
   const handleCloseFullScreenImage = useCallback(() => {
     setFullScreenImageUrl(null);
-  }, []);
+  }, [setFullScreenImageUrl]);
 
   const handleShowExport = useCallback(() => {
     setShowExportSheet(true);
-  }, []);
+  }, [setShowExportSheet]);
 
   const handleCloseExport = useCallback(() => {
     setShowExportSheet(false);
-  }, []);
+  }, [setShowExportSheet]);
 
   const handleDoubleTap = useCallback(
     (event: TapGestureHandlerStateChangeEvent) => {
@@ -173,13 +214,13 @@ export const MessageBubble = memo(function MessageBubble({
         });
       }
     },
-    [isAssistant, hapticsEnabled, message.id, onReaction],
+    [isAssistant, hapticsEnabled, message.id, onReaction, setReaction],
   );
 
   const handleOpenEditModal = useCallback(() => {
     setEditText(message.content);
     setEditModalVisible(true);
-  }, [message.content]);
+  }, [message.content, setEditModalVisible, setEditText]);
 
   const handleSubmitEdit = useCallback(() => {
     const trimmed = editText.trim();
@@ -187,7 +228,7 @@ export const MessageBubble = memo(function MessageBubble({
       onEditMessage(message.id, trimmed);
     }
     setEditModalVisible(false);
-  }, [editText, message.id, onEditMessage]);
+  }, [editText, message.id, onEditMessage, setEditModalVisible]);
 
   const handleLongPress = useCallback(() => {
     const exportOption = isAssistant && message.content.trim() ? ['Export Message...'] : [];
@@ -505,8 +546,12 @@ export const MessageBubble = memo(function MessageBubble({
             {/* Tool calls — unified connected timeline (Claude-style inline tool use) */}
             {isAssistant && message.toolCalls && message.toolCalls.length > 0 ? (
               <ToolCallTimeline
+                messageId={message.id}
                 toolCalls={message.toolCalls}
                 summary={summarizeToolTimeline(message.toolCalls)}
+                onResolveApproval={handleResolveToolApproval}
+                approvalExpired={approvalTurnExpired}
+                onResendApproval={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
               />
             ) : null}
 
@@ -585,6 +630,60 @@ export const MessageBubble = memo(function MessageBubble({
                 ))}
               </View>
             ) : null}
+
+            {/* Mid-stream provider failure notice: metadata.streamError (additive
+                x_stream_error delta) OR the retroactive metadata.finishReason
+                ==='error' case (legacy-web has passed that literal through for
+                a while, so historical turns can carry it with no marker at
+                all — see hasMessageStreamError's doc comment) is the ONLY
+                signal that this turn's answer may be cut off — the server
+                still ends the stream cleanly, so without this the partial
+                content renders as an ordinary completion with zero
+                indication anything went wrong. The partial content itself is
+                left exactly as it streamed; this only adds a visible notice
+                below it. */}
+            {isAssistant && !message.isStreaming && hasMessageStreamError(message) && (
+              <Pressable
+                onPress={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                disabled={!onRetryMessage}
+                accessibilityRole={onRetryMessage ? 'button' : 'text'}
+                accessibilityLabel={
+                  onRetryMessage
+                    ? 'This response may be incomplete. Tap to regenerate.'
+                    : 'This response may be incomplete.'
+                }
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: themeColors.dangerSurface,
+                  borderWidth: 1,
+                  borderColor: themeColors.dangerBorder,
+                  borderRadius: radii.md,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                  marginTop: 4,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <AlertCircle size={13} color={themeColors.agentError} />
+                <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>
+                  {getMessageStreamErrorMessage(message)
+                    ? `Response may be incomplete: ${getMessageStreamErrorMessage(message)}`
+                    : 'Response may be incomplete'}
+                </Text>
+                {onRetryMessage && (
+                  <>
+                    <RefreshCw size={12} color={themeColors.agentError} />
+                    <Text
+                      style={{ fontSize: 12, fontWeight: '600', color: themeColors.agentError }}
+                    >
+                      Retry
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            )}
 
             {/* Provenance badge: local or cloud provider context */}
             {provenance && (
@@ -685,7 +784,11 @@ export const MessageBubble = memo(function MessageBubble({
   // Wrap assistant messages with a double-tap gesture handler for reactions
   if (isAssistant) {
     return (
-      <TapGestureHandler numberOfTaps={2} onHandlerStateChange={handleDoubleTap}>
+      <TapGestureHandler
+        numberOfTaps={2}
+        onHandlerStateChange={handleDoubleTap}
+        testID="message-bubble-double-tap"
+      >
         <View>{messageContent}</View>
       </TapGestureHandler>
     );

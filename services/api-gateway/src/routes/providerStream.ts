@@ -35,7 +35,7 @@ import {
   type ProviderId,
 } from '../lib/providerAdapters';
 import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
-import { classifyError } from '@agiworkforce/llm-runtime';
+import { classifyError } from '@agiworkforce/provider-runtime';
 
 const router: Router = Router();
 

@@ -3,7 +3,7 @@
  *
  * Asserts the live route handlers' JSON output parses against the shared
  * `SettingsSyncPullResponseSchema` / `SettingsSyncPushResponseSchema` from
- * @agiworkforce/services — the schemas mobile's cloudSyncEngine validates
+ * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
  * pulled settings documents with. (The allowlist/secret-scrub behavior has
  * its own dedicated tests; this file pins only the response envelope.)
  */
@@ -12,7 +12,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   SettingsSyncPullResponseSchema,
   SettingsSyncPushResponseSchema,
-} from '@agiworkforce/services';
+} from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
@@ -73,16 +73,24 @@ describe('GET /api/settings/sync — shared cloud contract', () => {
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.settings).toEqual({});
   });
+
+  it('rejects a cursor outside the PostgreSQL bigint range before querying', async () => {
+    const res = await GET(
+      new Request('http://localhost:3000/api/settings/sync?since=9999999999999999999', {
+        method: 'GET',
+      }) as never,
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/settings/sync — shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('merged push ack parses', async () => {
-    // Route reads current row, then upserts and returns the new version.
-    mockQuery
-      .mockResolvedValueOnce([]) // no existing row
-      .mockResolvedValueOnce([{ server_version: '13' }]); // upsert returning
+    mockQuery.mockResolvedValueOnce([{ server_version: '13' }]);
 
     const res = await POST(
       new Request('http://localhost:3000/api/settings/sync', {
@@ -90,7 +98,7 @@ describe('POST /api/settings/sync — shared cloud contract', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           settings: { appearance: { theme: 'dark' } },
-          updatedAt: '2026-07-01T00:00:00.000Z',
+          baseVersion: '0',
         }),
       }) as never,
     );

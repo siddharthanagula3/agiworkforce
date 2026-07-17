@@ -9,11 +9,11 @@
  *   GET  /api/memory/sync   (no `since`)
  *        → legacy sync STATUS { lastSync, entriesCount, sources } (back-compat for
  *          the mobile data-controls UI).
- *   POST /api/memory/sync   { memories: [...] }
- *        → idempotent UPSERT by id. user_id is set SERVER-SIDE from the verified
+ *   POST /api/memory/sync   { protocolVersion: 2, memories: [...] }
+ *        → server-version compare-and-swap. user_id is set SERVER-SIDE from the verified
  *          session (never from the body); RLS WITH CHECK is the backstop.
- *          Last-writer-wins by updated_at; a null/older updated_at can never clobber
- *          a newer row. is_deleted carries the tombstone.
+ *          The server owns updated_at and tombstone timestamps; stale base revisions
+ *          return the deterministic current server row as a conflict.
  *   POST /api/memory/sync   (no `memories`)
  *        → legacy TRIGGER { synced, conflicts } (back-compat).
  *
@@ -24,7 +24,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  MemorySyncPushRequestSchema,
+  ServerVersionSchema,
+  type MemoryWireDelta,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -33,11 +37,10 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 
 const MAX_MEMORIES_PULL = 1000;
-const MAX_MEMORIES_PUSH = 1000;
 
 // Wire shape from the shared cloud contract (restructure Wave 4) — enforced
 // by route.contract.test.ts, consumed at runtime by mobile's cloudSyncEngine.
-type MemoryDelta = import('@agiworkforce/services').MemoryWireDelta;
+type MemoryDelta = MemoryWireDelta;
 
 // ---------------------------------------------------------------------------
 // GET — delta pull (?since=) OR legacy status (no since)
@@ -60,7 +63,11 @@ async function handlePull(request: NextRequest, url: URL) {
   const { db, userId } = await getUserScopedDb(request);
 
   const sinceRaw = url.searchParams.get('since') ?? '0';
-  const since = /^\d{1,19}$/.test(sinceRaw) ? sinceRaw : '0';
+  const parsedSince = ServerVersionSchema.safeParse(sinceRaw);
+  if (!parsedSince.success) {
+    throw createError.validation('Invalid memory sync cursor', parsedSince.error);
+  }
+  const since = parsedSince.data;
 
   try {
     const memories = await db.query<MemoryDelta>(
@@ -118,21 +125,6 @@ async function handleStatus(request: NextRequest) {
 // POST — delta push ({ memories }) OR legacy trigger (no memories)
 // ---------------------------------------------------------------------------
 
-const PushMemorySchema = z.object({
-  id: z.string().uuid(),
-  content: z.string().max(20_000),
-  category: z.string().max(200).nullable().optional(),
-  source: z.string().max(50).nullable().optional(),
-  pinned: z.boolean().optional(),
-  isDeleted: z.boolean().optional(),
-  createdAt: z.string().datetime().optional(),
-  updatedAt: z.string().datetime(),
-});
-
-const PushBodySchema = z.object({
-  memories: z.array(PushMemorySchema).max(MAX_MEMORIES_PUSH).optional(),
-});
-
 async function handlePost(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
@@ -149,14 +141,8 @@ async function handlePost(request: NextRequest) {
   } catch {
     rawBody = {};
   }
-  const parsed = PushBodySchema.safeParse(rawBody ?? {});
-  if (!parsed.success) {
-    throw createError.validation('Invalid memory sync payload', parsed.error);
-  }
-  const memories = parsed.data.memories;
-
   // Legacy trigger: no `memories` key → return the simple synced count (RLS-scoped).
-  if (memories === undefined) {
+  if (!hasMemoriesKey(rawBody)) {
     try {
       const [row] = await db.query<{ count: number }>(
         `select count(*)::int as count from user_memories where user_id = $1 and is_deleted = false`,
@@ -169,50 +155,131 @@ async function handlePost(request: NextRequest) {
     }
   }
 
-  // Delta push: idempotent UPSERT by id, last-writer-wins by updated_at. user_id is
-  // forced to the session user so a client can never write another user's row (RLS
-  // WITH CHECK is the DB-level backstop). A null/older updated_at can never clobber a
-  // newer row. is_deleted carries the tombstone so deletes propagate cross-device.
+  if (!hasSyncProtocolV2(rawBody)) {
+    return syncProtocolUpgradeRequired();
+  }
+  const parsed = MemorySyncPushRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    throw createError.validation('Invalid memory sync payload', parsed.error);
+  }
+  const { memories } = parsed.data;
+
+  // Delta push: server-version compare-and-swap. user_id is forced to the session
+  // user so a client can never write another user's row (RLS WITH CHECK is the
+  // DB-level backstop). Server-owned timestamps/tombstones remove client-clock races.
   const applied: Array<{ id: string; server_version: string }> = [];
+  const conflicts: Array<{ id: string; current: MemoryDelta | null }> = [];
   try {
-    for (const m of memories) {
-      const rows = await db.query<{ id: string; server_version: string }>(
+    if (memories.length > 0) {
+      const rows = await db.query<{
+        kind: 'applied' | 'conflict';
+        id: string;
+        server_version: string | null;
+        current: MemoryDelta | null;
+      }>(
         `
-          insert into user_memories
-            (id, user_id, content, category, source, pinned, is_deleted, created_at, updated_at)
-          values ($1, $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), $9::timestamptz)
-          on conflict (id) do update set
-            content = excluded.content,
-            category = excluded.category,
-            source = excluded.source,
-            pinned = excluded.pinned,
-            is_deleted = excluded.is_deleted,
-            updated_at = excluded.updated_at
-          where user_memories.user_id = $2
-            and excluded.updated_at >= user_memories.updated_at
-          returning id, server_version
+          with input as materialized (
+            select (item ->> 'id')::uuid as id,
+                   item ->> 'content' as content,
+                   item ->> 'category' as category,
+                   item ->> 'source' as source,
+                   coalesce((item ->> 'pinned')::boolean, false) as pinned,
+                   item ? 'pinned' as has_pinned,
+                   (item ->> 'baseVersion')::bigint as base_version,
+                   coalesce((item ->> 'isDeleted')::boolean, false) as should_delete
+              from jsonb_array_elements($2::jsonb) as source(item)
+          ), updated as (
+            update user_memories as existing
+               set content = incoming.content,
+                   category = incoming.category,
+                   source = incoming.source,
+                   pinned = case when incoming.has_pinned then incoming.pinned else existing.pinned end,
+                   is_deleted = incoming.should_delete,
+                   updated_at = now()
+              from input as incoming
+             where existing.id = incoming.id
+               and existing.user_id = $1
+               and existing.server_version = incoming.base_version
+               and (existing.is_deleted = false or incoming.should_delete)
+            returning existing.id, existing.server_version
+          ), inserted as (
+            insert into user_memories
+              (id, user_id, content, category, source, pinned, is_deleted, created_at, updated_at)
+            select incoming.id, $1, incoming.content, incoming.category, incoming.source,
+                   incoming.pinned, incoming.should_delete, now(), now()
+              from input as incoming
+             where incoming.base_version = 0
+            on conflict (id) do nothing
+            returning id, server_version
+          ), applied_rows as materialized (
+            select id, server_version from updated union all select id, server_version from inserted
+          ), conflict_rows as (
+            select incoming.id,
+                   case when current.id is null then null else jsonb_build_object(
+                     'id', current.id::text, 'content', current.content,
+                     'category', current.category, 'source', current.source,
+                     'pinned', current.pinned, 'is_deleted', current.is_deleted,
+                     'created_at', current.created_at, 'updated_at', current.updated_at,
+                     'server_version', current.server_version::text
+                   ) end as current
+              from input as incoming
+              left join user_memories as current
+                on current.id = incoming.id and current.user_id = $1
+             where not exists (select 1 from applied_rows where applied_rows.id = incoming.id)
+          )
+          select 'applied'::text as kind, id::text, server_version::text, null::jsonb as current
+            from applied_rows
+          union all
+          select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [
-          m.id,
-          userId,
-          m.content,
-          m.category ?? null,
-          m.source ?? null,
-          m.pinned ?? false,
-          m.isDeleted ?? false,
-          m.createdAt ?? null,
-          m.updatedAt,
-        ],
+        [userId, JSON.stringify(memories)],
       );
-      if (rows[0]) applied.push(rows[0]);
+      for (const row of rows) {
+        if (row.kind === 'applied' && row.server_version !== null) {
+          applied.push({ id: row.id, server_version: row.server_version });
+        } else if (row.kind === 'conflict') {
+          conflicts.push({ id: row.id, current: row.current });
+        } else {
+          throw new Error('Memory sync database returned an invalid batch result');
+        }
+      }
     }
 
-    const cursor = maxServerVersion('0', applied);
-    return NextResponse.json({ applied, cursor });
+    const conflictRows = conflicts.flatMap((conflict) =>
+      conflict.current ? [conflict.current] : [],
+    );
+    const cursor = maxServerVersion('0', applied, conflictRows);
+    return NextResponse.json({ protocolVersion: 2, applied, conflicts, cursor });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync push failed');
     throw createError.internal('Failed to push memory changes');
   }
+}
+
+function hasMemoriesKey(value: unknown): boolean {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value) && 'memories' in value);
+}
+
+function hasSyncProtocolV2(value: unknown): boolean {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>)['protocolVersion'] === 2,
+  );
+}
+
+function syncProtocolUpgradeRequired(): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: 'SYNC_PROTOCOL_UPGRADE_REQUIRED',
+        message: 'Upgrade this client before pushing Managed Cloud memory changes.',
+      },
+      requiredProtocolVersion: 2,
+    },
+    { status: 409 },
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -338,7 +338,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   /**
    * Publish via the canonical artifact-publish service.
    *
-   * Wires @agiworkforce/services publishArtifact with the Tauri localFileWriter
+   * Wires @agiworkforce/artifacts publishArtifact with the Tauri localFileWriter
    * adapter. Cloud artifact publishing is not built yet (no waitlist for it);
    * the toast says "coming soon". Versioning and inline edit-in-place remain
    * open product gaps.

@@ -1,4 +1,4 @@
-import { getCapabilities } from '@agiworkforce/local-llm';
+import { getCapabilities, getSystemModelForTier1Runtime } from '@agiworkforce/local-llm';
 import {
   getInstalledModel,
   listInstalledModels,
@@ -25,9 +25,8 @@ function isSystemModel(model: ModelDef): boolean {
 }
 
 function modelSupportsActiveSystemRuntime(model: ModelDef, runtime: string | null): boolean {
-  if (runtime === 'foundation_models') return model.id === 'apple-foundation-models';
-  if (runtime === 'aicore') return model.id === 'gemini-nano-aicore';
-  return false;
+  if (runtime !== 'foundation_models' && runtime !== 'aicore') return false;
+  return getSystemModelForTier1Runtime(runtime)?.id === model.id;
 }
 
 function firstModelMatching(predicate: (model: ModelDef) => boolean): ModelDef | undefined {

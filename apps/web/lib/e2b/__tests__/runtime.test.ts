@@ -5,7 +5,7 @@
  * Verifies:
  *   - No conversationId → ephemeral: one sandbox per getE2BExecutor() call, dispose()
  *     kills it immediately (byte-for-byte the original per-call behavior).
- *   - conversationId + no prior session → creates a sandbox, caches a code context per
+ *   - owned scope + no prior session → creates a sandbox, caches a code context per
  *     language, and persists the session (sandboxId + contexts) after each context
  *     create.
  *   - conversationId + a prior session → resumes via Sandbox.connect(sandboxId)
@@ -24,14 +24,31 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('../gate', () => ({ e2bExecutionEnabled: vi.fn(() => true) }));
 
+interface TestScope {
+  tenantId: string;
+  userId: string;
+  conversationId: string;
+}
+
+function scope(conversationId: string, userId = 'user-1'): TestScope {
+  return { tenantId: 'managed-cloud', userId, conversationId };
+}
+
+function scopeKey(value: TestScope): string {
+  return `${value.tenantId}:${value.userId}:${value.conversationId}`;
+}
+
 const sessions = new Map<string, { sandboxId: string; contexts: Record<string, unknown> }>();
 vi.mock('../session-store', () => ({
-  getE2BSession: vi.fn(async (id: string) => sessions.get(id) ?? null),
-  saveE2BSession: vi.fn(async (id: string, session: unknown) => {
-    sessions.set(id, session as { sandboxId: string; contexts: Record<string, unknown> });
+  getE2BSession: vi.fn(async (value: TestScope) => sessions.get(scopeKey(value)) ?? null),
+  saveE2BSession: vi.fn(async (value: TestScope, session: unknown) => {
+    sessions.set(
+      scopeKey(value),
+      session as { sandboxId: string; contexts: Record<string, unknown> },
+    );
   }),
-  deleteE2BSession: vi.fn(async (id: string) => {
-    sessions.delete(id);
+  deleteE2BSession: vi.fn(async (value: TestScope) => {
+    sessions.delete(scopeKey(value));
   }),
 }));
 
@@ -96,24 +113,24 @@ describe('getE2BExecutor — conversation-scoped', () => {
 
   it('creates a sandbox + context on first use and persists the session', async () => {
     const { getE2BExecutor } = await import('../runtime');
-    const executor = await getE2BExecutor('conv-1');
+    const executor = await getE2BExecutor(scope('conv-1'));
     expect(create).toHaveBeenCalledTimes(1);
     expect(connect).not.toHaveBeenCalled();
 
     await executor!.runCode({ language: 'python', code: 'x = 1' });
 
-    const saved = sessions.get('conv-1');
+    const saved = sessions.get(scopeKey(scope('conv-1')));
     expect(saved).toBeDefined();
     expect(saved!.contexts['python']).toBeDefined();
   });
 
   it('resumes via Sandbox.connect() instead of creating a new sandbox', async () => {
-    sessions.set('conv-2', {
+    sessions.set(scopeKey(scope('conv-2')), {
       sandboxId: 'sbx-existing',
       contexts: { python: { id: 'ctx-existing', language: 'python', cwd: '/home/user' } },
     });
     const { getE2BExecutor } = await import('../runtime');
-    const executor = await getE2BExecutor('conv-2');
+    const executor = await getE2BExecutor(scope('conv-2'));
 
     expect(connect).toHaveBeenCalledWith('sbx-existing', expect.any(Object));
     expect(create).not.toHaveBeenCalled();
@@ -125,11 +142,11 @@ describe('getE2BExecutor — conversation-scoped', () => {
   });
 
   it('falls back to creating a fresh sandbox when resume fails', async () => {
-    sessions.set('conv-3', { sandboxId: 'sbx-gone', contexts: {} });
+    sessions.set(scopeKey(scope('conv-3')), { sandboxId: 'sbx-gone', contexts: {} });
     connect.mockRejectedValueOnce(new Error('sandbox not found'));
 
     const { getE2BExecutor } = await import('../runtime');
-    const executor = await getE2BExecutor('conv-3');
+    const executor = await getE2BExecutor(scope('conv-3'));
 
     expect(connect).toHaveBeenCalledTimes(1);
     expect(create).toHaveBeenCalledTimes(1);
@@ -138,13 +155,27 @@ describe('getE2BExecutor — conversation-scoped', () => {
 
   it('dispose() persists the session instead of killing the sandbox', async () => {
     const { getE2BExecutor } = await import('../runtime');
-    const executor = await getE2BExecutor('conv-4');
+    const executor = await getE2BExecutor(scope('conv-4'));
     await executor!.runCode({ language: 'python', code: 'x = 1' });
     await executor!.dispose();
 
     const instance = await create.mock.results[0]!.value;
     expect(instance.kill).not.toHaveBeenCalled();
-    expect(sessions.has('conv-4')).toBe(true);
+    expect(sessions.has(scopeKey(scope('conv-4')))).toBe(true);
+  });
+
+  it('does not resume another user sandbox when the conversation id collides', async () => {
+    sessions.set(scopeKey(scope('shared-conv', 'user-a')), {
+      sandboxId: 'sbx-user-a',
+      contexts: {},
+    });
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('shared-conv', 'user-b'));
+
+    expect(executor).not.toBeNull();
+    expect(connect).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledOnce();
   });
 });
 
@@ -155,24 +186,32 @@ describe('pauseE2BSession / killE2BSession', () => {
   });
 
   it('pauseE2BSession pauses by sandbox ID without connecting', async () => {
-    sessions.set('conv-5', { sandboxId: 'sbx-5', contexts: {} });
+    sessions.set(scopeKey(scope('conv-5')), { sandboxId: 'sbx-5', contexts: {} });
     const { pauseE2BSession } = await import('../runtime');
-    await pauseE2BSession('conv-5');
+    await pauseE2BSession(scope('conv-5'));
     expect(staticPause).toHaveBeenCalledWith('sbx-5');
     expect(connect).not.toHaveBeenCalled();
   });
 
   it('pauseE2BSession is a no-op when there is no session', async () => {
     const { pauseE2BSession } = await import('../runtime');
-    await pauseE2BSession('conv-missing');
+    await pauseE2BSession(scope('conv-missing'));
     expect(staticPause).not.toHaveBeenCalled();
   });
 
   it('killE2BSession kills by sandbox ID and clears the mapping', async () => {
-    sessions.set('conv-6', { sandboxId: 'sbx-6', contexts: {} });
+    sessions.set(scopeKey(scope('conv-6', 'user-a')), {
+      sandboxId: 'sbx-user-a',
+      contexts: {},
+    });
+    sessions.set(scopeKey(scope('conv-6', 'user-b')), {
+      sandboxId: 'sbx-user-b',
+      contexts: {},
+    });
     const { killE2BSession } = await import('../runtime');
-    await killE2BSession('conv-6');
-    expect(staticKill).toHaveBeenCalledWith('sbx-6');
-    expect(sessions.has('conv-6')).toBe(false);
+    await killE2BSession(scope('conv-6', 'user-b'));
+    expect(staticKill).toHaveBeenCalledWith('sbx-user-b');
+    expect(sessions.has(scopeKey(scope('conv-6', 'user-b')))).toBe(false);
+    expect(sessions.has(scopeKey(scope('conv-6', 'user-a')))).toBe(true);
   });
 });

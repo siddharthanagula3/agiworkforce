@@ -15,6 +15,7 @@ import {
   ChevronRight,
   EyeOff,
   Lock,
+  Terminal,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { getModelMetadataById } from '@agiworkforce/types';
@@ -25,6 +26,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -69,6 +71,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   // appears for a model that can actually honor it.
   const selectedModelSupportsSearch =
     getModelMetadataById(selectedModel)?.capabilities?.search ?? false;
+  // Code execution: same "don't promise a no-op" reasoning as web search,
+  // plus two extra checks since running code is higher-risk than searching —
+  // the toggle only appears in Cloud mode, for a model whose catalog entry
+  // actually supports server-side code execution, AND when this deployment's
+  // E2B execution loop is reachable (`/api/me` feature_flags.code_execution,
+  // cached in useTierStore — defaults false until the first refresh, so a
+  // fresh install never shows the toggle before the real capability is known).
+  const selectedModelSupportsCodeExecution =
+    getModelMetadataById(selectedModel)?.capabilities?.codeExecution ?? false;
+  const codeExecutionDeploymentAvailable = useTierStore((s) => s.codeExecutionAvailable);
+  const showCodeExecutionToggle =
+    FEATURES.codeExecution &&
+    appMode === 'cloud' &&
+    selectedModelSupportsCodeExecution &&
+    codeExecutionDeploymentAvailable;
 
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projects = useProjectStore((s) => s.projects);
@@ -117,6 +134,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       if (!FEATURES.webSearch) return;
       haptic();
       setFeature('webSearch', enabled);
+    },
+    [haptic, setFeature],
+  );
+
+  const handleCodeExecutionToggle = useCallback(
+    (enabled: boolean) => {
+      if (!FEATURES.codeExecution) return;
+      haptic();
+      setFeature('codeExecution', enabled);
     },
     [haptic, setFeature],
   );
@@ -292,6 +318,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
         {/* Section 3: Tool availability */}
         {(FEATURES.webSearch && selectedModelSupportsSearch) ||
+        showCodeExecutionToggle ||
         FEATURES.imageGen ||
         FEATURES.computerUse ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
@@ -302,6 +329,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 description="Search current web results when needed"
                 enabled={features.webSearch}
                 onToggle={handleWebSearchToggle}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : null}
+            {showCodeExecutionToggle ? (
+              <CapabilityRow
+                icon={<Terminal size={18} color={themeColors.teal} />}
+                label="Run code"
+                description="Let the model execute code in a secure sandbox"
+                enabled={features.codeExecution}
+                onToggle={handleCodeExecutionToggle}
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
@@ -334,6 +372,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
         {/* Divider */}
         {(FEATURES.webSearch && selectedModelSupportsSearch) ||
+        showCodeExecutionToggle ||
         FEATURES.imageGen ||
         FEATURES.computerUse ? (
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />

@@ -6,6 +6,7 @@
  */
 
 import type { Artifact } from '../../types/chat';
+import type { ChatExecutionMode } from '@agiworkforce/types';
 
 /**
  * Widget data type for embedded widgets (INT-001)
@@ -264,6 +265,8 @@ export interface ConversationSummary {
   incognito?: boolean;
   /** Per-conversation model override — takes precedence over the global default model */
   modelOverride?: string;
+  /** Immutable execution boundary. Local -> BYOK transitions create a fork. */
+  executionMode: ChatExecutionMode;
 }
 
 // Pending user message - for mid-task input while AI is processing

@@ -28,9 +28,11 @@ const mockGetInstallationAccessToken = vi.fn();
 const mockGetPrDiff = vi.fn();
 const mockPostIssueComment = vi.fn();
 const mockPostPrReview = vi.fn();
+const mockIsGitHubAppConfigured = vi.fn();
 vi.mock('@/lib/github-app', () => ({
   getInstallationAccessToken: (...a: unknown[]) => mockGetInstallationAccessToken(...a),
   getPrDiff: (...a: unknown[]) => mockGetPrDiff(...a),
+  isGitHubAppConfigured: () => mockIsGitHubAppConfigured(),
   postIssueComment: (...a: unknown[]) => mockPostIssueComment(...a),
   postPrReview: (...a: unknown[]) => mockPostPrReview(...a),
 }));
@@ -76,7 +78,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   __resetConnectorMcpMapCacheForTests();
   delete process.env['CONNECTOR_MCP_SERVERS_JSON'];
-  delete process.env['CONNECTOR_MCP_MAP_PATH'];
+  mockIsGitHubAppConfigured.mockReturnValue(true);
   mockAssertResolvedPublicHostname.mockResolvedValue(undefined);
 });
 
@@ -93,6 +95,18 @@ describe('loadUserConnectorToolDefs — github built-in gate', () => {
     stubDb({ installations: [] });
     const defs = await loadUserConnectorToolDefs('user-1');
     expect(defs).toEqual([]);
+  });
+
+  it('offers NO github tools when the GitHub App is not configured', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    stubDb({ installations: [{ installation_id: 42, account_login: 'acme' }] });
+
+    const defs = await loadUserConnectorToolDefs('user-1');
+
+    expect(defs).toEqual([]);
+    expect(
+      mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('github_installations')),
+    ).toBe(false);
   });
 
   it('returns [] for an empty userId without touching the DB', async () => {
@@ -150,6 +164,19 @@ describe('loadUserConnectorToolDefs — remote connector gate', () => {
 
     const defs = await loadUserConnectorToolDefs('user-1');
     expect(defs).toEqual([]);
+    expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
+  });
+
+  it('rejects a plaintext HTTP operator connector before discovery', async () => {
+    process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
+      connectors: [{ connectorId: 'notion', url: 'http://mcp.notion.example/mcp' }],
+    });
+    stubDb({ activeConnectors: ['notion'] });
+
+    const defs = await loadUserConnectorToolDefs('user-1');
+
+    expect(defs).toEqual([]);
+    expect(mockAssertResolvedPublicHostname).not.toHaveBeenCalled();
     expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();
   });
 });
@@ -223,5 +250,94 @@ describe('makeUserConnectorExecutor', () => {
     const result = await exec('notion', 'search_pages', { q: 'roadmap' });
     expect(callTool).toHaveBeenCalledWith('search_pages', { q: 'roadmap' });
     expect(result).toEqual({ handled: true, content: 'page found', isError: false });
+  });
+
+  it('never reuses User A credentialed handle when User B has the same short_id', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    const sameShortId = 'deadbeef00';
+    const userRows = {
+      'user-a': {
+        id: 'row-a',
+        short_id: sameShortId,
+        name: 'Private A',
+        url: 'https://a.mcp.example/mcp',
+        transport: 'streamable-http',
+        auth_header_enc: null,
+      },
+      'user-b': {
+        id: 'row-b',
+        short_id: sameShortId,
+        name: 'Private B',
+        url: 'https://b.mcp.example/mcp',
+        transport: 'streamable-http',
+        auth_header_enc: null,
+      },
+    } as const;
+    mockNeonQuery.mockImplementation((sql: string, params: unknown[] = []) => {
+      if (sql.includes('user_custom_connectors')) {
+        const userId = sql.includes('where short_id = $1') ? params[1] : params[0];
+        const row = userRows[userId as keyof typeof userRows];
+        return Promise.resolve(row ? [row] : []);
+      }
+      return Promise.resolve([]);
+    });
+
+    const callAsA = vi.fn().mockResolvedValue({
+      isError: false,
+      content: [{ type: 'text', text: 'credential owner: A' }],
+    });
+    const callAsB = vi.fn().mockResolvedValue({
+      isError: false,
+      content: [{ type: 'text', text: 'credential owner: B' }],
+    });
+    mockBuildMcpToolCatalog.mockImplementation(async (configs: Record<string, { url?: string }>) => {
+      const config = Object.values(configs)[0];
+      const isUserA = config?.url === 'https://a.mcp.example/mcp';
+      return {
+        catalog: {
+          version: 1,
+          generatedAt: 0,
+          servers: {},
+          tools: [
+            {
+              serverName: `custom-${sameShortId}`,
+              safeServerName: `custom-${sameShortId}`,
+              toolName: 'whoami',
+              description: isUserA ? 'User A private tool' : 'User B private tool',
+              inputSchema: { type: 'object' },
+              fallbackDescription: 'identify credential owner',
+            },
+          ],
+        },
+        handles: [
+          {
+            serverName: `custom-${sameShortId}`,
+            callTool: isUserA ? callAsA : callAsB,
+            close: vi.fn(),
+          },
+        ],
+      };
+    });
+    mockConnectMcpServer.mockResolvedValue({
+      serverName: `custom-${sameShortId}`,
+      callTool: callAsB,
+      close: vi.fn(),
+    });
+
+    const userADefs = await loadUserConnectorToolDefs('user-a');
+    const userBDefs = await loadUserConnectorToolDefs('user-b');
+    const result = await makeUserConnectorExecutor('user-b')(
+      `custom-${sameShortId}`,
+      'whoami',
+      {},
+    );
+
+    expect(userADefs[0]?.description).toBe('User A private tool');
+    expect(userBDefs[0]?.description).toBe('User B private tool');
+    expect(mockBuildMcpToolCatalog).toHaveBeenCalledTimes(2);
+    expect(callAsA).not.toHaveBeenCalled();
+    expect(callAsB).toHaveBeenCalledWith('whoami', {});
+    expect(result).toEqual({ handled: true, content: 'credential owner: B', isError: false });
+    expect(mockConnectMcpServer).not.toHaveBeenCalled();
   });
 });

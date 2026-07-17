@@ -93,7 +93,7 @@ vi.mock('../../src/lib/neonClients', () => {
   }
   const client = { from: vi.fn(from) };
   return {
-    getServiceClient: vi.fn(() => client),
+    getSystemClient: vi.fn(() => client),
     getUserClient: vi.fn(() => client),
     getUserScopedClient: vi.fn(() => client),
   };

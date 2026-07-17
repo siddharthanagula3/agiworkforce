@@ -29,15 +29,23 @@ interface SettingsSyncState {
   settingsCursor: string;
 
   /**
-   * Serialized JSON snapshot of the last successfully pushed cloud-safe settings
-   * projection (as returned by toCloudSettings()). Empty string means never pushed.
-   * Used to detect whether a push is needed: if the current projection serializes
-   * the same as this baseline, skip the POST.
+   * Serialized local-surface baseline (historical field name retained for stored
+   * state compatibility). It is advanced by an accepted/rejected push attempt or
+   * a server pull, then used for dirty detection and three-way rebasing. Empty
+   * string means this device has never observed a baseline.
    */
   lastPushedSnapshot: string;
 
+  /**
+   * Last complete cloud-safe document observed from or accepted by the server.
+   * Unlike `lastPushedSnapshot`, this retains fields owned by Web/Desktop so a
+   * narrower Mobile projection cannot erase them on its next push.
+   */
+  serverSnapshot: string;
+
   setSettingsCursor: (cursor: string) => void;
   setLastPushedSnapshot: (snapshot: string) => void;
+  setServerSnapshot: (snapshot: string) => void;
   /** Reset all settings sync bookkeeping (e.g. on sign-out / account switch). */
   resetSettingsSync: () => void;
 }
@@ -47,14 +55,17 @@ export const useSettingsSyncStateStore = create<SettingsSyncState>()(
     (set) => ({
       settingsCursor: '0',
       lastPushedSnapshot: '',
+      serverSnapshot: '',
 
       setSettingsCursor: (cursor) => set({ settingsCursor: cursor }),
       setLastPushedSnapshot: (snapshot) => set({ lastPushedSnapshot: snapshot }),
+      setServerSnapshot: (snapshot) => set({ serverSnapshot: snapshot }),
 
       resetSettingsSync: () =>
         set({
           settingsCursor: '0',
           lastPushedSnapshot: '',
+          serverSnapshot: '',
         }),
     }),
     {
@@ -64,6 +75,7 @@ export const useSettingsSyncStateStore = create<SettingsSyncState>()(
       partialize: (s) => ({
         settingsCursor: s.settingsCursor,
         lastPushedSnapshot: s.lastPushedSnapshot,
+        serverSnapshot: s.serverSnapshot,
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[settingsSyncStateStore] Hydration failed:', error);

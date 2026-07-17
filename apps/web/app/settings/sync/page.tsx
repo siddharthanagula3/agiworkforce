@@ -1,11 +1,17 @@
 /**
  * /settings/sync · Cross-device sync settings page.
  *
- * Cross-surface sync is a hosted cloud capability. Keep local/account modes
- * clear and reuse the shared account-bound access request form.
+ * Managed cloud is public alpha and open by default (founder decision,
+ * 2026-06-27, AGENTS.md) — there is no waitlist/request-access step for sync
+ * itself. Settings sync (/api/settings/sync, a cloud-safe namespace allowlist)
+ * and mobile chat-history sync (/api/chat/sync) are both live today for any
+ * signed-in AGI Cloud account; this page previously showed a "request hosted
+ * sync access" waitlist form for that already-live capability. The one piece
+ * that is genuinely not available yet is Desktop cloud persistence (chat and
+ * settings both) — Desktop Local/BYOK modes keep history device-local by
+ * design, and Desktop's Cloud app mode has no sync wiring yet (tracked gap,
+ * not a waitlist).
  */
-
-import { WaitlistForm } from '../../byok/WaitlistForm';
 
 export default function SyncSettingsPage() {
   return (
@@ -24,11 +30,11 @@ export default function SyncSettingsPage() {
           Sync
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Cross-device chat history and settings sync.
+          Cross-device chat history and settings sync for your AGI Cloud account.
         </p>
       </div>
 
-      {/* Cross-device sync · hosted cloud upgrade CTA */}
+      {/* Cross-device sync · live status */}
       <section
         style={{
           border: '1px solid var(--settings-border)',
@@ -49,7 +55,7 @@ export default function SyncSettingsPage() {
           Cross-device sync
         </div>
         <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Row: Chat history sync status */}
+          {/* Row: Settings + chat sync status */}
           <div
             style={{
               display: 'flex',
@@ -60,7 +66,7 @@ export default function SyncSettingsPage() {
             }}
           >
             <span style={{ fontSize: 14, color: 'var(--text-3)', flexShrink: 0 }}>
-              Chat history sync (Web, Desktop, Mobile)
+              Settings and chat history sync (Web, Mobile)
             </span>
             <span
               style={{
@@ -77,16 +83,54 @@ export default function SyncSettingsPage() {
                 textTransform: 'uppercase',
               }}
             >
-              Hosted cloud upgrade
+              Live
             </span>
           </div>
 
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            Chat history stays local or account-scoped until you enable hosted cloud sync. Request
-            access if you want AGI to sync conversations across Web, Desktop, Mobile, and CLI.
+            Appearance, personalization, notifications, language, and chat preferences sync
+            automatically across Web and Mobile whenever you&apos;re signed in to your AGI Cloud
+            account — no request or opt-in step. Secrets (BYOK/provider keys, local model paths,
+            device settings) never sync and stay on the device where you set them.
           </p>
 
-          <WaitlistForm source="sync" ctaLabel="Request hosted sync access" />
+          {/* Row: Desktop status */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              minHeight: 32,
+            }}
+          >
+            <span style={{ fontSize: 14, color: 'var(--text-3)', flexShrink: 0 }}>
+              Settings and chat history sync (Desktop)
+            </span>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                color: 'var(--text-3)',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 9999,
+                padding: '3px 10px',
+                whiteSpace: 'nowrap',
+                textTransform: 'uppercase',
+              }}
+            >
+              Coming soon
+            </span>
+          </div>
+
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
+            Desktop Local and BYOK modes keep chat and settings on your machine by design. Desktop
+            cloud sync isn&apos;t wired up yet — Desktop stays local-only for now, independent of
+            your Web/Mobile sync state.
+          </p>
         </div>
       </section>
 
@@ -118,7 +162,8 @@ export default function SyncSettingsPage() {
             Website chat is account-bound. Desktop and CLI keep local history on your machine.
           </li>
           <li style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            No cross-surface sync happens unless you explicitly enable hosted cloud sync.
+            Secret and device-specific settings (BYOK keys, local model paths, device config) never
+            sync, on any surface.
           </li>
           <li style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
             Export your data at any time. See Privacy &amp; Data for JSON export.

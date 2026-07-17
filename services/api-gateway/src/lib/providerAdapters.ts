@@ -6,7 +6,7 @@
  * to the client).
  *
  * Restructure Wave 2: this factory is the ONLY provider-calling seam in the
- * gateway. All thirteen cloud adapters from packages/providers/* are wired
+ * gateway. All thirteen cloud adapters from packages/ai/providers/* are wired
  * here; a provider is "available" only when its server env key is present
  * (buildProviderAdapter returns null otherwise and routes respond 502/503).
  * LM Studio is deliberately absent — it is a local-device provider and has
@@ -14,37 +14,13 @@
  */
 
 import {
-  createAnthropicAdapter,
-  type AnthropicAdapterConfig,
-} from '@agiworkforce/providers-anthropic';
-import { createOpenAIAdapter, type OpenAIAdapterConfig } from '@agiworkforce/providers-openai';
-import { createOllamaAdapter, type OllamaAdapterConfig } from '@agiworkforce/providers-ollama';
-import { createGoogleAdapter, type GoogleAdapterConfig } from '@agiworkforce/providers-google';
-import { createDeepSeekAdapter } from '@agiworkforce/providers-deepseek';
-import { createXAIAdapter } from '@agiworkforce/providers-xai';
-import { createPerplexityAdapter } from '@agiworkforce/providers-perplexity';
-import { createGroqAdapter } from '@agiworkforce/providers-groq';
-import { createMistralAdapter } from '@agiworkforce/providers-mistral';
-import { createMoonshotAdapter } from '@agiworkforce/providers-moonshot';
-import { createQwenAdapter } from '@agiworkforce/providers-qwen';
-import { createZhipuAdapter } from '@agiworkforce/providers-zhipu';
-import { createOpenRouterAdapter } from '@agiworkforce/providers-openrouter';
+  createProviderAdapter,
+  type ProviderAdapterConfigMap,
+  type ProviderAdapterId,
+} from '@agiworkforce/providers-factory';
 import type { ProviderAdapter } from '@agiworkforce/types';
 
-export type ProviderId =
-  | 'anthropic'
-  | 'openai'
-  | 'ollama'
-  | 'google'
-  | 'deepseek'
-  | 'xai'
-  | 'perplexity'
-  | 'groq'
-  | 'mistral'
-  | 'moonshot'
-  | 'qwen'
-  | 'zhipu'
-  | 'open_router';
+export type ProviderId = Exclude<ProviderAdapterId, 'lmstudio'>;
 
 export const SUPPORTED_PROVIDER_IDS = [
   'anthropic',
@@ -60,45 +36,28 @@ export const SUPPORTED_PROVIDER_IDS = [
   'qwen',
   'zhipu',
   'open_router',
-] as const;
+] as const satisfies readonly ProviderId[];
 
 /** Simple env-keyed providers: one API key env var, no extra config. */
-const ENV_KEYED_PROVIDERS: Partial<
-  Record<ProviderId, { envVars: string[]; create: (apiKey: string) => ProviderAdapter }>
-> = {
-  deepseek: {
-    envVars: ['DEEPSEEK_API_KEY'],
-    create: (apiKey) => createDeepSeekAdapter({ apiKey }),
-  },
-  xai: { envVars: ['XAI_API_KEY'], create: (apiKey) => createXAIAdapter({ apiKey }) },
-  perplexity: {
-    envVars: ['PERPLEXITY_API_KEY'],
-    create: (apiKey) => createPerplexityAdapter({ apiKey }),
-  },
-  groq: { envVars: ['GROQ_API_KEY'], create: (apiKey) => createGroqAdapter({ apiKey }) },
-  mistral: { envVars: ['MISTRAL_API_KEY'], create: (apiKey) => createMistralAdapter({ apiKey }) },
-  moonshot: {
-    envVars: ['MOONSHOT_API_KEY'],
-    // Honor MOONSHOT_BASE_URL so international keys can target api.moonshot.ai
-    // (the adapter default is api.moonshot.cn). The adapter re-validates the
-    // host against its allowlist, which already permits both.
-    create: (apiKey) =>
-      createMoonshotAdapter({
-        apiKey,
-        ...(process.env['MOONSHOT_BASE_URL'] ? { baseUrl: process.env['MOONSHOT_BASE_URL'] } : {}),
-      }),
-  },
-  // DASHSCOPE_API_KEY is Alibaba's own env-var convention — honored as a fallback.
-  qwen: {
-    envVars: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
-    create: (apiKey) => createQwenAdapter({ apiKey }),
-  },
-  zhipu: { envVars: ['ZHIPU_API_KEY'], create: (apiKey) => createZhipuAdapter({ apiKey }) },
-  open_router: {
-    envVars: ['OPENROUTER_API_KEY'],
-    create: (apiKey) => createOpenRouterAdapter({ apiKey }),
-  },
-};
+const ENV_KEYED_PROVIDERS: Partial<Record<ProviderId, { envVars: string[]; baseUrlEnv?: string }>> =
+  {
+    deepseek: { envVars: ['DEEPSEEK_API_KEY'] },
+    xai: { envVars: ['XAI_API_KEY'] },
+    perplexity: { envVars: ['PERPLEXITY_API_KEY'] },
+    groq: { envVars: ['GROQ_API_KEY'] },
+    mistral: { envVars: ['MISTRAL_API_KEY'] },
+    moonshot: {
+      envVars: ['MOONSHOT_API_KEY'],
+      // Honor MOONSHOT_BASE_URL so international keys can target api.moonshot.ai
+      // (the adapter default is api.moonshot.cn). The adapter re-validates the
+      // host against its allowlist, which already permits both.
+      baseUrlEnv: 'MOONSHOT_BASE_URL',
+    },
+    // DASHSCOPE_API_KEY is Alibaba's own env-var convention — honored as a fallback.
+    qwen: { envVars: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
+    zhipu: { envVars: ['ZHIPU_API_KEY'] },
+    open_router: { envVars: ['OPENROUTER_API_KEY'] },
+  };
 
 function firstEnv(names: string[]): string | undefined {
   for (const name of names) {
@@ -165,17 +124,17 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
     case 'anthropic': {
       const apiKey = process.env['ANTHROPIC_API_KEY'];
       if (!apiKey) return null;
-      const config: AnthropicAdapterConfig = {
+      const config: ProviderAdapterConfigMap['anthropic'] = {
         apiKey,
         enableCacheControl: true,
         cacheRetention: 'short',
       };
-      return createAnthropicAdapter(config);
+      return createProviderAdapter('anthropic', config);
     }
     case 'openai': {
       const apiKey = process.env['OPENAI_API_KEY'];
       if (!apiKey) return null;
-      const config: OpenAIAdapterConfig = {
+      const config: ProviderAdapterConfigMap['openai'] = {
         apiKey,
         skipDiscovery: true,
       };
@@ -185,17 +144,17 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
       if (process.env['OPENAI_PROJECT_ID']) {
         config.project = process.env['OPENAI_PROJECT_ID'];
       }
-      return createOpenAIAdapter(config);
+      return createProviderAdapter('openai', config);
     }
     case 'ollama': {
-      const config: OllamaAdapterConfig = {};
+      const config: ProviderAdapterConfigMap['ollama'] = {};
       if (process.env['OLLAMA_BASE_URL']) {
         config.baseUrl = process.env['OLLAMA_BASE_URL'];
       }
       if (process.env['OLLAMA_API_KEY']) {
         config.apiKey = process.env['OLLAMA_API_KEY'];
       }
-      return createOllamaAdapter(config);
+      return createProviderAdapter('ollama', config);
     }
     case 'google': {
       // GOOGLE_AI_API_KEY is the legacy cloud-chat env name; GEMINI_API_KEY is
@@ -206,18 +165,22 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
         process.env['GOOGLE_AI_API_KEY'] ??
         process.env['GEMINI_API_KEY'];
       if (!apiKey) return null;
-      const config: GoogleAdapterConfig = { apiKey };
+      const config: ProviderAdapterConfigMap['google'] = { apiKey };
       if (process.env['GOOGLE_GENAI_BASE_URL']) {
         config.baseUrl = process.env['GOOGLE_GENAI_BASE_URL'];
       }
-      return createGoogleAdapter(config);
+      return createProviderAdapter('google', config);
     }
     default: {
       const entry = ENV_KEYED_PROVIDERS[id];
       if (!entry) return null;
       const apiKey = firstEnv(entry.envVars);
       if (!apiKey) return null;
-      return entry.create(apiKey);
+      const baseUrl = entry.baseUrlEnv ? process.env[entry.baseUrlEnv] : undefined;
+      return createProviderAdapter(id, {
+        apiKey,
+        ...(baseUrl ? { baseUrl } : {}),
+      });
     }
   }
 }

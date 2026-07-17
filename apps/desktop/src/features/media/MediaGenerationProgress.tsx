@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Image as ImageIcon, Clapperboard, Clock } from 'lucide-react';
+import { getModelMetadataById } from '@agiworkforce/types';
 import { cn } from '../../lib/utils';
 
-export type MediaGenProvider = 'gpt-image-2' | 'google' | 'stability' | 'runway' | 'veo3';
+export type MediaGenProvider = 'openai' | 'google' | 'stability' | 'runway';
 
 interface MediaGenerationProgressProps {
   type: 'image' | 'video';
   provider?: MediaGenProvider;
+  /** Canonical catalog model id used for release-safe display labels. */
+  model?: string;
   /** Optional prompt snippet displayed beneath the spinner */
   prompt?: string;
   className?: string;
@@ -14,23 +17,23 @@ interface MediaGenerationProgressProps {
 
 // Estimated generation times per provider (seconds)
 const PROVIDER_ESTIMATES: Record<string, { min: number; max: number; label: string }> = {
-  // Image providers
-  'gpt-image-2': { min: 10, max: 25, label: 'GPT Image 2' },
-  google: { min: 8, max: 20, label: 'Imagen 4' },
-  stability: { min: 10, max: 20, label: 'Stable Image' },
-  // Video providers
-  runway: { min: 60, max: 120, label: 'Runway Gen4' },
-  veo3: { min: 90, max: 150, label: 'Google Veo 3' },
+  'image:openai': { min: 10, max: 25, label: 'OpenAI image model' },
+  'image:google': { min: 8, max: 20, label: 'Google image model' },
+  'image:stability': { min: 10, max: 20, label: 'Stability image model' },
+  'video:runway': { min: 60, max: 120, label: 'Runway video model' },
+  'video:google': { min: 90, max: 150, label: 'Google video model' },
 };
 
 const DEFAULT_IMAGE_ESTIMATE = { min: 10, max: 30, label: 'Image AI' };
 const DEFAULT_VIDEO_ESTIMATE = { min: 60, max: 120, label: 'Video AI' };
 
-function getEstimate(type: 'image' | 'video', provider?: MediaGenProvider) {
-  if (provider && PROVIDER_ESTIMATES[provider]) {
-    return PROVIDER_ESTIMATES[provider];
-  }
-  return type === 'image' ? DEFAULT_IMAGE_ESTIMATE : DEFAULT_VIDEO_ESTIMATE;
+function getEstimate(type: 'image' | 'video', provider?: MediaGenProvider, model?: string) {
+  const fallback = type === 'image' ? DEFAULT_IMAGE_ESTIMATE : DEFAULT_VIDEO_ESTIMATE;
+  const providerEstimate = provider ? PROVIDER_ESTIMATES[`${type}:${provider}`] : undefined;
+  const estimate = providerEstimate ?? fallback;
+  const modelName = getModelMetadataById(model)?.name;
+
+  return modelName ? { ...estimate, label: modelName } : estimate;
 }
 
 /**
@@ -45,11 +48,12 @@ function getEstimate(type: 'image' | 'video', provider?: MediaGenProvider) {
 export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = ({
   type,
   provider,
+  model,
   prompt,
   className,
 }) => {
   const [elapsedSecs, setElapsedSecs] = useState(0);
-  const estimate = getEstimate(type, provider);
+  const estimate = getEstimate(type, provider, model);
   const isImage = type === 'image';
 
   useEffect(() => {

@@ -73,6 +73,7 @@ vi.mock('@/lib/api-auth', () => ({
 const mockCheckAvailable = vi.fn();
 const mockGetBalance = vi.fn();
 const mockDeductCredits = vi.fn();
+const mockSettleCreditsDurably = vi.fn();
 const mockGenerateIdempotencyKey = vi.fn(
   (_userId: string, _op: string, requestId: string) => `key:${requestId}`,
 );
@@ -83,13 +84,14 @@ vi.mock('@/lib/services/credit-service', () => ({
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     getBalance: (...args: unknown[]) => mockGetBalance(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
+    settleCreditsDurably: (...args: unknown[]) => mockSettleCreditsDurably(...args),
     generateIdempotencyKey: (userId: string, op: string, requestId: string) =>
       mockGenerateIdempotencyKey(userId, op, requestId),
   },
 }));
 
 // Mock the server-key adapter construction service (task #34: agents/execute
-// normalized off LLMProviderFactory onto packages/providers/* adapters, wire
+// normalized off LLMProviderFactory onto packages/ai/providers/* adapters, wire
 // normalized onto the v1 chat-completions shape). `buildServerProviderAdapter`
 // returns a fake ProviderAdapter whose `.stream()` yields canonical
 // StreamChunks -- `chunksToOpenAiSse` (real, not mocked) turns those into the
@@ -228,6 +230,12 @@ describe('POST /api/agents/execute', () => {
       credits_used_cents: 1000,
     });
     mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 950 });
+    mockSettleCreditsDurably.mockResolvedValue({
+      status: 'succeeded',
+      success: true,
+      remaining_cents: 950,
+      attempt_count: 1,
+    });
 
     // Default: adapter returns a happy-path StreamChunk sequence.
     mockResolveProviderFromModel.mockReturnValue('anthropic');
@@ -404,7 +412,7 @@ describe('POST /api/agents/execute', () => {
     expect(data.error.code).toBe('INTERNAL_ERROR');
   });
 
-  it('should include employeeId in credit deduction metadata', async () => {
+  it('should persist the post-stream settlement with employee metadata', async () => {
     const request = makeRequest({ message: 'Hello', employeeId: 'legal-advisor' }, FAKE_BEARER);
 
     const response = await POST(request);
@@ -420,14 +428,16 @@ describe('POST /api/agents/execute', () => {
       }
     }
 
-    // Credit deduction should have been called after stream flush. Signature:
-    // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
-    expect(mockDeductCredits).toHaveBeenCalledWith(
-      'user-123',
-      expect.any(Number),
-      expect.stringContaining('agent execution'),
-      expect.objectContaining({ employeeId: 'legal-advisor' }),
-      expect.any(String),
-    );
+    expect(mockSettleCreditsDurably).toHaveBeenCalledWith({
+      userId: 'user-123',
+      amountCents: expect.any(Number),
+      description: expect.stringContaining('agent execution'),
+      metadata: expect.objectContaining({
+        employeeId: 'legal-advisor',
+        type: 'agent_execution_settlement',
+      }),
+      idempotencyKey: expect.any(String),
+    });
+    expect(mockDeductCredits).not.toHaveBeenCalled();
   });
 });

@@ -13,15 +13,13 @@
 
 import type {
   ChatRuntime,
-  Artifact,
   GeneratedFileEntry,
   SendMessageOptions,
   StreamCallback,
   StreamEvent,
-  WebSearchResult,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
-import { parseGeneratedFilesDelta, resolveGeneratedFileUri } from '@agiworkforce/services';
+import { parseGeneratedFilesDelta, resolveGeneratedFileUri } from '@agiworkforce/cloud-contracts';
 import {
   listCloudConversations,
   createCloudConversation,
@@ -35,6 +33,10 @@ import {
 } from '../api/cloudApi';
 import { getProviderDefaultModel, normalizeModelId } from '../constants/llm';
 import { getDefaultModelFor } from '@agiworkforce/types';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
+import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
+import { createCloudStreamDeltaSink } from './cloudStreamDeltas';
+import { CloudToolApprovalRegistry } from './cloudToolApproval';
 
 // ---------------------------------------------------------------------------
 // Mapping helpers — cloud API uses snake_case, ChatRuntime uses camelCase
@@ -61,61 +63,6 @@ function mapMessage(cloud: CloudMessage): ChatMessage {
     content: cloud.content,
     createdAt: cloud.created_at,
     model: cloud.model,
-  };
-}
-
-function mapSearchPayload(payload: unknown): WebSearchResult | null {
-  if (!payload || typeof payload !== 'object') {
-    return null;
-  }
-
-  const raw = payload as Record<string, unknown>;
-  const content = Array.isArray(raw['content']) ? raw['content'] : [];
-  const resultItems = content
-    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
-    .filter((item) => item['type'] === 'web_search_result')
-    .map((item) => {
-      const url = typeof item['url'] === 'string' ? item['url'] : '';
-      const title = typeof item['title'] === 'string' ? item['title'] : url || 'Web result';
-      const snippet =
-        typeof item['snippet'] === 'string'
-          ? item['snippet']
-          : typeof item['cited_text'] === 'string'
-            ? item['cited_text']
-            : undefined;
-      let domain: string | undefined;
-      if (url) {
-        try {
-          domain = new URL(url).hostname;
-        } catch {
-          domain = undefined;
-        }
-      }
-
-      return {
-        url,
-        title,
-        snippet,
-        domain,
-      };
-    })
-    .filter((item) => item.url.length > 0);
-
-  const errorEntry = content.find(
-    (item) =>
-      !!item &&
-      typeof item === 'object' &&
-      (item as Record<string, unknown>)['type'] === 'web_search_tool_result_error',
-  ) as Record<string, unknown> | undefined;
-
-  return {
-    id:
-      (typeof raw['tool_use_id'] === 'string' && raw['tool_use_id']) ||
-      `search-${Date.now().toString(36)}`,
-    query: typeof raw['query'] === 'string' ? raw['query'] : 'Web search',
-    results: resultItems,
-    resultCount: resultItems.length,
-    status: errorEntry ? 'failed' : 'completed',
   };
 }
 
@@ -148,6 +95,7 @@ export function mapGeneratedFilesPayload(payload: unknown): GeneratedFileEntry[]
 export class WebRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
+  private readonly _approvals = new CloudToolApprovalRegistry();
 
   /**
    * Cloud SSE path supports Continue Generation: `sendMessage` sends the full
@@ -156,6 +104,12 @@ export class WebRuntime implements ChatRuntime {
    * the same message. (TauriRuntime omits this — it drops `messageHistory`.)
    */
   readonly supportsContinueGeneration = true;
+
+  /** The cloud SSE wire forwards `code_execution` — see `SendMessageOptions.codeExecution`. */
+  readonly supportsCodeExecution = true;
+
+  /** The managed cloud wire forwards the exact `research` request field. */
+  readonly supportsResearch = true;
 
   private emit(event: StreamEvent): void {
     for (const cb of this._streamCallbacks) {
@@ -178,189 +132,54 @@ export class WebRuntime implements ChatRuntime {
       getDefaultModelFor(null, 'chat');
     const controller = new AbortController();
     this._abortControllers.set(conversationId, controller);
-    const toolCallBuffer = new Map<
-      string,
-      {
-        id: string;
-        name: string;
-        argsJson: string;
-      }
-    >();
-    let inThinkingBlock = false;
-    // How this turn ended, from the OpenAI-wire `finish_reason`. Captured in the
-    // raw-payload callback (which sees `choices[0].finish_reason`) but emitted
-    // in `onDone` — so it lives here across both callbacks. Keep the LAST reason
-    // seen: server tool loops emit intermediate 'tool_calls' before the final
-    // 'stop'/'length'. 'length'/'max_tokens' → truncated (continuable).
-    let finishReason: string | undefined;
 
     // If the caller provided an external signal, chain it
     if (options?.signal) {
       options.signal.addEventListener('abort', () => controller.abort());
     }
 
+    const sink = createCloudStreamDeltaSink((event) => this.emit(event), CLOUD_API_BASE_URL);
+    // The exact thread sent to the server — reused verbatim as `priorMessages`
+    // if this turn suspends on a tool-approval request (see cloudApi.ts's
+    // `sendCloudMessage`, which builds the identical fallback).
+    const priorMessages: Array<Record<string, unknown>> =
+      options?.messageHistory && options.messageHistory.length > 0
+        ? options.messageHistory
+        : [{ role: 'user', content }];
+
     try {
       await sendCloudMessage(
         conversationId,
         content,
         model,
-        // onChunk
-        (text: string) => {
-          if (text === '<thinking>') {
-            inThinkingBlock = true;
-            return;
-          }
-
-          if (text === '</thinking>') {
-            inThinkingBlock = false;
-            return;
-          }
-
-          this.emit({
-            type: inThinkingBlock ? 'thinking' : 'content',
-            content: text,
-          });
-        },
+        sink.onChunk,
         // onDone
         () => {
-          this.emit({ type: 'done', ...(finishReason ? { finishReason } : {}) });
+          this._approvals.recordTurnOutcome(conversationId, model, priorMessages, sink);
+          const finishReason = sink.getFinishReason();
+          const streamError = sink.getStreamError();
+          this.emit({
+            type: 'done',
+            ...(finishReason ? { finishReason } : {}),
+            ...(streamError ? { streamError } : {}),
+          });
         },
         // onError
         (err: Error) => {
           this.emit({ type: 'error', error: err.message });
         },
         controller.signal,
-        (payload) => {
-          const choices = Array.isArray(payload['choices']) ? payload['choices'] : [];
-          const delta =
-            choices.length > 0 && choices[0] && typeof choices[0] === 'object'
-              ? ((choices[0] as Record<string, unknown>)['delta'] as
-                  | Record<string, unknown>
-                  | undefined)
-              : undefined;
-
-          // Capture the turn's finish_reason as it streams (last seen wins).
-          // Sits on the choice, not the delta. Threaded into the assistant
-          // message metadata by useChat so the Continue affordance is honest.
-          const rawFinishReason =
-            choices.length > 0 && choices[0] && typeof choices[0] === 'object'
-              ? (choices[0] as Record<string, unknown>)['finish_reason']
-              : undefined;
-          if (typeof rawFinishReason === 'string' && rawFinishReason) {
-            finishReason = rawFinishReason;
-          }
-
-          const toolCalls = Array.isArray(delta?.['tool_calls']) ? delta['tool_calls'] : [];
-          for (const entry of toolCalls) {
-            if (!entry || typeof entry !== 'object') {
-              continue;
-            }
-
-            const toolCall = entry as Record<string, unknown>;
-            const functionData =
-              toolCall['function'] && typeof toolCall['function'] === 'object'
-                ? (toolCall['function'] as Record<string, unknown>)
-                : null;
-            const callId =
-              (typeof toolCall['id'] === 'string' && toolCall['id']) ||
-              `tool-${toolCall['index'] ?? toolCallBuffer.size}`;
-            const existing = toolCallBuffer.get(callId) ?? {
-              id: callId,
-              name: typeof functionData?.['name'] === 'string' ? functionData['name'] : 'tool',
-              argsJson: '',
-            };
-
-            const nextName =
-              typeof functionData?.['name'] === 'string' && functionData['name'].length > 0
-                ? functionData['name']
-                : existing.name;
-            const nextArgsJson =
-              existing.argsJson +
-              (typeof functionData?.['arguments'] === 'string' ? functionData['arguments'] : '');
-
-            toolCallBuffer.set(callId, {
-              id: callId,
-              name: nextName,
-              argsJson: nextArgsJson,
-            });
-
-            let parsedArgs: Record<string, unknown> = {};
-            if (nextArgsJson.trim().length > 0) {
-              try {
-                const parsed = JSON.parse(nextArgsJson);
-                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                  parsedArgs = parsed as Record<string, unknown>;
-                } else {
-                  parsedArgs = { value: parsed };
-                }
-              } catch {
-                parsedArgs = { _partial: nextArgsJson };
-              }
-            }
-
-            this.emit({
-              type: 'tool_call',
-              toolCall: {
-                id: callId,
-                name: nextName,
-                args: parsedArgs,
-              },
-            });
-          }
-
-          const artifactPayload =
-            payload['artifact'] && typeof payload['artifact'] === 'object'
-              ? (payload['artifact'] as Artifact)
-              : null;
-          if (
-            artifactPayload?.id &&
-            artifactPayload?.type &&
-            typeof artifactPayload.content === 'string'
-          ) {
-            this.emit({ type: 'artifact', artifact: artifactPayload });
-          }
-
-          const searchPayload = delta?.['x_search_results'];
-          const search = mapSearchPayload(searchPayload);
-          if (search) {
-            this.emit({ type: 'search_results', search });
-          }
-
-          // Platform-executed tool results (`x_tool_result`): the web tool
-          // loop runs MCP/E2B tools server-side and reports completion keyed
-          // by the SAME tool_call_id it forwarded in the raw `tool_calls`
-          // deltas above. Finishing the call here flips the UI entry off
-          // 'running' as soon as execution ends — which also keeps the shared
-          // generated-files pending strip honest (it must not claim
-          // "Running code…" while the model is merely streaming text).
-          const toolResultPayload = delta?.['x_tool_result'];
-          if (toolResultPayload && typeof toolResultPayload === 'object') {
-            const tr = toolResultPayload as Record<string, unknown>;
-            const toolCallId = typeof tr['tool_call_id'] === 'string' ? tr['tool_call_id'] : '';
-            if (toolCallId) {
-              const resultContent = typeof tr['content'] === 'string' ? tr['content'] : undefined;
-              const isError = tr['is_error'] === true;
-              this.emit({
-                type: 'tool_result',
-                toolCallId,
-                ...(isError
-                  ? { error: resultContent ?? 'Tool execution failed' }
-                  : resultContent !== undefined
-                    ? { result: resultContent }
-                    : {}),
-              });
-            }
-          }
-
-          // Managed-cloud sandbox files (emitted once before [DONE]).
-          const generatedFiles = mapGeneratedFilesPayload(delta?.['x_generated_files']);
-          if (generatedFiles.length > 0) {
-            this.emit({ type: 'generated_files', files: generatedFiles });
-          }
-        },
+        sink.onEvent,
         options?.webSearch,
         options?.messageHistory,
         options?.thinkingEnabled,
+        options?.codeExecution,
+        createManagedChatIdempotencyKey({
+          surface: 'desktop',
+          purpose: 'send',
+          operationId: uuidv7(),
+        }),
+        options?.research ? { research: true } : undefined,
       );
     } catch (err) {
       // Only emit error if it wasn't an intentional abort
@@ -371,6 +190,36 @@ export class WebRuntime implements ChatRuntime {
     } finally {
       this._abortControllers.delete(conversationId);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // resolveToolApproval — resume a turn suspended on x_tool_approval_request
+  // -------------------------------------------------------------------------
+
+  async resolveToolApproval(
+    conversationId: string,
+    toolCallId: string,
+    decision: 'approved' | 'rejected',
+  ): Promise<void> {
+    const controller = new AbortController();
+    this._abortControllers.set(conversationId, controller);
+    try {
+      await this._approvals.resolve(
+        conversationId,
+        toolCallId,
+        decision,
+        (event) => this.emit(event),
+        CLOUD_API_BASE_URL,
+        (err) => this.emit({ type: 'error', error: err.message }),
+        controller.signal,
+      );
+    } finally {
+      this._abortControllers.delete(conversationId);
+    }
+  }
+
+  hasLiveApprovalTurn(conversationId: string): boolean {
+    return this._approvals.hasLiveTurn(conversationId);
   }
 
   // -------------------------------------------------------------------------

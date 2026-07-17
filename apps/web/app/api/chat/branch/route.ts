@@ -1,19 +1,16 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ManagedCloudBranchConversationRequestSchema,
+  ManagedCloudBranchConversationResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-
-const BranchConversationSchema = z.object({
-  sessionId: z.string().uuid(),
-  branchPointMessageId: z.string().uuid(),
-  branchName: z.string().max(200).optional(),
-});
 
 type ConversationRow = {
   id: string;
@@ -52,7 +49,7 @@ async function handlePost(request: NextRequest) {
   const db = getNeonDb();
 
   const body = await request.json();
-  const parsed = BranchConversationSchema.safeParse(body);
+  const parsed = ManagedCloudBranchConversationRequestSchema.safeParse(body);
   if (!parsed.success) throw createError.validation('Invalid request body');
 
   const { sessionId, branchPointMessageId, branchName } = parsed.data;
@@ -116,10 +113,10 @@ async function handlePost(request: NextRequest) {
   });
 
   return NextResponse.json(
-    {
+    ManagedCloudBranchConversationResponseSchema.parse({
       session: result.session,
       branch: result.branch,
-    },
+    }),
     { status: 201 },
   );
 }

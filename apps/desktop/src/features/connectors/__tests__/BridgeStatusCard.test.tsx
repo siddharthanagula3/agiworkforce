@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { ExtensionStatusDiagnostics } from '@agiworkforce/api';
+import type { ExtensionStatusDiagnostics } from '@agiworkforce/desktop-command-client';
 import { BridgeStatusCard } from '../BridgeStatusCard';
 
 function buildDiagnostics(

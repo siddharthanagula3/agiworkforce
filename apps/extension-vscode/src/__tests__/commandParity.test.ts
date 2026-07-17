@@ -138,6 +138,20 @@ describe('package.json ↔ runtime command parity', () => {
     expect(dupes, `duplicate command registrations: ${dupes.join(', ')}`).toEqual([]);
   });
 
+  it('does not advertise unavailable checkpoint, worktree, or rewind controls', () => {
+    const unsupported = /checkpoint|worktree|rewind/i;
+    const declared = readDeclaredCommands().filter(
+      (command) => unsupported.test(command.command) || unsupported.test(command.title ?? ''),
+    );
+    const setupSource = fs.readFileSync(
+      path.resolve(__dirname, '../core/commandSetup.ts'),
+      'utf8',
+    );
+
+    expect(declared).toEqual([]);
+    expect(setupSource).not.toMatch(/restore-checkpoint|restoreCheckpoint|rewindLast/);
+  });
+
   it('parity holds on second activate after reset (module-state isolation)', () => {
     // First activation
     activate(makeMockContext());

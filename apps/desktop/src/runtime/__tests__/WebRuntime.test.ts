@@ -95,6 +95,18 @@ describe('WebRuntime x_generated_files stream handling', () => {
     vi.clearAllMocks();
   });
 
+  it('advertises Research and forwards it to the cloud API request options', async () => {
+    const runtime = new WebRuntime();
+    expect(runtime.supportsResearch).toBe(true);
+    sendCloudMessage.mockResolvedValue(undefined);
+
+    await runtime.sendMessage('conv_research', 'investigate', {
+      research: true,
+    });
+
+    expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({ research: true });
+  });
+
   it('emits a generated_files event when the delta carries x_generated_files', async () => {
     const runtime = new WebRuntime();
     const events = collectEvents(runtime);
@@ -353,5 +365,12 @@ describe('WebRuntime x_generated_files stream handling', () => {
     await runtime.sendMessage('conv_1', 'hello');
 
     expect(events.some((e) => e.type === 'generated_files')).toBe(false);
+  });
+});
+
+describe('WebRuntime.hasLiveApprovalTurn', () => {
+  it('delegates to the approval registry -- false on a fresh runtime instance (Finding 1: process-memory-only registry resets on restart)', () => {
+    const runtime = new WebRuntime();
+    expect(runtime.hasLiveApprovalTurn('conv_1')).toBe(false);
   });
 });

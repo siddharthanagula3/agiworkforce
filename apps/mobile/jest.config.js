@@ -17,17 +17,20 @@ module.exports = {
   // The optional (?:.pnpm/[^/]+/node_modules/)? prefix handles both npm and pnpm layouts
   // so React Native packages that use Flow types still get transformed by Babel.
   transformIgnorePatterns: [
-    // uuid and @agiworkforce/services are ESM packages — include them in the Babel transform.
-    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/services|uuid))',
+    // uuid and shared ESM workspaces are included in the Babel transform.
+    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/artifacts|@agiworkforce/cloud-contracts|@agiworkforce/sync|@agiworkforce/trust-boundaries|uuid))',
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
     // Override jest-expo preset which incorrectly resolves react to @types/react in pnpm
     '^react$': '<rootDir>/node_modules/react',
     // Workspace packages that may not be pnpm-linked in CI: resolve src directly.
-    '^@agiworkforce/local-llm$': '<rootDir>/../../packages/local-llm/src/index',
-    // @agiworkforce/services is ESM; resolve src directly so Jest/Babel picks up TS.
-    '^@agiworkforce/services$': '<rootDir>/../../packages/services/src/index',
+    '^@agiworkforce/local-llm$': '<rootDir>/../../packages/platform/local-llm/src/index',
+    '^@agiworkforce/artifacts$': '<rootDir>/../../packages/platform/artifacts/src/index',
+    '^@agiworkforce/cloud-contracts$': '<rootDir>/../../packages/contracts/cloud-contracts/src/index',
+    '^@agiworkforce/sync$': '<rootDir>/../../packages/client/sync/src/index',
+    // Platform-neutral trust policy is ESM; resolve source for Jest/Babel.
+    '^@agiworkforce/trust-boundaries$': '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
     // expo-clipboard is a native Expo module; keep Jest from loading native glue.
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     // expo-sqlite stub for storage tests until the native module is linked.

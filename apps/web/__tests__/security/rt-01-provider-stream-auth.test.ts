@@ -36,11 +36,13 @@ vi.mock('@/lib/rate-limit', () => ({
 // ─── Credit service mock ──────────────────────────────────────────────────────
 const mockCheckAvailable = vi.fn();
 const mockDeductCredits = vi.fn();
+const mockSettleCreditsDurably = vi.fn();
 const mockGenerateIdempotencyKey = vi.fn().mockReturnValue('idem-key-123');
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
     deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
+    settleCreditsDurably: (...args: unknown[]) => mockSettleCreditsDurably(...args),
     generateIdempotencyKey: (...args: unknown[]) => mockGenerateIdempotencyKey(...args),
   },
 }));
@@ -112,6 +114,13 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     mockGetAuthenticatedUser.mockResolvedValue({ userId: 'user-123', email: 'user@example.com' });
     mockCheckAvailable.mockResolvedValue(true);
     mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 900 });
+    mockGenerateIdempotencyKey.mockReturnValue('idem-key-123');
+    mockSettleCreditsDurably.mockResolvedValue({
+      status: 'succeeded',
+      success: true,
+      remaining_cents: 900,
+      attempt_count: 1,
+    });
     mockFetch.mockResolvedValue({
       ok: true,
       body: new ReadableStream(),
@@ -208,12 +217,16 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     });
     const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer valid.jwt');
     await POST(req, { params });
-    // Should have called deductCredits twice: once to charge, once to refund
-    expect(mockDeductCredits).toHaveBeenCalledTimes(2);
-    // Second call should be a negative amount (refund). Signature:
-    // deductCredits(client, userId, amountCents, description, metadata, ...)
-    const secondCall = mockDeductCredits.mock.calls[1] as unknown[];
-    expect(secondCall[2] as number).toBeLessThan(0);
+    expect(mockDeductCredits).toHaveBeenCalledTimes(1);
+    expect(mockSettleCreditsDurably).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-123',
+        amountCents: -1,
+        metadata: expect.objectContaining({ type: 'refund' }),
+        idempotencyKey: 'idem-key-123',
+      }),
+      expect.any(Object),
+    );
   });
 
   it('refunds credits when upstream fetch throws', async () => {
@@ -221,7 +234,8 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     const { req, params } = makeRequest('anthropic', VALID_BODY, 'Bearer valid.jwt');
     const res = await POST(req, { params });
     expect(res.status).toBe(502);
-    expect(mockDeductCredits).toHaveBeenCalledTimes(2);
+    expect(mockDeductCredits).toHaveBeenCalledTimes(1);
+    expect(mockSettleCreditsDurably).toHaveBeenCalledOnce();
   });
 
   it('accepts all valid provider IDs in allowlist', async () => {

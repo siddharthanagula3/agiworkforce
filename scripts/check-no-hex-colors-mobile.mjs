@@ -36,7 +36,7 @@ const EXEMPT_PREFIXES = [
   'apps/mobile/__tests__/',
   'apps/mobile/scripts/screenshots/',
   'apps/mobile/src/ui/theme/tokens.ts',
-  'packages/design-tokens/',
+  'packages/ui/design-tokens/',
 ];
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);

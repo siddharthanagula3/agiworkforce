@@ -21,7 +21,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getServiceClient } from '../lib/neonClients';
+import { getSystemClient, getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 import { isValidUuid } from '../validations/ids';
@@ -145,12 +145,7 @@ router.post(
 
     const deviceId = clientId ?? randomUUID();
 
-    // RLS-GAP: mobile_devices has no RLS policy (0013_devices.sql enables
-    // none) — migration TODO. Same gap applies to `agent_approval_requests`
-    // and `feedback` (no migration record anywhere in the repo) at every
-    // getServiceClient() call site in this file. Explicit ownership/filter
-    // checks are the SOLE tenant-isolation mechanism until policies ship.
-    const db = getServiceClient();
+    const db = getUserScopedClient(user);
 
     // SECURITY: Verify ownership before upsert to prevent device registration hijack.
     // Without this check, an attacker who knows another user's device ID could
@@ -205,8 +200,7 @@ router.post(
       throw new AppError('Unauthorized', 401);
     }
 
-    // Wave 1.5+ singleton sweep: user-scoped client.
-    const db = getServiceClient(); // RLS-GAP: see /register handler above
+    const db = getUserScopedClient(user);
     // First verify the device exists and belongs to the user
     const { data: device, error: fetchError } = await db
       .from('mobile_devices')
@@ -335,8 +329,7 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
     throw new AppError('Unauthorized', 401);
   }
 
-  // Wave 1.5+ singleton sweep: user-scoped client.
-  const db = getServiceClient(); // RLS-GAP: see /register handler above
+  const db = getUserScopedClient(user);
   const { data: devices, error } = await db
     .from('mobile_devices')
     .select('*')
@@ -378,7 +371,9 @@ router.get(
       throw new AppError('Unauthorized', 401);
     }
 
-    const db = getServiceClient(); // RLS-GAP: see /register handler above
+    // agent_approval_requests has no canonical migration. Keep its existing
+    // user_id predicate on an explicitly privileged compatibility boundary.
+    const db = getSystemClient('shadow-schema-compatibility');
     const { data: pendingRequests, error } = await db
       .from('agent_approval_requests')
       .select('id, tool_name, agent_id, created_at')
@@ -435,7 +430,7 @@ router.post(
       'Mobile feedback received',
     );
 
-    const db = getServiceClient(); // RLS-GAP: see /register handler above
+    const db = getUserScopedClient(user);
     const { error } = await db.from('feedback').insert({
       user_id: user.userId,
       subject: `mobile:${type}`,
@@ -477,8 +472,7 @@ router.delete(
       throw new AppError('Invalid device ID format', 400);
     }
 
-    // Wave 1.5+ singleton sweep: user-scoped client.
-    const db = getServiceClient(); // RLS-GAP: see /register handler above
+    const db = getUserScopedClient(user);
     // First verify ownership
     const { data: device, error: fetchError } = await db
       .from('mobile_devices')

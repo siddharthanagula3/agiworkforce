@@ -8,7 +8,14 @@ import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { runAuthGate } from '../lib/auth-gate';
 import { processRequest } from '../lib/request-processor';
 import { runToolLoop, loadMcpToolDefs, type ToolApprovalDecision } from '../lib/tool-loop';
+import { buildManagedAgentStream } from '../lib/managed-agent-stream';
 import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
+import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import {
+  ManagedUsageRequestError,
+  finalizeManagedUsageRequest,
+  markManagedUsageProviderStarted,
+} from '@/lib/services/managed-usage-request-service';
 
 /**
  * Tool-approval RESUME endpoint for the agentic chat loop.
@@ -159,6 +166,38 @@ async function handleToolApproval(request: NextRequest) {
   if (!processResult.ok) return processResult.response;
   const processed = processResult;
 
+  if (processed.managedUsage) {
+    try {
+      await markManagedUsageProviderStarted(processed.managedUsage);
+    } catch (error) {
+      await finalizeManagedUsageRequest({
+        ...processed.managedUsage,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: { reason: 'provider_start_failed' },
+      }).catch(() => undefined);
+      const managedError =
+        error instanceof ManagedUsageRequestError
+          ? error
+          : new ManagedUsageRequestError(
+              'Managed usage billing is temporarily unavailable.',
+              503,
+              'billing_unavailable',
+            );
+      return NextResponse.json(
+        {
+          error: {
+            message: managedError.message,
+            type: 'invalid_request_error',
+            code: managedError.code,
+            contract_version: managedError.contractVersion,
+          },
+        },
+        { status: managedError.status, headers: getSecurityHeaders() },
+      );
+    }
+  }
+
   // Force extended thinking OFF on the resume continuation. A post-tool answer
   // needs no extended thinking, and a thinking-enabled continuation of an
   // Anthropic tool_use turn would require the SUSPENDED turn's signed thinking
@@ -192,31 +231,22 @@ async function handleToolApproval(request: NextRequest) {
     decision: a.decision,
   }));
 
+  const toolLoopUsage = createObservedProviderUsage();
   const toolLoopGen = runToolLoop(processed, {
     mcpTools,
     approvalMode: 'manual',
     userId,
     connectorExecutor,
     resume: { approvals },
+    usage: toolLoopUsage,
   });
 
-  const encoder = new TextEncoder();
-  const agentStream = new ReadableStream({
-    async pull(controller) {
-      const { value, done } = await toolLoopGen.next();
-      if (done) {
-        controller.close();
-      } else {
-        controller.enqueue(value ?? encoder.encode(''));
-      }
-    },
-    async cancel() {
-      try {
-        await toolLoopGen.return(undefined);
-      } catch {
-        // ignore
-      }
-    },
+  const agentStream = buildManagedAgentStream({
+    generator: toolLoopGen,
+    processed,
+    usage: toolLoopUsage,
+    completionReason: 'tool_resume_completed',
+    cancellationReason: 'client_cancelled_tool_resume',
   });
 
   const streamHeaders: Record<string, string> = {

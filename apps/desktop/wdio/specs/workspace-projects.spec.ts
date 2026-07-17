@@ -4,6 +4,13 @@
 // real UI, confirming each step against the live DOM/backend rather than
 // mocked state.
 
+import * as fs from 'node:fs';
+
+const SCREEN_DIR =
+  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/5c2cae99-6834-4da9-92a9-3df91afbf448/scratchpad/desktop-qa-screens';
+
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
+
 describe('AGI Desktop Workspace — Projects (real create/persist/rename)', () => {
   it('creates a project, persists it, and renames it via real UI', async function () {
     this.timeout(60000);
@@ -39,8 +46,6 @@ describe('AGI Desktop Workspace — Projects (real create/persist/rename)', () =
     console.log('HAS_UNTITLED_AFTER_RELOAD', bodyTextAfterReload.includes('Untitled'));
     expect(bodyTextAfterReload).toContain('Untitled');
 
-    await browser.saveScreenshot(
-      '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/5c2cae99-6834-4da9-92a9-3df91afbf448/scratchpad/desktop-qa-screens/workspace-project-created.png',
-    );
+    await browser.saveScreenshot(`${SCREEN_DIR}/workspace-project-created.png`);
   });
 });

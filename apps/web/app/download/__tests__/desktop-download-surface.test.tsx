@@ -1,0 +1,138 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+
+const { fetchMock, loggerErrorMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  loggerErrorMock: vi.fn(),
+}));
+
+vi.stubGlobal('fetch', fetchMock);
+vi.mock('@shared/lib/logger', () => ({
+  logger: { error: loggerErrorMock },
+}));
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ user: null, isLoaded: true }),
+  useClerk: () => ({ signOut: vi.fn() }),
+}));
+vi.mock('@/components/marketing/Reveal', () => ({
+  Reveal: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+import DownloadPage from '../page';
+import DesktopPage from '../../desktop/page';
+import DownloadLoading from '../loading';
+import DownloadError from '../error';
+
+function signedLinuxManifest() {
+  return {
+    version: '1.10.0',
+    notes: 'Stable Linux release',
+    pub_date: '2026-07-15T00:00:00Z',
+    platforms: {
+      'linux-x86_64': {
+        url: 'https://github.com/siddharthanagula3/agiworkforce/releases/download/v-desktop-1.10.0/AGI.Workforce_1.10.0_amd64.AppImage',
+        signature: 'tauri-signature',
+      },
+    },
+  };
+}
+
+beforeEach(() => {
+  fetchMock.mockResolvedValue(Response.json(signedLinuxManifest()));
+});
+
+describe('public Desktop download surfaces', () => {
+  it('offers only the verified Linux AppImage from the shared download API', async () => {
+    render(<DownloadPage />);
+
+    const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
+    expect(
+      within(region).getByRole('link', { name: 'Download Linux x64 AppImage' }),
+    ).toHaveAttribute('href', '/api/download?platform=linux');
+    expect(within(region).getByText('macOS installer not published')).toBeInTheDocument();
+    expect(within(region).getByText('Windows installer not published')).toBeInTheDocument();
+    expect(within(region).queryByRole('link', { name: /macOS|Windows/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/July 12, 2026|July 12/i)).not.toBeInTheDocument();
+  });
+
+  it('shows an accessible empty state when no signed Linux release exists', async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ error: { code: 'NOT_FOUND', message: 'No release found' } }, { status: 404 }),
+    );
+    render(<DownloadPage />);
+
+    const status = await screen.findByRole('status', { name: 'Desktop downloads unavailable' });
+    expect(status).toHaveTextContent('No signed Linux installer is available right now.');
+    expect(within(status).getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
+      'href',
+      '/login?redirectTo=%2Fchat',
+    );
+    expect(within(status).getByRole('link', { name: 'See CLI availability' })).toHaveAttribute(
+      'href',
+      '/cli',
+    );
+  });
+
+  it('shows an accessible error with a working retry action', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error('network unavailable'))
+      .mockResolvedValueOnce(Response.json(signedLinuxManifest()));
+    render(<DownloadPage />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('We could not verify the Linux installer.');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry release check' }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'Download Linux x64 AppImage' }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('announces the live availability check and uses theme-token colors', () => {
+    fetchMock.mockReturnValueOnce(new Promise(() => {}));
+    render(<DownloadPage />);
+
+    const status = screen.getByRole('status', { name: 'Checking Desktop downloads' });
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveClass('bg-card', 'text-card-foreground', 'border-border');
+    expect(status).not.toHaveClass('bg-black', 'text-white');
+  });
+
+  it('uses the same verified availability component on the Desktop product page', async () => {
+    render(<DesktopPage />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Download Linux x64 AppImage' }),
+    ).toHaveAttribute('href', '/api/download?platform=linux');
+    expect(screen.queryByText('macOS universal · Windows x64 · Linux x64')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Public launch ·/i)).not.toBeInTheDocument();
+  });
+
+  it('renders the route loading state as an announced theme-aware status', () => {
+    render(<DownloadLoading />);
+
+    const status = screen.getByRole('status', { name: 'Loading download options' });
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status.parentElement).toHaveClass('bg-background', 'text-foreground');
+    expect(status.parentElement).not.toHaveClass('bg-black');
+  });
+
+  it('renders the route error boundary with retry, Web, and CLI recovery paths', () => {
+    const reset = vi.fn();
+    render(<DownloadError error={new Error('route failed')} reset={reset} />);
+
+    expect(screen.getByRole('heading', { name: 'Unable to load downloads' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(reset).toHaveBeenCalledOnce();
+    expect(screen.getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
+      'href',
+      '/login?redirectTo=%2Fchat',
+    );
+    expect(screen.getByRole('link', { name: 'See CLI availability' })).toHaveAttribute(
+      'href',
+      '/cli',
+    );
+  });
+});

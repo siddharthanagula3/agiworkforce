@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Button,
@@ -20,9 +21,8 @@ import {
 } from '@agiworkforce/ui';
 import { Label } from '@agiworkforce/ui';
 import { Smile, Trash2 } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
 import { toast } from 'sonner';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import type { Project } from '@features/projects/stores/project-store';
 
@@ -81,23 +81,7 @@ export function ProjectSettingsDialog({
       // survives the next hydration/sync. Previously this handler only wrote
       // to the local projectStore, which the next server-driven refresh would
       // silently revert. See PUT /api/projects/[id].
-      const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
-        method: 'PUT',
-        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-        credentials: 'same-origin',
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        let message = `Failed to update project (${response.status})`;
-        try {
-          const json = (await response.json()) as { error?: string; message?: string };
-          message = json.message || json.error || message;
-        } catch {
-          // response body wasn't JSON · fall back to the generic message above
-        }
-        throw new Error(message);
-      }
+      await webManagedCloudProjects.updateProject(project.id, updates);
 
       // Server write succeeded · sync the local store so the UI reflects the
       // change immediately without waiting for the next background refresh.
@@ -119,22 +103,7 @@ export function ProjectSettingsDialog({
       // only called the local-store `onDelete` and showed a success toast, so
       // the next server-driven `/api/projects` refresh silently resurrected the
       // project — a false "Project deleted" toast with no DELETE ever sent.
-      const response = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
-        method: 'DELETE',
-        headers: await addCsrfHeaders(),
-        credentials: 'same-origin',
-      });
-
-      if (!response.ok) {
-        let message = `Failed to delete project (${response.status})`;
-        try {
-          const json = (await response.json()) as { error?: string; message?: string };
-          message = json.message || json.error || message;
-        } catch {
-          // response body wasn't JSON · fall back to the generic message above
-        }
-        throw new Error(message);
-      }
+      await webManagedCloudProjects.deleteProject(project.id);
 
       // Server delete succeeded · remove from the local store and close.
       onDelete(project.id);
@@ -156,6 +125,9 @@ export function ProjectSettingsDialog({
           {/* Header */}
           <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-5">
             <DialogTitle className="text-base font-semibold">Project settings</DialogTitle>
+            <DialogDescription className="sr-only">
+              Rename the project, update its instructions and knowledge files, or delete it.
+            </DialogDescription>
           </DialogHeader>
 
           {/* Scrollable body */}
@@ -169,22 +141,16 @@ export function ProjectSettingsDialog({
                 Project name
               </Label>
               <div className="relative">
-                <button
-                  type="button"
-                  aria-label="Choose emoji (coming soon)"
-                  tabIndex={-1}
-                  className={cn(
-                    'absolute left-3 top-1/2 -translate-y-1/2',
-                    'flex h-6 w-6 items-center justify-center rounded-md',
-                    'text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
-                  )}
+                <span
+                  aria-hidden="true"
+                  className="absolute left-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground"
                 >
                   {project.iconEmoji ? (
                     <span className="text-base leading-none">{project.iconEmoji}</span>
                   ) : (
                     <Smile className="h-4 w-4" aria-hidden="true" />
                   )}
-                </button>
+                </span>
                 <Input
                   id="ps-project-name"
                   type="text"

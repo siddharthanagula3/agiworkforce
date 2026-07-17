@@ -1,177 +1,165 @@
-// ---------------------------------------------------------------------------
-// Shared types for the schedules feature
-// ---------------------------------------------------------------------------
+import { getAutoRoutingProfiles, getCoreManualModelOptions } from '@agiworkforce/types';
+import type { ProductRecurrence } from '@/lib/schedules/schedule-time';
 
-import { getCoreManualModelOptions, listCanonicalModels } from '@agiworkforce/types';
+export type ScheduleStatus = 'active' | 'paused' | 'completed' | 'failed' | 'expired';
+export type ScheduleRunStatus = 'running' | 'success' | 'failed' | 'timeout' | 'cancelled';
+export type ScheduleTriggerSource = 'schedule' | 'manual' | 'webhook' | 'api';
 
-export interface Schedule {
+/** Canonical client representation returned by /api/schedules. */
+export interface ScheduleTask {
   id: string;
+  userId: string;
   name: string;
-  prompt: string;
-  model: string;
-  recurrence: string;
+  description: string | null;
+  scheduleType: 'cron' | 'once' | 'interval';
   cronExpression: string | null;
-  scheduledAt: string | null;
-  daysOfWeek: number[] | null;
-  dayOfMonth: number | null;
-  timeOfDay: string;
+  executeAt: string | null;
+  intervalMs: number | null;
   timezone: string;
-  isActive: boolean;
-  lastRunAt: string | null;
-  nextRunAt: string | null;
-  lastRunStatus: string | null;
+  isEnabled: boolean;
+  expiresAt: string | null;
+  maxExecutions: number | null;
+  executionCount: number;
+  actionType: 'agent' | 'workflow' | 'notification' | 'command';
+  actionConfig: Record<string, unknown> | null;
+  prompt: string | null;
+  model: string | null;
+  status: ScheduleStatus;
+  lastExecutedAt: string | null;
+  nextExecutionAt: string | null;
+  lastError: string | null;
+  metadata: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
-  // Notification preferences stored on the schedule
-  notificationSettings?: NotificationSettings;
 }
 
+/** Canonical client representation returned by /api/schedules/[id]/runs. */
 export interface ScheduleRun {
   id: string;
-  scheduleId: string;
-  status: string;
+  taskId: string;
+  status: ScheduleRunStatus;
+  triggerSource: ScheduleTriggerSource;
+  scheduledFor: string | null;
   startedAt: string;
   completedAt: string | null;
-  result: string | null;
+  durationMs: number | null;
+  result: Record<string, unknown> | null;
   error: string | null;
-  durationMs?: number | null;
+  idempotencyKey: string;
+  leaseExpiresAt: string | null;
+  attemptCount: number;
 }
 
-export interface NotificationSettings {
-  emailOnComplete: boolean;
-  emailOnFailure: boolean;
-  pushNotification: boolean;
-  webhookUrl?: string;
-}
+export type IntervalUnit = 'minutes' | 'hours' | 'days';
 
-export interface ScheduleFormData {
+/** UI-only editable state. It is converted to ScheduleMutation before transport. */
+export interface ScheduleDraft {
   name: string;
+  description: string;
   prompt: string;
   model: string;
-  recurrence: string;
-  timeOfDay: string;
-  timezone: string;
-  isActive: boolean;
-  // Advanced recurrence
+  recurrence: ProductRecurrence;
   cronExpression: string;
+  scheduledLocal: string;
+  intervalValue: string;
+  intervalUnit: IntervalUnit;
+  timeOfDay: string;
   daysOfWeek: number[];
   dayOfMonth: number | null;
-  // Notifications
-  notificationSettings: NotificationSettings;
+  timezone: string;
+  isActive: boolean;
+  expiresLocal: string;
+  maxExecutions: string;
 }
 
-export const INITIAL_NOTIFICATION_SETTINGS: NotificationSettings = {
-  emailOnComplete: false,
-  emailOnFailure: true,
-  pushNotification: false,
-  webhookUrl: '',
-};
+/** Exact body accepted by the canonical schedule create/update service. */
+export interface ScheduleMutation {
+  name: string;
+  description: string | null;
+  prompt: string;
+  model: string;
+  recurrence: ProductRecurrence;
+  cronExpression: string | null;
+  scheduledAt: string | null;
+  intervalMs: number | null;
+  timeOfDay: string;
+  daysOfWeek: number[];
+  dayOfMonth: number | null;
+  timezone: string;
+  isActive: boolean;
+  expiresAt: string | null;
+  maxExecutions: number | null;
+}
 
-export const INITIAL_FORM: ScheduleFormData = {
-  name: '',
-  prompt: '',
-  model: 'auto-balanced',
-  recurrence: 'daily',
-  timeOfDay: '09:00',
-  timezone:
-    typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' : 'UTC',
-  isActive: true,
-  cronExpression: '',
-  daysOfWeek: [],
-  dayOfMonth: null,
-  notificationSettings: INITIAL_NOTIFICATION_SETTINGS,
-};
-
-export const TIMEZONES = [
-  { value: 'America/New_York', label: 'Eastern (ET)' },
-  { value: 'America/Chicago', label: 'Central (CT)' },
-  { value: 'America/Denver', label: 'Mountain (MT)' },
-  { value: 'America/Los_Angeles', label: 'Pacific (PT)' },
-  { value: 'America/Sao_Paulo', label: 'BRT' },
-  { value: 'Europe/London', label: 'GMT' },
-  { value: 'Europe/Paris', label: 'CET' },
-  { value: 'Europe/Berlin', label: 'CET/Berlin' },
-  { value: 'Asia/Dubai', label: 'GST' },
-  { value: 'Asia/Kolkata', label: 'IST' },
-  { value: 'Asia/Singapore', label: 'SGT' },
-  { value: 'Asia/Tokyo', label: 'JST' },
-  { value: 'Australia/Sydney', label: 'AEDT' },
-  { value: 'UTC', label: 'UTC' },
-];
-
-// Build the allowed model ID set from the catalog: include chat, code, and reasoning models
-// only (exclude image/video/audio). This replaces the previous hardcoded ID list.
-const SCHEDULE_ALLOWED_TYPES = new Set(['chat', 'code', 'reasoning']);
-const SCHEDULE_MODEL_IDS = new Set(
-  listCanonicalModels()
-    .filter((m) => SCHEDULE_ALLOWED_TYPES.has(m.modelType))
-    .map((m) => m.id),
-);
+export type ScheduleFormErrors = Partial<Record<keyof ScheduleDraft | 'form', string>>;
 
 export const AVAILABLE_MODELS = [
-  { value: 'auto-balanced', label: 'Auto (Balanced)' },
-  { value: 'auto-economy', label: 'Auto (Economy)' },
-  ...getCoreManualModelOptions()
-    .filter((model) => SCHEDULE_MODEL_IDS.has(model.id))
-    .map((model) => ({
-      value: model.id,
-      label: model.label,
-    })),
+  ...getAutoRoutingProfiles().map((profile) => ({
+    value: profile.id,
+    label: profile.label,
+  })),
+  ...getCoreManualModelOptions().map((model) => ({ value: model.id, label: model.label })),
 ];
 
 export const DAYS_OF_WEEK = [
-  { value: 0, label: 'Sun' },
-  { value: 1, label: 'Mon' },
-  { value: 2, label: 'Tue' },
-  { value: 3, label: 'Wed' },
-  { value: 4, label: 'Thu' },
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' },
-];
+  { value: 0, label: 'Sun', longLabel: 'Sunday' },
+  { value: 1, label: 'Mon', longLabel: 'Monday' },
+  { value: 2, label: 'Tue', longLabel: 'Tuesday' },
+  { value: 3, label: 'Wed', longLabel: 'Wednesday' },
+  { value: 4, label: 'Thu', longLabel: 'Thursday' },
+  { value: 5, label: 'Fri', longLabel: 'Friday' },
+  { value: 6, label: 'Sat', longLabel: 'Saturday' },
+] as const;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-export function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '--';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+export function formatDateTime(value: string | null, timezone?: string): string {
+  if (!value) return 'Not yet';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return 'Unknown time';
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      ...(timezone ? { timeZone: timezone } : {}),
+    }).format(date);
+  } catch {
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: 'UTC',
+    }).format(date);
+  }
 }
 
-export function recurrenceLabel(r: string): string {
-  const labels: Record<string, string> = {
-    once: 'One-time',
+export function formatDuration(durationMs: number | null): string {
+  if (durationMs === null) return 'In progress';
+  if (durationMs < 1_000) return `${durationMs} ms`;
+  if (durationMs < 60_000) return `${(durationMs / 1_000).toFixed(1)} s`;
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.floor((durationMs % 60_000) / 1_000);
+  return `${minutes} m ${seconds} s`;
+}
+
+export function recurrenceLabel(recurrence: ProductRecurrence): string {
+  const labels: Record<ProductRecurrence, string> = {
+    once: 'One Time',
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',
     custom: 'Custom Cron',
+    interval: 'Interval',
   };
-  return labels[r] || r;
+  return labels[recurrence];
 }
 
-export function formatDuration(ms: number | null | undefined): string {
-  if (!ms) return '--';
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  const mins = Math.floor(ms / 60000);
-  const secs = Math.floor((ms % 60000) / 1000);
-  return `${mins}m ${secs}s`;
+export function taskRecurrence(task: ScheduleTask): ProductRecurrence {
+  const stored = task.metadata?.['productRecurrence'];
+  if (['once', 'daily', 'weekly', 'monthly', 'custom', 'interval'].includes(String(stored))) {
+    return stored as ProductRecurrence;
+  }
+  return task.scheduleType === 'cron' ? 'custom' : task.scheduleType;
 }
 
-export function getNextRunCountdown(nextRunAt: string | null): string {
-  if (!nextRunAt) return '';
-  const diff = new Date(nextRunAt).getTime() - Date.now();
-  if (diff <= 0) return 'overdue';
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `in ${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `in ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `in ${days}d`;
+export function scheduleResultText(run: ScheduleRun): string | null {
+  const value = run.result?.['text'];
+  return typeof value === 'string' && value.trim() ? value : null;
 }

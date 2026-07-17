@@ -17,12 +17,9 @@ import { useVoiceInputStore } from '../stores/settingsStore';
  * `stores/settingsStore.ts` (defined in `stores/settings/voice.ts`) —
  * this is the SAME store instance watched by `VoiceInputOverlay.tsx` and
  * `VoiceSettings.tsx`, and the one driven by the Quick Query voice request
- * in `App.tsx`. Do NOT import from the separate, legacy
- * `stores/voiceInputStore.ts` module — that store has no live UI observer
- * and previously caused DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01 (hotkey
- * recorded audio with zero visible feedback because the overlay was
- * watching a different store instance). See
- * docs/agent-context/known-flaws.md for details.
+ * in `App.tsx`. The former duplicate `stores/voiceInputStore.ts` owner was
+ * removed after it caused DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01 (the
+ * hotkey recorded audio while the overlay watched a different store).
  */
 export function useVoiceHotkey() {
   const startListening = useVoiceInputStore((s) => s.startListening);

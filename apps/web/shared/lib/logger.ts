@@ -19,7 +19,6 @@ export const logger = {
     if (shouldLog('debug')) console.debug(`[DEBUG] ${message}`, ...args);
   },
   info: (message: string, ...args: unknown[]) => {
-    // eslint-disable-next-line no-console
     if (shouldLog('info')) console.info(`[INFO] ${message}`, ...args);
   },
   warn: (message: string, ...args: unknown[]) => {
@@ -29,11 +28,9 @@ export const logger = {
     if (shouldLog('error')) console.error(`[ERROR] ${message}`, ...args);
   },
   auth: (message: string, ...args: unknown[]) => {
-    // eslint-disable-next-line no-console
     if (isDevelopment) console.info(`[AUTH] ${message}`, ...args);
   },
   app: (message: string, ...args: unknown[]) => {
-    // eslint-disable-next-line no-console
     console.info(`[APP] ${message}`, ...args);
   },
 };

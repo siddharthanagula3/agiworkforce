@@ -153,11 +153,13 @@ beforeEach(() => {
     _path: string,
     body: { conversations?: Array<{ id: string }>; messages?: Array<{ id: string }> },
   ) => ({
+    protocolVersion: 2,
     applied: {
       conversations: (body?.conversations ?? []).map((c) => ({ id: c.id, server_version: '1' })),
       messages: (body?.messages ?? []).map((m) => ({ id: m.id, server_version: '1' })),
       artifacts: [],
     },
+    conflicts: { conversations: [], messages: [], artifacts: [] },
     cursor: '1',
   })) as never);
 });
@@ -304,6 +306,9 @@ describe('syncNow — push', () => {
     expect(path).toBe('/api/chat/sync');
     expect(body.conversations).toHaveLength(1);
     expect(body.conversations[0]).toMatchObject({ id: 'c1', title: 'Chat c1', model: 'gpt-5.4' });
+    expect(body).toMatchObject({ protocolVersion: 2 });
+    expect(body.conversations[0]).toMatchObject({ baseVersion: '0' });
+    expect(body.conversations[0]).not.toHaveProperty('updatedAt');
     expect(body.messages).toHaveLength(1);
     expect(body.messages[0]).toMatchObject({
       id: 'm1',
@@ -315,6 +320,53 @@ describe('syncNow — push', () => {
     const sync = useCloudSyncStateStore.getState();
     expect(sync.dirtyConversationIds).toEqual([]);
     expect(sync.dirtyMessages).toEqual([]);
+  });
+
+  it('preserves an edit made while a conversation push is in flight', async () => {
+    seedConversation('c1', { title: 'sent', serverVersion: '7' });
+    markConversationForSync('c1');
+    mockPost.mockImplementationOnce(async () => {
+      useChatCloudMessageStore.getState().patchCloudConversation('c1', { title: 'edited later' });
+      return {
+        protocolVersion: 2,
+        applied: {
+          conversations: [{ id: 'c1', server_version: '8' }],
+          messages: [],
+          artifacts: [],
+        },
+        conflicts: { conversations: [], messages: [], artifacts: [] },
+        cursor: '8',
+      } as never;
+    });
+
+    await syncNow();
+
+    const latest = useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1');
+    expect(latest).toMatchObject({ title: 'edited later', serverVersion: '8' });
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
+  });
+
+  it('adopts the deterministic server winner for a stale conversation CAS conflict', async () => {
+    seedConversation('c1', { title: 'stale local', serverVersion: '7' });
+    markConversationForSync('c1');
+    mockPost.mockImplementationOnce(async () => ({
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [], artifacts: [] },
+      conflicts: {
+        conversations: [{ id: 'c1', current: convDelta('c1', '8') }],
+        messages: [],
+        artifacts: [],
+      },
+      cursor: '8',
+    }) as never);
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1')).toMatchObject({
+      title: 'Chat c1',
+      serverVersion: '8',
+    });
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).not.toContain('c1');
   });
 
   it('does not push tool-role messages (and posts nothing when only a tool msg is dirty)', async () => {
@@ -338,7 +390,9 @@ describe('syncNow — push', () => {
     mockPost.mockImplementationOnce(async () => {
       order.push('push');
       return {
+        protocolVersion: 2,
         applied: { conversations: [], messages: [], artifacts: [] },
+        conflicts: { conversations: [], messages: [], artifacts: [] },
         cursor: '0',
       } as never;
     });
@@ -358,7 +412,9 @@ describe('syncNow — push', () => {
     markMessageForSync('c1', 'm1'); // conversation intentionally NOT marked dirty
     // Server rejects the message (parent missing → EXISTS fails): applied.messages empty.
     mockPost.mockImplementationOnce((async () => ({
+      protocolVersion: 2,
       applied: { conversations: [], messages: [], artifacts: [] },
+      conflicts: { conversations: [], messages: [], artifacts: [] },
       cursor: '0',
     })) as never);
 

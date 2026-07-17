@@ -111,11 +111,28 @@ async function handleListModels(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // Unauthenticated callers get the free-tier model list. Authenticated
-  // callers get the model list for their actual subscription tier.
+  // callers get the model list for their actual subscription tier. A caller
+  // that explicitly presents an Authorization credential must never be
+  // silently downgraded to the public catalog when verification fails: that
+  // masks expired/revoked credentials and makes native clients behave as if
+  // their account lost entitlements.
+  const presentedAuthorization = request.headers.has('authorization');
   let userId: string | null = null;
   try {
     ({ userId } = await getClerkAuthUser(request));
   } catch {
+    if (presentedAuthorization) {
+      return NextResponse.json(
+        {
+          error: {
+            message: 'Invalid authentication token',
+            type: 'invalid_request_error',
+            code: 'invalid_api_key',
+          },
+        },
+        { status: 401, headers: getCorsHeaders(request) },
+      );
+    }
     return listModelsForRequest(request, 'free');
   }
 

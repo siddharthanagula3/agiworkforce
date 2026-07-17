@@ -2,7 +2,7 @@
  * Shared Links screen — v1 placeholder.
  * Cloud feature gated via InviteCodeModal (invite code + waitlist tabs).
  */
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,12 +11,10 @@ import { ArrowLeft, Link2, Lock } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useTheme } from '@/src/ui/theme';
-import { InviteCodeModal } from '@/src/features/cloud-bridge/InviteCodeModal';
 
 export default function SharedLinksScreen() {
   const router = useRouter();
   const { colors: c, statusBarStyle } = useTheme();
-  const [showModal, setShowModal] = useState(false);
 
   const handleBack = useCallback(() => {
     router.navigate('/(app)/settings/data-controls' as Parameters<typeof router.navigate>[0]);
@@ -83,8 +81,7 @@ export default function SharedLinksScreen() {
           </View>
           <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
             Shared Links lets you publish conversations and invite collaborators. This feature isn’t
-            available on mobile yet — join the waitlist to get notified, or enter your invitation
-            code if you have early access.
+            available on mobile yet.
           </Text>
         </View>
 
@@ -127,29 +124,7 @@ export default function SharedLinksScreen() {
           </View>
         </Card>
 
-        <Pressable
-          onPress={() => setShowModal(true)}
-          style={{
-            marginTop: 16,
-            borderRadius: 14,
-            paddingVertical: 16,
-            alignItems: 'center',
-            backgroundColor: c.teal,
-          }}
-          accessibilityLabel="Join the Shared Links waitlist or enter your invitation code"
-          accessibilityRole="button"
-        >
-          <Text style={{ color: c.white, fontSize: 16, fontWeight: '600' }}>Join waitlist</Text>
-        </Pressable>
       </ScrollView>
-
-      <InviteCodeModal
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        source="shared-links"
-        title="Shared Links"
-        body="This feature isn’t available on mobile yet. Join the waitlist to get notified, or enter your invitation code if you have early access."
-      />
     </SafeAreaView>
   );
 }

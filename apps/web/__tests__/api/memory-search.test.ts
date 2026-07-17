@@ -99,9 +99,11 @@ describe('Memory Search API', () => {
     });
 
     it('should succeed with valid session', async () => {
+      // Cookie-session test: no Authorization header — see
+      // WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01 (a present-but-
+      // unverifiable bearer now rejects rather than falling back to cookie).
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
-        headers: { Authorization: 'Bearer valid-jwt-token' },
       });
 
       const response = await GET(request);

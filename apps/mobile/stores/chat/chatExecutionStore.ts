@@ -2,18 +2,24 @@ import { Alert, AppState } from 'react-native';
 import { create } from 'zustand';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
-import { QueueFullError } from '@agiworkforce/runtime';
+import { QueueFullError } from '@agiworkforce/client-runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
-import { streamChat, type StreamDelta } from '@/services/streaming';
+import {
+  streamChat,
+  streamToolApprovalResume,
+  type StreamDelta,
+  type ChatWireMessage,
+} from '@/services/streaming';
 import {
   parseGeneratedFilesDelta,
   resolveGeneratedFileUri,
   type GeneratedFileWire,
-} from '@agiworkforce/services';
+} from '@agiworkforce/cloud-contracts';
 import {
   createToolCallAccumulator,
+  seedToolCallAccumulator,
   accumulateToolCallDelta,
   toolCallList,
 } from '@/src/features/chat/utils/toolCallAccumulator';
@@ -27,8 +33,10 @@ import {
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
 import { isCloudManagedModelId, isSelectableModelId } from '@/src/features/model-picker/service';
+import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
@@ -46,13 +54,20 @@ import {
   providerForExecutionMode,
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
+import {
+  labelMobileSession,
+  mobileExecutionProfileFor,
+} from '@/src/features/chat/utils/sessionLabeling';
 import type { ChatMessage, MessageAttachment, ConversationSummary, ToolCall } from '@/types/chat';
+import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
 import type { GeneratedFile, GeneratedFileKind } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
+import { getConversationMessageStore } from './conversationRepository';
+import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 
 /** Paywall error state captured when the API returns a tier-cap paywall response. */
 export interface PaywallErrorState {
@@ -109,11 +124,70 @@ interface ExecutionState {
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
   setPaywallError: (paywallError: PaywallErrorState) => void;
+  /**
+   * Record the user's approve/reject decision for one pending MCP/connector
+   * tool call and, once every call in the suspended turn is decided, resume
+   * the turn via `POST /api/llm/v1/chat/completions/approve`. No-op if
+   * `assistantMessageId` has no pending turn (already resolved, or the turn
+   * never suspended) or `toolCallId` isn't one of its pending calls.
+   */
+  resolveToolApproval: (
+    conversationId: string,
+    assistantMessageId: string,
+    toolCallId: string,
+    decision: 'approved' | 'rejected',
+  ) => Promise<void>;
 }
 
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const streamingConversations = new Set<string>();
+
+/** One tool call the server suspended for user approval (`x_tool_approval_request`). */
+interface PendingApprovalCall {
+  toolCallId: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+/**
+ * Context captured for a suspended turn so the resume request can be rebuilt
+ * statelessly (the server keeps no loop state between the initial request and
+ * `/approve`). Keyed by assistantMessageId in a module-level registry — mirrors
+ * apps/web's `pendingTurns` (lib/hooks/useChatStream.ts) so the mobile and web
+ * resume flows drive the identical wire contract.
+ */
+interface PendingApprovalTurn {
+  priorMessages: ChatWireMessage[];
+  model: string;
+  conversationId: string;
+  calls: PendingApprovalCall[];
+  decisions: Map<string, 'approved' | 'rejected'>;
+  /** Set once the resume request has been dispatched, to prevent double-submit. */
+  resolving: boolean;
+}
+
+const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
+
+/**
+ * Whether a suspended turn is actually resolvable right now. `pendingApprovalTurns`
+ * is process-memory-only (module state, reset on every app cold start), while an
+ * `awaiting_approval` tool call is durably persisted on the message. A cold
+ * start -- or loading a conversation whose last turn suspended in a PRIOR app
+ * session -- leaves the store showing `awaiting_approval`/`requiresApproval`
+ * with no matching registry entry: the Allow/Deny buttons would render
+ * live-wired but silently no-op, since `resolveToolApproval` bails out on a
+ * missing turn. Callers must check this before wiring the buttons and render
+ * an expired state instead (mirrors apps/web's `isApprovalTurnLive`).
+ */
+export function isApprovalTurnLive(assistantMessageId: string): boolean {
+  return pendingApprovalTurns.has(assistantMessageId);
+}
+
+/** TEST-ONLY: clear the module-level pending-approval registry between tests. */
+export function __resetPendingApprovalTurnsForTests(): void {
+  pendingApprovalTurns.clear();
+}
 
 /** Reactive streaming flags derived from the module-level set — spread into
  *  every `set()` that follows a `streamingConversations` add/delete so the
@@ -389,32 +463,8 @@ export function compareCloudMessagesByCreatedAtThenId(a: ChatMessage, b: ChatMes
   return at === bt ? a.id.localeCompare(b.id) : at.localeCompare(bt);
 }
 
-/**
- * Additive write-through for CLOUD conversations (P2 sync).
- *
- * The live send/stream path writes messages to the LOCAL message store (which feeds
- * LLM history-building). This mirrors a COMPLETED turn's messages into the cloud
- * store and queues them for the next sync push, so that: (a) the engine can push
- * them server-side (the first durable persistence path for mobile cloud chat), (b) a
- * conversation reopen's empty-GET guard sees existing messages and won't clobber
- * them, and (c) cross-device pulls merge against the same store. No-op for local
- * conversations — gated on the cloud store actually owning the conversation.
- */
-function mirrorCloudTurn(
-  conversationId: string,
-  messages: ChatMessage[],
-  convPatch: Partial<ConversationSummary>,
-): void {
-  const cloud = getCloudStore().getState();
-  if (!cloud.conversations.some((c) => c.id === conversationId)) return;
-
-  const current = cloud.messages[conversationId] ?? [];
-  const byId = new Map(current.map((m) => [m.id, m]));
-  for (const m of messages) byId.set(m.id, { ...byId.get(m.id), ...m });
-  const ordered = Array.from(byId.values()).sort(compareCloudMessagesByCreatedAtThenId);
-  cloud.setCloudMessages(conversationId, ordered);
-  cloud.patchCloudConversation(conversationId, { ...convPatch, messageCount: ordered.length });
-
+/** Queue messages already written to the Cloud repository for cross-device sync. */
+function queueCloudTurnForSync(conversationId: string, messages: ChatMessage[]): void {
   markConversationForSync(conversationId);
   for (const m of messages) {
     // Only user/assistant/system rows are part of the synced transcript.
@@ -427,27 +477,16 @@ function mirrorCloudTurn(
 /**
  * Build the prior-turn history the LLM sees for a conversation (P2 cross-device).
  *
- * For CLOUD conversations this MERGES the cloud store — which holds turns PULLED
- * from other devices plus the locally-mirrored turns — with the local store, so a
- * user can seamlessly continue on mobile a conversation they started on web/desktop
- * and the model receives the full pulled history. Local conversations read only the
- * local store. Union by id (cloud copy wins — it's the persisted/final content),
- * ordered by createdAt.
+ * Cloud history comes only from the Cloud repository (including turns pulled
+ * from web/desktop); Local history comes only from the Local repository.
  */
 function historyMessagesForConversation(
   conversationId: string,
   executionMode: ConversationExecutionMode,
 ): ChatMessage[] {
-  const local = getMsgStore().getState().messages[conversationId] ?? [];
-  if (executionMode !== 'cloud') return local;
-
-  const cloud = getCloudStore().getState().messages[conversationId] ?? [];
-  if (cloud.length === 0) return local;
-
-  const byId = new Map<string, ChatMessage>();
-  for (const m of local) byId.set(m.id, m);
-  for (const m of cloud) byId.set(m.id, m);
-  return Array.from(byId.values()).sort(compareCloudMessagesByCreatedAtThenId);
+  const owned =
+    getConversationMessageStore(conversationId).getState().messages[conversationId] ?? [];
+  return executionMode === 'cloud' ? [...owned].sort(compareCloudMessagesByCreatedAtThenId) : owned;
 }
 
 /**
@@ -481,7 +520,7 @@ function deriveChatMessageArtifacts(
   try {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { deriveArtifacts } =
-      require('@agiworkforce/services') as typeof import('@agiworkforce/services');
+      require('@agiworkforce/artifacts') as typeof import('@agiworkforce/artifacts');
     /* eslint-enable @typescript-eslint/no-require-imports */
     const shared = deriveArtifacts(content, {
       conversationId,
@@ -664,16 +703,31 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     cancelledBeforeStream.delete(conversationId);
 
     let uploadedAttachments: MessageAttachment[] | undefined;
-    const msgStore = getMsgStore();
+    const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
-    const isCloudModel = isCloudManagedModelId(model);
+    const requestedModel = model;
+    const isCloudModel = isCloudManagedModelId(requestedModel);
+    const isAutoSelection = isAutoModeModelId(requestedModel);
     const executionMode = conversation
       ? executionModeForConversation(conversation)
-      : executionModeForModel(model);
+      : executionModeForModel(requestedModel);
     const provider = providerForExecutionMode(executionMode);
-    const shouldUseLocalRuntime = executionMode === 'local' && isSelectableModelId(model);
+    if (__DEV__) {
+      // W5 stage-2 session labeling — additive, dev/test-only (see
+      // src/features/chat/utils/sessionLabeling.ts module doc). Does not
+      // change routing, persistence, or any value used below; only asserts
+      // this conversation's AppSession/ExecutionProfile are internally
+      // consistent and agree with the real Local/Cloud trust boundary.
+      labelMobileSession({
+        id: conversationId,
+        ownerUserId: useAuthStore.getState().user?.id ?? 'unknown-mobile-user',
+        executionMode,
+      });
+      mobileExecutionProfileFor(executionMode);
+    }
+    const shouldUseLocalRuntime = executionMode === 'local' && isSelectableModelId(requestedModel);
     if (executionMode === 'local' && isCloudModel) {
       set({
         error: 'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
@@ -682,7 +736,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return false;
     }
-    if (executionMode === 'cloud' && !isCloudModel) {
+    if (executionMode === 'cloud' && !isCloudModel && !isAutoSelection) {
       set({
         error: 'This is an AGI Cloud chat. Start a separate Local Mode chat to use local models.',
         paywallError: null,
@@ -690,6 +744,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return false;
     }
+
+    let executionModel = requestedModel;
+    let routingReason: string | undefined;
     // C1: Cloud auth gate — checked before invite/paywall gates so "sign in"
     // takes priority. isClerkLoaded guard prevents false-rejection during the
     // ~200ms cold-start window where isClerkSignedIn is false for signed-in users.
@@ -719,6 +776,40 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ...streamingFlags(),
       });
       return false;
+    }
+    if (executionMode === 'cloud') {
+      const route = resolveMobileCloudDispatch({
+        selection: requestedModel,
+        message: content,
+        subscriptionTier: useTierStore.getState().tier,
+        attachments: attachments?.map((attachment) => ({
+          mime: attachment.mimeType,
+          type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',
+        })),
+        currentModelKey:
+          conversation?.model && !isAutoModeModelId(conversation.model)
+            ? conversation.model
+            : undefined,
+      });
+
+      if (route.status === 'unavailable') {
+        set({
+          error: `No AGI Cloud route is available for this request: ${route.reasons.join('; ')}`,
+          paywallError: null,
+          ...streamingFlags(),
+        });
+        return false;
+      }
+      if (route.dispatch !== 'chat') {
+        set({
+          error: 'This request requires the AGI Cloud media workflow.',
+          paywallError: null,
+          ...streamingFlags(),
+        });
+        return false;
+      }
+      executionModel = route.modelKey;
+      routingReason = route.reason;
     }
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
@@ -797,8 +888,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       role: 'user',
       content,
       createdAt: new Date().toISOString(),
-      model,
+      model: requestedModel,
       attachments: uploadedAttachments,
+      ...(executionMode === 'cloud'
+        ? {
+            metadata: {
+              requestedModel,
+              resolvedModel: executionModel,
+              ...(routingReason ? { routingReason } : {}),
+            },
+          }
+        : {}),
     };
 
     const assistantMessageId = newMessageId();
@@ -809,7 +909,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       content: '',
       createdAt: new Date().toISOString(),
       isStreaming: true,
-      model,
+      model: executionMode === 'cloud' ? executionModel : requestedModel,
+      ...(executionMode === 'cloud'
+        ? {
+            metadata: {
+              requestedModel,
+              resolvedModel: executionModel,
+              ...(routingReason ? { routingReason } : {}),
+            },
+          }
+        : {}),
     };
 
     // P2: for cloud chats, history merges in turns pulled from other devices so a
@@ -947,7 +1056,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...c,
               lastMessage: content,
               updatedAt: new Date().toISOString(),
-              model: c.model ?? model,
+              model: c.model ?? requestedModel,
               provider: c.provider ?? provider,
               executionMode: c.executionMode ?? executionMode,
             }
@@ -958,7 +1067,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // Cloud write-through: persist+queue the user message now so an aborted or failed
     // turn still syncs it (the assistant reply is mirrored on stream completion).
     if (executionMode === 'cloud') {
-      mirrorCloudTurn(conversationId, [userMessage], { lastMessage: content });
+      queueCloudTurnForSync(conversationId, [userMessage]);
     }
 
     // The user message is now committed to the transcript — every pre-flight
@@ -1015,7 +1124,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             content: normalizeLocalMessageContent(message.content),
           })),
         );
-        const localRef = await resolveLocalModelRef(model);
+        const localRef = await resolveLocalModelRef(requestedModel);
         let localStreamingRaw = '';
         // Measure on-device decode rate (tokens/sec) from first token to done.
         let localTokenCount = 0;
@@ -1026,7 +1135,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           }
 
           const thinkingStartedAt = thinkingStartTimes.get(conversationId);
-          const currentMsgStore = getMsgStore();
+          const currentMsgStore = getConversationMessageStore(conversationId);
           const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
           const updatedMsgs = msgs.map((m) =>
             m.id === assistantMessageId
@@ -1093,7 +1202,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ? Math.round((localTokenCount / decodeMs) * 1000 * 10) / 10
             : undefined;
 
-        const currentMsgStore = getMsgStore();
+        const currentMsgStore = getConversationMessageStore(conversationId);
         const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
         const updatedMsgs = msgs.map((m) =>
           m.id === assistantMessageId
@@ -1145,7 +1254,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   lastMessage: finalContent.slice(0, 100),
                   messageCount: (c.messageCount ?? 0) + 2,
                   updatedAt: new Date().toISOString(),
-                  model: c.model ?? model,
+                  model: c.model ?? requestedModel,
                   provider: c.provider ?? provider,
                   executionMode: c.executionMode ?? executionMode,
                 }
@@ -1166,12 +1275,29 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // (web_search / code execution / MCP) as SSE deltas; we fold them into the
       // assistant message's toolCalls so ToolCallTimeline renders them live.
       const toolAcc = createToolCallAccumulator();
+      // MCP/connector tool calls this turn suspended on for user approval
+      // (x_tool_approval_request). Registered into `pendingApprovalTurns` in
+      // onDone so `resolveToolApproval` can rebuild the resume request.
+      const turnPendingApprovals: PendingApprovalCall[] = [];
 
       // Per-turn web search: when the user has the web-search feature enabled
       // (AddToChatSheet toggle, gated by FEATURES.webSearch), ask the server to
       // inject its built-in web_search tool. The server streams results back as
       // x_search_results deltas, which the tool-call accumulator already renders.
       const webSearchEnabled = FEATURES.webSearch && useChatViewStore.getState().features.webSearch;
+
+      // Per-turn code execution: mirrors webSearchEnabled above, with two extra
+      // honesty checks so the toggle is never cosmetic — re-verified here (not
+      // just at the AddToChatSheet UI layer) in case the user switched models
+      // after enabling it: the SELECTED MODEL must actually support server-side
+      // code execution (models.json capabilities.codeExecution), and THIS
+      // DEPLOYMENT must have the E2B execution loop reachable
+      // (`/api/me` feature_flags.code_execution, cached in useTierStore).
+      const codeExecutionEnabled =
+        FEATURES.codeExecution &&
+        getModelMetadataById(executionModel)?.capabilities?.codeExecution === true &&
+        useTierStore.getState().codeExecutionAvailable &&
+        useChatViewStore.getState().features.codeExecution;
 
       // Raw content accumulator for cloud streams — separate from streamingContent
       // (which must hold only display-clean text). The server intentionally emits
@@ -1194,6 +1320,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // to, to handle a tag straddling two chunks) — accumulating its output
       // onto itself across deltas would duplicate the reasoning text.
       let cloudStructuredReasoning = '';
+      // How this turn ended (OpenAI-wire finish_reason, last one seen) and
+      // whether the provider failed mid-stream (additive `x_stream_error` —
+      // finish_reason alone can't reliably say 'error', see
+      // packages/ui/unified-chat's hasStreamError doc comment). Previously
+      // parsed off the wire in services/streaming.ts but never read here at
+      // all — a mid-stream provider failure rendered as a clean completion
+      // with zero indication, worse than web/desktop (which at least
+      // persisted finishReason even before this fix). `code`/`retryable`
+      // ride along when the provider adapter supplied them.
+      let turnFinishReason: string | undefined;
+      let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
 
       // Honor the user's per-model Thinking toggle — the same state that drives
       // the Brain badge on ModelSelectorButton. Hardcoding `thinking: true`
@@ -1201,16 +1338,30 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // regardless of choice) and broke free-trial sends on non-thinking
       // models, which the server rejects when thinking/effort is requested
       // without the capability. Effort rides along only when thinking is on.
-      const thinkingEnabled = useModelStore.getState().thinkingEnabledPerModel[model] ?? false;
+      const thinkingEnabled =
+        useModelStore.getState().thinkingEnabledPerModel[executionModel] ?? false;
+      // agentControl.effort is a PickerEffort (agentControlStore) -- a superset
+      // of streamChat's wire-level Effort that also allows 'none'/'minimal' for
+      // models whose catalog reasoning.supportedEfforts includes them (model
+      // picker). Per-model request-path handling of those two values isn't
+      // verified across every provider adapter yet (reasoning-effort-capability
+      // matrix, 2026-07-10), so send them as "no explicit effort" rather than
+      // forward an unverified string to a provider that may reject it.
+      const wireEffort =
+        agentControl.effort === 'none' || agentControl.effort === 'minimal'
+          ? undefined
+          : agentControl.effort;
 
       await streamChat(
         {
-          model,
+          model: executionModel,
           messages: historyMessages,
           stream: true,
+          operationId: assistantMessageId,
           thinking: thinkingEnabled,
-          ...(thinkingEnabled ? { effort: agentControl.effort } : {}),
+          ...(thinkingEnabled && wireEffort ? { effort: wireEffort } : {}),
           ...(webSearchEnabled ? { web_search: true } : {}),
+          ...(codeExecutionEnabled ? { code_execution: true } : {}),
         },
         {
           onDelta: (delta: StreamDelta) => {
@@ -1261,14 +1412,67 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);
 
+            // Manual-approval suspend: record the pending call's AUTHORITATIVE
+            // args from the validated event itself (not the accumulator's
+            // stringified `input`, whose provenance may be raw streamed
+            // fragments) so the resume request rebuilds `function.arguments`
+            // exactly as the server sent it.
+            const approvalReq = delta.x_tool_approval_request;
+            if (
+              approvalReq?.tool_call_id &&
+              !turnPendingApprovals.some((c) => c.toolCallId === approvalReq.tool_call_id)
+            ) {
+              turnPendingApprovals.push({
+                toolCallId: approvalReq.tool_call_id,
+                name: approvalReq.name,
+                args:
+                  approvalReq.args && typeof approvalReq.args === 'object'
+                    ? (approvalReq.args as Record<string, unknown>)
+                    : {},
+              });
+            }
+
             if (delta.x_generated_files) {
               // Validate against the shared cloud contract; malformed
               // descriptors are dropped per-file instead of trusted blindly.
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
             }
 
+            // Keep the LAST finish_reason seen (server tool loops emit
+            // intermediate 'tool_calls' before the final reason) — mirrors
+            // web/desktop's "keep the last reason" handling.
+            if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
+              turnFinishReason = delta.finish_reason;
+            }
+            // Sticky: keep the FIRST error payload seen, it identifies the
+            // actual failure (unlike finish_reason, which legitimately
+            // changes as the turn progresses). Accepts a bare string
+            // defensively too, though the wire only ever sends the object.
+            if (!turnStreamError) {
+              const rawStreamError = delta.x_stream_error as unknown;
+              if (
+                rawStreamError &&
+                typeof rawStreamError === 'object' &&
+                typeof (rawStreamError as { message?: unknown }).message === 'string' &&
+                (rawStreamError as { message: string }).message
+              ) {
+                const r = rawStreamError as {
+                  message: string;
+                  code?: unknown;
+                  retryable?: unknown;
+                };
+                turnStreamError = {
+                  message: r.message,
+                  ...(typeof r.code === 'string' ? { code: r.code } : {}),
+                  ...(typeof r.retryable === 'boolean' ? { retryable: r.retryable } : {}),
+                };
+              } else if (typeof rawStreamError === 'string' && rawStreamError) {
+                turnStreamError = { message: rawStreamError };
+              }
+            }
+
             const thinkingStartedAt = thinkingStartTimes.get(conversationId);
-            const currentMsgStore = getMsgStore();
+            const currentMsgStore = getConversationMessageStore(conversationId);
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
@@ -1302,12 +1506,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             thinkingStartTimes.delete(conversationId);
             thinkingEndTimes.delete(conversationId);
 
-            // Finalize the accumulated tool calls onto the message. mirrorCloudTurn
-            // (below) reads this same finalized message, so the tool steps ride
-            // along into the cloud write-through and survive reload.
+            // Finalize accumulated tool calls directly on the owning repository.
             const finalToolCalls = toolCallList(toolAcc);
 
-            const currentMsgStore = getMsgStore();
+            const currentMsgStore = getConversationMessageStore(conversationId);
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
             // Read the finalized content from THIS turn's message, not the
             // global streamingContent — under concurrent streams the global
@@ -1349,6 +1551,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     metadata: {
                       ...m.metadata,
                       ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
+                      ...(turnFinishReason !== undefined ? { finishReason: turnFinishReason } : {}),
+                      // Mid-stream provider failure: the turn otherwise looks
+                      // like a clean completion (server still sends a normal
+                      // stream end) — this is the only persisted signal that
+                      // tells MessageBubble to show the incomplete-response
+                      // notice + retry affordance instead.
+                      ...(turnStreamError !== undefined ? { streamError: turnStreamError } : {}),
                     },
                   }
                 : m,
@@ -1368,7 +1577,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       lastMessage: preview,
                       messageCount: (c.messageCount ?? 0) + 2,
                       updatedAt: new Date().toISOString(),
-                      model: c.model ?? model,
+                      model: c.model ?? requestedModel,
                       provider: c.provider ?? provider,
                       executionMode: c.executionMode ?? executionMode,
                     }
@@ -1381,12 +1590,28 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (executionMode === 'cloud') {
               const finalAssistant = updatedMsgs.find((m) => m.id === assistantMessageId);
               if (finalAssistant) {
-                mirrorCloudTurn(conversationId, [finalAssistant], {
-                  lastMessage: preview,
-                  updatedAt: new Date().toISOString(),
-                });
+                queueCloudTurnForSync(conversationId, [finalAssistant]);
               }
               void syncNow();
+
+              // Manual-approval suspend: the server emitted x_tool_approval_request
+              // for one or more calls and stopped ([DONE] with no final answer yet).
+              // Register the turn so resolveToolApproval can rebuild the resume
+              // request once the user decides. historyMessages is exactly the
+              // thread this request sent — the resume replays it verbatim, plus
+              // the reconstructed assistant tool_call turn.
+              if (turnPendingApprovals.length > 0) {
+                pendingApprovalTurns.set(assistantMessageId, {
+                  priorMessages: historyMessages,
+                  model: executionModel,
+                  conversationId,
+                  calls: turnPendingApprovals,
+                  decisions: new Map(),
+                  resolving: false,
+                });
+              } else {
+                pendingApprovalTurns.delete(assistantMessageId);
+              }
             }
 
             set({
@@ -1401,7 +1626,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
 
-            const currentMsgStore = getMsgStore();
+            const currentMsgStore = getConversationMessageStore(conversationId);
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
             const currentContent = get().streamingContent;
 
@@ -1472,7 +1697,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return true;
       }
 
-      const currentMsgStore = getMsgStore();
+      const currentMsgStore = getConversationMessageStore(conversationId);
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
       const currentContent = get().streamingContent;
 
@@ -1567,7 +1792,413 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         abortControllers.delete(conversationId);
       }
       streamingConversations.delete(conversationId);
-      const sweepStore = getMsgStore();
+      const sweepStore = getConversationMessageStore(conversationId);
+      const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
+      if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
+        sweepStore.setState((s) => ({
+          messages: {
+            ...s.messages,
+            [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+              m.id === assistantMessageId && m.isStreaming ? { ...m, isStreaming: false } : m,
+            ),
+          },
+        }));
+      }
+      set({ ...streamingFlags() });
+    }
+  },
+
+  resolveToolApproval: async (conversationId, assistantMessageId, toolCallId, decision) => {
+    const turn = pendingApprovalTurns.get(assistantMessageId);
+    if (!turn || turn.resolving) return;
+    if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
+
+    turn.decisions.set(toolCallId, decision);
+
+    const msgStore = getConversationMessageStore(conversationId);
+    const patchToolCall = (patch: Partial<ToolCall>) => {
+      msgStore.setState((s) => ({
+        messages: {
+          ...s.messages,
+          [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  toolCalls: (m.toolCalls ?? []).map((t) =>
+                    t.toolCallId === toolCallId ? { ...t, ...patch } : t,
+                  ),
+                }
+              : m,
+          ),
+        },
+      }));
+    };
+
+    // Reflect the decision on the card immediately: approved -> running (the
+    // continuation's status/result events land on it), rejected -> failed.
+    patchToolCall(
+      decision === 'approved'
+        ? { status: 'running', requiresApproval: false }
+        : {
+            status: 'failed',
+            requiresApproval: false,
+            output: 'You denied permission to run this tool.',
+          },
+    );
+
+    // Wait until every pending call in this turn is decided before resuming —
+    // a multi-tool suspend needs one resume request carrying every decision.
+    if (turn.decisions.size < turn.calls.length) return;
+    turn.resolving = true;
+
+    const existingController = abortControllers.get(conversationId);
+    if (existingController) existingController.abort();
+    const controller = new AbortController();
+    abortControllers.set(conversationId, controller);
+    streamingConversations.add(conversationId);
+    lastDeltaTimes.set(conversationId, Date.now());
+    set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
+
+    const currentMsgs = msgStore.getState().messages[conversationId] ?? [];
+    const currentMessage = currentMsgs.find((m) => m.id === assistantMessageId);
+    const assistantContent = currentMessage?.content ?? '';
+    const seedToolCalls = currentMessage?.toolCalls
+      ? currentMessage.toolCalls.map((t) => ({ ...t }))
+      : [];
+
+    // Reconstruct the suspended assistant tool_call turn (standard OpenAI
+    // continue-after-tool shape) and the per-tool approval decisions.
+    const assistantToolCallMessage: ChatWireMessage = {
+      role: 'assistant',
+      content: assistantContent,
+      tool_calls: turn.calls.map((c) => ({
+        id: c.toolCallId,
+        type: 'function',
+        function: { name: c.name, arguments: JSON.stringify(c.args) },
+      })),
+    };
+    const toolApprovals = turn.calls.map((c) => ({
+      tool_call_id: c.toolCallId,
+      decision: turn.decisions.get(c.toolCallId) ?? ('rejected' as const),
+    }));
+
+    msgStore.setState((s) => ({
+      messages: {
+        ...s.messages,
+        [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+          m.id === assistantMessageId ? { ...m, isStreaming: true } : m,
+        ),
+      },
+    }));
+
+    // Seed from the message's existing tool cards (the just-decided ones) so
+    // the continuation's deltas EXTEND the same timeline instead of a fresh
+    // accumulator dropping them.
+    const toolAcc = seedToolCallAccumulator(seedToolCalls);
+    let cloudContentRaw = assistantContent;
+    // Seed from any reasoning the model already produced before the tool call
+    // (thinking is force-disabled server-side for the resume itself, but the
+    // ORIGINAL pre-suspend stream may have streamed real reasoning text) — an
+    // empty seed would overwrite it with `undefined` the instant the first
+    // resume delta lands, since every onDelta below replaces `reasoning`
+    // wholesale rather than appending.
+    let cloudStructuredReasoning = currentMessage?.reasoning ?? '';
+    const turnGeneratedFiles: GeneratedFileWire[] = [];
+    const turnPendingApprovals: PendingApprovalCall[] = [];
+    // See the sendMessage onDelta/onDone pair above for why these are
+    // captured and persisted (finish_reason previously parsed off the wire
+    // but never read; x_stream_error is the additive mid-stream-failure
+    // marker finish_reason alone can't reliably carry).
+    let turnFinishReason: string | undefined;
+    let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
+
+    try {
+      await streamToolApprovalResume(
+        {
+          model: turn.model,
+          messages: [...turn.priorMessages, assistantToolCallMessage],
+          stream: true,
+          operationId: uuidv7(),
+          tool_approvals: toolApprovals,
+        },
+        {
+          onDelta: (delta: StreamDelta) => {
+            if (controller.signal.aborted) return;
+            lastDeltaTimes.set(conversationId, Date.now());
+
+            if (delta.content) cloudContentRaw += delta.content;
+            const parsedTags = parseLocalThinking(cloudContentRaw);
+            const newContent = parsedTags.content;
+            if (delta.reasoning) cloudStructuredReasoning += delta.reasoning;
+            const newReasoning = [cloudStructuredReasoning, parsedTags.reasoning]
+              .filter(Boolean)
+              .join('\n\n');
+
+            accumulateToolCallDelta(toolAcc, delta);
+            const toolCalls = toolCallList(toolAcc);
+
+            const approvalReq = delta.x_tool_approval_request;
+            if (
+              approvalReq?.tool_call_id &&
+              !turnPendingApprovals.some((c) => c.toolCallId === approvalReq.tool_call_id)
+            ) {
+              turnPendingApprovals.push({
+                toolCallId: approvalReq.tool_call_id,
+                name: approvalReq.name,
+                args:
+                  approvalReq.args && typeof approvalReq.args === 'object'
+                    ? (approvalReq.args as Record<string, unknown>)
+                    : {},
+              });
+            }
+
+            if (delta.x_generated_files) {
+              turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
+            }
+
+            if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
+              turnFinishReason = delta.finish_reason;
+            }
+            if (!turnStreamError) {
+              const rawStreamError = delta.x_stream_error as unknown;
+              if (
+                rawStreamError &&
+                typeof rawStreamError === 'object' &&
+                typeof (rawStreamError as { message?: unknown }).message === 'string' &&
+                (rawStreamError as { message: string }).message
+              ) {
+                const r = rawStreamError as {
+                  message: string;
+                  code?: unknown;
+                  retryable?: unknown;
+                };
+                turnStreamError = {
+                  message: r.message,
+                  ...(typeof r.code === 'string' ? { code: r.code } : {}),
+                  ...(typeof r.retryable === 'boolean' ? { retryable: r.retryable } : {}),
+                };
+              } else if (typeof rawStreamError === 'string' && rawStreamError) {
+                turnStreamError = { message: rawStreamError };
+              }
+            }
+
+            const innerMsgStore = getConversationMessageStore(conversationId);
+            const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
+            const updatedMsgs = msgs.map((m) =>
+              m.id === assistantMessageId
+                ? {
+                    ...m,
+                    content: newContent,
+                    reasoning: newReasoning || undefined,
+                    isStreaming: true,
+                    ...(toolCalls.length > 0 ? { toolCalls } : {}),
+                  }
+                : m,
+            );
+            set({ streamingContent: newContent, streamingReasoning: newReasoning });
+            innerMsgStore.setState((s) => ({
+              messages: { ...s.messages, [conversationId]: updatedMsgs },
+            }));
+          },
+
+          onDone: () => {
+            const finalToolCalls = toolCallList(toolAcc);
+            const innerMsgStore = getConversationMessageStore(conversationId);
+            const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
+            const finalContent = msgs.find((m) => m.id === assistantMessageId)?.content ?? '';
+            const completedAt = new Date().toISOString();
+            const convTitle =
+              innerMsgStore.getState().conversations.find((c) => c.id === conversationId)?.title ??
+              '';
+            const messageArtifacts = [
+              ...deriveChatMessageArtifacts(
+                finalContent,
+                conversationId,
+                assistantMessageId,
+                completedAt,
+              ),
+              ...generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
+            ];
+            const finalCitations = citationsFromToolCalls(finalToolCalls);
+            captureArtifactsFromMessage(
+              finalContent,
+              assistantMessageId,
+              conversationId,
+              convTitle,
+              completedAt,
+            );
+
+            const updatedMsgs = msgs.map((m) =>
+              m.id === assistantMessageId
+                ? {
+                    ...m,
+                    isStreaming: false,
+                    ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
+                    ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
+                    ...(finalCitations.length > 0 ? { citations: finalCitations } : {}),
+                    ...(turnFinishReason !== undefined || turnStreamError !== undefined
+                      ? {
+                          metadata: {
+                            ...m.metadata,
+                            ...(turnFinishReason !== undefined
+                              ? { finishReason: turnFinishReason }
+                              : {}),
+                            ...(turnStreamError !== undefined
+                              ? { streamError: turnStreamError }
+                              : {}),
+                          },
+                        }
+                      : {}),
+                  }
+                : m,
+            );
+            const preview = finalContent.slice(0, 100);
+
+            abortControllers.delete(conversationId);
+            streamingConversations.delete(conversationId);
+
+            innerMsgStore.setState((s) => ({
+              messages: { ...s.messages, [conversationId]: updatedMsgs },
+              // messageCount is deliberately NOT incremented here: the initial
+              // suspend's onDone already counted the user+assistant pair. This
+              // resume continuation extends the SAME assistant message — it
+              // creates no new transcript rows.
+              conversations: s.conversations.map((c) =>
+                c.id === conversationId
+                  ? { ...c, lastMessage: preview, updatedAt: new Date().toISOString() }
+                  : c,
+              ),
+            }));
+
+            if (turnPendingApprovals.length > 0) {
+              // Suspended again on a further tool: register a fresh turn
+              // carrying the now-longer thread (this resume's assistant
+              // tool_call turn + its tool results) for the next
+              // resolveToolApproval call — mirrors apps/web's re-suspend path.
+              // finalToolCalls (built above from this resume's accumulator)
+              // has each approved call's REAL output -- use it instead of a
+              // placeholder, so the model sees the genuine file contents /
+              // command output / search results it needs to reason about the
+              // NEXT tool call.
+              pendingApprovalTurns.set(assistantMessageId, {
+                priorMessages: [
+                  ...turn.priorMessages,
+                  assistantToolCallMessage,
+                  ...turn.calls.map(
+                    (c): ChatWireMessage => ({
+                      role: 'tool',
+                      content:
+                        turn.decisions.get(c.toolCallId) === 'approved'
+                          ? (finalToolCalls.find((t) => t.toolCallId === c.toolCallId)?.output ??
+                            '(executed)')
+                          : 'The user denied permission to run this tool.',
+                      tool_call_id: c.toolCallId,
+                    }),
+                  ),
+                ],
+                model: turn.model,
+                conversationId,
+                calls: turnPendingApprovals,
+                decisions: new Map(),
+                resolving: false,
+              });
+            } else {
+              pendingApprovalTurns.delete(assistantMessageId);
+            }
+
+            const finalAssistant = updatedMsgs.find((m) => m.id === assistantMessageId);
+            if (finalAssistant) {
+              queueCloudTurnForSync(conversationId, [finalAssistant]);
+            }
+            void syncNow();
+
+            set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '' });
+          },
+
+          onError: (error: Error) => {
+            pendingApprovalTurns.delete(assistantMessageId);
+            abortControllers.delete(conversationId);
+            streamingConversations.delete(conversationId);
+
+            if (__DEV__) {
+              console.warn(
+                `[chat-stream] resolveToolApproval onError ${error?.name}: ${error?.message}`,
+              );
+            }
+            const innerMsgStore = getConversationMessageStore(conversationId);
+            const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
+            const currentContent = get().streamingContent || cloudContentRaw;
+            // Every call in this turn that was approved got optimistically
+            // patched to 'running' when the decision was recorded (this
+            // resume is what would have reported its real result) -- the
+            // resume failing outright must not leave those cards stuck at
+            // 'running' forever. Rejected calls are already 'failed' with
+            // their own denial message and must NOT be overwritten here.
+            const approvedIds = new Set(turn.calls.map((c) => c.toolCallId));
+            const updatedMsgs = msgs.map((m) =>
+              m.id === assistantMessageId
+                ? {
+                    ...m,
+                    content: currentContent || 'Something went wrong. Please try again.',
+                    isStreaming: false,
+                    toolCalls: (m.toolCalls ?? []).map((t) =>
+                      t.toolCallId && approvedIds.has(t.toolCallId) && t.status === 'running'
+                        ? {
+                            ...t,
+                            status: 'failed' as const,
+                            error: error?.message || 'Resume failed',
+                          }
+                        : t,
+                    ),
+                  }
+                : m,
+            );
+            innerMsgStore.setState((s) => ({
+              messages: { ...s.messages, [conversationId]: updatedMsgs },
+            }));
+            set({
+              ...streamingFlags(),
+              streamingContent: '',
+              streamingReasoning: '',
+              error: 'Something went wrong. Please try again.',
+            });
+          },
+        },
+        controller.signal,
+      );
+    } catch (caughtErr) {
+      // Defensive fallback only: streamToolApprovalResume never rethrows (it
+      // routes every failure through onError above), so this branch is not
+      // expected to run in practice — kept for structural parity with
+      // sendMessage's stuck-composer guarantee.
+      if (__DEV__) {
+        console.warn('[chat-stream] resolveToolApproval unexpected throw:', caughtErr);
+      }
+      pendingApprovalTurns.delete(assistantMessageId);
+      if (!controller.signal.aborted) {
+        const innerMsgStore = getConversationMessageStore(conversationId);
+        const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
+        const updatedMsgs = msgs.map((m) =>
+          m.id === assistantMessageId
+            ? {
+                ...m,
+                content: cloudContentRaw || 'Failed to connect. Check your network and try again.',
+                isStreaming: false,
+              }
+            : m,
+        );
+        innerMsgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: updatedMsgs },
+        }));
+      }
+      set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '' });
+    } finally {
+      lastDeltaTimes.delete(conversationId);
+      if (abortControllers.get(conversationId) === controller) {
+        abortControllers.delete(conversationId);
+      }
+      streamingConversations.delete(conversationId);
+      const sweepStore = getConversationMessageStore(conversationId);
       const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
       if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
         sweepStore.setState((s) => ({
@@ -1584,9 +2215,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   },
 
   stopStreaming: () => {
-    const currentMsgStore = getMsgStore();
-    const msgState = currentMsgStore.getState();
-    const currentId = msgState.currentConversationId;
+    const currentId = getMsgStore().getState().currentConversationId;
 
     // #16: only the CURRENT conversation may be stopped. Do NOT fall back to an
     // arbitrary streaming conversation — the global isStreaming flag can surface
@@ -1595,16 +2224,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const targetId = currentId && streamingConversations.has(currentId) ? currentId : null;
 
     if (!targetId) {
-      const cid = msgState.currentConversationId;
+      const cid = currentId;
       if (cid) {
         // Mark as cancelled so a sendMessage coroutine that hasn't added to
         // streamingConversations yet (still awaiting pre-stream async ops) will
         // bail out when it reaches the isStreaming=true set point.
         cancelledBeforeStream.add(cid);
-        const msgs = msgState.messages[cid] ?? [];
+        const ownerStore = getConversationMessageStore(cid);
+        const msgs = ownerStore.getState().messages[cid] ?? [];
         const hasStreaming = msgs.some((m) => m.isStreaming);
         if (hasStreaming) {
-          currentMsgStore.setState((s) => ({
+          ownerStore.setState((s) => ({
             messages: {
               ...s.messages,
               [cid]: msgs.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
@@ -1632,8 +2262,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     streamingConversations.delete(targetId);
 
-    const msgs = msgState.messages[targetId] ?? [];
-    currentMsgStore.setState((s) => ({
+    const ownerStore = getConversationMessageStore(targetId);
+    const msgs = ownerStore.getState().messages[targetId] ?? [];
+    ownerStore.setState((s) => ({
       messages: {
         ...s.messages,
         [targetId]: msgs.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
@@ -1653,7 +2284,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // block retrying here.
     if (streamingConversations.has(conversationId)) return;
 
-    const msgStore = getMsgStore();
+    const msgStore = getConversationMessageStore(conversationId);
     const msgs = msgStore.getState().messages[conversationId];
     if (!msgs) return;
 
@@ -1707,21 +2338,42 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // (subtract 0). sendMessage re-adds +2 on success, keeping the count accurate.
     const countedRemoved = target.role === 'assistant' ? removedCount : 0;
     const trimmedMsgs = msgs.slice(0, userIndex);
-    msgStore.setState((s) => ({
-      messages: { ...s.messages, [conversationId]: trimmedMsgs },
-      conversations: s.conversations.map((c) =>
-        c.id === conversationId
-          ? { ...c, messageCount: Math.max(0, (c.messageCount ?? 0) - countedRemoved) }
-          : c,
-      ),
-    }));
+    const conversation = msgStore
+      .getState()
+      .conversations.find((candidate) => candidate.id === conversationId);
+    const replaceAndRetry = async () => {
+      if (conversation && executionModeForConversation(conversation) === 'cloud') {
+        try {
+          await deleteCloudMessagesRemote(
+            conversationId,
+            msgs.slice(userIndex).map((message) => message.id),
+          );
+        } catch {
+          set({ error: 'Could not replace the Cloud response. Check your connection and retry.' });
+          return;
+        }
+      }
+
+      msgStore.setState((s) => ({
+        messages: { ...s.messages, [conversationId]: trimmedMsgs },
+        conversations: s.conversations.map((candidate) =>
+          candidate.id === conversationId
+            ? {
+                ...candidate,
+                messageCount: Math.max(0, (candidate.messageCount ?? 0) - countedRemoved),
+              }
+            : candidate,
+        ),
+      }));
+      await get().sendMessage(conversationId, userContent, userModel);
+    };
 
     if (backoffMs > 0) {
       setTimeout(() => {
-        void get().sendMessage(conversationId, userContent, userModel);
+        void replaceAndRetry();
       }, backoffMs);
     } else {
-      void get().sendMessage(conversationId, userContent, userModel);
+      void replaceAndRetry();
     }
   },
 
@@ -1739,7 +2391,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     if (state.isEditing) return;
 
-    const msgStore = getMsgStore();
+    const msgStore = getConversationMessageStore(conversationId);
     const msgs = msgStore.getState().messages[conversationId];
     if (!msgs) return;
 
@@ -1754,14 +2406,30 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     set({ isEditing: true });
 
     const trimmedMsgs = msgs.slice(0, msgIndex);
-    msgStore.setState((s) => ({
-      messages: { ...s.messages, [conversationId]: trimmedMsgs },
-    }));
-
-    get()
-      .sendMessage(conversationId, newContent, userModel)
+    const conversation = msgStore
+      .getState()
+      .conversations.find((candidate) => candidate.id === conversationId);
+    void (async () => {
+      if (conversation && executionModeForConversation(conversation) === 'cloud') {
+        await deleteCloudMessagesRemote(
+          conversationId,
+          msgs.slice(msgIndex).map((message) => message.id),
+        );
+      }
+      msgStore.setState((s) => ({
+        messages: { ...s.messages, [conversationId]: trimmedMsgs },
+      }));
+      await get().sendMessage(conversationId, newContent, userModel);
+    })()
       .catch((err) => {
-        set({ error: err instanceof Error ? err.message : 'Failed to re-send edited message' });
+        set({
+          error:
+            conversation && executionModeForConversation(conversation) === 'cloud'
+              ? 'Could not replace the Cloud message. Check your connection and retry.'
+              : err instanceof Error
+                ? err.message
+                : 'Failed to re-send edited message',
+        });
       })
       .finally(() => {
         set({ isEditing: false });

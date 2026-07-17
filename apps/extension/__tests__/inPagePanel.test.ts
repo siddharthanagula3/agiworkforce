@@ -45,7 +45,11 @@ const chromeMock = vi.hoisted(() => {
 
 // ─── Module imports (after chrome stub) ──────────────────────────────────────
 
-import { getPageActions, truncatePageText } from '../src/inPagePanel/pageActions';
+import {
+  getPageActions,
+  truncatePageText,
+  redactSensitiveText,
+} from '../src/features/content/in-page-panel/pageActions';
 import { loadPosition, savePosition, applyPosition } from '../src/inPagePanel/launcher';
 import { isPanelEnabled, IN_PAGE_PANEL_ENABLED_KEY } from '../src/inPagePanel/setup';
 
@@ -212,6 +216,44 @@ describe('isPanelEnabled', () => {
     chromeMock.data[IN_PAGE_PANEL_ENABLED_KEY] = true;
     const enabled = await isPanelEnabled();
     expect(enabled).toBe(true);
+  });
+});
+
+// ─── redactSensitiveText ──────────────────────────────────────────────────────
+// Regression coverage for the live pageActions.ts previously importing a local
+// two-pattern (credit-card + password-line) redactor instead of the shared
+// @agiworkforce/utils redactSecrets. The local pattern let JWTs, AWS/GitHub/
+// Anthropic/Google/Stripe/Groq/XAI keys, and generic bearer tokens visible on
+// a page (DevTools panels, READMEs, pasted curl commands) reach the LLM
+// prompt un-redacted. See in-page-panel FIX 1 in the dead-code audit report.
+
+describe('redactSensitiveText', () => {
+  it('redacts credit-card numbers (pre-existing coverage)', () => {
+    const text = 'card 4111 1111 1111 1111 on file';
+    expect(redactSensitiveText(text)).not.toContain('4111 1111 1111 1111');
+  });
+
+  it('redacts password-field lines (pre-existing coverage)', () => {
+    const text = 'password: hunter2';
+    expect(redactSensitiveText(text)).not.toContain('hunter2');
+  });
+
+  it('redacts a JWT (previously missed by the local two-pattern redactor)', () => {
+    const jwt =
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U';
+    expect(redactSensitiveText(`Authorization token: ${jwt}`)).not.toContain(jwt);
+  });
+
+  it('redacts an Anthropic API key (previously missed by the local two-pattern redactor)', () => {
+    const key = 'sk-ant-' + 'a'.repeat(30);
+    expect(redactSensitiveText(`export ANTHROPIC_API_KEY=${key}`)).not.toContain(key);
+  });
+
+  it('redacts a GitHub PAT (previously missed by the local two-pattern redactor)', () => {
+    const token = 'ghp_' + 'a'.repeat(36);
+    expect(
+      redactSensitiveText(`git remote set-url origin https://${token}@github.com/x/y`),
+    ).not.toContain(token);
   });
 });
 

@@ -15,7 +15,7 @@
  *   `<iframe sandbox="allow-scripts" srcDoc=...>` · same-origin but without
  *   `allow-same-origin`, which still closes the dual-flag bypass.
  *
- * See `apps/sandbox/` for the renderer and its CSP envelope.
+ * See `infrastructure/sandbox/` for the renderer and its CSP envelope.
  */
 
 export type ArtifactKind = 'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';

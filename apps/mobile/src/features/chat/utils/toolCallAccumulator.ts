@@ -41,6 +41,26 @@ export function createToolCallAccumulator(): ToolCallAccumulator {
   };
 }
 
+/**
+ * Seed a fresh accumulator from previously-finalized tool calls — used when a
+ * tool-approval resume continuation starts a NEW SSE stream that must extend
+ * the SAME timeline (approved/rejected cards) rather than dropping them. Each
+ * tool's own `id` is already the accumulator's stable key (`id:${toolCallId}`
+ * for MCP tools, `name:${name}` for server tools), so re-registering the
+ * lookup maps from it reproduces exactly what the original stream built.
+ */
+export function seedToolCallAccumulator(existing: ToolCall[]): ToolCallAccumulator {
+  const acc = createToolCallAccumulator();
+  for (const tool of existing) {
+    const key = tool.id;
+    acc.byKey.set(key, { ...tool });
+    acc.order.push(key);
+    if (tool.toolCallId) acc.idToKey.set(tool.toolCallId, key);
+    if (tool.name) acc.nameToKey.set(tool.name, key);
+  }
+  return acc;
+}
+
 function mapStatus(status?: string): ToolCall['status'] {
   if (status === 'completed') return 'completed';
   if (status === 'failed' || status === 'error') return 'failed';
@@ -87,6 +107,9 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     t.name = st.name;
     t.status = mapStatus(st.status);
     if (st.args !== undefined && !t.input) t.input = safeStringify(st.args);
+    // A status update means the tool progressed past the approval gate
+    // (approved → executing) — it is no longer awaiting a decision.
+    t.requiresApproval = false;
     acc.lastKey = key;
     changed = true;
   }
@@ -180,11 +203,16 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     if (r.name) t.name = r.name;
     t.output = safeStringify(r.content);
     t.status = r.is_error ? 'failed' : 'completed';
+    // Terminal result (approved-and-executed or a server-issued denial) — the
+    // call is no longer awaiting approval.
+    t.requiresApproval = false;
     changed = true;
   }
 
-  // 5. MCP approval request (manual mode): surface the pending tool so the step is
-  //    at least visible. The full approve/deny flow is a separate, larger scope.
+  // 5. MCP approval request (manual mode): surface the pending tool with an
+  //    approve/reject affordance (ToolCallTimeline renders it when
+  //    `requiresApproval` is set). `resolveToolApproval` in chatExecutionStore
+  //    drives the actual resume request once the user decides.
   const appr = delta.x_tool_approval_request;
   if (appr?.tool_call_id) {
     const key = acc.idToKey.get(appr.tool_call_id) ?? `id:${appr.tool_call_id}`;
@@ -193,6 +221,8 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
     if (appr.name) t.name = appr.name;
     if (appr.args !== undefined && !t.input) t.input = safeStringify(appr.args);
     t.status = 'running';
+    t.requiresApproval = true;
+    t.toolCallId = appr.tool_call_id;
     changed = true;
   }
 

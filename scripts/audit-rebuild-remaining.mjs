@@ -66,12 +66,12 @@ function categorize(p) {
     return 2;
   }
   if (
-    f.includes('packages/providers/') ||
-    f.includes('packages/llm-normalize/') ||
-    f.includes('packages/llm-runtime/') ||
-    f.includes('packages/local-llm/') ||
-    f.includes('packages/routing/') ||
-    f.includes('packages/unified-chat/') ||
+    f.includes('packages/ai/providers/') ||
+    f.includes('packages/ai/provider-protocol/') ||
+    f.includes('packages/ai/provider-runtime/') ||
+    f.includes('packages/platform/local-llm/') ||
+    f.includes('packages/ai/routing/') ||
+    f.includes('packages/ui/unified-chat/') ||
     /(openai|anthropic|ollama|deepseek|openrouter|groq|mistral|bedrock|lmstudio|perplexity|gemini)/.test(
       f,
     ) ||

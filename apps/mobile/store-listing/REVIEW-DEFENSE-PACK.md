@@ -15,7 +15,7 @@ Evidence:
 
 - `apps/mobile/lib/v1FeatureFlags.ts`
 - `apps/mobile/services/remoteChatGate.ts`
-- `packages/compliance/src/article50-disclosure.ts`
+- `packages/contracts/compliance/src/article50-disclosure.ts`
 
 ## 2. Apple Guideline 2.5.2 — Self-Contained App
 
@@ -33,8 +33,8 @@ The first-run disclosure informs users that they are interacting with an AI syst
 
 Evidence:
 
-- `packages/compliance/src/article50-disclosure.ts`
-- `packages/compliance/src/article50-text.ts`
+- `packages/contracts/compliance/src/article50-disclosure.ts`
+- `packages/contracts/compliance/src/article50-text.ts`
 
 ## 4. Permissions
 

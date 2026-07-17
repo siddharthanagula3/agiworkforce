@@ -10,6 +10,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
+import {
+  getModelMetadataById,
+  getRoutingSlotModel,
+  isModelLive,
+} from '@agiworkforce/types';
 
 const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions';
 
@@ -208,12 +213,28 @@ async function handleTranscriptions(request: NextRequest) {
     );
   }
 
-  const ALLOWED_MODELS = ['whisper-1', 'whisper-large-v3'];
+  const defaultModelId = getRoutingSlotModel('voice_transcription');
+  const defaultModel = getModelMetadataById(defaultModelId);
+  if (
+    !defaultModel ||
+    defaultModel.provider !== 'openai' ||
+    defaultModel.modelType !== 'stt' ||
+    !isModelLive(defaultModel)
+  ) {
+    throw new Error('The canonical voice_transcription slot is not a live OpenAI STT model');
+  }
+
   const modelValue = formData.get('model');
-  const model =
-    typeof modelValue === 'string' && ALLOWED_MODELS.includes(modelValue)
-      ? modelValue
-      : 'whisper-1';
+  const requestedModel =
+    typeof modelValue === 'string' ? getModelMetadataById(modelValue) : null;
+  const selectedModel =
+    requestedModel?.provider === 'openai' &&
+    requestedModel.modelType === 'stt' &&
+    requestedModel.status !== 'deprecated' &&
+    isModelLive(requestedModel)
+      ? requestedModel
+      : defaultModel;
+  const model = selectedModel.apiModelId ?? selectedModel.id;
 
   const forwardForm = new FormData();
   forwardForm.append('file', file);

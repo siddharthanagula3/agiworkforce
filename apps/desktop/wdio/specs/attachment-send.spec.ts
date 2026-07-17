@@ -25,6 +25,13 @@
 //     'secret-memo.txt' (115 chars)` — 115 being the exact byte length of
 //     the in-memory file content this spec generates — followed by
 //     `[Chat] Added 1 document(s) to context (115 total chars)`.
+import * as fs from 'node:fs';
+
+const SCREEN_DIR =
+  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
+
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
+
 describe('AGI Desktop attachment delivery (via drag-drop into the live composer)', () => {
   it('delivers a dropped file attachment through to a real chat turn', async () => {
     await browser.pause(1500);
@@ -90,9 +97,7 @@ describe('AGI Desktop attachment delivery (via drag-drop into the live composer)
       console.log('ASSISTANT MESSAGE TEXT (informational):', JSON.stringify(assistantText));
     }
 
-    await browser.saveScreenshot(
-      '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/attachment-send.png',
-    );
+    await browser.saveScreenshot(`${SCREEN_DIR}/attachment-send.png`);
 
     // Deterministic assertions: the composer picked up the attachment (already
     // asserted above via waitForDisplayed not throwing) and the model was

@@ -51,7 +51,9 @@ await SubscriptionService.resetCreditsForNewPeriod(userId, subscriptionId, planT
 ### Files in scope (all migrated as of 2026-05-05)
 
 - `subscription-service.ts` — `getSubscription` (user), webhook/cron methods (service-role)
-- `credit-service.ts` — `getBalance`, `checkAvailable`, `deductCredits` (overload pattern)
+- `credit-service.ts` — `getBalance`, `checkAvailable`, `deductCredits` (synchronous
+  reservation overloads); `settleCreditsDurably` (post-provider idempotent
+  settlement); `processPendingSettlements` (cron-only cross-user recovery)
 - `audit-service.ts` — `log` (service-role, system writes), `getOrganizationLogs` (user)
 - `api-key-service.ts` — `createApiKey`, `listApiKeys`, `revokeApiKey` (user); `verifyKey` (service-role)
 - `organization-service.ts` — all methods (user)

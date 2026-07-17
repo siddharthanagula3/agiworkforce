@@ -7,8 +7,12 @@
 // fixed ~5-6s tax on nearly every discrete WebdriverIO command, so most steps
 // are collapsed into single `browser.execute()` in-page DOM operations.
 
+import * as fs from 'node:fs';
+
 const SCREEN_DIR =
   '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens';
+
+fs.mkdirSync(SCREEN_DIR, { recursive: true });
 
 function clickSelector(selector: string) {
   return browser.execute((sel) => {

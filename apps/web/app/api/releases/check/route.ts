@@ -8,17 +8,17 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@/utils/env';
+import {
+  compareSemanticVersions,
+  DESKTOP_RELEASE_PLATFORMS,
+  fetchLatestStableDesktopRelease,
+  parseSemanticVersion,
+  selectSignedDesktopUpdaterAsset,
+  type DesktopReleasePlatform,
+} from '@/lib/releases/github-desktop-releases';
 
-// Valid platforms
-const VALID_PLATFORMS = [
-  'darwin-aarch64',
-  'darwin-x86_64',
-  'darwin-universal',
-  'windows-x86_64',
-  'linux-x86_64',
-] as const;
-
-type Platform = (typeof VALID_PLATFORMS)[number];
+const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
+type Platform = DesktopReleasePlatform;
 
 interface UpdateCheckRequest {
   current_version: string;
@@ -46,50 +46,8 @@ interface ReleaseRecord {
   is_critical: boolean;
 }
 
-/**
- * Parse semantic version string
- */
-function parseSemver(version: string): [number, number, number] | null {
-  // Strip leading "v" and pre-release/build metadata
-  const clean = version.trim().replace(/^v/i, '').split('-')[0]?.split('+')[0] ?? '';
-  const parts = clean.split('.');
-
-  if (parts.length < 1 || parts.length > 3) return null;
-
-  const nums = parts.map((p) => Number.parseInt(p, 10));
-  if (nums.some((n) => Number.isNaN(n) || n < 0)) return null;
-
-  return [nums[0] ?? 0, nums[1] ?? 0, nums[2] ?? 0];
-}
-
-/**
- * Compare two semantic versions
- * Returns: 1 if a > b, -1 if a < b, 0 if equal
- */
-function compareSemver(a: string, b: string): number {
-  const parsedA = parseSemver(a);
-  const parsedB = parseSemver(b);
-
-  if (!parsedA || !parsedB) {
-    // Fallback to string comparison if parsing fails
-    return a.localeCompare(b);
-  }
-
-  for (let i = 0; i < 3; i++) {
-    const aVal = parsedA[i] ?? 0;
-    const bVal = parsedB[i] ?? 0;
-    if (aVal > bVal) return 1;
-    if (aVal < bVal) return -1;
-  }
-
-  return 0;
-}
-
-/**
- * Check if an update is available
- */
 function isUpdateAvailable(currentVersion: string, latestVersion: string): boolean {
-  return compareSemver(latestVersion, currentVersion) > 0;
+  return compareSemanticVersions(latestVersion, currentVersion) === 1;
 }
 
 /**
@@ -131,49 +89,20 @@ async function getLatestRelease(
 /**
  * Fallback: Get latest version from GitHub
  */
-async function getLatestReleaseFromGitHub(): Promise<{
-  version: string;
-  notes: string;
-  pub_date: string;
-} | null> {
-  const owner = getOptionalEnv('DESKTOP_GITHUB_OWNER');
-  const repo = getOptionalEnv('DESKTOP_GITHUB_REPO');
+async function getLatestReleaseFromGitHub(platform: Platform): Promise<ReleaseRecord | null> {
+  const release = await fetchLatestStableDesktopRelease();
+  if (!release) return null;
+  const updaterAsset = selectSignedDesktopUpdaterAsset(release, platform);
+  if (!updaterAsset) return null;
 
-  if (!owner || !repo) {
-    return null;
-  }
-
-  const headers: HeadersInit = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'AGI-Workforce-Updater',
+  return {
+    version: release.version,
+    download_url: `https://agiworkforce.com/api/releases/latest/${platform}`,
+    notes: release.notes,
+    pub_date: release.publishedAt,
+    file_size_bytes: updaterAsset.binary.size,
+    is_critical: false,
   };
-
-  const githubToken = getOptionalEnv('GITHUB_TOKEN');
-  if (githubToken) {
-    headers['Authorization'] = `Bearer ${githubToken}`;
-  }
-
-  try {
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
-      headers,
-      next: { revalidate: 300 },
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const release = await response.json();
-    return {
-      version: release.tag_name.replace(/^v/, ''),
-      notes: release.body,
-      pub_date: release.published_at,
-    };
-  } catch (error) {
-    logger.warn({ error }, 'Failed to fetch from GitHub');
-    return null;
-  }
 }
 
 /**
@@ -221,7 +150,7 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
   }
 
   // Validate version format
-  if (!parseSemver(current_version)) {
+  if (!parseSemanticVersion(current_version)) {
     throw createError.validation('Invalid version format. Expected semantic version (e.g., 1.0.0)');
   }
 
@@ -229,18 +158,8 @@ async function handleUpdateCheck(request: NextRequest): Promise<NextResponse> {
   let latest = await getLatestRelease(platform, channel);
 
   // Fall back to GitHub if database is empty
-  if (!latest) {
-    const githubRelease = await getLatestReleaseFromGitHub();
-    if (githubRelease) {
-      latest = {
-        version: githubRelease.version,
-        download_url: `https://agiworkforce.com/api/releases/latest/${platform}`,
-        notes: githubRelease.notes,
-        pub_date: githubRelease.pub_date,
-        file_size_bytes: null,
-        is_critical: false,
-      };
-    }
+  if (!latest && channel === 'stable') {
+    latest = await getLatestReleaseFromGitHub(platform);
   }
 
   // Build response
@@ -316,7 +235,7 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
   }
 
   // Validate version format
-  if (!parseSemver(current_version)) {
+  if (!parseSemanticVersion(current_version)) {
     throw createError.validation('Invalid version format. Expected semantic version (e.g., 1.0.0)');
   }
 
@@ -324,18 +243,8 @@ async function handleGetUpdateCheck(request: NextRequest): Promise<NextResponse>
   let latest = await getLatestRelease(platform, channel);
 
   // Fall back to GitHub
-  if (!latest) {
-    const githubRelease = await getLatestReleaseFromGitHub();
-    if (githubRelease) {
-      latest = {
-        version: githubRelease.version,
-        download_url: `https://agiworkforce.com/api/releases/latest/${platform}`,
-        notes: githubRelease.notes,
-        pub_date: githubRelease.pub_date,
-        file_size_bytes: null,
-        is_critical: false,
-      };
-    }
+  if (!latest && channel === 'stable') {
+    latest = await getLatestReleaseFromGitHub(platform);
   }
 
   // Build response

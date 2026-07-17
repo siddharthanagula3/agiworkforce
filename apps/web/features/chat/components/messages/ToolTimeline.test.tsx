@@ -288,6 +288,21 @@ describe('ToolTimeline · edge cases', () => {
     });
     expect(screen.getByText(/1 failed/)).toBeInTheDocument();
   });
+
+  it('surfaces the failure reason on the tool card itself, not just the aggregate count', async () => {
+    // Regression guard: ToolEntry.error is populated by useChatStream but was
+    // previously dropped before reaching ToolCallCard — a failed tool showed
+    // only "1 failed" with no indication of why. This asserts the actual
+    // reason text is rendered, not just that a failure occurred.
+    const tools = [{ name: 'bad-tool', status: 'failed' as const, error: 'timeout exceeded' }];
+    render(<ToolTimeline tools={tools} />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/timeout exceeded/)).toBeInTheDocument();
+    });
+  });
 });
 
 // ─── Audit-trail lifecycle (Claude parity: live steps → collapsed trail) ──────
@@ -361,5 +376,56 @@ describe('ToolTimeline · manual approval', () => {
     render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={onReject} />);
     fireEvent.click(screen.getByText('Reject'));
     expect(onReject).toHaveBeenCalledWith('call_1');
+  });
+});
+
+// ─── Expired approval (Finding 1: dead buttons after reload/restart) ────────
+
+describe('ToolTimeline · expired approval', () => {
+  const awaitingTool = {
+    id: 'entry-1',
+    name: 'mcp__github__get_pull_request_diff',
+    status: 'awaiting_approval' as const,
+    toolCallId: 'call_1',
+    requiresApproval: true,
+    parameters: { owner: 'acme', repo: 'app', pull_number: 7 },
+  };
+
+  it('renders an expired notice instead of live Approve/Reject buttons', () => {
+    render(
+      <ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} expired />,
+    );
+    expect(screen.queryByText('Approve')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reject')).not.toBeInTheDocument();
+    expect(screen.getByText(/this approval request expired/i)).toBeInTheDocument();
+  });
+
+  it('shows a Resend affordance when onResend is provided, and calls it', () => {
+    const onResend = vi.fn();
+    render(
+      <ToolTimeline
+        tools={[awaitingTool]}
+        onApprove={() => {}}
+        onReject={() => {}}
+        expired
+        onResend={onResend}
+      />,
+    );
+    fireEvent.click(screen.getByText('Resend'));
+    expect(onResend).toHaveBeenCalledWith('call_1');
+  });
+
+  it('falls back to text-only guidance with no Resend button when onResend is absent', () => {
+    render(
+      <ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} expired />,
+    );
+    expect(screen.queryByText('Resend')).not.toBeInTheDocument();
+    expect(screen.getByText(/send a new message to continue/i)).toBeInTheDocument();
+  });
+
+  it('does NOT show the expired notice when not expired (live buttons render as normal)', () => {
+    render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />);
+    expect(screen.queryByText(/this approval request expired/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Approve')).toBeInTheDocument();
   });
 });

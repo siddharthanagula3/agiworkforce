@@ -29,6 +29,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -251,6 +252,7 @@ export default function SettingsTabScreen() {
   const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const subscriptionTier = useTierStore((s) => s.tier);
   const user = useAuthStore((s) => s.user);
   const signOut = useAuthStore((s) => s.signOut);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
@@ -310,7 +312,7 @@ export default function SettingsTabScreen() {
             key: 'general',
             label: 'General',
             icon: SlidersHorizontal,
-            value: getShortDisplayName(selectedModel),
+            value: getShortDisplayName(selectedModel, subscriptionTier),
             onPress: push('/(app)/settings/general'),
           },
           {
@@ -484,11 +486,13 @@ export default function SettingsTabScreen() {
       accentColor,
       appVersion,
       cloudAccessTag,
+      cloudUnlocked,
       handleSignOut,
       openCloudAccess,
       push,
       router,
       selectedModel,
+      subscriptionTier,
       themeMode,
       user,
     ],

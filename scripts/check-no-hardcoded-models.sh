@@ -55,7 +55,7 @@ GHOST_PATTERN='claude-opus-4-6-mini'
 # Path-anchored exclusions so future-named "xxx_model_catalog.rs" can't
 # bypass the gate. Each legitimate baseline file lives at exactly one
 # path in the workspace.
-GHOST_BASELINE_REGEX='(__tests__|/(test|tests)/|/tests\.rs|\.test\.|\.spec\.|^\./apps/cli/src/model_catalog\.rs:|^\./packages/types/src/__tests__/model-catalog\.test\.ts:)'
+GHOST_BASELINE_REGEX='(__tests__|/(test|tests)/|/tests\.rs|\.test\.|\.spec\.|^\./apps/cli/src/model_catalog\.rs:|^\./packages/contracts/types/src/__tests__/model-catalog\.test\.ts:)'
 if grep -REn --include='*.rs' --include='*.ts' --include='*.tsx' \
     --exclude-dir=node_modules --exclude-dir=target \
     --exclude-dir=.git --exclude-dir=crates \

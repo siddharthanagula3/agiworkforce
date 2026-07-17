@@ -2,25 +2,25 @@
 
 Status: Current
 Owner role: Extension lead
-Last updated: 2026-05-20
+Last updated: 2026-07-15
 Kind: app
 Criticality: high
 
 ## Purpose
 
-`apps/extension` owns the Chrome MV3 extension: browser context capture, side panel UI, approved-site page interaction, native messaging bridge, and extension packaging.
+`apps/extension` owns the Chrome MV3 extension: Managed Cloud chat, browser-local conversations, browser context capture, approved-site page interaction, explicit native context handoff, and extension packaging.
 
 ## Consumers
 
 - Chrome extension users.
-- Desktop app through the native messaging bridge.
+- Desktop app through explicit, reviewed native context handoff and browser mechanics.
 - Future browser-task and connector flows.
 
 ## Public API / Exports
 
 This is an app, not a shared package. Other apps and packages must not import from `apps/extension`.
 
-Reusable browser automation contracts belong in `packages/browser-tool`, `packages/runtime`, or `packages/types`.
+Reusable browser automation contracts belong in `packages/tools/browser-tool`, `packages/client/client-runtime`, or `packages/contracts/types`.
 
 ## What Belongs Here
 
@@ -54,11 +54,22 @@ Reusable browser automation contracts belong in `packages/browser-tool`, `packag
 
 Do not commit extension store credentials, private keys, local native-host registration state, browsing captures, cookies, tokens, or user page content.
 
+The build reads the public values documented in `.env.example`:
+
+- `CLERK_PUBLISHABLE_KEY` — the same Clerk instance used by Web.
+- `CLERK_FRONTEND_API` — the exact Clerk Frontend API origin.
+- `CLERK_SYNC_HOST` — the exact Clerk web-session Sync Host origin.
+- `CHROME_EXTENSION_PUBLIC_KEY` — public CRX key material that keeps the
+  extension ID stable across unpacked/store builds.
+
+Production packages require a live Clerk key and all three origins/key values.
+The package script fails closed when they are absent or malformed.
+
 ## Security, Privacy, Data Boundaries
 
 Security/privacy review is required for permissions, content-script injection, page capture, native messaging, cross-origin requests, command execution, browser storage, and any flow that sends page data to Local/BYOK/Managed runtime.
 
-The extension should clearly separate "ask before acting" and "act" capabilities.
+The extension should clearly separate "ask before acting" and "act" capabilities. Chrome has no Local or BYOK chat mode and must never fall back from Managed Cloud inference to Desktop/native execution.
 
 ## Demo Boundary
 
@@ -72,7 +83,16 @@ Chrome is a secondary demo surface. Do not present autonomous browser actions as
 
 ## Release / Deployment Notes
 
-Extension release requires a clean `dist`, manifest review, permission review, native-host installer verification, and store packaging checks.
+Run `pnpm --filter @agiworkforce/extension package` only with the production
+environment configured. The build injects the exact Clerk origins and stable
+CRX public key into `dist/manifest.json`; `prepare-package.mjs` validates the
+result before creating `extension.zip`.
+
+Extension release also requires external evidence that Clerk Native API is
+enabled and `chrome-extension://<stable-id>` is present in the production Clerk
+instance's `allowed_origins`. A clean build alone does not prove either dashboard
+setting. Manifest review, permission review, native-host installer verification,
+and Chrome Web Store package checks remain required.
 
 ## Known Caveats
 

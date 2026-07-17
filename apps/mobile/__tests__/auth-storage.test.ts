@@ -114,6 +114,16 @@ jest.mock('../src/features/artifacts/store', () => ({
   },
 }));
 
+// Platform integration connection status (connected/lastSynced/accountName)
+// is persisted to MMKV and scoped to the signed-in user — clearPlatformConnections
+// must run on sign-out so a subsequent account cannot inherit a prior user's
+// "Connected" badges.
+jest.mock('../src/features/integrations/store', () => ({
+  useIntegrationStore: {
+    getState: jest.fn(),
+  },
+}));
+
 // mobile_devices push tokens are keyed by deviceId (not session) — the token
 // must be cleared server-side on sign-out so a subsequent different account
 // on this device doesn't receive push notifications addressed to the prior
@@ -148,6 +158,12 @@ const _artifactMock = require('../src/features/artifacts/store') as {
   useArtifactStore: { getState: jest.Mock };
 };
 const mockClearCloudArtifacts = jest.fn();
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const _integrationMock = require('../src/features/integrations/store') as {
+  useIntegrationStore: { getState: jest.Mock };
+};
+const mockClearPlatformConnections = jest.fn();
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _notificationsMock = require('../services/notifications') as {
@@ -407,6 +423,9 @@ describe('authStore — secure storage persistence', () => {
     _artifactMock.useArtifactStore.getState.mockReturnValue({
       clearCloudArtifacts: mockClearCloudArtifacts,
     });
+    _integrationMock.useIntegrationStore.getState.mockReturnValue({
+      clearPlatformConnections: mockClearPlatformConnections,
+    });
   });
 
   it('signInWithEmail throws and does not write session to secure store (Clerk v1)', async () => {
@@ -511,6 +530,22 @@ describe('authStore — secure storage persistence', () => {
     });
 
     expect(mockSetTier).toHaveBeenCalledWith('free');
+  });
+
+  it('signOut clears platform integration connections (account-B isolation)', async () => {
+    // Regression: platforms (connected/lastSynced/accountName) on
+    // useIntegrationStore is persisted to MMKV and scoped to the signed-in
+    // user, but had no sign-out reset at all — a subsequent account signing
+    // in on this device would see a prior user's "Connected" badges
+    // (Slack/Gmail/etc.) as its own, with no self-heal (fetchPlatforms()
+    // does not reconcile against the server).
+    useAuthStore.setState({ session: makeSession() as never, user: {} as never });
+
+    await act(async () => {
+      await getState().signOut();
+    });
+
+    expect(mockClearPlatformConnections).toHaveBeenCalledTimes(1);
   });
 
   it('signOut clears cloud artifacts (account-B isolation)', async () => {

@@ -40,11 +40,6 @@ jest.mock('lucide-react-native', () => {
   };
 });
 
-jest.mock('../src/features/connectors/store', () => ({
-  useConnectorsStore: (selector: (s: { connectedIds: string[]; toggle: () => void }) => unknown) =>
-    selector({ connectedIds: [], toggle: jest.fn() }),
-}));
-
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { connectors: false } }));
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';

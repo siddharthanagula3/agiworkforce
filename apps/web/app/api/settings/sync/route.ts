@@ -5,9 +5,9 @@
  *   GET  /api/settings/sync?since=<server_version cursor>
  *        → the user's CLOUD-SAFE settings subset IF its row server_version > cursor,
  *          plus the cursor. Otherwise an empty doc (nothing new).
- *   POST /api/settings/sync  { settings: {<namespace>: {...}}, updatedAt }
- *        → merges ONLY cloud-safe namespaces into the stored JSONB doc (last-writer-
- *          wins by updated_at). user_id is server-side; RLS WITH CHECK is the backstop.
+ *   POST /api/settings/sync  { settings: {<namespace>: {...}}, baseVersion }
+ *        → merges ONLY when baseVersion matches the server-owned revision.
+ *          user_id is server-side; RLS WITH CHECK is the backstop.
  *
  * TRUST BOUNDARY — THE WHOLE POINT OF THIS FILE:
  * `user_settings.settings` is one JSONB doc keyed by namespace and it can hold
@@ -22,7 +22,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { ServerVersionSchema, SettingsSyncPushRequestSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -65,6 +65,7 @@ export const FORBIDDEN_SETTINGS_NAMESPACES: readonly string[] = [
 /** Key substrings that signal a secret; scrubbed even inside an allowed namespace. */
 const SECRET_KEY_PATTERN =
   /(api[-_]?key|secret|token|password|passwd|credential|bearer|authorization|private[-_]?key|access[-_]?key|client[-_]?secret)/i;
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
 /**
  * Recursively drop any object key that looks like a secret. Defense-in-depth on top
@@ -75,7 +76,7 @@ export function scrubSecrets(value: unknown): unknown {
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (SECRET_KEY_PATTERN.test(k)) continue; // drop secret-looking keys entirely
+      if (SECRET_KEY_PATTERN.test(k) || UNSAFE_OBJECT_KEYS.has(k)) continue;
       out[k] = scrubSecrets(v);
     }
     return out;
@@ -113,7 +114,11 @@ async function handleGet(request: NextRequest) {
 
   const url = new URL(request.url);
   const sinceRaw = url.searchParams.get('since') ?? '0';
-  const since = /^\d{1,19}$/.test(sinceRaw) ? sinceRaw : '0';
+  const parsedSince = ServerVersionSchema.safeParse(sinceRaw);
+  if (!parsedSince.success) {
+    throw createError.validation('Invalid settings sync cursor', parsedSince.error);
+  }
+  const since = parsedSince.data;
 
   try {
     const [row] = await db.query<{
@@ -138,11 +143,6 @@ async function handleGet(request: NextRequest) {
 // Push
 // ---------------------------------------------------------------------------
 
-const PushBodySchema = z.object({
-  settings: z.record(z.string(), z.unknown()),
-  updatedAt: z.string().datetime(),
-});
-
 async function handlePost(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse as NextResponse;
@@ -158,7 +158,7 @@ async function handlePost(request: NextRequest) {
   } catch {
     throw createError.validation('Invalid JSON body');
   }
-  const parsed = PushBodySchema.safeParse(rawBody);
+  const parsed = SettingsSyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid settings sync payload', parsed.error);
   }
@@ -168,26 +168,55 @@ async function handlePost(request: NextRequest) {
   const safeIncoming = filterCloudSafeSettings(parsed.data.settings);
 
   try {
-    // Merge (jsonb `||`): existing doc keeps its non-synced namespaces (incl. any
-    // BYOK/secret namespaces stored by /api/settings/preferences) and only the
-    // cloud-safe namespaces are overwritten. Last-writer-wins by updated_at.
+    // Compare-and-swap on the server-owned revision. Client clocks never
+    // participate in conflict resolution. Existing non-synced namespaces and
+    // sibling keys inside an allowed namespace remain intact.
     const rows = await db.query<{ server_version: string }>(
       `
-        insert into user_settings (user_id, settings, updated_at)
-        values ($1, $2::jsonb, coalesce($3::timestamptz, now()))
-        on conflict (user_id) do update set
-          settings = user_settings.settings || excluded.settings,
-          updated_at = excluded.updated_at
-        where excluded.updated_at >= user_settings.updated_at
-        returning server_version
+        with updated as (
+          update user_settings
+             set settings = coalesce(user_settings.settings, '{}'::jsonb) || (
+                   select coalesce(
+                     jsonb_object_agg(
+                       incoming.key,
+                       case
+                         when jsonb_typeof(
+                                coalesce(user_settings.settings, '{}'::jsonb) -> incoming.key
+                              ) = 'object'
+                          and jsonb_typeof(incoming.value) = 'object'
+                         then (coalesce(user_settings.settings, '{}'::jsonb) -> incoming.key)
+                              || incoming.value
+                         else incoming.value
+                       end
+                     ),
+                     '{}'::jsonb
+                   )
+                     from jsonb_each($2::jsonb) as incoming(key, value)
+                 ),
+                 updated_at = now()
+           where user_id = $1
+             and user_settings.server_version = $3::bigint
+          returning server_version
+        ), inserted as (
+          insert into user_settings (user_id, settings, updated_at)
+          select $1, $2::jsonb, now()
+           where $3::bigint = 0
+          on conflict (user_id) do nothing
+          returning server_version
+        )
+        select server_version from updated
+        union all
+        select server_version from inserted
+        limit 1
       `,
-      [userId, JSON.stringify(safeIncoming), parsed.data.updatedAt],
+      [userId, JSON.stringify(safeIncoming), parsed.data.baseVersion],
     );
 
     if (rows[0]) {
       return NextResponse.json({ applied: true, cursor: rows[0].server_version });
     }
-    // LWW skipped (stale push): return the current cursor so the client can advance.
+    // Revision conflict: return the current revision, but the client must retain
+    // its pre-push cursor and pull the server winner before attempting another push.
     const [current] = await db.query<{ server_version: string }>(
       `select server_version from user_settings where user_id = $1 limit 1`,
       [userId],

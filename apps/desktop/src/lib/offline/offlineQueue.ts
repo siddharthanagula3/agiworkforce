@@ -1,7 +1,7 @@
 /**
  * Offline Queue (Desktop wrapper)
  *
- * Desktop-surface binding of the shared `@agiworkforce/runtime/offline-queue`
+ * Desktop-surface binding of the shared `@agiworkforce/client-runtime/offline-queue`
  * factory. Provides browser-localStorage storage (Tauri webview),
  * console-based logging, and a `window.addEventListener('storage')`
  * change subscriber. No network probe — Tauri webview cannot reliably
@@ -9,7 +9,7 @@
  * SyncManager's own `navigator.onLine` listener.
  */
 
-import { createOfflineQueue } from '@agiworkforce/runtime';
+import { createOfflineQueue } from '@agiworkforce/client-runtime';
 import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
 
 const OFFLINE_QUEUE_KEY = 'agi_offline_queue';

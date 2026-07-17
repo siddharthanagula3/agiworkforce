@@ -31,6 +31,9 @@ vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     generateIdempotencyKey: vi.fn(() => 'idempotency-key'),
     deductCredits: vi.fn(() => Promise.resolve()),
+    settleCreditsDurably: vi.fn(() =>
+      Promise.resolve({ status: 'succeeded', success: true, attempt_count: 1 }),
+    ),
   },
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
@@ -54,6 +57,7 @@ vi.mock('@/lib/cost-tracker', () => ({
 
 import { buildNonStreamResponse } from '../lib/response-builder';
 import type { ProcessedRequest } from '../lib/request-processor';
+import { CreditService } from '@/lib/services/credit-service';
 
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
@@ -88,6 +92,42 @@ beforeEach(() => {
 });
 
 describe('buildNonStreamResponse golden fixture', () => {
+  it('persists reconciliation through the durable settlement owner', async () => {
+    await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'claude-opus-4-8',
+        content: 'Hello there',
+        finishReason: 'stop',
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120,
+      },
+      makeProcessed({ estimatedCostCents: 100 }),
+      'user-durable',
+      'token-durable',
+    );
+
+    expect(CreditService.settleCreditsDurably).toHaveBeenCalledWith({
+      userId: 'user-durable',
+      amountCents: 23,
+      description: 'Additional charge: anthropic/claude-opus-4-8',
+      metadata: {
+        provider: 'anthropic',
+        model: 'claude-opus-4-8',
+        type: 'reconciliation',
+        estimatedCostCents: 100,
+        actualCostCents: 123,
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120,
+        requestId: 'req-test-001',
+      },
+      idempotencyKey: 'idempotency-key',
+    });
+    expect(CreditService.deductCredits).not.toHaveBeenCalled();
+  });
+
   it('serializes a plain text response with usage and cache token fields', async () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,

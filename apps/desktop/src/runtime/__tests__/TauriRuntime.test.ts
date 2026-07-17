@@ -11,6 +11,7 @@ const listenMock = vi.fn(async (event: string, handler: (event: { payload: unkno
 
 const uuidToDbIdMock = vi.fn();
 const linkConversationIdMock = vi.fn();
+const executionModeByConversationId = new Map<string, 'local_only' | 'byok' | 'cloud_managed'>();
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: invokeMock,
@@ -43,6 +44,10 @@ vi.mock('../../stores/chat/chatStore', () => ({
   useChatStore: {
     getState: () => ({
       linkConversationId: linkConversationIdMock,
+      conversations: Array.from(executionModeByConversationId, ([id, executionMode]) => ({
+        id,
+        executionMode,
+      })),
     }),
   },
 }));
@@ -52,6 +57,7 @@ describe('TauriRuntime', () => {
     vi.resetModules();
     vi.clearAllMocks();
     listenHandlers.clear();
+    executionModeByConversationId.clear();
     uuidToDbIdMock.mockReturnValue(undefined);
 
     invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
@@ -122,6 +128,7 @@ describe('TauriRuntime', () => {
         title: 'Hello from runtime',
         userId: 'user-123',
         projectId: null,
+        executionMode: 'local_only',
       },
     });
 
@@ -177,6 +184,38 @@ describe('TauriRuntime', () => {
         conversationId: 77,
         stream: true,
         frontendMessageId: expect.any(String),
+      }),
+    });
+  });
+
+  it('sends a BYOK fork through the explicit BYOK execution boundary', async () => {
+    uuidToDbIdMock.mockReturnValue(77);
+    executionModeByConversationId.set('byok-fork', 'byok');
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:stream-end')?.({
+            payload: { conversation_id: 77, message_id: 'assistant-byok' },
+          });
+        }, 0);
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('byok-fork', 'Use my OpenAI key', {
+      provider: 'openai',
+      model: 'gpt-5.5',
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('chat_send_message', {
+      request: expect.objectContaining({
+        conversationId: 77,
+        executionMode: 'byok',
+        activeMode: 'local',
+        preferCloudCredits: false,
       }),
     });
   });
@@ -270,6 +309,127 @@ describe('TauriRuntime', () => {
     });
   });
 
+  it('durably links streamed artifacts to the persisted assistant message', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:artifact')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-live-id',
+              artifact: {
+                id: 'artifact-linked',
+                type: 'react',
+                title: 'Counter',
+                content: 'export default function Counter() { return <button>1</button>; }',
+                language: 'tsx',
+                metadata: {},
+              },
+            },
+          });
+          listenHandlers.get('chat:stream-end')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-live-id',
+              backend_message_id: 17,
+            },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-03-28T00:00:00.000Z',
+          updated_at: '2026-03-28T00:00:00.000Z',
+        };
+      }
+      if (command === 'artifact_link_to_message') {
+        return { success: true, data: 1, error: null };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Create a React counter');
+
+    expect(invokeMock).toHaveBeenCalledWith('artifact_link_to_message', {
+      conversationId: 42,
+      messageId: 17,
+      artifactIds: ['artifact-linked'],
+      userId: 'user-123',
+    });
+  });
+
+  it('waits for native cancellation completion so a created artifact is linked before teardown', async () => {
+    const controller = new AbortController();
+    uuidToDbIdMock.mockReturnValue(42);
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_create_conversation') {
+        return {
+          id: 42,
+          title: 'New Conversation',
+          created_at: '2026-07-15T00:00:00.000Z',
+          updated_at: '2026-07-15T00:00:00.000Z',
+        };
+      }
+      if (command === 'chat_send_message') {
+        setTimeout(() => {
+          listenHandlers.get('chat:artifact')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-cancelled',
+              artifact: {
+                id: 'artifact-before-cancel',
+                type: 'markdown',
+                title: 'Partial notes',
+                content: '# Already complete',
+              },
+            },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'chat_stop_generation') {
+        setTimeout(() => {
+          listenHandlers.get('chat:stream-end')?.({
+            payload: {
+              conversation_id: 42,
+              message_id: 'assistant-cancelled',
+              backend_message_id: 19,
+            },
+          });
+        }, 0);
+        return undefined;
+      }
+      if (command === 'artifact_link_to_message') {
+        return { success: true, data: 1, error: null };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+    runtime.onStream((event) => {
+      if (event.type === 'artifact') controller.abort();
+    });
+
+    await runtime.sendMessage('frontend-conversation-id', 'Create notes, then stop', {
+      signal: controller.signal,
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('chat_stop_generation', { conversationId: 42 });
+    expect(invokeMock).toHaveBeenCalledWith('artifact_link_to_message', {
+      conversationId: 42,
+      messageId: 19,
+      artifactIds: ['artifact-before-cancel'],
+      userId: 'user-123',
+    });
+  });
+
   // Mirrors the conversation-id filter already proven for chat:stream-chunk —
   // an artifact event for a DIFFERENT conversation must not leak into this turn.
   it('ignores a chat:artifact event for a different conversation', async () => {
@@ -312,6 +472,114 @@ describe('TauriRuntime', () => {
     await runtime.sendMessage('frontend-conversation-id', 'Hello');
 
     expect(events.find((event) => event.type === 'artifact')).toBeUndefined();
+  });
+
+  it('reconstructs persisted rich artifacts on conversation reopen without losing type or version', async () => {
+    uuidToDbIdMock.mockReturnValue(42);
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'chat_get_messages') {
+        return [
+          {
+            id: 1,
+            conversation_id: 42,
+            role: 'user',
+            content: 'Create two rich artifacts',
+            created_at: '2026-07-15T00:00:00.000Z',
+          },
+          {
+            id: 17,
+            conversation_id: 42,
+            role: 'assistant',
+            content: 'Created the artifacts.',
+            created_at: '2026-07-15T00:00:01.000Z',
+          },
+        ];
+      }
+      if (command === 'artifact_get_conversation_snapshot') {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'artifact-react',
+              render_type: 'react',
+              title: 'Counter',
+              content: 'export default function Counter() { return <button>1</button>; }',
+              metadata: { language: 'tsx' },
+              conversation_id: 42,
+              message_id: 17,
+              current_version: 3,
+              created_at: '2026-07-15T00:00:01.100Z',
+              updated_at: '2026-07-15T00:02:00.000Z',
+            },
+            {
+              id: 'artifact-svg',
+              artifact_type: 'image',
+              render_type: 'svg',
+              title: 'Logo',
+              content: '<svg><circle r="10" /></svg>',
+              metadata: {},
+              conversation_id: 42,
+              message_id: 17,
+              current_version: 2,
+              created_at: '2026-07-15T00:00:01.200Z',
+              updated_at: '2026-07-15T00:03:00.000Z',
+            },
+            {
+              id: 'artifact-forward-compatible',
+              artifact_type: 'image',
+              render_type: 'future-image-widget',
+              title: 'Future image',
+              content: 'future-image-content',
+              metadata: {},
+              conversation_id: 42,
+              message_id: 17,
+              current_version: 1,
+              created_at: '2026-07-15T00:00:01.300Z',
+              updated_at: '2026-07-15T00:04:00.000Z',
+            },
+            {
+              id: 'artifact-malformed-missing-render-type',
+              artifact_type: 'document',
+              title: 'Malformed legacy row',
+              content: 'must be skipped at the IPC boundary',
+              metadata: {},
+              conversation_id: 42,
+              message_id: 17,
+              current_version: 1,
+            },
+          ],
+          error: null,
+        };
+      }
+      return undefined;
+    });
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    const messages = await runtime.loadMessages('42');
+
+    expect(messages[1]?.artifacts).toEqual([
+      expect.objectContaining({
+        id: 'artifact-react',
+        type: 'react',
+        language: 'tsx',
+        version: 3,
+        messageId: '17',
+      }),
+      expect.objectContaining({
+        id: 'artifact-svg',
+        type: 'svg',
+        version: 2,
+        messageId: '17',
+      }),
+      expect.objectContaining({
+        id: 'artifact-forward-compatible',
+        type: 'image',
+        version: 1,
+        messageId: '17',
+      }),
+    ]);
   });
 
   // DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01 regression: `options.attachments`

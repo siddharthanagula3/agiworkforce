@@ -1,4 +1,4 @@
-// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
+// TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { generateImage, generateVideo } from '../api/media';
@@ -138,7 +138,7 @@ export const useMediaGenerationStore = create<MediaGenerationState>()(
           {
             id: jobId,
             prompt: payload.prompt,
-            provider: payload.provider === 'veo3' ? 'google' : (payload.provider ?? 'google'),
+            provider: payload.provider ?? 'google',
             model: payload.model,
             status: 'running',
             createdAt: startedAt,

@@ -20,14 +20,9 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
-import { randomBytes, scrypt, timingSafeEqual, createHash } from 'crypto';
-import { ApiKey } from '@/types/saas';
+import { randomBytes } from 'crypto';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import argon2 from 'argon2';
-
-// Scrypt parameters for secure key derivation (legacy)
-// These provide a good balance of security and performance
-const SCRYPT_KEY_LEN = 64; // Output key length in bytes
 
 // Argon2id options (OWASP recommended)
 // See: https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
@@ -38,43 +33,20 @@ const ARGON2_OPTIONS: argon2.Options = {
   parallelism: 4,
 };
 
-// Hash format detection
-type HashFormat = 'argon2id' | 'scrypt' | 'sha256';
-
-function detectHashFormat(storedHash: string): HashFormat {
-  if (storedHash.startsWith('$argon2id$')) {
-    return 'argon2id';
-  }
-  // Scrypt format: salt$hash (32 hex chars for salt, 128 hex chars for hash)
-  const parts = storedHash.split('$');
-  if (parts.length === 2 && parts[0] && parts[1]) {
-    return 'scrypt';
-  }
-  // Legacy SHA-256: 64 hex characters, no separator
-  return 'sha256';
-}
-
-/**
- * Promisified scrypt wrapper with proper typing
- */
-function scryptAsync(password: string, salt: string, keylen: number): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    scrypt(password, salt, keylen, (err, derivedKey) => {
-      if (err) reject(err);
-      else resolve(derivedKey);
-    });
-  });
-}
-
-// RT-02 fix: API key format now embeds a key_id prefix so verifyKey can do a
+// RT-02 fix: API key format embeds a key_id prefix so verifyKey can do a
 // single-row DB lookup instead of scanning all active keys.
 // Format: sk_live_<keyId16hex>_<secret48hex>
 // - keyId: 8 random bytes → 16 hex chars. Stored as `key_prefix` column.
 // - secret: 24 random bytes → 48 hex chars. Only the Argon2id hash is stored.
 //
-// Backward compat: old keys (no underscore after sk_live_ prefix beyond the
-// 8-char prefix segment) fall through to the legacy slow-scan path, which is
-// rate-limited per IP at 5/min by callers.
+// Both segments are hex (never base64url) so they can never contain a
+// character outside VALID_KEY_PATTERN's `[A-Za-z0-9_]` class below — a
+// base64url secret can contain `-`, which would fail that pattern's `$`
+// anchor and reject a real, just-issued key.
+//
+// `key_prefix` is `NOT NULL` at the schema level (0005_api_keys.sql), so
+// every row always has one: there is no legacy "no prefix" format to scan
+// for, and no slow-path fallback is needed.
 export const KEY_ID_REGEX = /^sk_live_([0-9a-f]{16})_[A-Za-z0-9]{1,}/;
 
 /**
@@ -87,8 +59,9 @@ export const KEY_ID_REGEX = /^sk_live_([0-9a-f]{16})_[A-Za-z0-9]{1,}/;
 async function generateKey(): Promise<{ raw: string; hash: string; keyId: string }> {
   // keyId: 8 bytes → 16 hex chars (stored in DB, used as lookup index)
   const keyId = randomBytes(8).toString('hex');
-  // secret: 24 bytes → 48 hex chars (never stored; only the hash is stored)
-  const secret = randomBytes(24).toString('base64url');
+  // secret: 24 bytes → 48 hex chars (never stored; only the hash is stored).
+  // Hex, not base64url — see the VALID_KEY_PATTERN note above KEY_ID_REGEX.
+  const secret = randomBytes(24).toString('hex');
   // Full raw key embeds the keyId so verifyKey can extract it for single-row lookup
   const raw = `sk_live_${keyId}_${secret}`;
 
@@ -99,97 +72,16 @@ async function generateKey(): Promise<{ raw: string; hash: string; keyId: string
 }
 
 /**
- * Rehash a raw key with Argon2id.
- * Used for migrating legacy keys on successful authentication.
+ * Verify a raw API key against its stored Argon2id hash.
+ * Every key created by `generateKey()` is Argon2id-hashed, so this is the
+ * only format this service ever needs to check (timing-safe internally).
  */
-async function rehashWithArgon2(rawKey: string): Promise<string> {
-  return argon2.hash(rawKey, ARGON2_OPTIONS);
-}
-
-/**
- * Result of key verification including whether rehashing is needed
- */
-interface VerifyResult {
-  valid: boolean;
-  format: HashFormat;
-  needsRehash: boolean;
-}
-
-/**
- * Verify a raw API key against a stored hash.
- * Supports three hash formats:
- * 1. Argon2id (primary, starts with $argon2id$)
- * 2. scrypt (legacy, format: salt$hash)
- * 3. SHA-256 (legacy unsalted, 64 hex chars)
- *
- * Uses timing-safe comparison where applicable to prevent timing attacks.
- */
-async function verifyKeyHash(rawKey: string, storedHash: string): Promise<VerifyResult> {
+async function verifyKeyHash(rawKey: string, storedHash: string): Promise<boolean> {
   try {
-    const format = detectHashFormat(storedHash);
-
-    switch (format) {
-      case 'argon2id': {
-        // Argon2id verification (timing-safe internally)
-        const valid = await argon2.verify(storedHash, rawKey);
-        return { valid, format, needsRehash: false };
-      }
-
-      case 'scrypt': {
-        // Legacy scrypt format: salt$hash
-        const [salt, expectedHash] = storedHash.split('$');
-        if (!salt || !expectedHash) {
-          return { valid: false, format, needsRehash: false };
-        }
-
-        const derivedKey = await scryptAsync(rawKey, salt, SCRYPT_KEY_LEN);
-        const expectedBuffer = Buffer.from(expectedHash, 'hex');
-        const valid = timingSafeEqual(derivedKey, expectedBuffer);
-
-        if (valid) {
-          logger.info('API key with scrypt hash verified, will rehash to Argon2id');
-        }
-        return { valid, format, needsRehash: valid };
-      }
-
-      case 'sha256': {
-        // Legacy unsalted SHA-256 (64 hex characters)
-        logger.warn('Encountered API key with legacy hash format (unsalted SHA-256)');
-        const legacyHash = createHash('sha256').update(rawKey).digest('hex');
-
-        // Use timing-safe comparison for legacy hashes too
-        const valid =
-          legacyHash.length === storedHash.length &&
-          timingSafeEqual(Buffer.from(legacyHash), Buffer.from(storedHash));
-
-        if (valid) {
-          logger.info('API key with SHA-256 hash verified, will rehash to Argon2id');
-        }
-        return { valid, format, needsRehash: valid };
-      }
-
-      default: {
-        // Exhaustive check
-        const _exhaustive: never = format;
-        return { valid: false, format: _exhaustive, needsRehash: false };
-      }
-    }
+    return await argon2.verify(storedHash, rawKey);
   } catch (error) {
     logger.error({ error }, 'Error verifying API key hash');
-    return { valid: false, format: 'sha256', needsRehash: false };
-  }
-}
-
-/**
- * Update the key hash in the database (for rehashing on auth)
- */
-async function updateKeyHash(db: DatabaseAdapter, keyId: string, newHash: string): Promise<void> {
-  try {
-    await db.execute('UPDATE api_keys SET key_hash = $1 WHERE id = $2', [newHash, keyId]);
-    logger.info({ keyId }, 'Successfully rehashed API key to Argon2id');
-  } catch (error) {
-    logger.error({ error, keyId }, 'Failed to update API key hash during rehash');
-    // Don't throw - rehashing failure shouldn't block authentication
+    return false;
   }
 }
 
@@ -207,7 +99,7 @@ export class ApiKeyService {
     userId: string,
     name: string,
     scopes: string[] = [],
-  ): Promise<{ apiKey: ApiKey; rawKey: string }> {
+  ): Promise<{ apiKey: ApiKeyRow; rawKey: string }> {
     const { raw, hash, keyId } = await generateKey();
 
     const rows = await db.query<ApiKeyRow>(
@@ -223,7 +115,7 @@ export class ApiKeyService {
       throw err;
     }
 
-    return { apiKey: rows[0] as unknown as ApiKey, rawKey: raw };
+    return { apiKey: rows[0], rawKey: raw };
   }
 
   /**
@@ -234,25 +126,38 @@ export class ApiKeyService {
    * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
    * to reduce data transfer and improve query performance.
    */
-  static async listApiKeys(db: DatabaseAdapter, userId: string): Promise<ApiKey[]> {
-    const rows = await db.query<ApiKeyRow>(
+  static async listApiKeys(
+    db: DatabaseAdapter,
+    userId: string,
+  ): Promise<
+    Array<
+      Pick<
+        ApiKeyRow,
+        'id' | 'user_id' | 'name' | 'scopes' | 'created_at' | 'expires_at' | 'last_used_at'
+      >
+    >
+  > {
+    return db.query<ApiKeyRow>(
       `SELECT id, user_id, name, scopes, created_at, expires_at, last_used_at
        FROM api_keys
        WHERE user_id = $1
        ORDER BY created_at DESC`,
       [userId],
     );
-
-    return rows as unknown as ApiKey[];
   }
 
   /**
-   * Revoke/Delete API Key.
-   * USER-CONTEXT: caller passes a DatabaseAdapter bound to the authenticated user
-   * to enforce ownership in addition to the explicit user_id check.
+   * Revoke an API Key (soft-delete via `revoked_at`, preserving the audit
+   * trail — see 0023_api_keys.sql). USER-CONTEXT: caller passes a
+   * DatabaseAdapter bound to the authenticated user to enforce ownership in
+   * addition to the explicit user_id check. Idempotent: revoking an
+   * already-revoked key is a no-op.
    */
   static async revokeApiKey(db: DatabaseAdapter, id: string, userId: string): Promise<void> {
-    await db.execute('DELETE FROM api_keys WHERE id = $1 AND user_id = $2', [id, userId]);
+    await db.execute(
+      'UPDATE api_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL',
+      [id, userId],
+    );
   }
 
   /**
@@ -262,131 +167,66 @@ export class ApiKeyService {
    * across all users. Once a key is verified and user_id is returned, downstream
    * callers should use getNeonDb().withUser(jwt) for any further user-scoped ops.
    *
-   * RT-02 FIX: Two-path verification to prevent DoS via Argon2 fan-out:
-   *
-   * FAST PATH (new keys): Parse keyId from `sk_live_<keyId16>_<secret>` format,
-   * do a single DB lookup by `key_prefix = keyId`, run exactly one Argon2id call.
-   *
-   * LEGACY PATH (old format): Fall back to per-user scan if the key doesn't
-   * match the new format. This path MUST only be exercised after per-IP rate
-   * limiting (5/min) by the caller to prevent DoS.
+   * RT-02 FIX: single-row lookup instead of an Argon2 scan fan-out:
+   * parse the keyId out of `sk_live_<keyId16>_<secret>`, do one DB lookup by
+   * `key_prefix = keyId`, run exactly one Argon2id call.
    *
    * PARSE-TIME REJECTION: Any key not matching `^sk_(live|test)_[A-Za-z0-9_]{20,}$`
-   * is rejected immediately with no Argon2 work.
+   * — or that doesn't carry an embedded keyId — is rejected immediately with
+   * no DB or Argon2 work. There is no legacy scan fallback: `key_prefix` is
+   * `NOT NULL` at the schema level, so a keyless lookup could never match a
+   * row anyway.
    */
-  static async verifyKey(rawKey: string): Promise<ApiKey | null> {
+  static async verifyKey(
+    rawKey: string,
+  ): Promise<Omit<ApiKeyRow, 'key_hash' | 'key_prefix'> | null> {
     // SERVICE-CONTEXT: service-level db (no user JWT) to look up across all users.
     const db = getNeonDb();
 
     // Parse-time rejection: reject keys that don't even look like API keys.
-    // Regex allows both new format (with embedded keyId) and old format (no underscore separator).
     const VALID_KEY_PATTERN = /^sk_(?:live|test)_[A-Za-z0-9_]{20,}$/;
     if (!VALID_KEY_PATTERN.test(rawKey)) {
-      // No Argon2 work · immediate rejection
+      // No DB or Argon2 work · immediate rejection
       return null;
     }
 
-    // Try to extract keyId from new format: sk_live_<16hex>_<rest>
+    // Extract the embedded keyId: sk_live_<16hex>_<rest>
     const keyIdMatch = KEY_ID_REGEX.exec(rawKey);
-
-    if (keyIdMatch?.[1]) {
-      // FAST PATH: Single DB lookup by key_prefix
-      const keyId = keyIdMatch[1];
-      const keys = await db.query<ApiKeyRow>(
-        `SELECT id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at
-         FROM api_keys
-         WHERE key_prefix = $1
-           AND (expires_at IS NULL OR expires_at > now())
-         LIMIT 2`,
-        [keyId],
-      );
-
-      if (!keys || keys.length === 0) {
-        return null;
-      }
-
-      // Run Argon2 exactly once
-      const key = keys[0]!;
-      const result = await verifyKeyHash(rawKey, key.key_hash);
-      if (!result.valid) return null;
-
-      // Fire-and-forget: update last_used_at
-      db.execute('UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [
-        new Date().toISOString(),
-        key.id,
-      ]).catch((updateError: unknown) => {
-        logger.error({ error: updateError }, 'Failed to update last_used_at');
-      });
-
-      if (result.needsRehash) {
-        void (async () => {
-          try {
-            const newHash = await rehashWithArgon2(rawKey);
-            await updateKeyHash(db, key.id, newHash);
-          } catch (rehashError) {
-            logger.error({ error: rehashError, keyId: key.id }, 'Failed to rehash API key');
-          }
-        })();
-      }
-
-      const { key_hash: _h, key_prefix: _p, ...keyWithoutSecrets } = key;
-      void _h;
-      void _p;
-      return keyWithoutSecrets as unknown as ApiKey;
+    if (!keyIdMatch?.[1]) {
+      return null;
     }
+    const keyId = keyIdMatch[1];
 
-    // LEGACY PATH: Old key format · no key_id prefix. Scan user's keys only.
-    // Caller MUST enforce per-IP rate limiting (5/min) before reaching this path.
-    logger.warn({ keyPrefix: rawKey.slice(0, 12) }, 'RT-02: legacy key format · slow Argon2 path');
-
-    // Fetch only required columns for verification to reduce data transfer
     const keys = await db.query<ApiKeyRow>(
       `SELECT id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at
        FROM api_keys
-       WHERE key_prefix IS NULL
+       WHERE key_prefix = $1
+         AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > now())
-       LIMIT 1000`,
+       LIMIT 2`,
+      [keyId],
     );
 
     if (!keys || keys.length === 0) {
       return null;
     }
 
-    for (const key of keys) {
-      const result = await verifyKeyHash(rawKey, key.key_hash);
-      if (result.valid) {
-        // Fire-and-forget: update last_used_at
-        db.execute('UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [
-          new Date().toISOString(),
-          key.id,
-        ]).catch((updateError: unknown) => {
-          logger.error({ error: updateError }, 'Failed to update last_used_at');
-        });
+    // Run Argon2 exactly once
+    const key = keys[0]!;
+    const valid = await verifyKeyHash(rawKey, key.key_hash);
+    if (!valid) return null;
 
-        if (result.needsRehash) {
-          void (async () => {
-            try {
-              const newHash = await rehashWithArgon2(rawKey);
-              await updateKeyHash(db, key.id, newHash);
-            } catch (rehashError) {
-              logger.error(
-                { error: rehashError, keyId: key.id, fromFormat: result.format },
-                'Failed to rehash API key to Argon2id',
-              );
-            }
-          })();
-        }
+    // Fire-and-forget: update last_used_at
+    db.execute('UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [
+      new Date().toISOString(),
+      key.id,
+    ]).catch((updateError: unknown) => {
+      logger.error({ error: updateError }, 'Failed to update last_used_at');
+    });
 
-        const { key_hash: _keyHash, key_prefix: _kp, ...keyWithoutHash } = key;
-        void _keyHash;
-        void _kp;
-        return keyWithoutHash as unknown as ApiKey;
-      }
-    }
-
-    return null;
+    const { key_hash: _h, key_prefix: _p, ...keyWithoutSecrets } = key;
+    void _h;
+    void _p;
+    return keyWithoutSecrets;
   }
 }
-
-// Export hash format detection for audit scripts
-export { detectHashFormat, type HashFormat };

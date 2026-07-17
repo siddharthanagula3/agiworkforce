@@ -17,7 +17,11 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getServiceClient } from '../lib/neonClients';
+import {
+  getSystemClient,
+  getUserScopedClient,
+  type UserAuth,
+} from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -61,17 +65,12 @@ const denySchema = z
 // HELPER: Verify desktop ownership
 // =============================================================================
 
-async function verifyDesktopOwnership(desktopId: string, userId: string): Promise<void> {
+async function verifyDesktopOwnership(desktopId: string, user: UserAuth): Promise<void> {
   if (!isValidUuid(desktopId)) {
     throw new AppError('Invalid desktop ID format', 400);
   }
 
-  // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables
-  // none) — migration TODO. Same gap applies to `agent_approval_requests` (no
-  // migration record anywhere in the repo) at every getServiceClient() call
-  // site in this file. Explicit ownership/filter checks are the SOLE
-  // tenant-isolation mechanism until policies ship.
-  const db = getServiceClient();
+  const db = getUserScopedClient(user);
   const { data: desktop, error } = await db
     .from('desktop_devices')
     .select('id, user_id')
@@ -82,7 +81,7 @@ async function verifyDesktopOwnership(desktopId: string, userId: string): Promis
     throw new AppError('Desktop not found', 404);
   }
 
-  if (desktop.user_id !== userId) {
+  if (desktop.user_id !== user.userId) {
     throw new AppError('Desktop not found', 404);
   }
 }
@@ -110,9 +109,9 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
     throw new AppError('desktopId query parameter is required', 400);
   }
 
-  await verifyDesktopOwnership(desktopId, user.userId);
+  await verifyDesktopOwnership(desktopId, user);
 
-  const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
+  const db = getUserScopedClient(user);
   // Send a status query to the desktop via WebSocket and return the response.
   // For MVP, we query the last known status from the DB.
   const { data: desktop } = await db
@@ -161,9 +160,11 @@ router.get('/pending', createRateLimiter('device-status'), async (req: Request, 
     throw new AppError('desktopId query parameter is required', 400);
   }
 
-  await verifyDesktopOwnership(desktopId, user.userId);
+  await verifyDesktopOwnership(desktopId, user);
 
-  const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
+  // agent_approval_requests has no canonical migration. The explicit user_id
+  // and desktop_id predicates remain mandatory on this compatibility path.
+  const db = getSystemClient('shadow-schema-compatibility');
   // Fetch pending approval requests from Neon
   const { data: pendingRequests, error } = await db
     .from('agent_approval_requests')
@@ -210,9 +211,9 @@ router.post(
 
     const { desktopId, requestId } = approveSchema.parse(req.body);
 
-    await verifyDesktopOwnership(desktopId, user.userId);
+    await verifyDesktopOwnership(desktopId, user);
 
-    const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
+    const db = getSystemClient('shadow-schema-compatibility');
     const { data: updatedRows, error: updateError } = await db
       .from('agent_approval_requests')
       .update({ status: 'approved', resolved_at: new Date().toISOString() })
@@ -273,9 +274,9 @@ router.post('/deny', createRateLimiter('device-command'), async (req: Request, r
 
   const { desktopId, requestId, reason } = denySchema.parse(req.body);
 
-  await verifyDesktopOwnership(desktopId, user.userId);
+  await verifyDesktopOwnership(desktopId, user);
 
-  const db = getServiceClient(); // RLS-GAP: see verifyDesktopOwnership() above
+  const db = getSystemClient('shadow-schema-compatibility');
   const { data: updatedRows, error: updateError } = await db
     .from('agent_approval_requests')
     .update({

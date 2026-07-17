@@ -32,6 +32,11 @@ vi.mock('next/headers', () => ({
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();
+const mockKillE2BSession = vi.fn();
+
+vi.mock('@/lib/e2b/runtime', () => ({
+  killE2BSession: (...args: unknown[]) => mockKillE2BSession(...args),
+}));
 
 vi.mock('@/lib/server/neon-chat', () => ({
   getNeonChatDb: () => ({ query: mockQuery, execute: mockExecute }),
@@ -335,6 +340,11 @@ describe('Single Conversation API', () => {
           expect.stringContaining('user_id'),
           expect.arrayContaining(['user-123']),
         );
+        expect(mockKillE2BSession).toHaveBeenCalledWith({
+          tenantId: 'managed-cloud',
+          userId: 'user-123',
+          conversationId: 'conv-1',
+        });
       });
     });
   });

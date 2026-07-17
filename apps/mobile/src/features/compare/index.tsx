@@ -19,6 +19,7 @@ import { streamChat, type StreamDelta } from '@/services/streaming';
 import { getModelById, getProviderById, getDisplayName } from '@/lib/models';
 import { getProviderDefaultModel } from '@agiworkforce/types';
 import { useThemeColors } from '@/src/ui/theme';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -127,7 +128,13 @@ export default function CompareScreen() {
       setStateA((prev) => ({ ...prev, isStreaming: true }));
 
       streamChat(
-        { model: modelA, messages, stream: true as const, thinking: false },
+        {
+          model: modelA,
+          messages,
+          stream: true as const,
+          operationId: uuidv7(),
+          thinking: false,
+        },
         {
           onDelta: (delta: StreamDelta) => {
             if (delta.content) {
@@ -174,7 +181,13 @@ export default function CompareScreen() {
       setStateB((prev) => ({ ...prev, isStreaming: true }));
 
       streamChat(
-        { model: modelB, messages, stream: true as const, thinking: false },
+        {
+          model: modelB,
+          messages,
+          stream: true as const,
+          operationId: uuidv7(),
+          thinking: false,
+        },
         {
           onDelta: (delta: StreamDelta) => {
             if (delta.content) {

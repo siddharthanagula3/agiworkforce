@@ -17,7 +17,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { LibraryListResponseSchema } from '@agiworkforce/services';
+import { LibraryListResponseSchema } from '@agiworkforce/cloud-contracts';
 
 const { mockGetClerkAuthUser, mockQuery } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),

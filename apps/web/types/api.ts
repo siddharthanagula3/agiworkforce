@@ -14,7 +14,7 @@ export interface CheckoutResponse {
   url: string;
 }
 
-// Me API response shape lives in @agiworkforce/services cloud-contracts (MeResponseSchema).
+// Me API response shape lives in @agiworkforce/cloud-contracts (MeResponseSchema).
 
 // Device API
 export interface DeviceLinkRequest {

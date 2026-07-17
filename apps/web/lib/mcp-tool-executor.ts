@@ -6,9 +6,8 @@
  * modules.
  *
  * Responsibilities:
- *   1. Load the MCP server list from the same env-var-pointed config file that
- *      `services/api-gateway/src/mcp/mcpConfig.ts` reads
- *      (MCP_WEB_CONFIG_PATH, falling back to WEB_MCP_SERVERS_JSON).
+ *   1. Load a runtime-validated, remote-only MCP server list from
+ *      WEB_MCP_SERVERS_JSON.
  *   2. Build and cache a flat tool catalog across all enabled servers.
  *   3. Dispatch individual tool calls to the right server.
  *
@@ -18,14 +17,13 @@
  *     depth-caps without reimplementing them here.
  *   - Catalog is cached for 60 s in the route-handler process memory.
  *     The first warm-up call is lazy (on the first request that needs tools).
- *   - SSRF: only servers already declared in the config file are reachable.
- *     No user-supplied URLs flow through this path.
+ *   - Managed Web never starts stdio MCP processes. Operator endpoints must be
+ *     HTTPS and pass DNS-aware egress validation before discovery and execution.
+ *   - No user-supplied URLs flow through this path.
  */
 
 import 'server-only';
 
-import { existsSync, readFileSync } from 'fs';
-import { resolve } from 'path';
 import { z } from 'zod';
 
 import {
@@ -37,20 +35,17 @@ import {
   type McpToolCatalog,
 } from '@agiworkforce/mcp';
 
+import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { logger } from '@/lib/logger';
 
 // ─── Config schema (same shape as the gateway's mcpConfig.ts) ─────────────────
 
-const stdioSchema = z.object({
-  type: z.literal('stdio'),
-  command: z.string().min(1),
-  args: z.array(z.string()).optional().default([]),
-  env: z.record(z.string(), z.string()).optional().default({}),
-});
-
 const httpSchema = z.object({
   type: z.literal('http'),
-  url: z.string().url(),
+  url: z
+    .string()
+    .url()
+    .refine((value) => new URL(value).protocol === 'https:', 'MCP endpoint must use HTTPS'),
   headers: z.record(z.string(), z.string()).optional().default({}),
 });
 
@@ -58,12 +53,12 @@ const webMcpEntrySchema = z.object({
   id: z.string().min(1).max(100),
   name: z.string().min(1).max(200),
   description: z.string().max(1000).optional().default(''),
-  transport: z.discriminatedUnion('type', [stdioSchema, httpSchema]),
+  transport: httpSchema,
   enabled: z.boolean().optional().default(true),
 });
 
 const webMcpFileSchema = z.object({
-  servers: z.array(webMcpEntrySchema),
+  servers: z.array(webMcpEntrySchema).max(64),
 });
 
 type WebMcpEntry = z.infer<typeof webMcpEntrySchema>;
@@ -72,62 +67,29 @@ type WebMcpEntry = z.infer<typeof webMcpEntrySchema>;
 
 let _configCache: WebMcpEntry[] | null = null;
 
-function resolveConfigPath(): string | null {
-  // Prefer a dedicated env var so the web app can point at a different server
-  // list from the gateway. Fall back to a well-known default.
-  const candidates = [
-    process.env['MCP_WEB_CONFIG_PATH'],
-    process.env['MCP_CONFIG_PATH'],
-    resolve(process.cwd(), 'mcp-servers.json'),
-  ].filter(Boolean) as string[];
-
-  for (const candidate of candidates) {
-    const abs = resolve(candidate);
-    if (existsSync(abs)) return abs;
-  }
-  return null;
-}
-
 function loadWebMcpConfig(): WebMcpEntry[] {
   if (_configCache !== null) return _configCache;
 
-  const path = resolveConfigPath();
-  if (!path) {
-    logger.info({}, '[web-mcp] no config file found — no MCP tools available');
+  const rawConfig = process.env['WEB_MCP_SERVERS_JSON'];
+  if (!rawConfig) {
+    logger.info({}, '[web-mcp] WEB_MCP_SERVERS_JSON is unset — no MCP tools available');
     _configCache = [];
     return _configCache;
   }
 
   try {
-    const raw = JSON.parse(readFileSync(path, 'utf-8'));
+    const raw: unknown = JSON.parse(rawConfig);
     const parsed = webMcpFileSchema.parse(raw);
     _configCache = parsed.servers.filter((s) => s.enabled);
-    logger.info({ count: _configCache.length, path }, '[web-mcp] loaded MCP server configuration');
+    logger.info({ count: _configCache.length }, '[web-mcp] loaded MCP server configuration');
   } catch (err) {
-    logger.error({ error: err, path }, '[web-mcp] failed to parse MCP config — using empty list');
+    logger.error({ error: err }, '[web-mcp] failed to parse MCP config — using empty list');
     _configCache = [];
   }
   return _configCache;
 }
 
 function entryToConfig(entry: WebMcpEntry): McpServerConfig {
-  if (entry.transport.type === 'stdio') {
-    return {
-      command: entry.transport.command,
-      args: entry.transport.args,
-      env: entry.transport.env,
-      // signedManifest: false means only userConsent path is available.
-      // For our system-configured servers we trust the config file itself
-      // (operator-deployed), so we set developerMode:true to allow stdio
-      // without a signed manifest. This is only used in the server process.
-      developerMode: true,
-      userConsent: {
-        granted_at: new Date().toISOString(),
-        for_command: entry.transport.command,
-        for_args: entry.transport.args ?? [],
-      },
-    };
-  }
   return {
     url: entry.transport.url,
     transport: 'streamable-http',
@@ -178,7 +140,27 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
 
   const configs: Record<string, McpServerConfig> = {};
   for (const entry of servers) {
-    configs[entry.id] = entryToConfig(entry);
+    try {
+      await assertResolvedPublicHostname(entry.transport.url);
+      configs[entry.id] = entryToConfig(entry);
+    } catch (error) {
+      logger.warn(
+        { error, serverId: entry.id },
+        '[web-mcp] endpoint rejected by managed-cloud egress policy',
+      );
+    }
+  }
+
+  if (Object.keys(configs).length === 0) {
+    const empty: McpToolCatalog = {
+      version: 1,
+      generatedAt: now,
+      servers: {},
+      tools: [],
+    };
+    _state.catalog = empty;
+    _state.expiresAt = now + CATALOG_TTL_MS;
+    return empty;
   }
 
   _state.building = (async () => {
@@ -219,6 +201,7 @@ export async function executeWebMcpTool(
     if (!entry) {
       throw new Error(`[web-mcp] server "${serverId}" is not in the config`);
     }
+    await assertResolvedPublicHostname(entry.transport.url);
     handle = await connectMcpServer({
       serverName: serverId,
       config: entryToConfig(entry),

@@ -6,7 +6,7 @@ import {
   detectArtifactType,
   extractArtifactTitle,
   type TrailingUnclosedBlock,
-} from '@agiworkforce/services';
+} from '@agiworkforce/artifacts';
 import { useStreamingArtifactStore } from '../stores/streaming-artifact-store';
 import { useArtifactsStore } from '../stores/artifacts-store';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';

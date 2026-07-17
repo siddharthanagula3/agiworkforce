@@ -13,32 +13,10 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
+import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getNeonDb } from '@/lib/server/neon-db';
-import {
-  PRIVACY_MODES,
-  PROVIDER_MODES,
-  SYNCED_APP_SURFACES,
-  DEVELOPER_SESSION_SURFACES,
-  type PrivacyMode,
-  type ProviderMode,
-  type ProjectAccentColor,
-  type ProjectImportSource,
-  type SourceSurface,
-} from '@agiworkforce/types';
-
-const ACCENT_COLORS: readonly ProjectAccentColor[] = [
-  'emerald',
-  'sky',
-  'amber',
-  'rose',
-  'violet',
-  'zinc',
-];
-const IMPORT_SOURCES: readonly ProjectImportSource[] = ['claude', 'openai', 'manual'];
-const ALL_SURFACES: readonly SourceSurface[] = [
-  ...SYNCED_APP_SURFACES,
-  ...DEVELOPER_SESSION_SURFACES,
-];
+import { ManagedCloudProjectCreateRequestSchema } from '@agiworkforce/cloud-contracts';
+import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 
 const PG_UNDEFINED_COLUMN = '42703';
 
@@ -86,86 +64,13 @@ async function handleCreateProject(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  let body: {
-    name?: string;
-    description?: string;
-    instructions?: string;
-    color?: string;
-    iconEmoji?: string | null;
-    accentColor?: ProjectAccentColor | null;
-    defaultPrivacyMode?: PrivacyMode;
-    defaultProviderMode?: ProviderMode;
-    allowedSurfaces?: SourceSurface[];
-    defaultModelId?: string | null;
-    importedFrom?: ProjectImportSource | null;
-  };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     throw createError.validation('Invalid request body');
   }
-
-  if (!body.name || typeof body.name !== 'string' || body.name.trim().length === 0) {
-    throw createError.validation('Name is required');
-  }
-
-  if (body.name.trim().length > 200) {
-    throw createError.validation('Name must be 200 characters or less');
-  }
-
-  if (
-    body.description !== undefined &&
-    body.description !== null &&
-    body.description.length > 2_000
-  ) {
-    throw createError.validation('Description must be 2,000 characters or less');
-  }
-
-  if (
-    body.instructions !== undefined &&
-    body.instructions !== null &&
-    body.instructions.length > 10_000
-  ) {
-    throw createError.validation('Instructions must be 10,000 characters or less');
-  }
-
-  if (
-    body.defaultPrivacyMode !== undefined &&
-    !(PRIVACY_MODES as readonly string[]).includes(body.defaultPrivacyMode)
-  ) {
-    throw createError.validation(`defaultPrivacyMode must be one of: ${PRIVACY_MODES.join(', ')}`);
-  }
-
-  if (
-    body.defaultProviderMode !== undefined &&
-    !(PROVIDER_MODES as readonly string[]).includes(body.defaultProviderMode)
-  ) {
-    throw createError.validation(
-      `defaultProviderMode must be one of: ${PROVIDER_MODES.join(', ')}`,
-    );
-  }
-
-  if (
-    body.accentColor !== undefined &&
-    body.accentColor !== null &&
-    !(ACCENT_COLORS as readonly string[]).includes(body.accentColor)
-  ) {
-    throw createError.validation(`accentColor must be one of: ${ACCENT_COLORS.join(', ')}`);
-  }
-
-  if (
-    body.importedFrom !== undefined &&
-    body.importedFrom !== null &&
-    !(IMPORT_SOURCES as readonly string[]).includes(body.importedFrom)
-  ) {
-    throw createError.validation(`importedFrom must be one of: ${IMPORT_SOURCES.join(', ')}`);
-  }
-
-  if (body.iconEmoji !== undefined && body.iconEmoji !== null) {
-    if (typeof body.iconEmoji !== 'string' || body.iconEmoji.length > 16) {
-      throw createError.validation('iconEmoji must be a string of 16 characters or less');
-    }
-  }
+  const body = parseProjectRequest(ManagedCloudProjectCreateRequestSchema, rawBody);
 
   // Build columns/values for the insert, optionally including round-10 fields
   const baseColumns = ['user_id', 'name', 'description', 'instructions', 'color'];
@@ -197,11 +102,10 @@ async function handleCreateProject(request: NextRequest) {
     round10Values.push(body.defaultProviderMode);
   }
   if (body.allowedSurfaces !== undefined) {
-    const filtered = body.allowedSurfaces.filter((s) =>
-      (ALL_SURFACES as readonly string[]).includes(s),
-    );
     round10Columns.push('allowed_surfaces');
-    round10Values.push(filtered.length > 0 ? filtered : [...SYNCED_APP_SURFACES]);
+    round10Values.push(
+      body.allowedSurfaces.length > 0 ? body.allowedSurfaces : [...SYNCED_APP_SURFACES],
+    );
   }
   if (body.defaultModelId !== undefined) {
     round10Columns.push('default_model_id');

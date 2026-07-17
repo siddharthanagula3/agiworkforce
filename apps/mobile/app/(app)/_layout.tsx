@@ -3,6 +3,14 @@ import { Drawer } from 'expo-router/drawer';
 import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
 import { useThemeColors } from '@/src/ui/theme';
 
+// Expo Router only wires up a route's error boundary when the route file
+// itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
+// otherwise just an ordinary, unreachable screen. ./error.tsx already has
+// the full retry / go-back UI matching this group's design system;
+// re-export it here under the name Expo Router looks for so it actually
+// fires for errors thrown anywhere inside the (app) drawer.
+export { default as ErrorBoundary } from './error';
+
 /**
  * App layout -- Drawer navigator wrapping the entire authenticated section.
  *

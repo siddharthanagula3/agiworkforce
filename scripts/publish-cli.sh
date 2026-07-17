@@ -7,8 +7,8 @@
 #   - You're on a clean git tree at a tagged commit (e.g. v-cli-1.0.0)
 #
 # Usage:
-#   ./scripts/publish-cli.sh         # interactive confirm, dry-run first
-#   ./scripts/publish-cli.sh --yes   # skip confirm
+#   ./scripts/publish-cli.sh         # package dry-run, then interactive confirm
+#   ./scripts/publish-cli.sh --yes   # package dry-run, then skip confirm
 
 set -euo pipefail
 
@@ -17,6 +17,18 @@ NPM_VERSION=$(node -p "require('./apps/cli/npm/package.json').version")
 
 if [ "$VERSION" != "$NPM_VERSION" ]; then
   echo "ERROR: Cargo.toml version ($VERSION) != npm package.json version ($NPM_VERSION)"
+  exit 1
+fi
+
+VERSION_WITHOUT_BUILD="${VERSION%%+*}"
+if [[ "$VERSION_WITHOUT_BUILD" == *-* ]]; then
+  EXPECTED_NPM_DIST_TAG="next"
+else
+  EXPECTED_NPM_DIST_TAG="latest"
+fi
+NPM_DIST_TAG="${NPM_DIST_TAG:-$EXPECTED_NPM_DIST_TAG}"
+if [ "$NPM_DIST_TAG" != "$EXPECTED_NPM_DIST_TAG" ]; then
+  echo "ERROR: npm dist-tag '$NPM_DIST_TAG' contradicts version $VERSION; expected '$EXPECTED_NPM_DIST_TAG'"
   exit 1
 fi
 
@@ -45,6 +57,31 @@ for platform in "${PLATFORMS[@]}"; do
   fi
 done
 
+# Generate every platform manifest and dry-run every tarball before the first
+# irreversible npm publish. This cannot make seven registry writes atomic, but
+# it prevents late packaging/metadata failures from leaving a partial release.
+for platform in "${PLATFORMS[@]}"; do
+  bin_dir="dist/cli/$platform"
+  pkg_name="@agiworkforce/cli-$platform"
+  cat > "$bin_dir/package.json" <<EOF
+{
+  "name": "$pkg_name",
+  "version": "$VERSION",
+  "description": "AGI Workforce CLI — native binary for $platform",
+  "license": "Proprietary",
+  "os": ["${platform%-*}"],
+  "cpu": ["${platform##*-}"],
+  "files": ["bin"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/siddharthanagula3/agiworkforce.git"
+  }
+}
+EOF
+  (cd "$bin_dir" && npm pack --dry-run >/dev/null)
+done
+(cd apps/cli/npm && npm pack --dry-run >/dev/null)
+
 if [ "${1:-}" != "--yes" ]; then
   echo "About to publish 7 packages to npm:"
   echo "  @agiworkforce/cli@$VERSION (wrapper)"
@@ -66,30 +103,13 @@ for platform in "${PLATFORMS[@]}"; do
   echo ""
   echo "→ Publishing $pkg_name@$VERSION..."
 
-  # Generate platform package.json
-  cat > "$bin_dir/package.json" <<EOF
-{
-  "name": "$pkg_name",
-  "version": "$VERSION",
-  "description": "AGI Workforce CLI — native binary for $platform",
-  "license": "Proprietary",
-  "os": ["${platform%-*}"],
-  "cpu": ["${platform##*-}"],
-  "files": ["bin"],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/siddharthanagula3/agiworkforce.git"
-  }
-}
-EOF
-
-  (cd "$bin_dir" && npm publish --access public)
+  (cd "$bin_dir" && npm publish --access public --tag "$NPM_DIST_TAG")
 done
 
 # 2. Publish the wrapper package (depends on platform packages via optionalDependencies)
 echo ""
 echo "→ Publishing @agiworkforce/cli@$VERSION (wrapper)..."
-(cd apps/cli/npm && npm publish --access public)
+(cd apps/cli/npm && npm publish --access public --tag "$NPM_DIST_TAG")
 
 echo ""
 echo "========================================"

@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/Dialog';
 import { PlanCard } from './PlanCard';
 import { isFreePlan, type UIPlanTier } from '@agiworkforce/types';
-import { useAppModeStore } from '../../stores/appModeStore';
+import { selectPlan, useAuthStore } from '../../stores/auth';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -47,7 +47,7 @@ const TIER_ORDER: UIPlanTier[] = ['local', 'byok', 'basic', 'pro', 'max'];
 function legacyToUIPlanTier(raw: string | null | undefined): UIPlanTier {
   if (!raw) return 'byok';
   if (raw === 'free' || raw === 'byok') return 'byok';
-  if (raw === 'local') return 'local';
+  if (raw === 'local' || raw === 'local-only') return 'local';
   // 'hobby' is a legacy value from before the 2026-07-02 tier rename.
   if (raw === 'hobby' || raw === 'basic') return 'basic';
   if (raw === 'pro') return 'pro';
@@ -61,7 +61,7 @@ function legacyToUIPlanTier(raw: string | null | undefined): UIPlanTier {
 // ---------------------------------------------------------------------------
 
 export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansModalProps) {
-  const rawPlan = useAppModeStore((s) => s.planTier);
+  const rawPlan = useAuthStore(selectPlan);
   const currentTier = legacyToUIPlanTier(rawPlan);
 
   function handleCtaClick(tier: UIPlanTier) {
@@ -87,17 +87,15 @@ export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansMod
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-4xl w-full p-0 gap-0 overflow-hidden"
-        aria-labelledby="plans-modal-title"
-        aria-describedby="plans-modal-desc"
       >
         {/* Header */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border">
           <div className="flex items-start justify-between">
             <div className="space-y-1">
-              <DialogTitle id="plans-modal-title" className="text-lg font-semibold text-foreground">
+              <DialogTitle className="text-lg font-semibold text-foreground">
                 Plans &amp; Pricing
               </DialogTitle>
-              <DialogDescription id="plans-modal-desc" className="text-sm text-muted-foreground">
+              <DialogDescription className="text-sm text-muted-foreground">
                 AGI Workforce — Beyond one model. Beyond one surface.{' '}
                 <span className="font-medium">Local and BYOK are always free.</span>
               </DialogDescription>

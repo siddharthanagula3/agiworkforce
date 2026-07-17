@@ -5,9 +5,9 @@ import { PublicWaitlistForm } from '../../components/marketing/PublicWaitlistFor
 import { Reveal } from '../../components/marketing/Reveal';
 
 export const metadata = buildMetadata({
-  title: 'AGI Cloud is open — Team & Enterprise early access',
+  title: 'AGI Cloud is open — Team org & SSO early access',
   description:
-    'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Join the list for Team & Enterprise early access (org seats, admin controls, SSO).',
+    'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Team is already live at /pricing. Join the list for Team & Enterprise org-seat, admin-control, and SSO early access.',
   path: '/waitlist',
 });
 
@@ -49,14 +49,19 @@ export default function WaitlistPage() {
             <a href="/get-started" className="agi-fl-surface-link">
               sign in and start
             </a>
-            , no waitlist. This list is for <strong>Team &amp; Enterprise</strong> early access: org
-            seats, admin controls, SSO, and centralized billing. Leave your email and we will reach
-            out as those land.
+            , no waitlist.{' '}
+            <a href="/pricing" className="agi-fl-surface-link">
+              Team is already live at /pricing
+            </a>
+            . This list is for <strong>Team &amp; Enterprise</strong> early access to org seats,
+            admin controls, SSO, and centralized billing. Leave your email and we will reach out as
+            those land.
           </p>
           <div style={{ maxWidth: 560, marginTop: 34, paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
-            <PublicWaitlistForm source="website" ctaLabel="Request Team Access" />
+            <PublicWaitlistForm source="website" ctaLabel="Request Org/SSO Early Access" />
             <p className="agi-fl-final-stamp" style={{ marginTop: 18, textTransform: 'none' }}>
-              One email when Team &amp; Enterprise opens. No marketing drip, unsubscribe anytime.
+              One email when Team &amp; Enterprise org/SSO features land. No marketing drip,
+              unsubscribe anytime.
             </p>
           </div>
         </section>

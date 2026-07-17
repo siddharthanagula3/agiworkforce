@@ -3,6 +3,9 @@ import { API_BASE_URL } from '../api/client';
 import { voiceCheckLocalWhisper, voiceConfigure, voiceGetSettings } from '../api/voice';
 import { guardedFetch } from '../lib/egressGuard';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
+import { getRoutingSlotModel } from '@agiworkforce/types';
+
+const CLOUD_TRANSCRIPTION_MODEL = getRoutingSlotModel('voice_transcription');
 
 /**
  * Transcription mode - kept for backward compatibility
@@ -645,7 +648,7 @@ export function useVoiceTranscription(
           );
           const formData = new FormData();
           formData.append('file', transcriptionFile);
-          formData.append('model', 'whisper-1');
+          formData.append('model', CLOUD_TRANSCRIPTION_MODEL);
           if (language) {
             formData.append('language', language);
           }

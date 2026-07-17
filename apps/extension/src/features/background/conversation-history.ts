@@ -1,6 +1,12 @@
-const HISTORY_KEY = 'agi_conversation_history';
+import type { RoutingTaskType } from '@agiworkforce/types';
+
+const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
+const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
+const LEGACY_HISTORY_KEY = 'agi_conversation_history';
+const LEGACY_ACTIVE_MESSAGES_KEY = 'agi_side_panel_messages';
 const MAX_CONVERSATIONS = 100;
-const TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const CONVERSATION_STORE_LOCK = 'agi-browser-conversation-store-v2';
 
 export interface HistoryMessage {
   role: 'user' | 'assistant';
@@ -13,36 +19,178 @@ export interface ConversationEntry {
   title: string;
   messages: HistoryMessage[];
   savedAt: number;
+  routing: ConversationRoutingState;
+}
+
+export interface ConversationRoutingState {
+  selectedModel: string;
+  currentModelKey?: string;
+  previousTaskType?: RoutingTaskType;
+}
+
+interface BrowserConversationStore {
+  version: 2;
+  activeConversationId: string | null;
+  conversations: ConversationEntry[];
+}
+
+const EMPTY_STORE: BrowserConversationStore = {
+  version: 2,
+  activeConversationId: null,
+  conversations: [],
+};
+
+const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
+  'coding',
+  'reasoning',
+  'general',
+  'agentic',
+  'multimodal',
+  'research',
+  'computer-use',
+  'image_generation',
+  'creative_writing',
+  'long_context',
+  'simple_chat',
+]);
+
+let mutationQueue: Promise<void> = Promise.resolve();
+
+function isHistoryMessage(value: unknown): value is HistoryMessage {
+  if (!value || typeof value !== 'object') return false;
+  const message = value as Record<string, unknown>;
+  return (
+    (message['role'] === 'user' || message['role'] === 'assistant') &&
+    typeof message['content'] === 'string' &&
+    typeof message['timestamp'] === 'number' &&
+    Number.isFinite(message['timestamp'])
+  );
+}
+
+function containsControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function isSafeModelReference(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 200 &&
+    !containsControlCharacter(value)
+  );
+}
+
+function isSafeConversationId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 200 &&
+    !containsControlCharacter(value)
+  );
+}
+
+function normalizeRoutingState(value: unknown): ConversationRoutingState {
+  if (!value || typeof value !== 'object') return { selectedModel: 'auto' };
+  const routing = value as Record<string, unknown>;
+  if (!isSafeModelReference(routing['selectedModel'])) return { selectedModel: 'auto' };
+
+  const normalized: ConversationRoutingState = {
+    selectedModel: routing['selectedModel'],
+  };
+  if (isSafeModelReference(routing['currentModelKey'])) {
+    normalized.currentModelKey = routing['currentModelKey'];
+  }
+  if (
+    typeof routing['previousTaskType'] === 'string' &&
+    ROUTING_TASK_TYPES.has(routing['previousTaskType'] as RoutingTaskType)
+  ) {
+    normalized.previousTaskType = routing['previousTaskType'] as RoutingTaskType;
+  }
+  return normalized;
+}
+
+function normalizeConversationEntry(value: unknown): ConversationEntry | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const entry = value as Record<string, unknown>;
+  if (
+    typeof entry['id'] !== 'string' ||
+    typeof entry['title'] !== 'string' ||
+    !Array.isArray(entry['messages']) ||
+    !entry['messages'].every(isHistoryMessage) ||
+    typeof entry['savedAt'] !== 'number' ||
+    !Number.isFinite(entry['savedAt'])
+  ) {
+    return undefined;
+  }
+  return {
+    id: entry['id'],
+    title: entry['title'],
+    messages: entry['messages'],
+    savedAt: entry['savedAt'],
+    routing: normalizeRoutingState(entry['routing']),
+  };
+}
+
+function normalizeConversationEntries(value: unknown): ConversationEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(normalizeConversationEntry)
+    .filter((entry): entry is ConversationEntry => entry !== undefined);
+}
+
+function normalizeMessages(value: unknown): HistoryMessage[] {
+  return Array.isArray(value) ? value.filter(isHistoryMessage) : [];
 }
 
 function pruneExpired(entries: ConversationEntry[]): ConversationEntry[] {
   const cutoff = Date.now() - TTL_MS;
-  return entries.filter((e) => e.savedAt >= cutoff);
+  return entries.filter((entry) => entry.savedAt >= cutoff);
 }
 
 function deriveTitle(messages: HistoryMessage[]): string {
-  const firstUser = messages.find((m) => m.role === 'user');
+  const firstUser = messages.find((message) => message.role === 'user');
   if (!firstUser) return 'Conversation';
   const text = firstUser.content.trim().replace(/\s+/g, ' ');
-  return text.length > 60 ? text.slice(0, 57) + '...' : text;
+  return text.length > 60 ? `${text.slice(0, 57)}...` : text;
 }
 
-async function readAll(): Promise<ConversationEntry[]> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(HISTORY_KEY, (result) => {
+export function createBrowserConversationId(): string {
+  return `conv-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function createConversation(
+  messages: HistoryMessage[],
+  routing: ConversationRoutingState = { selectedModel: 'auto' },
+  id = createBrowserConversationId(),
+): ConversationEntry {
+  return {
+    id,
+    title: deriveTitle(messages),
+    messages,
+    savedAt: Date.now(),
+    routing: normalizeRoutingState(routing),
+  };
+}
+
+async function storageGet(keys: string[]): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(keys, (result) => {
       if (chrome.runtime.lastError) {
-        resolve([]);
+        reject(new Error(chrome.runtime.lastError.message));
         return;
       }
-      const raw = result[HISTORY_KEY];
-      resolve(Array.isArray(raw) ? (raw as ConversationEntry[]) : []);
+      resolve(result);
     });
   });
 }
 
-async function writeAll(entries: ConversationEntry[]): Promise<void> {
+async function storageSet(items: Record<string, unknown>): Promise<void> {
   return new Promise((resolve, reject) => {
-    chrome.storage.local.set({ [HISTORY_KEY]: entries }, () => {
+    chrome.storage.local.set(items, () => {
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
         return;
@@ -52,35 +200,241 @@ async function writeAll(entries: ConversationEntry[]): Promise<void> {
   });
 }
 
-export async function saveConversation(messages: HistoryMessage[]): Promise<string> {
-  if (messages.length === 0) return '';
-  const all = await readAll();
-  const pruned = pruneExpired(all);
-  const entry: ConversationEntry = {
-    // SECURITY (audit batch-220 [LOW] weak entropy, fixed 2026-06-13): crypto-backed
-    // UUID suffix instead of Math.random (matches policy.ts::generateRecordId).
-    id: `conv-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
-    title: deriveTitle(messages),
-    messages,
-    savedAt: Date.now(),
+async function storageRemove(keys: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function parseStore(value: unknown): BrowserConversationStore | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const store = value as Record<string, unknown>;
+  if (store['version'] !== 2 || !Array.isArray(store['conversations'])) return undefined;
+  const conversations = normalizeConversationEntries(store['conversations']);
+  const activeCandidate = store['activeConversationId'];
+  const activeConversationId =
+    typeof activeCandidate === 'string' &&
+    conversations.some((entry) => entry.id === activeCandidate)
+      ? activeCandidate
+      : null;
+  return { version: 2, activeConversationId, conversations };
+}
+
+function parseLegacyBrowserStore(value: unknown): BrowserConversationStore | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const store = value as Record<string, unknown>;
+  if (store['version'] !== 1 || !Array.isArray(store['conversations'])) return undefined;
+  const conversations = normalizeConversationEntries(store['conversations']);
+  const activeCandidate = store['activeConversationId'];
+  const activeConversationId =
+    typeof activeCandidate === 'string' &&
+    conversations.some((entry) => entry.id === activeCandidate)
+      ? activeCandidate
+      : null;
+  return { version: 2, activeConversationId, conversations };
+}
+
+async function readStore(): Promise<BrowserConversationStore> {
+  const stored = await storageGet([
+    BROWSER_STORE_KEY,
+    LEGACY_BROWSER_STORE_KEY,
+    LEGACY_HISTORY_KEY,
+    LEGACY_ACTIVE_MESSAGES_KEY,
+  ]);
+  const current = parseStore(stored[BROWSER_STORE_KEY]);
+  if (current) {
+    return { ...current, conversations: pruneExpired(current.conversations) };
+  }
+
+  const legacyBrowserStore = parseLegacyBrowserStore(stored[LEGACY_BROWSER_STORE_KEY]);
+  if (legacyBrowserStore) {
+    await storageSet({ [BROWSER_STORE_KEY]: legacyBrowserStore });
+    await storageRemove([LEGACY_BROWSER_STORE_KEY]);
+    return {
+      ...legacyBrowserStore,
+      conversations: pruneExpired(legacyBrowserStore.conversations),
+    };
+  }
+
+  const legacyHistory = Array.isArray(stored[LEGACY_HISTORY_KEY])
+    ? normalizeConversationEntries(stored[LEGACY_HISTORY_KEY])
+    : [];
+  const legacyActiveMessages = normalizeMessages(stored[LEGACY_ACTIVE_MESSAGES_KEY]);
+  if (legacyHistory.length === 0 && legacyActiveMessages.length === 0) {
+    return { ...EMPTY_STORE, conversations: [] };
+  }
+
+  const activeConversation =
+    legacyActiveMessages.length > 0 ? createConversation(legacyActiveMessages) : undefined;
+  const migrated: BrowserConversationStore = {
+    version: 2,
+    activeConversationId: activeConversation?.id ?? null,
+    conversations: [
+      ...(activeConversation ? [activeConversation] : []),
+      ...pruneExpired(legacyHistory),
+    ].slice(0, MAX_CONVERSATIONS),
   };
-  const updated = [entry, ...pruned].slice(0, MAX_CONVERSATIONS);
-  await writeAll(updated);
-  return entry.id;
+  await storageSet({ [BROWSER_STORE_KEY]: migrated });
+  await storageRemove([LEGACY_HISTORY_KEY, LEGACY_ACTIVE_MESSAGES_KEY]);
+  return migrated;
+}
+
+async function writeStore(store: BrowserConversationStore): Promise<void> {
+  await storageSet({
+    [BROWSER_STORE_KEY]: {
+      version: 2,
+      activeConversationId: store.activeConversationId,
+      conversations: pruneExpired(store.conversations).slice(0, MAX_CONVERSATIONS),
+    } satisfies BrowserConversationStore,
+  });
+}
+
+async function withConversationStoreLock<T>(operation: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(CONVERSATION_STORE_LOCK, operation);
+  }
+  return operation();
+}
+
+function mutateStore<T>(operation: (store: BrowserConversationStore) => Promise<T>): Promise<T> {
+  const result = mutationQueue.then(() =>
+    withConversationStoreLock(async () => operation(await readStore())),
+  );
+  mutationQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function readAfterMutations(): Promise<BrowserConversationStore> {
+  await mutationQueue;
+  return withConversationStoreLock(readStore);
+}
+
+/** Save an independent archived browser conversation. */
+export async function saveConversation(
+  messages: HistoryMessage[],
+  routing: ConversationRoutingState = { selectedModel: 'auto' },
+): Promise<string> {
+  if (messages.length === 0) return '';
+  return mutateStore(async (store) => {
+    const entry = createConversation(messages, routing);
+    store.conversations = [entry, ...store.conversations].slice(0, MAX_CONVERSATIONS);
+    await writeStore(store);
+    return entry.id;
+  });
+}
+
+/**
+ * Persist a browser conversation using the caller-owned identity.
+ *
+ * Side panels must use this API instead of inferring ownership from the
+ * store-wide active pointer. Multiple Chrome windows can therefore retain
+ * distinct conversations even when they save concurrently.
+ */
+export async function upsertConversation(
+  conversationId: string,
+  messages: HistoryMessage[],
+  routing: ConversationRoutingState = { selectedModel: 'auto' },
+): Promise<ConversationEntry | undefined> {
+  if (!isSafeConversationId(conversationId)) {
+    throw new Error('Invalid browser conversation id');
+  }
+  if (messages.length === 0) return undefined;
+
+  return mutateStore(async (store) => {
+    const existing = store.conversations.find((entry) => entry.id === conversationId);
+    const entry: ConversationEntry = existing
+      ? {
+          ...existing,
+          title: deriveTitle(messages),
+          messages,
+          savedAt: Date.now(),
+          routing: normalizeRoutingState(routing),
+        }
+      : createConversation(messages, routing, conversationId);
+    store.activeConversationId = conversationId;
+    store.conversations = [
+      entry,
+      ...store.conversations.filter((candidate) => candidate.id !== conversationId),
+    ].slice(0, MAX_CONVERSATIONS);
+    await writeStore(store);
+    return entry;
+  });
+}
+
+/** Persist the current Chrome conversation, updating its existing record in place. */
+export async function saveActiveConversation(
+  messages: HistoryMessage[],
+  routing: ConversationRoutingState = { selectedModel: 'auto' },
+): Promise<ConversationEntry | undefined> {
+  if (messages.length === 0) return undefined;
+  return mutateStore(async (store) => {
+    const existing = store.activeConversationId
+      ? store.conversations.find((entry) => entry.id === store.activeConversationId)
+      : undefined;
+    const entry: ConversationEntry = existing
+      ? {
+          ...existing,
+          title: deriveTitle(messages),
+          messages,
+          savedAt: Date.now(),
+          routing: normalizeRoutingState(routing),
+        }
+      : createConversation(messages, routing);
+    store.activeConversationId = entry.id;
+    store.conversations = [
+      entry,
+      ...store.conversations.filter((candidate) => candidate.id !== entry.id),
+    ].slice(0, MAX_CONVERSATIONS);
+    await writeStore(store);
+    return entry;
+  });
+}
+
+export async function getActiveConversation(): Promise<ConversationEntry | undefined> {
+  const store = await readAfterMutations();
+  return store.activeConversationId
+    ? store.conversations.find((entry) => entry.id === store.activeConversationId)
+    : undefined;
+}
+
+export async function startNewConversation(): Promise<void> {
+  await mutateStore(async (store) => {
+    store.activeConversationId = null;
+    await writeStore(store);
+  });
+}
+
+export async function activateConversation(id: string): Promise<ConversationEntry | undefined> {
+  return mutateStore(async (store) => {
+    const entry = store.conversations.find((candidate) => candidate.id === id);
+    if (!entry) return undefined;
+    store.activeConversationId = id;
+    await writeStore(store);
+    return entry;
+  });
 }
 
 export async function listConversations(): Promise<ConversationEntry[]> {
-  const all = await readAll();
-  return pruneExpired(all);
+  return (await readAfterMutations()).conversations;
 }
 
 export async function getConversation(id: string): Promise<ConversationEntry | undefined> {
-  const all = await readAll();
-  return all.find((e) => e.id === id);
+  return (await readAfterMutations()).conversations.find((entry) => entry.id === id);
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  const all = await readAll();
-  const updated = all.filter((e) => e.id !== id);
-  await writeAll(updated);
+  await mutateStore(async (store) => {
+    store.conversations = store.conversations.filter((entry) => entry.id !== id);
+    if (store.activeConversationId === id) store.activeConversationId = null;
+    await writeStore(store);
+  });
 }

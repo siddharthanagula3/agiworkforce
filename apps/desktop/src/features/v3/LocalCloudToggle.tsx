@@ -30,6 +30,7 @@ function Segment({ active, icon: Icon, label, onClick }: SegmentProps) {
       role="tab"
       aria-selected={active}
       onClick={onClick}
+      className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
       style={{
         flex: 1,
         display: 'flex',
@@ -64,12 +65,15 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
 
   if (collapsed) {
     const Icon = isLocal ? Laptop : Cloud;
+    const destinationLabel = isLocal ? cloudLabel : localLabel;
+    const switchLabel = t('sidebar.mode.switchTo', { mode: destinationLabel });
     return (
       <button
         type="button"
         onClick={() => setMode(isLocal ? 'cloud' : 'local')}
-        title={isLocal ? localLabel : cloudLabel}
-        aria-label={isLocal ? localLabel : cloudLabel}
+        title={switchLabel}
+        aria-label={switchLabel}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
         style={{
           display: 'flex',
           alignItems: 'center',

@@ -3,6 +3,12 @@ import { logger } from '@shared/lib/logger';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 import type { ChatSession, ChatMessage } from '../types';
+import {
+  createManagedCloudChatClient,
+  ManagedCloudChatHttpError,
+  type ManagedCloudConversation,
+  type ManagedCloudMessage,
+} from '@agiworkforce/cloud-contracts';
 
 /**
  * Pagination parameters for list queries
@@ -22,132 +28,51 @@ export interface PaginatedResponse<T> {
   total?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Wire-format row types returned by the API routes
-// ---------------------------------------------------------------------------
-
-interface APIConversationRow {
-  id: string;
-  title: string | null;
-  model?: string | null;
-  created_at: string;
-  updated_at: string;
-  // Fields present on the full /[id] response but not the list response:
-  user_id?: string;
-  is_active?: boolean | null;
-  is_starred?: boolean | null;
-  is_pinned?: boolean | null;
-  is_archived?: boolean | null;
-  shared_link?: string | null;
-  metadata?: unknown;
-  last_message_at?: string | null;
-  folder_id?: string | null;
-  deleted_at?: string | null;
-  summary?: string | null;
-  tags?: string[] | null;
-  token_count?: number | null;
-  cost_cents?: number | null;
-}
-
-interface APIMessageRow {
-  id: string;
-  role: string;
-  content: string;
-  model?: string | null;
-  provider?: string | null;
-  input_tokens?: number | null;
-  output_tokens?: number | null;
-  cost_cents?: number | null;
-  created_at: string;
-  updated_at?: string | null;
-  edited?: boolean | null;
-  edit_count?: number | null;
-  metadata?: Record<string, unknown> | null;
-  conversation_id?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Header helpers
-// ---------------------------------------------------------------------------
-
-async function buildMutateHeaders(): Promise<HeadersInit> {
-  const [token, csrf] = await Promise.all([getAuthToken(), getCsrfToken()]);
-  return {
-    'Content-Type': 'application/json',
-    'x-csrf-token': csrf,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-async function buildReadHeaders(): Promise<HeadersInit> {
-  const token = await getAuthToken();
-  return {
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
+const cloudClient = createManagedCloudChatClient({
+  getAuthToken,
+  decorateMutationHeaders: async (headers) => ({
+    ...headers,
+    'x-csrf-token': await getCsrfToken(),
+  }),
+  fetchImpl: (input, init) => fetch(input, init),
+});
 
 // ---------------------------------------------------------------------------
 // Mapping helpers
 // ---------------------------------------------------------------------------
 
-function mapAPIConversationToSession(
-  row: APIConversationRow,
-  conversationId?: string,
-): ChatSession {
-  const createdAt = row.created_at ? new Date(row.created_at) : new Date();
-  const updatedAt = row.updated_at ? new Date(row.updated_at) : new Date();
-
-  const metadataObj = (
-    typeof row.metadata === 'object' && row.metadata !== null ? row.metadata : {}
-  ) as Record<string, unknown>;
-  const metadataTags = (metadataObj['tags'] as string[]) || row.tags || [];
-
+function mapCloudConversationToSession(row: ManagedCloudConversation): ChatSession {
+  const createdAt = new Date(row.createdAt);
+  const updatedAt = new Date(row.updatedAt);
   return {
-    id: conversationId ?? row.id,
-    title: row.title || 'New Chat',
+    id: row.id,
+    title: row.title,
     createdAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,
     updatedAt: isNaN(updatedAt.getTime()) ? new Date() : updatedAt,
     messageCount: 0,
-    tokenCount: row.token_count ?? 0,
-    cost: row.cost_cents ? row.cost_cents / 100 : 0,
-    isPinned: row.is_pinned ?? false,
-    isArchived: row.is_archived ?? row.is_active === false,
-    isStarred: row.is_starred ?? false,
-    sharedLink: row.shared_link || undefined,
-    tags: metadataTags,
-    participants: row.user_id ? [row.user_id] : [],
-    metadata: {
-      role: metadataObj['role'] as string | undefined,
-      provider: metadataObj['provider'] as string | undefined,
-      starred: row.is_starred ?? false,
-      pinned: row.is_pinned ?? false,
-      archived: row.is_archived ?? false,
-      tags: metadataTags,
-      ...metadataObj,
-    },
+    tokenCount: 0,
+    cost: 0,
+    isPinned: row.pinned,
+    isArchived: false,
+    isStarred: false,
+    tags: [],
+    participants: [],
+    metadata: { pinned: row.pinned },
   };
 }
 
-function mapAPIMessageToMessage(row: APIMessageRow, sessionId: string): ChatMessage {
-  const createdAt = row.created_at ? new Date(row.created_at) : new Date();
-  const updatedAt = row.updated_at ? new Date(row.updated_at) : createdAt;
-
-  const rawMetadata = row.metadata;
-  const metadata =
-    rawMetadata && typeof rawMetadata === 'object' && Object.keys(rawMetadata).length > 0
-      ? rawMetadata
-      : undefined;
-
+function mapCloudMessageToMessage(row: ManagedCloudMessage): ChatMessage {
+  const createdAt = new Date(row.createdAt);
   return {
     id: row.id,
-    sessionId: row.conversation_id ?? sessionId,
-    role: row.role as 'user' | 'assistant' | 'system',
+    sessionId: row.conversationId,
+    role: row.role,
     content: row.content,
     createdAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,
-    updatedAt: isNaN(updatedAt.getTime()) ? createdAt : updatedAt,
-    edited: row.edited ?? false,
-    editCount: row.edit_count ?? 0,
-    ...(metadata && { metadata }),
+    updatedAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,
+    edited: false,
+    editCount: 0,
+    ...(row.metadata && { metadata: row.metadata }),
   };
 }
 
@@ -168,42 +93,16 @@ export class ChatPersistenceService {
       provider?: string;
     },
   ): Promise<ChatSession> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch('/api/chat/conversations', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ title, metadata }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to create session: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
-
-    const data = (await res.json()) as { conversation: APIConversationRow };
-    if (!data.conversation) throw new Error('Failed to create session: No data returned');
-
-    return mapAPIConversationToSession(data.conversation);
+    void metadata;
+    return mapCloudConversationToSession(await cloudClient.createConversation({ title }));
   }
 
   /**
    * Get all sessions for a user
    */
   async getUserSessions(_userId: string): Promise<ChatSession[]> {
-    const headers = await buildReadHeaders();
-    const res = await fetch('/api/chat/conversations', { headers });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to load sessions: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
-
-    const data = (await res.json()) as { conversations: APIConversationRow[] };
-    return (data.conversations || []).map((c) => mapAPIConversationToSession(c));
+    const page = await cloudClient.listConversations();
+    return page.conversations.map(mapCloudConversationToSession);
   }
 
   /**
@@ -213,101 +112,44 @@ export class ChatPersistenceService {
     _userId: string,
     params: PaginationParams = {},
   ): Promise<PaginatedResponse<ChatSession>> {
-    const { limit = 20, cursor } = params;
-    const qp = new URLSearchParams({ limit: String(limit) });
-    if (cursor) qp.set('cursor', cursor);
-
-    const headers = await buildReadHeaders();
-    const res = await fetch(`/api/chat/conversations?${qp.toString()}`, { headers });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to load sessions: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
-
-    const data = (await res.json()) as { conversations: APIConversationRow[] };
-    const items = data.conversations || [];
-    const hasMore = items.length > limit;
-    const resultItems = hasMore ? items.slice(0, limit) : items;
-    const sessions = resultItems.map((c) => mapAPIConversationToSession(c));
-
-    const lastItem = resultItems[resultItems.length - 1];
-    const nextCursor = hasMore && lastItem ? (lastItem.updated_at ?? null) : null;
-
-    return { data: sessions, nextCursor, hasMore };
+    const limit = params.limit ?? 20;
+    const offset = params.cursor ? Number.parseInt(params.cursor, 10) || 0 : 0;
+    const page = await cloudClient.listConversations({ limit, offset });
+    return {
+      data: page.conversations.map(mapCloudConversationToSession),
+      nextCursor: page.hasMore ? String(page.nextOffset) : null,
+      hasMore: page.hasMore,
+    };
   }
 
   /**
    * Get a specific session by ID
    */
   async getSession(sessionId: string, _userId?: string): Promise<ChatSession | null> {
-    const headers = await buildReadHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      headers,
-    });
-
-    if (res.status === 404) return null;
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        logger.warn('Access denied to session:', sessionId);
+    try {
+      const detail = await cloudClient.getConversation(sessionId);
+      return mapCloudConversationToSession(detail.conversation);
+    } catch (error) {
+      if (error instanceof ManagedCloudChatHttpError && [401, 403, 404].includes(error.status)) {
+        logger.warn('Access denied to or missing session:', sessionId);
         return null;
       }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to load session: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
+      throw error;
     }
-
-    const data = (await res.json()) as { conversation: APIConversationRow };
-    if (!data.conversation) return null;
-
-    return mapAPIConversationToSession(data.conversation, sessionId);
   }
 
   /**
    * Update session title
    */
   async updateSessionTitle(sessionId: string, title: string, _userId?: string): Promise<void> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ title }),
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw new Error('You do not have permission to update this session');
-      }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to update session: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
+    await cloudClient.updateConversation(sessionId, { title });
   }
 
   /**
    * Delete (archive) a session
    */
   async deleteSession(sessionId: string, _userId?: string): Promise<void> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      method: 'DELETE',
-      headers,
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw new Error('You do not have permission to delete this session');
-      }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to delete session: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
+    await cloudClient.deleteConversation(sessionId);
   }
 
   /**
@@ -319,52 +161,27 @@ export class ChatPersistenceService {
     content: string,
     metadata?: Record<string, unknown>,
   ): Promise<ChatMessage> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}/messages`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ role, content, skipLlm: true, metadata }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to save message: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
-
-    const data = (await res.json()) as { message: APIMessageRow };
-    if (!data.message) throw new Error('Failed to save message: No data returned');
-
-    return mapAPIMessageToMessage(data.message, sessionId);
+    const saved = await cloudClient.saveMessage(sessionId, { role, content, metadata });
+    const now = new Date();
+    return {
+      id: saved.id,
+      sessionId,
+      role,
+      content,
+      createdAt: now,
+      updatedAt: now,
+      edited: false,
+      editCount: 0,
+      ...(metadata && { metadata }),
+    };
   }
 
   /**
    * Get all messages for a session
    */
   async getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
-    const headers = await buildReadHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        logger.warn('Access denied to messages for session:', sessionId);
-        return [];
-      }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to load messages: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
-
-    const data = (await res.json()) as {
-      conversation: APIConversationRow;
-      messages: APIMessageRow[];
-    };
-
-    return (data.messages || []).map((m) => mapAPIMessageToMessage(m, sessionId));
+    const detail = await cloudClient.getConversation(sessionId);
+    return detail.messages.map(mapCloudMessageToMessage);
   }
 
   /**
@@ -475,18 +292,8 @@ export class ChatPersistenceService {
    * Search sessions by title
    */
   async searchSessions(_userId: string, query: string): Promise<ChatSession[]> {
-    const headers = await buildReadHeaders();
-    const res = await fetch(`/api/chat/conversations?q=${encodeURIComponent(query)}`, { headers });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to search sessions: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
-
-    const data = (await res.json()) as { conversations: APIConversationRow[] };
-    return (data.conversations || []).map((c) => mapAPIConversationToSession(c));
+    const page = await cloudClient.listConversations({ q: query });
+    return page.conversations.map(mapCloudConversationToSession);
   }
 
   /**
@@ -498,44 +305,16 @@ export class ChatPersistenceService {
     isStarred: boolean,
     _userId?: string,
   ): Promise<void> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ is_starred: isStarred }),
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw new Error('You do not have permission to update this session');
-      }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to update starred state: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
+    void sessionId;
+    void isStarred;
+    throw new Error('Conversation starring is not supported by the managed-cloud API');
   }
 
   /**
    * Update session pinned state
    */
   async updateSessionPinned(sessionId: string, isPinned: boolean, _userId?: string): Promise<void> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ is_pinned: isPinned }),
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw new Error('You do not have permission to update this session');
-      }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to update pinned state: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
+    await cloudClient.updateConversation(sessionId, { pinned: isPinned });
   }
 
   /**
@@ -546,22 +325,9 @@ export class ChatPersistenceService {
     isArchived: boolean,
     _userId?: string,
   ): Promise<void> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ is_archived: isArchived }),
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw new Error('You do not have permission to update this session');
-      }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to update archived state: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
+    void sessionId;
+    void isArchived;
+    throw new Error('Conversation archiving is not supported by the managed-cloud API');
   }
 
   /**
@@ -572,22 +338,9 @@ export class ChatPersistenceService {
     sharedLink: string | null,
     _userId?: string,
   ): Promise<void> {
-    const headers = await buildMutateHeaders();
-    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ shared_link: sharedLink }),
-    });
-
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        throw new Error('You do not have permission to update this session');
-      }
-      const err = await res.json().catch(() => ({}));
-      throw new Error(
-        `Failed to update shared link: ${(err as { error?: string }).error ?? res.statusText}`,
-      );
-    }
+    void sessionId;
+    void sharedLink;
+    throw new Error('Conversation shared links are not supported by the managed-cloud API');
   }
 
   /**

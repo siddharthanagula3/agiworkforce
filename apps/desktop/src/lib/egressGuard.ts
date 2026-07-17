@@ -42,12 +42,12 @@
 // the same import edge egressGuard used directly; the cloudAccountAuth → egressGuard
 // → appModeStore cycle stays broken on the cloudAccountAuth side (lazy require).
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
-// Host policy lives in ONE shared module (@agiworkforce/services) so desktop and
+// Host policy lives in ONE shared module (@agiworkforce/trust-boundaries) so desktop and
 // mobile can never drift apart again — they used to define separate denylists
 // and each failed to block some of our-cloud hosts the other blocked. The
 // reconciled UNION + the boundary-safe suffix matcher are shared; only the
 // platform-bound guardedFetch wrapper + privacy-mode read stay here.
-import { OUR_CLOUD_HOSTS, isOurCloudHost } from '@agiworkforce/services';
+import { OUR_CLOUD_HOSTS, isOurCloudHost } from '@agiworkforce/trust-boundaries';
 
 // Re-export so existing desktop importers (and the egress tests) keep their
 // `../lib/egressGuard` import path.

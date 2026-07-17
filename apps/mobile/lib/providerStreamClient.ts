@@ -1,8 +1,8 @@
 /**
  * Expo / React Native provider stream client.
  *
- * Thin wrapper around the shared `@agiworkforce/llm-runtime` SSE client
- * (`packages/llm-runtime/src/client/streamFromProvider.ts`). Keeps this
+ * Thin wrapper around the shared `@agiworkforce/provider-runtime` SSE client
+ * (`packages/ai/provider-runtime/src/client/streamFromProvider.ts`). Keeps this
  * surface's public API (types + `streamFromProvider` signature) stable for
  * its callers, and turns on the two behaviors this surface has always had:
  * the idle watchdog (cellular/NAT drops are a common transient failure on
@@ -18,7 +18,7 @@
  * `Response.body` should fall back to a polyfill (`react-native-sse`).
  */
 
-import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/llm-runtime';
+import { streamFromProvider as sharedStreamFromProvider } from '@agiworkforce/provider-runtime';
 // Zero-leak chokepoint: this client streams through OUR api-gateway
 // (`${gatewayUrl}/api/v1/providers/...`, gatewayUrl = API_URL). Route it through
 // guardedFetch so Local mode refuses the request before any network I/O

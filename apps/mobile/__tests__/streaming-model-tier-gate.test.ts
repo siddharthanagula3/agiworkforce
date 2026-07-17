@@ -76,7 +76,7 @@ describe('model-tier-gate 403 handling', () => {
       text: async () =>
         JSON.stringify({
           error: {
-            message: 'Model gpt-4.1-nano requires PRO subscription or higher.',
+            message: 'Model gemini-3.1-flash-lite requires PRO subscription or higher.',
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: 'pro',
@@ -86,7 +86,12 @@ describe('model-tier-gate 403 handling', () => {
 
     const callbacks = makeCallbacks();
     await streamChat(
-      { model: 'gpt-4.1-nano', messages: [{ role: 'user', content: 'hi' }], stream: true },
+      {
+        model: 'gemini-3.1-flash-lite',
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000011',
+      },
       callbacks,
     );
 
@@ -95,7 +100,7 @@ describe('model-tier-gate 403 handling', () => {
     expect(err).toBeInstanceOf(ApiPaywallError);
     expect(err.feature).toBe('model_access');
     expect(err.requiredTier).toBe('pro');
-    expect(err.reason).toBe('Model gpt-4.1-nano requires PRO subscription or higher.');
+    expect(err.reason).toBe('Model gemini-3.1-flash-lite requires PRO subscription or higher.');
   });
 
   it('falls back to a generic Error for a 403 without the model_not_available code', async () => {
@@ -109,7 +114,15 @@ describe('model-tier-gate 403 handling', () => {
     } as unknown as Response);
 
     const callbacks = makeCallbacks();
-    await streamChat({ model: 'gpt-4.1-nano', messages: [], stream: true }, callbacks);
+    await streamChat(
+      {
+        model: 'gemini-3.1-flash-lite',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000012',
+      },
+      callbacks,
+    );
 
     expect(callbacks.onError).toHaveBeenCalledTimes(1);
     const err = callbacks.onError.mock.calls[0][0];
@@ -130,7 +143,15 @@ describe('model-tier-gate 403 handling', () => {
     } as unknown as Response);
 
     const callbacks = makeCallbacks();
-    await streamChat({ model: 'gpt-4.1-nano', messages: [], stream: true }, callbacks);
+    await streamChat(
+      {
+        model: 'gemini-3.1-flash-lite',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000013',
+      },
+      callbacks,
+    );
 
     const err = callbacks.onError.mock.calls[0][0];
     expect(err).toBeInstanceOf(ApiPaywallError);

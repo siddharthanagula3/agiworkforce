@@ -8,7 +8,6 @@ import {
   FolderPlus,
   Box,
   RefreshCw,
-  GitBranch,
   LogIn,
   PanelLeftClose,
   PanelLeftOpen,
@@ -106,7 +105,6 @@ function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
   return [
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
-    { id: 'dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
   ];
 }
 
@@ -225,7 +223,6 @@ export function Sidebar({
         projects: 'projects',
         artifacts: 'artifacts',
         scheduled: 'work-scheduled',
-        dispatch: 'work-dispatch',
       };
       const view = viewMap[id];
       if (view) onNavigateView?.(view);
@@ -344,6 +341,8 @@ export function Sidebar({
         <button
           onClick={() => setCollapsed(!collapsed)}
           title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+          aria-label={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
           style={{
             background: 'none',
             border: 'none',
@@ -365,6 +364,7 @@ export function Sidebar({
         <button
           onClick={() => onNewChat?.()}
           title={newLabel}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
           style={{
             width: '100%',
             display: 'flex',
@@ -391,6 +391,7 @@ export function Sidebar({
         <button
           onClick={onOpenSearch}
           title={t('sidebar.searchKbd')}
+          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
           style={{
             width: '100%',
             display: 'flex',
@@ -695,6 +696,14 @@ export function Sidebar({
           <button
             onClick={handleFooterPrimaryClick}
             data-open={showAccountMenu}
+            aria-label={
+              collapsed
+                ? isSignedIn
+                  ? (user?.name ?? user?.email ?? t('accountMenu.accountFallback'))
+                  : t('sidebar.signIn')
+                : undefined
+            }
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
             style={{
               flex: collapsed ? '0 0 auto' : 1,
               minWidth: 0,
@@ -764,6 +773,7 @@ export function Sidebar({
               onClick={() => openSettings('general')}
               title={t('common.settings')}
               aria-label={t('common.settings')}
+              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
               style={{
                 width: 36,
                 height: 36,

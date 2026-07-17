@@ -1114,6 +1114,7 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
         <button type="submit">Submit Application</button>
       </form>
     `;
+    document.querySelector('form')?.addEventListener('submit', (event) => event.preventDefault());
     const result = (await runPlatformJobAutofill(
       { firstName: 'Ada' },
       { delayMs: 0, autoSubmit: true, platform: 'greenhouse' },

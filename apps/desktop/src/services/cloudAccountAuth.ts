@@ -7,7 +7,7 @@ import {
   asPlanTier,
 } from '../lib/cloudAccountTypes';
 import { API_BASE_URL, WEB_APP_URL } from '../api/config';
-import { parseMeResponse, type MeResponse } from '@agiworkforce/services';
+import { parseMeResponse, type MeResponse } from '@agiworkforce/cloud-contracts';
 import { invoke } from '../lib/tauri-mock';
 // `isTauri` from the zero-import leaf, not the barrel: this module runs during
 // auth-store init (checkSession → isLocalDevBrowser), and pulling `isTauri`

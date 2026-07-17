@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     // Include DOM lib here even though VS Code extensions don't run in
-    // a DOM context — `packages/types/src/tauri.ts` references DOM
+    // a DOM context — `packages/contracts/types/src/tauri.ts` references DOM
     // types (PerformanceEntry, Node, DOMRectReadOnly) that TS 6 needs
     // to resolve through the type-source check even when the import is
     // never instantiated.

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getServiceClient } from '../lib/neonClients';
+import { getUserScopedClient, type UserAuth } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -133,22 +133,18 @@ function formatPeriodLabel(date: Date): string {
   }).format(date);
 }
 
-async function fetchUsageRows(userId: string, start: Date, end: Date): Promise<UsageRow[]> {
-  // RLS-GAP: usage_events has no RLS policy (0016_misc.sql enables none) —
-  // migration TODO. The `.eq('user_id', …)` filter is the SOLE
-  // tenant-isolation mechanism until a policy ships. Same gap applies to the
-  // /history route's getServiceClient() call below.
-  const db = getServiceClient();
+async function fetchUsageRows(user: UserAuth, start: Date, end: Date): Promise<UsageRow[]> {
+  const db = getUserScopedClient(user);
   const { data, error } = await db
     .from('usage_events')
     .select('*')
-    .eq('user_id', userId)
+    .eq('user_id', user.userId)
     .gte('created_at', start.toISOString())
     .lte('created_at', end.toISOString())
     .order('created_at', { ascending: false });
 
   if (error) {
-    logger.error({ error, userId }, 'Failed to fetch usage rows');
+    logger.error({ error, userId: user.userId }, 'Failed to fetch usage rows');
     throw new AppError('Failed to fetch usage', 500);
   }
 
@@ -234,7 +230,7 @@ router.get('/', createRateLimiter('usage-summary'), async (req: Request, res: Re
 
   const periodStart = startOfCurrentMonth();
   const periodEnd = endOfCurrentMonth();
-  const rows = await fetchUsageRows(user.userId, periodStart, periodEnd);
+  const rows = await fetchUsageRows(user, periodStart, periodEnd);
   const summary = summarizeRows(rows);
 
   res.json({
@@ -254,7 +250,7 @@ router.get('/summary', createRateLimiter('usage-summary'), async (req: Request, 
 
   const periodStart = startOfCurrentMonth();
   const periodEnd = endOfCurrentMonth();
-  const rows = await fetchUsageRows(user.userId, periodStart, periodEnd);
+  const rows = await fetchUsageRows(user, periodStart, periodEnd);
   const conversationIds = new Set(
     rows.map((row) => getConversationId(row)).filter((value): value is string => Boolean(value)),
   );
@@ -287,7 +283,7 @@ router.get('/history', createRateLimiter('usage-history'), async (req: Request, 
   const limit = Math.max(1, Math.min(100, Number(req.query['limit'] ?? 50)));
   const offset = Math.max(0, Number(req.query['offset'] ?? 0));
 
-  const db = getServiceClient(); // RLS-GAP: usage_events — see fetchUsageRows() above
+  const db = getUserScopedClient(user);
   const { data, error } = await db
     .from('usage_events')
     .select('*')

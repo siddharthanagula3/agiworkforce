@@ -1,12 +1,12 @@
 # Source files (compiled to out/)
 src/**
-!out/**
 
 # Config / build files
 .vscode/**
 .vscode-test/**
 esbuild.js
 tsconfig.json
+tsconfig.*.json
 .tsbuildinfo
 .eslintrc*
 eslint.config*
@@ -25,12 +25,13 @@ coverage/**
 *.spec.ts
 
 # Misc dev artifacts
-out/**/*.map
-*.log
+**/*.map
+**/*.log
 *.tmp
 .DS_Store
 Thumbs.db
 .cache/**
+.turbo/**
 
 # pnpm / npm lockfiles (not needed in VSIX)
 pnpm-lock.yaml
@@ -44,7 +45,12 @@ PLAN.md
 TODO.md
 CHANGELOG.md
 CLAUDE.md
+AGENTS.md
+MARKETPLACE_PUBLISH_RUNBOOK.md
 docs/**
+
+# Test-only root configuration
+vitest.*.config.ts
 
 # CI/CD
 .github/**

@@ -28,8 +28,8 @@
    `bg-[var(--chat-user-bubble-bg)]` in the unified-chat MessageBubble — were
    never generated, silently dropping the chat surface's theming. Scan them
    explicitly so the shared chat UI renders with its intended backgrounds. */
-@source "../../../../packages/unified-chat/src/**/*.{js,ts,jsx,tsx}";
-@source "../../../../packages/ui/src/**/*.{js,ts,jsx,tsx}";
+@source "../../../../packages/ui/unified-chat/src/**/*.{js,ts,jsx,tsx}";
+@source "../../../../packages/ui/ui/src/**/*.{js,ts,jsx,tsx}";
 
 /* Tailwind v4 CSS-based configuration */
 @theme {

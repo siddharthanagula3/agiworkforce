@@ -1,9 +1,9 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Coming Soon',
+  title: 'Download AGI Desktop',
   description:
-    'AGI is coming to macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and AI skills. Leave your email to get notified.',
+    'Download the signed AGI Desktop AppImage for Linux x64. macOS and Windows installers are not yet published.',
   keywords: [
     'download AI app',
     'AGI download',
@@ -14,9 +14,9 @@ export const metadata: Metadata = {
     'desktop automation',
   ],
   openGraph: {
-    title: 'AGI Desktop App: Coming Soon',
+    title: 'Download AGI Desktop',
     description:
-      'The native desktop AI assistant for macOS, Windows, and Linux is in development. Get notified when it opens.',
+      'The signed Linux x64 AppImage is available through the stable release channel. macOS and Windows installers are not yet published.',
     type: 'website',
     url: 'https://agiworkforce.com/download',
     images: [
@@ -24,14 +24,15 @@ export const metadata: Metadata = {
         url: '/app-preview.png',
         width: 1024,
         height: 665,
-        alt: 'AGI for macOS, Windows, and Linux — coming soon',
+        alt: 'AGI Desktop application preview',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Desktop App: Coming Soon',
-    description: 'Native AI desktop assistant for macOS, Windows, and Linux. Coming soon.',
+    title: 'Download AGI Desktop',
+    description:
+      'Signed Linux x64 AppImage availability, with current macOS and Windows release status.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

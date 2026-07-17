@@ -1,8 +1,9 @@
 /**
- * LLM Constants for web app — reads from the shared models.json (single source of truth).
+ * LLM constants for web — consumes the generated compatibility catalog.
  *
- * The canonical model catalog lives in packages/types/src/models.json and is
- * re-exported as `modelsCatalogJson` from @agiworkforce/types.
+ * Canonical authoring lives in packages/ai/model-registry/catalog. Its compiler
+ * emits packages/contracts/types/src/models.json, re-exported as `modelsCatalogJson` from
+ * @agiworkforce/types.
  * This file imports it and re-exports with the same API as the desktop shim.
  */
 
@@ -20,6 +21,7 @@ import {
   getDisplayModels as getCatalogDisplayModels,
   getSelectableModels as getCatalogSelectableModels,
   isModelAllowedForTier as isCatalogModelAllowedForTier,
+  isAutoModeModelId as isCatalogAutoModeModelId,
   modelIdAliases,
   modelsById,
   modelsCatalogJson as modelsJson,
@@ -86,6 +88,10 @@ export const MODEL_ID_ALIASES: Record<string, string> = modelIdAliases;
 
 export function normalizeModelId(modelId: string | null | undefined): string | null {
   return normalizeCatalogModelId(modelId);
+}
+
+export function isAutoModeModelId(modelId: string | null | undefined): boolean {
+  return isCatalogAutoModeModelId(modelId);
 }
 
 export const MODEL_METADATA: Record<string, ModelMetadata> = modelsById as Record<

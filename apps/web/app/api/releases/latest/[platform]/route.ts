@@ -8,17 +8,17 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@/utils/env';
+import {
+  DESKTOP_RELEASE_PLATFORMS,
+  fetchDesktopAssetSignature,
+  fetchLatestStableDesktopRelease,
+  parseSemanticVersion,
+  selectSignedDesktopUpdaterAsset,
+  type DesktopReleasePlatform,
+} from '@/lib/releases/github-desktop-releases';
 
-// Valid platforms for desktop releases
-const VALID_PLATFORMS = [
-  'darwin-aarch64',
-  'darwin-x86_64',
-  'darwin-universal',
-  'windows-x86_64',
-  'linux-x86_64',
-] as const;
-
-type Platform = (typeof VALID_PLATFORMS)[number];
+const VALID_PLATFORMS = DESKTOP_RELEASE_PLATFORMS;
+type Platform = DesktopReleasePlatform;
 
 // Tauri update manifest format
 interface TauriUpdateManifest {
@@ -44,31 +44,6 @@ interface ReleaseRecord {
   file_size_bytes: number | null;
   is_critical: boolean;
 }
-
-interface GitHubAsset {
-  name: string;
-  browser_download_url: string;
-}
-
-interface GitHubRelease {
-  tag_name: string;
-  name: string;
-  published_at: string;
-  body: string;
-  assets: GitHubAsset[];
-  prerelease: boolean;
-}
-
-// Platform to GitHub asset name mapping
-const PLATFORM_ASSET_MATCHERS: Record<Platform, (name: string) => boolean> = {
-  'darwin-aarch64': (name) =>
-    name.includes('.app.tar.gz') && (name.includes('aarch64') || name.includes('universal')),
-  'darwin-x86_64': (name) =>
-    name.includes('.app.tar.gz') && (name.includes('x64') || name.includes('universal')),
-  'darwin-universal': (name) => name.includes('.app.tar.gz') && name.includes('universal'),
-  'windows-x86_64': (name) => name.includes('.nsis.zip') || name.includes('setup.exe'),
-  'linux-x86_64': (name) => name.includes('.AppImage.tar.gz'),
-};
 
 /**
  * Get release from database
@@ -105,85 +80,24 @@ async function getReleaseFromDatabase(
  * Fallback: Get release from GitHub Releases API
  */
 async function getReleaseFromGitHub(platform: Platform): Promise<ReleaseRecord | null> {
-  const owner = getOptionalEnv('DESKTOP_GITHUB_OWNER');
-  const repo = getOptionalEnv('DESKTOP_GITHUB_REPO');
+  const release = await fetchLatestStableDesktopRelease();
+  if (!release) return null;
+  const updaterAsset = selectSignedDesktopUpdaterAsset(release, platform);
+  if (!updaterAsset) return null;
+  const signature = await fetchDesktopAssetSignature(updaterAsset.signature);
+  if (!signature) return null;
 
-  if (!owner || !repo) {
-    logger.warn('GitHub repository not configured for releases');
-    return null;
-  }
-
-  const headers: HeadersInit = {
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'AGI-Workforce-Updater',
+  return {
+    id: '',
+    version: release.version,
+    platform,
+    download_url: updaterAsset.binary.browserDownloadUrl,
+    signature,
+    notes: release.notes,
+    pub_date: release.publishedAt,
+    file_size_bytes: updaterAsset.binary.size,
+    is_critical: false,
   };
-
-  const githubToken = getOptionalEnv('GITHUB_TOKEN');
-  if (githubToken) {
-    headers['Authorization'] = `Bearer ${githubToken}`;
-  }
-
-  try {
-    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
-      headers,
-      next: { revalidate: 300 }, // Cache for 5 minutes
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!response.ok) {
-      logger.warn({ status: response.status }, 'GitHub API error');
-      return null;
-    }
-
-    const release = (await response.json()) as GitHubRelease;
-    const matcher = PLATFORM_ASSET_MATCHERS[platform];
-
-    // Find binary asset
-    const binaryAsset = release.assets.find((a) => matcher(a.name) && !a.name.endsWith('.sig'));
-
-    if (!binaryAsset) {
-      logger.warn(
-        { platform, assets: release.assets.map((a) => a.name) },
-        'No matching asset found',
-      );
-      return null;
-    }
-
-    // Find signature asset
-    const sigAsset = release.assets.find((a) => a.name === `${binaryAsset.name}.sig`);
-
-    if (!sigAsset) {
-      logger.warn({ assetName: binaryAsset.name }, 'Signature missing for asset');
-      return null;
-    }
-
-    // Fetch signature content
-    const sigResponse = await fetch(sigAsset.browser_download_url, {
-      headers,
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!sigResponse.ok) {
-      logger.warn({ status: sigResponse.status }, 'Failed to fetch signature');
-      return null;
-    }
-
-    const signature = await sigResponse.text();
-
-    return {
-      id: '', // Not available from GitHub
-      version: release.tag_name.replace(/^v/, ''),
-      platform,
-      download_url: binaryAsset.browser_download_url,
-      signature: signature.trim(),
-      notes: release.body,
-      pub_date: release.published_at,
-      file_size_bytes: null,
-      is_critical: false,
-    };
-  } catch (error) {
-    logger.error({ error, platform }, 'Failed to fetch release from GitHub');
-    return null;
-  }
 }
 
 /**
@@ -259,7 +173,7 @@ async function handleGetLatestRelease(
   let release = await getReleaseFromDatabase(validPlatform, channel);
 
   // Fall back to GitHub if database doesn't have the release
-  if (!release) {
+  if (!release && channel === 'stable') {
     release = await getReleaseFromGitHub(validPlatform);
   }
 
@@ -277,8 +191,17 @@ async function handleGetLatestRelease(
   });
 
   // Build Tauri-compatible update manifest
+  const parsedVersion = parseSemanticVersion(release.version);
+  if (!parsedVersion) {
+    logger.error({ version: release.version }, 'Release record has an invalid semantic version');
+    return NextResponse.json(
+      { error: { code: 'NOT_FOUND', message: 'No valid release found for this platform' } },
+      { status: 404 },
+    );
+  }
+
   const manifest: TauriUpdateManifest = {
-    version: release.version.startsWith('v') ? release.version : `v${release.version}`,
+    version: parsedVersion.join('.'),
     notes: release.notes || `Release ${release.version}`,
     pub_date: release.pub_date,
     platforms: {

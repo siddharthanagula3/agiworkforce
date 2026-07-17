@@ -11,7 +11,6 @@
  * - subscribeWithSelector for granular subscriptions
  */
 import { create } from 'zustand';
-import type { RoutingDecision } from '@agiworkforce/types';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { toast } from 'sonner';
 import type { ModelMetadata } from '../constants/llm';
@@ -31,11 +30,11 @@ import {
 } from '../constants/llm';
 import { invoke } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
-import { getModelForRequest, getModelForRequestAsync, isManualSelection } from '../lib/modelRouter';
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from '../constants/planModels';
 import { useAccountStore } from './auth';
-import { useAppModeStore, type AppMode, type PlanTier } from './appModeStore';
+import type { PlanTier } from '../lib/cloudAccountTypes';
+import { useAppModeStore, type AppMode } from './appModeStore';
 import { useSettingsStore, waitForSettingsHydration } from './settingsStore';
 import { useUIStore } from './ui';
 import { storageFallback } from '../lib/storageFallback';
@@ -169,16 +168,6 @@ export interface RouterSuggestion {
   reason: string;
 }
 
-/** Model capability metadata from the Rust backend */
-export interface ModelCapabilities {
-  supportsTools: boolean;
-  supportsVision: boolean;
-  supportsStreaming: boolean;
-  supportsThinking: boolean;
-  contextLength: number;
-  toolMode: 'native' | 'prompt_injection';
-}
-
 export interface UsageStats {
   totalTokens: number;
   totalCost: number;
@@ -258,14 +247,8 @@ interface ModelState {
   ollamaLoading: boolean;
   ollamaError: string | null;
 
-  // Intelligent routing state
-  lastRoutingDecision: RoutingDecision | null;
-
   // Router suggestion state
   routerSuggestion: RouterSuggestion | null;
-
-  // Model capabilities cache
-  modelCapabilities: Record<string, ModelCapabilities>;
 
   loading: boolean;
   error: string | null;
@@ -303,16 +286,6 @@ interface ModelState {
     requiresVision?: boolean;
   }) => Promise<RouterSuggestion>;
 
-  // Model capability detection (Ollama probing + cloud defaults)
-  getModelCapabilities: (
-    provider: string,
-    modelId: string,
-    baseUrl?: string,
-  ) => Promise<ModelCapabilities>;
-
-  // Clear cached Ollama capability data
-  clearModelCapabilityCache: () => Promise<void>;
-
   // Reset the session cost accumulator in the LLM router
   resetSessionCost: () => Promise<void>;
 
@@ -321,39 +294,6 @@ interface ModelState {
   fetchOllamaModels: () => Promise<OllamaModel[]>;
   pullOllamaModel: (modelName: string) => Promise<void>;
   deleteOllamaModel: (modelName: string) => Promise<void>;
-
-  // Intelligent routing actions
-  /**
-   * Get the model to use for a specific message.
-   * - If user manually selected a model, returns that model (bypass routing)
-   * - If auto mode selected, routes to optimal model based on message content
-   *
-   * @param message - The user's message content
-   * @param hasImages - Whether the message includes images
-   * @returns The model ID to use and routing decision details
-   */
-  getRoutedModel: (message: string, hasImages?: boolean) => RoutingDecision;
-
-  /**
-   * Async version of getRoutedModel that uses LLM classification for Pro+ tiers.
-   * When the selected auto mode is balanced or premium and local classification
-   * has low confidence, this sends a lightweight classify request to a fast model
-   * for more accurate task type detection.
-   *
-   * @param message - The user's message content
-   * @param hasImages - Whether the message includes images
-   * @param llmClassify - Callback to classify via a fast LLM (e.g. Gemini Flash)
-   */
-  getRoutedModelAsync: (
-    message: string,
-    hasImages?: boolean,
-    llmClassify?: (prompt: string) => Promise<string>,
-  ) => Promise<RoutingDecision>;
-
-  /**
-   * Check if current selection is a manual model selection (bypasses routing)
-   */
-  isManualModelSelection: () => boolean;
 
   /**
    * Cycle the currently selected model to its thinking/reasoning counterpart, or back.
@@ -462,14 +402,8 @@ export const useModelStore = create<ModelState>()(
         ollamaLoading: false,
         ollamaError: null,
 
-        // Intelligent routing initial state
-        lastRoutingDecision: null,
-
         // Router suggestion initial state
         routerSuggestion: null,
-
-        // Model capabilities cache
-        modelCapabilities: {},
 
         loading: false,
         error: null,
@@ -850,78 +784,6 @@ export const useModelStore = create<ModelState>()(
           }
         },
 
-        // Model capability detection
-        getModelCapabilities: async (
-          provider: string,
-          modelId: string,
-          baseUrl?: string,
-        ): Promise<ModelCapabilities> => {
-          // Check cache first
-          const cacheKey = `${provider}:${modelId}`;
-          const cached = get().modelCapabilities[cacheKey];
-          if (cached) return cached;
-
-          try {
-            const raw = await invoke<{
-              supports_tools: boolean;
-              supports_vision: boolean;
-              supports_streaming: boolean;
-              supports_thinking: boolean;
-              context_length: number;
-              tool_mode: string;
-            }>('get_model_capabilities', {
-              provider,
-              modelId,
-              baseUrl: baseUrl ?? null,
-            });
-
-            const capabilities: ModelCapabilities = {
-              supportsTools: raw.supports_tools,
-              supportsVision: raw.supports_vision,
-              supportsStreaming: raw.supports_streaming,
-              supportsThinking: raw.supports_thinking,
-              contextLength: raw.context_length,
-              toolMode: raw.tool_mode as 'native' | 'prompt_injection',
-            };
-
-            set(
-              (state) => ({
-                modelCapabilities: {
-                  ...state.modelCapabilities,
-                  [cacheKey]: capabilities,
-                },
-              }),
-              undefined,
-              'model/getModelCapabilities',
-            );
-
-            return capabilities;
-          } catch (error) {
-            console.error('Failed to get model capabilities:', error);
-            // Return cloud-like defaults on error
-            const defaults: ModelCapabilities = {
-              supportsTools: true,
-              supportsVision: true,
-              supportsStreaming: true,
-              supportsThinking: false,
-              contextLength: 128_000,
-              toolMode: 'native',
-            };
-            return defaults;
-          }
-        },
-
-        // Clear Ollama capability cache
-        clearModelCapabilityCache: async (): Promise<void> => {
-          try {
-            await invoke('clear_model_capability_cache');
-            // Also clear the local JS-side cache
-            set({ modelCapabilities: {} }, undefined, 'model/clearModelCapabilityCache');
-          } catch (error) {
-            console.error('Failed to clear model capability cache:', error);
-          }
-        },
-
         // Reset session cost accumulator
         resetSessionCost: async (): Promise<void> => {
           try {
@@ -930,77 +792,6 @@ export const useModelStore = create<ModelState>()(
             console.error('Failed to reset session cost:', error);
             throw error;
           }
-        },
-
-        // Intelligent routing implementation
-        getRoutedModel: (message: string, hasImages: boolean = false): RoutingDecision => {
-          const { selectedModel } = get();
-          const currentPlan = (() => {
-            try {
-              return useAccountStore.getState()?.account?.plan ?? 'basic';
-            } catch {
-              return 'basic' as const;
-            }
-          })();
-
-          // If no model is selected yet, use the best auto mode the current plan allows.
-          const effectiveModel = resolveEffectiveModelForTier(selectedModel, currentPlan);
-
-          // Use the model router to determine the actual model.
-          // Pass currentPlan as tier so Pro/Max users get *_pro slot routing
-          // (e.g. coding -> coding_premium_pro -> claude-sonnet-4.6).
-          const routingResult = getModelForRequest(effectiveModel, message, hasImages, currentPlan);
-
-          const decision: RoutingDecision = {
-            routedModelId: routingResult.modelId,
-            taskType: routingResult.taskType,
-            reason: routingResult.reason,
-            wasRouted: routingResult.wasRouted,
-            timestamp: Date.now(),
-          };
-
-          return decision;
-        },
-
-        getRoutedModelAsync: async (
-          message: string,
-          hasImages: boolean = false,
-          llmClassify?: (prompt: string) => Promise<string>,
-        ): Promise<RoutingDecision> => {
-          const { selectedModel } = get();
-          const currentPlan = (() => {
-            try {
-              return useAccountStore.getState()?.account?.plan ?? 'basic';
-            } catch {
-              return 'basic' as const;
-            }
-          })();
-
-          const effectiveModel = resolveEffectiveModelForTier(selectedModel, currentPlan);
-
-          const routingResult = await getModelForRequestAsync(
-            effectiveModel,
-            message,
-            hasImages,
-            llmClassify,
-            currentPlan,
-          );
-
-          const decision: RoutingDecision = {
-            routedModelId: routingResult.modelId,
-            taskType: routingResult.taskType,
-            reason: routingResult.reason,
-            wasRouted: routingResult.wasRouted,
-            timestamp: Date.now(),
-          };
-
-          return decision;
-        },
-
-        isManualModelSelection: (): boolean => {
-          const { selectedModel } = get();
-          if (!selectedModel) return false;
-          return isManualSelection(selectedModel);
         },
 
         cycleModelVariant: () => {
@@ -1069,11 +860,8 @@ export const useModelStore = create<ModelState>()(
               ollamaAvailable: false,
               ollamaLoading: false,
               ollamaError: null,
-              // Reset routing state
-              lastRoutingDecision: null,
-              // Reset router suggestion and capabilities cache
+              // Reset router suggestion
               routerSuggestion: null,
-              modelCapabilities: {},
               speedQualityMode: 'balanced' as SpeedQualityMode,
               loading: false,
               error: null,
@@ -1173,17 +961,12 @@ export const selectOllamaAvailable = (state: ModelState) => state.ollamaAvailabl
 export const selectOllamaLoading = (state: ModelState) => state.ollamaLoading;
 export const selectOllamaError = (state: ModelState) => state.ollamaError;
 
-// Routing selectors
-export const selectLastRoutingDecision = (state: ModelState) => state.lastRoutingDecision;
 export const selectSpeedQualityMode = (state: ModelState) => state.speedQualityMode;
 export const selectIsAutoMode = (state: ModelState) =>
   state.selectedModel?.startsWith('auto-') ?? false;
 
 // Router suggestion selectors
 export const selectRouterSuggestion = (state: ModelState) => state.routerSuggestion;
-export const selectModelCapabilities = (state: ModelState) => state.modelCapabilities;
-export const selectModelCapability = (provider: string, modelId: string) => (state: ModelState) =>
-  state.modelCapabilities[`${provider}:${modelId}`] ?? null;
 
 /**
  * Helper function to format Ollama model size for display
@@ -1267,17 +1050,6 @@ export const getBestAutoModeForTier = (tier: string): string => {
   return getBestAutoModeForSubscriptionTier(tier);
 };
 
-export const resolveEffectiveModelForTier = (
-  selectedModel: string | null,
-  tier: string | null | undefined,
-): string => {
-  return (
-    normalizeModelId(selectedModel) ??
-    selectedModel ??
-    getBestAutoModeForSubscriptionTier(tier ?? 'basic')
-  );
-};
-
 /**
  * Enforce tier-appropriate model selection.
  * Called when user's plan tier changes to ensure they're using an allowed auto mode.
@@ -1358,6 +1130,9 @@ if (typeof window !== 'undefined') {
     (plan) => {
       const normalizedPlan = plan ?? 'free';
       enforceModelTierRestriction(normalizedPlan);
+      useModelStore
+        .getState()
+        .loadModelsForMode(useAppModeStore.getState().mode, normalizedPlan);
     },
   );
   const initialPlan = useAccountStore.getState().plan ?? 'free';
@@ -1365,7 +1140,8 @@ if (typeof window !== 'undefined') {
 }
 
 // ---------------------------------------------------------------------------
-// Subscribe to app mode + plan tier changes to reload the model list.
+// Subscribe to app-mode changes to reload the model list. Account entitlement
+// is owned by the unified auth store above, never duplicated in appModeStore.
 // When switching to cloud mode: populate cloudModels with managed models.
 // When switching to local mode: clear cloudModels (BYOK list used instead).
 // Module-level ref prevents subscription accumulation on HMR reload.
@@ -1376,16 +1152,16 @@ let _unsubscribeAppMode: () => void = () => {};
 if (typeof window !== 'undefined') {
   _unsubscribeAppMode?.();
   // Initial load
-  const { mode, planTier } = useAppModeStore.getState();
-  useModelStore.getState().loadModelsForMode(mode, planTier);
+  const { mode } = useAppModeStore.getState();
+  useModelStore.getState().loadModelsForMode(mode, useAccountStore.getState().plan ?? 'free');
 
-  // Subscribe to both mode and planTier changes
   _unsubscribeAppMode = useAppModeStore.subscribe(
-    (state) => ({ mode: state.mode, planTier: state.planTier }),
-    ({ mode: newMode, planTier: newTier }) => {
-      useModelStore.getState().loadModelsForMode(newMode, newTier);
+    (state) => state.mode,
+    (newMode) => {
+      useModelStore
+        .getState()
+        .loadModelsForMode(newMode, useAccountStore.getState().plan ?? 'free');
     },
-    { equalityFn: (a, b) => a.mode === b.mode && a.planTier === b.planTier },
   );
 }
 

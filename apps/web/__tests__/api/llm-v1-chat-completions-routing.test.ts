@@ -1,28 +1,17 @@
 /**
  * Integration test: Pro-tier task-aware routing wiring in the v1 chat completions route.
  *
- * Verifies (Task #21):
+ * Verifies:
  *   1. classifyTaskLocally runs in the request path (sync, before awaits)
  *   2. resolvedTaskType is populated and returned in x_agi_workforce.routing
  *   3. A coding-heavy message is classified as 'coding'
- *   4. CreditService.checkAvailable is called (the v1 route uses credit-based
- *      quota enforcement, not assertQuota — which is the gap identified by Task #21)
+ *   4. Canonical route admission runs before credits/provider dispatch
  *   5. The response is 200 for low usage (credits available)
  *   6. x_agi_workforce.routing.task_type reflects the coding classification
  *
- * GAP IDENTIFIED (Task #21):
- *   The v1 route at app/api/llm/v1/chat/completions/route.ts uses CreditService
- *   (legacy) for quota enforcement, NOT the task-aware assertQuota from
- *   @/lib/assert-quota. The assertQuota + tier-aware quota logic from the spec
- *   is absent from this route. This file documents the current behavior and
- *   highlights the gap so it can be closed in a follow-up task.
- *
- * NOTE (Task #17 dependency):
- *   resolveAutoModeModel in @agiworkforce/types does not yet accept a taskType
- *   3rd argument. Once Task #17 ships, x_agi_workforce.routing.resolved_model
- *   will diverge for Pro users (e.g. 'auto-balanced' + coding -> 'claude-sonnet-4.6').
- *   The plumbing is already wired in route.ts via the resolveAutoModel wrapper;
- *   only the types package upgrade is needed to activate Pro slot routing.
+ * The route uses @agiworkforce/routing#resolveAutoRoute with the
+ * web/cloud-chat runtime profile. App-local keyword/model pools are not part
+ * of the production request path.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -100,10 +89,10 @@ vi.mock('@/utils/env', () => ({
 }));
 
 // Coding-classified prompts route to a Claude model (Task #17 auto-routing),
-// which now dispatches through packages/providers/anthropic's adapter
+// which now dispatches through packages/ai/providers/anthropic's adapter
 // (task #34) instead of the mocked LLMProviderFactory below. This suite is
 // about routing/classification metadata, not provider wire-shape (see
-// packages/providers/anthropic/src/__tests__/web-wire-parity.test.ts for
+// packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts for
 // that), so a minimal fake stream is enough to reach a 200 with routing
 // fields populated.
 vi.mock('@agiworkforce/providers-anthropic', () => ({
@@ -188,6 +177,36 @@ vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 
+const managedUsageMocks = vi.hoisted(() => ({
+  reserve: vi.fn(),
+  providerStarted: vi.fn(() => Promise.resolve()),
+  finalize: vi.fn(() =>
+    Promise.resolve({
+      requestStatus: 'completed',
+      operationResult: 'finalized',
+      settlementStatus: 'succeeded',
+      actualCostCents: 4,
+    }),
+  ),
+  delivered: vi.fn(() => Promise.resolve()),
+}));
+
+const rlsMocks = vi.hoisted(() => ({
+  getUserScopedDb: vi.fn(),
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: rlsMocks.getUserScopedDb,
+}));
+
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  reserveManagedUsageRequest: managedUsageMocks.reserve,
+  markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
+  finalizeManagedUsageRequest: managedUsageMocks.finalize,
+  markManagedUsageClientDelivered: managedUsageMocks.delivered,
+}));
+
 // Mock subscription + credit services
 const mockGetSubscription = vi.fn();
 const mockCheckAvailable = vi.fn();
@@ -232,8 +251,6 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   },
 }));
 
-// Note: @/lib/assert-quota is NOT imported by this route (gap), so no mock needed.
-
 // Import the route AFTER all vi.mock() calls
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
 
@@ -245,6 +262,7 @@ function makeRequest(message: string, stream = false): NextRequest {
     headers: {
       Authorization: 'Bearer test-pro-token',
       'Content-Type': 'application/json',
+      'Idempotency-Key': 'test-managed-chat-request',
     },
     body: JSON.stringify({
       model: 'auto-balanced',
@@ -263,6 +281,7 @@ function makeRequestForModel(model: string, message: string, stream = false): Ne
     headers: {
       Authorization: 'Bearer test-pro-token',
       'Content-Type': 'application/json',
+      'Idempotency-Key': 'test-managed-chat-request',
     },
     body: JSON.stringify({
       model,
@@ -285,13 +304,23 @@ function makeProSubscription() {
 
 // ---- test suite ----
 
-describe('POST /api/llm/v1/chat/completions — Pro-tier routing wiring (Task #21)', () => {
+describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'pro-user-id', email: 'pro@example.com' });
 
     mockGetSubscription.mockResolvedValue(makeProSubscription());
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'pro-user-id' });
+
+    managedUsageMocks.reserve.mockImplementation(async (input) => ({
+      db: input.db,
+      userId: input.userId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      leaseToken: 'lease-test',
+      estimatedCostCents: input.estimatedCostCents,
+    }));
 
     // Credits available (low usage scenario)
     mockCheckAvailable.mockResolvedValue(true);
@@ -328,7 +357,9 @@ describe('POST /api/llm/v1/chat/completions — Pro-tier routing wiring (Task #2
     const request = makeRequest('Hello, how are you?');
     const response = await POST(request);
 
-    expect(response.status).toBe(200);
+    expect(rlsMocks.getUserScopedDb).toHaveBeenCalledOnce();
+    expect(managedUsageMocks.reserve).toHaveBeenCalledOnce();
+    expect(response.status, await response.clone().text()).toBe(200);
 
     const data = (await response.json()) as {
       x_agi_workforce?: {
@@ -451,23 +482,79 @@ describe('POST /api/llm/v1/chat/completions — Pro-tier routing wiring (Task #2
     expect(data.x_agi_workforce?.routing?.resolved_model).toBeTypeOf('string');
   });
 
+  it('fails closed for a model selection absent from the canonical registry', async () => {
+    const request = makeRequestForModel('totally-not-a-real-model-xyz', 'hello');
+    const response = await POST(request);
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'model_route_unavailable' },
+    });
+    expect(mockCheckAvailable).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the Web runtime profile has not implemented a required harness feature', async () => {
+    const request = makeRequest('Use autonomous agents and discover the best available tools');
+    const response = await POST(request);
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'model_route_unavailable' },
+    });
+    expect(mockCheckAvailable).not.toHaveBeenCalled();
+  });
+
+  it('classifies image message parts as multimodal before resolving Auto', async () => {
+    const request = new NextRequest('http://localhost/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-pro-token',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'test-managed-chat-request',
+      },
+      body: JSON.stringify({
+        model: 'auto-balanced',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'What is shown here?' },
+              { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } },
+            ],
+          },
+        ],
+        stream: false,
+      }),
+    });
+
+    const response = await POST(request);
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      x_agi_workforce?: { routing?: { task_type?: string } };
+    };
+    expect(data.x_agi_workforce?.routing?.task_type).toBe('multimodal');
+  });
+
+  it('does not send a media-harness route through a text-chat provider adapter', async () => {
+    const request = makeRequest('Generate an image of a blue robot reading a book');
+    const response = await POST(request);
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'model_route_requires_media_dispatch' },
+    });
+    expect(mockCheckAvailable).not.toHaveBeenCalled();
+  });
+
   // -------------------------------------------------------------------------
-  // Test 8: GAP DOCUMENTATION — assertQuota is NOT called (Task #21 gap)
-  //
-  // This test documents the current gap: the v1 route uses the legacy credit
-  // system (CreditService.checkAvailable) rather than the task-aware assertQuota
-  // from @/lib/assert-quota. Removing this test once the gap is closed.
+  // Test 8: credit reservation remains in force after quota + route admission.
   // -------------------------------------------------------------------------
-  it('[gap] uses CreditService not assertQuota for quota enforcement', async () => {
+  it('reserves credits after canonical routing and quota admission', async () => {
     const request = makeRequest('write a recursive function');
     const response = await POST(request);
 
     expect(response.status).toBe(200);
-    // Credit service IS called (legacy quota path)
     expect(mockCheckAvailable).toHaveBeenCalled();
-    // assertQuota is NOT imported/called by this route (the gap)
-    // When Task #21 gap is closed, this test should be updated to assert
-    // mockAssertQuota was called with { tier: 'pro', userId: 'pro-user-id' }
   });
 
   // -------------------------------------------------------------------------

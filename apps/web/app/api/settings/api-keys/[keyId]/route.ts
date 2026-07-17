@@ -10,6 +10,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ApiKeyRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { ApiKeyService } from '@/lib/services/api-key-service';
 
 /**
  * DELETE /api/settings/api-keys/[keyId]
@@ -49,10 +50,7 @@ async function handleRevoke(request: NextRequest, context: { params: Promise<{ k
     return NextResponse.json({ message: 'API key was already revoked' });
   }
 
-  await db.execute(`update public.api_keys set revoked_at = now() where id = $1 and user_id = $2`, [
-    keyId,
-    userId,
-  ]);
+  await ApiKeyService.revokeApiKey(db, keyId, userId);
 
   logger.info({ userId, keyId }, 'API key revoked');
 

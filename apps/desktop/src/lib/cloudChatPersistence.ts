@@ -2,7 +2,7 @@
  * DCL-2 — Desktop managed-cloud chat persistence seam.
  *
  * Desktop Cloud mode uses the SAME backend as web (the "one logical cloud"
- * invariant): the shared `@agiworkforce/unified-chat` persistence client talking
+ * invariant): the canonical `@agiworkforce/cloud-contracts` client talking
  * to `/api/chat/conversations*` on the ABSOLUTE cloud origin, routed through the
  * egress guard. There is no Rust path for cloud persistence — cloud goes through
  * the web API boundary, never the local Tauri runtime (the orphaned Rust
@@ -25,10 +25,7 @@
  *
  * @module cloudChatPersistence
  */
-import {
-  createCloudChatPersistenceClient,
-  type CloudChatPersistenceClient,
-} from '@agiworkforce/unified-chat';
+import { createManagedCloudChatClient, type ManagedCloudChatClient } from '@agiworkforce/cloud-contracts';
 import { WEB_APP_URL } from '../api/config';
 import { guardedFetch } from './egressGuard';
 import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
@@ -73,18 +70,18 @@ async function getDesktopCloudAuthToken(): Promise<string | null> {
  *
  * @throws Error when not in managed Cloud mode (Local/BYOK, or the PA-3 gate).
  */
-export function getDesktopCloudChatPersistenceClient(): CloudChatPersistenceClient {
+export function getDesktopCloudChatPersistenceClient(): ManagedCloudChatClient {
   if (!isManagedCloudPersistenceActive()) {
     throw new Error(
       '[cloud-chat] managed-cloud persistence is unavailable: desktop is not in managed Cloud mode. ' +
         'Local and BYOK route to the Rust runtime; the PA-3 coming-soon gate keeps desktop Cloud closed until DCL-4.',
     );
   }
-  return createCloudChatPersistenceClient({
+  return createManagedCloudChatClient({
     // Absolute cloud origin — never a web-relative path on desktop.
     baseUrl: WEB_APP_URL,
     getAuthToken: getDesktopCloudAuthToken,
-    // No decorateHeaders: desktop has no CSRF token to inject.
+    // No decorateMutationHeaders: desktop has no CSRF token to inject.
     fetchImpl: guardedFetch,
   });
 }

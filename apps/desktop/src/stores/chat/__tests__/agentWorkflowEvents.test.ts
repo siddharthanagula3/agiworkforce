@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { enableMapSet } from 'immer';
 
-vi.mock('@agiworkforce/api', () => ({
+vi.mock('@agiworkforce/desktop-command-client', () => ({
   agent: {
     agentSetWorkflowHash: vi.fn().mockResolvedValue(undefined),
   },

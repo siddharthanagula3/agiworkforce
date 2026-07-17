@@ -160,50 +160,41 @@ Verify:
 
 ---
 
-## Extended procedure — Cloud waitlist (8 steps)
+## Extended procedure — Cloud sign-in (3 steps)
 
-Run this after the 7-step core procedure passes.
+Run this after the 7-step core procedure passes. Managed Cloud is public alpha and open by
+default (founder decision 2026-06-27, PA-2): signing in IS the entitlement — there is no
+invite code or waitlist step. `CloudWaitlistSheet`/`InviteCodeModal` still exist in the
+codebase but are not part of this flow; do not expect them to appear here.
 
-### Step 8 — Tap Cloud chip
+### Step 8 — Tap Cloud chip (signed out)
 
 1. In the chat header, tap the **Cloud** segment (with lock icon)
-2. The CloudWaitlistSheet modal must appear
+2. The app must route straight to the sign-in screen (`/(auth)/login`)
 
-**PASS** if sheet opens.
+**PASS** if the sign-in screen appears.
 
-### Step 9 — Enter email
+**FAIL** if a waitlist sheet, invite-code modal, or dead toggle appears instead.
 
-1. Tap the email input field
-2. Type your email address
-3. Verify the "Join waitlist" button becomes enabled
+### Step 9 — Complete sign-in
 
-### Step 10 — Submit
+1. Sign in with a real or test Clerk account
+2. The app should return to chat with Cloud mode active, with no separate confirmation step
 
-1. Tap **Join waitlist**
-2. Loading indicator should appear briefly
+**PASS** if `cloudUnlocked` flips and Cloud mode activates automatically (`ClerkTokenBridge`).
 
-### Step 11 — Confirmation with rank
+**FAIL** if the user is stuck on the sign-in screen, or Cloud stays locked after a successful sign-in.
 
-1. After submission, a confirmation screen appears
-2. Verify rank is shown: **"#N in line"** (N is a real number, not 0 or blank)
+### Step 10 — Header chip updated
 
-**PASS** if rank is a positive integer.  
-**FAIL** if rank shows as 0, blank, or submission errors out.
+After sign-in, look at the chat header ModeToggle:
 
-### Step 12 — Continue on-device
+- [ ] Cloud segment now shows an unlocked/active state (no lock icon)
+- [ ] The default cloud model for the account's tier is selected
 
-1. Tap **"Continue on-device"** or the close/X button
-2. The sheet dismisses
+**PASS** if Cloud shows unlocked and a real model is selected.
 
-### Step 13 — Header chip updated
-
-After dismissing, look at the chat header ModeToggle:
-
-- [ ] Cloud segment now shows: **"Cloud · ✓ #N"** (the rank from the confirmation)
-- [ ] On-device is still active / selected
-
-**PASS** if rank appears in the header.  
-**FAIL** if the header still shows the lock icon, or rank is 0.
+**FAIL** if the lock icon persists or no model is selected.
 
 ---
 
@@ -231,7 +222,7 @@ The procedure is identical for Pixel with these differences:
 | First token never arrives            | LLMController initialization. Check `lib/llmController.ts` — model path may not match download path                                                                |
 | App crashes during inference         | Memory pressure on low-RAM device. Try Tier 3 (llama.rn) fallback. Report model name + device RAM                                                                  |
 | Article 50 modal doesn't appear      | `composeFirstRunDisclosure` returned null — check `@agiworkforce/compliance` package build. Run `pnpm typecheck` in `apps/mobile`                                  |
-| Cloud waitlist submit fails          | AGI Web/API waitlist endpoint may be unavailable or blocked by auth/CSRF/rate limits. Verify the hosted endpoint before launch                                     |
+| Cloud sign-in doesn't unlock Cloud   | Clerk auth or `ClerkTokenBridge` may be failing to flip `cloudUnlocked`. Check network/auth logs and verify the Clerk session token before launch                  |
 
 ---
 

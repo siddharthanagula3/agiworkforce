@@ -7,9 +7,16 @@ Canonical reference: `apps/desktop/src/features/cloud-bridge/README.md`
 
 ## Purpose
 
-Every cloud-only feature on mobile (Connectors, Cloud Sync, Web Search, Computer Use, etc.)
-opens this modal when the user taps the locked surface. The local demo path stays usable,
-and this modal is the single, consistent gate for Cloud Managed access.
+Historically, every cloud-only feature on mobile opened this modal when the user tapped the
+locked surface. As of PA-2 (founder decision 2026-06-27), the primary Cloud-chat access gate
+no longer uses this modal — Cloud is public alpha, open by default, and a signed-out user
+tapping Cloud in the chat header routes straight to sign-in
+(`apps/mobile/app/(app)/chat/[id].tsx` `handleTapCloudMode`). This modal remains live only for
+the genuinely-unshipped feature surfaces (Connectors, Skills, hosted Code environments,
+cloud-connectors OAuth, shared-links) that gate on their own feature flags independent of
+cloud-chat access — see `MOB-CLOUD-INVITE-RESIDUAL-01` in `docs/agent-context/known-flaws.md`
+for the full residual scope and the PA-5 follow-up to retire this modal from any remaining
+cloud-chat-adjacent path.
 
 This is the **mobile port** of the canonical desktop modal. The contract is identical;
 the implementation uses React Native primitives + NativeWind theme tokens.
@@ -33,9 +40,10 @@ interface InviteCodeModalProps {
 ## Two tabs
 
 **Invite tab** — calls `redeemInviteCode(code, source)` from `features/waitlist/service.ts`.
-Mobile public v1 keeps Cloud closed by default, but private beta testers can
-unlock the auth/cloud surface with an invitation code before signing in or
-creating an account.
+This path is retained for backward-compat (legacy `ALPHATESTER` code) but is no longer
+required for Cloud-chat access, which is public alpha and sign-in gated. For the
+still-unshipped feature surfaces that call this modal (see Callers below), the invite tab
+lets early testers unlock that specific feature ahead of its general release.
 
 **Waitlist tab** — preserves the existing mobile rank-in-line UX (email + country).
 This is the consolidation of the former `CloudWaitlistSheet.tsx` content. Calls
@@ -53,11 +61,13 @@ Background / foreground / surface / border / accent / state colors — all sourc
 backdrop scrim using `rgba(0,0,0,0.55)` which mirrors the pre-existing pattern in
 `EnvironmentOptionsSheet.tsx`. A `scrim` token addition is tracked as a follow-up.
 
-## Callers (3 sites, migrated in Stage 0d)
+## Callers
 
-- `app/(app)/chat/[id].tsx` — Cloud sync prompt
-- `src/features/chat/components/AddToChatSheet.tsx` — Connectors gate
-- `src/features/code-sessions/components/EnvironmentOptionsSheet.tsx` — Code mode gate
+Re-verified 2026-07-11: `app/(app)/chat/[id].tsx` and `AddToChatSheet.tsx` no longer import
+this modal — their Cloud-access gating now routes directly to sign-in. Confirmed current
+callers: `src/features/code-sessions/components/EnvironmentOptionsSheet.tsx` (Code mode gate),
+`app/(app)/settings/shared-links.tsx`, and `app/(app)/skills/index.tsx` — all gated on their
+own unshipped-feature flags per `MOB-CLOUD-INVITE-RESIDUAL-01`, not on cloud-chat access.
 
 The former `CloudWaitlistSheet.tsx` remains as a thin re-export for Detox E2E spec
 compatibility — will be removed once the Detox suite is migrated in a follow-up.

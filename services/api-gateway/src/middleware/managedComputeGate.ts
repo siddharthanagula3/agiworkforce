@@ -1,10 +1,17 @@
 /**
  * Managed compute launch gate.
  *
- * This middleware intentionally fails closed. AGI-held provider keys must not
- * be reachable just because a user has a paid subscription; managed compute
- * needs an explicit private-beta gate until reservation, settlement, fraud,
- * refund, dispute, retention, and provider-term controls are fully wired.
+ * Public Alpha (2026-06-27): managed compute is GA/open by default — the
+ * private-beta/waitlist launch gate has been removed (founder decision).
+ * `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is retained ONLY as an optional
+ * incident-response kill-switch: set it to `0` (or `false`/`off`) to
+ * re-gate. Any other value (including unset or `1`) keeps managed compute
+ * open. Byte-identical accepted-value parsing to the web reference
+ * implementation, apps/web/lib/managed-compute-gate.ts.
+ *
+ * Billing, metering, abuse, fraud, refunds, chargebacks, provider terms,
+ * retention, and deletion controls must keep pace with public usage, but
+ * they no longer gate access (mirrored critical rule, AGENTS.md/CLAUDE.md).
  */
 
 import type { NextFunction, Request, Response } from 'express';
@@ -56,7 +63,9 @@ function denial(
     privacyMode: 'managed',
     provider: descriptor.provider,
     model: descriptor.model,
-    accountStatus: 'waitlisted',
+    // 'suspended', not 'waitlisted' — this only fires when the incident
+    // kill-switch is engaged, not because an account is pending approval.
+    accountStatus: 'suspended',
     denialCode,
     denialMessage,
     checkedAt: new Date().toISOString(),
@@ -69,18 +78,25 @@ function allowed(req: Request, descriptor: ManagedComputeDescriptor): ManagedCom
     organizationId:
       descriptor.organizationId ??
       firstHeaderValue(req.headers[MANAGED_COMPUTE_ORG_HEADER]) ??
-      'private-beta',
+      'unscoped',
     userId: req.user?.userId ?? 'anonymous',
     privacyMode: 'managed',
     provider: descriptor.provider,
     model: descriptor.model,
-    accountStatus: 'private_beta',
+    // 'active', not 'private_beta' — public alpha has no beta enrollment
+    // concept; every non-kill-switched request is a normal active request.
+    accountStatus: 'active',
     checkedAt: new Date().toISOString(),
   };
 }
 
+/**
+ * True unless the incident kill-switch is engaged. Byte-identical accepted
+ * values to apps/web/lib/managed-compute-gate.ts's isManagedComputePrivateBetaEnabled.
+ */
 export function isManagedComputePrivateBetaEnabled(): boolean {
-  return process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] === '1';
+  const raw = process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV]?.trim().toLowerCase();
+  return raw !== '0' && raw !== 'false' && raw !== 'off';
 }
 
 export function buildManagedComputeEligibility(
@@ -92,17 +108,7 @@ export function buildManagedComputeEligibility(
       req,
       descriptor,
       'public_launch_blocked',
-      'Managed compute is waitlisted and private beta only.',
-    );
-  }
-
-  const betaHeader = firstHeaderValue(req.headers[MANAGED_COMPUTE_BETA_HEADER]);
-  if (betaHeader !== '1') {
-    return denial(
-      req,
-      descriptor,
-      'not_private_beta',
-      'Managed compute requires an approved private-beta request.',
+      'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
     );
   }
 

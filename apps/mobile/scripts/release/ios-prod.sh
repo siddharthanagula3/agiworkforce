@@ -5,7 +5,7 @@
 # What it does:
 #   1. Preflight + clean-git check (production requires committed source)
 #   2. eas build --platform ios --profile production
-#   3. If --auto-submit: eas submit --platform ios --profile production
+#   3. If --auto-submit: bind that exact build to the production submit profile
 #
 # Production releases land in App Store Connect → TestFlight first.
 # Promote to App Store via the App Store Connect UI after Apple review.
@@ -36,18 +36,17 @@ EOF
   esac
 done
 
-bash "$(dirname "${BASH_SOURCE[0]}")/preflight.sh" "${PROFILE}"
-
-log "starting iOS PRODUCTION build (App Store)"
-eas_build ios "${PROFILE}"
-log_ok "iOS production build queued."
+bash "$(dirname "${BASH_SOURCE[0]}")/preflight.sh" "${PROFILE}" "${AUTO_SUBMIT}" ios 1
 
 if [[ "${AUTO_SUBMIT}" == "1" ]]; then
-  log "submitting iOS production build to App Store Connect..."
-  eas_submit ios "${PROFILE}" --latest
-  log_ok "submitted. Apple processing takes 5-30 min, then it appears in App Store Connect → TestFlight."
+  log "starting iOS PRODUCTION build with submission bound to this exact build"
+  eas_build ios "${PROFILE}" --auto-submit
+  log_ok "iOS production build and paired App Store Connect submission queued."
   log "to release to App Store: log in to App Store Connect → My Apps → AGI → 'Prepare for Submission' → submit for review."
 else
+  log "starting iOS PRODUCTION build (App Store)"
+  eas_build ios "${PROFILE}"
+  log_ok "iOS production build queued."
   log "build only. To upload after it finishes:"
-  log "  pnpm --filter @agiworkforce/mobile release:ios:prod:submit"
+  log "  pnpm --filter @agiworkforce/mobile release:ios:prod:submit -- --build-id <id>"
 fi

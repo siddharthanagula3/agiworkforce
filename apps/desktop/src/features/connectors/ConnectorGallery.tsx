@@ -38,10 +38,12 @@ import {
   CONNECTORS,
   CONNECTOR_CATEGORIES,
   CONNECTOR_DIRECTORY,
+  buildCustomMcpConnectorDef,
+  isCustomMcpConnectorId,
   type ConnectorCategory,
   type ConnectorDef,
 } from './connectorDefinitions';
-import { isTauri } from '../../lib/tauri-mock';
+import { isTauri, listen } from '../../lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
@@ -111,8 +113,14 @@ function connectorAuthLabel(connector: ConnectorDef): string {
   }
 }
 
+// Custom remote MCP connectors (CustomRemoteMcpConnectorDialog.tsx) have no
+// static catalog entry — synthesize one on the fly rather than dropping them
+// (see buildCustomMcpConnectorDef's doc comment in connectorDefinitions.ts).
 function connectorById(id: string): ConnectorDef | null {
-  return CONNECTORS.find((connector) => connector.id === id) ?? null;
+  return (
+    CONNECTORS.find((connector) => connector.id === id) ??
+    (isCustomMcpConnectorId(id) ? buildCustomMcpConnectorDef(id) : null)
+  );
 }
 
 // Mirrors the MCP server-name convention used when a connector is actually
@@ -122,7 +130,13 @@ function connectorById(id: string): ConnectorDef | null {
 // without a real MCP-backed server (no entry in that mapping) simply won't
 // match anything here, which correctly falls through to "no live tool
 // schema available" in ConnectorDetailView.
+//
+// Custom remote MCP connectors (`custom-<slug>`, CustomRemoteMcpConnectorDialog.tsx)
+// are the exception: the connector id IS the literal MCP server name already
+// (see slugifyServerName there) — applying the `connector-` transform to it
+// would produce a name that never matches any real server.
 function connectorMcpServerName(connectorId: string): string {
+  if (isCustomMcpConnectorId(connectorId)) return connectorId;
   return `connector-${connectorId.replace(/_/g, '-')}`;
 }
 
@@ -373,6 +387,13 @@ export function ConnectorGallery() {
   const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
   const [detailConnectorId, setDetailConnectorId] = useState<string | null>(null);
   const [oauthCredsOpen, setOauthCredsOpen] = useState(false);
+  // Custom remote MCP connectors aren't managed by useConnectorsStore (they
+  // have no OAuth/API-key credential row for it to track) — their own
+  // busy/error UI state lives here instead.
+  const [customConnectorBusy, setCustomConnectorBusy] = useState<Record<string, boolean>>({});
+  const [customConnectorError, setCustomConnectorError] = useState<Record<string, string | null>>(
+    {},
+  );
 
   const {
     connectedIds,
@@ -519,6 +540,68 @@ export function ConnectorGallery() {
     };
   }, [completeOAuth]);
 
+  // Bridge for the Rust loopback OAuth listener's Tauri events. Unlike the
+  // legacy deep-link window events above (which carry {code, state} and
+  // re-run the token exchange), these fire AFTER the backend has already
+  // exchanged the code and connected the MCP server — the payload is
+  // {provider, connectorId}. Do NOT route them through handleOAuthCallback:
+  // the pending flow is consumed, so a re-exchange would fail state
+  // validation. This only reconciles frontend state (clears the pending
+  // spinner via completeOAuth, which re-connects idempotently and verifies).
+  useEffect(() => {
+    if (!isTauri) return;
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+
+    void (async () => {
+      const unCallback = await listen<{ provider: string; connectorId: string }>(
+        'mcp-oauth-callback',
+        (event) => {
+          const { connectorId } = event.payload;
+          const connector = CONNECTORS.find((c) => c.id === connectorId);
+          if (connector) {
+            setOauthState({ status: 'connecting', connectorName: connector.name });
+          }
+          void completeOAuth(connectorId)
+            .then(() => {
+              if (connector) {
+                setOauthState({ status: 'success', connectorName: connector.name });
+              }
+            })
+            .catch((err: unknown) => {
+              setOauthState({
+                status: 'error',
+                connectorName: connector?.name ?? connectorId,
+                message: err instanceof Error ? err.message : String(err),
+              });
+            });
+        },
+      );
+      const unError = await listen<{ error: string; error_description?: string }>(
+        'mcp-oauth-error',
+        (event) => {
+          const { error: oauthError, error_description: description } = event.payload;
+          setOauthState({
+            status: 'error',
+            connectorName: 'Connector',
+            message: description || oauthError || 'OAuth authorization failed',
+          });
+        },
+      );
+      if (disposed) {
+        unCallback();
+        unError();
+        return;
+      }
+      unlisteners.push(unCallback, unError);
+    })();
+
+    return () => {
+      disposed = true;
+      for (const unlisten of unlisteners) unlisten();
+    };
+  }, [completeOAuth]);
+
   // DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01: the static catalog
   // (CONNECTOR_DIRECTORY) is necessary but not sufficient — a connector must
   // ALSO have a real backend MCP mapping (mirrored here via
@@ -626,6 +709,31 @@ export function ConnectorGallery() {
     [fetchConnected],
   );
 
+  // Disconnecting a custom remote MCP connector removes it from the MCP
+  // config entirely (symmetric with how CustomRemoteMcpConnectorDialog adds
+  // it) rather than calling the store's `disconnect`, which is an OAuth/
+  // API-key-token flow (`mcp_oauth_disconnect`) that has no mapping entry
+  // for a `custom-*` id and would silently no-op, leaving the server
+  // configured and the gallery still showing it connected.
+  const handleDisconnectCustomConnector = useCallback(
+    async (serverName: string) => {
+      setCustomConnectorBusy((prev) => ({ ...prev, [serverName]: true }));
+      setCustomConnectorError((prev) => ({ ...prev, [serverName]: null }));
+      try {
+        const currentConfig = await McpClient.getConfig();
+        const { [serverName]: _removed, ...remainingServers } = currentConfig.mcpServers;
+        await McpClient.updateConfig({ mcpServers: remainingServers });
+        await fetchConnected();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Disconnection failed';
+        setCustomConnectorError((prev) => ({ ...prev, [serverName]: message }));
+      } finally {
+        setCustomConnectorBusy((prev) => ({ ...prev, [serverName]: false }));
+      }
+    },
+    [fetchConnected],
+  );
+
   const dialogs = (
     <>
       <ConnectorOAuthFlow
@@ -700,22 +808,35 @@ export function ConnectorGallery() {
           />
         ) : (
           <div className="rounded-xl border border-border bg-card/35 px-4">
-            {connectedConnectors.map((connector) => (
-              <ConnectedConnectorRow
-                key={connector.id}
-                connector={connector}
-                loading={Boolean(loading[connector.id])}
-                error={error[connector.id] ?? null}
-                expiresAt={expiresAtByProvider[connector.id] ?? null}
-                onConfigure={() => setDetailConnectorId(connector.id)}
-                onDisconnect={() => void disconnect(connector.id)}
-                onRefresh={
-                  connector.authType === 'oauth'
-                    ? () => handleRefreshToken(connector.id)
-                    : undefined
-                }
-              />
-            ))}
+            {connectedConnectors.map((connector) => {
+              const isCustom = isCustomMcpConnectorId(connector.id);
+              return (
+                <ConnectedConnectorRow
+                  key={connector.id}
+                  connector={connector}
+                  loading={
+                    isCustom
+                      ? Boolean(customConnectorBusy[connector.id])
+                      : Boolean(loading[connector.id])
+                  }
+                  error={
+                    (isCustom ? customConnectorError[connector.id] : error[connector.id]) ?? null
+                  }
+                  expiresAt={expiresAtByProvider[connector.id] ?? null}
+                  onConfigure={() => setDetailConnectorId(connector.id)}
+                  onDisconnect={() =>
+                    void (isCustom
+                      ? handleDisconnectCustomConnector(connector.id)
+                      : disconnect(connector.id))
+                  }
+                  onRefresh={
+                    connector.authType === 'oauth'
+                      ? () => handleRefreshToken(connector.id)
+                      : undefined
+                  }
+                />
+              );
+            })}
           </div>
         )}
       </section>

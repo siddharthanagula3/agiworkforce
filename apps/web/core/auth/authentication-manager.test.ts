@@ -16,7 +16,7 @@ vi.mock('@shared/lib/logger', () => ({
 }));
 
 /**
- * Contract-valid /api/me payload (packages/services cloud-contracts/me.ts).
+ * Contract-valid /api/me payload (packages/contracts/cloud-contracts/src/me.ts).
  * getCurrentUser() validates responses with parseMeResponse, so partial
  * payloads throw and surface as an error result instead of a drifted user.
  */

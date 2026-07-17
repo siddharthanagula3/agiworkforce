@@ -457,26 +457,42 @@ export default function CloudUsageScreen() {
                     justifyContent: 'flex-end',
                   }}
                 >
+                  {/*
+                    No `style` prop on Pressable — its function-style
+                    `style={({pressed}) => ({...})}` callback silently drops
+                    layout properties (flexDirection/alignItems/padding) in
+                    this stack (nativewind 4.2.3 + react-native-css-interop
+                    0.2.3), which stacked the icon above "Refresh" instead of
+                    beside it. Same class as MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
+                    (docs/agent-context/known-flaws.md) — using `children` as a
+                    function instead routes pressed state through a plain
+                    object-literal-style View, which renders correctly.
+                  */}
                   <Pressable
                     onPress={() => void load()}
                     disabled={loading}
                     accessibilityLabel="Refresh usage"
                     accessibilityRole="button"
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 5,
-                      paddingHorizontal: 10,
-                      paddingVertical: 5,
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-                      opacity: loading ? 0.5 : 1,
-                    })}
                   >
-                    <RefreshCw size={12} color={colors.textMuted} />
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>Refresh</Text>
+                    {({ pressed }) => (
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 5,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                          opacity: loading ? 0.5 : 1,
+                        }}
+                      >
+                        <RefreshCw size={12} color={colors.textMuted} />
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Refresh</Text>
+                      </View>
+                    )}
                   </Pressable>
                 </View>
               </View>

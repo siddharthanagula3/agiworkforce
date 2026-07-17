@@ -159,21 +159,6 @@
         "icon": "$(play)"
       },
       {
-        "command": "agi-workforce.createCheckpoint",
-        "title": "AGI Workforce: Create Checkpoint",
-        "icon": "$(bookmark)"
-      },
-      {
-        "command": "agi-workforce.restoreCheckpoint",
-        "title": "AGI Workforce: Restore Checkpoint",
-        "icon": "$(history)"
-      },
-      {
-        "command": "agi-workforce.listCheckpoints",
-        "title": "AGI Workforce: List Checkpoints",
-        "icon": "$(list-unordered)"
-      },
-      {
         "command": "agi.git.status",
         "title": "AGI: Git Status",
         "icon": "$(source-control)"
@@ -342,11 +327,6 @@
         "command": "agi-workforce.openActionSheet",
         "title": "AGI Workforce: Open Actions",
         "icon": "$(menu)"
-      },
-      {
-        "command": "agi-workforce.rewindLast",
-        "title": "AGI Workforce: Rewind Last",
-        "icon": "$(history)"
       },
       {
         "command": "agi-workforce.mentionFileInChat",
@@ -661,6 +641,12 @@
           "default": "auto-economy",
           "description": "Default LLM model. Run 'AGI Workforce: Select Model' (cmd+shift+m) to pick from currently available providers."
         },
+        "agiWorkforce.cliPath": {
+          "type": "string",
+          "default": "agi",
+          "scope": "machine",
+          "description": "Path to the AGI CLI executable that owns workspace-scoped local developer sessions."
+        },
         "agiWorkforce.streamingEnabled": {
           "type": "boolean",
           "default": true,
@@ -731,7 +717,7 @@
             "bypass"
           ],
           "default": "auto",
-          "description": "Default agent mode for new conversations. 'ask' confirms every edit, 'auto' edits without confirmation, 'plan' proposes a plan before any edits, 'bypass' skips all approval prompts."
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' runs safe, read-only operations automatically while writes and commands still require approval, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
@@ -924,7 +910,7 @@
     "compile": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "package": "node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
-    "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint",
+    "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "vitest run",
     "test:webview": "vitest run --config vitest.webview.config.ts",
     "test:integration": "tsc -p tsconfig.test.json && node esbuild.js && node out/test/runTests.js",
@@ -937,8 +923,9 @@
   },
   "dependencies": {
     "@agiworkforce/design-tokens": "workspace:*",
-    "@agiworkforce/llm-runtime": "workspace:*",
-    "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/provider-runtime": "workspace:*",
+    "@agiworkforce/client-runtime": "workspace:*",
+    "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.0",

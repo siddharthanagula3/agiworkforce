@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { registerChatParticipant } from '../features/chat-participant';
 import { SidebarProvider } from '../features/sidebar-webview';
-import { ConversationStore } from '../data/conversationStore';
 import {
   ConversationTreeProvider,
   ContextPanelProvider,
@@ -10,9 +9,9 @@ import {
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { WorkspaceIndexer } from '../data/workspaceIndexer';
 import { MemoryTreeProvider } from '../memory/memoryTreeProvider';
+import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 
 export interface ChatState {
-  conversationStore: ConversationStore;
   conversationTreeProvider: ConversationTreeProvider;
   sidebarProvider: SidebarProvider;
   contextPanelProvider: ContextPanelProvider;
@@ -21,15 +20,15 @@ export interface ChatState {
 
 export function setupChat(
   context: vscode.ExtensionContext,
+  localRuntimes: LocalRuntimePool,
   diffDecorationProvider?: DiffDecorationProvider,
 ): ChatState {
-  const conversationStore = new ConversationStore(context);
-  const conversationTreeProvider = new ConversationTreeProvider(conversationStore);
+  const conversationTreeProvider = new ConversationTreeProvider(localRuntimes);
 
   const chatParticipant = registerChatParticipant(
     context,
-    conversationStore,
     conversationTreeProvider,
+    localRuntimes,
   );
   context.subscriptions.push(chatParticipant);
 
@@ -37,9 +36,9 @@ export function setupChat(
     context.extensionUri,
     context.secrets,
     context,
-    conversationStore,
     conversationTreeProvider,
     context.workspaceState,
+    localRuntimes,
     diffDecorationProvider,
   );
 
@@ -69,7 +68,6 @@ export function setupChat(
   context.subscriptions.push(...indexer.registerFileWatcher());
 
   return {
-    conversationStore,
     conversationTreeProvider,
     sidebarProvider,
     contextPanelProvider,

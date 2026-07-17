@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { CreditService } from '@/lib/services/credit-service';
+import { logger } from '@/lib/logger';
 import { refundFreeTrialPrompt } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest, getSecurityHeaders, getCorsHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
@@ -13,12 +14,19 @@ import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/respon
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
 import { runResearchLoop } from './lib/research-loop';
+import { buildManagedAgentStream } from './lib/managed-agent-stream';
+import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import { isExecutionTool } from '@/lib/e2b/execution-tools';
 import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import { startProviderStream } from './lib/adapter-factory';
 import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
 import type { StreamChunk } from '@agiworkforce/types';
+import {
+  ManagedUsageRequestError,
+  finalizeManagedUsageRequest,
+  markManagedUsageProviderStarted,
+} from '@/lib/services/managed-usage-request-service';
 
 /**
  * OpenAI-compatible Chat Completions API
@@ -27,8 +35,8 @@ import type { StreamChunk } from '@agiworkforce/types';
  * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
  * Service modules: auth-gate | request-processor | stream-transform | response-builder
  *
- * Agentic extension: when MCP tools are configured (MCP_WEB_CONFIG_PATH or
- * mcp-servers.json with enabled:true entries), streaming requests enter the
+ * Agentic extension: when remote MCP tools are configured through the validated
+ * WEB_MCP_SERVERS_JSON contract, streaming requests enter the
  * tool-loop driver (tool-loop.ts) which executes tools and re-invokes the
  * model up to DEFAULT_MAX_STEPS times.  The approval_mode query parameter
  * controls gating: ?approval_mode=auto skips the per-tool prompt; the default
@@ -37,7 +45,7 @@ import type { StreamChunk } from '@agiworkforce/types';
  * Provider dispatch, for the standard (non-agentic) paths below (restructure
  * Wave 2, task #34): Anthropic, Google, OpenAI, and the 9 openai-compat
  * providers (groq, mistral, moonshot, zhipu, qwen, openrouter, deepseek,
- * xai, perplexity) go through `packages/providers/*` adapters
+ * xai, perplexity) go through `packages/ai/providers/*` adapters
  * (`ADAPTER_PROVIDERS`, ./lib/adapter-providers.ts) -- that is every provider
  * `processed.provider` (request-processor.ts's catalog lookup + heuristic
  * fallback chain) can resolve to, so there is no longer a `LLMProviderFactory`
@@ -62,14 +70,48 @@ async function refundFailedReservation(
     return;
   }
 
+  if (processed.managedUsage) {
+    try {
+      await finalizeManagedUsageRequest({
+        ...processed.managedUsage,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: { reason },
+      });
+    } catch (settlementError) {
+      logger.error(
+        {
+          event: 'managed_chat_release_unrecorded',
+          error: settlementError,
+          userId,
+          requestId: processed.requestId,
+        },
+        'Managed chat reservation release could not be persisted',
+      );
+    }
+    return;
+  }
+
   const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
-  await CreditService.deductCredits(
-    userId,
-    -processed.estimatedCostCents,
-    `Refund for failed request: ${processed.provider}/${processed.chatRequest.model}`,
-    { type: 'refund', reason, requestId: processed.requestId },
-    refundKey,
-  );
+  try {
+    await CreditService.settleCreditsDurably({
+      userId,
+      amountCents: -processed.estimatedCostCents,
+      description: `Refund for failed request: ${processed.provider}/${processed.chatRequest.model}`,
+      metadata: { type: 'refund', reason, requestId: processed.requestId },
+      idempotencyKey: refundKey,
+    });
+  } catch (settlementError) {
+    logger.error(
+      {
+        event: 'chat_refund_settlement_unrecorded',
+        error: settlementError,
+        userId,
+        requestId: processed.requestId,
+      },
+      'Chat refund could not be persisted',
+    );
+  }
 }
 
 async function handleChatCompletions(request: NextRequest) {
@@ -103,6 +145,36 @@ async function handleChatCompletions(request: NextRequest) {
 
   const processed = processResult;
 
+  // Persist the external-side-effect boundary before any provider/tool loop
+  // starts. A crash after this point is recovered customer-favorably by 0056;
+  // a concurrent retry cannot acquire a second lease.
+  if (processed.managedUsage) {
+    try {
+      await markManagedUsageProviderStarted(processed.managedUsage);
+    } catch (error) {
+      await refundFailedReservation(userId, processed, 'request_failure');
+      const managedError =
+        error instanceof ManagedUsageRequestError
+          ? error
+          : new ManagedUsageRequestError(
+              'Managed usage billing is temporarily unavailable.',
+              503,
+              'billing_unavailable',
+            );
+      return NextResponse.json(
+        {
+          error: {
+            message: managedError.message,
+            type: 'invalid_request_error',
+            code: managedError.code,
+            contract_version: managedError.contractVersion,
+          },
+        },
+        { status: managedError.status, headers: getSecurityHeaders() },
+      );
+    }
+  }
+
   // 3. Dispatch to provider
   if (processed.chatRequest.stream) {
     // Deep Research path: bounded multi-turn research loop (plan -> search
@@ -117,24 +189,14 @@ async function handleChatCompletions(request: NextRequest) {
       !processed.freeTrial &&
       processed.provider.toLowerCase() !== 'anthropic'
     ) {
-      const researchGen = runResearchLoop(processed, { userId, token });
-      const researchStream = new ReadableStream({
-        async pull(controller) {
-          const { value, done } = await researchGen.next();
-          if (done) {
-            controller.close();
-          } else {
-            controller.enqueue(value);
-          }
-        },
-        async cancel() {
-          // Finalize the generator so billing reconciliation runs on abort.
-          try {
-            await researchGen.return(undefined);
-          } catch {
-            // ignore
-          }
-        },
+      const researchUsage = createObservedProviderUsage();
+      const researchGen = runResearchLoop(processed, { userId, token }, { usage: researchUsage });
+      const researchStream = buildManagedAgentStream({
+        generator: researchGen,
+        processed,
+        usage: researchUsage,
+        completionReason: 'research_loop_completed',
+        cancellationReason: 'client_cancelled_research_loop',
       });
 
       const researchHeaders: Record<string, string> = {
@@ -207,31 +269,21 @@ async function handleChatCompletions(request: NextRequest) {
       // user actually connected connectors; a no-op otherwise).
       const connectorExecutor =
         connectorTools.length > 0 ? makeUserConnectorExecutor(userId) : undefined;
+      const toolLoopUsage = createObservedProviderUsage();
       const toolLoopGen = runToolLoop(processed, {
         mcpTools,
         approvalMode,
         userId,
         connectorExecutor,
+        usage: toolLoopUsage,
       });
 
-      const encoder = new TextEncoder();
-      const agentStream = new ReadableStream({
-        async pull(controller) {
-          const { value, done } = await toolLoopGen.next();
-          if (done) {
-            controller.close();
-          } else {
-            controller.enqueue(value ?? encoder.encode(''));
-          }
-        },
-        async cancel() {
-          // Drain the generator so it can release handles.
-          try {
-            await toolLoopGen.return(undefined);
-          } catch {
-            // ignore
-          }
-        },
+      const agentStream = buildManagedAgentStream({
+        generator: toolLoopGen,
+        processed,
+        usage: toolLoopUsage,
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
       });
 
       const streamHeaders: Record<string, string> = {

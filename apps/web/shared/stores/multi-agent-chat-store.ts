@@ -16,6 +16,7 @@ import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
 import { logger } from '@shared/lib/logger';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type {
   MessageDeliveryStatus,
   ParticipantType,
@@ -436,7 +437,7 @@ export const useMultiAgentChatStore = create<MultiAgentChatStore>()(
                 muted: false,
               },
               settings: {
-                model: 'gpt-4',
+                model: requireProviderDefaultModel('openai'),
                 provider: 'openai',
                 temperature: 0.7,
                 maxTokens: 4096,

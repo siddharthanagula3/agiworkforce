@@ -58,7 +58,7 @@ describe('getWebviewContent — F-01 regression: script must parse without Synta
     for (const script of scripts) {
       const body = script.textContent ?? '';
       // Use the Function constructor to parse; throws SyntaxError on bad JS.
-      // Wrap in `() => { ... }` so top-level returns don't trip it.
+      // llm-guardrail-allow: parser-only use in a test; the constructed function is never invoked
       expect(() => new Function(body)).not.toThrow();
     }
   });
@@ -107,11 +107,61 @@ describe('getWebviewContent — CSP', () => {
 });
 
 describe('getWebviewContent — structural smoke', () => {
+  it('presents chat as a local developer session without cloud-auth gating', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    expect(doc.body.textContent).toContain('Local Runtime');
+    expect(doc.body.textContent).not.toContain('AGI Cloud');
+    expect(doc.querySelector('#apiKeyBanner')).toBeNull();
+    expect(doc.querySelector('#signInBtn')).toBeNull();
+    expect(doc.querySelector('#cloudHistoryBtn')).toBeNull();
+  });
+
   it('contains the chat input and send button', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     expect(doc.querySelector('#userInput')).not.toBeNull();
     expect(doc.querySelector('#sendBtn')).not.toBeNull();
+  });
+
+  it('keeps async chat updates announced and exposes keyboard-native popup controls', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    expect(doc.querySelector('#messages')?.getAttribute('role')).toBe('log');
+    expect(doc.querySelector('#messages')?.getAttribute('aria-live')).toBe('polite');
+    expect(doc.querySelector('#plusMenuUpload')?.tagName).toBe('BUTTON');
+    expect(doc.querySelector('#plusMenuPlanMode')?.tagName).toBe('BUTTON');
+    expect(doc.querySelector('#plusBtn')?.getAttribute('aria-label')).toBe('Attach or use tools');
+    expect(doc.querySelector('#meterDismissBtn')?.getAttribute('aria-label')).toBe(
+      'Collapse usage meter',
+    );
+    expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Change agent mode');
+    expect(doc.querySelector('#plusMenuPlanMode')?.textContent).not.toContain('Add context');
+  });
+
+  it('submits an attachment-only turn with a visible trusted prompt', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(scriptBody).toContain("'Please analyze the attached file.'");
+    expect(scriptBody).toContain("'Please analyze the attached files.'");
+    expect(scriptBody).toContain("msg.type === 'attachmentsConsumed'");
+  });
+
+  it('renders tool-call disclosure bars as native buttons', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(scriptBody).toContain("var bar = document.createElement('button')");
+    expect(scriptBody).not.toContain("bar.setAttribute('role', 'button')");
   });
 
   it('contains a working inline model picker popover contract', () => {
@@ -127,6 +177,7 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).toContain('function closeModelPopover()');
     expect(scriptBody).toContain("msg.type === 'modelPickerData'");
     expect(scriptBody).toContain("vscode.postMessage({ type: 'selectModel'");
+    expect(scriptBody).toContain('if (options[i].disabled) continue;');
   });
 
   it('nonce is present on style and script tags', () => {

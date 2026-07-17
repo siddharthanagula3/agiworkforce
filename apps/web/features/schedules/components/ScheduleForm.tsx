@@ -1,334 +1,458 @@
 'use client';
 
-import { useState } from 'react';
-import { Label, Button, Input, Textarea } from '@agiworkforce/ui';
-import { Switch } from '@agiworkforce/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
-import { Separator } from '@agiworkforce/ui';
-import { Clock, Loader2, ChevronDown, ChevronUp, Info } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
-import { TIMEZONES, AVAILABLE_MODELS, DAYS_OF_WEEK, INITIAL_NOTIFICATION_SETTINGS } from '../types';
-import type { ScheduleFormData } from '../types';
-import { ScheduleNotificationSettings } from './ScheduleNotificationSettings';
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
+import { useEffect } from 'react';
+import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
+import { CalendarClock, Loader2 } from 'lucide-react';
+import type { ScheduleDraft, ScheduleFormErrors } from '../types';
+import { AVAILABLE_MODELS, DAYS_OF_WEEK } from '../types';
 
 interface ScheduleFormProps {
-  form: ScheduleFormData;
-  onChange: (patch: Partial<ScheduleFormData>) => void;
-  onSave: () => void;
-  onCancel: () => void;
+  draft: ScheduleDraft;
+  errors: ScheduleFormErrors;
+  submitError: string | null;
   saving: boolean;
   isEdit: boolean;
+  onChange: (patch: Partial<ScheduleDraft>) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const CRON_EXAMPLES = [
-  { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Every 6 hours', value: '0 */6 * * *' },
-  { label: 'Weekdays at 9am', value: '0 9 * * 1-5' },
-  { label: 'Every Sunday midnight', value: '0 0 * * 0' },
-  { label: 'First of month', value: '0 9 1 * *' },
+const FIELD_ORDER: (keyof ScheduleDraft)[] = [
+  'name',
+  'description',
+  'prompt',
+  'model',
+  'recurrence',
+  'scheduledLocal',
+  'intervalValue',
+  'timeOfDay',
+  'daysOfWeek',
+  'dayOfMonth',
+  'cronExpression',
+  'timezone',
+  'expiresLocal',
+  'maxExecutions',
 ];
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
+const fieldId = (field: keyof ScheduleDraft) => `schedule-${field}`;
+
+function FieldError({ field, errors }: { field: keyof ScheduleDraft; errors: ScheduleFormErrors }) {
+  const message = errors[field];
+  if (!message) return null;
+  return (
+    <p id={`${fieldId(field)}-error`} role="alert" className="text-xs text-destructive">
+      {message}
+    </p>
+  );
+}
+
+function describedBy(field: keyof ScheduleDraft, errors: ScheduleFormErrors, helper?: string) {
+  return (
+    [helper, errors[field] ? `${fieldId(field)}-error` : null].filter(Boolean).join(' ') ||
+    undefined
+  );
+}
+
+const nativeSelectClass =
+  'h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 export function ScheduleForm({
-  form,
-  onChange,
-  onSave,
-  onCancel,
+  draft,
+  errors,
+  submitError,
   saving,
   isEdit,
+  onChange,
+  onSubmit,
+  onCancel,
 }: ScheduleFormProps) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
+  useEffect(() => {
+    const firstError = FIELD_ORDER.find((field) => errors[field]);
+    if (!firstError) return;
+    const target = document.getElementById(fieldId(firstError));
+    if (target instanceof HTMLElement) target.focus();
+  }, [errors]);
 
-  const set = (patch: Partial<ScheduleFormData>) => onChange(patch);
-
+  const set = (patch: Partial<ScheduleDraft>) => onChange(patch);
   const toggleDay = (day: number) => {
-    const current = form.daysOfWeek;
-    const next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day];
-    set({ daysOfWeek: next });
+    set({
+      daysOfWeek: draft.daysOfWeek.includes(day)
+        ? draft.daysOfWeek.filter((candidate) => candidate !== day)
+        : [...draft.daysOfWeek, day],
+    });
   };
 
   return (
-    <div className="space-y-4 py-1">
-      {/* Name */}
-      <div className="space-y-1.5">
-        <Label htmlFor="sf-name">Name</Label>
-        <Input
-          id="sf-name"
-          value={form.name}
-          onChange={(e) => set({ name: e.target.value })}
-          placeholder="e.g. Daily market summary"
-          maxLength={500}
-          autoFocus
-        />
-      </div>
-
-      {/* Prompt */}
-      <div className="space-y-1.5">
-        <Label htmlFor="sf-prompt">Prompt</Label>
-        <Textarea
-          id="sf-prompt"
-          value={form.prompt}
-          onChange={(e) => set({ prompt: e.target.value })}
-          placeholder="What should the AI do?"
-          rows={4}
-          maxLength={10000}
-        />
-      </div>
-
-      {/* Model */}
-      <div className="space-y-1.5">
-        <Label>Model</Label>
-        <Select value={form.model} onValueChange={(v) => set({ model: v })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {AVAILABLE_MODELS.map((m) => (
-              <SelectItem key={m.value} value={m.value}>
-                {m.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Recurrence + Time */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Recurrence</Label>
-          <Select value={form.recurrence} onValueChange={(v) => set({ recurrence: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="once">One-time</SelectItem>
-              <SelectItem value="daily">Daily</SelectItem>
-              <SelectItem value="weekly">Weekly</SelectItem>
-              <SelectItem value="monthly">Monthly</SelectItem>
-              <SelectItem value="custom">Custom Cron</SelectItem>
-            </SelectContent>
-          </Select>
+    <form
+      className="flex min-h-0 flex-1 flex-col"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pr-3">
+        <div className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          Scheduled runs use Managed Cloud and return text. Web search, tools, research, files,
+          media generation, and notifications are not available in this surface.
         </div>
 
-        {form.recurrence !== 'custom' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="sf-time">Time</Label>
-            <Input
-              id="sf-time"
-              type="time"
-              value={form.timeOfDay}
-              onChange={(e) => set({ timeOfDay: e.target.value })}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Days of week picker · only for weekly */}
-      {form.recurrence === 'weekly' && (
-        <div className="space-y-1.5">
-          <Label>Days of week</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {DAYS_OF_WEEK.map((day) => (
-              <button
-                key={day.value}
-                type="button"
-                onClick={() => toggleDay(day.value)}
-                className={cn(
-                  'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
-                  form.daysOfWeek.includes(day.value)
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-transparent text-muted-foreground hover:border-primary/50',
-                )}
-              >
-                {day.label}
-              </button>
-            ))}
-          </div>
-          {form.daysOfWeek.length === 0 && (
-            <p className="text-xs text-muted-foreground">Select at least one day.</p>
-          )}
-        </div>
-      )}
-
-      {/* Day of month · only for monthly */}
-      {form.recurrence === 'monthly' && (
-        <div className="space-y-1.5">
-          <Label>Day of month</Label>
-          <div className="flex flex-wrap gap-1">
-            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-              <button
-                key={day}
-                type="button"
-                onClick={() => set({ dayOfMonth: form.dayOfMonth === day ? null : day })}
-                className={cn(
-                  'h-7 w-7 rounded text-xs font-medium transition-colors',
-                  form.dayOfMonth === day
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted/50 text-muted-foreground hover:bg-muted',
-                )}
-              >
-                {day}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Custom cron expression */}
-      {form.recurrence === 'custom' && (
-        <div className="space-y-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="sf-cron">
-              Cron expression
-              <span className="ml-1 text-muted-foreground">(minute hour day month weekday)</span>
-            </Label>
-            <Input
-              id="sf-cron"
-              value={form.cronExpression}
-              onChange={(e) => set({ cronExpression: e.target.value })}
-              placeholder="0 9 * * *"
-              className="font-mono"
-            />
-          </div>
-          <div className="rounded-md border border-border/50 bg-muted/20 p-2.5">
-            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Info className="h-3.5 w-3.5" />
-              <span>Quick examples</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {CRON_EXAMPLES.map((ex) => (
-                <button
-                  key={ex.value}
-                  type="button"
-                  onClick={() => set({ cronExpression: ex.value })}
-                  className={cn(
-                    'rounded border px-2 py-0.5 font-mono text-xs transition-colors',
-                    form.cronExpression === ex.value
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-transparent text-muted-foreground hover:border-primary/50',
-                  )}
-                  title={ex.value}
-                >
-                  {ex.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Timezone */}
-      <div className="space-y-1.5">
-        <Label>Timezone</Label>
-        <Select value={form.timezone} onValueChange={(v) => set({ timezone: v })}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {TIMEZONES.map((tz) => (
-              <SelectItem key={tz.value} value={tz.value}>
-                {tz.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Active toggle */}
-      <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-        <div>
-          <p className="text-sm font-medium">Active</p>
-          <p className="text-xs text-muted-foreground">Enable or pause this schedule</p>
-        </div>
-        <Switch checked={form.isActive} onCheckedChange={(checked) => set({ isActive: checked })} />
-      </div>
-
-      {/* Notifications collapsible */}
-      <Separator />
-      <button
-        type="button"
-        className="flex w-full items-center justify-between text-left text-sm font-medium"
-        onClick={() => setShowNotifications((v) => !v)}
-      >
-        <span>Notification Settings</span>
-        {showNotifications ? (
-          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        )}
-      </button>
-
-      {showNotifications && (
-        <ScheduleNotificationSettings
-          settings={form.notificationSettings ?? INITIAL_NOTIFICATION_SETTINGS}
-          onChange={(ns) => set({ notificationSettings: ns })}
-        />
-      )}
-
-      {/* Advanced collapsible · only shows when not already shown via recurrence */}
-      {form.recurrence !== 'custom' && (
-        <>
-          <Separator />
-          <button
-            type="button"
-            className="flex w-full items-center justify-between text-left text-sm font-medium"
-            onClick={() => setShowAdvanced((v) => !v)}
+        {submitError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
           >
-            <span>Advanced</span>
-            {showAdvanced ? (
-              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            )}
-          </button>
-          {showAdvanced && (
-            <div className="space-y-1.5">
-              <Label htmlFor="sf-cron-adv">
-                Override with cron expression{' '}
-                <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="sf-cron-adv"
-                value={form.cronExpression}
-                onChange={(e) => set({ cronExpression: e.target.value })}
-                placeholder="Leave blank to use the settings above"
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Setting a cron expression overrides the recurrence and time fields.
-              </p>
-            </div>
-          )}
-        </>
-      )}
+            {submitError} Review the fields below or retry.
+          </div>
+        )}
 
-      {/* Footer buttons */}
-      <div className="flex justify-end gap-2 pt-2">
-        <Button variant="outline" onClick={onCancel} disabled={saving}>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor={fieldId('name')}>Schedule Name</Label>
+            <Input
+              id={fieldId('name')}
+              name="scheduleName"
+              autoComplete="off"
+              value={draft.name}
+              onChange={(event) => set({ name: event.target.value })}
+              placeholder="Daily priorities…"
+              maxLength={500}
+              aria-invalid={Boolean(errors.name)}
+              aria-describedby={describedBy('name', errors)}
+            />
+            <FieldError field="name" errors={errors} />
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor={fieldId('description')}>Description</Label>
+            <Input
+              id={fieldId('description')}
+              name="scheduleDescription"
+              autoComplete="off"
+              value={draft.description}
+              onChange={(event) => set({ description: event.target.value })}
+              placeholder="Why this task runs…"
+              maxLength={2_000}
+              aria-invalid={Boolean(errors.description)}
+              aria-describedby={describedBy('description', errors, 'schedule-description-helper')}
+            />
+            <p id="schedule-description-helper" className="text-xs text-muted-foreground">
+              Optional. This is visible only in your schedule list.
+            </p>
+            <FieldError field="description" errors={errors} />
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor={fieldId('prompt')}>Task Instructions</Label>
+            <Textarea
+              id={fieldId('prompt')}
+              name="taskInstructions"
+              autoComplete="off"
+              value={draft.prompt}
+              onChange={(event) => set({ prompt: event.target.value })}
+              placeholder="Describe the text task to run…"
+              rows={5}
+              maxLength={10_000}
+              aria-invalid={Boolean(errors.prompt)}
+              aria-describedby={describedBy('prompt', errors, 'schedule-prompt-helper')}
+            />
+            <p id="schedule-prompt-helper" className="text-xs text-muted-foreground">
+              Write a self-contained instruction. Scheduled runs do not inherit chat context or
+              memory.
+            </p>
+            <FieldError field="prompt" errors={errors} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('model')}>Model</Label>
+            <select
+              id={fieldId('model')}
+              name="model"
+              autoComplete="off"
+              className={nativeSelectClass}
+              value={draft.model}
+              onChange={(event) => set({ model: event.target.value })}
+              aria-invalid={Boolean(errors.model)}
+              aria-describedby={describedBy('model', errors)}
+            >
+              {AVAILABLE_MODELS.map((model) => (
+                <option key={model.value} value={model.value}>
+                  {model.label}
+                </option>
+              ))}
+            </select>
+            <FieldError field="model" errors={errors} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('recurrence')}>Frequency</Label>
+            <select
+              id={fieldId('recurrence')}
+              name="recurrence"
+              autoComplete="off"
+              className={nativeSelectClass}
+              value={draft.recurrence}
+              onChange={(event) =>
+                set({ recurrence: event.target.value as ScheduleDraft['recurrence'] })
+              }
+              aria-invalid={Boolean(errors.recurrence)}
+              aria-describedby={describedBy('recurrence', errors)}
+            >
+              <option value="once">One Time</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="interval">Interval</option>
+              <option value="custom">Custom Cron</option>
+            </select>
+            <FieldError field="recurrence" errors={errors} />
+          </div>
+        </div>
+
+        {draft.recurrence === 'once' && (
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('scheduledLocal')}>Run At</Label>
+            <Input
+              id={fieldId('scheduledLocal')}
+              name="scheduledLocal"
+              type="datetime-local"
+              autoComplete="off"
+              value={draft.scheduledLocal}
+              onChange={(event) => set({ scheduledLocal: event.target.value })}
+              aria-invalid={Boolean(errors.scheduledLocal)}
+              aria-describedby={describedBy('scheduledLocal', errors, 'schedule-run-at-helper')}
+            />
+            <p id="schedule-run-at-helper" className="text-xs text-muted-foreground">
+              Interpreted in the IANA time zone below. Ambiguous or skipped daylight-saving times
+              are rejected.
+            </p>
+            <FieldError field="scheduledLocal" errors={errors} />
+          </div>
+        )}
+
+        {draft.recurrence === 'interval' && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor={fieldId('intervalValue')}>Repeat Every</Label>
+              <Input
+                id={fieldId('intervalValue')}
+                name="intervalValue"
+                type="number"
+                inputMode="numeric"
+                autoComplete="off"
+                min={1}
+                step={1}
+                value={draft.intervalValue}
+                onChange={(event) => set({ intervalValue: event.target.value })}
+                aria-invalid={Boolean(errors.intervalValue)}
+                aria-describedby={describedBy('intervalValue', errors)}
+              />
+              <FieldError field="intervalValue" errors={errors} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={fieldId('intervalUnit')}>Interval Unit</Label>
+              <select
+                id={fieldId('intervalUnit')}
+                name="intervalUnit"
+                autoComplete="off"
+                className={nativeSelectClass}
+                value={draft.intervalUnit}
+                onChange={(event) =>
+                  set({ intervalUnit: event.target.value as ScheduleDraft['intervalUnit'] })
+                }
+              >
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {['daily', 'weekly', 'monthly'].includes(draft.recurrence) && (
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('timeOfDay')}>Local Time</Label>
+            <Input
+              id={fieldId('timeOfDay')}
+              name="timeOfDay"
+              type="time"
+              autoComplete="off"
+              value={draft.timeOfDay}
+              onChange={(event) => set({ timeOfDay: event.target.value })}
+              aria-invalid={Boolean(errors.timeOfDay)}
+              aria-describedby={describedBy('timeOfDay', errors)}
+            />
+            <FieldError field="timeOfDay" errors={errors} />
+          </div>
+        )}
+
+        {draft.recurrence === 'weekly' && (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Days of Week</legend>
+            <div id={fieldId('daysOfWeek')} tabIndex={-1} className="flex flex-wrap gap-2">
+              {DAYS_OF_WEEK.map((day) => {
+                const selected = draft.daysOfWeek.includes(day.value);
+                return (
+                  <button
+                    key={day.value}
+                    type="button"
+                    aria-label={day.longLabel}
+                    aria-pressed={selected}
+                    onClick={() => toggleDay(day.value)}
+                    className="min-h-10 min-w-10 rounded-lg border border-border px-3 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+                  >
+                    {day.label}
+                  </button>
+                );
+              })}
+            </div>
+            <FieldError field="daysOfWeek" errors={errors} />
+          </fieldset>
+        )}
+
+        {draft.recurrence === 'monthly' && (
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('dayOfMonth')}>Day of Month</Label>
+            <Input
+              id={fieldId('dayOfMonth')}
+              name="dayOfMonth"
+              type="number"
+              inputMode="numeric"
+              autoComplete="off"
+              min={1}
+              max={31}
+              step={1}
+              value={draft.dayOfMonth ?? ''}
+              onChange={(event) =>
+                set({ dayOfMonth: event.target.value ? Number(event.target.value) : null })
+              }
+              aria-invalid={Boolean(errors.dayOfMonth)}
+              aria-describedby={describedBy('dayOfMonth', errors, 'schedule-month-day-helper')}
+            />
+            <p id="schedule-month-day-helper" className="text-xs text-muted-foreground">
+              Months without that day are skipped.
+            </p>
+            <FieldError field="dayOfMonth" errors={errors} />
+          </div>
+        )}
+
+        {draft.recurrence === 'custom' && (
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('cronExpression')}>Cron Expression</Label>
+            <Input
+              id={fieldId('cronExpression')}
+              name="cronExpression"
+              autoComplete="off"
+              spellCheck={false}
+              value={draft.cronExpression}
+              onChange={(event) => set({ cronExpression: event.target.value })}
+              placeholder="0 9 * * 1-5…"
+              className="font-mono"
+              aria-invalid={Boolean(errors.cronExpression)}
+              aria-describedby={describedBy('cronExpression', errors, 'schedule-cron-helper')}
+            />
+            <p id="schedule-cron-helper" className="text-xs text-muted-foreground">
+              Five fields only: minute, hour, day of month, month, and day of week.
+            </p>
+            <FieldError field="cronExpression" errors={errors} />
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor={fieldId('timezone')}>IANA Time Zone</Label>
+          <Input
+            id={fieldId('timezone')}
+            name="timezone"
+            autoComplete="off"
+            spellCheck={false}
+            value={draft.timezone}
+            onChange={(event) => set({ timezone: event.target.value })}
+            placeholder="America/Chicago…"
+            aria-invalid={Boolean(errors.timezone)}
+            aria-describedby={describedBy('timezone', errors, 'schedule-timezone-helper')}
+          />
+          <p id="schedule-timezone-helper" className="text-xs text-muted-foreground">
+            Uses daylight-saving rules for this location. Example: America/Chicago.
+          </p>
+          <FieldError field="timezone" errors={errors} />
+        </div>
+
+        <details className="rounded-xl border border-border/70 bg-muted/20 p-4">
+          <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Execution Limits
+          </summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor={fieldId('expiresLocal')}>Expire At</Label>
+              <Input
+                id={fieldId('expiresLocal')}
+                name="expiresLocal"
+                type="datetime-local"
+                autoComplete="off"
+                value={draft.expiresLocal}
+                onChange={(event) => set({ expiresLocal: event.target.value })}
+                aria-invalid={Boolean(errors.expiresLocal)}
+                aria-describedby={describedBy('expiresLocal', errors)}
+              />
+              <FieldError field="expiresLocal" errors={errors} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={fieldId('maxExecutions')}>Maximum Runs</Label>
+              <Input
+                id={fieldId('maxExecutions')}
+                name="maxExecutions"
+                type="number"
+                inputMode="numeric"
+                autoComplete="off"
+                min={1}
+                max={1_000_000}
+                step={1}
+                value={draft.maxExecutions}
+                onChange={(event) => set({ maxExecutions: event.target.value })}
+                placeholder="No limit…"
+                aria-invalid={Boolean(errors.maxExecutions)}
+                aria-describedby={describedBy('maxExecutions', errors)}
+              />
+              <FieldError field="maxExecutions" errors={errors} />
+            </div>
+          </div>
+        </details>
+
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+          <div className="min-w-0">
+            <Label htmlFor={fieldId('isActive')} className="cursor-pointer">
+              Active After Save
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              Pause it now if you want to review the schedule before it can run.
+            </p>
+          </div>
+          <Switch
+            id={fieldId('isActive')}
+            checked={draft.isActive}
+            onCheckedChange={(isActive) => set({ isActive })}
+            aria-label="Active After Save"
+          />
+        </div>
+      </div>
+
+      <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border/60 pt-4 sm:flex-row sm:justify-end">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button onClick={onSave} disabled={saving}>
+        <Button type="submit" disabled={saving} aria-busy={saving}>
           {saving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2
+              className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
           ) : (
-            <Clock className="mr-2 h-4 w-4" />
+            <CalendarClock className="mr-2 h-4 w-4" aria-hidden="true" />
           )}
-          {isEdit ? 'Save Changes' : 'Create Schedule'}
+          {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Schedule'}
         </Button>
       </div>
-    </div>
+    </form>
   );
 }
 

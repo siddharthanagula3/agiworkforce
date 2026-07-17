@@ -30,6 +30,7 @@
     },
     "development": {
       "extends": "base",
+      "environment": "development",
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
@@ -48,6 +49,7 @@
     },
     "preview": {
       "extends": "base",
+      "environment": "preview",
       "distribution": "internal",
       "channel": "preview",
       "autoIncrement": true,
@@ -72,8 +74,29 @@
         "buildConfiguration": "Release"
       }
     },
+    "beta": {
+      "extends": "base",
+      "environment": "preview",
+      "channel": "beta",
+      "autoIncrement": true,
+      "env": {
+        "APP_ENV": "preview",
+        "EXPO_PUBLIC_APP_ENV": "preview"
+      },
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release",
+        "credentialsSource": "remote",
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
+      }
+    },
     "production": {
       "extends": "base",
+      "environment": "production",
       "channel": "production",
       "autoIncrement": true,
       "env": {
@@ -97,8 +120,6 @@
         "language": "en-US",
         "appleTeamId": "D2PR62RLT4",
         "bundleIdentifier": "com.agiworkforce.app",
-        "ascAppId": "$ASC_APP_ID",
-        "appleId": "$APPLE_ID",
         "ascApiKeyPath": "./secrets/asc-api-key.p8",
         "ascApiKeyId": "$ASC_API_KEY_ID",
         "ascApiKeyIssuerId": "$ASC_API_KEY_ISSUER_ID"
@@ -110,17 +131,8 @@
         "changesNotSentForReview": false
       }
     },
-    "preview": {
-      "ios": {
-        "language": "en-US",
-        "appleTeamId": "D2PR62RLT4",
-        "bundleIdentifier": "com.agiworkforce.app",
-        "ascAppId": "$ASC_APP_ID",
-        "appleId": "$APPLE_ID",
-        "ascApiKeyPath": "./secrets/asc-api-key.p8",
-        "ascApiKeyId": "$ASC_API_KEY_ID",
-        "ascApiKeyIssuerId": "$ASC_API_KEY_ISSUER_ID"
-      },
+    "beta": {
+      "extends": "production",
       "android": {
         "track": "internal",
         "serviceAccountKeyPath": "./secrets/google-play-service-account.json",

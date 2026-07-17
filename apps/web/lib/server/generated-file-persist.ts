@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createHash } from 'crypto';
-import type { GeneratedFileSurface } from '@agiworkforce/services';
+import type { GeneratedFileSurface } from '@agiworkforce/cloud-contracts';
 import { storeMedia, isMediaStorageConfigured } from '@/lib/server/media-storage';
 import { insertMediaAsset, type MediaKind } from '@/lib/server/media-assets';
 import { logger } from '@/lib/logger';
@@ -55,11 +55,11 @@ export interface GeneratedFileWire {
 }
 
 // Compile-time drift anchor: the emitted wire shape must stay assignable to
-// the shared cloud contract (`packages/services/src/cloud-contracts/
+// the shared cloud contract (`packages/contracts/cloud-contracts/src/
 // generated-files.ts`) that mobile/desktop validate stream deltas against.
 const _generatedFileWireContractCheck: (
   file: GeneratedFileWire,
-) => import('@agiworkforce/services').GeneratedFileWire = (file) => file;
+) => import('@agiworkforce/cloud-contracts').GeneratedFileWire = (file) => file;
 void _generatedFileWireContractCheck;
 
 export type PersistGeneratedFileOutcome =

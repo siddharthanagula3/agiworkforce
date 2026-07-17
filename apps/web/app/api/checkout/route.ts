@@ -6,7 +6,7 @@ import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
-import { requireEnv } from '@/utils/env';
+import { getOptionalEnv, requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -45,9 +45,15 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     return csrfError as NextResponse;
   }
 
-  // Reject checkout requests only when the incident-response kill-switch
-  // (STRIPE_CHECKOUT_ENABLED=0/false/off) has been set.
-  if (!CHECKOUT_ENABLED) {
+  // Reject checkout requests when the incident-response kill-switch
+  // (STRIPE_CHECKOUT_ENABLED=0/false/off) has been set, OR when Stripe isn't
+  // actually configured (STRIPE_SECRET_KEY unset) despite checkout being left
+  // "open" by default. Checked BEFORE any DB/Clerk work so a deployment with
+  // no Stripe env degrades to this honest message instead of requireEnv()
+  // throwing deep inside getStripe() and surfacing to the user as an opaque
+  // 500 (confirmed live on prod: STRIPE_CHECKOUT_ENABLED unset + no
+  // STRIPE_SECRET_KEY produced a 500 on "Get Pro"/"Get Max" instead of this).
+  if (!CHECKOUT_ENABLED || !getOptionalEnv('STRIPE_SECRET_KEY')) {
     throw createError.validation(
       'Paid-plan checkout is not available yet. Local and BYOK are free; managed cloud is in public alpha.',
     );

@@ -104,6 +104,15 @@ describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — content-script senders reje
     ).toBe(true);
   });
 
+  it('rejects context-handoff approval and cancellation from a content script', () => {
+    const sender: SenderShape = {
+      id: EXTENSION_ID,
+      tab: { id: 1, url: 'https://allowlisted.com/' },
+    };
+    expect(isRejectedByExtensionPageOnlyGate('APPROVE_CONTEXT_HANDOFF', sender)).toBe(true);
+    expect(isRejectedByExtensionPageOnlyGate('CANCEL_CONTEXT_HANDOFF', sender)).toBe(true);
+  });
+
   it('rejects when sender.id is from another extension', () => {
     const sender: SenderShape = {
       id: 'different-extension-id',

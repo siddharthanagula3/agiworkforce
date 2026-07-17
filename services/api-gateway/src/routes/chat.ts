@@ -16,7 +16,11 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getServiceClient } from '../lib/neonClients';
+import {
+  getSystemClient,
+  getUserScopedClient,
+  type UserAuth,
+} from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -62,17 +66,12 @@ const historyQuerySchema = z.object({
 // HELPER: Verify desktop ownership
 // =============================================================================
 
-async function verifyDesktopOwnership(desktopId: string, userId: string): Promise<void> {
+async function verifyDesktopOwnership(desktopId: string, user: UserAuth): Promise<void> {
   if (!isValidUuid(desktopId)) {
     throw new AppError('Invalid desktop ID format', 400);
   }
 
-  // RLS-GAP: desktop_devices has no RLS policy (0013_devices.sql enables
-  // none) — migration TODO. Same gap applies to `chat_messages` (no
-  // migration record anywhere in the repo) at every getServiceClient() call
-  // site below. The explicit ownership checks are the SOLE tenant-isolation
-  // mechanism until policies ship.
-  const db = getServiceClient();
+  const db = getUserScopedClient(user);
   const { data: desktop, error } = await db
     .from('desktop_devices')
     .select('id, user_id')
@@ -83,7 +82,7 @@ async function verifyDesktopOwnership(desktopId: string, userId: string): Promis
     throw new AppError('Desktop not found', 404);
   }
 
-  if (desktop.user_id !== userId) {
+  if (desktop.user_id !== user.userId) {
     throw new AppError('Desktop not found', 404);
   }
 }
@@ -115,12 +114,14 @@ router.post(
       req.body,
     );
 
-    await verifyDesktopOwnership(desktopId, user.userId);
+    await verifyDesktopOwnership(desktopId, user);
 
     const messageId = randomUUID();
     const timestamp = Date.now();
 
-    const db = getServiceClient(); // RLS-GAP: chat_messages — see verifyDesktopOwnership() above
+    // chat_messages has no canonical migration. Preserve its explicit user_id
+    // ownership predicates on the compatibility boundary.
+    const db = getSystemClient('shadow-schema-compatibility');
     // Persist the message to Neon for history (best-effort)
     const { error: insertError } = await db.from('chat_messages').insert({
       id: messageId,
@@ -193,10 +194,10 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
   const query = historyQuerySchema.parse(req.query);
 
   if (query.desktopId) {
-    await verifyDesktopOwnership(query.desktopId, user.userId);
+    await verifyDesktopOwnership(query.desktopId, user);
   }
 
-  const db = getServiceClient(); // RLS-GAP: chat_messages — see verifyDesktopOwnership() above
+  const db = getSystemClient('shadow-schema-compatibility');
   // Build Neon query
   let dbQuery = db
     .from('chat_messages')
@@ -264,10 +265,10 @@ router.get(
       typeof req.query['desktopId'] === 'string' ? req.query['desktopId'] : undefined;
 
     if (desktopId) {
-      await verifyDesktopOwnership(desktopId, user.userId);
+      await verifyDesktopOwnership(desktopId, user);
     }
 
-    const db = getServiceClient(); // RLS-GAP: chat_messages — see verifyDesktopOwnership() above
+    const db = getSystemClient('shadow-schema-compatibility');
     // Fetch distinct conversations with their latest message
     let dbQuery = db
       .from('chat_messages')

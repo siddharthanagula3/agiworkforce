@@ -29,6 +29,29 @@ if (!fs.existsSync(absolute(migrationsDir))) {
       errors.push(`${migrationsDir}/${filename} must use <sequence>_<name>.sql naming.`);
     }
   }
+
+  const migrationHistory = files
+    .map((filename) => fs.readFileSync(absolute(path.join(migrationsDir, filename)), 'utf8'))
+    .join('\n')
+    .toLowerCase();
+  const requiredProjectColumns = [
+    'organization_id',
+    'default_privacy_mode',
+    'default_provider_mode',
+    'allowed_surfaces',
+    'default_model_id',
+    'last_used_at',
+    'icon_emoji',
+    'accent_color',
+    'imported_from',
+  ];
+  for (const column of requiredProjectColumns) {
+    if (!migrationHistory.includes(`add column if not exists ${column}`)) {
+      errors.push(
+        `${migrationsDir} has production code for user_projects.${column} but no canonical ADD COLUMN migration.`,
+      );
+    }
+  }
 }
 
 const retiredDbDir = 'supa' + 'base';

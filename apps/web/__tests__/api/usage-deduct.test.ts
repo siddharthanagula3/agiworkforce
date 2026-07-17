@@ -59,12 +59,17 @@ import { POST } from '@/app/api/usage/deduct/route';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Cookie-session requests: no Authorization header. This suite mocks
+// @clerk/nextjs/server's auth() (the cookie path) but never mocks
+// @clerk/backend's verifyToken, so a placeholder Bearer header here would be
+// a present-but-unverifiable credential — getClerkAuthUser now rejects that
+// outright rather than falling back to the mocked cookie session
+// (WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01).
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/usage/deduct', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: 'Bearer test-token',
     },
     body: JSON.stringify(body),
   });
@@ -75,7 +80,6 @@ function makeRawRequest(rawBody: string): NextRequest {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: 'Bearer test-token',
     },
     body: rawBody,
   });

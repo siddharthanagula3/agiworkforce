@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Switch } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { useBillingStore } from '@/stores/unified/auth';
+import { setTelemetryConsentCache } from '@/lib/sentry-shared';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
@@ -12,7 +13,17 @@ import {
 
 const NAMESPACE = 'privacy';
 
-type ToggleKey = 'locationMetadata' | 'improveModelTraining' | 'shareTelemetry' | 'rememberChats';
+// 'locationMetadata' and 'improveModelTraining' are intentionally absent from
+// TOGGLES: both persisted correctly but had zero consumers anywhere (no
+// location collection exists to gate; no training-data pipeline exists to
+// gate) — a switch that saves but changes nothing is a dead control. Re-add
+// once the underlying feature ships. 'rememberChats' is also absent: it
+// currently promises the opposite of what happens (off does NOT stop
+// cloud-saving; the conversation-save path never reads this preference).
+// Fixing that means gating the save path itself, not this settings screen —
+// do not re-add the switch until that read is wired, or it goes back to
+// actively lying to privacy-conscious users.
+type ToggleKey = 'shareTelemetry';
 
 interface ToggleSpec {
   id: ToggleKey;
@@ -23,28 +34,6 @@ interface ToggleSpec {
 }
 
 const TOGGLES: ReadonlyArray<ToggleSpec> = [
-  {
-    id: 'locationMetadata',
-    label: 'Location metadata',
-    description:
-      'Allow AGI to use coarse location metadata (city/region) to improve product experiences.',
-    defaultValue: false,
-  },
-  {
-    id: 'rememberChats',
-    label: 'Remember chats',
-    description:
-      'When enabled, conversations are stored in the cloud and accessible on Web, Desktop, and Mobile (never CLI / VS Code / Chrome extension). Turn off to stop new conversations from being saved.',
-    defaultValue: true,
-  },
-  {
-    id: 'improveModelTraining',
-    label: 'Help improve AGI models',
-    description:
-      'Hosted cloud only: share anonymized conversations to improve future models. Off by default. Local Mode and BYOK conversations are never used regardless of this setting.',
-    defaultValue: false,
-    managedOnly: true,
-  },
   {
     id: 'shareTelemetry',
     label: 'Share crash and usage telemetry',
@@ -146,6 +135,10 @@ export function PrivacySection() {
         if (!cancelled) {
           setState(value);
           setPreferenceError(null);
+          // Sync the server-authoritative value to this device's synchronous
+          // localStorage cache so instrumentation-client.ts's next page load
+          // (which runs before this fetch could resolve) respects it.
+          setTelemetryConsentCache(value.shareTelemetry);
         }
       })
       .catch((error) => {
@@ -168,6 +161,12 @@ export function PrivacySection() {
       const next = { ...prev, [key]: !prev[key] };
       setSavingPreferences(true);
       setPreferenceError(null);
+      // Mirror immediately, matching the optimistic setState above (this
+      // component doesn't roll UI state back on save failure, it only shows
+      // an error banner — so the cache must track what the switch displays,
+      // not server-confirmed state, or the switch and the actual gate could
+      // silently disagree).
+      setTelemetryConsentCache(next.shareTelemetry);
       savePreferenceNamespace(NAMESPACE, next)
         .catch((error) => {
           setPreferenceError(

@@ -507,22 +507,14 @@ describe('CHROME-HIGH-3 handleChatMessage refuses apiKey from message body', () 
   function handleChatMessageBody(): string {
     const start = backgroundSource.indexOf('async function handleChatMessage');
     if (start < 0) return '';
-    // Skip past the signature line so the lookahead doesn't match the start itself.
-    const afterSignature = start + 'async function handleChatMessage'.length;
-    const tail = backgroundSource.slice(afterSignature);
-    // Next top-level function declaration ("\n}\n\n" terminates current fn,
-    // followed by another `function ` or `async function ` at column 0).
-    const endRel = tail.search(/\n\}\n\n(?:async )?function /);
-    return endRel > 0
-      ? backgroundSource.slice(start, afterSignature + endRel + 2)
-      : backgroundSource.slice(start);
+    const end = backgroundSource.indexOf('async function handleInPagePrompt', start);
+    return end > start ? backgroundSource.slice(start, end) : backgroundSource.slice(start);
   }
 
   it('handleChatMessage does NOT destructure apiKey from the inbound message', () => {
     const body = handleChatMessageBody();
     expect(body.length).toBeGreaterThan(500);
-    // Required: destructure pulls the legitimate fields.
-    expect(body).toMatch(/const \{[^}]*pageContext[^}]*\} = message;/);
+    expect(body).toContain('pageContext: message.pageContext');
     // Forbidden: destructure must NOT pull apiKey (any whitespace variant).
     expect(body).not.toMatch(/const \{[^}]*\bapiKey\b[^}]*\} = message;/);
   });
@@ -581,26 +573,38 @@ describe('side panel page-context capture sanitizes raw innerText', () => {
   });
 });
 
-describe('Chrome chat fails closed without cloud/API fallback', () => {
+describe('Chrome inference stays inside the Managed Cloud boundary', () => {
   const backgroundSource = readFileSync(join(__dirname, '..', 'src', 'background.ts'), 'utf8');
 
   function handleChatMessageBody(): string {
     const start = backgroundSource.indexOf('async function handleChatMessage');
     if (start < 0) return '';
-    const afterSignature = start + 'async function handleChatMessage'.length;
-    const tail = backgroundSource.slice(afterSignature);
-    const endRel = tail.search(/\n\}\n\n(?:async )?function /);
-    return endRel > 0
-      ? backgroundSource.slice(start, afterSignature + endRel + 2)
-      : backgroundSource.slice(start);
+    const end = backgroundSource.indexOf('async function handleInPagePrompt', start);
+    return end > start ? backgroundSource.slice(start, end) : backgroundSource.slice(start);
   }
 
-  it('background chat handler does not call legacy hosted chat/provider paths', () => {
+  it('background chat handler uses the managed owner and has no Desktop/Local fallback', () => {
     const body = handleChatMessageBody();
-    expect(body).not.toContain('api.agiworkforce.com');
-    expect(body).not.toContain('agi_use_provider_stream');
-    expect(body).not.toContain('/api/v1/providers/');
-    expect(body).not.toContain('/api/llm/v1/chat/completions');
+    expect(body).toContain('executeChromeManagedChat');
+    expect(body).not.toContain('getAgiBridgeBaseUrl');
+    expect(body).not.toContain('/v1/chat/stream');
+    expect(body).not.toContain('sendNativeRequest');
+    expect(body).not.toContain("type: 'chat_message'");
+  });
+
+  it('in-page prompts use the same managed owner and have no native fallback', () => {
+    const start = backgroundSource.indexOf('async function handleInPagePrompt');
+    const afterSignature = start + 'async function handleInPagePrompt'.length;
+    const tail = backgroundSource.slice(afterSignature);
+    const endRel = tail.search(/\n\}\n\n(?:async )?function /);
+    const body =
+      endRel > 0
+        ? backgroundSource.slice(start, afterSignature + endRel + 2)
+        : backgroundSource.slice(start);
+    expect(body).toContain('executeChromeManagedChat');
+    expect(body).not.toContain('getAgiBridgeBaseUrl');
+    expect(body).not.toContain('/v1/chat/stream');
+    expect(body).not.toContain('sendNativeRequest');
   });
 });
 
@@ -915,7 +919,7 @@ describe('P0-D cross-tab mutation guard — DOUBLE_CLICK, RIGHT_CLICK, FILL_FORM
 
 // ─── P1-14: redactSensitiveText — credit-card + password-field redaction ───────
 
-import { redactSensitiveText } from '../src/inPagePanel/pageActions';
+import { redactSensitiveText } from '../src/features/content/in-page-panel/pageActions';
 
 describe('P1-14 redactSensitiveText — sensitive field redaction', () => {
   it('redacts a 16-digit Visa number', () => {

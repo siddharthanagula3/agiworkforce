@@ -350,9 +350,8 @@ export async function runAgentLoop(
   if (!token) {
     unregisterActiveTab(tabId);
     throw new Error(
-      'agentLoop: no auth token available. ' +
-        'Set agi_dev_bearer_token in chrome.storage.local for dev, ' +
-        'or have the popup post a Clerk session token to agi_clerk_session_token.',
+      'agentLoop: no authenticated AGI Cloud session is available. ' +
+        'Sign in from the extension drawer before starting computer use.',
     );
   }
   const gatewayBase = await resolveGatewayBase();

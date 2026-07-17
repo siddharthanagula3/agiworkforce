@@ -149,10 +149,10 @@ const canonicalContractNames = [
 
 const allowedLegacyDefinitions = new Set([
   'apps/desktop/src/api/mcp.ts::ConnectorManifest',
-  'packages/api/src/mcp.ts::ConnectorManifest',
-  'packages/mcp/src/types.ts::McpServerConfig',
-  'packages/types/src/agent-status.ts::AgentSession',
-  'packages/types/src/suite-contracts.ts::GeneratedFile',
+  'packages/client/desktop-command-client/src/mcp.ts::ConnectorManifest',
+  'packages/tools/mcp/src/types.ts::McpServerConfig',
+  'packages/contracts/types/src/agent-status.ts::AgentSession',
+  'packages/contracts/types/src/suite-contracts.ts::GeneratedFile',
 ]);
 
 for (const scanRoot of ['apps', 'packages', 'services']) {
@@ -170,7 +170,7 @@ for (const scanRoot of ['apps', 'packages', 'services']) {
 
       const definitionId = `${relativePath}::${contractName}`;
       if (allowedLegacyDefinitions.has(definitionId)) continue;
-      if (relativePath.startsWith('packages/types/src/')) continue;
+      if (relativePath.startsWith('packages/contracts/types/src/')) continue;
 
       errors.push(
         `${relativePath} defines ${contractName}; import the canonical contract from @agiworkforce/types or update scripts/check-service-layer.mjs with an explicit migration exception.`,

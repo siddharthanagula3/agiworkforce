@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ChatComposerNew } from './ChatComposerNew';
+import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
+import { getSelectableModels } from '@/constants/llm';
+import { providerSupportsWebSearch } from '@/lib/web-search-support';
+import { useModelStore } from '@shared/stores/model-store';
+import { CapabilityProvider } from '@agiworkforce/unified-chat';
 
 // ─── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -15,6 +19,16 @@ const chatComposerMocks = vi.hoisted(() => ({
     },
   ],
   openSettings: vi.fn(),
+  routerPush: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: chatComposerMocks.routerPush,
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+  }),
 }));
 
 vi.mock('@features/settings/components/SettingsModalProvider', () => ({
@@ -98,27 +112,18 @@ vi.mock('@/hooks/useApiPromptCompletion', () => ({
     mockUseApiPromptCompletion(...args),
 }));
 
-// Router + project store: the composer uses next/navigation's useRouter (AGI Work
-// project selector navigation) and the shared project store (project list). Neither
-// has a provider in unit tests, so stub both.
-const mockRouterPush = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockRouterPush, replace: vi.fn(), prefetch: vi.fn() }),
-}));
-
-vi.mock('@features/projects', () => ({
-  useProjectStore: (selector: (s: { projects: unknown[] }) => unknown) =>
-    selector({ projects: [] }),
-}));
-
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ChatComposerNew', () => {
+  let originalModelId: string;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    originalModelId = useModelStore.getState().selectedModelId;
   });
 
   afterEach(() => {
+    useModelStore.getState().setSelectedModelId(originalModelId);
     vi.unstubAllGlobals();
   });
 
@@ -163,7 +168,7 @@ describe('ChatComposerNew', () => {
         'hello world',
         undefined,
         undefined,
-        expect.objectContaining({ agentMode: 'solo', folderId: null }),
+        expect.objectContaining({ workMode: 'chat', projectId: null }),
       );
     });
   });
@@ -181,7 +186,7 @@ describe('ChatComposerNew', () => {
         'hello world',
         undefined,
         undefined,
-        expect.objectContaining({ agentMode: 'solo', folderId: null }),
+        expect.objectContaining({ workMode: 'chat', projectId: null }),
       );
     });
   });
@@ -212,9 +217,26 @@ describe('ChatComposerNew', () => {
     expect(onSendMock).not.toHaveBeenCalled();
   });
 
-  it('passes agentMode in meta when onSend is called', async () => {
+  it('AGI Work send carries workMode + the selected projectId in meta (connected payload)', async () => {
     const onSendMock = vi.fn();
-    render(<ChatComposerNew onSend={onSendMock} initialAgentMode="engineer" />);
+    render(
+      <ChatComposerNew
+        onSend={onSendMock}
+        projectPicker={{
+          projects: [{ id: 'proj-2', name: 'Mobile App' }],
+          activeProjectId: 'proj-2',
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    // A preselected project flips the composer into AGI Work mode by itself
+    // (URL-entry path); the toggle must reflect it.
+    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, 'test');
@@ -225,7 +247,7 @@ describe('ChatComposerNew', () => {
         'test',
         undefined,
         undefined,
-        expect.objectContaining({ agentMode: 'engineer' }),
+        expect.objectContaining({ workMode: 'agiwork', projectId: 'proj-2' }),
       );
     });
   });
@@ -377,13 +399,33 @@ describe('ChatComposerNew', () => {
     expect(screen.getByTestId('composer-footer')).toBeInTheDocument();
   });
 
-  it('shows a Chat | AGI Work segmented toggle (claude.ai parity) in the input row', () => {
+  it('renders the work-mode toggle ONLY when backed by host project data (never disconnected)', () => {
+    // Without projectPicker there is no project backing → no Chat/AGI Work
+    // toggle (a mode switch that scopes nothing would be a dead control).
     render(<ChatComposerNew onSend={vi.fn()} />);
-    // The segmented work-mode toggle replaces the old always-present tool pills.
-    expect(screen.getByRole('button', { name: 'Chat' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'AGI Work' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'AGI Work' })).not.toBeInTheDocument();
     // Tools no longer sit in the input area as always-present pills.
     expect(screen.queryByRole('button', { name: /toggle web search/i })).not.toBeInTheDocument();
+  });
+
+  it('renders the connected Chat | AGI Work segmented toggle when project data is provided', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('web search + deep research live inside the + menu (not the input area)', () => {
@@ -393,15 +435,22 @@ describe('ChatComposerNew', () => {
     expect(screen.getByRole('button', { name: /deep research/i })).toBeInTheDocument();
   });
 
-  it('toggling to AGI Work reveals the project selector row', () => {
+  it('does not expose an inert work-project selector', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
-    // Chat mode: no project selector.
     expect(screen.queryByRole('button', { name: /choose a project/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
-    expect(screen.getByRole('button', { name: /choose a project/i })).toBeInTheDocument();
   });
 
   it('web search is a PERSISTENT toggle — stays on across sends (not fire-once)', async () => {
+    const searchModel = getSelectableModels().find(
+      (model) =>
+        model.capabilities.search === true && providerSupportsWebSearch(model.provider) === true,
+    );
+    expect(
+      searchModel,
+      'the canonical registry must expose a wired web-search model',
+    ).toBeDefined();
+    useModelStore.getState().setSelectedModelId(searchModel!.id);
+
     const onSendMock = vi.fn();
     render(<ChatComposerNew onSend={onSendMock} />);
 
@@ -434,5 +483,119 @@ describe('ChatComposerNew', () => {
         expect.objectContaining({ webSearchEnabled: true }),
       ),
     );
+  });
+
+  describe('Project or folder picker', () => {
+    // The picker is only rendered when the host passes REAL project data
+    // (WebChatPage supplies useManagedCloudProjects rows) — the selection is
+    // threaded into createConversation as projectId, so it is never cosmetic.
+    const pickerProjects = [
+      { id: 'proj-1', name: 'Website Redesign' },
+      { id: 'proj-2', name: 'Mobile App' },
+    ];
+
+    function makePicker(overrides: Partial<ComposerProjectPicker> = {}): ComposerProjectPicker {
+      return {
+        projects: pickerProjects,
+        activeProjectId: null,
+        onSelectProject: vi.fn(),
+        onCreateProject: vi.fn(),
+        ...overrides,
+      };
+    }
+
+    /** The chip lives BELOW the composer and only renders in AGI Work mode. */
+    function enterAgiWork() {
+      fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    }
+
+    it('is absent when the host provides no project data (no cosmetic control)', () => {
+      render(<ChatComposerNew onSend={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeInTheDocument();
+    });
+
+    it('is hidden in Chat mode and appears below the composer in AGI Work mode', () => {
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeInTheDocument();
+      enterAgiWork();
+      expect(screen.getByRole('button', { name: 'Project or folder' })).toBeInTheDocument();
+    });
+
+    it('opens a searchable popover listing the real projects', () => {
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      enterAgiWork();
+      fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+      expect(screen.getByRole('textbox', { name: /search projects/i })).toBeInTheDocument();
+      expect(screen.getByText('Website Redesign')).toBeInTheDocument();
+      expect(screen.getByText('Mobile App')).toBeInTheDocument();
+    });
+
+    it('filters the project list as the user searches', async () => {
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      enterAgiWork();
+      fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+      await userEvent.type(screen.getByRole('textbox', { name: /search projects/i }), 'mobile');
+      expect(screen.queryByText('Website Redesign')).not.toBeInTheDocument();
+      expect(screen.getByText('Mobile App')).toBeInTheDocument();
+    });
+
+    it('selecting a project reports its projectId to the host (the value threaded into createConversation)', () => {
+      const picker = makePicker();
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      enterAgiWork();
+      fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+      fireEvent.click(screen.getByText('Mobile App'));
+      expect(picker.onSelectProject).toHaveBeenCalledWith('proj-2');
+    });
+
+    it('a preselected project (URL entry) auto-enters AGI Work and shows the project on the chip', () => {
+      const picker = makePicker({ activeProjectId: 'proj-1' });
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      // No manual toggle click: the preselected project flips the mode itself.
+      expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(screen.getByRole('button', { name: 'Project or folder' })).toHaveTextContent(
+        'Website Redesign',
+      );
+      fireEvent.click(screen.getByRole('button', { name: /clear project or folder selection/i }));
+      expect(picker.onSelectProject).toHaveBeenCalledWith(null);
+    });
+
+    it('switching back to Chat clears the project selection (no hidden scope)', () => {
+      const picker = makePicker({ activeProjectId: 'proj-1' });
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
+      expect(picker.onSelectProject).toHaveBeenCalledWith(null);
+      expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeInTheDocument();
+    });
+
+    it('offers Create new project (opens the host CreateProjectDialog)', () => {
+      const picker = makePicker();
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker} />);
+      enterAgiWork();
+      fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+      fireEvent.click(screen.getByText('Create new project'));
+      expect(picker.onCreateProject).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT offer local-folder selection on web (working-directory is a desktop capability)', () => {
+      render(<ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />);
+      enterAgiWork();
+      fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+      expect(screen.queryByText('Choose a different folder')).not.toBeInTheDocument();
+    });
+
+    it('offers "Choose a different folder" only on working-directory surfaces (desktop)', () => {
+      render(
+        <CapabilityProvider platform="desktop">
+          <ChatComposerNew onSend={vi.fn()} projectPicker={makePicker()} />
+        </CapabilityProvider>,
+      );
+      enterAgiWork();
+      fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
+      expect(screen.getByText('Choose a different folder')).toBeInTheDocument();
+    });
   });
 });

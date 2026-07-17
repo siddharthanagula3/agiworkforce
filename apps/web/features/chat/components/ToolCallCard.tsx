@@ -24,6 +24,8 @@ export interface ToolCall {
   description?: string;
   parameters?: Record<string, unknown>;
   result?: string;
+  /** Failure reason, shown in a dedicated "Error" section when status === 'error'. */
+  error?: string;
   status: ToolCallStatus;
   createdAt?: string;
   startedAt?: string;
@@ -40,6 +42,9 @@ interface ToolCallCardProps {
   onCancel?: (id: string) => void;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
+  /** See the package ToolCallCard's own doc comment -- renders an expired notice instead of live approve/reject buttons. */
+  expired?: boolean;
+  onResend?: (id: string) => void;
   showParameters?: boolean;
   className?: string;
 }
@@ -49,6 +54,8 @@ export function ToolCallCard({
   onCancel,
   onApprove,
   onReject,
+  expired,
+  onResend,
   showParameters = true,
   className,
 }: ToolCallCardProps) {
@@ -60,11 +67,14 @@ export function ToolCallCard({
       requiresApproval={toolCall.requiresApproval}
       args={toolCall.parameters}
       result={toolCall.result}
+      error={toolCall.error}
       showParameters={showParameters}
       elapsedMs={toolCall.durationMs}
       onApprove={onApprove}
       onReject={onReject}
       onCancel={onCancel}
+      expired={expired}
+      onResend={onResend}
       className={className}
     />
   );

@@ -1,6 +1,8 @@
 /**
- * @deprecated import from 'features/content/in-page-panel' instead.
- * Re-export shim — canonical source: src/features/content/in-page-panel/setup.ts
+ * Live entry point for the in-page panel, imported directly by content.ts.
+ * `./launcher` and `./panel` in this directory are re-export shims onto
+ * `features/content/in-page-panel/{launcher,panel}.ts`, which hold the real
+ * implementations.
  */
 
 import { createLauncher, loadPosition, applyPosition, attachScrollBehaviour } from './launcher';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAllowedModelsForTier, getRoutingSlotModel } from '@agiworkforce/types';
+import { getAllowedModelsForTier, getDefaultModelFor } from '@agiworkforce/types';
 import {
   FREE_TRIAL_MAX_INPUT_CHARS,
   FREE_TRIAL_MAX_INPUT_TOKENS,
@@ -18,7 +18,7 @@ describe('free trial config', () => {
   });
 
   it('derives the default model and model set from the catalog (no hardcoded IDs)', () => {
-    expect(FREE_TRIAL_MODEL).toBe(getRoutingSlotModel('general_balanced'));
+    expect(FREE_TRIAL_MODEL).toBe(getDefaultModelFor('free', 'chat'));
     expect(FREE_TRIAL_MODELS).toEqual(getAllowedModelsForTier('economy'));
     // the default selection must live inside the selectable Hobby set
     expect(FREE_TRIAL_MODELS).toContain(FREE_TRIAL_MODEL);

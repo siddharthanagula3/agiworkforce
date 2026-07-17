@@ -56,6 +56,7 @@ describe('DesktopShellV3 real render', () => {
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
     expect(screen.getByText('New chat')).toBeInTheDocument();
+    expect(screen.queryByText('Dispatch')).not.toBeInTheDocument();
     // EmptyChat is composer-only as of the 2026-06-13 greeting removal (it renders
     // null), so the mode badge no longer appears in the empty state. The shell
     // still mounting (New chat present) is what proves no error boundary fired.

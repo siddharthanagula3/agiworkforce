@@ -22,19 +22,19 @@ vi.mock('@shared/stores/model-store', () => ({
     }) => unknown,
   ) => {
     const state = {
-      selectedModelId: 'gpt-5.5',
+      selectedModelId: 'gpt-5.6-sol',
       setSelectedModelId: vi.fn(),
-      getSelectedModel: () => ({ id: 'gpt-5.5', name: 'GPT-5.5', provider: 'OpenAI' }),
+      getSelectedModel: () => ({ id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'OpenAI' }),
     };
     return selector(state);
   },
   AVAILABLE_MODELS: [
     // ComposerFooter groups by `providerKey` (the lowercase models.json key);
     // `provider` is the display label only.
-    { id: 'gpt-5.5', name: 'GPT-5.5', provider: 'OpenAI', providerKey: 'openai' },
+    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'OpenAI', providerKey: 'openai' },
     {
-      id: 'claude-3-5-sonnet',
-      name: 'Claude 3.5 Sonnet',
+      id: 'claude-sonnet-5',
+      name: 'Claude Sonnet 5',
       provider: 'Anthropic',
       providerKey: 'anthropic',
     },
@@ -88,7 +88,7 @@ describe('ComposerFooter · model selector integration', () => {
 
   it('renders the current model name in the selector button', () => {
     render(<ComposerFooter />);
-    expect(screen.getByRole('button', { name: /change model/i })).toHaveTextContent('GPT-5.5');
+    expect(screen.getByRole('button', { name: /change model/i })).toHaveTextContent('GPT-5.6 Sol');
   });
 
   it('renders the model selector button with aria-label', () => {
@@ -133,5 +133,4 @@ describe('ComposerFooter · layout', () => {
     expect(styleSelector).toBeInTheDocument();
     expect(modelBtn).toBeInTheDocument();
   });
-
 });

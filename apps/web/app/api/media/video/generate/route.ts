@@ -1,13 +1,23 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ManagedMediaVideoGenerationRequestSchema,
+  type ManagedMediaVideoProvider,
+  type ManagedMediaVideoResolution,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getProviderDefaultModel,
+  getRoutingSlotModel,
+  isModelLive,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -31,24 +41,9 @@ import { randomUUID } from 'crypto';
 export const maxDuration = 60;
 export const runtime = 'nodejs';
 
-// Request validation schema
-const VideoGenerationRequestSchema = z.object({
-  prompt: z.string().min(1).max(2000),
-  duration_secs: z.number().int().min(2).max(10).optional().default(5),
-  resolution: z.enum(['720p', '1080p', '4k']).optional().default('720p'),
-  provider: z.enum(['runway', 'google']).optional(),
-});
-
 // Provider type
-type VideoProvider = 'runway' | 'google';
-
-// Cost estimates in cents per video generation task
-// Runway Gen4 Turbo: ~$0.05/s generated video ($0.25 for 5s)
-// Google Veo: ~$0.06/s generated video ($0.30 for 5s)
-const VIDEO_COST_CENTS: Record<VideoProvider, number> = {
-  runway: 25, // ~$0.25 per task (conservative estimate)
-  google: 30, // ~$0.30 per task (conservative estimate)
-};
+type VideoProvider = ManagedMediaVideoProvider;
+type VideoResolution = ManagedMediaVideoResolution;
 
 // Response types
 interface VideoGenerationResponse {
@@ -56,6 +51,7 @@ interface VideoGenerationResponse {
   task_id: string;
   status: 'queued' | 'processing';
   provider: VideoProvider;
+  model: string;
   estimated_duration_secs: number;
 }
 
@@ -93,17 +89,82 @@ function getVideoProvider(requestedProvider?: VideoProvider): VideoProvider {
     return 'google';
   }
 
-  // Default: Runway if available, else Google Veo
-  if (process.env['RUNWAY_API_KEY']) {
-    return 'runway';
-  }
-  if (process.env['GOOGLE_API_KEY']) {
-    return 'google';
-  }
+  // Default to the provider assigned to the canonical video slot, then fall
+  // back to the other configured adapter. Provider preference is product
+  // policy and must not be duplicated in this route.
+  const slotProvider = getModelMetadataById(getRoutingSlotModel('video_generation'))?.provider;
+  if (slotProvider === 'google' && process.env['GOOGLE_API_KEY']) return 'google';
+  if (slotProvider === 'runway' && process.env['RUNWAY_API_KEY']) return 'runway';
+  if (process.env['GOOGLE_API_KEY']) return 'google';
+  if (process.env['RUNWAY_API_KEY']) return 'runway';
 
   throw createError.serviceUnavailable(
     'No video generation provider configured. Please contact support.',
   );
+}
+
+function resolveVideoModel(
+  requestedProvider?: VideoProvider,
+  requestedModelId?: string,
+): { provider: VideoProvider; model: ModelMetadata } {
+  if (requestedModelId) {
+    const requestedModel = getModelMetadataById(requestedModelId);
+    if (!requestedModel || requestedModel.modelType !== 'video' || !isModelLive(requestedModel)) {
+      throw createError.validation(`Unknown or unavailable video model: ${requestedModelId}`);
+    }
+    if (requestedModel.provider !== 'google' && requestedModel.provider !== 'runway') {
+      throw createError.validation(`Video model ${requestedModelId} has no executable provider`);
+    }
+    if (requestedProvider && requestedProvider !== requestedModel.provider) {
+      throw createError.validation(
+        `Video model ${requestedModel.id} belongs to ${requestedModel.provider}, not ${requestedProvider}`,
+      );
+    }
+
+    const provider = getVideoProvider(requestedModel.provider);
+    return { provider, model: requestedModel };
+  }
+
+  const provider = getVideoProvider(requestedProvider);
+  const slotModelId = getRoutingSlotModel('video_generation');
+  const slotModel = getModelMetadataById(slotModelId);
+  const defaultModelId =
+    slotModel?.provider === provider ? slotModelId : getProviderDefaultModel(provider);
+  const model = defaultModelId ? getModelMetadataById(defaultModelId) : null;
+  if (!model || model.modelType !== 'video' || model.provider !== provider || !isModelLive(model)) {
+    throw createError.serviceUnavailable(`No live ${provider} video model is configured`);
+  }
+  return { provider, model };
+}
+
+function normalizeBillableDuration(
+  provider: VideoProvider,
+  requestedDuration: number,
+  resolution: VideoResolution,
+): number {
+  if (provider === 'runway') return Math.max(2, Math.min(requestedDuration, 10));
+  if (resolution === '1080p' || resolution === '4k') return 8;
+  if (requestedDuration <= 4) return 4;
+  if (requestedDuration <= 6) return 6;
+  return 8;
+}
+
+function getVideoCostCents(
+  model: ModelMetadata,
+  resolution: VideoResolution,
+  durationSecs: number,
+): number {
+  const resolutionPrices = model.videoPerSecondCostByResolution;
+  const pricePerSecond = resolutionPrices ? resolutionPrices[resolution] : model.videoPerSecondCost;
+  if (pricePerSecond === undefined) {
+    if (resolutionPrices) {
+      throw createError.validation(`${model.name} does not support ${resolution} output`);
+    }
+    throw createError.serviceUnavailable(`Pricing is not configured for ${model.name}`);
+  }
+  // Normalize binary floating-point noise before rounding up to whole cents
+  // (for example, 0.40 * 6 * 100 must reserve 240, not 241).
+  return Math.ceil(Number((pricePerSecond * durationSecs * 100).toFixed(8)));
 }
 
 /**
@@ -123,6 +184,7 @@ async function generateWithRunway(
   prompt: string,
   durationSecs: number,
   resolution: string,
+  model: ModelMetadata,
 ): Promise<{ taskId: string; estimatedDuration: number }> {
   const apiKey = process.env['RUNWAY_API_KEY'];
   if (!apiKey) {
@@ -142,7 +204,7 @@ async function generateWithRunway(
       'X-Runway-Version': '2024-11-06',
     },
     body: JSON.stringify({
-      model: 'gen4_turbo',
+      model: model.apiModelId ?? model.id,
       promptText: prompt,
       duration: clampedDuration,
       ratio,
@@ -197,38 +259,17 @@ async function generateWithRunway(
  */
 async function generateWithGoogleVeo(
   prompt: string,
-  durationSecs: number,
-  resolution: string,
+  durationSecs: 4 | 6 | 8,
+  resolution: VideoResolution,
+  model: ModelMetadata,
 ): Promise<{ taskId: string; estimatedDuration: number }> {
   const apiKey = process.env['GOOGLE_API_KEY'];
   if (!apiKey) {
     throw createError.serviceUnavailable('Google Veo API not configured');
   }
 
-  // Veo 3.1 supports 4, 6, or 8 seconds; clamp to nearest valid value
-  type VeoDuration = 4 | 6 | 8;
-  let veoDuration: VeoDuration;
-  if (durationSecs <= 4) {
-    veoDuration = 4;
-  } else if (durationSecs <= 6) {
-    veoDuration = 6;
-  } else {
-    veoDuration = 8;
-  }
-
-  // Map resolution; Veo supports 720p, 1080p, 4k
-  let veoResolution: string;
-  if (resolution === '4k') {
-    veoResolution = '4k';
-  } else if (resolution === '1080p') {
-    veoResolution = '1080p';
-  } else {
-    veoResolution = '720p';
-  }
-
-  const catalogModelId = getRoutingSlotModel('video_generation');
-  const model = getModelMetadataById(catalogModelId)?.apiModelId ?? catalogModelId;
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning`;
+  const providerModelId = model.apiModelId ?? model.id;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${providerModelId}:predictLongRunning`;
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -244,8 +285,8 @@ async function generateWithGoogleVeo(
       ],
       parameters: {
         aspectRatio: '16:9',
-        durationSeconds: String(veoDuration),
-        resolution: veoResolution,
+        durationSeconds: String(durationSecs),
+        resolution,
         numberOfVideos: 1,
         enhancePrompt: true,
       },
@@ -294,7 +335,7 @@ async function generateWithGoogleVeo(
   const operationId = result.name.split('/').pop() || result.name;
 
   // Estimated wait: ~90s base + 15s per second of video
-  const estimatedDuration = 90 + veoDuration * 15;
+  const estimatedDuration = 90 + durationSecs * 15;
 
   return {
     taskId: `google_${operationId}`,
@@ -368,7 +409,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     throw createError.validation('Invalid JSON in request body');
   }
 
-  const validationResult = VideoGenerationRequestSchema.safeParse(body);
+  const validationResult = ManagedMediaVideoGenerationRequestSchema.safeParse(body);
   if (!validationResult.success) {
     const errorMessage = validationResult.error.issues
       .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
@@ -376,13 +417,19 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     throw createError.validation(`Invalid request: ${errorMessage}`);
   }
 
-  const { prompt, duration_secs, resolution, provider: requestedProvider } = validationResult.data;
+  const {
+    prompt,
+    duration_secs,
+    resolution,
+    provider: requestedProvider,
+    model: requestedModelId,
+  } = validationResult.data;
 
-  // Determine provider
-  const provider = getVideoProvider(requestedProvider);
+  const { provider, model } = resolveVideoModel(requestedProvider, requestedModelId);
+  const billableDurationSecs = normalizeBillableDuration(provider, duration_secs, resolution);
 
   // Cost pre-check: verify the user has enough credits before starting the task
-  const estimatedCostCents = VIDEO_COST_CENTS[provider];
+  const estimatedCostCents = getVideoCostCents(model, resolution, billableDurationSecs);
   const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
   if (!hasCredits) {
     const balance = await CreditService.getBalance(userId);
@@ -402,7 +449,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     userId,
     estimatedCostCents,
     `Credit reservation: video generation (${provider})`,
-    { provider, type: 'reservation', requestId },
+    { provider, model: model.id, type: 'reservation', requestId },
     reservationKey,
   );
 
@@ -420,7 +467,8 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     {
       userId: userId,
       provider,
-      durationSecs: duration_secs,
+      model: model.id,
+      durationSecs: billableDurationSecs,
       resolution,
       promptLength: prompt.length,
     },
@@ -433,24 +481,48 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   try {
     if (provider === 'runway') {
-      const result = await generateWithRunway(prompt, duration_secs, resolution);
+      const result = await generateWithRunway(prompt, billableDurationSecs, resolution, model);
       taskId = result.taskId;
       estimatedDuration = result.estimatedDuration;
     } else {
-      const result = await generateWithGoogleVeo(prompt, duration_secs, resolution);
+      const result = await generateWithGoogleVeo(
+        prompt,
+        billableDurationSecs as 4 | 6 | 8,
+        resolution,
+        model,
+      );
       taskId = result.taskId;
       estimatedDuration = result.estimatedDuration;
     }
   } catch (error) {
     // Refund the reserved credits since the task was never created
     const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
-    await CreditService.deductCredits(
-      userId,
-      -estimatedCostCents,
-      `Refund: video generation failed (${provider})`,
-      { provider, type: 'refund', reason: 'task_creation_failure', requestId },
-      refundKey,
-    );
+    try {
+      await CreditService.settleCreditsDurably({
+        userId,
+        amountCents: -estimatedCostCents,
+        description: `Refund: video generation failed (${provider})`,
+        metadata: {
+          provider,
+          model: model.id,
+          type: 'refund',
+          reason: 'task_creation_failure',
+          requestId,
+        },
+        idempotencyKey: refundKey,
+      });
+    } catch (settlementError) {
+      logger.error(
+        {
+          event: 'video_refund_settlement_unrecorded',
+          error: settlementError,
+          userId,
+          provider,
+          requestId,
+        },
+        'Video generation refund could not be persisted',
+      );
+    }
     logger.warn(
       { userId: userId, provider, requestId },
       'Video task creation failed - credits refunded',
@@ -479,6 +551,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     task_id: taskId,
     status: 'queued',
     provider,
+    model: model.id,
     estimated_duration_secs: estimatedDuration,
   };
 

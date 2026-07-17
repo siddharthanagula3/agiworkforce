@@ -12,5 +12,5 @@ Purpose: Mobile Artifacts gallery, received-artifact previews, local copy/share 
 ## Rules
 
 - Keep artifact display local-first and share through native OS share APIs.
-- Do not add cloud upload or generation paths here without a feature flag and waitlist gate.
+- Do not add cloud upload or generation paths here without a feature flag and honest not-yet-available copy. Cloud access itself is public alpha and sign-in gated (no waitlist mechanic); an unshipped feature should read as "coming soon," not "join the cloud waitlist."
 - Put reusable artifact preview data/types in this folder, not in route wrappers.

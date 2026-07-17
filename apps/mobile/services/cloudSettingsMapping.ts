@@ -170,8 +170,8 @@ export function toCloudSettings(
 
 /**
  * Apply a pulled CloudSettings payload (namespaces from GET /api/settings/sync)
- * back into the live cloud settings store. Uses LWW semantics: fields are only
- * updated when present in the pulled payload (undefined = no change).
+ * back into the live cloud settings store. The server-revision winner is merged
+ * field-by-field (undefined = no change).
  *
  * Operates on `useCloudSettingsStore.getState()` directly (cloud mode only;
  * local-mode settings are never touched by the sync engine).

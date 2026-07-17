@@ -13,7 +13,7 @@ import { CloudRuntime } from '../CloudRuntime';
 const saveMessage = vi.fn();
 const createConversation = vi.fn();
 const deleteConversation = vi.fn();
-const updateConversationTitle = vi.fn();
+const updateConversation = vi.fn();
 const listConversations = vi.fn();
 const getConversation = vi.fn();
 
@@ -22,7 +22,7 @@ vi.mock('../../lib/cloudChatPersistence', () => ({
     saveMessage,
     createConversation,
     deleteConversation,
-    updateConversationTitle,
+    updateConversation,
     listConversations,
     getConversation,
   }),
@@ -30,6 +30,7 @@ vi.mock('../../lib/cloudChatPersistence', () => ({
 
 const sendCloudMessage = vi.fn();
 vi.mock('../../api/cloudApi', () => ({
+  CLOUD_API_BASE_URL: 'https://cloud.example',
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
 }));
 
@@ -46,6 +47,18 @@ describe('CloudRuntime', () => {
   });
 
   describe('sendMessage', () => {
+    it('advertises Research and forwards it to the cloud API request options', async () => {
+      const runtime = new CloudRuntime();
+      expect(runtime.supportsResearch).toBe(true);
+      sendCloudMessage.mockResolvedValue(undefined);
+
+      await runtime.sendMessage('conv_research', 'investigate', {
+        research: true,
+      });
+
+      expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({ research: true });
+    });
+
     it('persists the user message before streaming, then the assistant message on done', async () => {
       const runtime = new CloudRuntime();
       const events = collectEvents(runtime);
@@ -187,14 +200,13 @@ describe('CloudRuntime', () => {
     it('createConversation sends a client-supplied UUID and maps the response', async () => {
       createConversation.mockResolvedValue({
         id: 'conv_1',
-        userId: 'user_1',
         title: 'New Conversation',
-        mode: 'chat',
         model: 'claude-sonnet-5',
         projectId: null,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-        metadata: { messageCount: 0, agentsInvolved: [], lastActivity: new Date() },
+        pinned: false,
+        isTemporary: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
       });
 
       const runtime = new CloudRuntime();
@@ -217,24 +229,28 @@ describe('CloudRuntime', () => {
       expect(deleteConversation).toHaveBeenCalledWith('conv_1');
     });
 
-    it('renameConversation delegates to updateConversationTitle', async () => {
+    it('renameConversation delegates to updateConversation', async () => {
       const runtime = new CloudRuntime();
       await runtime.renameConversation('conv_1', 'New title');
-      expect(updateConversationTitle).toHaveBeenCalledWith('conv_1', 'New title');
+      expect(updateConversation).toHaveBeenCalledWith('conv_1', { title: 'New title' });
     });
 
     it('listConversations maps the normalized DTO to the lightweight shape', async () => {
-      listConversations.mockResolvedValue([
-        {
-          id: 'conv_1',
-          userId: 'user_1',
-          title: 'Chat 1',
-          mode: 'chat',
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
-          updatedAt: new Date('2026-01-02T00:00:00.000Z'),
-          metadata: { messageCount: 0, agentsInvolved: [], lastActivity: new Date() },
-        },
-      ]);
+      listConversations.mockResolvedValue({
+        conversations: [
+          {
+            id: 'conv_1',
+            title: 'Chat 1',
+            projectId: null,
+            pinned: false,
+            isTemporary: false,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-02T00:00:00.000Z',
+          },
+        ],
+        hasMore: false,
+        nextOffset: 1,
+      });
 
       const runtime = new CloudRuntime();
       const result = await runtime.listConversations();
@@ -246,20 +262,28 @@ describe('CloudRuntime', () => {
   });
 
   describe('message loading', () => {
-    it('getMessages maps raw messages with a conversationId and generated id fallback', async () => {
+    it('getMessages maps normalized contract messages', async () => {
       getConversation.mockResolvedValue({
         conversation: {
           id: 'conv_1',
-          userId: 'user_1',
           title: 'Chat 1',
-          mode: 'chat',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          metadata: { messageCount: 1, agentsInvolved: [], lastActivity: new Date() },
+          projectId: null,
+          pinned: false,
+          isTemporary: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
         },
         messages: [
-          { id: 'm1', role: 'user', content: 'hi', created_at: '2026-01-01T00:00:00.000Z' },
-          { role: 'assistant', content: 'hello' },
+          {
+            id: 'm1',
+            conversationId: 'conv_1',
+            role: 'user',
+            content: 'hi',
+            inputTokens: 0,
+            outputTokens: 0,
+            costCents: 0,
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
         ],
       });
 
@@ -274,21 +298,18 @@ describe('CloudRuntime', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         model: undefined,
       });
-      expect(messages[1]?.conversationId).toBe('conv_1');
-      expect(messages[1]?.role).toBe('assistant');
-      expect(messages[1]?.id).toEqual(expect.any(String));
     });
 
     it('loadMessages is an alias for getMessages', async () => {
       getConversation.mockResolvedValue({
         conversation: {
           id: 'conv_1',
-          userId: 'user_1',
           title: 'Chat 1',
-          mode: 'chat',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          metadata: { messageCount: 0, agentsInvolved: [], lastActivity: new Date() },
+          projectId: null,
+          pinned: false,
+          isTemporary: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
         },
         messages: [],
       });
@@ -301,6 +322,13 @@ describe('CloudRuntime', () => {
   describe('getPlatform', () => {
     it('returns desktop', () => {
       expect(new CloudRuntime().getPlatform()).toBe('desktop');
+    });
+  });
+
+  describe('hasLiveApprovalTurn', () => {
+    it('delegates to the approval registry -- false on a fresh runtime instance (Finding 1: process-memory-only registry resets on restart)', () => {
+      const runtime = new CloudRuntime();
+      expect(runtime.hasLiveApprovalTurn('conv_1')).toBe(false);
     });
   });
 });
