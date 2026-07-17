@@ -811,6 +811,10 @@
       },
       {
         "from": "agiworkforce-desktop",
+        "to": "agiworkforce-protocol"
+      },
+      {
+        "from": "agiworkforce-desktop",
         "to": "agiworkforce-sandbox-policy"
       },
       {
