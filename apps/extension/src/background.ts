@@ -1686,10 +1686,10 @@ async function handleMessageAsync(
 
     case 'IN_PAGE_PROMPT' as ExtensionMessage['type']: {
       // Sent by the in-page chat panel (content-script) to run a prompt and
-      // return the full accumulated response text. Uses the same local bridge /
-      // native chain as CHAT_MESSAGE but resolves to a simple { success, text }
-      // rather than broadcasting chunks, since content scripts cannot receive
-      // chunked messages while the panel waits.
+      // return the full accumulated response text. Uses the same Managed
+      // Cloud-only owner as CHAT_MESSAGE but resolves to a simple
+      // { success, text } rather than broadcasting chunks, since content
+      // scripts cannot receive chunked messages while the panel waits.
       const promptPayload = message as unknown as { prompt?: string };
       const promptText = typeof promptPayload.prompt === 'string' ? promptPayload.prompt : '';
       if (!promptText) {
@@ -2810,10 +2810,10 @@ async function handleChatMessage(
  * Returns the full accumulated response text so the panel can render it
  * without needing a chunked messaging protocol.
  *
- * Fallback chain (same trust boundary as handleChatMessage):
- *  1. HTTP fetch to AGI bridge (localhost:8787)
- *  2. Native messaging to desktop app
- *  3. Offline message
+ * Same trust boundary as handleChatMessage: Chrome inference is Managed
+ * Cloud only. The desktop bridge and native messaging carry pairing and
+ * browser automation, never chat inference, and there is no local or BYOK
+ * fallback — a failed Managed Cloud turn surfaces its error.
  */
 async function handleInPagePrompt(prompt: string): Promise<string> {
   let systemPrompt: string | undefined;
