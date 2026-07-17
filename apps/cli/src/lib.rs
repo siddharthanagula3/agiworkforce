@@ -1600,6 +1600,7 @@ pub async fn run_main() -> Result<()> {
                     normalized_cli_options.disallowed_tools.clone(),
                     normalized_cli_options.mcp_config_load_options(),
                     None,
+                    None,
                 )
                 .await
             }
@@ -1632,6 +1633,7 @@ pub async fn run_main() -> Result<()> {
                     normalized_cli_options.allowed_tools.clone(),
                     normalized_cli_options.disallowed_tools.clone(),
                     normalized_cli_options.mcp_config_load_options(),
+                    None,
                     None,
                 )
                 .await
@@ -2392,20 +2394,29 @@ pub async fn run_main() -> Result<()> {
                 tier_cache::UserTier::Byok => "free",
             })
             .unwrap_or("free");
-        Some(
-            model_catalog::resolve_auto_model(
-                "auto-economy",
-                agiworkforce_model_registry::RoutingTaskType::Coding,
-                tier,
-                agiworkforce_model_registry::TrustMode::ManagedCloud,
-            )
-            .map_err(anyhow::Error::msg)?,
+        // AUTO-ROUTER-MIGRATION-01 (CLI clause): classify the launch prompt
+        // through the canonical taxonomy instead of hardcoding Coding.
+        // One-shot runs classify their real prompt text; interactive launches
+        // have no text yet and land on simple_chat — AgentSession::send then
+        // re-classifies and re-resolves every turn with continuity.
+        let launch_text = match cli.prompt.as_deref() {
+            Some("-") | None => stdin_content.as_deref().unwrap_or(""),
+            Some(prompt) => prompt,
+        };
+        let launch_task = routing::classify::classify_turn_task(launch_text, false);
+        let route = model_catalog::resolve_auto_model(
+            "auto-economy",
+            launch_task,
+            tier,
+            agiworkforce_model_registry::TrustMode::ManagedCloud,
         )
+        .map_err(anyhow::Error::msg)?;
+        Some((route, tier.to_string(), launch_task))
     } else {
         None
     };
 
-    let model: String = if let Some(route) = &auto_route {
+    let model: String = if let Some((route, _, _)) = &auto_route {
         route.provider_model_id.clone()
     } else if let Some(ref explicit_model) = cli.model {
         explicit_model.clone()
@@ -2433,7 +2444,7 @@ pub async fn run_main() -> Result<()> {
     } else {
         cli.provider.as_deref()
     };
-    if let Some(route) = &auto_route {
+    if let Some((route, _, _)) = &auto_route {
         eprintln!(
             "Auto route: managed_cloud -> {}/{} (harness: {})",
             route.upstream_provider, route.provider_model_id, route.harness_id
@@ -2686,6 +2697,21 @@ pub async fn run_main() -> Result<()> {
         }
     }
 
+    // Seed interactive sessions with the Auto launch state so per-turn
+    // re-classification has full continuity (selection, model_key, task,
+    // trust, tier) — see AgentSession::re_resolve_auto_route_for_turn.
+    let auto_route_seed = auto_route
+        .as_ref()
+        .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
+            state: crate::runtime::session::ManagedSessionAutoRouting {
+                selection: "auto-economy".to_string(),
+                model_key: route.model_key.clone(),
+                task_type: routing::classify::developer_task_type(*task),
+                trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
+            },
+            tier: tier.clone(),
+        });
+
     // Interactive mode: TUI (default) or classic REPL (--no-tui)
     if cli.no_tui {
         repl::run_repl(
@@ -2709,6 +2735,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
             cli.agent.clone(),
+            auto_route_seed,
         )
         .await
     } else {
@@ -2734,6 +2761,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
             cli.agent.clone(),
+            auto_route_seed,
         )
         .await
     }
