@@ -161,6 +161,8 @@ describe('cloud repository authority', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
       messageCount: 1,
       pinned: false,
+      starred: false,
+      archived: false,
       model: CLOUD_MODEL,
       executionMode: 'cloud',
     });
@@ -185,6 +187,8 @@ describe('cloud send → sync write-through', () => {
       updatedAt: new Date().toISOString(),
       messageCount: 0,
       pinned: false,
+      starred: false,
+      archived: false,
       model: 'auto-balanced',
       executionMode: 'cloud',
     });
@@ -227,6 +231,8 @@ describe('cloud send → sync write-through', () => {
       updatedAt: new Date().toISOString(),
       messageCount: 1,
       pinned: false,
+      starred: false,
+      archived: false,
       model: CLOUD_MODEL,
       executionMode: 'cloud',
     });
@@ -251,6 +257,8 @@ describe('cloud send → sync write-through', () => {
         updated_at: new Date().toISOString(),
         project_id: null,
         pinned: false,
+        starred: false,
+        archived: false,
         is_temporary: false,
         model: CLOUD_MODEL,
       },
@@ -280,6 +288,8 @@ describe('cloud send → sync write-through', () => {
       updatedAt: new Date().toISOString(),
       messageCount: 0,
       pinned: false,
+      starred: false,
+      archived: false,
       model: CLOUD_MODEL,
       executionMode: 'cloud',
     });
@@ -311,6 +321,8 @@ describe('cloud send → sync write-through', () => {
       updatedAt: new Date().toISOString(),
       messageCount: 0,
       pinned: false,
+      starred: false,
+      archived: false,
       model: CLOUD_MODEL,
       executionMode: 'cloud',
     });
@@ -348,6 +360,8 @@ describe('cloud send → sync write-through', () => {
           updatedAt: new Date().toISOString(),
           messageCount: 0,
           pinned: false,
+          starred: false,
+          archived: false,
           model: LOCAL_MODEL,
           executionMode: 'local',
         },
@@ -380,6 +394,8 @@ describe('cross-device history continuation', () => {
       updatedAt: '2026-06-20T00:00:01.000Z',
       messageCount: 2,
       pinned: false,
+      starred: false,
+      archived: false,
       model: CLOUD_MODEL,
       executionMode: 'cloud',
     });

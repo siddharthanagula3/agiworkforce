@@ -7,6 +7,8 @@ const rawConversation = {
   model: 'auto',
   project_id: null,
   pinned: false,
+  starred: false,
+  archived: false,
   is_temporary: false,
   created_at: '2026-07-14T00:00:00.000Z',
   updated_at: '2026-07-14T00:01:00.000Z',

@@ -565,7 +565,6 @@ export default function WebChatPage() {
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
-  const updateConversationInStore = useChatStore((s) => s.updateConversation);
   const isLoading = useChatStore((s) => s.isLoading);
   const chatError = useChatStore((s) => s.error);
   const setChatError = useChatStore((s) => s.setError);
@@ -1625,22 +1624,20 @@ export default function WebChatPage() {
 
   const handleStarSession = useCallback(
     (id: string) => {
-      // Star is client-side only (no DB column). Toggle via store directly.
       const convo = conversations.find((c) => c.id === id);
       if (!convo) return;
-      updateConversationInStore(id, { isStarred: !convo.isStarred });
+      void updateConversation(id, { starred: !convo.isStarred });
     },
-    [conversations, updateConversationInStore],
+    [conversations, updateConversation],
   );
 
   const handleArchiveSession = useCallback(
     (id: string) => {
-      // Archive is client-side only (no DB column). Toggle via store directly.
       const convo = conversations.find((c) => c.id === id);
       if (!convo) return;
-      updateConversationInStore(id, { isArchived: !convo.isArchived });
+      void updateConversation(id, { archived: !convo.isArchived });
     },
-    [conversations, updateConversationInStore],
+    [conversations, updateConversation],
   );
 
   // Share from the sidebar dropdown. If the target is not the active
