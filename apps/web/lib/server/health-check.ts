@@ -86,21 +86,17 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     logger.error({ error }, 'Stripe health check failed');
   }
 
-  // Determine overall status
-  const allHealthy =
-    checks.database.status === 'healthy' &&
-    checks.stripe.status === 'healthy' &&
-    checks.environment.status === 'healthy';
+  // Overall status: `unhealthy` (503) means the platform cannot serve —
+  // database or environment failure. A Stripe failure only degrades billing
+  // while chat keeps working, so it reports `degraded` (200); uptime monitors
+  // on /api/health must not page a whole-platform outage for it.
+  const coreHealthy =
+    checks.database.status === 'healthy' && checks.environment.status === 'healthy';
 
-  const anyUnhealthy =
-    checks.database.status === 'unhealthy' ||
-    checks.stripe.status === 'unhealthy' ||
-    checks.environment.status === 'unhealthy';
-
-  const status: HealthCheckResult['status'] = allHealthy
-    ? 'healthy'
-    : anyUnhealthy
-      ? 'unhealthy'
+  const status: HealthCheckResult['status'] = !coreHealthy
+    ? 'unhealthy'
+    : checks.stripe.status === 'healthy'
+      ? 'healthy'
       : 'degraded';
 
   return {
