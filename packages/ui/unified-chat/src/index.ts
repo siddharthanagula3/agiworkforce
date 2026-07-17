@@ -96,7 +96,12 @@ export type { EmptyStateProps } from './components/EmptyState';
 export { QuickChips } from './components/QuickChips';
 export type { ChipType } from './components/QuickChips';
 export { ChatInput } from './components/ChatInput';
-export type { ChatInputProps } from './components/ChatInput';
+export type {
+  ChatInputProps,
+  ChatInputProjectPicker,
+  ChatWorkMode,
+  ChatWorkScope,
+} from './components/ChatInput';
 export { AgentControl } from './components/AgentControl';
 export type { AgentControlProps } from './components/AgentControl';
 export { ModelSelector } from './components/ModelSelector';

@@ -194,9 +194,7 @@ export function AttachmentMenu({
   // for web/mobile in the capability matrix). The actual dialog + backend sync
   // live in the host app and arrive via `onSelectFolder`.
   const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
-  const hasSourceAction = Boolean(
-    onAddToProject || onAddFromGoogleDrive || onAddFromGitHub,
-  );
+  const hasSourceAction = Boolean(onAddToProject || onAddFromGoogleDrive || onAddFromGitHub);
 
   const handleScreenshot = async () => {
     if (!onScreenshot) {
@@ -280,7 +278,10 @@ export function AttachmentMenu({
               className={screenshotting ? 'opacity-60 pointer-events-none' : undefined}
             />
           )}
-          {canUseWorkingDirectory && (
+          {/* Handler presence is part of the gate: hosts withhold onSelectFolder
+              (e.g. desktop in non-local privacy mode) to hide the row instead of
+              rendering a dead control. */}
+          {canUseWorkingDirectory && onSelectFolder && (
             <MenuItem
               icon={<Folder size={15} />}
               label={currentFolderLabel ? `Folder: ${currentFolderLabel}` : 'Select folder'}

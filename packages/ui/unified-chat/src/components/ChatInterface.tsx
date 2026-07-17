@@ -17,7 +17,7 @@ import type { Artifact, ChatMessage } from '../lib/types';
 import type { ChipType } from './QuickChips';
 import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
-import { ChatInput } from './ChatInput';
+import { ChatInput, type ChatInputProjectPicker } from './ChatInput';
 import { QuickChips } from './QuickChips';
 import { Disclaimer } from './Disclaimer';
 import { MessageList } from './MessageList';
@@ -259,6 +259,13 @@ export interface ChatInterfaceProps {
   onSelectFolder?: () => void;
   /** Display label for the currently scoped project folder, if any. */
   currentFolderLabel?: string | null;
+  /** Clears the host's scoped local folder (project/folder mutual exclusion). */
+  onClearFolder?: () => void;
+  /**
+   * Chat | AGI Work toggle + "Project or folder" picker for the composer.
+   * Forwarded to ChatInput; absent = no toggle rendered (mobile).
+   */
+  projectPicker?: ChatInputProjectPicker;
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
   onNavigateView?: (view: string) => void;
   /** Explicit host-owned bridge for conversation selection and persistence. */
@@ -309,6 +316,8 @@ export function ChatInterface({
   onVoiceClick: onVoiceClickProp,
   onSelectFolder: onSelectFolderProp,
   currentFolderLabel = null,
+  onClearFolder,
+  projectPicker,
   onNavigateView,
   hostBridge = null,
   onAddMessage,
@@ -637,8 +646,10 @@ export function ChatInterface({
                 onModelSelectorClick={handleModelSelectorClick}
                 allowModelFallbackModels={allowModelFallbackModels}
                 onVoiceClick={handleVoiceClick}
-                onSelectFolder={handleSelectFolder}
+                onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
                 currentFolderLabel={currentFolderLabel}
+                onClearFolder={onClearFolder}
+                projectPicker={projectPicker}
                 hasMessages={hasMessages}
                 disabled={!runtime}
                 disabledMessage="Connect to start chatting"
