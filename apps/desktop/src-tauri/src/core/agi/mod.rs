@@ -4,7 +4,6 @@ pub mod checkpoint;
 pub mod checkpoint_manager;
 pub mod checkpoint_store;
 pub mod comparator;
-pub mod context_manager;
 pub mod conversation_summarizer;
 pub mod core;
 pub mod executor;
@@ -42,7 +41,6 @@ pub use checkpoint::{
 pub use checkpoint_manager::{CheckpointManager, CheckpointedExecution, ExecutionMetrics};
 pub use checkpoint_store::CheckpointStore;
 pub use comparator::{ExecutionResult, ResultComparator, ScoredResult};
-pub use context_manager::{CompactionResult, CompactionStats, ContextManager};
 pub use conversation_summarizer::{
     ConversationSummarizer, ExtractedMemory, ExtractionResult, HttpSummaryLLM, SummarizationRun,
     SummarizationStatus, SummaryLLM, DEFAULT_EXTRACTION_PROMPT,

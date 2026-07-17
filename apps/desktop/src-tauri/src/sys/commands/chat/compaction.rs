@@ -59,6 +59,7 @@ pub(super) async fn compact_context(
     if user_id.is_empty() {
         return Err("User ID cannot be empty".to_string());
     }
+    let focus = validate_compaction_focus(focus)?;
 
     let messages = {
         let conn = db.connection()?;
@@ -111,41 +112,24 @@ pub(super) async fn compact_context(
             _ => 10,
         },
         min_messages: 10,
+        summary_focus: focus.clone(),
         ..CompactionConfig::default()
     };
 
     let compactor = ContextCompactor::new(config);
 
-    if !compactor.should_compact(&messages) {
-        return Ok(ContextCompactionResponse {
-            messages_compacted: 0,
-            tokens_before,
-            tokens_after: tokens_before,
-            savings_percent: 0.0,
-            summary_created: false,
-            focus: focus.clone(),
-            message: format!(
-                "Context is within limits ({} tokens). No compaction needed.",
-                tokens_before
-            ),
-        });
-    }
-
-    let summary = compactor
-        .generate_summary(&messages)
+    let result = compactor
+        .compact_messages(&messages)
         .await
-        .map_err(|e| format!("Failed to generate summary: {e}"))?;
-
-    let compacted = compactor.get_compacted_messages(&messages, &summary);
+        .map_err(|e| format!("Failed to compact context: {e}"))?
+        .ok_or_else(|| "Compaction selected no eligible historical messages".to_string())?;
+    let compacted = result.messages;
     persist_compacted_context(db, conversation_id, user_id, &messages, &compacted)?;
-    let tokens_after: usize = compacted
-        .iter()
-        .map(|message| message.tokens.unwrap_or(0) as usize)
-        .sum();
-
-    let messages_compacted = messages.len() - compacted.len();
+    let tokens_after = result.tokens_after;
+    let messages_compacted = result.messages_compacted;
+    let summary_created = result.summary_created;
     let savings_percent = if tokens_before > 0 {
-        ((tokens_before - tokens_after) as f32 / tokens_before as f32) * 100.0
+        (tokens_before.saturating_sub(tokens_after) as f32 / tokens_before as f32) * 100.0
     } else {
         0.0
     };
@@ -164,7 +148,7 @@ pub(super) async fn compact_context(
         tokens_before,
         tokens_after,
         savings_percent,
-        summary_created: true,
+        summary_created,
         focus: focus.clone(),
         message: format!(
             "Compacted {} messages, saving {:.1}% of tokens ({} → {}).",
@@ -173,7 +157,22 @@ pub(super) async fn compact_context(
     })
 }
 
-fn persist_compacted_context(
+fn validate_compaction_focus(focus: Option<String>) -> Result<Option<String>, String> {
+    let Some(focus) = focus else {
+        return Ok(None);
+    };
+    let normalized = focus.trim().to_ascii_lowercase();
+    if matches!(
+        normalized.as_str(),
+        "code" | "decisions" | "errors" | "debug" | "todo"
+    ) {
+        Ok(Some(normalized))
+    } else {
+        Err("Invalid compaction focus. Use code, decisions, errors, debug, or todo.".to_string())
+    }
+}
+
+pub(super) fn persist_compacted_context(
     db: &AppDatabase,
     conversation_id: i64,
     user_id: &str,
@@ -183,7 +182,7 @@ fn persist_compacted_context(
     let summary_message = compacted_messages
         .first()
         .filter(|message| {
-            message.id == 0 && message.role == crate::data::db::models::MessageRole::System
+            message.id == 0 && message.role == crate::data::db::models::MessageRole::Assistant
         })
         .ok_or_else(|| "Compaction produced no summary message to persist".to_string())?;
 
@@ -326,8 +325,10 @@ mod tests {
         };
 
         assert_eq!(messages.len(), 11);
-        assert_eq!(messages[0].role, MessageRole::System);
-        assert!(messages[0].content.starts_with("[Compacted Context]"));
+        assert_eq!(messages[0].role, MessageRole::Assistant);
+        assert!(messages[0]
+            .content
+            .starts_with(agiworkforce_agent_core::context::UNTRUSTED_SUMMARY_MARKER));
         let remaining_contents: Vec<&str> = messages
             .iter()
             .skip(1)
