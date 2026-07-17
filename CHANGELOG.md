@@ -6,6 +6,59 @@ Last updated: 2026-07-16
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — post-landing hardening: tier ladder, live-flaw closures, dead-code sweeps] — 2026-07-16/17
+
+### Fixed
+
+- Enforced the founder's tier ladder on every managed routing surface
+  (free 403 · basic/hobby = pro's model set, budget-differentiated ·
+  flagship max/enterprise-only): the api-gateway previously applied NO
+  model check to pro/team/max, web `canAccessModel` let $8 Basic pick
+  flagship models, the auto resolver collapsed Basic to free slots, and
+  the contracts package carried three disagreeing normalizers. All
+  unified; resolver fail-closed (`auto-max` → unavailable for pro-class)
+  and flagship-free fallback chains now test-pinned.
+  (`723971ceb`, `3b7905a95`)
+- Closed the LIVE desktop PlansModal defect: paid CTAs open the web
+  checkout surface; waitlist modal deleted; catalog-driven prices.
+  (`d43b58220`)
+- Persisted sidebar Star/Archive on conversations (migration 0059, NOT
+  yet applied — rides the pre-merge migration pass). (`67ee5f687`)
+- Wired the CLI's mid-turn MCP elicitation modal (previously an
+  elicitation arriving during a model turn parked the server forever) and
+  repaired registry-drift test reds; desktop routing pins updated to the
+  live-probe-verified registry. (`616d6532e`, `95ab7ee58`, `23ffddff1`)
+- Wired desktop project scoping end to end: project_id persists through
+  SQLite (v75), project instructions + knowledge inject into the system
+  prompt, and project cards count real linked sessions. (`053981f5b`)
+
+### Removed
+
+- Seven dead web feature stacks (chat_folders, bookmarks, reactions,
+  shortcuts, sessions alias, branch, ProjectSidebar) — closes
+  WEB-ROUTE-PROD-SCHEMA-MISMATCH-01 by deletion. (`ef15f96ab`)
+- The apps/web/core legacy layer (44 files, 3 wired modules kept; live
+  types ported first) — closes NETLIFY-PROXY-01 by deletion; the real
+  search/media features run through `app/api/search` and `app/api/media/*`.
+  (`132b9ceaa`)
+- Duplicate `customModel` type, four `useReducedMotion` copies, dead web
+  `hash.ts` — one canonical owner each. (`fbd4a7b65`)
+
+### Changed
+
+- W7 c2c: request-side byte-parity oracle; Ollama requests now build
+  through the shared `agiworkforce-llm` serializers (fixing a real
+  desktop vision bug — the old top-level `images` field was ignored by
+  `/api/chat`); anthropic/openai/responses/gemini parity documented with
+  a crate-feature-gap tripwire. Twins retired in place, NOT deleted.
+  (`f61b8c1de`)
+- Chrome auto-router migration verified complete at the wire level; 5 new
+  carriage/boundary pins; stale fallback-chain comments corrected.
+  (`fe38f24c1`)
+- CI now gates on cargo-deny bans/sources/licenses (verified green);
+  advisories report-only until the 40-item RUSTSEC baseline is triaged.
+  (`942a17993`)
+
 ## [Unreleased — restructure tree landed] — 2026-07-16
 
 ### Changed
