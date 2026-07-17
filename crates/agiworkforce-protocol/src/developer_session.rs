@@ -1,7 +1,8 @@
 //! Stable local developer-session protocol shared by AGI CLI and AGI for VS Code.
 //!
-//! The wire is bidirectional newline-delimited JSON over stdio. Requests and
-//! responses carry an `id`; notifications omit it. Method names follow the
+//! The wire is bidirectional JSON: newline-delimited frames over stdio or one
+//! JSON object per authenticated WebSocket text frame. Requests and responses
+//! carry an `id`; notifications omit it. Method names follow the
 //! thread/turn/item vocabulary used by modern coding-agent app servers while
 //! all payloads and trust decisions remain AGI-owned.
 

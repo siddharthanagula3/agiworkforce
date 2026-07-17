@@ -213,10 +213,13 @@ agi doctor --json
 ## Architecture
 
 - `agi app-server` is the canonical local developer-session runtime used by
-  AGI for VS Code. Its default stdio transport is a typed JSONL thread/turn
-  protocol; the CLI owns persistence, agent execution, streaming, approvals,
-  cancellation, model resolution, and workspace isolation while VS Code owns
-  IDE presentation and context selection.
+  AGI for VS Code and future Cowork clients. Both the default stdio transport
+  and authenticated WebSocket transport run the same typed thread/turn
+  protocol and full agent engine; the CLI owns persistence, tool/MCP execution,
+  streaming, approval round-trips, cancellation, model resolution, and
+  workspace isolation while clients own presentation and context selection.
+  WebSocket mode requires `--auth-token` or `AGI_APP_SERVER_TOKEN`; auth tokens
+  are never printed.
 - CLI and VS Code sessions share `~/.agiworkforce/managed_sessions/`; they do
   not join Web/Mobile/Desktop Cloud chat sync. App-server reads never expose
   the internal system prompt, and cross-workspace read/fork/archive operations

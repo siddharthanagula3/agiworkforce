@@ -8,7 +8,7 @@ Authority: grounds in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`
 
 ## Overview & stance
 
-AGI CLI is the pure-Rust (Ratatui TUI) developer surface with three trust modes: **Local**, **BYOK** (Desktop/CLI/VS Code only), and **Managed Cloud** (public alpha). MCP is bidirectional here: the CLI acts as an **MCP client** that attaches external tool servers, and it can **run as an MCP/app server** so other agents drive AGI's tool catalog (`run_mcp_server` / `run_app_server` in `apps/cli/src/lib.rs`, dispatched from `Command::McpServer` and `Command::AppServer`).
+AGI CLI is the pure-Rust (Ratatui TUI) developer surface with three trust modes: **Local**, **BYOK** (Desktop/CLI/VS Code only), and **Managed Cloud** (public alpha). The CLI acts as an **MCP client** that attaches external tool servers. Its typed app-server lets other local clients drive the full AGI engine; the separate `agi mcp-server` command currently advertises no executable tools rather than presenting an unwired one (`apps/cli/src/app_server.rs`, dispatched from `Command::McpServer` and `Command::AppServer`).
 
 The binding constraint is the trust boundary. An MCP server over stdio is a local child process; an MCP server over SSE/HTTP is a network egress. The session privacy mode (`PrivacyMode::{Local,Byok,Managed}` in `apps/cli/src/agent/mod.rs` — ✅ Built) governs what may leave the device. Local sessions must never silently ship prompts, files, or tool arguments to a remote MCP endpoint; a remote MCP attach in a Local session is a boundary crossing that requires the same explicit fork discipline as Local→BYOK (context selection, secret scan, payload preview, visible provider/server label, consent). Sessions are workspace/session-scoped — MCP results never auto-sync to app chat.
 
@@ -54,7 +54,7 @@ The binding constraint is the trust boundary. An MCP server over stdio is a loca
 
 ### CLI as MCP / app server
 
-✅ Built — `agi mcp-server` runs `run_mcp_server` (MCP wire protocol on stdio; exposes a single agent-facing tool, wire name `agiworkforce_exec`). `agi app-server --listen stdio|<ws-addr>` runs `run_app_server` from `crates/agiworkforce-app-server`, a JSON-RPC stdio + WebSocket host implementing `initialize`, `tools/list`, `tools/call`, and `shutdown` over the pluggable `ToolDispatch` trait, with `WebSocketSecurity` admission.
+🟡 Partial — `agi mcp-server` speaks MCP stdio but advertises an empty catalog until real agent execution is wired. ✅ Built — `agi app-server --listen stdio|<ws-addr>` runs the same typed developer-session host on either transport: full `AgentSession` tools/MCP plus `approval/requested` → `approval/respond` round-trips, interruption, steering, and streaming. WebSocket admission uses `WebSocketSecurity`; callers must provide `--auth-token` or `AGI_APP_SERVER_TOKEN`, and the token is never printed. The crate's separate `run_app_server`/`ToolDispatch` direct-tool API remains for embedders but is no longer the CLI command's restricted WebSocket path.
 
 ## Repository map
 
@@ -62,8 +62,8 @@ The binding constraint is the trust boundary. An MCP server over stdio is a loca
 - `apps/cli/src/mcp/{http.rs,sse.rs}` — Streamable HTTP + SSE transports.
 - `apps/cli/src/mcp/{oauth_flow.rs,oauth_store.rs}` — OAuth PKCE, token store.
 - `apps/cli/src/mcp/{elicitation.rs,resources.rs,connection_pool.rs,status.rs}` — elicitation, resource types, pooling, health.
-- `apps/cli/src/app_server.rs` — `run_mcp_server`, `make_dispatch`, `CliToolDispatch`.
-- `crates/agiworkforce-app-server/src/lib.rs` — JSON-RPC stdio/WS server + `ToolDispatch`.
+- `apps/cli/src/app_server.rs` — full `CliDeveloperSessionHost` plus the separate `run_mcp_server` entry point.
+- `crates/agiworkforce-app-server/src/lib.rs` — typed developer-session stdio/WS transport plus legacy direct `ToolDispatch` API.
 - `apps/cli/src/cli_options.rs`, `apps/cli/src/ecosystem.rs` — flags + cross-tool MCP import.
 
 ## Competitor notes

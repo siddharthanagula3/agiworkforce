@@ -61,14 +61,11 @@ the single-row `user_settings` (0028) reusing the 0038 sequence/trigger; setting
 Requirement: durable per-session state (id, kind, status, timing, output location) with
 local-only retention; sessions never leave the host or sync to Cloud.
 
-**✅ Built.** `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` defines `Task { id: TaskId
-(Uuid), kind: TaskKind, status: TaskStatus, command, output_path: PathBuf, started_at,
-ended_at, exit_code, error }` with validated status transitions (`TaskError::
-InvalidTransition`); task output is streamed to `output_path` on the local disk. The CLI's
-session layer lives in `apps/cli/src/features/session/mod.rs`, with agent turn history in
-`apps/cli/src/agent/history.rs`. The local tool host bounds live sessions via
-`AppServerConfig { max_sessions, session_timeout_secs }`
-(`crates/agiworkforce-app-server/src/lib.rs`). **Sessions stay local by design** — matching
+**🟡 Partial.** The CLI's session layer lives in `apps/cli/src/features/session/mod.rs`,
+with agent turn history in `apps/cli/src/agent/history.rs`; those files stay on the local host.
+The former task-runtime crate was removed and has no live replacement task registry, while the
+app-server lacks enforceable connection/session limits and idle expiry. Those controls are
+🔭 Planned. **Sessions stay local by design** — matching
 canon's "CLI/VS Code/Desktop sessions stay local" and the Remote-Control model (compute on
 the host). A durable cross-restart session-resume store and cross-surface presence
 (`surface_heartbeats`) are **🔭 Planned** (the table does not exist; only
@@ -151,7 +148,7 @@ stay on the host; no runtime log is auto-synced to Cloud.
 - `apps/desktop/src-tauri/src/sys/security/{audit_logger.rs,log_redaction.rs}`; `sys/logging/mod.rs`; `sys/telemetry/logging.rs`; `core/mcp/logs.rs` — logs + audit.
 - `apps/mobile/stores/settingsStore.ts` (encrypted MMKV); `apps/mobile/lib/biometricFlagStore.ts` (SecureStore/keychain).
 - `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `Task`/`output_path` session records.
-- `crates/agiworkforce-app-server/src/lib.rs` — `max_sessions`/`session_timeout_secs`.
+- `crates/agiworkforce-app-server/src/lib.rs` — typed developer-session transport; connection/session limits and idle expiry are planned.
 - `crates/agiworkforce-utils-cache/src/lib.rs` — in-memory LRU + `sha1_digest`.
 - `apps/web/app/api/{chat,memory,projects}/sync/route.ts` — Neon delta-sync (cursor + tombstones + upsert).
 - `apps/web/db/neon/{0005,0021,0022,0023,0028,0037,0038,0042,0043}_*.sql` — cloud schema.
