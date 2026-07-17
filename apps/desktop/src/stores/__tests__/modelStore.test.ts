@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getAllowedModelsForTier, getModelMetadata } from '../../constants/llm';
-import { useModelStore, formatOllamaModelSize, getOllamaModelDisplayName } from '../modelStore';
+import { getModelsForTierAndSurface } from '@agiworkforce/types';
+import {
+  useModelStore,
+  formatOllamaModelSize,
+  getManagedCloudModelsForTier,
+  getOllamaModelDisplayName,
+} from '../modelStore';
 
 // Mock @tauri-apps/api/core - throw for unknown commands so error-handling paths are exercised
 vi.mock('@tauri-apps/api/core', () => ({
@@ -212,6 +218,14 @@ describe('modelStore', () => {
   });
 
   describe('helper functions', () => {
+    it('derives cloud rows from the shared tier + Desktop runtime intersection', () => {
+      const expectedIds = getModelsForTierAndSurface('max', 'desktop/cloud-chat', {
+        modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+      }).map((model) => model.id);
+
+      expect(getManagedCloudModelsForTier('max').map((model) => model.id)).toEqual(expectedIds);
+    });
+
     it('formatOllamaModelSize formats GB correctly', () => {
       const sizeInBytes = 3.5 * 1024 * 1024 * 1024;
       expect(formatOllamaModelSize(sizeInBytes)).toBe('3.5 GB');

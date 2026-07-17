@@ -27,6 +27,7 @@ import {
   modelIdAliases,
   modelsById,
   modelsCatalogJson as modelsJson,
+  normalizeSubscriptionAccessTier,
   normalizeModelId as normalizeCatalogModelId,
   providerLabels,
   type EnvironmentAvailability,
@@ -240,7 +241,7 @@ export function getTaskModelForProvider(
 export function normalizeSubscriptionTier(
   tier: SubscriptionTier | string | null | undefined,
 ): SubscriptionTier {
-  return getCatalogTierPolicy(tier).tier as SubscriptionTier;
+  return normalizeSubscriptionAccessTier(tier ?? 'free') as SubscriptionTier;
 }
 
 export function getAllowedAutoModesForTier(

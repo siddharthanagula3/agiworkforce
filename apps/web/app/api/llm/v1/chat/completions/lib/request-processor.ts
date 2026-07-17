@@ -26,12 +26,13 @@ import {
 } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
-import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
+import { canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
   ANTHROPIC_THINKING_BUDGET,
   getEconomyFallbackModels,
   getModelMetadataById,
+  getMinimumRequiredTier,
   getModelReasoning,
   type Effort,
   getSlotForModel,
@@ -1044,8 +1045,6 @@ export async function processRequest(
 
   // Model tier access check
   if (!freeTrialEnabled && !checkModelTierAccess(chatRequest.model, subscription.plan_tier)) {
-    const modelKey = chatRequest.model.toLowerCase();
-    const requiredTiers = MODEL_TIER_REQUIREMENTS[modelKey];
     // Lowercase key (e.g. 'pro') for clients to pattern-match on, alongside the
     // uppercased word used in the human-readable message below. Clients (mobile,
     // desktop, web) key their upgrade-prompt UI off this field the same way they
@@ -1054,7 +1053,7 @@ export async function processRequest(
     // way to tell it apart from a generic server error, so every client fell back
     // to a blank "Something went wrong" message instead of an actionable upgrade
     // prompt.
-    const requiredTierKey = requiredTiers && requiredTiers.length > 0 ? requiredTiers[0] : 'pro';
+    const requiredTierKey = getMinimumRequiredTier(chatRequest.model) ?? 'pro';
     const requiredTier = requiredTierKey?.toUpperCase() ?? 'PRO';
     return {
       ok: false,

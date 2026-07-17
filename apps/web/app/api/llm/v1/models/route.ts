@@ -6,12 +6,15 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
+import { getAllowedAutoModesForTier } from '@shared/config/llm';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
-  getAllowedAutoModesForTier,
-  getAllowedModelsForTier,
-  normalizeSubscriptionTier,
-} from '@shared/config/llm';
-import { listCanonicalModels, type ModelMetadata } from '@agiworkforce/types';
+  getMinimumRequiredTier,
+  getModelsForTierAndSurface,
+  getPickerModelsForRuntimeProfile,
+  normalizeSubscriptionAccessTier,
+  type PickerModelView,
+} from '@agiworkforce/types';
 
 type OpenAiCompatibleModel = {
   id: string;
@@ -21,37 +24,17 @@ type OpenAiCompatibleModel = {
   permission: [];
   root: string;
   parent: null;
-  tier: 'hobby' | 'pro' | 'max';
+  tier: 'basic' | 'pro' | 'max';
   context_window: number;
   max_output: number;
 };
 
-const VISIBLE_MODEL_TYPES = new Set(['chat', 'code', 'reasoning', 'multimodal', 'search']);
 const CREATED_AT_TIMESTAMP = 1_704_067_200;
+const MODEL_TYPES = ['chat', 'code', 'reasoning', 'multimodal', 'search'] as const;
+const FREE_MODEL_IDS = new Set(FREE_TRIAL_MODELS);
 
-const ECONOMY_MODELS = new Set(getAllowedModelsForTier('hobby'));
-const PRO_MODELS = new Set(getAllowedModelsForTier('pro'));
-const MAX_MODELS = new Set(getAllowedModelsForTier('max'));
-
-function getTierForModel(modelId: string): OpenAiCompatibleModel['tier'] | null {
-  if (ECONOMY_MODELS.has(modelId)) {
-    return 'hobby';
-  }
-  if (MAX_MODELS.has(modelId) && !PRO_MODELS.has(modelId)) {
-    return 'max';
-  }
-  if (PRO_MODELS.has(modelId)) {
-    return 'pro';
-  }
-  return null;
-}
-
-function toModelRecord(model: ModelMetadata): OpenAiCompatibleModel | null {
-  if (model.status === 'deprecated' || !VISIBLE_MODEL_TYPES.has(model.modelType)) {
-    return null;
-  }
-
-  const tier = getTierForModel(model.id);
+function toModelRecord(model: PickerModelView): OpenAiCompatibleModel | null {
+  const tier = getMinimumRequiredTier(model.id);
   if (!tier) {
     return null;
   }
@@ -66,18 +49,23 @@ function toModelRecord(model: ModelMetadata): OpenAiCompatibleModel | null {
     parent: null,
     tier,
     context_window: model.contextWindow,
-    max_output: model.maxOutputTokens ?? 8192,
+    max_output: model.maxOutput,
   };
 }
 
-const MODELS: OpenAiCompatibleModel[] = listCanonicalModels()
-  .map(toModelRecord)
-  .filter((model): model is OpenAiCompatibleModel => Boolean(model));
-
 function getVisibleModelsForTier(userTier: string): OpenAiCompatibleModel[] {
-  const normalizedTier = normalizeSubscriptionTier(userTier);
-  const allowedModels = new Set(getAllowedModelsForTier(normalizedTier));
-  return MODELS.filter((model) => allowedModels.has(model.id));
+  const normalizedTier = normalizeSubscriptionAccessTier(userTier);
+  const pickerOptions = { modelTypes: [...MODEL_TYPES] };
+  const models =
+    normalizedTier === 'free'
+      ? getPickerModelsForRuntimeProfile('web/cloud-chat', pickerOptions).filter((model) =>
+          FREE_MODEL_IDS.has(model.id),
+        )
+      : getModelsForTierAndSurface(normalizedTier, 'web/cloud-chat', pickerOptions);
+
+  return models
+    .map(toModelRecord)
+    .filter((model): model is OpenAiCompatibleModel => Boolean(model));
 }
 
 async function listModelsForRequest(request: NextRequest, userTier: string) {
@@ -88,7 +76,7 @@ async function listModelsForRequest(request: NextRequest, userTier: string) {
       object: 'list',
       data: visibleModels,
       x_agi_workforce: {
-        user_tier: normalizeSubscriptionTier(userTier),
+        user_tier: normalizeSubscriptionAccessTier(userTier),
         total_available: visibleModels.length,
         allowed_auto_modes: getAllowedAutoModesForTier(userTier),
       },

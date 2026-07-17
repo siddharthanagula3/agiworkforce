@@ -30,13 +30,13 @@ describe('QuickQuery', () => {
     });
   });
 
-  it('shows pro-class auto modes for basic users (2026-07-16 ladder: basic = pro set, no flagship)', async () => {
+  it('shows only economy Auto for Basic users', async () => {
     renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /auto balanced/i }));
+    fireEvent.click(screen.getByRole('button', { name: /auto \(economy\)/i }));
 
     expect(screen.getAllByText('Auto (Economy)').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Auto Balanced').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Auto Balanced')).not.toBeInTheDocument();
     expect(screen.queryByText('Auto (Best Model)')).not.toBeInTheDocument();
   });
 
@@ -50,8 +50,7 @@ describe('QuickQuery', () => {
     fireEvent.click(screen.getByRole('button', { name: /send/i }));
 
     await waitFor(() => {
-      // Basic defaults to the best mode its (pro-class) ladder allows.
-      expect(onSubmit).toHaveBeenCalledWith('hello from hobby', 'auto-balanced');
+      expect(onSubmit).toHaveBeenCalledWith('hello from hobby', 'auto-economy');
     });
   });
 

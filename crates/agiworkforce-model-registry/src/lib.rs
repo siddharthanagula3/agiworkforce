@@ -421,7 +421,7 @@ struct Eligibility<'a> {
 fn normalize_tier(tier: Option<&str>) -> &'static str {
     match tier.unwrap_or_default().to_ascii_lowercase().as_str() {
         "pro" | "team" => "pro",
-        "max" => "max",
+        "max" | "max+" | "max_plus" | "max-plus" => "max",
         "enterprise" => "enterprise",
         "byok" => "byok",
         _ => "free",
