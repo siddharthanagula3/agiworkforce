@@ -12,6 +12,7 @@ const listenMock = vi.fn(async (event: string, handler: (event: { payload: unkno
 const uuidToDbIdMock = vi.fn();
 const linkConversationIdMock = vi.fn();
 const executionModeByConversationId = new Map<string, 'local_only' | 'byok' | 'cloud_managed'>();
+const projectIdByConversationId = new Map<string, string>();
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: invokeMock,
@@ -47,6 +48,7 @@ vi.mock('../../stores/chat/chatStore', () => ({
       conversations: Array.from(executionModeByConversationId, ([id, executionMode]) => ({
         id,
         executionMode,
+        projectId: projectIdByConversationId.get(id),
       })),
     }),
   },
@@ -58,6 +60,7 @@ describe('TauriRuntime', () => {
     vi.clearAllMocks();
     listenHandlers.clear();
     executionModeByConversationId.clear();
+    projectIdByConversationId.clear();
     uuidToDbIdMock.mockReturnValue(undefined);
 
     invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
@@ -145,6 +148,27 @@ describe('TauriRuntime', () => {
 
     expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain('llm_send_message');
     expect(linkConversationIdMock).toHaveBeenCalledWith('frontend-conversation-id', 42);
+  });
+
+  it('carries the conversation project scope into the backend create', async () => {
+    executionModeByConversationId.set('frontend-conversation-id', 'local_only');
+    projectIdByConversationId.set('frontend-conversation-id', 'proj-42');
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello from a project chat', {
+      model: 'claude-sonnet-4.6',
+    });
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'chat_create_conversation', {
+      request: {
+        title: 'Hello from a project chat',
+        userId: 'user-123',
+        projectId: 'proj-42',
+        executionMode: 'local_only',
+      },
+    });
   });
 
   it('reuses an existing backend id for mapped conversations', async () => {
