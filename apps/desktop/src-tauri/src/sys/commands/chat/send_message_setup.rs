@@ -260,6 +260,41 @@ pub(super) async fn prepare_send_message(
         std::env::consts::ARCH
     );
 
+    // Project-scoped conversation ("AGI Work"): inject the project's custom
+    // instructions + knowledge base into the system context — the local mirror
+    // of web request-processor's loadProjectContext/formatProjectSystemPrompt.
+    // Best-effort: a project-load failure must not take down the chat turn,
+    // but it is logged loudly because silently dropping the user's project
+    // instructions is a scope lie.
+    if let Some(project_id) = conversation
+        .project_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        match db.connection() {
+            Ok(conn) => {
+                if let Some(project_scope_prompt) = load_project_scope_prompt(&conn, project_id) {
+                    llm_messages.push(ChatMessage {
+                        role: "system".to_string(),
+                        content: project_scope_prompt,
+                        tool_calls: None,
+                        tool_call_id: None,
+                        multimodal_content: None,
+                    });
+                    debug!("[Chat] Added project scope context for project {project_id}");
+                }
+            }
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    %project_id,
+                    "Project scope context load failed; continuing without project instructions"
+                );
+            }
+        }
+    }
+
     let effective_folder = resolve_effective_folder(
         project_context_state,
         mcp_state,
@@ -497,6 +532,162 @@ fn resolve_thinking_parameter(
     None
 }
 
+// Deterministic size caps so a pathological project can never blow up the
+// prompt budget (mirrors web's project-context-service): instructions dominate
+// (they are the product feature), knowledge content is bounded per file.
+const MAX_PROJECT_SCOPE_INSTRUCTIONS_CHARS: usize = 8_000;
+const MAX_PROJECT_SCOPE_DESCRIPTION_CHARS: usize = 1_000;
+const MAX_PROJECT_SCOPE_KNOWLEDGE_FILES: usize = 10;
+const MAX_PROJECT_SCOPE_FILE_CONTENT_CHARS: usize = 4_000;
+const MAX_PROJECT_SCOPE_NAME_CHARS: usize = 200;
+
+/// Char-boundary-safe truncation with an ellipsis marker when cut.
+fn truncate_chars(value: &str, max: usize) -> String {
+    if value.chars().count() > max {
+        let mut out: String = value.chars().take(max).collect();
+        out.push('…');
+        out
+    } else {
+        value.to_string()
+    }
+}
+
+/// Load the project scope prompt for a project-scoped conversation.
+///
+/// Returns `None` when the project does not exist, is archived, or carries
+/// nothing worth injecting — the turn proceeds without project context in all
+/// three cases. Unlike web (`project_knowledge_files` is metadata-only), the
+/// desktop v65 `knowledge_base_files` column stores extracted file content, so
+/// bounded content excerpts are injected rather than a name-only manifest.
+pub(super) fn load_project_scope_prompt(
+    conn: &rusqlite::Connection,
+    project_id: &str,
+) -> Option<String> {
+    use rusqlite::OptionalExtension;
+
+    let row = conn
+        .query_row(
+            "SELECT name, description, custom_instructions, knowledge_base_files
+             FROM projects
+             WHERE id = ?1 AND is_archived = 0",
+            rusqlite::params![project_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            },
+        )
+        .optional();
+
+    match row {
+        Ok(Some((name, description, instructions, knowledge_json))) => {
+            format_project_scope_prompt(
+                &name,
+                description.as_deref(),
+                instructions.as_deref(),
+                knowledge_json.as_deref(),
+            )
+        }
+        Ok(None) => {
+            debug!(
+                "[Chat] Conversation is scoped to project {project_id}, but no active project row exists — skipping project context"
+            );
+            None
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                %project_id,
+                "Project scope query failed; continuing without project instructions"
+            );
+            None
+        }
+    }
+}
+
+/// Render the project scope as a system-prompt block. Pure and exported for
+/// unit tests. Returns `None` when the project carries nothing actionable
+/// (no instructions, no description, no knowledge files) so the turn does not
+/// spend prompt tokens on a bare project name.
+pub(super) fn format_project_scope_prompt(
+    name: &str,
+    description: Option<&str>,
+    instructions: Option<&str>,
+    knowledge_base_files_json: Option<&str>,
+) -> Option<String> {
+    let mut sections: Vec<String> = vec![format!(
+        "## Project Scope\n\nThis conversation belongs to the user's project \"{}\".",
+        truncate_chars(name, MAX_PROJECT_SCOPE_NAME_CHARS)
+    )];
+
+    if let Some(description) = description.map(str::trim).filter(|s| !s.is_empty()) {
+        sections.push(format!(
+            "Project description: {}",
+            truncate_chars(description, MAX_PROJECT_SCOPE_DESCRIPTION_CHARS)
+        ));
+    }
+
+    if let Some(instructions) = instructions.map(str::trim).filter(|s| !s.is_empty()) {
+        sections.push(format!(
+            "Project instructions (set by the user; follow them for every reply in this project):\n{}",
+            truncate_chars(instructions, MAX_PROJECT_SCOPE_INSTRUCTIONS_CHARS)
+        ));
+    }
+
+    // knowledge_base_files is the frontend-serialized KnowledgeBaseFile[] JSON
+    // (camelCase keys); unparseable JSON degrades to "no knowledge" rather
+    // than failing the turn.
+    let knowledge_files = knowledge_base_files_json
+        .and_then(|json| serde_json::from_str::<Vec<serde_json::Value>>(json).ok())
+        .unwrap_or_default();
+    if !knowledge_files.is_empty() {
+        let entries: Vec<String> = knowledge_files
+            .iter()
+            .take(MAX_PROJECT_SCOPE_KNOWLEDGE_FILES)
+            .map(|file| {
+                let file_name = file
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or("(unnamed file)");
+                let heading = truncate_chars(file_name, MAX_PROJECT_SCOPE_NAME_CHARS);
+                match file
+                    .get("content")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                {
+                    Some(content) => format!(
+                        "### {heading}\n{}",
+                        truncate_chars(content, MAX_PROJECT_SCOPE_FILE_CONTENT_CHARS)
+                    ),
+                    None => format!(
+                        "### {heading}\n(content not extracted — only the file name is available)"
+                    ),
+                }
+            })
+            .collect();
+        if !entries.is_empty() {
+            sections.push(format!(
+                "Project knowledge files (added by the user for this project):\n\n{}",
+                entries.join("\n\n")
+            ));
+        }
+    }
+
+    // Only the bare "belongs to project X" line → nothing actionable to
+    // inject; skip so unscoped-feeling projects don't spend prompt tokens.
+    if sections.len() == 1 {
+        return None;
+    }
+
+    Some(sections.join("\n\n"))
+}
+
 fn load_or_create_conversation(
     db: &AppDatabase,
     request: &ChatSendMessageRequest,
@@ -516,6 +707,7 @@ fn load_or_create_conversation(
                 .unwrap_or(ChatExecutionMode::LocalOnly)
                 .as_str()
                 .to_string(),
+            project_id: None,
         });
     }
 
@@ -540,12 +732,16 @@ fn load_or_create_conversation(
         let execution_mode = request
             .execution_mode
             .unwrap_or(ChatExecutionMode::LocalOnly);
+        // No project scope on this lazy-create path: project-scoped chats are
+        // pre-created by TauriRuntime.ensureBackendConversation, which carries
+        // the projectId (ChatSendMessageRequest has no project field).
         let id = repository::create_conversation_with_execution_mode(
             &conn,
             title,
             request.user_id.clone(),
             app_mode,
             execution_mode.as_str(),
+            None,
         )
         .map_err(|e| format!("Failed to create conversation: {e}"))?;
         let conversation = repository::get_conversation(&conn, id, &request.user_id)
@@ -797,8 +993,8 @@ fn maybe_inject_matching_skills(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_router_preferences, derive_cloud_sync_enabled, resolve_routing_strategy,
-        resolve_thinking_parameter,
+        build_router_preferences, derive_cloud_sync_enabled, format_project_scope_prompt,
+        load_project_scope_prompt, resolve_routing_strategy, resolve_thinking_parameter,
     };
     use crate::core::llm::llm_router::RoutingStrategy;
     use crate::core::llm::{Provider, ThinkingParameter};
@@ -1252,5 +1448,106 @@ mod tests {
             !derive_cloud_sync_enabled(None, false),
             "active_mode=None with storage_mode=local must yield cloud_sync_enabled=false"
         );
+    }
+
+    // ── DESKTOP-PROJECT-SCOPING-UNWIRED-01 seam B: project scope prompt ─────
+
+    #[test]
+    fn project_scope_prompt_includes_instructions_and_knowledge_content() {
+        let prompt = format_project_scope_prompt(
+            "My Research",
+            Some("Long-running research effort"),
+            Some("Always answer in formal English."),
+            Some(r#"[{"id":"f1","name":"notes.md","path":"/tmp/notes.md","content":"The launch window is May.","addedAt":"2026-07-16"}]"#),
+        )
+        .expect("actionable project scope must produce a prompt");
+
+        assert!(prompt.contains("My Research"));
+        assert!(prompt.contains("Long-running research effort"));
+        assert!(prompt.contains("Always answer in formal English."));
+        assert!(prompt.contains("notes.md"));
+        assert!(prompt.contains("The launch window is May."));
+    }
+
+    #[test]
+    fn project_scope_prompt_skips_bare_projects_and_bad_knowledge_json() {
+        // Name-only project: nothing actionable, no prompt tokens spent.
+        assert!(format_project_scope_prompt("Empty", None, None, None).is_none());
+        assert!(format_project_scope_prompt("Empty", Some("  "), Some(""), None).is_none());
+
+        // Unparseable knowledge JSON degrades to "no knowledge", and with
+        // instructions present the prompt still renders.
+        let prompt =
+            format_project_scope_prompt("P", None, Some("Use tabs."), Some("not-json")).unwrap();
+        assert!(prompt.contains("Use tabs."));
+        assert!(!prompt.contains("knowledge files"));
+    }
+
+    #[test]
+    fn project_scope_prompt_caps_oversized_instructions() {
+        let oversized = "x".repeat(20_000);
+        let prompt = format_project_scope_prompt("P", None, Some(&oversized), None).unwrap();
+        // 8k cap + ellipsis, plus the surrounding framing — far below the raw size.
+        assert!(prompt.chars().count() < 9_000);
+        assert!(prompt.contains('…'));
+    }
+
+    #[test]
+    fn scoped_conversation_round_trips_project_id_and_loads_instructions() {
+        // End-to-end over a real migrated schema: persist a project-scoped
+        // conversation (seam A), then resolve its project scope prompt the way
+        // prepare() does (seam B).
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::data::db::migrations::run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO projects (id, name, description, custom_instructions, knowledge_base_files)
+             VALUES ('proj-1', 'Apollo', 'Moonshot planning', 'Cite sources for every claim.',
+                     '[{\"id\":\"k1\",\"name\":\"brief.md\",\"path\":\"/p/brief.md\",\"content\":\"Budget is 2M.\",\"addedAt\":\"2026-07-16\"}]')",
+            [],
+        )
+        .unwrap();
+
+        let id = crate::data::db::repository::create_conversation_with_execution_mode(
+            &conn,
+            "Scoped chat".to_string(),
+            "user-1".to_string(),
+            "local",
+            "local_only",
+            Some("proj-1"),
+        )
+        .unwrap();
+        let conversation =
+            crate::data::db::repository::get_conversation(&conn, id, "user-1").unwrap();
+        assert_eq!(
+            conversation.project_id.as_deref(),
+            Some("proj-1"),
+            "project_id must round-trip through create + get (seam A)"
+        );
+
+        let prompt = load_project_scope_prompt(&conn, conversation.project_id.as_deref().unwrap())
+            .expect("scoped conversation must yield a project scope prompt");
+        assert!(prompt.contains("Cite sources for every claim."));
+        assert!(prompt.contains("brief.md"));
+        assert!(prompt.contains("Budget is 2M."));
+
+        // Archived projects must stop injecting context.
+        conn.execute("UPDATE projects SET is_archived = 1 WHERE id = 'proj-1'", [])
+            .unwrap();
+        assert!(load_project_scope_prompt(&conn, "proj-1").is_none());
+
+        // Unscoped conversations stay unscoped.
+        let unscoped_id = crate::data::db::repository::create_conversation_with_execution_mode(
+            &conn,
+            "Plain chat".to_string(),
+            "user-1".to_string(),
+            "local",
+            "local_only",
+            None,
+        )
+        .unwrap();
+        let unscoped =
+            crate::data::db::repository::get_conversation(&conn, unscoped_id, "user-1").unwrap();
+        assert_eq!(unscoped.project_id, None);
     }
 }

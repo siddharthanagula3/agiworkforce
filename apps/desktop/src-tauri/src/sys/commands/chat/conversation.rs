@@ -35,6 +35,7 @@ pub fn chat_create_conversation(
         request.user_id.clone(),
         app_mode,
         execution_mode.as_str(),
+        request.project_id.as_deref(),
     )
     .map_err(|e| format!("Failed to create conversation: {e}"))?;
     repository::get_conversation(&conn, id, &request.user_id)

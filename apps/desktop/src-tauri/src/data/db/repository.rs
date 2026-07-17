@@ -69,6 +69,7 @@ pub fn create_conversation_with_execution_mode(
     user_id: String,
     app_mode: &str,
     execution_mode: &str,
+    project_id: Option<&str>,
 ) -> Result<i64> {
     let safe_mode = match app_mode {
         "local" | "cloud" => app_mode,
@@ -96,16 +97,18 @@ pub fn create_conversation_with_execution_mode(
             "app_mode and execution_mode disagree".to_string(),
         ));
     }
+    // Normalize blank scope to NULL so "no project" is a single representation.
+    let safe_project_id = project_id.map(str::trim).filter(|s| !s.is_empty());
     conn.execute(
-        "INSERT INTO conversations (title, user_id, app_mode, execution_mode) VALUES (?1, ?2, ?3, ?4)",
-        params![title, user_id, safe_mode, safe_execution_mode],
+        "INSERT INTO conversations (title, user_id, app_mode, execution_mode, project_id) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![title, user_id, safe_mode, safe_execution_mode, safe_project_id],
     )?;
     Ok(conn.last_insert_rowid())
 }
 
 pub fn get_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<Conversation> {
     conn.query_row(
-        "SELECT id, title, created_at, updated_at, user_id, execution_mode FROM conversations WHERE id = ?1 AND user_id = ?2",
+        "SELECT id, title, created_at, updated_at, user_id, execution_mode, project_id FROM conversations WHERE id = ?1 AND user_id = ?2",
         params![id, user_id],
         map_conversation,
     )
@@ -118,7 +121,7 @@ pub fn list_conversations(
     user_id: &str,
 ) -> Result<Vec<Conversation>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, created_at, updated_at, user_id, execution_mode
+        "SELECT id, title, created_at, updated_at, user_id, execution_mode, project_id
          FROM conversations
          WHERE user_id = ?3
          ORDER BY updated_at DESC
@@ -150,7 +153,7 @@ pub fn list_conversations_by_mode(
         _ => "local",
     };
     let mut stmt = conn.prepare(
-        "SELECT id, title, created_at, updated_at, user_id, execution_mode
+        "SELECT id, title, created_at, updated_at, user_id, execution_mode, project_id
          FROM conversations
          WHERE user_id = ?3
            AND (app_mode = ?4 OR app_mode IS NULL)
@@ -215,6 +218,7 @@ fn map_conversation(row: &Row) -> Result<Conversation> {
         updated_at: parse_datetime(&row.get::<_, String>(3)?),
         user_id: row.get(4)?,
         execution_mode: row.get(5)?,
+        project_id: row.get(6)?,
     })
 }
 

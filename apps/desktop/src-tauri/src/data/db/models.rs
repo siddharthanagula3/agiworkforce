@@ -9,6 +9,9 @@ pub struct Conversation {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub execution_mode: String,
+    /// Local project scope ("AGI Work"), v75 migration. None = unscoped chat.
+    #[serde(default)]
+    pub project_id: Option<String>,
 }
 
 impl Conversation {
@@ -21,6 +24,7 @@ impl Conversation {
             created_at: now,
             updated_at: now,
             execution_mode: "local_only".to_string(),
+            project_id: None,
         }
     }
 }
@@ -34,6 +38,7 @@ impl Default for Conversation {
             created_at: Utc::now(),
             updated_at: Utc::now(),
             execution_mode: "local_only".to_string(),
+            project_id: None,
         }
     }
 }

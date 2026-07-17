@@ -16,6 +16,7 @@ import { AgiWorkScheduled } from './AgiWorkScheduled';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useChatStore } from '../../stores/chat';
+import { useProjectStore } from '../../stores/projectStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import {
@@ -101,6 +102,9 @@ export function DesktopShellV3({
         // Scope the new chat to a project when started from a project folder.
         if (projectId) {
           useChatStore.getState().setConversationProject(conversationId, projectId);
+          // Real link (not just chat-side metadata) so project.conversationIds
+          // — and the project card's session count — reflect the new chat.
+          void useProjectStore.getState().linkConversation(projectId, conversationId);
         }
       }
     },

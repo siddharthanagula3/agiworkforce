@@ -121,6 +121,11 @@ pub struct CreateConversationRequest {
     pub user_id: String,
     #[serde(default, alias = "executionMode")]
     pub execution_mode: Option<ChatExecutionMode>,
+    /// Local project scope ("AGI Work"). TauriRuntime has always sent
+    /// `projectId`; before v75 serde silently dropped it and the scope was
+    /// lost (DESKTOP-PROJECT-SCOPING-UNWIRED-01, seam A).
+    #[serde(default, alias = "projectId")]
+    pub project_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -415,6 +420,19 @@ impl Validate for CreateConversationRequest {
                     MAX_USER_ID_LENGTH
                 ),
             });
+        }
+        if let Some(project_id) = &self.project_id {
+            // Opaque local project UUID; bound it like user_id so a hostile
+            // payload cannot stuff arbitrary blobs into the column.
+            if project_id.len() > MAX_USER_ID_LENGTH {
+                return Err(ValidationError {
+                    field: "project_id".to_string(),
+                    message: format!(
+                        "Project ID exceeds maximum length of {} characters",
+                        MAX_USER_ID_LENGTH
+                    ),
+                });
+            }
         }
         Ok(())
     }

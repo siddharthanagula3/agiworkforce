@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 74;
+const CURRENT_VERSION: i32 = 75;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -634,6 +634,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 74 {
         run_migration_in_transaction(conn, 74, apply_migration_v74)?;
+    }
+
+    if current_version < 75 {
+        run_migration_in_transaction(conn, 75, apply_migration_v75)?;
     }
 
     Ok(())
@@ -6030,6 +6034,22 @@ fn apply_migration_v74(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration v75: Add `project_id` to conversations for local project scoping
+/// ("AGI Work"). DESKTOP-PROJECT-SCOPING-UNWIRED-01 seam A: TauriRuntime has
+/// always sent `projectId` on conversation create, but there was no column to
+/// persist it into. Nullable TEXT referencing `projects.id`; NULL = unscoped.
+/// No FK constraint — `projects` rows are soft-deletable and a dangling scope
+/// must degrade to "no project context", not block conversation reads.
+fn apply_migration_v75(conn: &Connection) -> Result<()> {
+    ensure_column(conn, "conversations", "project_id", "project_id TEXT")?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_project_id \
+         ON conversations(project_id) WHERE project_id IS NOT NULL",
+        [],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6063,6 +6083,47 @@ mod tests {
         assert!(tables.contains(&"schema_version".to_string()));
         assert!(tables.contains(&"cache_entries".to_string()));
         assert!(tables.contains(&"calendar_accounts".to_string()));
+    }
+
+    #[test]
+    fn migration_v75_adds_conversations_project_id_and_persists_it() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let has_column: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM pragma_table_info('conversations') WHERE name = 'project_id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(has_column, "v75 must add conversations.project_id");
+
+        conn.execute(
+            "INSERT INTO conversations (title, user_id, project_id) VALUES
+             ('scoped', 'u1', 'proj-123'), ('unscoped', 'u1', NULL)",
+            [],
+        )
+        .unwrap();
+        let scoped: Option<String> = conn
+            .query_row(
+                "SELECT project_id FROM conversations WHERE title = 'scoped'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let unscoped: Option<String> = conn
+            .query_row(
+                "SELECT project_id FROM conversations WHERE title = 'unscoped'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(scoped.as_deref(), Some("proj-123"));
+        assert_eq!(unscoped, None);
+
+        // Re-running migrations on an already-migrated db must be a no-op.
+        run_migrations(&conn).unwrap();
     }
 
     #[test]
