@@ -4,13 +4,9 @@
  * Managed cloud is public alpha and open by default (founder decision,
  * 2026-06-27, AGENTS.md) — there is no waitlist/request-access step for sync
  * itself. Settings sync (/api/settings/sync, a cloud-safe namespace allowlist)
- * and mobile chat-history sync (/api/chat/sync) are both live today for any
- * signed-in AGI Cloud account; this page previously showed a "request hosted
- * sync access" waitlist form for that already-live capability. The one piece
- * that is genuinely not available yet is Desktop cloud persistence (chat and
- * settings both) — Desktop Local/BYOK modes keep history device-local by
- * design, and Desktop's Cloud app mode has no sync wiring yet (tracked gap,
- * not a waitlist).
+ * and chat-history sync (/api/chat/sync) are live today for signed-in AGI Cloud
+ * accounts on Web, Mobile, and Desktop Cloud. Desktop Local/BYOK modes keep
+ * history device-local by design and never inherit Cloud sync implicitly.
  */
 
 export default function SyncSettingsPage() {
@@ -105,7 +101,7 @@ export default function SyncSettingsPage() {
             }}
           >
             <span style={{ fontSize: 14, color: 'var(--text-3)', flexShrink: 0 }}>
-              Settings and chat history sync (Desktop)
+              Settings and chat history sync (Desktop Cloud)
             </span>
             <span
               style={{
@@ -122,14 +118,14 @@ export default function SyncSettingsPage() {
                 textTransform: 'uppercase',
               }}
             >
-              Coming soon
+              Live
             </span>
           </div>
 
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            Desktop Local and BYOK modes keep chat and settings on your machine by design. Desktop
-            cloud sync isn&apos;t wired up yet — Desktop stays local-only for now, independent of
-            your Web/Mobile sync state.
+            Desktop Cloud syncs chat history and allowlisted settings through your signed-in AGI
+            Cloud account. Desktop Local and BYOK modes keep chat and settings on your machine by
+            design and never join Cloud sync unless you explicitly switch to Desktop Cloud.
           </p>
         </div>
       </section>
@@ -159,7 +155,8 @@ export default function SyncSettingsPage() {
           }}
         >
           <li style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
-            Website chat is account-bound. Desktop and CLI keep local history on your machine.
+            Web, Mobile, and Desktop Cloud chat are account-bound. Desktop Local/BYOK and CLI keep
+            local history on your machine.
           </li>
           <li style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.55 }}>
             Secret and device-specific settings (BYOK keys, local model paths, device config) never
