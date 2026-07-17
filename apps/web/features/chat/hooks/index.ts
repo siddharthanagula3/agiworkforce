@@ -7,7 +7,6 @@ export { useChatPersistence } from './use-chat-persistence';
 export * from './use-chat-queries';
 export { useChatHistory as useConversationHistory } from './use-conversation-history';
 export { useVoiceRecording } from './use-voice-recording';
-export * from './use-search-history';
 export {
   useAdaptedMessages,
   useAdaptedSessions,

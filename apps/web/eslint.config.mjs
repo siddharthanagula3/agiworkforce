@@ -85,6 +85,7 @@ const eslintConfig = defineConfig([
     },
   },
   // WEB-37 (audit 2026-05-19): forbid `dangerouslySetInnerHTML` in
+  // llm-guardrail-allow: this block IS the ban on the sink, not a use of it
   // dynamic-content surfaces (features/**, components/**). JSON-LD in
   // server-component layouts (app/**/layout.tsx and app/**/page.tsx) is
   // exempt because the content is developer-authored at build time.
@@ -98,8 +99,10 @@ const eslintConfig = defineConfig([
       'no-restricted-syntax': [
         'error',
         {
+          // llm-guardrail-allow: rule selector/message naming the banned sink
           selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
           message:
+            // llm-guardrail-allow: rule message naming the banned sink
             'dangerouslySetInnerHTML can introduce XSS. Sanitize via DOMPurify (@shared/utils/html-sanitizer) and add a per-line eslint-disable with WEB-37 justification, or render via JSX.',
         },
       ],
@@ -135,7 +138,6 @@ const eslintConfig = defineConfig([
   // WEB-13 justification.
   {
     files: [
-      'core/security/**/*.{ts,tsx}',
       'features/chat/services/**/*.{ts,tsx}',
       'features/chat/hooks/**/*.{ts,tsx}',
       'lib/**/*.{ts,tsx}',

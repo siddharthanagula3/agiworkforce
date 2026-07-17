@@ -32,7 +32,6 @@ import type {
 
 /**
  * AIEmployee for workflow system (subset of complete-ai-employee.ts AIEmployee)
- * For file-based employees, use AIEmployee from @core/types/ai-employee.ts
  */
 export interface AIEmployee {
   id: string;

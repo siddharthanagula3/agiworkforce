@@ -9,9 +9,8 @@
  *   const meta = msg.metadata as WebChatMessageMetadata | undefined;
  */
 
-// Re-exported from integrations so consumers don't reach across feature roots.
-import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
-export type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
+import type { SearchResponse, SearchResult } from './search-media';
+export type { SearchResponse, SearchResult, MediaGenerationResult } from './search-media';
 export type WebSearchResults = SearchResponse | SearchResult[];
 export type WebChatStyleMode = 'concise' | 'formal' | 'explanatory';
 
