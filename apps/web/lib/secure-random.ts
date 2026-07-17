@@ -6,9 +6,9 @@
  * `SecureRandomUnavailableError` instead of silently falling back to `Math.random`.
  *
  * WEB-13 (audit 2026-05-19): introduced to replace ad-hoc `Math.random` token /
- * filename / rollout-bucket generation across `features/chat/**`, `core/security/**`,
- * and `app/api/**`. The ESLint rule in `eslint.config.mjs` forbids `Math.random` in
- * those paths and points callers here.
+ * filename generation across `features/chat/**` and `app/api/**`. The ESLint
+ * rule in `eslint.config.mjs` forbids `Math.random` in those paths and points
+ * callers here.
  */
 
 export class SecureRandomUnavailableError extends Error {

@@ -15,26 +15,11 @@ export {
   useColorContrast,
 } from './useAccessibility';
 
-// Analytics hooks
-export { useAnalytics, useInteractionTracking, useBusinessMetrics } from './useAnalytics';
-
 // Auto-scroll behavior
 export { useAutoScroll } from './useAutoScroll';
 
 // Chat state management
 export { useChatState, type ChatMessage, type ChatTab, type ChatState } from './useChatState';
-
-// Performance optimization hooks
-export {
-  usePerformanceOptimization,
-  useDebounce,
-  useThrottle,
-  useLazyComponent,
-  useVirtualizedList,
-  useOptimizedImage,
-  useResourcePreloader,
-  useComponentPerformance,
-} from './usePerformanceOptimization';
 
 // Realtime subscriptions
 export { useRealtime, type RealtimeCallbacks } from './useRealtime';

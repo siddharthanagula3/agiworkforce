@@ -12,9 +12,6 @@ export * from './agents';
 // Artifacts
 export * from './artifacts';
 
-// Search
-export * from './search';
-
 // Workflows
 export * from './workflows';
 
