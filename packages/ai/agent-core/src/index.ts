@@ -6,6 +6,18 @@ export {
   estimateMessageTokens,
   estimateTextTokens,
 } from './context';
+export {
+  boostMemoryImportance,
+  classifyMemoryCategory,
+  cosineSimilarity,
+  decayMemoryImportance,
+  isValidEmbedding,
+  memoryRelevanceScore,
+  normalizeMemoryKey,
+  type MemoryCategory,
+  type MemoryDecayConfig,
+  type MemoryRelevanceInput,
+} from './memory';
 export type {
   AgentContextKind,
   AgentContextMessage,

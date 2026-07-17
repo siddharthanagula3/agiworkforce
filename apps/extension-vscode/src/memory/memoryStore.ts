@@ -10,6 +10,11 @@
  */
 
 import * as vscode from 'vscode';
+import {
+  classifyMemoryCategory,
+  normalizeMemoryKey,
+  type MemoryCategory,
+} from '@agiworkforce/agent-core';
 
 export const MEMORY_STORE_KEY = 'agiWorkforce.memoryFacts';
 
@@ -18,6 +23,9 @@ export interface MemoryFact {
   text: string;
   createdAt: string;
   updatedAt?: string;
+  category?: MemoryCategory;
+  importance?: number;
+  lastAccessed?: string;
 }
 
 // Change notification so TreeDataProvider can react without polling.
@@ -44,7 +52,11 @@ function isMemoryFact(v: unknown): v is MemoryFact {
 export function loadFacts(globalState: vscode.ExtensionContext['globalState']): MemoryFact[] {
   const stored = globalState.get<unknown>(MEMORY_STORE_KEY);
   if (!Array.isArray(stored)) return [];
-  return stored.filter(isMemoryFact).slice();
+  return stored.filter(isMemoryFact).map((fact) => ({
+    ...fact,
+    category: fact.category ?? classifyMemoryCategory(fact.text),
+    importance: fact.importance ?? 5,
+  }));
 }
 
 export async function saveFacts(
@@ -61,7 +73,16 @@ export async function addFact(
 ): Promise<MemoryFact> {
   const facts = loadFacts(globalState);
   const now = new Date().toISOString();
-  const fact: MemoryFact = { id: generateId(), text: text.trim(), createdAt: now, updatedAt: now };
+  const trimmed = text.trim();
+  const fact: MemoryFact = {
+    id: generateId(),
+    text: trimmed,
+    createdAt: now,
+    updatedAt: now,
+    lastAccessed: now,
+    category: classifyMemoryCategory(trimmed),
+    importance: 5,
+  };
   facts.unshift(fact);
   await saveFacts(globalState, facts);
   return fact;
@@ -75,7 +96,13 @@ export async function updateFact(
   const facts = loadFacts(globalState);
   const idx = facts.findIndex((f) => f.id === id);
   if (idx === -1) return false;
-  facts[idx] = { ...facts[idx]!, text: newText.trim(), updatedAt: new Date().toISOString() };
+  const trimmed = newText.trim();
+  facts[idx] = {
+    ...facts[idx]!,
+    text: trimmed,
+    category: classifyMemoryCategory(trimmed),
+    updatedAt: new Date().toISOString(),
+  };
   await saveFacts(globalState, facts);
   return true;
 }
@@ -96,4 +123,9 @@ export async function clearFacts(
   globalState: vscode.ExtensionContext['globalState'],
 ): Promise<void> {
   await saveFacts(globalState, []);
+}
+
+export function containsFact(facts: readonly MemoryFact[], text: string): boolean {
+  const key = normalizeMemoryKey(text);
+  return facts.some((fact) => normalizeMemoryKey(fact.text) === key);
 }

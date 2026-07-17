@@ -256,8 +256,8 @@ impl MemoryInjector {
             match memory.category {
                 MemoryCategory::Decision => summary.decisions += 1,
                 MemoryCategory::Preference => summary.preferences += 1,
-                MemoryCategory::Fact => summary.facts += 1,
-                MemoryCategory::Context => summary.context_entries += 1,
+                MemoryCategory::Fact | MemoryCategory::Skill => summary.facts += 1,
+                MemoryCategory::Context | MemoryCategory::Summary => summary.context_entries += 1,
             }
         }
 

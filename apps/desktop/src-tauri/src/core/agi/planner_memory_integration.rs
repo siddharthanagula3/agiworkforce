@@ -72,10 +72,12 @@ impl PlannerMemoryIntegration {
                 crate::core::agi::memory_manager::MemoryCategory::Preference => {
                     context.style_preferences.push(memory.content.clone());
                 }
-                crate::core::agi::memory_manager::MemoryCategory::Fact => {
+                crate::core::agi::memory_manager::MemoryCategory::Fact
+                | crate::core::agi::memory_manager::MemoryCategory::Skill => {
                     context.previous_solutions.push(memory.content.clone());
                 }
-                crate::core::agi::memory_manager::MemoryCategory::Context => {
+                crate::core::agi::memory_manager::MemoryCategory::Context
+                | crate::core::agi::memory_manager::MemoryCategory::Summary => {
                     context.architecture_patterns.push(memory.content.clone());
                 }
             }

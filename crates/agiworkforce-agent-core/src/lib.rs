@@ -43,6 +43,7 @@ use serde::Serialize;
 
 pub mod context;
 pub mod engine;
+pub mod memory;
 pub mod runaway;
 
 pub use engine::{run_turn, TurnEngine};
