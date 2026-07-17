@@ -5,7 +5,14 @@
 export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from './selector';
 export { detectCapabilities, isThermallyThrottled } from './capabilities';
 export { tier1Generate } from './tier1';
-export { tier2LoadModel, tier2Generate, tier2Release, _setLLMModuleForTesting } from './tier2';
+export {
+  tier2LoadModel,
+  tier2Generate,
+  tier2Release,
+  tier2IsVisionReady,
+  executorchVlmPresetInfo,
+  _setLLMModuleForTesting,
+} from './tier2';
 export {
   tier3LoadModel,
   tier3LoadMultimodalModel,
@@ -19,6 +26,7 @@ export {
   isMultimodalModel,
   hasRunnableGgufArtifacts,
   effectiveVisionIn,
+  effectiveTier2VisionIn,
   hasSufficientRAMForMultimodal,
   MULTIMODAL_MIN_RAM_MB,
   ensureVerifiedArtifact,

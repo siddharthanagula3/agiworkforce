@@ -7,7 +7,11 @@
  *      on disk. This passes the real image into the model via `images` +
  *      `mmprojPath` (llama.rn `initMultimodal`). Effective vision is gated on the
  *      projector actually being present — never on a catalog flag alone (§8).
- *   2. Native OCR over the image + local text-only LLM reasoning (fallback).
+ *   2. Tier-2 ExecuTorch VLM (single .pte, projector embedded — e.g. LFM2-VL
+ *      450M): used only when the model is actually installed
+ *      (`effectiveTier2VisionIn`). The image rides `images` into tier-2's
+ *      `mediaPath` plumbing; no mmproj pair exists on this tier.
+ *   3. Native OCR over the image + local text-only LLM reasoning (fallback).
  *
  * The VL route stays dormant until the mobile GGUF+mmproj install path lands and
  * writes the artifacts to disk; today that path is device-QA-gated, so real
@@ -18,6 +22,7 @@
  */
 
 import {
+  effectiveTier2VisionIn,
   getDefaultModel,
   getModelById,
   isMultimodalModel,
@@ -50,8 +55,12 @@ export interface VisionResult {
 interface RunnableVisionModel {
   modelId: string;
   displayName: string;
-  modelPath: string;
-  mmprojPath: string;
+  /**
+   * Tier-3 GGUF fields. Absent for a tier-2 ExecuTorch VLM, whose artifacts
+   * are preset-cached by the module — the selector routes those by `modelId`.
+   */
+  modelPath?: string;
+  mmprojPath?: string;
 }
 
 /**
@@ -91,6 +100,7 @@ async function resolveInstalledMultimodalModel(): Promise<RunnableVisionModel | 
   if (typeof getModelById !== 'function' || typeof isMultimodalModel !== 'function') return null;
 
   const installed = await listInstalledModels().catch(() => []);
+  // Pass 1 (preferred): tier-3 llama.rn GGUF+mmproj pack.
   for (const entry of installed) {
     if (!entry.local_path) continue;
 
@@ -121,6 +131,39 @@ async function resolveInstalledMultimodalModel(): Promise<RunnableVisionModel | 
       mmprojPath,
     };
   }
+
+  // Pass 2: tier-2 ExecuTorch VLM (single .pte with embedded projector, e.g.
+  // LFM2-VL 450M). Effective vision requires the model to actually be
+  // installed — the ExecuTorch module preset-caches the artifacts itself, so
+  // the installed_models record (format 'pte', no local_path) is the install
+  // evidence here.
+  if (typeof effectiveTier2VisionIn === 'function') {
+    for (const entry of installed) {
+      if (entry.format !== 'pte') continue;
+
+      let catalogModel;
+      try {
+        catalogModel = getModelById(entry.id);
+      } catch {
+        catalogModel = undefined;
+      }
+      if (!catalogModel) continue;
+
+      let tier2Vision = false;
+      try {
+        tier2Vision = effectiveTier2VisionIn(catalogModel, { modelInstalled: true });
+      } catch {
+        tier2Vision = false;
+      }
+      if (!tier2Vision) continue;
+
+      return {
+        modelId: entry.id,
+        displayName: catalogModel.displayName,
+      };
+    }
+  }
+
   return null;
 }
 
@@ -157,11 +200,13 @@ export async function runVisionQuery(query: VisionQuery): Promise<VisionResult> 
   // Preferred path: a real on-device VL model with its mmproj installed.
   const vl = await resolveInstalledMultimodalModel();
   if (vl) {
+    // Tier-3 routes by modelPath + mmprojPath; tier-2 routes by modelId (the
+    // selector resolves its ExecuTorch preset — images ride into mediaPath).
     const result = await localGenerate(vl.modelPath, {
       modelId: vl.modelId,
       prompt: query.question,
       images: [query.imageUri],
-      mmprojPath: vl.mmprojPath,
+      ...(vl.mmprojPath ? { mmprojPath: vl.mmprojPath } : {}),
       onToken: query.onToken,
     });
     return {

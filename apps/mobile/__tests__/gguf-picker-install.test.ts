@@ -29,6 +29,23 @@ jest.mock('@/storage/installedModels', () => ({
   recordInstalledModel: jest.fn(),
 }));
 
+// The multimodal RAM gate (model-picker-ram-gate.test.ts) fails closed on an
+// unknown RAM reading; these tests exercise the DOWNLOAD branch, so report a
+// vision-capable device.
+jest.mock('@agiworkforce/local-llm', () => ({
+  ...jest.requireActual('@agiworkforce/local-llm'),
+  getCapabilities: jest.fn().mockResolvedValue({
+    totalRAMMB: 8192,
+    osVersion: '17.0',
+    thermalThrottled: false,
+    tier1Available: false,
+    tier1Runtime: null,
+    tier1Status: 'unavailable',
+    tier2Available: true,
+    tier3Available: true,
+  }),
+}));
+
 const HEX = 'a'.repeat(64);
 
 function ggufRow(overrides: Partial<OnDeviceModel> = {}): OnDeviceModel {
@@ -119,7 +136,12 @@ describe('installStore.prepareModel GGUF branch', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getInstalledModel as jest.Mock).mockResolvedValue(null);
-    useModelInstallStore.setState({ installedModelIds: [], readySystemModelIds: [], jobs: {} });
+    useModelInstallStore.setState({
+      installedModelIds: [],
+      readySystemModelIds: [],
+      totalRAMMB: 8192,
+      jobs: {},
+    });
   });
 
   it('downloads the base + mmproj artifacts via modelDownload and lands ready', async () => {

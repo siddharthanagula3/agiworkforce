@@ -137,22 +137,28 @@ const CATALOG: OnDeviceModel[] = [
     // huggingface.co/software-mansion/react-native-executorch-lfm-2.5
     // (x-linked-size/x-linked-etag), independent of react-native-executorch's
     // own modelUrls.js (installed at ^0.8.4; also cross-checked).
-    // CAPABILITY HONESTY: `visionIn` is false, not true — unlike the Qwen3-VL-2B
-    // tier-3 row (where `effectiveVisionIn` gates a REAL, already-shipped
-    // llama.rn `initMultimodal` runtime on mmproj presence), tier-2's
-    // `LLMModule` wrapper (tier2.ts) has NO image-passing plumbing at all today
-    // — no `capabilities:['vision']` forwarded to `fromModelName`, no
-    // `mediaPath`/`imagePath` on generate. Claiming visionIn:true here would be
-    // a capability with no code path that could ever make it true. Flip to true
-    // only once that plumbing ships AND is device-verified (tracked as a
-    // deferred follow-up, not built this pass: backup path, shipsInV1:false,
-    // no device QA scheduled).
-    // No downloadUrl/executorchPreset recorded: still no verified `resolve/<tag>/`
-    // URL construction from this package version confirmed safe to hardcode
-    // beyond the raw HEAD check above, and the vision plumbing it would enable
-    // does not exist yet — adding a preset now would be speculative wiring, not
-    // a real capability. LFM Open License v1.0 permits free commercial use only
-    // up to $10M annual revenue and must be re-reviewed at scale.
+    // CAPABILITY HONESTY (updated 2026-07-16): `visionIn` is now the NOMINAL
+    // capability, mirroring the Qwen3-VL-2B tier-3 row — the tier-2 vision
+    // plumbing SHIPS in this repo: tier2.ts forwards `capabilities:['vision']`
+    // to `LLMModule.fromModelName`, applies the model card's generation config,
+    // and passes the current turn's image as `mediaPath` on the user message
+    // (react-native-executorch 0.8.4's documented multimodal path — the same
+    // package export `LFM2_5_VL_450M_QUANTIZED` carries these exact values).
+    // The EFFECTIVE capability stays install-gated: `effectiveTier2VisionIn`
+    // in ./multimodal.ts is true only when this model is actually installed —
+    // never from this catalog flag alone. Ship gate unchanged: shipsInV1 flips
+    // only after on-device QA (real generateMultimodal execution + RAM/thermal
+    // matrix), which no amount of mocked-native testing can substitute for.
+    // executorchPreset URLs use the same mirrored ET_URL_PREFIX/ET_VERSION_TAG
+    // pattern as the qwen3/llama presets above and were verified 2026-07-16
+    // against BOTH the installed package's own modelUrls.js (0.8.4,
+    // VERSION_TAG resolve/v0.8.0) and live HF (tokenizer resolves; .pte LFS
+    // pointer sha256+size match `checksum`/`fileSizeBytes` below). The .pte is
+    // a SINGLE artifact (vision projector embedded) — no mmproj pair; the
+    // ExecuTorch module manages its own download, so `checksum` here is the
+    // independently verified audit digest, not a wired verify step.
+    // LFM Open License v1.0 permits free commercial use only up to $10M
+    // annual revenue and must be re-reviewed at scale.
     id: 'lfm2-vl-450m',
     displayName: 'AGI Vision Lite',
     family: 'lfm2-vl',
@@ -162,7 +168,7 @@ const CATALOG: OnDeviceModel[] = [
     contextWindow: 32_768,
     capabilities: {
       text: true,
-      visionIn: false,
+      visionIn: true,
       audioIn: false,
       toolCalls: false,
       structuredOutput: false,
@@ -170,6 +176,15 @@ const CATALOG: OnDeviceModel[] = [
     license: 'LFM Open License v1.0 (free commercial use capped at $10M annual revenue)',
     role: 'premium-vision-pack',
     shipsInV1: false,
+    downloadUrl: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/lfm2_5_vl_450m_8da4w_xnnpack.pte`,
+    checksum: 'c3aeead4499cb1c19de48d4216f3b2e9216b27770d768ea4650dbcaa1a998a9b',
+    format: 'pte',
+    executorchPreset: {
+      modelName: 'lfm2.5-vl-450m-quantized',
+      modelSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/lfm2_5_vl_450m_8da4w_xnnpack.pte`,
+      tokenizerSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/tokenizer.json`,
+      tokenizerConfigSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/tokenizer_config.json`,
+    },
   },
   {
     id: 'gemma4-e4b-instruct',
