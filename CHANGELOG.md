@@ -6,6 +6,42 @@ Last updated: 2026-07-16
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — restructure tree landed] — 2026-07-16
+
+### Changed
+
+- Landed the entire production-restructure working tree (~3,010 files) on
+  `chore/repo-restructure-2026-07` in six reviewed slices
+  (`5b14585dd..c39eba06c`), ending the multi-lane integration knot: vendored
+  agent-skill bundles removed; docs/plans/product corpus committed; Rust slice
+  (M6 microcrate merges, protocol agent-event envelope + developer-session
+  contracts, W7 shared-engine progress with twins intact, CLI app-server,
+  rust-toolchain + deny.toml pins); root `ios/` deleted for the
+  config-plugin-first path; isolated sandbox renderer added under
+  `infrastructure/`; and the atomic platform slice — W4 t-wave regroup of
+  `packages/` into `{contracts,ai,client,ui,tools,platform}` with the
+  `llm-runtime`→`provider-runtime` and `llm-normalize`→`provider-protocol`
+  renames (1,090 history-preserving renames), M7 `tools/` root, M8 facade
+  deletion, W5 session/capability/envelope contracts with real consumers,
+  W6 provider/billing correctness, W9 final-shape contract repairs
+  (migrations 0052–0058 committed, NOT applied), W10 mobile multimodal
+  catalog, and the web AGI-Work project-context wiring.
+- Evidence at landing: repo guard battery, `check:llm-operability`,
+  `typecheck:all` (45/45), `cargo check --workspace`, `git diff --check`,
+  `check:llm-failures:staged`, and full `turbo run lint` all green.
+  Post-commit secret audit of every new commit: clean (fixtures only;
+  `.env.local` ignored and absent from history).
+- Strict-guard debt paid in-line: bare `#[ignore]` attributes given reason
+  strings; env-gated live-provider tests annotated with the sanctioned
+  `llm-guardrail-allow` justification; the api-gateway WebSocket
+  `describe.skip` stub block deleted as test theater; the
+  prompt-injection-detector placeholder rewritten as a tracked-gap comment;
+  new known-flaws row `DESKTOP-COMPUTER-USE-FOREGROUND-GATE-01` for the
+  previously-undocumented foreground-app permission gap.
+- Deploy sequencing unchanged and explicit: branch commits do not deploy;
+  migration 0056 must be applied to prod Neon before this branch merges to
+  `main` (`SVC-MANAGED-USAGE-0056-DEPLOY-SEQ-01`), then 0057/0058 per W9.
+
 ## [Unreleased — trust-boundary, sync, and operability hardening] — 2026-07-15
 
 ### Changed

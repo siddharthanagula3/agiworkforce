@@ -361,6 +361,14 @@ agi-work-wiring teammate frees apps/web:
 - BLOCKED on web-AGI-Work integration: chat_folders stack (app/api/chat/folders/route.ts + features/chat/{components/Sidebar/FolderManagement, components/Composer/FolderContextSelector, services/folder-management-service} + 3 barrels). Verified UNMOUNTED (neither component rendered) and folders duplicate Projects (canonical) → archive to resolve WEB-ROUTE-PROD-SCHEMA-MISMATCH-01. BUT Composer/index.ts barrel is co-dirty with the unintegrated web AGI Work slice → can't edit cleanly until that slice lands. (branch stack is ambiguous — has a cloud contract — decide fix-vs-archive separately.)
 - AUDIT TARGET: apps/web/core/ (48 files: ai/llm, ai/orchestration [agent-collaboration/communication protocols, intelligent-agent-router, workflow-orchestration, NLP, task-breakdown], auth, integrations [imagen/veo/openai-image/social-media-analyzer/web-search-handler/websocket-manager], monitoring, security [api-abuse, employee-input-sanitizer, gradual-rollout], storage) — a large parallel/legacy business-logic layer with only 1–6 external importers per module (core/storage/chat = 0). Likely significant dead/duplicate code but NOT safe to blind-archive; needs a dedicated read-only wired/partial/dead audit before archiving.
 
-## INTEGRATION KNOT (blocks clean incremental cleanup) — needs founder sequencing decision
+## INTEGRATION KNOT — RESOLVED 2026-07-16 (tree landed)
 
-- ~2997 files uncommitted across many lanes (restructure W-waves, web AGI Work, W5 idempotency). request-processor.ts entangles the web AGI Work project-context splice WITH the uncommitted W5 reserveManagedUsageRequest code → the verified web AGI Work slice can't be committed cleanly (would bundle W5). W5's reservation needs migration 0056 applied to prod Neon BEFORE its code deploys (SVC-MANAGED-USAGE-0056-DEPLOY-SEQ-01). Unlock: decide the commit-sequencing (apply 0056 to prod Neon → commit the combined request-processor changes, or patch-split the two lanes).
+- The founder authorized commit-sequencing via the session goal; the whole
+  working tree landed in six reviewed slices (`5b14585dd..c39eba06c`) with
+  every gate green and a clean post-commit secret audit (details in
+  CHANGELOG 2026-07-16). The combined request-processor changes (AGI-Work
+  project context + W5 reservation) are committed together as recorded.
+  STILL OPEN from this knot: migration 0056 MUST be applied to prod Neon
+  BEFORE this branch merges to `main`/deploys
+  (SVC-MANAGED-USAGE-0056-DEPLOY-SEQ-01), then 0057/0058 per W9. Branch
+  commits do not deploy; Vercel deploys from `main`.

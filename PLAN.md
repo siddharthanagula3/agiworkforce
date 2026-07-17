@@ -203,28 +203,34 @@ Four non-overlapping lanes are active in parallel:
 
 ## Exact Resume Point
 
-Resume the four active lanes from their current diffs; do not restart their
-already-verified work. The classification and disposition manifest are
-complete. Mechanical waves M0-M8 are done (2026-07-15: M6 microcrate merges
-with the `utils-template` delete adjustment; M7 `tools/` root +
-skill-vetting move; M8 facade deletion with zero-importer proof and the
-ownership guards rewritten to anti-regression form — all gates green); the
-T-wave regroup is the next and only mechanical wave allowed to run, and it
-must WAIT until the in-flight behavior lanes (W5 item 3, W9 fixes) and the
-external provider-factory session quiesce, strictly per
-`docs/plans/restructure-execution-program-2026-07-15.md` (the 12-wave
-execution program that now sequences all remaining work; orchestrator +
-Sonnet teammate model per its §3). Behavior lanes W5 (discipline
-contracts), W6 (provider/billing correctness), and W9 pre-verification run
-in parallel with disjoint write sets. The finalized target structure and
-research-corpus adjudication are recorded in
-`docs/plans/target-structure-finalization-2026-07-15.md`.
+2026-07-16: THE TREE LANDED. The founder authorized commit-sequencing via the
+session goal; the ~3,010-file working tree was committed in six reviewed
+slices on `chore/repo-restructure-2026-07` (`5b14585dd..c39eba06c`) with the
+full gate battery, `typecheck:all` (45/45), `cargo check --workspace`,
+`turbo run lint`, `pnpm test` (44/44 tasks, web 4,389 tests), and a
+post-commit secret audit all green. Waves W1-W6, W8, W9 (code), W10 (code),
+and W11 are landed in history. See the CHANGELOG 2026-07-16 entry.
 
-Before the final completion claim, rerun Desktop full tests after the registry
-model-type update, Web typecheck after chat/memory sync, all repository
-operability guards, `pnpm typecheck:all`, `pnpm test`, and
-`cargo check --workspace`; inspect the final diff and unresolved external
-release prerequisites separately.
+Remaining program work, in order of dependency:
+
+1. W7 tail (desktop-native lane, in flight): c2c request-parity oracle +
+   crate `ChatRequest` extension, then c3/c4 dialect/bedrock swaps, then the
+   ~201 twin-file deletion behind a host-owned-file manifest + orchestrator
+   review. CLI `exec_policy.rs` → `agiworkforce-execpolicy`.
+2. Post-landing one-canonical-owner pass: knip + content-hash dedup sweep,
+   web dead-stack archiving per the TODO wiring-gap audit.
+3. W12 web domain-first internal move (LAST mechanical wave, after the
+   behavior fixes above quiesce).
+4. Live-defect closure for enterprise/demo readiness (PlansModal stale CTA in
+   flight; star/archive + branch schema fixes; desktop project scoping after
+   W7; the 12 stale-model-ID `routing_logic_tests` reds in desktop core/llm).
+5. External release gates (founder-run or scheduled, cannot be faked):
+   apply+probe migrations 0056 → 0057/0058 on prod Neon BEFORE merging this
+   branch to `main`; W7 live-provider + desktop-device smoke; desktop
+   restart-persistence smoke; W10 on-device mobile QA.
+6. The final requirement-by-requirement completion audit (Remaining
+   Workstream 8) recorded in CHANGELOG with unresolved external
+   prerequisites listed separately.
 
 ## Current Evidence Commands
 
