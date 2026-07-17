@@ -1,7 +1,7 @@
 use agiworkforce_model_registry::{
-    is_auto_routing_selection, model_keys_for_provider, resolve_auto_route, runtime_profile,
     AutoRouteDecision, AutoRoutingRequest, RouteReason, RoutingProfile, RoutingTaskType, TrustMode,
-    UnavailableCode,
+    UnavailableCode, is_auto_routing_selection, model_keys_for_provider, resolve_auto_route,
+    runtime_profile,
 };
 
 #[test]
@@ -73,6 +73,34 @@ fn clamps_premium_to_free_tier_maximum() {
     };
     assert_eq!(selected.model_key, "gemini-3.1-flash-lite");
     assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
+}
+
+#[test]
+fn treats_basic_as_economy_and_max_plus_as_max() {
+    let basic = resolve_auto_route(&request(
+        "auto-premium",
+        RoutingTaskType::Coding,
+        "basic",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+    let max_plus = resolve_auto_route(&request(
+        "auto-premium",
+        RoutingTaskType::Coding,
+        "max_plus",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+
+    let AutoRouteDecision::Selected(basic) = basic else {
+        panic!("expected Basic to select its economy route");
+    };
+    let AutoRouteDecision::Selected(max_plus) = max_plus else {
+        panic!("expected Max+ to select its Max route");
+    };
+    assert_eq!(basic.effective_profile, Some(RoutingProfile::Economy));
+    assert_eq!(max_plus.effective_profile, Some(RoutingProfile::Premium));
+    assert_eq!(max_plus.model_key, "claude-opus-4.8");
 }
 
 #[test]
@@ -238,10 +266,12 @@ fn runtime_adapter_admission_blocks_an_unexecutable_media_harness() {
         panic!("expected unavailable route");
     };
     assert_eq!(unavailable.code, UnavailableCode::NoEligibleRoute);
-    assert!(unavailable
-        .reasons
-        .iter()
-        .any(|reason| reason.contains("google/media")));
+    assert!(
+        unavailable
+            .reasons
+            .iter()
+            .any(|reason| reason.contains("google/media"))
+    );
 }
 
 #[test]

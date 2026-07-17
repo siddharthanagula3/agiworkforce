@@ -112,7 +112,7 @@ describe('modelStore', () => {
       expect(state.selectedProvider).toBe('managed_cloud');
     });
 
-    it('should block non-allowed model selection for basic plans and fall back to the best pro-class auto mode', async () => {
+    it('should block non-allowed model selection for basic plans and fall back to economy Auto', async () => {
       const { useModelStore } = await import('../stores/modelStore');
       const { useUnifiedAuthStore } = await import('../stores/auth');
 
@@ -122,9 +122,7 @@ describe('modelStore', () => {
       await store.selectModel('gpt-5.5', 'openai');
 
       const state = useModelStore.getState();
-      // 2026-07-16 ladder: basic carries pro's admission, so the fallback is
-      // the best pro-class auto mode, not the free economy mode.
-      expect(state.selectedModel).toBe('auto-balanced');
+      expect(state.selectedModel).toBe('auto-economy');
       expect(state.selectedProvider).toBe('managed_cloud');
     });
   });

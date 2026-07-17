@@ -1529,11 +1529,8 @@ export function requireProviderDefaultModel(provider: Provider | string): string
 }
 
 function normalizeProductTier(tier: string | null | undefined): ProductTier {
-  // Basic ($8/mo, formerly 'hobby') shares Pro's model access and tier
-  // policy; the tiers differ by usage budget only (founder ladder
-  // 2026-07-16: flagship is max/enterprise-only, basic tracks pro).
-  // Previously basic fell through to 'free', denying paying Basic
-  // subscribers the pro tier policy and model list.
+  // Product-feature policy remains broader than model admission. Model lists
+  // use normalizeSubscriptionAccessTier; Basic must never inherit Pro models.
   switch ((tier ?? '').toLowerCase()) {
     case 'pro':
     case 'team':
@@ -1541,6 +1538,9 @@ function normalizeProductTier(tier: string | null | undefined): ProductTier {
     case 'hobby':
       return 'pro';
     case 'max':
+    case 'max+':
+    case 'max_plus':
+    case 'max-plus':
       return 'max';
     case 'enterprise':
       return 'enterprise';
@@ -1550,7 +1550,10 @@ function normalizeProductTier(tier: string | null | undefined): ProductTier {
 }
 
 function normalizeAutoRoutingTier(tier: string | null | undefined): ProductTier | 'byok' {
-  return (tier ?? '').toLowerCase() === 'byok' ? 'byok' : normalizeProductTier(tier);
+  if ((tier ?? '').toLowerCase() === 'byok') return 'byok';
+  return normalizeSubscriptionAccessTier(tier ?? 'free') === 'basic'
+    ? 'free'
+    : normalizeProductTier(tier);
 }
 
 export function getProviderSurface(provider: Provider | string): ProviderSurface {
@@ -1688,24 +1691,21 @@ export function isModelAllowedForTier(modelId: string, tier: TierKey): boolean {
   return getAllowedModelsForTier(tier).includes(canonicalModelId);
 }
 
-/**
- * Client-safe mirror of `apps/web/lib/model-tiers.ts`'s subscription-tier gate.
- * Both surfaces derive from the same `tierAllowedModels` catalog groups so a
- * model that's locked server-side is never shown as freely selectable client-side.
- */
-export type SubscriptionAccessTier = 'free' | 'pro' | 'max' | 'enterprise';
+/** Canonical subscription tiers used by every cloud-model picker and server gate. */
+export type SubscriptionAccessTier = 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
 
-function normalizeSubscriptionAccessTier(tier: string): SubscriptionAccessTier {
-  // Basic ($8/mo, formerly 'hobby') shares PRO's model access — see
-  // apps/web/lib/model-tiers.ts (usage budget, not allowlist, differentiates
-  // Basic from Pro). Flagship models stay max/enterprise-only.
+export function normalizeSubscriptionAccessTier(tier: string): SubscriptionAccessTier {
   switch (tier.toLowerCase()) {
-    case 'pro':
-    case 'team':
     case 'basic':
     case 'hobby':
+      return 'basic';
+    case 'pro':
+    case 'team':
       return 'pro';
     case 'max':
+    case 'max+':
+    case 'max_plus':
+    case 'max-plus':
       return 'max';
     case 'enterprise':
       return 'enterprise';
@@ -1715,15 +1715,15 @@ function normalizeSubscriptionAccessTier(tier: string): SubscriptionAccessTier {
 }
 
 /**
- * Minimum subscription tier required to use `modelId`, or null if the model
- * isn't gated behind a Pro/Max-exclusive catalog group (still requires SOME
- * paid tier + economy-list membership — see `canAccessModelForSubscriptionTier`).
+ * Minimum paid subscription tier required to use `modelId`, or null when the
+ * model is not in any selectable subscription roster.
  */
-export function getMinimumRequiredTier(modelId: string): 'pro' | 'max' | null {
-  const canonicalModelId = normalizeModelId(modelId);
+export function getMinimumRequiredTier(modelId: string): 'basic' | 'pro' | 'max' | null {
+  const canonicalModelId = normalizeModelId(modelId.toLowerCase());
   if (!canonicalModelId) return null;
   if (getAllowedModelsForTier('flagship_additions').includes(canonicalModelId)) return 'max';
   if (getAllowedModelsForTier('pro_additions').includes(canonicalModelId)) return 'pro';
+  if (getAllowedModelsForTier('economy').includes(canonicalModelId)) return 'basic';
   return null;
 }
 
@@ -1735,14 +1735,14 @@ export function canAccessModelForSubscriptionTier(
   const tier = normalizeSubscriptionAccessTier(subscriptionTier);
   if (tier === 'free') return false;
 
-  const canonicalModelId = normalizeModelId(modelId);
+  const canonicalModelId = normalizeModelId(modelId.toLowerCase());
   if (!canonicalModelId) return false;
 
   if (getAllowedModelsForTier('flagship_additions').includes(canonicalModelId)) {
     return tier === 'max' || tier === 'enterprise';
   }
   if (getAllowedModelsForTier('pro_additions').includes(canonicalModelId)) {
-    return true; // pro, max, enterprise all qualify
+    return tier === 'pro' || tier === 'max' || tier === 'enterprise';
   }
   return getAllowedModelsForTier('economy').includes(canonicalModelId);
 }
@@ -2117,7 +2117,8 @@ export function getDefaultModelFor(
   tier: SubscriptionTier | ProductTier | string | null | undefined,
   kind: DefaultModelKind,
 ): string {
-  const normalizedTier = normalizeProductTier(tier);
+  const accessTier = normalizeSubscriptionAccessTier(tier ?? 'free');
+  const normalizedTier = accessTier === 'basic' ? 'free' : normalizeProductTier(tier);
   const policy = getTierPolicy(normalizedTier);
   const preference = DEFAULT_KIND_SLOT_PREFERENCE[kind];
   const allowed = policy.allowedSlots;
@@ -2273,6 +2274,21 @@ export function getPickerModelsForRuntimeProfile(
   );
 
   return getPickerModels(options).filter((model) => admittedModelKeys.has(model.id));
+}
+
+/**
+ * Returns the single canonical model list for a subscription tier on a runtime
+ * surface. A model must pass both the real runtime profile and tier policy;
+ * unavailable surfaces intentionally receive an empty list.
+ */
+export function getModelsForTierAndSurface(
+  subscriptionTier: string,
+  runtimeProfileId: string,
+  options: PickerModelOptions = {},
+): PickerModelView[] {
+  return getPickerModelsForRuntimeProfile(runtimeProfileId, options).filter((model) =>
+    canAccessModelForSubscriptionTier(model.id, subscriptionTier),
+  );
 }
 
 export function getModelContextLimits(modelIds?: string[]): Record<string, number> {

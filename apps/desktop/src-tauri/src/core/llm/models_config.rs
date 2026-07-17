@@ -42,7 +42,6 @@ pub struct ModelsConfig {
     pub last_updated: String,
     pub providers: HashMap<String, ProviderConfig>,
     pub models: HashMap<String, ModelEntry>,
-    pub tier_allowed_models: TierConfig,
     pub model_presets: HashMap<String, Vec<PresetOption>>,
     pub providers_in_order: Vec<String>,
 }
@@ -153,15 +152,6 @@ pub struct ModelCapabilities {
     pub search: bool,
     pub research: bool,
     pub code_execution: bool,
-}
-
-/// Subscription tier allowed-model lists.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct TierConfig {
-    pub economy: Vec<String>,
-    pub pro_additions: Vec<String>,
-    pub flagship_additions: Vec<String>,
 }
 
 /// Preset option for the QuickModelSelector UI.

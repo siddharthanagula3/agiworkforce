@@ -10,17 +10,17 @@
 import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,
-  getAllowedModelsForTier as getCatalogAllowedModelsForTier,
+  canAccessModelForSubscriptionTier,
   getManagedCloudProviderIds as getCatalogManagedCloudProviderIds,
   getManualOverrideModels as getCatalogManualOverrideModels,
   getModelMetadataById,
   getProviderDefaultModel as getCatalogProviderDefaultModel,
   getTaskModelForProvider as getCatalogTaskModelForProvider,
   getTierPolicy as getCatalogTierPolicy,
+  normalizeSubscriptionAccessTier,
   getModelReasoning as getCatalogModelReasoning,
   getDisplayModels as getCatalogDisplayModels,
   getSelectableModels as getCatalogSelectableModels,
-  isModelAllowedForTier as isCatalogModelAllowedForTier,
   isAutoModeModelId as isCatalogAutoModeModelId,
   modelIdAliases,
   modelsById,
@@ -106,11 +106,6 @@ const CANONICAL_MODEL_METADATA: Record<string, ModelMetadata> = config.models as
 
 export const PROVIDER_LABELS: Record<string, string> = providerLabels;
 
-export const MODEL_PRESETS: Record<
-  string,
-  Array<{ value: string; label: string }>
-> = config.modelPresets as unknown as Record<string, Array<{ value: string; label: string }>>;
-
 export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
 
 export const PROVIDERS_IN_ORDER: string[] = config.providersInOrder;
@@ -118,20 +113,6 @@ export const PROVIDERS_IN_ORDER: string[] = config.providersInOrder;
 export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
   Object.entries(MODEL_METADATA).map(([id, m]) => [id, m.contextWindow]),
 );
-
-// ---- Tier logic ----
-
-const ECONOMY_MODELS = getCatalogAllowedModelsForTier('economy');
-const PRO_ADDITIONS = getCatalogAllowedModelsForTier('pro_additions');
-const FLAGSHIP_ADDITIONS = getCatalogAllowedModelsForTier('flagship_additions');
-
-export const TIER_ALLOWED_MODELS: Record<string, string[]> = {
-  free: [...ECONOMY_MODELS],
-  hobby: [...ECONOMY_MODELS],
-  pro: Array.from(new Set([...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-  max: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-  enterprise: Array.from(new Set([...FLAGSHIP_ADDITIONS, ...PRO_ADDITIONS, ...ECONOMY_MODELS])),
-};
 
 // ---- Helper functions ----
 
@@ -180,27 +161,7 @@ export function formatCost(inputCost?: number, outputCost?: number): string {
 }
 
 export function isModelAllowedForTier(modelId: string, tier: string): boolean {
-  if (tier === 'free' || tier === 'hobby') {
-    return isCatalogModelAllowedForTier(modelId, 'economy');
-  }
-  if (tier === 'pro') {
-    return (
-      isCatalogModelAllowedForTier(modelId, 'economy') ||
-      isCatalogModelAllowedForTier(modelId, 'pro_additions')
-    );
-  }
-  if (tier === 'max' || tier === 'enterprise') {
-    return (
-      isCatalogModelAllowedForTier(modelId, 'economy') ||
-      isCatalogModelAllowedForTier(modelId, 'pro_additions') ||
-      isCatalogModelAllowedForTier(modelId, 'flagship_additions')
-    );
-  }
-  return false;
-}
-
-export function getAllowedModelsForTier(tier: string): string[] {
-  return TIER_ALLOWED_MODELS[tier] ?? TIER_ALLOWED_MODELS['free'] ?? [];
+  return canAccessModelForSubscriptionTier(modelId, tier);
 }
 
 export function getProviderDefaultModel(provider: string): string | null {
@@ -221,7 +182,7 @@ export function getTaskModelForProvider(
 }
 
 export function normalizeSubscriptionTier(tier: string | null | undefined): string {
-  return getCatalogTierPolicy(tier).tier;
+  return normalizeSubscriptionAccessTier(tier ?? 'free');
 }
 
 export function getAllowedAutoModesForTier(tier: string | null | undefined): string[] {

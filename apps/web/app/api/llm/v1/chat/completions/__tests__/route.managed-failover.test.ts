@@ -24,8 +24,6 @@ const tierMocks = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/model-tiers', () => ({
   canAccessModel: (model: string, tier: string) => tierMocks.canAccessModel(model, tier),
-  ECONOMY_MODELS: new Set<string>(),
-  MODEL_TIER_REQUIREMENTS: {},
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },

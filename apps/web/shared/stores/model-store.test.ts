@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAutoRoutingProfiles } from '@agiworkforce/types';
+import { getAutoRoutingProfiles, getModelsForTierAndSurface } from '@agiworkforce/types';
 import { AVAILABLE_MODELS, useModelStore } from './model-store';
 
 describe('web model selection trust boundary', () => {
@@ -20,5 +20,16 @@ describe('web model selection trust boundary', () => {
         description,
       })),
     );
+  });
+
+  it('derives manual rows from the shared Max + web runtime intersection', () => {
+    const expectedIds = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+      modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+    }).map((model) => model.id);
+    const actualIds = AVAILABLE_MODELS.filter(
+      (model) => model.providerKey !== 'managed_cloud' && model.availability !== 'coming_soon',
+    ).map((model) => model.id);
+
+    expect(actualIds).toEqual(expectedIds);
   });
 });
