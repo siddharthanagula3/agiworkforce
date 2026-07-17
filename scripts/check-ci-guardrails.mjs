@@ -63,7 +63,11 @@ requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/ci.yml', '--filter=agi-workforce');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/extension package');
-requireIncludes('.github/workflows/ci.yml', 'cargo audit --deny warnings');
+// Rust dependency policy moved from cargo-audit to cargo-deny (2026-07-16):
+// bans/sources/licenses gate merges; advisories report against the triaged
+// baseline in docs/security/rust-dependency-advisories-2026-07-16.md.
+requireIncludes('.github/workflows/ci.yml', 'cargo deny check bans sources licenses');
+requireIncludes('.github/workflows/ci.yml', 'cargo deny check advisories');
 requireIncludes(
   '.github/workflows/ci.yml',
   'cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib',
