@@ -5,7 +5,7 @@
  * sidecar stores (only `services/api` and MMKV are mocked):
  *   - Local mode is an airtight no-op — zero network I/O.
  *   - Pull applies conversation/message deltas, honors tombstones, advances the cursor.
- *   - Pull applies artifact deltas into cloudArtifacts; tombstones remove entries.
+ *   - Pull applies artifact deltas into cloudArtifacts; tombstones remain as delete overlays.
  *   - Local-mode artifacts are never pushed (mobile is pull-only per design doc §4).
  *   - Push sends dirty rows, skips non-syncable (tool) roles, and clears the queue.
  *   - Pagination follows `hasMore`; a failed round trip surfaces as `error` status.
@@ -349,20 +349,25 @@ describe('syncNow — push', () => {
   it('adopts the deterministic server winner for a stale conversation CAS conflict', async () => {
     seedConversation('c1', { title: 'stale local', serverVersion: '7' });
     markConversationForSync('c1');
-    mockPost.mockImplementationOnce(async () => ({
-      protocolVersion: 2,
-      applied: { conversations: [], messages: [], artifacts: [] },
-      conflicts: {
-        conversations: [{ id: 'c1', current: convDelta('c1', '8') }],
-        messages: [],
-        artifacts: [],
-      },
-      cursor: '8',
-    }) as never);
+    mockPost.mockImplementationOnce(
+      async () =>
+        ({
+          protocolVersion: 2,
+          applied: { conversations: [], messages: [], artifacts: [] },
+          conflicts: {
+            conversations: [{ id: 'c1', current: convDelta('c1', '8') }],
+            messages: [],
+            artifacts: [],
+          },
+          cursor: '8',
+        }) as never,
+    );
 
     await syncNow();
 
-    expect(useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1')).toMatchObject({
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1'),
+    ).toMatchObject({
       title: 'Chat c1',
       serverVersion: '8',
     });
@@ -491,7 +496,7 @@ describe('syncNow — artifact pull wiring (migration 0039)', () => {
     expect(cloudArts[0]?.content).toBe('updated content');
   });
 
-  it('removes a cloudArtifact when a deleted_at tombstone is pulled', async () => {
+  it('retains a cloudArtifact tombstone so a derived copy cannot be resurrected', async () => {
     // Seed an existing cloud artifact.
     useArtifactStore.getState().applyCloudArtifactDeltas([artifactDelta('art1', '5')]);
     expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(1);
@@ -507,8 +512,11 @@ describe('syncNow — artifact pull wiring (migration 0039)', () => {
 
     await syncNow();
 
-    // The tombstone must remove the artifact from cloudArtifacts.
-    expect(useArtifactStore.getState().cloudArtifacts).toHaveLength(0);
+    // The tombstone remains in the cloud overlay so mergeCloudArtifacts can
+    // suppress a locally-derived copy with the same deterministic id.
+    expect(useArtifactStore.getState().cloudArtifacts).toEqual([
+      expect.objectContaining({ id: 'art1', deletedAt: T }),
+    ]);
   });
 
   it('does NOT push any artifacts in managed cloud mode (mobile is pull-only)', async () => {

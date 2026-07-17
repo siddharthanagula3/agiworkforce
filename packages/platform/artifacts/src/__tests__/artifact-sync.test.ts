@@ -128,11 +128,15 @@ describe('applyArtifactDeltas + wireToCloudArtifact', () => {
     expect(out.map((a) => a.id).sort()).toEqual(['a1', 'a2']);
   });
 
-  it('a tombstone delta removes the artifact from the set', () => {
+  it('retains a tombstone so merging cannot resurrect a locally derived artifact', () => {
     const out = applyArtifactDeltas(
       [wireToCloudArtifact(wire({ id: 'a1' })), wireToCloudArtifact(wire({ id: 'a2' }))],
       [wire({ id: 'a1', deleted_at: '2026-06-21T01:00:00.000Z' })],
     );
-    expect(out.map((a) => a.id)).toEqual(['a2']);
+    expect(out.map((a) => a.id).sort()).toEqual(['a1', 'a2']);
+    expect(out.find((a) => a.id === 'a1')?.deletedAt).toBe('2026-06-21T01:00:00.000Z');
+    expect(mergeCloudArtifacts([art({ id: 'a1' })], out)).toEqual([
+      expect.objectContaining({ id: 'a2' }),
+    ]);
   });
 });

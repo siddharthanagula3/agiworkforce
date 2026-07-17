@@ -3,7 +3,13 @@
 import { useStore } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { create } from 'zustand';
-import { createArtifactStore } from '@agiworkforce/artifacts';
+import {
+  applyArtifactDeltas as applySharedArtifactDeltas,
+  createArtifactStore,
+  mergeCloudArtifacts,
+  type CloudArtifact,
+} from '@agiworkforce/artifacts';
+import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData, ArtifactVersion } from '../components/artifacts/ArtifactPreview';
 import { logger } from '@shared/lib/logger';
@@ -95,6 +101,9 @@ type ArtifactInput = Omit<Artifact, 'createdAt'> & { createdAt?: Date };
 // ============================================================================
 
 let _sideMap: Record<string, WebSideEntry> = {};
+let _cloudArtifacts: CloudArtifact[] = [];
+let _cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error' = 'idle';
+let _cloudSyncError: string | null = null;
 
 function getSideEntry(id: string): WebSideEntry {
   return _sideMap[id] ?? {};
@@ -110,6 +119,14 @@ function deleteSideEntry(id: string): void {
 
 function clearSideMap(): void {
   _sideMap = {};
+}
+
+function mergedArtifacts(): SharedArtifact[] {
+  return mergeCloudArtifacts(_sharedArtifactStore.getState().artifacts, _cloudArtifacts);
+}
+
+function notifyArtifactSubscribers(): void {
+  _sharedArtifactStore.setState((state) => ({ ...state }));
 }
 
 // ============================================================================
@@ -373,6 +390,8 @@ type ArtifactsStoreReturn = {
   artifacts: Artifact[];
   selectedArtifactId: string | null;
   panelOpen: boolean;
+  cloudSyncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+  cloudSyncError: string | null;
 
   // Actions
   addArtifact: (artifact: Omit<Artifact, 'createdAt'> & { createdAt?: Date }) => string;
@@ -405,6 +424,12 @@ type ArtifactsStoreReturn = {
   addVersion: (artifactId: string, version: ArtifactVersion) => void;
   setCurrentVersion: (artifactId: string, versionIndex: number) => void;
   shareArtifact: (artifactId: string) => Promise<string>;
+  applyCloudArtifactDeltas: (deltas: ReadonlyArray<ArtifactWireDelta>) => void;
+  clearCloudArtifacts: () => void;
+  setCloudSyncStatus: (
+    status: 'idle' | 'syncing' | 'synced' | 'error',
+    error?: string | null,
+  ) => void;
   reset: () => void;
 };
 
@@ -521,6 +546,9 @@ const actions = {
   clearArtifacts(): void {
     _sharedArtifactStore.getState().clearAll();
     clearSideMap();
+    _cloudArtifacts = [];
+    _cloudSyncStatus = 'idle';
+    _cloudSyncError = null;
   },
 
   extractArtifactsFromContent(content: string, messageId: string, conversationId?: string): void {
@@ -565,16 +593,14 @@ const actions = {
   },
 
   getMessageArtifacts(messageId: string): Artifact[] {
-    return _sharedArtifactStore
-      .getState()
-      .artifacts.filter((a) => a.messageId === messageId)
+    return mergedArtifacts()
+      .filter((artifact) => artifact.messageId === messageId)
       .map(toArtifact);
   },
 
   getConversationArtifacts(conversationId: string): Artifact[] {
-    return _sharedArtifactStore
-      .getState()
-      .artifacts.filter((a) => a.conversationId === conversationId)
+    return mergedArtifacts()
+      .filter((artifact) => artifact.conversationId === conversationId)
       .map(toArtifact);
   },
 
@@ -597,7 +623,6 @@ const actions = {
       };
     });
     for (const id of toRemove) deleteSideEntry(id);
-
     // Repair selection + close panel
     const remaining = _sharedArtifactStore.getState().artifacts;
     if (!remaining.some((a) => a.id === _sharedArtifactStore.getState().selectedArtifactId)) {
@@ -643,7 +668,7 @@ const actions = {
   },
 
   async shareArtifact(artifactId: string): Promise<string> {
-    const shared = _sharedArtifactStore.getState().artifacts.find((a) => a.id === artifactId);
+    const shared = mergedArtifacts().find((artifact) => artifact.id === artifactId);
     if (!shared) throw new Error('Artifact not found');
 
     const artifact = toArtifact(shared);
@@ -677,9 +702,44 @@ const actions = {
     return shareId;
   },
 
+  applyCloudArtifactDeltas(deltas: ReadonlyArray<ArtifactWireDelta>): void {
+    _cloudArtifacts = applySharedArtifactDeltas(_cloudArtifacts, deltas);
+
+    const visibleArtifacts = mergedArtifacts();
+    const selectedArtifactId = _sharedArtifactStore.getState().selectedArtifactId;
+    if (
+      selectedArtifactId &&
+      !visibleArtifacts.some((artifact) => artifact.id === selectedArtifactId)
+    ) {
+      _sharedArtifactStore.getState().selectArtifact(visibleArtifacts[0]?.id ?? null);
+    } else {
+      notifyArtifactSubscribers();
+    }
+  },
+
+  clearCloudArtifacts(): void {
+    if (_cloudArtifacts.length === 0 && _cloudSyncStatus === 'idle' && !_cloudSyncError) return;
+    _cloudArtifacts = [];
+    _cloudSyncStatus = 'idle';
+    _cloudSyncError = null;
+    notifyArtifactSubscribers();
+  },
+
+  setCloudSyncStatus(
+    status: 'idle' | 'syncing' | 'synced' | 'error',
+    error: string | null = null,
+  ): void {
+    _cloudSyncStatus = status;
+    _cloudSyncError = error;
+    notifyArtifactSubscribers();
+  },
+
   reset(): void {
     _sharedArtifactStore.getState().clearAll();
     clearSideMap();
+    _cloudArtifacts = [];
+    _cloudSyncStatus = 'idle';
+    _cloudSyncError = null;
   },
 };
 
@@ -708,9 +768,11 @@ function buildStoreSlice(): ArtifactsStoreReturn {
     panelOpen,
   } = _sharedArtifactStore.getState();
   return {
-    artifacts: sharedArtifacts.map(toArtifact),
+    artifacts: mergeCloudArtifacts(sharedArtifacts, _cloudArtifacts).map(toArtifact),
     selectedArtifactId,
     panelOpen,
+    cloudSyncStatus: _cloudSyncStatus,
+    cloudSyncError: _cloudSyncError,
     ...actions,
   };
 }

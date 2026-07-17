@@ -90,10 +90,11 @@ export function wireToCloudArtifact(d: ArtifactWireDelta): CloudArtifact {
 }
 
 /**
- * Apply pulled artifact deltas to a surface's CURRENT persisted cloud-artifact set. Upsert by
- * id; a tombstone (`deleted_at`) removes it. PURE — the surface persists the returned set, then
- * renders `mergeCloudArtifacts(localDerived, returnedSet)`. Each surface's sync engine calls
- * this (web/desktop/mobile) so the apply logic lives in ONE place.
+ * Apply pulled artifact deltas to a surface's CURRENT cloud-artifact overlay. Upsert by id,
+ * INCLUDING tombstones: the tombstone must remain in the overlay so
+ * `mergeCloudArtifacts(localDerived, returnedSet)` cannot resurrect the locally derived copy.
+ * Each surface's sync engine calls this (web/desktop/mobile) so the apply logic lives in ONE
+ * place.
  *
  * Deltas arrive ordered by `server_version asc` (server contract), so a later delta for the
  * same id naturally wins.
@@ -104,8 +105,7 @@ export function applyArtifactDeltas(
 ): CloudArtifact[] {
   const byId = new Map(current.map((a) => [a.id, a]));
   for (const d of deltas) {
-    if (d.deleted_at) byId.delete(d.id);
-    else byId.set(d.id, wireToCloudArtifact(d));
+    byId.set(d.id, wireToCloudArtifact(d));
   }
   return [...byId.values()];
 }

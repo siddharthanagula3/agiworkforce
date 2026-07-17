@@ -221,7 +221,7 @@
       "name": "@agiworkforce/sync",
       "path": "packages/client/sync",
       "kind": "package",
-      "purpose": "Canonical pure delta-apply and bigint-cursor mechanics for cross-device Managed Cloud synchronization. Mobile consumes the TypeScript implementation at runtime. Desktop's Rust implementation replays the same committed JSON fixture corpus..."
+      "purpose": "Canonical pure delta-apply and bigint-cursor mechanics for cross-device Managed Cloud synchronization. Mobile consumes the TypeScript implementation at runtime. Web consumes the cursor mechanics for its pull-only artifact overlay. Deskto..."
     },
     {
       "name": "@agiworkforce/cloud-contracts",

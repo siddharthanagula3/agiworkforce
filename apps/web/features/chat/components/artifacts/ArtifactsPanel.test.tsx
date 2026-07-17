@@ -119,4 +119,11 @@ describe('ArtifactsPanel · live artifact streaming', () => {
     expect(screen.queryByTestId('streaming-artifact')).not.toBeInTheDocument();
     expect(screen.getByText('No artifacts yet')).toBeInTheDocument();
   });
+
+  it('shows when cloud artifact sync failed and is retrying', () => {
+    useArtifactsStore.getState().setCloudSyncStatus('error', 'network unavailable');
+    render(<ArtifactsPanel />);
+
+    expect(screen.getByText('Sync retrying')).toHaveAttribute('title', 'network unavailable');
+  });
 });
