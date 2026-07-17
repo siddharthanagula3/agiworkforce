@@ -269,6 +269,3 @@ class MonitoringService {
 
 // Export singleton instance
 export const monitoringService = new MonitoringService();
-
-// Export Sentry components for React integration
-export { Sentry };

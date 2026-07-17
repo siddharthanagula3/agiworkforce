@@ -1012,6 +1012,32 @@ async function endDictationSession(sessionId: string | null, outcome: string): P
   }
 }
 
+/**
+ * The explicit dictation transcription modes (mirrors the fail-closed parser
+ * in `src-tauri/features/speech/dictation/transcription.rs`): Local on-device
+ * Whisper, BYOK OpenAI Whisper (the user's key), or AGI managed cloud. There
+ * is deliberately no Deepgram option here — Deepgram is streaming-only (voice
+ * mode) and recorded dictation sent to it was historically rerouted to
+ * managed cloud silently; the backend now refuses it instead.
+ */
+export type DictationProvider = 'local_whisper' | 'openai_whisper' | 'managed_cloud';
+
+/**
+ * Normalize a persisted provider value. Legacy `deepgram` selections were in
+ * fact served by managed cloud, so they migrate to that honest label; any
+ * other unknown value falls back to the offline default.
+ */
+export function normalizeDictationProvider(value: unknown): DictationProvider {
+  if (value === 'local_whisper' || value === 'openai_whisper' || value === 'managed_cloud') {
+    return value;
+  }
+  if (value === 'deepgram') return 'managed_cloud';
+  return 'local_whisper';
+}
+
+/** Hard cap for one in-app dictation recording (bounded buffering). */
+const MAX_DICTATION_RECORDING_BYTES = 50 * 1024 * 1024;
+
 interface VoiceInputState {
   voiceMode: VoiceInputMode;
   transcript: string;
@@ -1019,7 +1045,11 @@ interface VoiceInputState {
   lastTranscriptIsCommand: boolean;
   voiceError: string | null;
   hotkey: 'option' | 'ctrl+space' | 'ctrl+shift+v' | 'caps_lock';
-  voiceProvider: 'local_whisper' | 'deepgram' | 'openai_whisper';
+  voiceProvider: DictationProvider;
+  /** Preferred microphone (browser deviceId); null = system default. */
+  inputDeviceId: string | null;
+  /** Human-readable label of the preferred microphone, for the settings UI. */
+  inputDeviceLabel: string | null;
   voiceLanguage: string;
   postProcessingMode: PostProcessingMode;
   _mediaStream: MediaStream | null;
@@ -1033,6 +1063,7 @@ interface VoiceInputState {
   confirmTranscript: () => void;
   setHotkey: (hotkey: VoiceInputState['hotkey']) => void;
   setProvider: (provider: VoiceInputState['voiceProvider']) => void;
+  setInputDevice: (deviceId: string | null, label: string | null) => void;
   setLanguage: (language: string) => void;
   setPostProcessingMode: (mode: PostProcessingMode) => void;
   clearTranscript: () => void;
@@ -1050,6 +1081,8 @@ export const useVoiceInputStore = create<VoiceInputState>()(
         voiceError: null,
         hotkey: 'option',
         voiceProvider: 'local_whisper',
+        inputDeviceId: null,
+        inputDeviceLabel: null,
         voiceLanguage: 'en',
         postProcessingMode: 'ai',
         _mediaStream: null,
@@ -1087,7 +1120,13 @@ export const useVoiceInputStore = create<VoiceInputState>()(
             _dictationSessionId: dictationSessionId,
           });
           try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Preferred microphone via `ideal`: if the saved device was
+            // unplugged since selection, the browser falls back to the
+            // system default instead of failing (device-change recovery).
+            const { inputDeviceId } = get();
+            const stream = await navigator.mediaDevices.getUserMedia({
+              audio: inputDeviceId ? { deviceId: { ideal: inputDeviceId } } : true,
+            });
             if (get()._startAborted) {
               stream.getTracks().forEach((t) => t.stop());
               set({ voiceMode: 'idle', _startAborted: false, _dictationSessionId: null });
@@ -1101,9 +1140,27 @@ export const useVoiceInputStore = create<VoiceInputState>()(
                 : 'audio/mp4';
             const recorder = new MediaRecorder(stream, { mimeType });
             const chunks: Blob[] = [];
+            let recordedBytes = 0;
             recorder.ondataavailable = (e) => {
-              if (e.data.size > 0) chunks.push(e.data);
+              if (e.data.size === 0) return;
+              chunks.push(e.data);
+              recordedBytes += e.data.size;
+              // Bounded buffering: auto-stop (and transcribe what was
+              // captured) instead of growing without limit.
+              if (recordedBytes > MAX_DICTATION_RECORDING_BYTES && get()._recorder === recorder) {
+                void get().stopListening();
+              }
             };
+            // Device removal mid-capture ends the audio track; recover the
+            // transcript by stopping cleanly with the captured audio instead
+            // of hanging in the listening state.
+            for (const track of stream.getAudioTracks()) {
+              track.addEventListener('ended', () => {
+                if (get()._recorder === recorder && get().voiceMode === 'listening') {
+                  void get().stopListening();
+                }
+              });
+            }
             recorder.start(100);
             set({ _mediaStream: stream, _recorder: recorder, _audioChunks: chunks });
           } catch (e) {
@@ -1245,6 +1302,8 @@ export const useVoiceInputStore = create<VoiceInputState>()(
 
         setHotkey: (hotkey) => set({ hotkey }),
         setProvider: (provider) => set({ voiceProvider: provider }),
+        setInputDevice: (deviceId, label) =>
+          set({ inputDeviceId: deviceId, inputDeviceLabel: label }),
         setLanguage: (language) => set({ voiceLanguage: language }),
         setPostProcessingMode: (mode) => set({ postProcessingMode: mode }),
         clearTranscript: () =>
@@ -1252,15 +1311,28 @@ export const useVoiceInputStore = create<VoiceInputState>()(
       }),
       {
         name: 'agiworkforce-voice-input',
+        version: 1,
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
           hotkey: state.hotkey,
           voiceProvider: state.voiceProvider,
+          inputDeviceId: state.inputDeviceId,
+          inputDeviceLabel: state.inputDeviceLabel,
           voiceLanguage: state.voiceLanguage,
           postProcessingMode: state.postProcessingMode,
         }),
+        migrate: (persisted) => {
+          const state = (persisted ?? {}) as Partial<VoiceInputState>;
+          return {
+            ...state,
+            // v0 -> v1: legacy 'deepgram' selections were actually served by
+            // managed cloud; relabel honestly. Unknown values fail safe to
+            // the offline default.
+            voiceProvider: normalizeDictationProvider(state.voiceProvider),
+          };
+        },
       },
     ),
     { name: 'voice-input-store' },

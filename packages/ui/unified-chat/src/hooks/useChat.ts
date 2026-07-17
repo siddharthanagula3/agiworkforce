@@ -20,10 +20,7 @@ import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import { isModelAdmittedForExecutionMode } from '../lib/modelAdmission';
 import { isChatModelSelectable } from '../lib/modelInfo';
 import { useTierStore } from '../stores/tierStore';
-import {
-  getWritingStyleInstruction,
-  type WritingStyle,
-} from '../lib/writingStyle';
+import { getWritingStyleInstruction, type WritingStyle } from '../lib/writingStyle';
 
 function getRoutingContext(
   platform: ReturnType<NonNullable<ChatRuntime['getPlatform']>> | undefined,
@@ -490,7 +487,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         }
         case 'code_execution_result': {
           // Surface-specific (web-only precedent: MessageMetadata.codeExecutionResult
-          // in apps/web/stores/chatStore.ts) -- goes in the generic metadata bag per
+          // in apps/web/shared/stores/web-chat-store.ts) -- goes in the generic metadata bag per
           // ChatMessage.metadata's own doc comment, not a dedicated typed field.
           if (assistantMessageIdRef.current) {
             const msgs = store.messagesByConversation[convId];

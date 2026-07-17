@@ -85,7 +85,7 @@ function formatSkillName(skillId: string): string {
 }
 
 /**
- * Returns a small default skill list from RoleExpertiseMapping keys
+ * Returns a small default skill list of skill ids
  * (used as fallback before employees are loaded from the backend).
  */
 function getDefaultSkills(): SkillInfo[] {
