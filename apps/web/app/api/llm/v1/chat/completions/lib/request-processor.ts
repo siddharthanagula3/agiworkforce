@@ -171,6 +171,25 @@ export type ProcessedRequest = {
   usedFallback: boolean;
   fallbackReason: string | undefined;
   originalModel: string;
+  /**
+   * The resolver's ordered managed-failover plan (AUTO-ROUTER-MIGRATION-01,
+   * web twin of the gateway's x-agi-fallback-models execution): registry-
+   * ordered, tier-admitted candidate model ids that route.ts may rotate to
+   * when the primary attempt fails on an availability-class error before
+   * the first byte reaches the client. STRUCTURALLY EMPTY for explicit
+   * (non-Auto) selections — the resolver emits no fallbacks for them, so an
+   * explicit selection can never rotate — and empty for free-trial requests
+   * (their pinned model and prompt accounting must not hop providers).
+   * Optional (additive schema evolution): absent means no failover, so
+   * pre-existing ProcessedRequest fixtures stay valid.
+   */
+  fallbackModels?: string[];
+  /**
+   * Plan tier the request was admitted under; managed-failover re-checks
+   * candidate admission against it per attempt (a stale plan entry must be
+   * skipped, never served). Optional for the same fixture-compat reason.
+   */
+  subscriptionTier?: string;
   resolvedTaskType: RoutingTaskType;
   classifierConfidence: number;
   resolvedSlot: RoutingSlot | null;
@@ -1603,6 +1622,13 @@ export async function processRequest(
     usedFallback,
     fallbackReason,
     originalModel,
+    // The resolver already emits [] for explicit selections (rotation-free by
+    // structure, not by a route.ts conditional); free-trial requests are
+    // additionally pinned to their admitted model.
+    fallbackModels: freeTrialEnabled
+      ? []
+      : routeDecision.fallbacks.map((fallback) => fallback.modelKey),
+    subscriptionTier: subscription.plan_tier,
     resolvedTaskType,
     classifierConfidence: classifierResult.confidence,
     resolvedSlot,
