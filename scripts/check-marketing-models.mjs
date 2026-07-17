@@ -90,8 +90,7 @@ const marketingSafeNormalized = new Set([...marketingSafeRaw].map(normalize));
 
 const ANCHOR_FILES = [
   join(WEB_DIR, 'lib/marketing-constants.ts'),
-  join(WEB_DIR, 'components/agi/AgiChatDemo.tsx'),
-  join(WEB_DIR, 'components/SurfaceShowcase.tsx'),
+  join(WEB_DIR, 'shared/components/agi/AgiChatDemo.tsx'),
 ];
 
 function walkDir(dir, files = []) {
@@ -112,7 +111,7 @@ function walkDir(dir, files = []) {
 }
 
 const marketingPathFiles = walkDir(join(WEB_DIR, 'lib')).concat(
-  walkDir(join(WEB_DIR, 'components')),
+  walkDir(join(WEB_DIR, 'features/marketing')),
 );
 
 // Union: anchors + marketing-path files, deduplicated

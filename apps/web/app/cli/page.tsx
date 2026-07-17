@@ -1,10 +1,10 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { ProductFrame } from '../../components/marketing/ProductFrame';
-import { FeatureGrid } from '../../components/marketing/LandingSections';
-import { DevBand, FinalCta, TrustTriptych } from '../../components/marketing/FlagshipSections';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { FeatureGrid } from '@/features/marketing/components/LandingSections';
+import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/FlagshipSections';
 import { LAUNCH, MARKETING, COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

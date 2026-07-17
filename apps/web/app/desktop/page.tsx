@@ -1,15 +1,15 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   CapabilityGrid,
   FinalCta,
   TrustTriptych,
-} from '../../components/marketing/FlagshipSections';
-import { LedgerSection } from '../../components/marketing/LandingSections';
-import { ProductFrame } from '../../components/marketing/ProductFrame';
-import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+} from '@/features/marketing/components/FlagshipSections';
+import { LedgerSection } from '@/features/marketing/components/LandingSections';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
 
 export const metadata = buildMetadata({

@@ -14,7 +14,7 @@ import {
   providerSurfaceToProviderMode,
   type ProviderMode,
 } from '@agiworkforce/types';
-import { getModelMetadata, normalizeModelId } from '@/constants/llm';
+import { getModelMetadata, normalizeModelId } from '@shared/config/llm';
 import type { Conversation, Message } from '@/stores/chatStore';
 
 export const WEB_HANDOFF_CONTEXT_LIMIT = 10;

@@ -62,7 +62,7 @@ vi.mock('@/lib/errors', () => ({
   },
 }));
 
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   getEnv: (key: string, fallback?: string) => {
     if (key === 'API_GATEWAY_URL') return 'http://localhost:3000';
     return fallback ?? '';

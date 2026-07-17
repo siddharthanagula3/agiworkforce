@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 
-import type { ResearchTask } from '@/types/chat';
+import type { ResearchTask } from '@shared/types/chat';
 
 interface ExecutionState {
   researchTasks: Record<string, ResearchTask>;

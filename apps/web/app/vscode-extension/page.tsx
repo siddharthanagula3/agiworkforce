@@ -1,10 +1,10 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { DevBand, FinalCta, TrustTriptych } from '../../components/marketing/FlagshipSections';
-import { ProductFrame } from '../../components/marketing/ProductFrame';
-import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/FlagshipSections';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({

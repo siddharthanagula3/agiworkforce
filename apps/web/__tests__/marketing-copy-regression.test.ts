@@ -298,7 +298,7 @@ describe('public marketing copy regressions', () => {
   });
 
   it('reframes the web InviteCodeModal away from invite-only cloud access (PA-5)', () => {
-    const modal = readWebFile('components/cloud-bridge/InviteCodeModal.tsx');
+    const modal = readWebFile('shared/components/cloud-bridge/InviteCodeModal.tsx');
 
     expect(modal).not.toContain('Cloud access is currently invite-only');
     expect(modal).toContain('Managed cloud is open in public alpha');

@@ -39,11 +39,11 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/components/layout/Header', () => ({
+vi.mock('@shared/components/layout/Header', () => ({
   Header: () => <header>Header</header>,
 }));
 
-vi.mock('@/components/marketing/MarketingFooter', () => ({
+vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => <footer>Footer</footer>,
 }));
 

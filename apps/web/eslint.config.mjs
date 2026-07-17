@@ -47,7 +47,6 @@ const eslintConfig = defineConfig([
     files: [
       'app/**',
       'components/**',
-      'core/**',
       'features/**',
       'shared/**',
       'hooks/**',

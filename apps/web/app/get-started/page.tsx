@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export default function GetStartedPage() {

@@ -1,5 +1,5 @@
 import { SignIn } from '@clerk/nextjs';
-import { AuthShell } from '../../components/marketing/AuthShell';
+import { AuthShell } from '@/features/marketing/components/AuthShell';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 import { agiClerkAppearance } from '../auth/clerkAppearance';
 

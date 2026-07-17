@@ -20,7 +20,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   getEnv: vi.fn((key: string, fallback?: string) => {
     if (key === 'API_GATEWAY_URL') return 'http://localhost:3001';
     return fallback ?? '';

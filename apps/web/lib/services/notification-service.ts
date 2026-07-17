@@ -18,7 +18,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import type { NotificationRow } from '@/lib/server/neon-types';
-import { AppNotification, NotificationType } from '@/types/saas';
+import { AppNotification, NotificationType } from '@shared/types/saas';
 
 export class NotificationService {
   /**

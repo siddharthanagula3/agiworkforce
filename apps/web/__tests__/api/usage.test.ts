@@ -33,7 +33,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 // Mock env utility
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `test-${key}`),
   getOptionalEnv: vi.fn(() => undefined),
 }));

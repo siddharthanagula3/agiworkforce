@@ -23,7 +23,7 @@ const { mockWithRateLimit, mockGetEnv, mockLoggerError } = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockWithRateLimit }));
-vi.mock('@/utils/env', () => ({ getEnv: mockGetEnv }));
+vi.mock('@shared/utils/env', () => ({ getEnv: mockGetEnv }));
 vi.mock('@/lib/logger', () => ({
   logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn() },
 }));

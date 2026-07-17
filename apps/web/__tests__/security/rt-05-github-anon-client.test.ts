@@ -14,7 +14,7 @@ import { createHmac } from 'crypto';
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/utils/env', () => ({
+vi.mock('@shared/utils/env', () => ({
   requireEnv: (_key: string) => '',
 }));
 

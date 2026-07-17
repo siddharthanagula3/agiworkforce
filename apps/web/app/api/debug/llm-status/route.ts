@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getOptionalEnv } from '@/utils/env';
+import { getOptionalEnv } from '@shared/utils/env';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';

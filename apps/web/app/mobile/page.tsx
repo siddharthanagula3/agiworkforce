@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '@shared/components/layout/Header';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   CapabilityGrid,
   FinalCta,
   TrustTriptych,
-} from '../../components/marketing/FlagshipSections';
-import { ProductFrame } from '../../components/marketing/ProductFrame';
-import { Reveal } from '../../components/marketing/Reveal';
-import { WaitlistTrigger } from '../../components/marketing/WaitlistModal';
+} from '@/features/marketing/components/FlagshipSections';
+import { ProductFrame } from '@/features/marketing/components/ProductFrame';
+import { Reveal } from '@/features/marketing/components/Reveal';
+import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {

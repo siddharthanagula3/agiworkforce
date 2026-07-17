@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import QRCode from 'qrcode';
-import { getEnv } from '@/utils/env';
+import { getEnv } from '@shared/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';

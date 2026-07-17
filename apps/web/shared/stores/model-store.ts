@@ -11,7 +11,7 @@ import {
   isAutoModeModelId,
   normalizeModelId,
   type ModelMetadata,
-} from '@/constants/llm';
+} from '@shared/config/llm';
 import { getAutoRoutingProfiles } from '@agiworkforce/types';
 
 export interface AIModel {

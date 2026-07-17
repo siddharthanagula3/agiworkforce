@@ -36,11 +36,11 @@ import {
   getBestAutoModeForTier,
   getModelReasoning,
   isModelAllowedForTier,
-} from '@/constants/llm';
+} from '@shared/config/llm';
 import type { ModelReasoning } from '@agiworkforce/types';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
-import { AgiMark } from '@/components/agi/AgiMark';
+import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 
 /**

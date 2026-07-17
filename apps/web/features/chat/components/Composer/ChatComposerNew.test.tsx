@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
-import { getSelectableModels } from '@/constants/llm';
+import { getSelectableModels } from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
@@ -107,7 +107,7 @@ const mockUseApiPromptCompletion = vi.fn(() => ({
   clear: vi.fn(),
 }));
 
-vi.mock('@/hooks/useApiPromptCompletion', () => ({
+vi.mock('../../hooks/useApiPromptCompletion', () => ({
   useApiPromptCompletion: (...args: Parameters<typeof mockUseApiPromptCompletion>) =>
     mockUseApiPromptCompletion(...args),
 }));
