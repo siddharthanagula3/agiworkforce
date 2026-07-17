@@ -43,6 +43,8 @@ export * from './AgentReasoningRawContentDeltaEvent';
 export * from './AgentReasoningRawContentEvent';
 export * from './AgentReasoningSectionBreakEvent';
 export * from './AgentStatus';
+export * from './AgentTaskState';
+export * from './AgentTaskStateChanged';
 export * from './AgiworkforceErrorInfo';
 export * from './AppServerCapabilities';
 export * from './AppServerClientInfo';

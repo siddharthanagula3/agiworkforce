@@ -60,7 +60,12 @@ function shouldShowGoal(
   liveSteps: AgentTaskLiveStep[] | undefined,
   liveProgress: { step: number; total: number } | undefined,
 ): boolean {
-  if (task.status === 'pending' || task.status === 'running' || task.status === 'paused') {
+  if (
+    task.status === 'queued' ||
+    task.status === 'running' ||
+    task.status === 'paused' ||
+    task.status === 'awaiting_input'
+  ) {
     return true;
   }
 
@@ -69,13 +74,15 @@ function shouldShowGoal(
 
 function mapGoalStatus(task: AgentTask): GoalData['status'] {
   switch (task.status) {
-    case 'pending':
+    case 'queued':
       return 'planning';
     case 'running':
     case 'paused':
-    case 'recovering':
+    case 'awaiting_input':
       return 'executing';
     case 'completed':
+    case 'ready_for_review':
+    case 'archived':
       return 'completed';
     default:
       return 'failed';

@@ -13,10 +13,11 @@ use serde_json::Value;
 use ts_rs::TS;
 
 use crate::protocol::ReviewDecision;
+use crate::task_state::{AgentTaskState, AgentTaskStateChanged};
 use crate::user_input::UserInput;
 
 /// Current wire version for the shared CLI/VS Code developer-session protocol.
-pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 3;
+pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 4;
 
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
@@ -31,7 +32,29 @@ pub mod method {
     pub const TURN_STEER: &str = "turn/steer";
     pub const TURN_INTERRUPT: &str = "turn/interrupt";
     pub const APPROVAL_RESPOND: &str = "approval/respond";
+    pub const TASK_STATE_CHANGED: &str = "task/state_changed";
     pub const SHUTDOWN: &str = "shutdown";
+}
+
+/// Build the canonical task-state notification shared by stdio and WebSocket
+/// developer-session clients. The payload is the same typed contract used by
+/// cloud chat activity, so UI surfaces never infer lifecycle from prose or
+/// transport-specific turn methods.
+pub fn task_state_notification(
+    task_id: impl Into<String>,
+    state: AgentTaskState,
+    previous_state: Option<AgentTaskState>,
+    summary: Option<String>,
+) -> Result<AppServerNotification, serde_json::Error> {
+    AppServerNotification::new(
+        method::TASK_STATE_CHANGED,
+        AgentTaskStateChanged {
+            task_id: task_id.into(),
+            state,
+            previous_state,
+            summary,
+        },
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]

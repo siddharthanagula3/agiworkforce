@@ -3,7 +3,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Zap } from 'lucide-react';
-import { invoke } from '../../lib/tauri-mock';
 import {
   Dialog,
   DialogContent,
@@ -12,17 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/Dialog';
-import { Switch } from '@/components/ui/Switch';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/Select';
 import { useAgentTaskStore } from '../../stores/agentTaskStore';
-import { useModelStore } from '../../stores/modelStore';
-import { ensureAgiInitialized } from '../../api/agi';
 import { cn } from '../../lib/utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,18 +23,6 @@ interface TaskCreationDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-interface SubmitGoalAutoResponse {
-  taskId: string;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-const ITERATION_MIN = 1;
-const ITERATION_MAX = 100;
-const ITERATION_DEFAULT = 25;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,44 +30,8 @@ const ITERATION_DEFAULT = 25;
 export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogProps) {
   // Form state
   const [goal, setGoal] = useState('');
-  const [maxIterations, setMaxIterations] = useState(ITERATION_DEFAULT);
-  const [autoApprove, setAutoApprove] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [iterationsError, setIterationsError] = useState<string | null>(null);
-
-  // Model selection — pull available models from the model store
-  const selectedModel = useModelStore((s) => s.selectedModel);
-  const recentModels = useModelStore((s) => s.recentModels);
-  const [chosenModel, setChosenModel] = useState<string>(selectedModel ?? '');
-
-  // Build model options: recent + current, de-duplicated
-  const modelOptions = Array.from(
-    new Set([...(selectedModel ? [selectedModel] : []), ...recentModels.slice(0, 8)]),
-  ).filter(Boolean);
-
-  // ── Validation ─────────────────────────────────────────────────────────────
-
-  const validateIterations = useCallback((value: number): boolean => {
-    if (value < ITERATION_MIN || value > ITERATION_MAX) {
-      setIterationsError(`Must be between ${ITERATION_MIN} and ${ITERATION_MAX}`);
-      return false;
-    }
-    setIterationsError(null);
-    return true;
-  }, []);
-
-  const handleIterationsChange = useCallback(
-    (raw: string) => {
-      const num = parseInt(raw, 10);
-      if (isNaN(num)) {
-        setIterationsError('Must be a number');
-        return;
-      }
-      setMaxIterations(num);
-      validateIterations(num);
-    },
-    [validateIterations],
-  );
+  const submitGoalAuto = useAgentTaskStore((state) => state.submitGoalAuto);
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
@@ -102,58 +43,20 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
       return;
     }
 
-    if (!validateIterations(maxIterations)) {
-      return;
-    }
-
     setSubmitting(true);
     try {
-      await ensureAgiInitialized();
-      const result = await invoke<SubmitGoalAutoResponse>('agi_submit_goal_auto', {
-        goal: trimmedGoal,
-        maxIterations,
-        autoApprove,
-        model: chosenModel || undefined,
-      });
-
-      // Optimistic task add via store
-      const newTask = {
-        id: result?.taskId ?? `task_${Date.now()}`,
-        goal: trimmedGoal,
-        status: 'pending' as const,
-        createdAt: new Date().toISOString(),
-      };
-      const current = useAgentTaskStore.getState();
-      // Add task without duplicating
-      if (!current.tasks.find((t) => t.id === newTask.id)) {
-        useAgentTaskStore.setState((state) => ({
-          tasks: [newTask, ...state.tasks],
-        }));
-      }
+      await submitGoalAuto(trimmedGoal);
 
       toast.success('Task launched successfully');
       onOpenChange(false);
-      // Reset form fields
       setGoal('');
-      setMaxIterations(ITERATION_DEFAULT);
-      setAutoApprove(true);
-      setIterationsError(null);
-      setChosenModel(selectedModel ?? '');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to submit task';
       toast.error(message);
     } finally {
       setSubmitting(false);
     }
-  }, [
-    goal,
-    maxIterations,
-    autoApprove,
-    chosenModel,
-    validateIterations,
-    onOpenChange,
-    selectedModel,
-  ]);
+  }, [goal, onOpenChange, submitGoalAuto]);
 
   const handleOpenChange = useCallback(
     (value: boolean) => {
@@ -161,19 +64,15 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
         onOpenChange(value);
         if (!value) {
           setGoal('');
-          setMaxIterations(ITERATION_DEFAULT);
-          setAutoApprove(true);
-          setIterationsError(null);
-          setChosenModel(selectedModel ?? '');
         }
       }
     },
-    [submitting, onOpenChange, selectedModel],
+    [submitting, onOpenChange],
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const isValid = goal.trim().length > 0 && !iterationsError;
+  const isValid = goal.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -212,72 +111,10 @@ export function TaskCreationDialog({ open, onOpenChange }: TaskCreationDialogPro
             />
           </div>
 
-          {/* Model selector */}
-          {modelOptions.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground">Model</label>
-              <Select value={chosenModel} onValueChange={setChosenModel} disabled={submitting}>
-                <SelectTrigger className="border-white/10 bg-white/5 text-sm text-foreground focus:ring-teal-500/30">
-                  <SelectValue placeholder="Select model..." />
-                </SelectTrigger>
-                <SelectContent className="border-white/10 bg-[#0f1117] text-foreground">
-                  {modelOptions.map((modelId) => (
-                    <SelectItem
-                      key={modelId}
-                      value={modelId}
-                      className="focus:bg-white/10 focus:text-foreground"
-                    >
-                      {modelId}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Max iterations */}
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="task-iterations" className="text-sm font-medium text-foreground">
-              Max Iterations
-            </label>
-            <div className="flex items-center gap-3">
-              <input
-                id="task-iterations"
-                type="number"
-                min={ITERATION_MIN}
-                max={ITERATION_MAX}
-                value={maxIterations}
-                onChange={(e) => handleIterationsChange(e.target.value)}
-                disabled={submitting}
-                className={cn(
-                  'w-24 rounded-lg border bg-white/5 px-3 py-2 text-sm text-foreground',
-                  'outline-none transition focus:border-teal-500/50 focus:ring-1 focus:ring-teal-500/30',
-                  iterationsError ? 'border-red-500/50' : 'border-white/10',
-                  submitting && 'opacity-50',
-                )}
-              />
-              <span className="text-xs text-muted-foreground">
-                {ITERATION_MIN}–{ITERATION_MAX} iterations
-              </span>
-            </div>
-            {iterationsError && <p className="text-xs text-red-400">{iterationsError}</p>}
-          </div>
-
-          {/* Auto-approve toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-foreground">Auto-approve</span>
-              <span className="text-xs text-muted-foreground">
-                Execute tool calls without pausing for confirmation
-              </span>
-            </div>
-            <Switch
-              checked={autoApprove}
-              onCheckedChange={setAutoApprove}
-              disabled={submitting}
-              className="data-[state=checked]:bg-teal-600"
-            />
-          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            The task uses your current model and approval settings. You can review every requested
+            tool action while it runs.
+          </p>
         </div>
 
         <DialogFooter className="gap-2 pt-2">

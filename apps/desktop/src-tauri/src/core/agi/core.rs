@@ -3,10 +3,12 @@ use crate::automation::AutomationService;
 use crate::core::agent::ChangeTracker;
 use crate::core::agi::planner::Plan;
 use crate::core::llm::LLMRouter;
+use agiworkforce_protocol::task_state::{AgentTaskState, AgentTaskStateChanged};
 use anyhow::{anyhow, Result};
 use chrono::Utc;
 use serde_json::json;
 use sha2::{Digest, Sha256};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
@@ -55,6 +57,20 @@ fn goal_iteration_limit(goal: &Goal) -> usize {
 const MAX_CONTEXT_MEMORY_ENTRIES: usize = 1000;
 /// Maximum number of tool results to keep in context.
 const MAX_TOOL_RESULTS: usize = 500;
+/// Completed/reviewable tasks retained for status queries and task history.
+const MAX_RETAINED_AGENT_TASKS: usize = 500;
+
+fn remember_finished_task(
+    history: &mut VecDeque<String>,
+    task_id: &str,
+    limit: usize,
+) -> Option<String> {
+    history.retain(|existing_id| existing_id != task_id);
+    history.push_back(task_id.to_string());
+    (history.len() > limit)
+        .then(|| history.pop_front())
+        .flatten()
+}
 
 /// MEDIUM-006 fix: Truncates context memory to prevent unbounded growth.
 /// Keeps the most recent entries when limit is exceeded.
@@ -115,6 +131,12 @@ pub struct AGICore {
     // TODO: Migrate to tokio::sync::Mutex when all callers are fully async-native.
     active_goals: Arc<Mutex<Vec<Goal>>>,
     execution_contexts: Arc<Mutex<HashMap<String, ExecutionContext>>>,
+    /// Canonical lifecycle emitted by the engine. UI stores consume this map
+    /// directly instead of inferring completion from legacy progress events.
+    task_states: Arc<Mutex<HashMap<String, AgentTaskState>>>,
+    /// Oldest-first completed/reviewable task ids used to bound retained
+    /// contexts and lifecycle state without pruning active work.
+    task_history: Arc<Mutex<VecDeque<String>>>,
     /// FIX-031 (Sprint 5): registry of spawned goal-execution JoinHandles,
     /// keyed by goal_id. Lets `cancel_goal` `.abort()` the worker so it
     /// stops within the next .await even if the loop is mid-LLM-call.
@@ -190,6 +212,8 @@ impl AGICore {
             automation,
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
+            task_states: Arc::new(Mutex::new(HashMap::new())),
+            task_history: Arc::new(Mutex::new(VecDeque::new())),
             goal_handles: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(AtomicBool::new(false)),
             pause_signal: Arc::new(AtomicBool::new(false)),
@@ -281,6 +305,8 @@ impl AGICore {
             automation,
             active_goals: Arc::new(Mutex::new(Vec::new())),
             execution_contexts: Arc::new(Mutex::new(HashMap::new())),
+            task_states: Arc::new(Mutex::new(HashMap::new())),
+            task_history: Arc::new(Mutex::new(VecDeque::new())),
             goal_handles: Arc::new(Mutex::new(HashMap::new())),
             stop_signal: Arc::new(AtomicBool::new(false)),
             pause_signal: Arc::new(AtomicBool::new(false)),
@@ -297,6 +323,68 @@ impl AGICore {
             if let Err(e) = app.emit(event, payload) {
                 tracing::warn!("Failed to emit event {}: {}", event, e);
             }
+        }
+    }
+
+    fn transition_task_state(
+        &self,
+        task_id: &str,
+        state: AgentTaskState,
+        summary: impl Into<String>,
+    ) {
+        let previous_state = match lock_with_recovery(&self.task_states, "transition_task_state") {
+            Ok(mut states) => states.insert(task_id.to_string(), state),
+            Err(error) => {
+                tracing::error!(
+                    "[AGI] Failed to store task state for {}: {}",
+                    task_id,
+                    error
+                );
+                None
+            }
+        };
+        if previous_state == Some(state) {
+            return;
+        }
+
+        if state == AgentTaskState::ReadyForReview || state.is_terminal() {
+            let evicted_task_id = lock_with_recovery(&self.task_history, "transition_task_state")
+                .ok()
+                .and_then(|mut history| {
+                    remember_finished_task(&mut history, task_id, MAX_RETAINED_AGENT_TASKS)
+                });
+            if let Some(evicted_task_id) = evicted_task_id {
+                if let Ok(mut states) =
+                    lock_with_recovery(&self.task_states, "transition_task_state:prune_states")
+                {
+                    states.remove(&evicted_task_id);
+                }
+                if let Ok(mut contexts) = lock_with_recovery(
+                    &self.execution_contexts,
+                    "transition_task_state:prune_contexts",
+                ) {
+                    contexts.remove(&evicted_task_id);
+                }
+            }
+        } else if let Ok(mut history) =
+            lock_with_recovery(&self.task_history, "transition_task_state:reactivate")
+        {
+            history.retain(|existing_id| existing_id != task_id);
+        }
+
+        let payload = AgentTaskStateChanged {
+            task_id: task_id.to_string(),
+            state,
+            previous_state,
+            summary: Some(summary.into()),
+        };
+        match serde_json::to_value(payload) {
+            Ok(payload) => self.emit_event("agi:task:state_changed", payload),
+            Err(error) => tracing::error!(
+                "[AGI] Failed to serialize task state for {}: {}",
+                task_id,
+                error
+            ),
         }
     }
 
@@ -376,6 +464,12 @@ impl AGICore {
     pub async fn submit_goal(&self, goal: Goal) -> Result<String> {
         tracing::info!("[AGI] New goal submitted: {}", goal.description);
 
+        self.transition_task_state(
+            &goal.id,
+            AgentTaskState::Queued,
+            "Task accepted by the agent engine.",
+        );
+
         self.emit_event(
             "agi:goal:submitted",
             json!({
@@ -416,6 +510,11 @@ impl AGICore {
         let handle = tokio::spawn(async move {
             if let Err(e) = core_with_app.achieve_goal(goal_id_for_spawn.clone()).await {
                 tracing::error!("[AGI] Goal execution failed: {}", e);
+                core_with_app.transition_task_state(
+                    &goal_id_for_spawn,
+                    AgentTaskState::Failed,
+                    format!("Agent work ended with an error: {e}"),
+                );
                 core_with_app.emit_event(
                     "agi:goal:error",
                     json!({
@@ -443,6 +542,16 @@ impl AGICore {
             goal.description,
             num_agents
         );
+        self.transition_task_state(
+            &goal.id,
+            AgentTaskState::Queued,
+            "Parallel task accepted by the agent engine.",
+        );
+        self.transition_task_state(
+            &goal.id,
+            AgentTaskState::Running,
+            "Parallel agents started working.",
+        );
 
         self.emit_event(
             "agi:goal:parallel_submitted",
@@ -453,81 +562,127 @@ impl AGICore {
             }),
         );
 
-        self.knowledge_base.add_goal(&goal).await?;
+        let result: Result<crate::core::agi::ScoredResult> = async {
+            self.knowledge_base.add_goal(&goal).await?;
 
-        let context = ExecutionContext {
-            goal: goal.clone(),
-            current_state: HashMap::new(),
-            available_resources: self.resource_manager.get_state().await?,
-            tool_results: Vec::new(),
-            context_memory: Vec::new(),
-        };
+            let context = ExecutionContext {
+                goal: goal.clone(),
+                current_state: HashMap::new(),
+                available_resources: self.resource_manager.get_state().await?,
+                tool_results: Vec::new(),
+                context_memory: Vec::new(),
+            };
 
-        tracing::info!("[AGI] Generating {} parallel plans", num_agents);
-        let plans = self
-            .planner
-            .create_parallel_plans(&goal, &context, num_agents)
-            .await?;
+            tracing::info!("[AGI] Generating {} parallel plans", num_agents);
+            let plans = self
+                .planner
+                .create_parallel_plans(&goal, &context, num_agents)
+                .await?;
 
-        self.emit_event(
-            "agi:goal:parallel_plans_created",
-            json!({
-                "goal_id": goal.id,
-                "num_plans": plans.len(),
-            }),
-        );
+            self.emit_event(
+                "agi:goal:parallel_plans_created",
+                json!({
+                    "goal_id": goal.id,
+                    "num_plans": plans.len(),
+                }),
+            );
 
-        let sandbox_manager = crate::core::agi::SandboxManager::new()?;
+            let sandbox_manager = crate::core::agi::SandboxManager::new()?;
 
-        tracing::info!("[AGI] Executing {} plans in parallel", plans.len());
-        let results = self
-            .executor
-            .execute_plans_parallel(plans, &sandbox_manager, &goal)
-            .await?;
+            tracing::info!("[AGI] Executing {} plans in parallel", plans.len());
+            let execution_result = self
+                .executor
+                .execute_plans_parallel(plans, &sandbox_manager, &goal)
+                .await;
+            let cleanup_result = sandbox_manager.cleanup_all().await;
+            let results = match (execution_result, cleanup_result) {
+                (Ok(results), Ok(())) => results,
+                (Err(execution_error), Ok(())) => return Err(execution_error),
+                (Ok(_), Err(cleanup_error)) => return Err(cleanup_error),
+                (Err(execution_error), Err(cleanup_error)) => {
+                    return Err(execution_error.context(format!(
+                        "parallel sandbox cleanup also failed: {cleanup_error}"
+                    )));
+                }
+            };
 
-        self.emit_event(
-            "agi:goal:parallel_execution_completed",
-            json!({
-                "goal_id": goal.id,
-                "num_results": results.len(),
-            }),
-        );
+            self.emit_event(
+                "agi:goal:parallel_execution_completed",
+                json!({
+                    "goal_id": goal.id,
+                    "num_results": results.len(),
+                }),
+            );
 
-        let comparator = crate::core::agi::ResultComparator::new();
-        let scored_results = comparator.compare_and_rank(results);
+            let comparator = crate::core::agi::ResultComparator::new();
+            let scored_results = comparator.compare_and_rank(results);
+            let comparison_output = comparator.format_comparison(&scored_results);
+            tracing::info!("[AGI] Parallel execution results:\n{}", comparison_output);
 
-        let comparison_output = comparator.format_comparison(&scored_results);
-        tracing::info!("[AGI] Parallel execution results:\n{}", comparison_output);
+            let best_result = scored_results
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("No valid results from parallel execution"))?;
 
-        sandbox_manager.cleanup_all().await?;
+            self.emit_event(
+                "agi:goal:parallel_best_result",
+                json!({
+                    "goal_id": goal.id,
+                    "best_plan_id": best_result.result.plan_id,
+                    "score": best_result.score,
+                    "rank": best_result.rank,
+                    "success": best_result.result.success,
+                    "execution_time_ms": best_result.result.execution_time_ms,
+                    "error": best_result.result.error,
+                }),
+            );
 
-        let best_result = scored_results
-            .first()
-            .ok_or_else(|| anyhow!("No valid results from parallel execution"))?;
+            self.emit_event(
+                "agi:goal:parallel_comparison",
+                json!({
+                    "goal_id": goal.id,
+                    "comparison": comparison_output,
+                    "all_results": scored_results,
+                }),
+            );
 
-        self.emit_event(
-            "agi:goal:parallel_best_result",
-            json!({
-                "goal_id": goal.id,
-                "best_plan_id": best_result.result.plan_id,
-                "score": best_result.score,
-                "rank": best_result.rank,
-                "success": best_result.result.success,
-                "execution_time_ms": best_result.result.execution_time_ms,
-                "error": best_result.result.error,
-            }),
-        );
+            Ok(best_result)
+        }
+        .await;
 
-        self.emit_event(
-            "agi:goal:parallel_comparison",
-            json!({
-                "goal_id": goal.id,
-                "comparison": comparison_output,
-                "all_results": scored_results,
-            }),
-        );
-
-        Ok(best_result.clone())
+        match result {
+            Ok(best_result) => {
+                self.transition_task_state(
+                    &goal.id,
+                    if best_result.result.success {
+                        AgentTaskState::ReadyForReview
+                    } else {
+                        AgentTaskState::Failed
+                    },
+                    if best_result.result.success {
+                        "Parallel agent work finished and is ready for review."
+                    } else {
+                        "Parallel agent work ended with an error."
+                    },
+                );
+                Ok(best_result)
+            }
+            Err(error) => {
+                self.transition_task_state(
+                    &goal.id,
+                    AgentTaskState::Failed,
+                    format!("Parallel agent work ended with an error: {error}"),
+                );
+                self.emit_event(
+                    "agi:goal:error",
+                    json!({
+                        "goal_id": goal.id,
+                        "error": error.to_string(),
+                    }),
+                );
+                Err(error)
+            }
+        }
     }
 
     /// Submits a goal for execution using the swarm orchestration system.
@@ -553,6 +708,16 @@ impl AGICore {
         use crate::core::swarm::{SwarmConfig, SwarmOrchestrator};
 
         tracing::info!("[AGI] Swarm goal submitted: {}", goal.description);
+        self.transition_task_state(
+            &goal.id,
+            AgentTaskState::Queued,
+            "Swarm task accepted by the agent engine.",
+        );
+        self.transition_task_state(
+            &goal.id,
+            AgentTaskState::Running,
+            "Swarm agents started working.",
+        );
 
         self.emit_event(
             "agi:goal:swarm_submitted",
@@ -581,6 +746,11 @@ impl AGICore {
             Ok(orchestrator) => orchestrator,
             Err(error) => {
                 let error = anyhow::anyhow!("Failed to create swarm orchestrator: {}", error);
+                self.transition_task_state(
+                    &goal.id,
+                    AgentTaskState::Failed,
+                    format!("Swarm initialization failed: {error}"),
+                );
                 self.emit_event(
                     "agi:goal:error",
                     json!({
@@ -597,6 +767,11 @@ impl AGICore {
             Ok(result) => result,
             Err(error) => {
                 let error = anyhow::anyhow!("Swarm execution failed: {}", error);
+                self.transition_task_state(
+                    &goal.id,
+                    AgentTaskState::Failed,
+                    format!("Swarm execution failed: {error}"),
+                );
                 self.emit_event(
                     "agi:goal:error",
                     json!({
@@ -621,6 +796,19 @@ impl AGICore {
                 "max_parallelism": result.max_parallelism,
                 "error": if result.success { None } else { Some(result.summary.clone()) },
             }),
+        );
+        self.transition_task_state(
+            &goal.id,
+            if result.success {
+                AgentTaskState::ReadyForReview
+            } else {
+                AgentTaskState::Failed
+            },
+            if result.success {
+                "Swarm work finished and is ready for review."
+            } else {
+                "Swarm work ended with an error."
+            },
         );
 
         tracing::info!(
@@ -747,6 +935,7 @@ impl AGICore {
             .clone();
 
         tracing::info!("[AGI] Achieving goal: {}", context.goal.description);
+        self.transition_task_state(&goal_id, AgentTaskState::Running, "Agent started working.");
 
         let max_iterations = goal_iteration_limit(&context.goal);
         let max_duration = Duration::from_secs(300); // 5 minute absolute timeout
@@ -760,21 +949,36 @@ impl AGICore {
             // Check cancellation first
             if self.is_goal_cancelled(&goal_id).await {
                 tracing::info!("[AGI] Goal {} cancelled by user", goal_id);
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::Cancelled,
+                    "Agent work was cancelled.",
+                );
                 self.emit_event("agi:goal:cancelled", json!({ "goal_id": goal_id }));
                 break;
             }
 
-            // Check pause signal and wait if paused
-            if self.is_paused() {
+            // Check global or goal-specific pause state and wait if paused.
+            if self.is_goal_paused(&goal_id) {
                 tracing::info!("[AGI] Goal {} paused", goal_id);
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::Paused,
+                    "Agent work is paused.",
+                );
                 self.emit_event("agi:goal:paused", json!({ "goal_id": goal_id.clone() }));
 
                 // Wait until unpaused
-                while self.is_paused() {
+                while self.is_goal_paused(&goal_id) {
                     sleep(Duration::from_millis(100)).await;
                 }
 
                 tracing::info!("[AGI] Goal {} resumed", goal_id);
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::Running,
+                    "Agent resumed working.",
+                );
                 self.emit_event("agi:goal:resumed", json!({ "goal_id": goal_id.clone() }));
             }
 
@@ -793,6 +997,11 @@ impl AGICore {
                         "iterations": iteration,
                     }),
                 );
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::Failed,
+                    "Agent work timed out.",
+                );
                 break;
             }
 
@@ -810,7 +1019,27 @@ impl AGICore {
                         "iterations": iteration,
                     }),
                 );
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::Failed,
+                    format!("Agent stopped after reaching the {max_iterations}-iteration limit."),
+                );
                 break;
+            }
+
+            context.current_state.insert(
+                "current_iteration".to_string(),
+                serde_json::Value::from(iteration),
+            );
+            if let Ok(mut contexts) =
+                lock_with_recovery(&self.execution_contexts, "achieve_goal:update_iteration")
+            {
+                if let Some(shared_context) = contexts.get_mut(&goal_id) {
+                    shared_context.current_state.insert(
+                        "current_iteration".to_string(),
+                        serde_json::Value::from(iteration),
+                    );
+                }
             }
 
             tracing::info!(
@@ -842,6 +1071,11 @@ impl AGICore {
                         "iterations": iteration,
                     }),
                 );
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::ReadyForReview,
+                    "Agent work finished and is ready for review.",
+                );
                 break;
             }
 
@@ -852,6 +1086,11 @@ impl AGICore {
 
             if plan.steps.is_empty() {
                 tracing::warn!("[AGI] Planner returned empty plan. Assuming blocked or done.");
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::Failed,
+                    "The agent could not produce an executable plan.",
+                );
                 break;
             }
 
@@ -1083,6 +1322,11 @@ impl AGICore {
                             "iterations": iteration,
                         }),
                     );
+                    self.transition_task_state(
+                        &goal_id,
+                        AgentTaskState::ReadyForReview,
+                        "Agent work finished and is ready for review.",
+                    );
                     plan_interrupted = true;
                     break;
                 }
@@ -1191,6 +1435,11 @@ impl AGICore {
                                     "final_insight": insight,
                                 }),
                             );
+                            self.transition_task_state(
+                                &goal_id,
+                                AgentTaskState::Failed,
+                                "The agent determined that the goal is not currently achievable.",
+                            );
                             break;
                         }
 
@@ -1246,8 +1495,8 @@ impl AGICore {
             sleep(Duration::from_secs(delay_secs)).await;
         }
 
-        // MEDIUM-007 fix: Clean up goal from active_goals and execution_contexts
-        // This ensures resources are freed regardless of how the goal ended
+        // Remove live execution ownership while retaining the final context and
+        // canonical state for status queries, review, and archival.
         self.cleanup_goal(&goal_id);
 
         Ok(())
@@ -1262,15 +1511,6 @@ impl AGICore {
             goals.retain(|g| g.id != goal_id);
             if goals.len() < original_len {
                 tracing::debug!("[AGI] Removed goal {} from active_goals", goal_id);
-            }
-        }
-
-        // Remove from execution_contexts
-        if let Ok(mut contexts) =
-            lock_with_recovery(&self.execution_contexts, "cleanup_goal:contexts")
-        {
-            if contexts.remove(goal_id).is_some() {
-                tracing::debug!("[AGI] Removed goal {} from execution_contexts", goal_id);
             }
         }
 
@@ -1373,6 +1613,8 @@ impl AGICore {
             automation: self.automation.clone(),
             active_goals: self.active_goals.clone(),
             execution_contexts: self.execution_contexts.clone(),
+            task_states: self.task_states.clone(),
+            task_history: self.task_history.clone(),
             goal_handles: self.goal_handles.clone(),
             stop_signal: self.stop_signal.clone(),
             pause_signal: self.pause_signal.clone(),
@@ -1420,8 +1662,59 @@ impl AGICore {
             }
         }
 
+        self.transition_task_state(
+            goal_id,
+            AgentTaskState::Cancelled,
+            "Agent work was cancelled.",
+        );
+        // Aborting the worker prevents `achieve_goal` from reaching its own
+        // cleanup epilogue. Release live ownership here while retaining the
+        // bounded status context for review and history.
+        self.cleanup_goal(goal_id);
         tracing::info!("[AGI] Cancellation requested for goal {}", goal_id);
         Ok(())
+    }
+
+    pub fn pause_goal(&self, goal_id: &str) -> Result<()> {
+        let mut contexts = lock_with_recovery(&self.execution_contexts, "pause_goal")?;
+        let context = contexts
+            .get_mut(goal_id)
+            .ok_or_else(|| anyhow!("Goal {} not found", goal_id))?;
+        context
+            .current_state
+            .insert("pause_requested".to_string(), serde_json::Value::Bool(true));
+        drop(contexts);
+        self.transition_task_state(goal_id, AgentTaskState::Paused, "Agent work is paused.");
+        Ok(())
+    }
+
+    pub fn resume_goal(&self, goal_id: &str) -> Result<()> {
+        let mut contexts = lock_with_recovery(&self.execution_contexts, "resume_goal")?;
+        let context = contexts
+            .get_mut(goal_id)
+            .ok_or_else(|| anyhow!("Goal {} not found", goal_id))?;
+        context.current_state.insert(
+            "pause_requested".to_string(),
+            serde_json::Value::Bool(false),
+        );
+        drop(contexts);
+        self.transition_task_state(goal_id, AgentTaskState::Running, "Agent resumed working.");
+        Ok(())
+    }
+
+    pub fn is_goal_paused(&self, goal_id: &str) -> bool {
+        if self.is_paused() {
+            return true;
+        }
+        lock_with_recovery(&self.execution_contexts, "is_goal_paused")
+            .ok()
+            .and_then(|contexts| {
+                contexts
+                    .get(goal_id)
+                    .and_then(|context| context.current_state.get("pause_requested"))
+                    .and_then(serde_json::Value::as_bool)
+            })
+            .unwrap_or(false)
     }
 
     /// HIGH-001 fix: Properly handle mutex poisoning in cancellation check.
@@ -1462,6 +1755,13 @@ impl AGICore {
             .ok()?
             .get(goal_id)
             .cloned()
+    }
+
+    pub fn get_task_state(&self, goal_id: &str) -> Option<AgentTaskState> {
+        lock_with_recovery(&self.task_states, "get_task_state")
+            .ok()?
+            .get(goal_id)
+            .copied()
     }
 
     pub fn list_goals(&self) -> Vec<Goal> {
@@ -1535,5 +1835,25 @@ mod tests {
         };
 
         assert_eq!(goal_iteration_limit(&goal), 12);
+    }
+
+    #[test]
+    fn finished_task_history_is_bounded_and_refreshes_existing_ids() {
+        let mut history = VecDeque::from(["task-1".to_string(), "task-2".to_string()]);
+
+        assert_eq!(remember_finished_task(&mut history, "task-1", 2), None);
+        assert_eq!(
+            history,
+            VecDeque::from(["task-2".to_string(), "task-1".to_string()])
+        );
+
+        assert_eq!(
+            remember_finished_task(&mut history, "task-3", 2),
+            Some("task-2".to_string())
+        );
+        assert_eq!(
+            history,
+            VecDeque::from(["task-1".to_string(), "task-3".to_string()])
+        );
     }
 }

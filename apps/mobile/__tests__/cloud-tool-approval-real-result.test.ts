@@ -114,7 +114,7 @@ function lastAssistantMessage() {
 describe('resolveToolApproval — recursive resume carries the REAL tool result', () => {
   it('replays the actual x_tool_result content (not a placeholder) when a resume suspends again on a further tool', async () => {
     const activityBase = {
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       sessionId: 'session-approval-1',
       turnId: 'turn-approval-1',
     };

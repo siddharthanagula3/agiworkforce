@@ -209,6 +209,7 @@ dependencies = [
  "agiworkforce-llm",
  "agiworkforce-mcp",
  "agiworkforce-model-registry",
+ "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",
  "anyhow",
  "arboard",

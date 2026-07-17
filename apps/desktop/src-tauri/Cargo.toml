@@ -34,6 +34,7 @@ agiworkforce-execpolicy = { path = "../../../crates/agiworkforce-execpolicy" }
 agiworkforce-llm = { path = "../../../crates/agiworkforce-llm" }
 agiworkforce-model-registry = { path = "../../../crates/agiworkforce-model-registry" }
 agiworkforce-mcp = { path = "../../../crates/agiworkforce-mcp" }
+agiworkforce-protocol = { path = "../../../crates/agiworkforce-protocol" }
 agiworkforce-sandbox-policy = { path = "../../../crates/agiworkforce-sandbox-policy" }
 
 tauri = { version = "2.11.0", features = ["tray-icon"] }

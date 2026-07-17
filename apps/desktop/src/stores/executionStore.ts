@@ -735,19 +735,20 @@ function hasTaskLiveState(
 
 function isActiveExecutionTask(task: AgentTask): boolean {
   return (
-    task.status === 'pending' ||
+    task.status === 'queued' ||
     task.status === 'running' ||
     task.status === 'paused' ||
-    task.status === 'recovering'
+    task.status === 'awaiting_input'
   );
 }
 
 function isTerminalExecutionTask(task: AgentTask): boolean {
   return (
     task.status === 'completed' ||
+    task.status === 'ready_for_review' ||
     task.status === 'failed' ||
     task.status === 'cancelled' ||
-    task.status === 'expired'
+    task.status === 'archived'
   );
 }
 
@@ -792,13 +793,15 @@ function selectPrimaryExecutionTask(
 
 function mapTaskStatusToExecutionStatus(task: AgentTask): ActiveGoal['status'] {
   switch (task.status) {
-    case 'pending':
+    case 'queued':
       return 'planning';
     case 'running':
     case 'paused':
-    case 'recovering':
+    case 'awaiting_input':
       return 'executing';
     case 'completed':
+    case 'ready_for_review':
+    case 'archived':
       return 'completed';
     default:
       return 'failed';
