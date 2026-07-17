@@ -6,6 +6,7 @@ import {
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
+import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
 import type { ProcessedRequest } from './request-processor';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
@@ -54,7 +55,9 @@ export interface ManagedAgentStreamInput {
  * before `[DONE]` becomes visible to the client. Generator-owned terminal
  * events are consumed and exactly one route-owned terminal event is emitted.
  */
-export function buildManagedAgentStream(input: ManagedAgentStreamInput): ReadableStream<Uint8Array> {
+export function buildManagedAgentStream(
+  input: ManagedAgentStreamInput,
+): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   let settled = false;
   let reportedFailure = false;
@@ -69,6 +72,12 @@ export function buildManagedAgentStream(input: ManagedAgentStreamInput): Readabl
         usage: input.usage,
         reason,
         cancelled,
+      });
+    } else if (input.processed.freeTrial) {
+      await recordFreeTrialTokens({
+        userId: input.processed.freeTrial.userId,
+        requestId: input.processed.freeTrial.requestId,
+        tokens: input.usage.inputTokens + input.usage.outputTokens,
       });
     }
     settled = true;

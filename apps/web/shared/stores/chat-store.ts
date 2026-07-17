@@ -603,9 +603,8 @@ export const useChatStore = create<ChatStore>()(
                   ? 'Session expired. Please sign in again.'
                   : response.status === 402
                     ? 'Insufficient credits. Please add credits to continue.'
-                    : serverError?.code === 'website_trial_prompt_limit_reached'
-                      ? (serverError.message ??
-                        'You have used the 3 free Auto Economy prompts for this account.')
+                    : serverError?.code === 'free_trial_token_budget_reached'
+                      ? (serverError.message ?? 'Free usage limit reached. Upgrade to continue.')
                       : serverError?.code === 'free_trial_model_only' ||
                           serverError?.code === 'free_trial_feature_unavailable'
                         ? (serverError.message ?? 'Auto Economy is required for free trial access.')

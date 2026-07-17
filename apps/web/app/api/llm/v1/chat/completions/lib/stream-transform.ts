@@ -13,6 +13,7 @@ import {
   finalizeManagedUsageRequest,
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
+import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { withSseHeartbeat } from './sse-heartbeat';
 import {
@@ -43,9 +44,16 @@ async function settleStreamBilling(input: {
   outcome?: 'completed' | 'failed';
 }): Promise<void> {
   const { processed, userId, provider, model, usage } = input;
-  if (processed.freeTrial) return;
-
   const totalTokens = usage.inputTokens + usage.outputTokens;
+  if (processed.freeTrial) {
+    await recordFreeTrialTokens({
+      userId: processed.freeTrial.userId,
+      requestId: processed.freeTrial.requestId,
+      tokens: totalTokens,
+    });
+    return;
+  }
+
   const actualCostCents =
     input.outcome === 'failed'
       ? 0
@@ -129,7 +137,6 @@ export async function buildStreamResponse(
     estimatedCostCents,
     quotaWarningHeader,
     usedFallback,
-    freeTrial,
   } = processed;
 
   const modelUsed = chatRequest.model;
@@ -598,11 +605,6 @@ export async function buildStreamResponse(
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
-  if (freeTrial) {
-    streamHeaders['X-AGI-Trial-Prompts-Used'] = String(freeTrial.promptCount);
-    streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
-  }
-
   // Idle heartbeat, provider-independent (see sse-heartbeat.ts) -- covers
   // every provider dispatched through this function, not just Anthropic.
   return new NextResponse(withSseHeartbeat(reconciledStream), { headers: streamHeaders });
@@ -694,7 +696,6 @@ export async function buildAdapterStreamResponse(
     estimatedCostCents,
     quotaWarningHeader,
     usedFallback,
-    freeTrial,
   } = processed;
 
   // Billing/analytics model id -- canonical (client-facing), matching
@@ -927,7 +928,7 @@ export async function buildAdapterStreamResponse(
       }
     },
     async cancel() {
-      if (processed.managedUsage) {
+      if (processed.managedUsage || processed.freeTrial) {
         await settleStreamBilling({
           processed,
           userId,
@@ -957,11 +958,6 @@ export async function buildAdapterStreamResponse(
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
-  if (freeTrial) {
-    streamHeaders['X-AGI-Trial-Prompts-Used'] = String(freeTrial.promptCount);
-    streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
-  }
-
   // Idle heartbeat, provider-independent (see sse-heartbeat.ts) -- the
   // Anthropic SDK swallows the vendor's own event:ping keepalive frames
   // before translateAnthropicStream ever sees them, so this is the only

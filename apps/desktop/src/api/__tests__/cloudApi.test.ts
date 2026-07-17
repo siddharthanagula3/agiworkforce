@@ -165,6 +165,7 @@ describe('cloudApi', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           'Idempotency-Key': 'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000001',
+          'X-AGI-Surface': 'desktop',
         }),
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
@@ -207,8 +208,6 @@ describe('cloudApi', () => {
     );
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    expect(JSON.parse(request.body as string)).toEqual(
-      expect.objectContaining({ research: true }),
-    );
+    expect(JSON.parse(request.body as string)).toEqual(expect.objectContaining({ research: true }));
   });
 });

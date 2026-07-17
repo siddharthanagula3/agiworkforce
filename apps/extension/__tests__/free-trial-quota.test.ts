@@ -2,9 +2,8 @@
  * Tests for apps/extension/src/features/cloud-bridge/freeTrialClient.ts
  *
  * Covers:
- *   - Constants: FREE_TRIAL_PROMPT_LIMIT, FREE_TRIAL_MODEL, FREE_TRIAL_ENDPOINT
+ *   - Constants: FREE_TRIAL_MODEL, FREE_TRIAL_ENDPOINT
  *   - Auth: getAuthToken (session → local fallback → null), storeSessionToken, clearAuthToken
- *   - Quota helpers: getFreePromptsUsed, getRemainingFreePrompts
  *   - streamFreeChat: happy-path SSE streaming, quota_exceeded (403), auth_required (401),
  *     server_error (5xx), network failure, abort, input truncation, [DONE] sentinel,
  *     inline stream error, explicit terminal enforcement, and routing options
@@ -83,18 +82,15 @@ vi.mock('../src/features/cloud-bridge/clerkAuth', () => clerkAuthMock);
 // ---------------------------------------------------------------------------
 
 import {
-  FREE_TRIAL_PROMPT_LIMIT,
   FREE_TRIAL_MODEL,
   FREE_TRIAL_ENDPOINT,
   MANAGED_MODELS_ENDPOINT,
-  FREE_PROMPTS_USED_KEY,
+  MANAGED_CHAT_MAX_INPUT_CHARS,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_SSE_FRAME_CHARS,
   MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS,
   getAuthToken,
   clearAuthToken,
-  getFreePromptsUsed,
-  getRemainingFreePrompts,
   getManagedModelAccess,
   streamFreeChat,
   createMultimodalUserContent,
@@ -163,6 +159,7 @@ function makeErrorResponse(status: number, bodyText: string): Response {
 }
 
 const SAMPLE_MESSAGES: FreeTrialMessage[] = [{ role: 'user', content: 'Hello!' }];
+const LEGACY_FREE_PROMPTS_USED_KEY = 'agi_free_prompts_used';
 
 // ---------------------------------------------------------------------------
 // Reset between tests
@@ -189,10 +186,6 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('constants', () => {
-  it('FREE_TRIAL_PROMPT_LIMIT is 3', () => {
-    expect(FREE_TRIAL_PROMPT_LIMIT).toBe(3);
-  });
-
   it('FREE_TRIAL_MODEL is a non-empty string read from models.json', () => {
     expect(typeof FREE_TRIAL_MODEL).toBe('string');
     expect(FREE_TRIAL_MODEL.length).toBeGreaterThan(0);
@@ -341,52 +334,6 @@ describe('clearAuthToken', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Quota: getFreePromptsUsed / getRemainingFreePrompts
-// ---------------------------------------------------------------------------
-
-describe('getFreePromptsUsed', () => {
-  it('returns 0 when counter is unset', async () => {
-    expect(await getFreePromptsUsed()).toBe(0);
-  });
-
-  it('returns the stored count', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = 2;
-    expect(await getFreePromptsUsed()).toBe(2);
-  });
-
-  it('clamps stored value to FREE_TRIAL_PROMPT_LIMIT', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = 99;
-    expect(await getFreePromptsUsed()).toBe(FREE_TRIAL_PROMPT_LIMIT);
-  });
-
-  it('ignores non-numeric stored values and returns 0', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = 'bad';
-    expect(await getFreePromptsUsed()).toBe(0);
-  });
-});
-
-describe('getRemainingFreePrompts', () => {
-  it('returns FREE_TRIAL_PROMPT_LIMIT when no prompts used', async () => {
-    expect(await getRemainingFreePrompts()).toBe(FREE_TRIAL_PROMPT_LIMIT);
-  });
-
-  it('returns correct remaining count', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = 1;
-    expect(await getRemainingFreePrompts()).toBe(2);
-  });
-
-  it('returns 0 when limit reached', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = FREE_TRIAL_PROMPT_LIMIT;
-    expect(await getRemainingFreePrompts()).toBe(0);
-  });
-
-  it('never returns negative remaining count', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = FREE_TRIAL_PROMPT_LIMIT + 5;
-    expect(await getRemainingFreePrompts()).toBeGreaterThanOrEqual(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // streamFreeChat — network failure
 // ---------------------------------------------------------------------------
 
@@ -398,11 +345,10 @@ describe('streamFreeChat — network failure', () => {
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'server_error' });
   });
 
-  it('does not increment local prompt counter on network failure', async () => {
+  it('does not create the retired local prompt counter on network failure', async () => {
     fetchMock.mockRejectedValueOnce(new Error('network down'));
     await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    const used = await getFreePromptsUsed();
-    expect(used).toBe(0);
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('yields error with code server_error on AbortError', async () => {
@@ -426,18 +372,23 @@ describe('streamFreeChat — auth and quota errors', () => {
     expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
   });
 
-  it('yields quota_exceeded on 403 with limit_reached body', async () => {
+  it('yields quota_exceeded on 403 with the server usage-budget code', async () => {
     fetchMock.mockResolvedValueOnce(
-      makeErrorResponse(403, JSON.stringify({ error: 'limit_reached', message: 'Quota hit' })),
+      makeErrorResponse(
+        403,
+        JSON.stringify({ error: { code: 'free_trial_token_budget_reached' } }),
+      ),
     );
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'quota_exceeded' });
   });
 
-  it('snaps local counter to limit on 403 quota_exceeded', async () => {
-    fetchMock.mockResolvedValueOnce(makeErrorResponse(403, 'free_trial limit_reached'));
+  it('does not publish a local counter on 403 quota_exceeded', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(403, '{"error":{"code":"free_trial_token_budget_reached"}}'),
+    );
     await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(FREE_TRIAL_PROMPT_LIMIT);
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('yields plan_required on 403 without quota keywords', async () => {
@@ -451,19 +402,21 @@ describe('streamFreeChat — auth and quota errors', () => {
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
 
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'rate_limited' });
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
-  it('yields quota_exceeded when body contains "Upgrade" (capital U)', async () => {
+  it('treats an upgrade-required 403 as a plan gate, not a usage counter', async () => {
     fetchMock.mockResolvedValueOnce(makeErrorResponse(403, 'Upgrade your plan'));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'quota_exceeded' });
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required' });
   });
 
-  it('yields quota_exceeded when body contains prompt_limit', async () => {
-    fetchMock.mockResolvedValueOnce(makeErrorResponse(403, '{"error":"prompt_limit"}'));
+  it('treats the free-surface restriction as a plan gate', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(403, '{"error":{"code":"free_trial_surface_unavailable"}}'),
+    );
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'quota_exceeded' });
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required' });
   });
 });
 
@@ -481,7 +434,7 @@ describe('streamFreeChat — 5xx server error', () => {
   it('does not snap counter to limit on 5xx', async () => {
     fetchMock.mockResolvedValueOnce(makeErrorResponse(502, 'Bad Gateway'));
     await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });
 
@@ -508,14 +461,14 @@ describe('streamFreeChat — SSE happy path', () => {
     expect(doneChunks).toHaveLength(1);
   });
 
-  it('increments local prompt counter on successful stream', async () => {
+  it('does not publish a local prompt counter on successful stream', async () => {
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
     ];
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
 
     await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(1);
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('does not mutate the free-tier display cache for a paid account', async () => {
@@ -525,33 +478,10 @@ describe('streamFreeChat — SSE happy path', () => {
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
 
     await collectChunks(
-      streamFreeChat(SAMPLE_MESSAGES, 'valid-token', {
-        model: FREE_TRIAL_MODEL,
-        subscriptionTier: 'pro',
-      }),
+      streamFreeChat(SAMPLE_MESSAGES, 'valid-token', { model: FREE_TRIAL_MODEL }),
     );
 
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
-  });
-
-  it('increments counter cumulatively across calls', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = 1;
-    const sseLines = [
-      JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
-    ];
-    fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
-    await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(2);
-  });
-
-  it('caps counter at FREE_TRIAL_PROMPT_LIMIT even if called beyond limit', async () => {
-    chromeMock._localStore[FREE_PROMPTS_USED_KEY] = FREE_TRIAL_PROMPT_LIMIT;
-    const sseLines = [
-      JSON.stringify({ choices: [{ delta: { content: 'x' }, finish_reason: 'stop' }] }),
-    ];
-    fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
-    await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(FREE_TRIAL_PROMPT_LIMIT);
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('handles [DONE] sentinel without an explicit finish_reason', async () => {
@@ -562,7 +492,7 @@ describe('streamFreeChat — SSE happy path', () => {
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
     expect(chunks.filter((c) => c.type === 'done')).toHaveLength(1);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(1);
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('accepts alternative done format: parsed.done = true', async () => {
@@ -583,7 +513,7 @@ describe('streamFreeChat — SSE happy path', () => {
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
 
     expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('decodes CR-only SSE framing', async () => {
@@ -663,6 +593,7 @@ describe('streamFreeChat — SSE happy path', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = fetchOpts.headers as Record<string, string>;
     expect(headers['X-Requested-With']).toBe('XMLHttpRequest');
+    expect(headers['X-AGI-Surface']).toBe('chrome');
   });
 
   it('posts to FREE_TRIAL_ENDPOINT', async () => {
@@ -682,7 +613,7 @@ describe('streamFreeChat — SSE happy path', () => {
 // ---------------------------------------------------------------------------
 
 describe('streamFreeChat — input truncation', () => {
-  it('truncates message content exceeding FREE_TRIAL_MAX_INPUT_CHARS', async () => {
+  it('truncates message content exceeding MANAGED_CHAT_MAX_INPUT_CHARS', async () => {
     const longContent = 'x'.repeat(40_000);
     const messages: FreeTrialMessage[] = [{ role: 'user', content: longContent }];
 
@@ -696,7 +627,7 @@ describe('streamFreeChat — input truncation', () => {
     const body = JSON.parse(fetchOpts.body as string) as {
       messages: FreeTrialMessage[];
     };
-    expect(body.messages[0]!.content.length).toBe(32_000);
+    expect(body.messages[0]!.content.length).toBe(MANAGED_CHAT_MAX_INPUT_CHARS);
   });
 
   it('does not truncate messages within the char limit', async () => {
@@ -794,7 +725,7 @@ describe('streamFreeChat — inline stream error', () => {
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'server_error' });
   });
 
-  it('snaps counter on inline quota error', async () => {
+  it('does not publish a counter on inline quota error', async () => {
     const sseLines = [
       JSON.stringify({
         error: { message: 'Quota hit', code: 'free_trial_limit_reached' },
@@ -802,7 +733,7 @@ describe('streamFreeChat — inline stream error', () => {
     ];
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
     await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(FREE_TRIAL_PROMPT_LIMIT);
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('honors the gateway x_stream_error delta instead of counting finish_reason error as success', async () => {
@@ -832,7 +763,7 @@ describe('streamFreeChat — inline stream error', () => {
       { type: 'text', text: 'partial' },
       expect.objectContaining({ type: 'error', code: 'server_error' }),
     ]);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('fails closed on finish_reason error even when a malformed server omits x_stream_error', async () => {
@@ -847,7 +778,7 @@ describe('streamFreeChat — inline stream error', () => {
 
     expect(chunks.at(-1)).toMatchObject({ type: 'error', code: 'server_error' });
     expect(chunks.some((chunk) => chunk.type === 'done')).toBe(false);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });
 
@@ -901,7 +832,7 @@ describe('streamFreeChat — stream ends without finish_reason', () => {
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks.at(-1)).toMatchObject({ type: 'error', code: 'protocol_error' });
     expect(chunks.some((c) => c.type === 'done')).toBe(false);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('fails closed when the response body closes without any terminal event', async () => {
@@ -909,14 +840,14 @@ describe('streamFreeChat — stream ends without finish_reason', () => {
     fetchMock.mockResolvedValueOnce(makeStreamResponse([]));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
   it('fails closed on a malformed data frame instead of silently skipping it', async () => {
     fetchMock.mockResolvedValueOnce(makeStreamResponse(['{not-json}', '[DONE]']));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBeUndefined();
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });
 
@@ -979,22 +910,25 @@ describe('streamFreeChat — model routing', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('counts two concurrent explicit-success streams without a lost update', async () => {
+  it('emits one terminal for each of two concurrent explicit-success streams', async () => {
     const success = () =>
       makeStreamResponse([
         JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
       ]);
     fetchMock.mockResolvedValueOnce(success()).mockResolvedValueOnce(success());
 
-    await Promise.all([
+    const results = await Promise.all([
       collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token')),
       collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token')),
     ]);
 
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(2);
+    expect(results.map((chunks) => chunks.filter((chunk) => chunk.type === 'done').length)).toEqual(
+      [1, 1],
+    );
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
-  it('emits and counts exactly one terminal when the server sends duplicate terminals', async () => {
+  it('emits exactly one terminal when the server sends duplicate terminals', async () => {
     fetchMock.mockResolvedValueOnce(
       makeStreamResponse([
         JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
@@ -1003,6 +937,6 @@ describe('streamFreeChat — model routing', () => {
     );
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks.filter((chunk) => chunk.type === 'done')).toHaveLength(1);
-    expect(chromeMock._localStore[FREE_PROMPTS_USED_KEY]).toBe(1);
+    expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });

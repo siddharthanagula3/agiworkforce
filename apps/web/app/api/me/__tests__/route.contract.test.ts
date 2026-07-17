@@ -136,13 +136,13 @@ describe('GET /api/me — shared cloud contract', () => {
       expect(parsed.data.credits).toBeNull();
       expect(parsed.data.routing_preferences).toEqual({});
       // Tier-layer honesty at the full integration level (real route, real
-      // getTierPolicy('free')): search/deep-research/voice/connectors must
-      // be DENIED, not silently granted because no subscription exists.
-      expect(parsed.data.capability_handshake?.granted).not.toContain('canUseWebSearch');
+      // getTierPolicy('free')): Claude-style free chat grants search, voice,
+      // and one custom remote connector while Deep Research remains paid.
+      expect(parsed.data.capability_handshake?.granted).toContain('canUseWebSearch');
       expect(parsed.data.capability_handshake?.granted).not.toContain('canUseDeepResearch');
-      expect(parsed.data.capability_handshake?.granted).not.toContain('canUseVoice');
-      expect(parsed.data.capability_handshake?.granted).not.toContain('canUseConnectors');
-      expect(parsed.data.capability_handshake?.deniedBy['canUseWebSearch']).toEqual(['tier']);
+      expect(parsed.data.capability_handshake?.granted).toContain('canUseVoice');
+      expect(parsed.data.capability_handshake?.granted).toContain('canUseConnectors');
+      expect(parsed.data.capability_handshake?.deniedBy['canUseDeepResearch']).toEqual(['tier']);
       // But free users can still chat — tier honesty must not overcorrect
       // into denying universal capabilities.
       expect(parsed.data.capability_handshake?.granted).toContain('canChat');

@@ -13,6 +13,7 @@ import {
   finalizeManagedUsageRequest,
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
+import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
 
 export async function buildNonStreamResponse(
   request: NextRequest,
@@ -168,6 +169,14 @@ export async function buildNonStreamResponse(
     logger.warn({ error: trackingError, userId, requestId }, 'Cost tracking failed');
   }
 
+  if (freeTrial) {
+    await recordFreeTrialTokens({
+      userId: freeTrial.userId,
+      requestId: freeTrial.requestId,
+      tokens: llmResponse.totalTokens,
+    });
+  }
+
   // BILLING FIX (0044): reconcileUsage/increment_usage was a SECOND, buggy
   // charge path that added the raw token count to credits_used_cents (a cents
   // ledger), double-charging on top of the authoritative deduct_credits()
@@ -187,11 +196,6 @@ export async function buildNonStreamResponse(
   if (quotaWarningHeader) {
     responseHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
-  if (freeTrial) {
-    responseHeaders['X-AGI-Trial-Prompts-Used'] = String(freeTrial.promptCount);
-    responseHeaders['X-AGI-Trial-Prompts-Limit'] = String(freeTrial.promptLimit);
-  }
-
   const response = NextResponse.json(
     {
       id: responseId,
@@ -245,8 +249,6 @@ export async function buildNonStreamResponse(
         ...(freeTrial && {
           trial: {
             type: freeTrial.kind,
-            prompts_used: freeTrial.promptCount,
-            prompt_limit: freeTrial.promptLimit,
           },
         }),
         cache: {

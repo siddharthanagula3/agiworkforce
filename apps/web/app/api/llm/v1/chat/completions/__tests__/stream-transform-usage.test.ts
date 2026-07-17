@@ -42,12 +42,17 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
 }));
+vi.mock('@/lib/services/free-trial-service', () => ({
+  recordFreeTrialTokens: vi.fn(() => Promise.resolve()),
+}));
 
 import { buildStreamResponse } from '../lib/stream-transform';
 import type { ProcessedRequest } from '../lib/request-processor';
 import { recordModelUsage } from '@/lib/cost-tracker';
+import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
 
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
+const mockRecordFreeTrialTokens = recordFreeTrialTokens as ReturnType<typeof vi.fn>;
 
 /** Create a minimal ProcessedRequest stub for buildStreamResponse. */
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
@@ -139,6 +144,41 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
         outputTokens: 80,
       }),
     );
+  });
+
+  it('records actual free-tier stream usage without trial-budget headers', async () => {
+    const events = [
+      JSON.stringify({ choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'gpt-5.5' }),
+      JSON.stringify({
+        choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
+        model: 'gpt-5.5',
+        usage: { prompt_tokens: 120, completion_tokens: 80, total_tokens: 200 },
+      }),
+      '[DONE]',
+    ];
+
+    const response = await buildStreamResponse(
+      makeRequest() as any,
+      makeStream(events),
+      makeProcessed({
+        freeTrial: {
+          kind: 'free_trial',
+          userId: 'user-free',
+          requestId: 'req-test-001',
+        },
+      } as any),
+      'user-free',
+      'token-free',
+    );
+    await drainStream(response as any);
+
+    expect(mockRecordFreeTrialTokens).toHaveBeenCalledWith({
+      userId: 'user-free',
+      requestId: 'req-test-001',
+      tokens: 200,
+    });
+    expect(response.headers.has('x-agi-trial-tokens-used')).toBe(false);
+    expect(response.headers.has('x-agi-trial-tokens-budget')).toBe(false);
   });
 
   it('captures cached_tokens from prompt_tokens_details (Chat Completions shape)', async () => {

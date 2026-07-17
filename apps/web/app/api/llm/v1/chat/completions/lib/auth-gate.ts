@@ -7,6 +7,7 @@ import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subsc
 import { buildFreeWebsiteSubscription, isFreePlanTier } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { canUseFreeCloudChat, resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 export type AuthGateSuccess = {
   ok: true;
@@ -24,6 +25,27 @@ export type AuthGateResult = AuthGateSuccess | AuthGateFailure;
 
 // Narrow helper for route.ts: resolves the union so `if (!authResult.ok) return authResult.response` works
 export type AnyResponse = NextResponse | Response;
+
+function enforceFreeChatSurface(request: NextRequest, success: AuthGateSuccess): AuthGateResult {
+  const isApiKey = success.token.startsWith('sk_live_') || success.token.startsWith('sk_test_');
+  const surface = isApiKey ? 'api' : resolveCloudChatSurface(request);
+  if (isFreePlanTier(success.subscription.plan_tier) && !canUseFreeCloudChat(surface)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'Chrome, IDE, and API access require a paid plan.',
+            type: 'invalid_request_error',
+            code: 'free_trial_surface_unavailable',
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+  return success;
+}
 
 export async function runAuthGate(request: NextRequest): Promise<AuthGateResult> {
   const preflightResponse = handleCorsPreflightRequest(request);
@@ -82,13 +104,18 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
-    return { ok: true, userId, token, subscription: buildFreeWebsiteSubscription(userId) };
+    return enforceFreeChatSurface(request, {
+      ok: true,
+      userId,
+      token,
+      subscription: buildFreeWebsiteSubscription(userId),
+    });
   }
 
   const activeStatuses = ['active', 'trialing'];
   if (!activeStatuses.includes(subscription.status)) {
     if (isFreePlanTier(subscription.plan_tier)) {
-      return {
+      return enforceFreeChatSurface(request, {
         ok: true,
         userId,
         token,
@@ -96,7 +123,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
           ...subscription,
           status: 'active',
         },
-      };
+      });
     }
 
     return {
@@ -114,5 +141,5 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  return { ok: true, userId, token, subscription };
+  return enforceFreeChatSurface(request, { ok: true, userId, token, subscription });
 }

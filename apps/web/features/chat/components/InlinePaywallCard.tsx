@@ -48,7 +48,9 @@ export type PaywallFeature =
   | 'image_quota'
   | 'token_cap'
   | 'mcp'
-  | 'web_search';
+  | 'web_search'
+  | 'model_access'
+  | 'paid_capability';
 
 export type UserTier = 'free' | 'hobby' | 'pro' | 'max';
 export type RequiredTier = 'hobby' | 'pro' | 'max';
@@ -90,6 +92,8 @@ const FEATURE_LABELS: Record<PaywallFeature, string> = {
   token_cap: 'higher token limits',
   mcp: 'MCP server support',
   web_search: 'web search',
+  model_access: 'more models',
+  paid_capability: 'this capability',
 };
 
 // ---------------------------------------------------------------------------

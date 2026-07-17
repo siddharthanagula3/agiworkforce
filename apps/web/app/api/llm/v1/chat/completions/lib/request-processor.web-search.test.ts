@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { appendWebSearchTool, shouldOfferGenericWebSearchTool } from './request-processor';
+import {
+  appendWebSearchTool,
+  isFreeTierBlockedAddOn,
+  shouldOfferGenericWebSearchTool,
+} from './request-processor';
 import {
   WEB_SEARCH_INJECTION_PROVIDERS,
   providerInjectsWebSearchTool,
@@ -121,11 +125,28 @@ describe('shouldOfferGenericWebSearchTool', () => {
     expect(shouldOfferGenericWebSearchTool({ ...baseArgs, stream: undefined })).toBe(false);
   });
 
-  it('is false on a free-trial request', () => {
-    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, freeTrial: true })).toBe(false);
+  it('is true on a free-tier request when the backend is configured', () => {
+    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, freeTrial: true })).toBe(true);
   });
 
   it('is false when no search backend is configured — never offer a tool the server cannot execute', () => {
     expect(shouldOfferGenericWebSearchTool({ ...baseArgs, backendConfigured: false })).toBe(false);
+  });
+});
+
+describe('isFreeTierBlockedAddOn', () => {
+  it('keeps Deep Research paid while allowing normal web search', () => {
+    expect(isFreeTierBlockedAddOn({ web_search: true })).toBe(false);
+    expect(isFreeTierBlockedAddOn({ research: true })).toBe(true);
+  });
+
+  it('keeps arbitrary client tool definitions and multi-completion API use out of free chat', () => {
+    expect(
+      isFreeTierBlockedAddOn({
+        tools: [{ type: 'function', function: { name: 'custom_tool', parameters: {} } }],
+      }),
+    ).toBe(true);
+    expect(isFreeTierBlockedAddOn({ tool_choice: 'auto' })).toBe(true);
+    expect(isFreeTierBlockedAddOn({ n: 2 })).toBe(true);
   });
 });

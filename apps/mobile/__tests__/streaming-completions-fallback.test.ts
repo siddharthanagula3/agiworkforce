@@ -117,6 +117,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(
       'agi.chat.mobile.send.0190a000-0000-7000-8000-000000000001',
     );
+    expect((init.headers as Record<string, string>)['X-AGI-Surface']).toBe('mobile');
   });
 
   it('maps boolean thinking → thinking_mode (never sends a bare boolean `thinking`)', async () => {

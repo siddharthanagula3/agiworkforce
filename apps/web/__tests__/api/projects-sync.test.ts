@@ -11,13 +11,19 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const queryMock = vi.fn();
+const { queryMock, getSubscriptionMock } = vi.hoisted(() => ({
+  queryMock: vi.fn(),
+  getSubscriptionMock: vi.fn(),
+}));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db: { query: queryMock }, userId: 'u1' })),
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => undefined) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => undefined) }));
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: getSubscriptionMock },
+}));
 
 import { GET, POST, computeProjectsPullCursor } from '@/app/api/projects/sync/route';
 import { NextRequest } from 'next/server';
@@ -27,6 +33,8 @@ const sv = (n: number) => ({ server_version: String(n) });
 beforeEach(() => {
   queryMock.mockReset();
   queryMock.mockResolvedValue([{ kind: 'applied', id: 'x', server_version: '4', current: null }]);
+  getSubscriptionMock.mockReset();
+  getSubscriptionMock.mockResolvedValue({ plan_tier: 'free' });
 });
 
 function postReq(body: unknown) {

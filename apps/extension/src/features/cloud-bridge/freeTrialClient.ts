@@ -1,31 +1,14 @@
 /**
- * freeTrialClient.ts — Economy-tier chat client for signed-in free users.
+ * Managed Cloud chat client for the paid Chrome surface.
  *
- * Implements the "3 prompts free" tier that mirrors the web Hobby/free experience:
- *   - 3 cloud chat prompts per user, tracked in chrome.storage.local
+ * Chrome is not part of the free chat plan. Server-verified model admission and
+ * managedChatHandler's paid-plan gate run before this transport is called.
+ * This module:
  *   - Routes to POST https://agiworkforce.com/api/llm/v1/chat/completions
- *     (the Next.js API route that handles free-tier users via
- *     reserveFreeTrialPrompt — NOT the Express gateway which blocks free users)
  *   - Economy model: read from models.json taskRouting.chat (gemini-3.1-flash-lite)
  *   - Streams SSE response back via an async generator
  *   - Auth: fresh Clerk Native API token; a local-storage override exists only
  *     in development builds
- *
- * Contract with background.ts:
- *   1. Call getAuthToken() to check if a token is available
- *   2. Call getRemainingFreePrompts() to check quota — if 0, caller should
- *      show the upgrade modal instead of attempting a call
- *   3. Call streamFreeChat(messages, token) — it decrements the local counter
- *      and yields text deltas, then a final done signal
- *   4. If the server returns 403 (quota_exceeded) the local counter is already
- *      at 0 so the next call will short-circuit without a network round-trip
- *
- * QUOTA LOGIC:
- *   The server is the authoritative gate (reserveFreeTrialPrompt DB write).
- *   The local counter is a client-side cache that avoids unnecessary round-trips
- *   and drives the remaining-count UI. On a 403 from the server, we snap the
- *   local count to 0. On success we decrement locally. On network error or 5xx
- *   we do NOT decrement (server did not consume the quota slot).
  *
  * MODEL:
  *   Read from the canonical model catalog via getRoutingSlotModel('general_fast')
@@ -34,7 +17,7 @@
  * SECURITY:
  *   - Only posts to FREE_TRIAL_GATEWAY — validated before every fetch
  *   - Bearer token never logged
- *   - Input capped at FREE_TRIAL_MAX_INPUT_CHARS to bound server cost
+ *   - Request envelopes are bounded before crossing the privileged gateway
  */
 
 import { getRoutingSlotModel, MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
@@ -52,16 +35,10 @@ import { getFreshClerkToken, signOutClerk } from './clerkAuth';
 export const FREE_TRIAL_MODEL: string = getRoutingSlotModel('general_fast');
 
 /**
- * Number of free prompts per signed-in user.
- * Mirrors web surface apps/web/lib/free-trial-config.ts FREE_TRIAL_PROMPT_LIMIT = 3.
+ * Character cap on the Chrome request envelope to bound renderer and transport
+ * memory. This is a surface safety bound, not a free-plan usage counter.
  */
-export const FREE_TRIAL_PROMPT_LIMIT = 3;
-
-/**
- * Character cap on the total user message to bound server cost per free prompt.
- * Mirrors web FREE_TRIAL_MAX_INPUT_CHARS = 32_000.
- */
-export const FREE_TRIAL_MAX_INPUT_CHARS = 32_000;
+export const MANAGED_CHAT_MAX_INPUT_CHARS = 32_000;
 
 /** Bound the request envelope before it reaches the privileged web route. */
 export const MANAGED_CHAT_MAX_MESSAGES = 100;
@@ -82,9 +59,6 @@ const MANAGED_CHAT_MAX_ERROR_BODY_CHARS = 65_536;
 export const FREE_TRIAL_GATEWAY = 'https://agiworkforce.com';
 export const FREE_TRIAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/chat/completions`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
-
-/** chrome.storage.local key for the local free-prompt counter */
-export const FREE_PROMPTS_USED_KEY = 'agi_free_prompts_used';
 
 /** Retired hand-pasted token keys retained only for cleanup during sign-out. */
 const SESSION_TOKEN_KEY = 'agi_clerk_session_token';
@@ -129,6 +103,7 @@ export async function getManagedModelAccess(
     headers: {
       Authorization: `Bearer ${token}`,
       'X-Requested-With': 'XMLHttpRequest',
+      'X-AGI-Surface': 'chrome',
     },
     signal,
   });
@@ -277,74 +252,6 @@ export async function clearAuthToken(): Promise<void> {
   }
 }
 
-// ─── Quota helpers ────────────────────────────────────────────────────────────
-
-/**
- * Read the local free-prompt counter.
- * Returns how many prompts have been USED (0–3).
- * Local counter is a cache — server is authoritative on 403.
- */
-export async function getFreePromptsUsed(): Promise<number> {
-  try {
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      const result = await chrome.storage.local.get([FREE_PROMPTS_USED_KEY]);
-      const raw = result[FREE_PROMPTS_USED_KEY];
-      if (typeof raw === 'number' && raw >= 0) return Math.min(raw, FREE_TRIAL_PROMPT_LIMIT);
-    }
-  } catch {
-    // storage unavailable
-  }
-  return 0;
-}
-
-/** Number of free prompts the user has remaining. */
-export async function getRemainingFreePrompts(): Promise<number> {
-  const used = await getFreePromptsUsed();
-  return Math.max(0, FREE_TRIAL_PROMPT_LIMIT - used);
-}
-
-// Multiple side-panel/background requests can complete concurrently. Serialize
-// the local cache update so two successful responses cannot both read `0` and
-// persist `1`. The server remains the authoritative quota owner.
-let quotaMutationQueue: Promise<void> = Promise.resolve();
-
-function enqueueQuotaMutation(operation: () => Promise<void>): Promise<void> {
-  const result = quotaMutationQueue.then(operation);
-  quotaMutationQueue = result.catch(() => undefined);
-  return result;
-}
-
-/** Increment the local free-prompt counter (called on successful server response). */
-async function incrementPromptsUsed(): Promise<void> {
-  await enqueueQuotaMutation(async () => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        const result = await chrome.storage.local.get([FREE_PROMPTS_USED_KEY]);
-        const current =
-          typeof result[FREE_PROMPTS_USED_KEY] === 'number' ? result[FREE_PROMPTS_USED_KEY] : 0;
-        await chrome.storage.local.set({
-          [FREE_PROMPTS_USED_KEY]: Math.min((current as number) + 1, FREE_TRIAL_PROMPT_LIMIT),
-        });
-      }
-    } catch {
-      // Cache drift is recoverable because the server owns admission.
-    }
-  });
-}
-
-/** Snap the local counter to the limit (called on 403 quota_exceeded). */
-async function snapPromptCountToLimit(): Promise<void> {
-  await enqueueQuotaMutation(async () => {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        await chrome.storage.local.set({ [FREE_PROMPTS_USED_KEY]: FREE_TRIAL_PROMPT_LIMIT });
-      }
-    } catch {
-      // Cache drift is recoverable because the server owns admission.
-    }
-  });
-}
-
 // ─── Message shape ────────────────────────────────────────────────────────────
 
 export type FreeTrialContentPart =
@@ -435,7 +342,7 @@ function assertMessageShape(message: FreeTrialMessage): void {
  */
 function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMessage[] {
   const window = selectBoundedMessageWindow(messages);
-  let remaining = FREE_TRIAL_MAX_INPUT_CHARS;
+  let remaining = MANAGED_CHAT_MAX_INPUT_CHARS;
   const reversed: FreeTrialMessage[] = [];
   let attachmentCount = 0;
   let attachmentBytes = 0;
@@ -501,8 +408,6 @@ export type FreeTrialChunk =
 export interface ManagedChatStreamOptions {
   /** Concrete canonical model selected by the shared router. */
   model?: string;
-  /** Authenticated account tier; controls only the local free-quota display cache. */
-  subscriptionTier?: string;
   extendedThinking?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -691,10 +596,9 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
 function bodyIndicatesFreeQuota(body: string): boolean {
   const normalized = body.toLowerCase();
   return (
-    normalized.includes('limit_reached') ||
-    normalized.includes('free_trial') ||
-    normalized.includes('prompt_limit') ||
-    normalized.includes('upgrade')
+    normalized.includes('free_trial_token_budget_reached') ||
+    normalized.includes('insufficient_quota') ||
+    normalized.includes('quota_exceeded')
   );
 }
 
@@ -728,15 +632,14 @@ async function readBoundedErrorBody(response: Response): Promise<string> {
 // ─── Core streaming call ──────────────────────────────────────────────────────
 
 /**
- * Stream a free-trial chat completion from the AGI web gateway.
+ * Stream a paid Chrome Managed Cloud completion from the AGI web gateway.
  *
  * Yields FreeTrialChunk items:
  *   { type: 'text', text }  — incremental content delta
- *   { type: 'done' }        — stream complete, prompt counted
- *   { type: 'error', ... }  — terminal error, prompt NOT counted
+ *   { type: 'done' }        — stream complete
+ *   { type: 'error', ... }  — terminal error
  *
- * The server is the authoritative quota/plan gate. The local counter is only a
- * display cache and must never prevent a paid account from reaching the route.
+ * The server is the authoritative quota and plan gate.
  */
 export async function* streamFreeChat(
   messages: FreeTrialMessage[],
@@ -745,9 +648,6 @@ export async function* streamFreeChat(
 ): AsyncGenerator<FreeTrialChunk> {
   const options = normalizeStreamOptions(optionsOrSignal);
   const model = (options.model ?? FREE_TRIAL_MODEL).trim();
-  const tracksFreePromptCache =
-    options.subscriptionTier === undefined ||
-    ['free', 'hobby'].includes(options.subscriptionTier.trim().toLowerCase());
   if (!token.trim()) {
     yield { type: 'error', message: 'Sign in to use AGI Cloud chat.', code: 'auth_required' };
     return;
@@ -813,12 +713,12 @@ export async function* streamFreeChat(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'X-Requested-With': 'XMLHttpRequest',
+          'X-AGI-Surface': 'chrome',
         },
         body: JSON.stringify({
           model,
           messages: cappedMessages,
           stream: true,
-          max_tokens: 2000,
           ...(options.extendedThinking ? { thinking_mode: true } : {}),
         }),
         signal: controller.signal,
@@ -841,7 +741,6 @@ export async function* streamFreeChat(
       const isQuotaExceeded = bodyIndicatesFreeQuota(body);
 
       if (isQuotaExceeded) {
-        if (tracksFreePromptCache) await snapPromptCountToLimit();
         yield {
           type: 'error',
           message: 'Usage limit reached. Upgrade or wait for your limit to reset.',
@@ -904,9 +803,6 @@ export async function* streamFreeChat(
       for (const data of dataEvents) {
         const frame = parseSseData(data);
         if (frame.error) {
-          if (frame.error.code === 'quota_exceeded' && tracksFreePromptCache) {
-            await snapPromptCountToLimit();
-          }
           chunks.push(frame.error);
           return { chunks, terminal: true };
         }
@@ -932,7 +828,6 @@ export async function* streamFreeChat(
             });
             return { chunks, terminal: true };
           }
-          if (tracksFreePromptCache) await incrementPromptsUsed();
           chunks.push({ type: 'done' });
           return { chunks, terminal: true };
         }

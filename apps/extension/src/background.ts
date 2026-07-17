@@ -2770,7 +2770,6 @@ async function handleChatMessage(
       if (!activeStream.cancelNotified) {
         broadcastChunk('', true, undefined, result.routing);
       }
-      chrome.runtime.sendMessage({ type: 'FREE_PROMPTS_UPDATED' }).catch(() => {});
       return result;
     }
 

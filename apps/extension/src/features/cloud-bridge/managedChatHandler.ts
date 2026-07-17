@@ -10,6 +10,7 @@ import {
   type ManagedModelAccess,
 } from './freeTrialClient';
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
+import { isFreeManagedTier } from './managedModelPicker';
 
 const MAX_MESSAGE_CHARS = 32_000;
 const MAX_PAGE_CONTEXT_CHARS = 64_000;
@@ -224,6 +225,15 @@ export async function executeChromeManagedChat(
     };
   }
 
+  if (isFreeManagedTier(access.subscriptionTier)) {
+    return {
+      status: 'error',
+      code: 'plan_required',
+      message:
+        'Chrome access requires a paid plan. Free chat is available on Web, Mobile, and Desktop.',
+    };
+  }
+
   // Quick is a per-turn routing override. It must not mutate the user's saved
   // picker selection, and it still passes through authenticated server
   // admission before the canonical router chooses a concrete model.
@@ -287,7 +297,6 @@ export async function executeChromeManagedChat(
 
   const streamOptions: ManagedChatStreamOptions = {
     model: routing.modelKey,
-    subscriptionTier: access.subscriptionTier,
     extendedThinking: request.extendedThinking,
     signal: request.signal,
   };

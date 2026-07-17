@@ -181,6 +181,61 @@ describe('loadUserConnectorToolDefs — remote connector gate', () => {
   });
 });
 
+describe('loadUserConnectorToolDefs — custom remote MCP plan limit', () => {
+  it('offers only one custom remote MCP when the caller applies the free-plan limit', async () => {
+    mockIsGitHubAppConfigured.mockReturnValue(false);
+    const rows = [
+      {
+        id: 'row-1',
+        short_id: 'aaaaaaaaaa',
+        name: 'First',
+        url: 'https://first.mcp.example/mcp',
+        transport: 'streamable-http',
+        auth_header_enc: null,
+      },
+      {
+        id: 'row-2',
+        short_id: 'bbbbbbbbbb',
+        name: 'Second',
+        url: 'https://second.mcp.example/mcp',
+        transport: 'streamable-http',
+        auth_header_enc: null,
+      },
+    ];
+    mockNeonQuery.mockImplementation((sql: string) => {
+      if (sql.includes('user_custom_connectors')) return Promise.resolve(rows);
+      return Promise.resolve([]);
+    });
+    mockBuildMcpToolCatalog.mockImplementation(async (configs: Record<string, unknown>) => {
+      const serverName = Object.keys(configs)[0]!;
+      return {
+        catalog: {
+          version: 1,
+          generatedAt: 0,
+          servers: {},
+          tools: [
+            {
+              serverName,
+              safeServerName: serverName,
+              toolName: 'search',
+              description: 'search',
+              inputSchema: { type: 'object' },
+              fallbackDescription: 'search',
+            },
+          ],
+        },
+        handles: [],
+      };
+    });
+
+    const defs = await loadUserConnectorToolDefs('user-1', { customConnectorLimit: 1 });
+
+    expect(defs.map((definition) => definition.qualifiedName)).toEqual([
+      'mcp__custom-aaaaaaaaaa__search',
+    ]);
+  });
+});
+
 describe('makeUserConnectorExecutor', () => {
   it('executes a github diff tool via the GitHub integration', async () => {
     stubDb({ installations: [{ installation_id: 42, account_login: 'acme' }] });
@@ -290,34 +345,36 @@ describe('makeUserConnectorExecutor', () => {
       isError: false,
       content: [{ type: 'text', text: 'credential owner: B' }],
     });
-    mockBuildMcpToolCatalog.mockImplementation(async (configs: Record<string, { url?: string }>) => {
-      const config = Object.values(configs)[0];
-      const isUserA = config?.url === 'https://a.mcp.example/mcp';
-      return {
-        catalog: {
-          version: 1,
-          generatedAt: 0,
-          servers: {},
-          tools: [
+    mockBuildMcpToolCatalog.mockImplementation(
+      async (configs: Record<string, { url?: string }>) => {
+        const config = Object.values(configs)[0];
+        const isUserA = config?.url === 'https://a.mcp.example/mcp';
+        return {
+          catalog: {
+            version: 1,
+            generatedAt: 0,
+            servers: {},
+            tools: [
+              {
+                serverName: `custom-${sameShortId}`,
+                safeServerName: `custom-${sameShortId}`,
+                toolName: 'whoami',
+                description: isUserA ? 'User A private tool' : 'User B private tool',
+                inputSchema: { type: 'object' },
+                fallbackDescription: 'identify credential owner',
+              },
+            ],
+          },
+          handles: [
             {
               serverName: `custom-${sameShortId}`,
-              safeServerName: `custom-${sameShortId}`,
-              toolName: 'whoami',
-              description: isUserA ? 'User A private tool' : 'User B private tool',
-              inputSchema: { type: 'object' },
-              fallbackDescription: 'identify credential owner',
+              callTool: isUserA ? callAsA : callAsB,
+              close: vi.fn(),
             },
           ],
-        },
-        handles: [
-          {
-            serverName: `custom-${sameShortId}`,
-            callTool: isUserA ? callAsA : callAsB,
-            close: vi.fn(),
-          },
-        ],
-      };
-    });
+        };
+      },
+    );
     mockConnectMcpServer.mockResolvedValue({
       serverName: `custom-${sameShortId}`,
       callTool: callAsB,
@@ -326,11 +383,7 @@ describe('makeUserConnectorExecutor', () => {
 
     const userADefs = await loadUserConnectorToolDefs('user-a');
     const userBDefs = await loadUserConnectorToolDefs('user-b');
-    const result = await makeUserConnectorExecutor('user-b')(
-      `custom-${sameShortId}`,
-      'whoami',
-      {},
-    );
+    const result = await makeUserConnectorExecutor('user-b')(`custom-${sameShortId}`, 'whoami', {});
 
     expect(userADefs[0]?.description).toBe('User A private tool');
     expect(userBDefs[0]?.description).toBe('User B private tool');
