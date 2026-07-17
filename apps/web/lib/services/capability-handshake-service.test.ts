@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { EffectiveCapabilityDocumentSchema } from '@agiworkforce/cloud-contracts';
+import { CAPABILITY_DOCUMENT_VERSION_UNRESOLVED } from '@agiworkforce/types';
 import {
   ME_CAPABILITY_HANDSHAKE_VERSION,
   buildMeCapabilityHandshake,
+  isMeCapabilityHandshakeStale,
   toWireCapabilityHandshake,
 } from './capability-handshake-service';
 
@@ -14,10 +16,13 @@ const BASE_INPUT = {
 };
 
 describe('buildMeCapabilityHandshake — document identity', () => {
-  it('carries sessionId=userId, the handshake logic version, and the injected computedAt', () => {
+  it('carries sessionId=userId, a schema-prefixed CONTENT version, and the injected computedAt', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
     expect(document.sessionId).toBe('user_1');
-    expect(document.version).toBe(ME_CAPABILITY_HANDSHAKE_VERSION);
+    // W5 versioning tail: no longer the bare schema constant — the version
+    // is `<schema>#<content-hash>` so input-layer changes are detectable.
+    expect(document.version).not.toBe(ME_CAPABILITY_HANDSHAKE_VERSION);
+    expect(document.version.startsWith(`${ME_CAPABILITY_HANDSHAKE_VERSION}#`)).toBe(true);
     expect(document.computedAt).toBe('2026-07-15T00:00:00.000Z');
   });
 
@@ -162,5 +167,53 @@ describe('toWireCapabilityHandshake', () => {
     expect(wire.deniedBy).toEqual(document.deniedBy);
     expect(wire.sessionId).toBe(document.sessionId);
     expect(wire.sources).toEqual(document.sources);
+  });
+});
+
+describe('capability-document versioning + staleness (W5 tail — replaces placeholder versions)', () => {
+  it('is stable across identical inputs (idempotent recomputation, no counter storage)', () => {
+    const a = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+    const b = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+    expect(a.version).toBe(b.version);
+  });
+
+  it('identifies POLICY content, not the user: same tier/surface/flags hash identically across users', () => {
+    const a = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+    const b = buildMeCapabilityHandshake({ ...BASE_INPUT, userId: 'user_2', tier: 'pro' });
+    expect(a.version).toBe(b.version);
+    expect(a.sessionId).not.toBe(b.sessionId);
+  });
+
+  it('bumps on a tier change, a surface change, and a deployment-flag flip', () => {
+    const base = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' }).version;
+
+    expect(buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free' }).version).not.toBe(base);
+    expect(
+      buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro', surface: 'desktop' }).version,
+    ).not.toBe(base);
+    expect(
+      buildMeCapabilityHandshake({
+        ...BASE_INPUT,
+        tier: 'pro',
+        cloudExecutionDeploymentEnabled: false,
+      }).version,
+    ).not.toBe(base);
+  });
+
+  it('staleness: a snapshot taken at version N is fresh against N and stale against N+1', () => {
+    const atPro = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+    const snapshotRef = { version: atPro.version };
+
+    expect(isMeCapabilityHandshakeStale(snapshotRef, atPro)).toBe(false);
+
+    const afterUpgrade = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'max' });
+    expect(isMeCapabilityHandshakeStale(snapshotRef, afterUpgrade)).toBe(true);
+  });
+
+  it('the unresolved session-label placeholder is ALWAYS stale (forces a re-handshake)', () => {
+    const current = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'pro' });
+    expect(
+      isMeCapabilityHandshakeStale({ version: CAPABILITY_DOCUMENT_VERSION_UNRESOLVED }, current),
+    ).toBe(true);
   });
 });

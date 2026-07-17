@@ -12,7 +12,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildEffectiveCapabilityDocument,
+  CAPABILITY_DOCUMENT_VERSION_UNRESOLVED,
+  computeCapabilityDocumentVersion,
   evaluateCapabilityAdmission,
+  isCapabilityDocumentStale,
   type CapabilityLayerGrant,
   type EffectiveCapabilityDocument,
   type PlatformCapability,
@@ -226,5 +229,85 @@ describe('evaluateCapabilityAdmission', () => {
     expect(result.admitted).toBe(true);
     if (!result.admitted) throw new Error('expected admission');
     expect(result.grantedRequirementIds).toEqual([]);
+  });
+});
+
+describe('capability-document versioning (W5 tail — real versions, not placeholders)', () => {
+  const baseLayers = () => ({
+    model: grant('model', 'models.json@9.1.0', ['canUseWebSearch', 'canUseVoice']),
+    tier: grant('tier', 'tier:pro', ['canUseWebSearch', 'canUseVoice']),
+    surface: grant('surface', 'surface:web', ['canUseWebSearch', 'canUseVoice']),
+    settings: grant('settings', 'settings:none-configured', ['canUseWebSearch', 'canUseVoice']),
+  });
+
+  it('is deterministic: identical inputs produce the identical version', () => {
+    const a = computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: baseLayers() });
+    const b = computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: baseLayers() });
+    expect(a).toBe(b);
+  });
+
+  it('is grant-order independent (a Set built in a different order hashes the same)', () => {
+    const reordered = {
+      ...baseLayers(),
+      tier: grant('tier', 'tier:pro', ['canUseVoice', 'canUseWebSearch']),
+    };
+    expect(computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: reordered })).toBe(
+      computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: baseLayers() }),
+    );
+  });
+
+  it('carries the schema tag as a readable prefix', () => {
+    const version = computeCapabilityDocumentVersion({
+      schemaVersion: 'me-handshake-v1',
+      layers: baseLayers(),
+    });
+    expect(version.startsWith('me-handshake-v1#')).toBe(true);
+  });
+
+  it('bumps on ANY input-layer change: a grant-set change, a sourceId change, or a schema change', () => {
+    const base = computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: baseLayers() });
+
+    const grantChanged = {
+      ...baseLayers(),
+      tier: grant('tier', 'tier:pro', ['canUseWebSearch']), // voice revoked
+    };
+    expect(
+      computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: grantChanged }),
+    ).not.toBe(base);
+
+    const sourceChanged = {
+      ...baseLayers(),
+      model: grant('model', 'models.json@9.2.0', ['canUseWebSearch', 'canUseVoice']),
+    };
+    expect(
+      computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: sourceChanged }),
+    ).not.toBe(base);
+
+    expect(
+      computeCapabilityDocumentVersion({ schemaVersion: 'v2', layers: baseLayers() }),
+    ).not.toBe(base);
+  });
+
+  it('detects staleness: same version fresh, different version stale', () => {
+    const current = computeCapabilityDocumentVersion({ schemaVersion: 'v1', layers: baseLayers() });
+    const next = computeCapabilityDocumentVersion({
+      schemaVersion: 'v1',
+      layers: { ...baseLayers(), tier: grant('tier', 'tier:max', ['canUseWebSearch']) },
+    });
+
+    expect(isCapabilityDocumentStale({ version: current }, current)).toBe(false);
+    expect(isCapabilityDocumentStale({ version: current }, next)).toBe(true);
+  });
+
+  it('treats the unresolved placeholder as ALWAYS stale (never silently reused)', () => {
+    expect(
+      isCapabilityDocumentStale(
+        { version: CAPABILITY_DOCUMENT_VERSION_UNRESOLVED },
+        CAPABILITY_DOCUMENT_VERSION_UNRESOLVED,
+      ),
+    ).toBe(true);
+    expect(
+      isCapabilityDocumentStale({ version: CAPABILITY_DOCUMENT_VERSION_UNRESOLVED }, 'v1#0'),
+    ).toBe(true);
   });
 });

@@ -8,7 +8,7 @@
  * is the literal fix for six-app finding A ("no effective-capability
  * handshake" / capability honesty).
  *
- * ## Fit with `packages/ai/routing` admission (read-only reference; NOT wired in)
+ * ## Fit with `packages/ai/routing` admission (WIRED 2026-07-17 — see below)
  *
  * `packages/ai/routing/src/auto.ts` `resolveAutoRoute` already returns a
  * discriminated `AutoRouteDecision` (`SelectedAutoRoute | UnavailableAutoRoute`)
@@ -18,18 +18,21 @@
  * layers this module composes (`model`) and only for intrinsic
  * model modality, not product capability, tier, surface, or settings.
  *
- * The intended future call shape (stage 2, out of this module's scope):
- * a routing-admission caller builds `requirements` from
- * `AutoTaskPolicy`/`AutoRoutingRequest.requiredCapabilities` (translated
- * onto `PlatformCapability` ids), calls `evaluateCapabilityAdmission`
- * alongside `evaluateEligibility`, and on `{ admitted: false }` folds
- * `rejected[].capabilityId` / `.reason` into the existing
- * `UnavailableAutoRoute.reasons: string[]` — same error-reporting shape
- * routing already has, now backed by a typed, four-layer-aware source
- * instead of the model-only check. This module does not import from
+ * The wired call shape (landed 2026-07-17, `packages/ai/routing/src/auto.ts`
+ * `evaluateSessionCapabilityAdmission`): `resolveAutoRoute` accepts the
+ * session's `capabilityDocument` + already-translated `PlatformCapability`
+ * `capabilityRequirements` (translation onto the shared vocabulary remains
+ * the SESSION-OWNING CALLER's job — routing never invents the
+ * intrinsic→platform mapping), calls `evaluateCapabilityAdmission` once per
+ * resolution, and on `{ admitted: false }` — or on mandatory requirements
+ * with NO document (fail-closed) — returns
+ * `UnavailableAutoRoute { code: 'mandatory_capability_unavailable' }` with
+ * `rejected[].capabilityId` / `.reason` / `.deniedByLayers` folded into the
+ * existing `reasons: string[]` — same error-reporting shape routing already
+ * had, now backed by this typed, four-layer-aware source in addition to the
+ * model-only intrinsic check. This module still does not import from
  * `@agiworkforce/routing` (that would invert the existing dependency
- * direction: routing already depends on `@agiworkforce/types`) and does not
- * modify `packages/ai/routing` — see the W5 stage-1 dispatch scope.
+ * direction: routing already depends on `@agiworkforce/types`).
  *
  * @module capability-handshake/evaluator
  */

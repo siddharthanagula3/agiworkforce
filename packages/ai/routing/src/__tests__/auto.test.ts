@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getAllowedModelsForTier } from '@agiworkforce/types';
+import {
+  buildEffectiveCapabilityDocument,
+  getAllowedModelsForTier,
+  type PlatformCapability,
+} from '@agiworkforce/types';
 import { resolveAutoRoute } from '../auto';
 
 describe('resolveAutoRoute', () => {
@@ -423,6 +427,131 @@ describe('resolveAutoRoute', () => {
       status: 'selected',
       modelKey: 'sonar-deep-research',
       reason: 'preferred_slot',
+    });
+  });
+});
+
+describe('resolveAutoRoute session capability admission (capability-handshake integration)', () => {
+  /**
+   * Session document where model/surface/settings grant both ids but the
+   * TIER layer withholds `canUseDeepResearch` — the four-layer intersection
+   * denies it with layer provenance, while `canUseWebSearch` stays granted.
+   */
+  function sessionDocument() {
+    return buildEffectiveCapabilityDocument({
+      sessionId: 'sess_routing',
+      version: 'v1#test',
+      computedAt: '2026-07-17T00:00:00.000Z',
+      layers: {
+        model: {
+          layer: 'model',
+          sourceId: 'models.json@test',
+          granted: new Set<PlatformCapability>(['canUseWebSearch', 'canUseDeepResearch']),
+        },
+        tier: {
+          layer: 'tier',
+          sourceId: 'tier:pro',
+          granted: new Set<PlatformCapability>(['canUseWebSearch']),
+        },
+        surface: {
+          layer: 'surface',
+          sourceId: 'surface:web',
+          granted: new Set<PlatformCapability>(['canUseWebSearch', 'canUseDeepResearch']),
+        },
+        settings: {
+          layer: 'settings',
+          sourceId: 'settings:none-configured',
+          granted: new Set<PlatformCapability>(['canUseWebSearch', 'canUseDeepResearch']),
+        },
+      },
+    });
+  }
+
+  it('selects normally when the session document grants every mandatory requirement', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto-premium',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      capabilityDocument: sessionDocument(),
+      capabilityRequirements: [{ capabilityId: 'canUseWebSearch', strength: 'mandatory' }],
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: 'claude-opus-4.8',
+      effectiveProfile: 'premium',
+    });
+  });
+
+  it('refuses the whole resolution when a tier-admissible slot exists but a mandatory capability is session-denied (tier+capability compose)', () => {
+    // Identical request to the passing premium-coding selection above —
+    // the ONLY difference is the session-mandatory requirement the
+    // document's tier layer withholds. The model cannot weaken it.
+    const result = resolveAutoRoute({
+      selection: 'auto-premium',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      capabilityDocument: sessionDocument(),
+      capabilityRequirements: [
+        {
+          capabilityId: 'canUseDeepResearch',
+          strength: 'mandatory',
+          reason: 'task requires deep research',
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      code: 'mandatory_capability_unavailable',
+      taskType: 'coding',
+    });
+    if (result.status !== 'unavailable') throw new Error('expected unavailable');
+    expect(result.reasons[0]).toContain('canUseDeepResearch');
+    expect(result.reasons[0]).toContain('tier');
+    expect(result.reasons[0]).toContain('task requires deep research');
+  });
+
+  it('fails closed when mandatory requirements are declared without a session document', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto-premium',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      capabilityRequirements: [{ capabilityId: 'canUseWebSearch', strength: 'mandatory' }],
+    });
+
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      code: 'mandatory_capability_unavailable',
+    });
+    if (result.status !== 'unavailable') throw new Error('expected unavailable');
+    expect(result.reasons[0]).toContain('no session capability document');
+  });
+
+  it('never blocks on optional requirements — denied-or-undocumented optionals still select', () => {
+    const deniedOptional = resolveAutoRoute({
+      selection: 'auto-premium',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      capabilityDocument: sessionDocument(),
+      capabilityRequirements: [{ capabilityId: 'canUseDeepResearch', strength: 'optional' }],
+    });
+    expect(deniedOptional).toMatchObject({ status: 'selected', modelKey: 'claude-opus-4.8' });
+
+    const optionalWithoutDocument = resolveAutoRoute({
+      selection: 'auto-premium',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      capabilityRequirements: [{ capabilityId: 'canUseWebSearch', strength: 'optional' }],
+    });
+    expect(optionalWithoutDocument).toMatchObject({
+      status: 'selected',
+      modelKey: 'claude-opus-4.8',
     });
   });
 });
