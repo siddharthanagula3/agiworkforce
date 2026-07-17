@@ -54,10 +54,16 @@ vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
+vi.mock('@/lib/services/free-trial-service', () => ({
+  recordFreeTrialTokens: vi.fn(() => Promise.resolve()),
+}));
 
 import { buildNonStreamResponse } from '../lib/response-builder';
 import type { ProcessedRequest } from '../lib/request-processor';
 import { CreditService } from '@/lib/services/credit-service';
+import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+
+const mockRecordFreeTrialTokens = recordFreeTrialTokens as ReturnType<typeof vi.fn>;
 
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
@@ -179,6 +185,43 @@ describe('buildNonStreamResponse golden fixture', () => {
         cache: { tokens_saved: 0, cost_saved_cents: 0 },
       },
     });
+  });
+
+  it('records actual free-tier usage without publishing a numeric budget', async () => {
+    const response = await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'claude-opus-4-8',
+        content: 'Hello there',
+        finishReason: 'stop',
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120,
+      },
+      makeProcessed({
+        estimatedCostCents: 0,
+        freeTrial: {
+          kind: 'free_trial',
+          userId: 'user-free',
+          requestId: 'req-test-001',
+        },
+      } as any),
+      'user-free',
+      'token-free',
+    );
+
+    expect(mockRecordFreeTrialTokens).toHaveBeenCalledWith({
+      userId: 'user-free',
+      requestId: 'req-test-001',
+      tokens: 120,
+    });
+    expect(response.headers.has('x-agi-trial-tokens-used')).toBe(false);
+    expect(response.headers.has('x-agi-trial-tokens-budget')).toBe(false);
+
+    const json = await response.json();
+    expect(json.x_agi_workforce.trial).toEqual({ type: 'free_trial' });
+    expect(json.x_agi_workforce.trial).not.toHaveProperty('tokens_used');
+    expect(json.x_agi_workforce.trial).not.toHaveProperty('token_budget');
   });
 
   it('includes citations and search_results only when non-empty (Anthropic web_search)', async () => {

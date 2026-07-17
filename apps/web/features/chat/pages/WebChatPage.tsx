@@ -100,7 +100,7 @@ import { isStaleActiveConversation } from '../lib/staleActiveConversation';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
-import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
+import { useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
 import {
   useManagedCloudProjects,
@@ -321,10 +321,8 @@ export default function WebChatPage() {
       ? freeTrialModelId
       : selectedModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
-  const trialPromptsUsed = useFreeTrialStore((s) => s.promptsUsed);
-  const trialPromptLimit = useFreeTrialStore((s) => s.promptLimit);
-  const trialPromptsRemaining = getFreeTrialRemaining(trialPromptsUsed, trialPromptLimit);
-  const isTrialExhausted = isWebsiteFreeTrial && trialPromptsRemaining <= 0;
+  const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
+  const isTrialExhausted = isWebsiteFreeTrial && freeUsageLimitReached;
 
   useEffect(() => {
     if (!isWebsiteFreeTrial) return;
@@ -2216,8 +2214,7 @@ export default function WebChatPage() {
                     projectPicker={composerProjectPicker}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
-                      promptsUsed: trialPromptsUsed,
-                      promptLimit: trialPromptLimit,
+                      limitReached: freeUsageLimitReached,
                     }}
                   />
                 </div>
@@ -2271,8 +2268,7 @@ export default function WebChatPage() {
                     onGenerateImage={handleGenerateImage}
                     freeTrial={{
                       enabled: isWebsiteFreeTrial,
-                      promptsUsed: trialPromptsUsed,
-                      promptLimit: trialPromptLimit,
+                      limitReached: freeUsageLimitReached,
                     }}
                   />
                 </div>

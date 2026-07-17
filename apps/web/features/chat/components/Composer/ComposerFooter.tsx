@@ -44,33 +44,6 @@ import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 
 /**
- * Returns a human-readable daily usage label for free-tier users.
- * null when there is nothing worth showing (paid tier, no limit set, or
- * usage is comfortably low).
- */
-function useDailyUsageLabel(): string | null {
-  const tier = useBillingStore((s) => s.subscription?.tier ?? 'free');
-  const dailyUsage_cents = useBillingStore((s) => s.dailyUsage_cents);
-  const dailyLimit_cents = useBillingStore((s) => s.dailyLimit_cents);
-
-  if (tier !== 'free') return null;
-  if (!dailyLimit_cents || dailyLimit_cents <= 0) return null;
-
-  const pct = dailyUsage_cents / dailyLimit_cents;
-  if (pct < 0.8) return null;
-
-  const remainingCents = Math.max(0, dailyLimit_cents - dailyUsage_cents);
-  if (remainingCents <= 0) return 'Daily limit reached';
-
-  // Approximate remaining messages assuming ~$0.01 average cost per message
-  const approxMessages = Math.floor(remainingCents / 1);
-  if (approxMessages <= 5) {
-    return `~${approxMessages} message${approxMessages !== 1 ? 's' : ''} left today`;
-  }
-  return 'Approaching daily limit';
-}
-
-/**
  * Map a model-store providerKey (from models.json) to a ProviderId
  * as defined in PROVIDER_DISPLAY. Most keys are 1:1; managed_cloud
  * maps to agi-cloud.
@@ -529,8 +502,6 @@ interface ComposerFooterProps {
   lockModelSelector?: boolean;
   /** Controls whether the response style selector is visible. */
   showStyleSelector?: boolean;
-  /** Free-trial prompt usage label, e.g. "2/3 prompts left". */
-  trialUsageLabel?: string | null;
   /**
    * Inline mode: render ONLY the model/style selector cluster (no hint, budget,
    * or usage rows) so it can be dropped directly into the composer's control
@@ -547,7 +518,6 @@ export function ComposerFooter({
   onUpgradeRequest,
   lockModelSelector = false,
   showStyleSelector = true,
-  trialUsageLabel,
   inline = false,
   className,
 }: ComposerFooterProps) {
@@ -618,8 +588,6 @@ export function ComposerFooter({
 
   const lockedDisplayModel =
     AVAILABLE_MODELS.find((model) => model.id === getBestAutoModeForTier('free')) ?? selectedModel;
-  const dailyUsageLabel = useDailyUsageLabel();
-  const usageLabel = trialUsageLabel ?? dailyUsageLabel;
 
   // Partition into recommended / more, respecting current tier and search
   const { recommended, more, isSearching } = partitionModels(AVAILABLE_MODELS, tier, searchQuery);
@@ -713,29 +681,6 @@ export function ComposerFooter({
     >
       {/* Budget display · renders only when tokens have been used */}
       {!inline && <BudgetTrackerDisplay className="mx-1" />}
-
-      {/* Usage label · trial prompt count takes precedence over daily-cost hints. */}
-      {!inline && usageLabel && (
-        <div className="flex items-center gap-1.5 px-1">
-          <span
-            className={[
-              'text-xs font-medium',
-              usageLabel === 'Daily limit reached' ? 'text-rose-400' : 'text-amber-400',
-            ].join(' ')}
-          >
-            {usageLabel}
-          </span>
-          {usageLabel === 'Daily limit reached' && (
-            <button
-              type="button"
-              onClick={onUpgradeRequest}
-              className="text-xs text-amber-400 underline underline-offset-2 hover:text-amber-300"
-            >
-              Upgrade
-            </button>
-          )}
-        </div>
-      )}
 
       <div
         className={

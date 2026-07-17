@@ -18,14 +18,10 @@ import { supportsOpenAIReasoningEffort } from '@agiworkforce/provider-protocol';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
-  FREE_TRIAL_MAX_INPUT_CHARS,
-  FREE_TRIAL_MAX_INPUT_TOKENS,
-  FREE_TRIAL_MAX_OUTPUT_TOKENS,
   FREE_TRIAL_MODEL,
-  FREE_TRIAL_PROMPT_LIMIT,
+  beginFreeTrialRequest,
   isFreeTrialRequest,
   isFreePlanTier,
-  reserveFreeTrialPrompt,
   type FreeTrialReservation,
 } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -433,8 +429,8 @@ export function appendWebSearchTool(
  * True when: the provider has no working native search path on this route
  * (`webSearchNeedsGenericTool` — openai plus every provider `appendWebSearchTool`
  * never had a branch for), the resolved model is tools-capable (unknown models
- * default to allowed), the request is streaming and non-free-trial (offer ⊆ run —
- * only that path enters the tool loop in route.ts, mirrors url_fetch/E2B below), and
+ * default to allowed), the request is streaming (offer ⊆ run — only that path
+ * enters the tool loop in route.ts, mirrors url_fetch/E2B below), and
  * a search backend is actually configured (`backendConfigured` —
  * `webSearchBackendConfigured()` in production — so the tool is never offered as a
  * promise the server can't back up).
@@ -443,7 +439,7 @@ export function shouldOfferGenericWebSearchTool({
   providerLower,
   toolsCapable,
   stream,
-  freeTrial,
+  freeTrial: _freeTrial,
   backendConfigured,
 }: {
   providerLower: string;
@@ -453,11 +449,23 @@ export function shouldOfferGenericWebSearchTool({
   backendConfigured: boolean;
 }): boolean {
   return (
-    webSearchNeedsGenericTool(providerLower) &&
-    toolsCapable &&
-    Boolean(stream) &&
-    !freeTrial &&
-    backendConfigured
+    webSearchNeedsGenericTool(providerLower) && toolsCapable && Boolean(stream) && backendConfigured
+  );
+}
+
+/**
+ * Free chat includes first-party chat capabilities, but not Deep Research,
+ * arbitrary API-defined tools, or multiple completions. Custom remote MCPs are
+ * server-owned connector tools and therefore do not pass through this check.
+ */
+export function isFreeTierBlockedAddOn(
+  request: Pick<ChatCompletionRequest, 'research' | 'tools' | 'tool_choice' | 'n' | 'web_search'>,
+): boolean {
+  return (
+    request.research === true ||
+    (request.tools?.length ?? 0) > 0 ||
+    (request.tool_choice !== undefined && request.tool_choice !== 'none') ||
+    (request.n ?? 1) > 1
   );
 }
 
@@ -771,7 +779,7 @@ export async function processRequest(
   if (freeTrialEnabled) {
     // Free = full Hobby experience, gated per-model: a prompt is never wasted on an
     // action the selected model can't perform (e.g. images to a no-vision model).
-    // The shared 3-prompt cap + per-prompt token budget (below) bound cost.
+    // Aggregate usage is gated by private server policy after this capability check.
     const trialCaps = getModelMetadataById(requestedModel)?.capabilities;
     const hasImagePart = chatRequest.messages.some((msg) =>
       Array.isArray(msg.content)
@@ -803,21 +811,14 @@ export async function processRequest(
       };
     }
 
-    // Custom client tool definitions and multiple completions stay blocked on the
-    // trial — they aren't surfaced in the composer and are token/cost abuse vectors.
-    const usesBlockedAddOn =
-      (chatRequest.tools?.length ?? 0) > 0 ||
-      (chatRequest.tool_choice !== undefined && chatRequest.tool_choice !== 'none') ||
-      (chatRequest.n ?? 1) > 1;
-
-    if (usesBlockedAddOn) {
+    if (isFreeTierBlockedAddOn(chatRequest)) {
       return {
         ok: false,
         response: NextResponse.json(
           {
             error: {
               message:
-                'The free trial does not support custom tool definitions or multiple completions. Use the built-in web search, images, or thinking instead.',
+                'Deep Research, custom API tool definitions, and multiple completions require a paid plan. Free chat still includes web search, skills, files, code execution, and extended thinking.',
               type: 'invalid_request_error',
               code: 'free_trial_feature_unavailable',
             },
@@ -826,15 +827,6 @@ export async function processRequest(
         ),
       };
     }
-
-    chatRequest.max_tokens = Math.min(
-      chatRequest.max_tokens ?? FREE_TRIAL_MAX_OUTPUT_TOKENS,
-      FREE_TRIAL_MAX_OUTPUT_TOKENS,
-    );
-    chatRequest.max_completion_tokens = Math.min(
-      chatRequest.max_completion_tokens ?? FREE_TRIAL_MAX_OUTPUT_TOKENS,
-      FREE_TRIAL_MAX_OUTPUT_TOKENS,
-    );
   }
 
   // WEB-MULTIMODAL-IMAGE-SSRF: validate every user-supplied image_url before forwarding.
@@ -1245,22 +1237,6 @@ export async function processRequest(
     };
   }
 
-  if (freeTrialEnabled && totalLength > FREE_TRIAL_MAX_INPUT_CHARS) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: `Free prompts are limited to ${FREE_TRIAL_MAX_INPUT_CHARS.toLocaleString()} input characters.`,
-            type: 'invalid_request_error',
-            code: 'free_trial_prompt_too_large',
-          },
-        },
-        { status: 413 },
-      ),
-    };
-  }
-
   // Token + cost estimation
   const rawEstimatedPromptTokens = chatRequest.messages.reduce((sum, msg) => {
     const textContent = extractTextContent(msg.content);
@@ -1277,24 +1253,6 @@ export async function processRequest(
   // can only ever reduce an over-reserve, never under-charge a legitimate request.
   const MAX_ESTIMATED_PROMPT_TOKENS = 1_000_000;
   const estimatedPromptTokens = Math.min(rawEstimatedPromptTokens, MAX_ESTIMATED_PROMPT_TOKENS);
-
-  // Per-prompt input-token cap for the free trial — abuse control so a single
-  // free prompt can't burn cost on a giant context across the 3 chances.
-  if (freeTrialEnabled && estimatedPromptTokens > FREE_TRIAL_MAX_INPUT_TOKENS) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: `Free prompts are limited to ${FREE_TRIAL_MAX_INPUT_TOKENS.toLocaleString()} input tokens. Shorten your prompt or upgrade for more.`,
-            type: 'invalid_request_error',
-            code: 'free_trial_prompt_too_large',
-          },
-        },
-        { status: 413 },
-      ),
-    };
-  }
 
   const providerLower = provider.toLowerCase();
   const effectiveEffort = resolveRequestEffort(
@@ -1339,7 +1297,7 @@ export async function processRequest(
 
   if (freeTrialEnabled) {
     estimatedCostCents = 0;
-    const trialReservationResult = await reserveFreeTrialPrompt({ userId, requestId });
+    const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });
     if (!trialReservationResult.ok) {
       return {
         ok: false,
@@ -1347,12 +1305,11 @@ export async function processRequest(
           {
             error: {
               message:
-                'You have used the 3 free Auto Economy prompts for this account. Upgrade your plan or use local/BYOK to continue.',
+                'You have reached the current free usage limit. Upgrade your plan, or switch to Local or BYOK to keep going.',
               type: 'insufficient_quota',
-              code: 'website_trial_prompt_limit_reached',
+              code: 'free_trial_token_budget_reached',
               trial: {
                 model: FREE_TRIAL_MODEL,
-                prompt_limit: FREE_TRIAL_PROMPT_LIMIT,
               },
             },
           },
@@ -1551,8 +1508,8 @@ export async function processRequest(
   // web-fetch server tool (Anthropic keeps its native tool above). Executed by the
   // agentic tool loop (SSRF-guarded, read-only — auto-approved like E2B tools).
   //
-  // Offer ⊆ run constraint (same as E2B): only offered on streaming non-free-trial
-  // requests because only that path enters the tool loop in route.ts; offering it
+  // Offer ⊆ run constraint (same as E2B): only offered on streaming requests
+  // because only that path enters the tool loop in route.ts; offering it
   // elsewhere would inject a tool_call nothing executes. Gated on the resolved
   // model's `tools` capability (unknown models default to allowed so a missing
   // catalog entry never silently drops the tool).
@@ -1560,7 +1517,6 @@ export async function processRequest(
     chatRequest.web_fetch &&
     providerLower !== 'anthropic' &&
     chatRequest.stream &&
-    !freeTrial &&
     (resolvedModelCaps?.tools ?? true)
   ) {
     resolvedTools = [...(resolvedTools ?? []), urlFetchToolDef()];
@@ -1569,25 +1525,20 @@ export async function processRequest(
   if (chatRequest.code_execution && (resolvedModelCaps?.codeExecution ?? true)) {
     // Code-execution router: tiered by provider when AGI_E2B_EXECUTION=1; native-always otherwise.
     //
-    // E2B CUT-OVER (flag ON, streaming, non-free-trial):
+    // E2B CUT-OVER (flag ON, streaming):
     //   - Anthropic + Google: free-native tier — they run code in their own sandboxes at no
     //     E2B credit cost, so we keep their provider-native tools.
     //   - OpenAI + everyone else: E2B-credit tier — routes to the platform-executed E2B sandbox
     //     (avoids OpenAI per-session fees; provides a sandbox for providers with no native exec).
     //
-    // The offer is guarded to streaming non-free-trial only (offer⊆run constraint): E2B tools
+    // The offer is guarded to streaming only (offer⊆run constraint): E2B tools
     // are platform-executed and require the agentic loop to actually run them. That loop is only
-    // entered on the streaming non-free-trial path in route.ts. Offering E2B tools on non-streaming
-    // or free-trial paths would inject a tool_call that nothing executes and stall the turn.
+    // entered on the streaming path in route.ts. Offering E2B tools on a non-streaming
+    // request would inject a tool_call that nothing executes and stall the turn.
     //
     // FLAG OFF (default): byte-for-byte the pre-P3 behavior regardless of E2B configuration.
     // See docs/plans/e2b-universal-execution-design-* for the full design rationale.
-    if (
-      e2bCutoverEnabled() &&
-      providerRoutesToE2B(providerLower) &&
-      chatRequest.stream &&
-      !freeTrial
-    ) {
+    if (e2bCutoverEnabled() && providerRoutesToE2B(providerLower) && chatRequest.stream) {
       resolvedTools = [...(resolvedTools ?? []), ...e2bExecutionToolDefs()];
     } else {
       resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];

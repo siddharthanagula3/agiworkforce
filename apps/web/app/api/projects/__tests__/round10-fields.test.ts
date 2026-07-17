@@ -24,6 +24,7 @@ const {
   mockGetClerkAuthUser,
   mockNeonQuery,
   mockNeonExecute,
+  mockGetSubscription,
 } = vi.hoisted(() => {
   const mockSingle = vi.fn();
   const mockSelect = vi.fn();
@@ -34,6 +35,7 @@ const {
   const mockGetClerkAuthUser = vi.fn();
   const mockNeonQuery = vi.fn();
   const mockNeonExecute = vi.fn();
+  const mockGetSubscription = vi.fn();
   return {
     mockFrom,
     mockUpdate,
@@ -44,6 +46,7 @@ const {
     mockGetClerkAuthUser,
     mockNeonQuery,
     mockNeonExecute,
+    mockGetSubscription,
   };
 });
 
@@ -73,6 +76,10 @@ vi.mock('@/lib/server/neon-db', () => ({
     withUser: vi.fn(() => ({})),
     dispose: vi.fn(),
   })),
+}));
+
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: mockGetSubscription },
 }));
 
 // ── Route imports (after mocks) ───────────────────────────────────────────────
@@ -123,6 +130,7 @@ function makePostRequest(body: unknown): NextRequest {
 function wireAuthAndDb() {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockNeonExecute.mockResolvedValue(1);
+  mockGetSubscription.mockResolvedValue({ plan_tier: 'free' });
 }
 
 // Set up neon query chain: db.query() resolves with row array (update/select returning *)
@@ -379,6 +387,22 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(json.project['defaultProviderMode']).toBe('ManagedGateway');
     expect(json.project['allowedSurfaces']).toEqual(['web', 'desktop', 'mobile']);
     expect(json.project['importedFrom']).toBe('openai');
+
+    const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("assert_user_resource_limit('projects'");
+    expect(params).toContain(5);
+  });
+
+  it('keeps paid project creation unlimited', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-paid' }, error: null });
+
+    const res = await POST(makePostRequest({ name: 'Paid project' }));
+
+    expect(res.status).toBe(201);
+    const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("assert_user_resource_limit('projects'");
+    expect(params).toContain(null);
   });
 
   it('POST returns 400 for invalid importedFrom enum', async () => {

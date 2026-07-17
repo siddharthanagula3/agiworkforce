@@ -50,19 +50,13 @@ describe('buildMeCapabilityHandshake — document identity', () => {
 });
 
 describe('buildMeCapabilityHandshake — tier-layer honesty (the required property)', () => {
-  it('free tier: denies search, deep research, voice, and connectors — not granted', () => {
+  it('free tier: grants search, voice, and connectors while keeping Deep Research paid', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free' });
-    expect(document.granted).not.toContain('canUseWebSearch');
+    expect(document.granted).toContain('canUseWebSearch');
     expect(document.granted).not.toContain('canUseDeepResearch');
-    expect(document.granted).not.toContain('canUseVoice');
-    expect(document.granted).not.toContain('canUseConnectors');
-    // And the denial is attributed to the tier layer specifically, not a
-    // vague "somebody denied it" — this is what makes it typed honesty
-    // rather than a silent downgrade.
-    expect(document.deniedBy.canUseWebSearch).toEqual(['tier']);
+    expect(document.granted).toContain('canUseVoice');
+    expect(document.granted).toContain('canUseConnectors');
     expect(document.deniedBy.canUseDeepResearch).toEqual(['tier']);
-    expect(document.deniedBy.canUseVoice).toEqual(['tier']);
-    expect(document.deniedBy.canUseConnectors).toEqual(['tier']);
   });
 
   it('free tier still grants universal capabilities no tier field restricts (free users can chat)', () => {
@@ -93,7 +87,7 @@ describe('buildMeCapabilityHandshake — tier-layer honesty (the required proper
     const missing = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: null });
     const bogus = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'not_a_real_tier' });
     for (const document of [missing, bogus]) {
-      expect(document.granted).not.toContain('canUseWebSearch');
+      expect(document.granted).toContain('canUseWebSearch');
       expect(document.sources.tier).toBe('tier:free');
     }
   });

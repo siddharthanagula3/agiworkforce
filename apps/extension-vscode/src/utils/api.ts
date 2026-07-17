@@ -587,6 +587,7 @@ export async function streamChatCompletion(
     Authorization: `Bearer ${apiKey}`,
     'User-Agent': 'agi-workforce-vscode/0.1.0',
     'X-Client': 'vscode-extension',
+    'X-AGI-Surface': 'vscode',
   };
 
   const requestStartTime = Date.now();
@@ -775,6 +776,7 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
         Authorization: `Bearer ${apiKey}`,
         'User-Agent': 'agi-workforce-vscode/0.1.0',
         'X-Client': 'vscode-extension',
+        'X-AGI-Surface': 'vscode',
       },
     };
 

@@ -246,6 +246,7 @@ async function attemptStream(
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
+        'X-AGI-Surface': 'mobile',
         'Idempotency-Key': createManagedChatIdempotencyKey({
           surface: 'mobile',
           purpose: path === TOOL_APPROVAL_RESUME_PATH ? 'tool-resume' : 'send',

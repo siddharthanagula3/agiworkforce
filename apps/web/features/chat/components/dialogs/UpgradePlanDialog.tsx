@@ -12,7 +12,6 @@ import {
   Button,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { FREE_TRIAL_PROMPT_LIMIT } from '@/lib/free-trial-config';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,11 +54,12 @@ const PLAN_CARDS: PlanCard[] = [
     name: BILLING_PLAN_PRICING.free.label,
     monthlyPrice: BILLING_PLAN_PRICING.free.monthlyPriceUsd,
     yearlyPrice: BILLING_PLAN_PRICING.free.yearlyPriceUsd,
-    tagline: `${FREE_TRIAL_PROMPT_LIMIT} free prompts to try AGI in your browser.`,
+    tagline: 'Core chat capabilities with a private, adaptive usage limit.',
     features: [
       'Auto Economy model routing',
-      `${FREE_TRIAL_PROMPT_LIMIT} hosted prompts (free cap)`,
-      'Web chat surface',
+      'Web search, code execution, files, skills, and voice',
+      'Up to 5 Projects and 1 custom remote MCP',
+      'Chat on Web, Mobile, and Desktop',
       'No credit card required',
     ],
   },
@@ -72,9 +72,10 @@ const PLAN_CARDS: PlanCard[] = [
     popular: true,
     features: [
       'Everything in Free',
-      'Larger hosted capacity per month',
-      'Full web search token cap',
-      'Computer-use tasks',
+      'Higher hosted capacity',
+      'Unlimited Projects',
+      'Cowork and developer agent features',
+      'Chrome and IDE extensions',
       'Advanced model routing controls',
       'Conversation branching',
     ],

@@ -15,7 +15,10 @@ import {
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
+const { mockQuery, mockGetSubscription } = vi.hoisted(() => ({
+  mockQuery: vi.fn(),
+  mockGetSubscription: vi.fn(),
+}));
 
 // vi.fn(impl) creation-time implementations survive the config-level
 // `mockReset: true` (which wipes .mockResolvedValue set in factories).
@@ -36,6 +39,10 @@ vi.mock('@/lib/server/rls-db', () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user_contract_1',
   })),
+}));
+
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: mockGetSubscription },
 }));
 
 import { GET, POST } from '../route';
@@ -102,7 +109,10 @@ describe('GET /api/projects/sync — shared cloud contract', () => {
 });
 
 describe('POST /api/projects/sync — shared cloud contract', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'free' });
+  });
 
   it('push ack parses against ProjectsSyncPushResponseSchema', async () => {
     mockQuery.mockResolvedValueOnce([
@@ -138,6 +148,9 @@ describe('POST /api/projects/sync — shared cloud contract', () => {
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('existing.server_version = incoming.base_version');
     expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
+    expect(sql).toContain('assert_user_resource_limit(');
+    expect(sql).toContain("'projects'");
+    expect(params[2]).toBe(5);
     const pushed = JSON.parse(String(params[1]));
     expect(pushed[0].baseVersion).toBe('0');
     expect(pushed[0].updatedAt).toBeUndefined();

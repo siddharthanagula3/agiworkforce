@@ -15,6 +15,8 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { SubscriptionService } from '@/lib/services/subscription-service';
+import { getProjectLimit, isUserResourceLimitError } from '@/lib/services/free-plan-entitlements';
 import { ManagedCloudProjectCreateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 
@@ -71,6 +73,8 @@ async function handleCreateProject(request: NextRequest) {
     throw createError.validation('Invalid request body');
   }
   const body = parseProjectRequest(ManagedCloudProjectCreateRequestSchema, rawBody);
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const projectLimit = getProjectLimit(subscription?.plan_tier);
 
   // Build columns/values for the insert, optionally including round-10 fields
   const baseColumns = ['user_id', 'name', 'description', 'instructions', 'color'];
@@ -122,9 +126,16 @@ async function handleCreateProject(request: NextRequest) {
     const cols = includeRound10 ? [...baseColumns, ...round10Columns] : [...baseColumns];
     const vals = includeRound10 ? [...baseValues, ...round10Values] : [...baseValues];
     const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
+    const limitParameter = `$${vals.length + 1}`;
     return {
-      sql: `insert into user_projects (${cols.join(', ')}) values (${placeholders}) returning *`,
-      params: vals,
+      sql: `with inserted as materialized (
+              insert into user_projects (${cols.join(', ')}) values (${placeholders}) returning *
+            ), quota_guard as materialized (
+              select public.assert_user_resource_limit('projects', $1, ${limitParameter})
+                from (select count(*) from inserted) as dependency
+            )
+            select inserted.* from inserted cross join quota_guard`,
+      params: [...vals, projectLimit],
     };
   }
 
@@ -135,6 +146,11 @@ async function handleCreateProject(request: NextRequest) {
     if (!inserted) throw new Error('No row returned');
     rowData = inserted;
   } catch (firstError) {
+    if (isUserResourceLimitError(firstError)) {
+      throw createError.validation(
+        'Free accounts can have up to 5 Projects. Delete a Project or upgrade to create another.',
+      );
+    }
     if (
       hasRound10 &&
       firstError &&
@@ -148,6 +164,11 @@ async function handleCreateProject(request: NextRequest) {
         if (!inserted) throw new Error('No row returned');
         rowData = inserted;
       } catch (retryError) {
+        if (isUserResourceLimitError(retryError)) {
+          throw createError.validation(
+            'Free accounts can have up to 5 Projects. Delete a Project or upgrade to create another.',
+          );
+        }
         logger.error({ error: retryError, userId }, 'Failed to create project');
         throw createError.internal('Failed to create project');
       }

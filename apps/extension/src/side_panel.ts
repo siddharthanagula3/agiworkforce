@@ -90,10 +90,7 @@ import {
 import {
   getAuthToken,
   getManagedModelAccess,
-  getRemainingFreePrompts,
   clearAuthToken,
-  FREE_TRIAL_PROMPT_LIMIT,
-  FREE_TRIAL_MODEL,
   type ManagedModelAccess,
 } from './features/cloud-bridge/freeTrialClient';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
@@ -128,8 +125,8 @@ let _drawerSessionTimer: ReturnType<typeof setInterval> | null = null;
  * Module-level reference to the cloud account UI refresh function.
  * Populated by buildUI() after the inner function is created so that the
  * chrome.runtime.onMessage listener (which runs at module scope, outside
- * buildUI's closure) can call it to update the quota bar and header badge
- * in response to FREE_PROMPTS_UPDATED / __QUOTA_EXCEEDED__ / __AUTH_REQUIRED__.
+ * buildUI's closure) can call it to update account access after authentication
+ * or plan changes.
  */
 let refreshCloudAccountUI: () => Promise<void> = async () => {
   /* no-op until buildUI() initialises the real implementation */
@@ -5622,34 +5619,15 @@ function buildUI(): void {
   signedInView.appendChild(userInfoEl);
   signedInView.appendChild(signoutBtn);
 
-  // ── Quota bar ────────────────────────────────────────────────────────────
+  // ── Paid-plan gate (Chrome is not part of Claude's free chat surfaces) ───
   const quotaWrap = el('div', {
     class: 'sp-quota-bar-wrap',
     id: 'sp-quota-bar-wrap',
     style: 'display:none',
   });
-  const quotaTopRow = el('div', { class: 'sp-quota-bar-row' });
-  const quotaLabel = el('span', { id: 'sp-quota-label' }, 'Free prompts');
-  const quotaCount = el('span', { id: 'sp-quota-count' }, `0 / ${FREE_TRIAL_PROMPT_LIMIT}`);
-  quotaTopRow.appendChild(quotaLabel);
-  quotaTopRow.appendChild(quotaCount);
-  const quotaBarBg = el('div', { class: 'sp-quota-bar-bg' });
-  const quotaBarFill = el('div', {
-    class: 'sp-quota-bar-fill',
-    id: 'sp-quota-bar-fill',
-    style: 'width:0%',
-  });
-  quotaBarBg.appendChild(quotaBarFill);
-  const quotaModelRow = el('div', { class: 'sp-quota-bar-row' });
-  const quotaModelLabel = el(
-    'span',
-    { class: 'sp-quota-bar-model', id: 'sp-quota-model-label' },
-    `Model: ${FREE_TRIAL_MODEL}`,
+  quotaWrap.appendChild(
+    el('span', { id: 'sp-quota-label' }, 'Chrome access requires a paid plan.'),
   );
-  quotaModelRow.appendChild(quotaModelLabel);
-  quotaWrap.appendChild(quotaTopRow);
-  quotaWrap.appendChild(quotaBarBg);
-  quotaWrap.appendChild(quotaModelRow);
 
   // Upgrade row (shown when quota exhausted)
   const quotaUpgradeRow = el('div', {
@@ -5660,7 +5638,7 @@ function buildUI(): void {
   const quotaExhaustedLabel = el(
     'span',
     { style: 'font-size:10px;color:var(--agi-ext-danger)' },
-    'Free prompts used',
+    'Free chat remains available on Web, Mobile, and Desktop.',
   );
   const quotaUpgradeBtn = el(
     'button',
@@ -5709,7 +5687,7 @@ function buildUI(): void {
   // Insert into the slot reserved in the header above.
   const quotaBadgeEl = el('div', {
     id: 'sp-quota-badge',
-    title: 'AGI Cloud free prompts',
+    title: 'AGI Cloud plan',
     style: 'cursor:pointer',
   });
   quotaBadgeEl.addEventListener('click', () => {
@@ -5803,32 +5781,13 @@ function buildUI(): void {
       return;
     }
 
-    const remaining = await getRemainingFreePrompts();
-    if (refreshGeneration !== cloudAccountRefreshGeneration) return;
-    const used = FREE_TRIAL_PROMPT_LIMIT - remaining;
-    const pct = Math.round((used / FREE_TRIAL_PROMPT_LIMIT) * 100);
-
     quotaWrap.style.display = '';
-    quotaCount.textContent = `${remaining} / ${FREE_TRIAL_PROMPT_LIMIT} remaining`;
-    (quotaBarFill as HTMLElement).style.width = `${pct}%`;
-    if (remaining === 0) {
-      (quotaBarFill as HTMLElement).classList.add('exhausted');
-      quotaUpgradeRow.style.display = '';
-    } else {
-      (quotaBarFill as HTMLElement).classList.remove('exhausted');
-      quotaUpgradeRow.style.display = 'none';
-    }
+    quotaUpgradeRow.style.display = '';
 
-    // Header badge
     quotaBadgeEl.classList.add('visible');
-    quotaBadgeEl.classList.remove('has-prompts', 'exhausted');
-    if (remaining > 0) {
-      quotaBadgeEl.textContent = `${remaining} free`;
-      quotaBadgeEl.classList.add('has-prompts');
-    } else {
-      quotaBadgeEl.textContent = 'Upgrade';
-      quotaBadgeEl.classList.add('exhausted');
-    }
+    quotaBadgeEl.classList.remove('has-prompts');
+    quotaBadgeEl.classList.add('exhausted');
+    quotaBadgeEl.textContent = 'Upgrade';
   };
 
   // Sign-out handler
@@ -7472,14 +7431,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (envelope.type === 'PERMISSION_REQUIRED') {
     const permMsg = msg as { requestId: string; domain: string; actionDescription: string };
     renderPermissionCard(permMsg.requestId, permMsg.domain, permMsg.actionDescription);
-    return;
-  }
-
-  // Cloud free-trial quota refresh — background emits this after each streamed
-  // response so the quota bar and header badge stay current without a full page
-  // reload.
-  if (envelope.type === 'FREE_PROMPTS_UPDATED') {
-    void refreshCloudAccountUI();
     return;
   }
 

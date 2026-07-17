@@ -33,6 +33,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { SubscriptionService } from '@/lib/services/subscription-service';
+import { getProjectLimit, isUserResourceLimitError } from '@/lib/services/free-plan-entitlements';
 
 const MAX_PROJECTS_PULL = 500;
 
@@ -113,6 +115,9 @@ async function handlePost(request: NextRequest) {
     return NextResponse.json({ applied: [], conflicts: [], cursor: '0' });
   }
 
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const projectLimit = getProjectLimit(subscription?.plan_tier);
+
   const applied: Array<{ id: string; server_version: string }> = [];
   const conflicts: Array<{ id: string; current: ProjectDelta | null }> = [];
   try {
@@ -165,6 +170,13 @@ async function handlePost(request: NextRequest) {
           select id, server_version from updated
           union all
           select id, server_version from inserted
+        ), quota_guard as materialized (
+          select public.assert_user_resource_limit(
+                 'projects',
+                 $1,
+                   case when dependency.inserted_count > 0 then $3 else null end
+                 )
+            from (select count(*) as inserted_count from inserted) as dependency
         ), conflict_rows as (
           select incoming.id,
                  case when current.id is null then null else jsonb_build_object(
@@ -192,14 +204,16 @@ async function handlePost(request: NextRequest) {
                applied_rows.server_version::text as server_version,
                null::jsonb as current
           from applied_rows
+          cross join quota_guard
         union all
         select 'conflict'::text as kind,
                conflict_rows.id::text as id,
                null::text as server_version,
                conflict_rows.current
           from conflict_rows
+          cross join quota_guard
       `,
-      [userId, JSON.stringify(projects)],
+      [userId, JSON.stringify(projects), projectLimit],
     );
 
     for (const row of rows) {
@@ -218,6 +232,11 @@ async function handlePost(request: NextRequest) {
     const cursor = maxServerVersion('0', applied, conflictRows);
     return NextResponse.json({ applied, conflicts, cursor });
   } catch (error) {
+    if (isUserResourceLimitError(error)) {
+      throw createError.validation(
+        'Free accounts can have up to 5 Projects. Delete a Project or upgrade before syncing another.',
+      );
+    }
     logger.error({ error, userId }, 'Projects sync push failed');
     throw createError.internal('Failed to push project changes');
   }

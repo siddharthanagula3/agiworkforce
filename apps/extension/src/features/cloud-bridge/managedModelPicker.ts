@@ -70,7 +70,7 @@ export function getManagedModelBadgeLabel(modelId: string): string {
 }
 
 export function isFreeManagedTier(tier: string): boolean {
-  return ['free', 'hobby'].includes(tier.trim().toLowerCase());
+  return tier.trim().toLowerCase() === 'free';
 }
 
 export function formatManagedTierLabel(tier: string): string {

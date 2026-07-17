@@ -40,7 +40,6 @@ import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useRouter } from 'next/navigation';
-import { FREE_TRIAL_MAX_INPUT_CHARS, getFreeTrialRemaining } from '../../stores/freeTrialStore';
 import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useCapability } from '@agiworkforce/unified-chat';
@@ -116,11 +115,10 @@ interface ChatComposerProps {
     prompt: string,
     options: { aspectRatio: ImageAspectRatio; modelId: string },
   ) => void;
-  /** Website free trial state. When enabled, the composer is text-only Auto Economy. */
+  /** Website free-plan state. The server owns the unpublished usage ceiling. */
   freeTrial?: {
     enabled: boolean;
-    promptsUsed: number | null;
-    promptLimit: number;
+    limitReached: boolean;
   };
   /**
    * "Project or folder" picker (Claude-composer parity). Provided only by hosts
@@ -299,6 +297,7 @@ const ChatComposerNewComponent = ({
   const clearFolder = useCoworkFolderStore((s) => s.clearFolder);
   const canPickFolder = supportsDirectoryPicker();
   const router = useRouter();
+  const isFreeTrial = freeTrial?.enabled ?? false;
 
   // Work-mode segmented toggle (Chat | AGI Work) — claude.ai Chat/Cowork
   // parity. 'agiwork' reveals the "Project or folder" picker row BELOW the
@@ -315,12 +314,17 @@ const ChatComposerNewComponent = ({
   const [projectQuery, setProjectQuery] = useState('');
 
   // Entering with a preselected project (sidebar "New chat in project" /
-  // project-page handoff → ?projectId= → host store) lands the composer in
-  // AGI Work mode so the scoping is visible, never silent.
+  // project-page handoff → ?projectId= → host store) lands paid accounts in
+  // AGI Work. Free accounts keep ordinary project-scoped chat; Cowork/AGI Work
+  // remains paid even though Free includes up to five Projects.
   const pickerActiveProjectId = projectPicker?.activeProjectId ?? null;
   useEffect(() => {
-    if (pickerActiveProjectId) setWorkMode('agiwork');
-  }, [pickerActiveProjectId]);
+    if (isFreeTrial) {
+      setWorkMode('chat');
+    } else if (pickerActiveProjectId) {
+      setWorkMode('agiwork');
+    }
+  }, [isFreeTrial, pickerActiveProjectId]);
 
   // Platform capabilities (PLATFORM axis — does this surface expose the action at
   // all). Sourced from the shared capability matrix via the CapabilityProvider;
@@ -342,13 +346,7 @@ const ChatComposerNewComponent = ({
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
 
-  const isFreeTrial = freeTrial?.enabled ?? false;
-  const trialPromptLimit = freeTrial?.promptLimit ?? 3;
-  const trialPromptsRemaining = getFreeTrialRemaining(
-    freeTrial?.promptsUsed ?? null,
-    trialPromptLimit,
-  );
-  const trialExhausted = isFreeTrial && trialPromptsRemaining <= 0;
+  const trialExhausted = isFreeTrial && (freeTrial?.limitReached ?? false);
 
   // Capability gating: enable/disable composer affordances based on the SELECTED
   // model's capabilities so a user never sends an input the model can't handle
@@ -505,7 +503,7 @@ const ChatComposerNewComponent = ({
     // once on they stay on across sends (checkmark remains in the + menu) until the
     // user turns them off. Do NOT reset them here (the after-send clear) — that made
     // Web search a fire-once flag. They still auto-clear via the capability effects
-    // above when the selected model can't support them, and via the free-trial reset.
+    // above when the selected model can't support them.
     setShowStyleSubmenu(false);
     setActiveTags([]);
     setLocalNotice(null);
@@ -521,17 +519,8 @@ const ChatComposerNewComponent = ({
 
   useEffect(() => {
     if (!isFreeTrial) return;
-    setSelectedSkill(null);
-    setSkillBody(null);
-    setWebSearchEnabled(false);
     setResearchEnabled(false);
-    setStyleMode('normal');
-    setShowOverflowMenu(false);
-    setShowStyleSubmenu(false);
-    if (attachments.length > 0) {
-      clearAttachments();
-    }
-  }, [attachments.length, clearAttachments, isFreeTrial]);
+  }, [isFreeTrial]);
 
   useEffect(() => {
     if (clearSignal === undefined || clearSignal === lastClearSignalRef.current) return;
@@ -617,14 +606,6 @@ const ChatComposerNewComponent = ({
         return;
       }
 
-      // Check the free-trial gate before accepting image bytes so dropped files
-      // are never briefly added and then stripped by the cleanup effect below.
-      if (isFreeTrial) {
-        setLocalNotice(
-          'Attachments are not available on the free trial. Upgrade to attach photos & files.',
-        );
-        return;
-      }
       if (!modelSupportsVision) {
         setLocalNotice(
           "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
@@ -633,7 +614,7 @@ const ChatComposerNewComponent = ({
       }
       addImageAttachments(files);
     },
-    [addImageAttachments, modelSupportsVision, isFreeTrial],
+    [addImageAttachments, modelSupportsVision],
   );
 
   // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
@@ -746,7 +727,7 @@ const ChatComposerNewComponent = ({
     : null;
   // The folder half of the chip label only exists on working-directory surfaces;
   // on web the cowork folder store is never populated through this control.
-  const pickerFolderName = canUseWorkingDirectory ? folderName : null;
+  const pickerFolderName = !isFreeTrial && canUseWorkingDirectory ? folderName : null;
   const pickerHasSelection = Boolean(activePickerProject || pickerFolderName);
   const pickerLabel = activePickerProject?.name ?? pickerFolderName ?? 'Project or folder';
   const filteredPickerProjects = projectPicker
@@ -812,51 +793,39 @@ const ChatComposerNewComponent = ({
   clearSuggestionRef.current = clearSuggestion;
 
   // Handle input change: detect @mention and /command; clear stale ghost-text
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const value = e.target.value;
-      const cursorPos = e.target.selectionStart || 0;
-      setMessage(value);
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart || 0;
+    setMessage(value);
 
-      // Clear ghost-text suggestion on new input (via ref to avoid dep instability)
-      if (suggestionRef.current) {
-        clearSuggestionRef.current();
-      }
+    // Clear ghost-text suggestion on new input (via ref to avoid dep instability)
+    if (suggestionRef.current) {
+      clearSuggestionRef.current();
+    }
 
-      if (isFreeTrial && value.startsWith('/')) {
-        setShowSlashMenu(false);
-        setShowMentions(false);
-        setLocalNotice(
-          'Slash commands are available on hosted cloud upgrades. Free web chat accepts plain text prompts.',
-        );
-        return;
-      }
-
-      // Slash command detection: only when message starts with /
-      if (value.startsWith('/') && !value.includes(' ')) {
-        setShowSlashMenu(true);
-        setSlashQuery(value.slice(1));
-        setShowMentions(false);
-        return;
-      }
-      setShowSlashMenu(false);
-
-      // @mention detection
-      const textBeforeCursor = value.substring(0, cursorPos);
-      const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-      if (lastAtIndex !== -1) {
-        const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
-        if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
-          setShowMentions(true);
-          setMentionQuery(textAfterAt);
-          setMentionStartIndex(lastAtIndex);
-          return;
-        }
-      }
+    // Slash command detection: only when message starts with /
+    if (value.startsWith('/') && !value.includes(' ')) {
+      setShowSlashMenu(true);
+      setSlashQuery(value.slice(1));
       setShowMentions(false);
-    },
-    [isFreeTrial],
-  );
+      return;
+    }
+    setShowSlashMenu(false);
+
+    // @mention detection
+    const textBeforeCursor = value.substring(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        setShowMentions(true);
+        setMentionQuery(textAfterAt);
+        setMentionStartIndex(lastAtIndex);
+        return;
+      }
+    }
+    setShowMentions(false);
+  }, []);
 
   const filteredSkills = availableSkills
     .filter(
@@ -882,43 +851,19 @@ const ChatComposerNewComponent = ({
     [message, mentionStartIndex],
   );
 
-  const handleSlashSelect = useCallback(
-    (commandId: string) => {
-      if (isFreeTrial) {
-        setMessage('');
-        setShowSlashMenu(false);
-        setLocalNotice(
-          'Slash commands are part of hosted cloud upgrades. Free web chat is text-only Auto Economy.',
-        );
-        setTimeout(() => textareaRef.current?.focus(), 0);
-        return;
-      }
-      setMessage('');
-      setShowSlashMenu(false);
-      if (commandId === 'search') setWebSearchEnabled(true);
-      setTimeout(() => textareaRef.current?.focus(), 0);
-    },
-    [isFreeTrial],
-  );
+  const handleSlashSelect = useCallback((commandId: string) => {
+    setMessage('');
+    setShowSlashMenu(false);
+    if (commandId === 'search') setWebSearchEnabled(true);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
 
-  const handleSkillSelect = useCallback(
-    (skillName: string) => {
-      if (isFreeTrial) {
-        setMessage('');
-        setShowSlashMenu(false);
-        setLocalNotice(
-          'Skills are available on hosted cloud upgrades. Use plain text prompts in the free web trial.',
-        );
-        setTimeout(() => textareaRef.current?.focus(), 0);
-        return;
-      }
-      setSelectedSkill({ id: skillName, name: skillName, description: '', category: 'Skill' });
-      setMessage('');
-      setShowSlashMenu(false);
-      setTimeout(() => textareaRef.current?.focus(), 0);
-    },
-    [isFreeTrial],
-  );
+  const handleSkillSelect = useCallback((skillName: string) => {
+    setSelectedSkill({ id: skillName, name: skillName, description: '', category: 'Skill' });
+    setMessage('');
+    setShowSlashMenu(false);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
 
   const handleStop = useCallback(() => {
     if (onStop) {
@@ -945,25 +890,12 @@ const ChatComposerNewComponent = ({
       return;
     }
 
-    if (isFreeTrial && attachments.length > 0) {
-      setLocalNotice(
-        'The website free trial is text-only. Upgrade for hosted file and image uploads.',
-      );
-      return;
-    }
-    if (isFreeTrial && message.trim().length > FREE_TRIAL_MAX_INPUT_CHARS) {
-      setLocalNotice(
-        'This prompt is too large for the website free trial. Shorten it or upgrade for larger hosted prompts.',
-      );
-      return;
-    }
-
     const result = onSend(
       message,
       attachments.length > 0 ? attachments : undefined,
       selectedSkill?.id,
       {
-        workMode,
+        workMode: isFreeTrial ? 'chat' : workMode,
         projectId: pickerActiveProjectId,
         webSearchEnabled,
         thinkingEnabled,
@@ -985,13 +917,13 @@ const ChatComposerNewComponent = ({
     isLoading,
     disabled,
     trialExhausted,
-    isFreeTrial,
     onUpgradeRequest,
     imageMode,
     imageAspectRatio,
     imageModelId,
     onGenerateImage,
     workMode,
+    isFreeTrial,
     pickerActiveProjectId,
     // web search / research / style toggles MUST be in the dep array: they are
     // read directly in the body, and omitting them (previous eslint-disable)
@@ -1077,21 +1009,6 @@ const ChatComposerNewComponent = ({
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       {modelSupportsVision && <DragDropOverlay onDrop={handleFileDrop} />}
 
-      {isFreeTrial && (
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--chat-glass-border)] bg-[var(--chat-bg-elevated)]/90 px-3 py-2 text-xs text-[var(--chat-text-secondary)] shadow-sm">
-          <span>
-            Free trial · {trialPromptsRemaining}/{trialPromptLimit} prompts left
-          </span>
-          <button
-            type="button"
-            onClick={onUpgradeRequest}
-            className="font-medium text-[var(--chat-accent-primary-text)] hover:underline"
-          >
-            Upgrade
-          </button>
-        </div>
-      )}
-
       {localNotice && (
         <div
           role="alert"
@@ -1101,11 +1018,27 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
+      {trialExhausted && (
+        <div
+          role="alert"
+          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100"
+        >
+          <span>Free usage limit reached. Upgrade to continue.</span>
+          <button
+            type="button"
+            onClick={onUpgradeRequest}
+            className="shrink-0 font-semibold text-amber-200 underline underline-offset-2"
+          >
+            Upgrade
+          </button>
+        </div>
+      )}
+
       {/* Active Mode Tags */}
       <ActiveModeTags tags={activeTags} onDismiss={handleTagDismiss} />
 
       {/* Selected Skill Badge */}
-      {selectedSkill && !isFreeTrial && (
+      {selectedSkill && (
         <div className="mb-2 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400">
             /{selectedSkill.name}
@@ -1161,7 +1094,7 @@ const ChatComposerNewComponent = ({
         )}
       >
         {/* Slash Command Menu */}
-        {showSlashMenu && !isFreeTrial && (
+        {showSlashMenu && (
           <SlashCommandMenu
             ref={slashMenuRef}
             query={slashQuery}
@@ -1172,7 +1105,7 @@ const ChatComposerNewComponent = ({
         )}
 
         {/* @Mention Dropdown */}
-        {showMentions && filteredSkills.length > 0 && !isFreeTrial && (
+        {showMentions && filteredSkills.length > 0 && (
           <div
             ref={mentionsRef}
             className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl"
@@ -1331,22 +1264,16 @@ const ChatComposerNewComponent = ({
                       {/* 1. Add photos */}
                       <button
                         type="button"
-                        disabled={!modelSupportsVision || isFreeTrial}
+                        disabled={!modelSupportsVision}
                         onClick={() => {
                           fileInputRef.current?.click();
                           closeMenu();
                         }}
                         className={cn(
                           'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          (!modelSupportsVision || isFreeTrial) && 'cursor-not-allowed opacity-50',
+                          !modelSupportsVision && 'cursor-not-allowed opacity-50',
                         )}
-                        title={
-                          isFreeTrial
-                            ? 'Upgrade to attach photos & files'
-                            : modelSupportsVision
-                              ? undefined
-                              : "This model can't read images"
-                        }
+                        title={modelSupportsVision ? undefined : "This model can't read images"}
                       >
                         <Paperclip className="h-4 w-4 text-muted-foreground" />
                         <span className="flex-1 text-left">Add photos &amp; files</span>
@@ -1563,11 +1490,13 @@ const ChatComposerNewComponent = ({
                           handleResearchToggle();
                           closeMenu();
                         }}
-                        disabled={isLoading || disabled || !modelSupportsResearch}
+                        disabled={isLoading || disabled || isFreeTrial || !modelSupportsResearch}
                         title={
-                          !modelSupportsResearch
-                            ? "Deep Research isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
-                            : undefined
+                          isFreeTrial
+                            ? 'Upgrade to use Deep Research'
+                            : !modelSupportsResearch
+                              ? "Deep Research isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
+                              : undefined
                         }
                       />
 
@@ -1831,13 +1760,8 @@ const ChatComposerNewComponent = ({
               </div>
             )}
 
-            {/* Voice Input Button - always rendered (like Search/Research) so free-trial
-              users see a visible-disabled control with a tooltip instead of the mic
-              disappearing from the DOM. */}
-            <div
-              className="relative shrink-0"
-              title={isFreeTrial ? 'Upgrade to use voice input' : undefined}
-            >
+            {/* Voice input is part of free chat and remains capability-neutral. */}
+            <div className="relative shrink-0">
               <VoiceInputButton
                 onTranscript={(text) => {
                   setMessage((prev) => {
@@ -1846,7 +1770,7 @@ const ChatComposerNewComponent = ({
                   });
                   setTimeout(() => textareaRef.current?.focus(), 50);
                 }}
-                disabled={isLoading || composerDisabled || isFreeTrial}
+                disabled={isLoading || composerDisabled}
               />
             </div>
 
@@ -1867,7 +1791,7 @@ const ChatComposerNewComponent = ({
           type="file"
           multiple
           accept="image/*"
-          disabled={!modelSupportsVision || isFreeTrial}
+          disabled={!modelSupportsVision}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -1878,13 +1802,10 @@ const ChatComposerNewComponent = ({
         />
       </div>
 
-      {/* AGI Work scope row — "Project or folder ▾" chip DIRECTLY BELOW the
-          composer (claude.ai Cowork reference layout: chips sit under the
-          prompt box, not inside the + menu). Rendered only in AGI Work mode
-          with host-provided project data; the popover opens DOWNWARD since
-          there is page space below the composer here. Web offers projects;
-          the local-folder action appears only on working-directory surfaces. */}
-      {projectPicker && workMode === 'agiwork' && !imageMode && !isFreeTrial && (
+      {/* Project scope row. Paid AGI Work can select a project or local folder;
+          Free keeps ordinary project-scoped chat and never exposes the folder/
+          Cowork boundary. */}
+      {projectPicker && (workMode === 'agiwork' || isFreeTrial) && !imageMode && (
         <div className="relative mt-2 flex items-center gap-2" ref={projectPickerRef}>
           <div
             className={cn(
@@ -1906,7 +1827,7 @@ const ChatComposerNewComponent = ({
                 pickerHasSelection ? 'pr-1' : 'pr-2.5',
                 (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
               )}
-              aria-label="Project or folder"
+              aria-label={isFreeTrial ? 'Project' : 'Project or folder'}
               aria-expanded={showProjectPicker}
               title={pickerHasSelection ? pickerLabel : undefined}
             >
@@ -1968,7 +1889,7 @@ const ChatComposerNewComponent = ({
                 Render-gated by the capability matrix so web never shows a
                 folder option; canPickFolder only disables when the desktop
                 browser shell lacks the File System Access API. */}
-              {canUseWorkingDirectory && (
+              {!isFreeTrial && canUseWorkingDirectory && (
                 <button
                   type="button"
                   disabled={!canPickFolder}
@@ -2059,8 +1980,7 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel &&
     prev.onUpgradeRequest === next.onUpgradeRequest &&
     prev.freeTrial?.enabled === next.freeTrial?.enabled &&
-    prev.freeTrial?.promptsUsed === next.freeTrial?.promptsUsed &&
-    prev.freeTrial?.promptLimit === next.freeTrial?.promptLimit &&
+    prev.freeTrial?.limitReached === next.freeTrial?.limitReached &&
     prev.projectPicker?.projects === next.projectPicker?.projects &&
     prev.projectPicker?.activeProjectId === next.projectPicker?.activeProjectId &&
     prev.projectPicker?.onSelectProject === next.projectPicker?.onSelectProject &&

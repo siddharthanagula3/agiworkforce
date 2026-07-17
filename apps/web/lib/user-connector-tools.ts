@@ -577,15 +577,21 @@ function customShortIdFromServerId(serverId: string): string | null {
     : null;
 }
 
-async function getUserCustomConnectorRows(userId: string): Promise<CustomConnectorRow[]> {
+async function getUserCustomConnectorRows(
+  userId: string,
+  limit?: number,
+): Promise<CustomConnectorRow[]> {
   const db = getNeonDb();
   try {
-    return await db.query<CustomConnectorRow>(
+    const rows = await db.query<CustomConnectorRow>(
       `select id, short_id, name, url, transport, auth_header_enc
          from user_custom_connectors
-        where user_id = $1`,
-      [userId],
+        where user_id = $1
+        order by created_at asc, id asc
+        limit $2`,
+      [userId, limit ?? null],
     );
+    return limit === undefined ? rows : rows.slice(0, limit);
   } catch (error) {
     if (isUndefinedTable(error)) return [];
     throw error;
@@ -834,7 +840,10 @@ async function executeCustomConnectorTool(
  * Fully defensive: any failure degrades to an empty list (never throws), so a
  * missing table / unconfigured map / DB hiccup can never break a chat request.
  */
-export async function loadUserConnectorToolDefs(userId: string): Promise<WebMcpToolDef[]> {
+export async function loadUserConnectorToolDefs(
+  userId: string,
+  options: { customConnectorLimit?: number } = {},
+): Promise<WebMcpToolDef[]> {
   if (!userId) return [];
   try {
     const defs: WebMcpToolDef[] = [];
@@ -859,7 +868,11 @@ export async function loadUserConnectorToolDefs(userId: string): Promise<WebMcpT
     // 3. The user's own custom remote MCP connectors (per-user credentialed,
     // persisted via /api/connectors/custom). Each row independently degrades
     // to no tools on failure (buildCustomConnectorCatalog never throws).
-    const customRows = await getUserCustomConnectorRows(userId);
+    const customConnectorLimit =
+      options.customConnectorLimit === undefined
+        ? undefined
+        : Math.max(0, Math.floor(options.customConnectorLimit));
+    const customRows = await getUserCustomConnectorRows(userId, customConnectorLimit);
     for (const row of customRows) {
       const catalog = await buildCustomConnectorCatalog(userId, row);
       if (catalog) defs.push(...catalogToConnectorToolDefs(catalog));
