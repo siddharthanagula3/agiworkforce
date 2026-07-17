@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ChatInterface,
   CapabilityProvider,
@@ -19,6 +19,7 @@ import { useChatStore } from '../../stores/chat';
 import { useProjectStore } from '../../stores/projectStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
+import { invoke } from '../../lib/tauri-mock';
 import {
   formatSelectedContextDraft,
   SelectedContextReview,
@@ -80,6 +81,72 @@ export function DesktopShellV3({
   const artifactPanelOpen = useArtifactStore((s) => s.panelOpen);
   const closeArtifactPanel = useArtifactStore((s) => s.closePanel);
   const { selectFolder, currentFolderLabel } = useFolderSelection();
+
+  // Local folder scoping is a Local-mode trust feature: in non-local privacy
+  // modes the folder seam is withheld entirely, which hides the folder rows
+  // in both the attachment menu and the composer scope picker.
+  const privacyMode = useAppModeStore(selectPrivacyMode);
+  const folderSeamEnabled = privacyMode === 'local';
+
+  // Clear mirrors FolderSelector's flow: reset the backend folder context,
+  // then the store label (project/folder mutual exclusion + chip clear).
+  const clearFolder = useCallback(() => {
+    void invoke('project_context_set_folder', { path: null })
+      .catch((error) => {
+        console.error('[DesktopShellV3] Failed to clear folder context:', error);
+      })
+      .finally(() => {
+        useProjectStore.getState().setCurrentFolder(null);
+      });
+  }, []);
+
+  // Composer "Project or folder" picker (web ChatComposerNew parity).
+  // Selection applies to the ACTIVE conversation immediately via the same
+  // scoping seam handleNewChat uses (setConversationProject + project links →
+  // TauriRuntime carries projectId into the backend row on first send).
+  const projects = useProjectStore((s) => s.projects);
+  const pickerProjects = useMemo(
+    () => projects.filter((p) => !p.isArchived).map((p) => ({ id: p.id, name: p.name })),
+    [projects],
+  );
+  const activeComposerProjectId = useChatStore(
+    (s) => s.conversations.find((c) => c.id === s.activeConversationId)?.projectId ?? null,
+  );
+
+  const handleSelectProject = useCallback(
+    (projectId: string | null) => {
+      const chat = useChatStore.getState();
+      let conversationId = chat.activeConversationId;
+      // Picking a project with no active chat starts one, scoped from birth.
+      if (!conversationId && projectId) {
+        conversationId = hostBridge?.createConversation?.('New chat') ?? null;
+        if (conversationId) hostBridge?.selectConversation?.(conversationId);
+      }
+      if (!conversationId) return;
+
+      const previousProjectId =
+        chat.conversations.find((c) => c.id === conversationId)?.projectId ?? null;
+      useChatStore.getState().setConversationProject(conversationId, projectId);
+
+      const projectStore = useProjectStore.getState();
+      if (previousProjectId && previousProjectId !== projectId) {
+        void projectStore.unlinkConversation(previousProjectId, conversationId);
+      }
+      if (projectId && projectId !== previousProjectId) {
+        void projectStore.linkConversation(projectId, conversationId);
+      }
+    },
+    [hostBridge],
+  );
+
+  const composerProjectPicker = useMemo(
+    () => ({
+      projects: pickerProjects,
+      activeProjectId: activeComposerProjectId,
+      onSelectProject: handleSelectProject,
+    }),
+    [pickerProjects, activeComposerProjectId, handleSelectProject],
+  );
 
   const handleSwitchModel = useCallback(() => {
     onModelSelectorClick?.();
@@ -163,8 +230,10 @@ export function DesktopShellV3({
               hostBridge={hostBridge}
               onModelSelectorClick={onModelSelectorClick}
               onVoiceClick={onVoiceClick}
-              onSelectFolder={selectFolder}
-              currentFolderLabel={currentFolderLabel}
+              onSelectFolder={folderSeamEnabled ? selectFolder : undefined}
+              currentFolderLabel={folderSeamEnabled ? currentFolderLabel : null}
+              onClearFolder={folderSeamEnabled ? clearFolder : undefined}
+              projectPicker={composerProjectPicker}
               onNavigateView={handleNavigateView}
               sidebarSlot={null}
               emptyStateSlot={<EmptyChat />}

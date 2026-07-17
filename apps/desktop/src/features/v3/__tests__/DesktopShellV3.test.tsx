@@ -6,7 +6,7 @@ import { useSettingsDialogStore } from '../../../stores/settings/dialog';
 import { useUnifiedAuthStore } from '../../../stores/auth';
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { useProjectStore } from '../../../stores/projectStore';
-import { useSidecarStore } from '../../../stores/chat';
+import { useChatStore, useSidecarStore } from '../../../stores/chat';
 import { DesktopShellV3 } from '../DesktopShellV3';
 
 const unifiedChatMock = vi.hoisted(() => {
@@ -358,5 +358,103 @@ describe('DesktopShellV3 duplication ownership', () => {
     expect(sidebar).toContainElement(accountMenus[0] as HTMLElement);
     expect(screen.getByText('BYOK & local models')).toBeInTheDocument();
     expect(screen.queryByText('Gift AGI')).not.toBeInTheDocument();
+  });
+
+  // ── Composer work scope (Chat | AGI Work toggle + project/folder picker) ──
+
+  function seedPickerProject(id: string, name: string, isArchived = false) {
+    return {
+      id,
+      name,
+      description: '',
+      customInstructions: '',
+      files: [],
+      conversationIds: [],
+      isArchived,
+      createdAt: '2026-07-16T00:00:00.000Z',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+    };
+  }
+
+  it('feeds the composer picker with non-archived projects and the folder seam in Local mode', () => {
+    useProjectStore.setState({
+      projects: [seedPickerProject('p1', 'Apollo'), seedPickerProject('p2', 'Retired', true)],
+    });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    const props = unifiedChatMock.chatInterfaceProps[0];
+    expect(typeof props?.['onSelectFolder']).toBe('function');
+    expect(typeof props?.['onClearFolder']).toBe('function');
+    const picker = props?.['projectPicker'] as {
+      projects: Array<{ id: string; name: string }>;
+      activeProjectId: string | null;
+    };
+    expect(picker.projects).toEqual([{ id: 'p1', name: 'Apollo' }]);
+    expect(picker.activeProjectId).toBeNull();
+  });
+
+  it('withholds the folder seam in non-local privacy mode so the folder rows are hidden', () => {
+    useAppModeStore.setState({ mode: 'cloud' });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    const props = unifiedChatMock.chatInterfaceProps[0];
+    expect(props?.['onSelectFolder']).toBeUndefined();
+    expect(props?.['onClearFolder']).toBeUndefined();
+    expect(props?.['currentFolderLabel']).toBeNull();
+    // Projects remain selectable in Cloud mode — only the LOCAL folder seam
+    // is privacy-gated.
+    expect(props?.['projectPicker']).toBeTruthy();
+  });
+
+  it('scopes the active conversation through the existing project seam when the picker selects', async () => {
+    useProjectStore.setState({
+      projects: [seedPickerProject('p1', 'Apollo')],
+    });
+    useChatStore.setState({
+      activeConversationId: 'conv-1',
+      conversations: [
+        {
+          id: 'conv-1',
+          title: 'Existing chat',
+          pinned: false,
+          lastMessage: '',
+          updatedAt: new Date(),
+          executionMode: 'local_only' as const,
+        },
+      ],
+    });
+
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    const picker = unifiedChatMock.chatInterfaceProps[0]?.['projectPicker'] as {
+      onSelectProject: (projectId: string | null) => void;
+    };
+    await act(async () => {
+      picker.onSelectProject('p1');
+    });
+
+    expect(useChatStore.getState().conversations.find((c) => c.id === 'conv-1')?.projectId).toBe(
+      'p1',
+    );
+    await waitFor(() => {
+      expect(
+        useProjectStore.getState().projects.find((p) => p.id === 'p1')?.conversationIds,
+      ).toContain('conv-1');
+    });
+
+    // Clearing unwinds both sides of the seam.
+    await act(async () => {
+      picker.onSelectProject(null);
+    });
+    expect(
+      useChatStore.getState().conversations.find((c) => c.id === 'conv-1')?.projectId,
+    ).toBeUndefined();
+    await waitFor(() => {
+      expect(
+        useProjectStore.getState().projects.find((p) => p.id === 'p1')?.conversationIds,
+      ).not.toContain('conv-1');
+    });
   });
 });
