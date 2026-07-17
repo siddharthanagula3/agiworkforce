@@ -181,7 +181,6 @@ import { initManagedCloudSettingsSync } from './services/managedCloudSettingsSyn
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
 import { PlansModal } from './features/pricing/PlansModal';
-import { InviteCodeModal, type InviteCodeTab } from './features/cloud-bridge';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">
@@ -212,8 +211,6 @@ const DesktopShell = () => {
   const closeSettingsDialog = useSettingsDialogStore((s) => s.closeSettings);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
   const [plansModalOpen, setPlansModalOpen] = useState(false);
-  const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
-  const [cloudWaitlistTab, setCloudWaitlistTab] = useState<InviteCodeTab>('waitlist');
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
@@ -244,12 +241,6 @@ const DesktopShell = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
   }, [theme, setTheme]);
-
-  const openCloudWaitlistModal = useCallback((tab: InviteCodeTab = 'waitlist') => {
-    setPlansModalOpen(false);
-    setCloudWaitlistTab(tab);
-    setCloudWaitlistOpen(true);
-  }, []);
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
@@ -861,13 +852,11 @@ const DesktopShell = () => {
         cloudAccountAuth.signOut();
       } else if (detail.type === 'open-plans-modal') {
         setPlansModalOpen(true);
-      } else if (detail.type === 'open-cloud-waitlist') {
-        openCloudWaitlistModal((detail.tab as InviteCodeTab | undefined) ?? 'waitlist');
       }
     };
     window.addEventListener('chat:action', handleChatAction);
     return () => window.removeEventListener('chat:action', handleChatAction);
-  }, [openCloudWaitlistModal, openSettingsDialog]);
+  }, [openSettingsDialog]);
 
   // Listen for native menu events from Tauri window menu
   useEffect(() => {
@@ -1589,17 +1578,7 @@ const DesktopShell = () => {
           <ErrorToastContainer position="top-right" />
         </Suspense>
         {/* Plans/Pricing modal — triggered by chat:action open-plans-modal */}
-        <PlansModal
-          open={plansModalOpen}
-          onOpenChange={setPlansModalOpen}
-          onOpenCloudWaitlist={() => openCloudWaitlistModal('waitlist')}
-        />
-        <InviteCodeModal
-          open={cloudWaitlistOpen}
-          onClose={() => setCloudWaitlistOpen(false)}
-          source="other"
-          defaultTab={cloudWaitlistTab}
-        />
+        <PlansModal open={plansModalOpen} onOpenChange={setPlansModalOpen} />
         <Suspense fallback={null}>
           <TimeoutWarningDialog
             warning={timeoutWarning}
