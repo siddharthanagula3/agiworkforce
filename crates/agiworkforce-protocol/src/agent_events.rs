@@ -51,11 +51,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::task_state::AgentTaskStateChanged;
+
 /// Current wire version for [`AgentEventEnvelope`]. Bump on any
 /// backward-incompatible change to the envelope or [`AgentEvent`] shape,
 /// mirroring `developer_session::DEVELOPER_SESSION_PROTOCOL_VERSION`'s
 /// precedent for a crate-level protocol version constant.
-pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 2;
+pub const AGENT_EVENT_SCHEMA_VERSION: u32 = 3;
 
 /// The one envelope web SSE chunks, app-server `turn/*` notifications, and
 /// desktop stream events all translate into. Mirrors this crate's existing
@@ -204,6 +206,10 @@ pub enum AgentEvent {
     /// Long-running context was summarized and compacted without ending the
     /// run.
     ContextCompacted(AgentEventContextCompacted),
+    /// The engine moved a durable task to a canonical lifecycle state. This
+    /// drives Cowork/Dispatch cards and semantic task filters without clients
+    /// reverse-engineering state from prose, tool rows, or transport status.
+    TaskStateChanged(AgentTaskStateChanged),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]

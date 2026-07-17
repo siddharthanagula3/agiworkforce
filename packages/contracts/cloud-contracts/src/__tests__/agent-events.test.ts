@@ -7,7 +7,7 @@ import {
 } from '../agent-events';
 
 const BASE_ENVELOPE = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   sessionId: 'conversation-1',
   turnId: 'turn-1',
   sequence: 0,
@@ -16,7 +16,22 @@ const BASE_ENVELOPE = {
 
 describe('AgentEventEnvelopeSchema / parseAgentEventDelta', () => {
   it('pins the canonical run-activity schema version', () => {
-    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(2);
+    expect(AGENT_EVENT_SCHEMA_VERSION).toBe(3);
+  });
+
+  it('parses the engine-authored task lifecycle without surface inference', () => {
+    const envelope = {
+      ...BASE_ENVELOPE,
+      event: {
+        type: 'task-state-changed',
+        taskId: 'task-1',
+        previousState: 'running',
+        state: 'ready_for_review',
+        summary: 'Work finished and is ready for review.',
+      },
+    };
+
+    expect(parseAgentEventDelta(envelope)).toEqual(envelope);
   });
 
   it('parses user-displayable progress without treating it as private reasoning', () => {

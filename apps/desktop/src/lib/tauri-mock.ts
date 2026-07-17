@@ -461,8 +461,14 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'agi_list_goals':
       return [] as T;
     case 'agi_get_goal_status':
-      return { context: { currentIteration: 0, status: 'pending' } } as T;
+      return {
+        state: 'queued',
+        currentIteration: 0,
+        context: { toolResults: [] },
+      } as T;
     case 'agi_cancel_goal':
+    case 'agi_pause_goal':
+    case 'agi_resume_goal':
       return undefined as T;
     case 'agi_get_reflection_insights':
       return null as T;

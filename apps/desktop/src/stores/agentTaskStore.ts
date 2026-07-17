@@ -4,31 +4,15 @@ import { devtools, persist } from 'zustand/middleware';
 import { toast } from 'sonner';
 import { invoke, isTauri, listen } from '../lib/tauri-mock';
 import { ensureAgiInitialized } from '../api/agi';
+import type {
+  AgentTaskState as CanonicalAgentTaskState,
+  AgentTaskStateChanged,
+} from '@agiworkforce/types/protocol';
 
 const MAX_LIVE_TASK_ENTRIES = 100;
 
-/**
- * Agent task status lifecycle.
- * Core states: pending, running, completed, failed, cancelled
- * Recovery states: paused, expired, recovering
- */
-export type AgentTaskStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'paused'
-  | 'expired'
-  | 'recovering';
-
-/**
- * Recovery action that can be applied to a failed/paused/expired task.
- */
-export type AgentRecoveryAction =
-  | 'retry-from-checkpoint'
-  | 'restart-from-beginning'
-  | 'abandon-with-summary';
+/** Engine-authored lifecycle shared by every AGI surface. */
+export type AgentTaskStatus = CanonicalAgentTaskState;
 
 export interface AgentTask {
   id: string;
@@ -44,15 +28,7 @@ export interface AgentTask {
   executionMode?: 'sequential' | 'parallel' | 'swarm' | 'auto';
   /** Swarm execution metrics (only set for swarm tasks) */
   swarmMetrics?: SwarmMetrics;
-  /** Last checkpoint iteration for recovery */
-  lastCheckpointIteration?: number;
-  /** Timestamp of last checkpoint */
-  lastCheckpointAt?: string;
-  /** Recovery summary when task is abandoned */
-  recoverySummary?: string;
-  /** How many times this task has been retried */
-  retryCount?: number;
-  /** Reason the task was paused or expired */
+  /** Reason the engine paused the task. */
   pauseReason?: string;
 }
 
@@ -83,7 +59,7 @@ export interface SwarmMetrics {
   summary: string;
 }
 
-interface AgentTaskState {
+interface AgentTaskStoreState {
   tasks: AgentTask[];
   loading: boolean;
   liveStepsByTask: Record<string, AgentTaskLiveStep[]>;
@@ -106,21 +82,11 @@ interface AgentTaskState {
   cancelTask: (taskId: string) => Promise<void>;
   fetchInsights: (taskId: string) => Promise<string[]>;
   /** Pause a running task */
-  pauseTask: (taskId: string, reason?: string) => void;
+  pauseTask: (taskId: string, reason?: string) => Promise<void>;
   /** Resume a paused task */
-  resumeTask: (taskId: string) => void;
-  /** Mark a task as expired (e.g., approval timeout, execution timeout) */
-  expireTask: (taskId: string, reason?: string) => void;
-  /** Retry a failed/expired task from its last checkpoint */
-  retryFromCheckpoint: (taskId: string) => Promise<string | null>;
-  /** Restart a task from the very beginning */
-  restartFromBeginning: (taskId: string) => Promise<string | null>;
-  /** Abandon a task and generate a summary of what was accomplished */
-  abandonWithSummary: (taskId: string) => void;
+  resumeTask: (taskId: string) => Promise<void>;
   /** Get a human-readable label for the current task status */
   getStatusLabel: (status: AgentTaskStatus) => string;
-  /** Check if a task is in a recoverable state */
-  isRecoverable: (taskId: string) => boolean;
   /** Clear task state for logout and same-renderer account changes */
   resetOnLogout: () => void;
 }
@@ -150,12 +116,9 @@ interface SubmitParallelGoalResponse {
 }
 
 interface GoalStatusResponse {
-  context: {
-    currentIteration: number;
-    status: string;
-    result?: string;
-    error?: string;
-  };
+  context: { toolResults: Array<{ result?: unknown; error?: string | null }> };
+  state: AgentTaskStatus;
+  currentIteration: number;
 }
 
 interface ReflectionInsightResponse {
@@ -232,7 +195,7 @@ export interface AgiGoalExecutionCompletedPayload {
   error?: string;
 }
 
-export const useAgentTaskStore = create<AgentTaskState>()(
+export const useAgentTaskStore = create<AgentTaskStoreState>()(
   devtools(
     persist(
       (set, get) => ({
@@ -253,15 +216,13 @@ export const useAgentTaskStore = create<AgentTaskState>()(
                 },
               });
               const taskId = result.goalId;
-              const succeeded = result.bestResult.result.success;
               set((state) => ({
-                tasks: upsertTerminalAgentTask(state.tasks, {
+                tasks: upsertSubmittedAgentTask(state.tasks, {
                   id: taskId,
                   goal,
-                  status: succeeded ? 'completed' : 'failed',
+                  status: 'queued',
                   createdAt: new Date().toISOString(),
-                  completedAt: new Date().toISOString(),
-                  result: `Parallel execution ${succeeded ? 'complete' : 'failed'}. Best score: ${result.bestResult.score}`,
+                  result: `Parallel execution returned a best score of ${result.bestResult.score}.`,
                   error: result.bestResult.result.error ?? undefined,
                   executionMode: 'parallel',
                 }),
@@ -282,7 +243,7 @@ export const useAgentTaskStore = create<AgentTaskState>()(
               tasks: upsertSubmittedAgentTask(state.tasks, {
                 id: taskId,
                 goal,
-                status: 'pending',
+                status: 'queued',
                 createdAt: new Date().toISOString(),
                 executionMode: 'sequential',
               }),
@@ -311,12 +272,11 @@ export const useAgentTaskStore = create<AgentTaskState>()(
 
             const taskId = result.goalId;
             set((state) => ({
-              tasks: upsertTerminalAgentTask(state.tasks, {
+              tasks: upsertSubmittedAgentTask(state.tasks, {
                 id: taskId,
                 goal,
-                status: result.success ? 'completed' : 'failed',
+                status: 'queued',
                 createdAt: new Date().toISOString(),
-                completedAt: new Date().toISOString(),
                 result: result.summary,
                 executionMode: 'swarm',
                 swarmMetrics: {
@@ -355,7 +315,7 @@ export const useAgentTaskStore = create<AgentTaskState>()(
               tasks: upsertSubmittedAgentTask(state.tasks, {
                 id: taskId,
                 goal,
-                status: 'pending',
+                status: 'queued',
                 createdAt: new Date().toISOString(),
                 executionMode: 'auto',
               }),
@@ -387,7 +347,7 @@ export const useAgentTaskStore = create<AgentTaskState>()(
               return {
                 id: g.id,
                 goal: g.description,
-                status: (existing?.status ?? 'pending') as AgentTask['status'],
+                status: existing?.status ?? 'queued',
                 createdAt: existing?.createdAt ?? new Date().toISOString(),
                 completedAt: existing?.completedAt,
                 iterations: existing?.iterations,
@@ -416,18 +376,8 @@ export const useAgentTaskStore = create<AgentTaskState>()(
               goalId: taskId,
             });
 
-            const ctx = response.context;
-            const statusMap: Record<string, AgentTaskStatus> = {
-              running: 'running',
-              completed: 'completed',
-              failed: 'failed',
-              cancelled: 'cancelled',
-              pending: 'pending',
-              paused: 'paused',
-              expired: 'expired',
-              recovering: 'recovering',
-            };
-            const mappedStatus = statusMap[ctx.status] ?? 'pending';
+            const mappedStatus = response.state;
+            const lastResult = response.context.toolResults.at(-1);
 
             set((state) => ({
               tasks: state.tasks.map((t) =>
@@ -435,11 +385,17 @@ export const useAgentTaskStore = create<AgentTaskState>()(
                   ? {
                       ...t,
                       status: mappedStatus,
-                      iterations: ctx.currentIteration,
-                      result: ctx.result,
-                      error: ctx.error,
+                      iterations: response.currentIteration,
+                      result:
+                        lastResult?.result === undefined
+                          ? t.result
+                          : typeof lastResult.result === 'string'
+                            ? lastResult.result
+                            : JSON.stringify(lastResult.result),
+                      error: lastResult?.error ?? t.error,
                       completedAt:
-                        mappedStatus === 'completed' || mappedStatus === 'failed'
+                        isTerminalAgentTaskStatus(mappedStatus) ||
+                        mappedStatus === 'ready_for_review'
                           ? (t.completedAt ?? new Date().toISOString())
                           : undefined,
                     }
@@ -456,17 +412,7 @@ export const useAgentTaskStore = create<AgentTaskState>()(
         cancelTask: async (taskId) => {
           try {
             await invoke('agi_cancel_goal', { goalId: taskId });
-            set((state) => ({
-              tasks: state.tasks.map((t) =>
-                t.id === taskId
-                  ? {
-                      ...t,
-                      status: 'cancelled' as AgentTaskStatus,
-                      completedAt: new Date().toISOString(),
-                    }
-                  : t,
-              ),
-            }));
+            await get().getTaskStatus(taskId);
           } catch (error) {
             toast.error('Failed to cancel task');
             console.error('[AgentTaskStore] cancelTask error:', error);
@@ -493,254 +439,48 @@ export const useAgentTaskStore = create<AgentTaskState>()(
           }
         },
 
-        pauseTask: (taskId, reason) => {
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId && t.status === 'running'
-                ? {
-                    ...t,
-                    status: 'paused' as AgentTaskStatus,
-                    pauseReason: reason ?? 'Paused by user',
-                    lastCheckpointIteration: t.iterations,
-                    lastCheckpointAt: new Date().toISOString(),
-                  }
-                : t,
-            ),
-          }));
-          toast.info('Agent task paused');
-        },
-
-        resumeTask: (taskId) => {
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId && (t.status === 'paused' || t.status === 'expired')
-                ? {
-                    ...t,
-                    status: 'running' as AgentTaskStatus,
-                    pauseReason: undefined,
-                  }
-                : t,
-            ),
-          }));
-          toast.info('Agent task resumed');
-        },
-
-        expireTask: (taskId, reason) => {
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId && (t.status === 'running' || t.status === 'paused')
-                ? {
-                    ...t,
-                    status: 'expired' as AgentTaskStatus,
-                    pauseReason: reason ?? 'Task expired',
-                    completedAt: new Date().toISOString(),
-                    lastCheckpointIteration: t.iterations,
-                    lastCheckpointAt: new Date().toISOString(),
-                  }
-                : t,
-            ),
-          }));
-        },
-
-        retryFromCheckpoint: async (taskId) => {
-          const task = get().tasks.find((t) => t.id === taskId);
-          if (!task) return null;
-          if (task.status !== 'failed' && task.status !== 'expired' && task.status !== 'paused') {
-            toast.error('Only failed, expired, or paused tasks can be retried');
-            return null;
-          }
-
-          // Mark as recovering
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId
-                ? {
-                    ...t,
-                    status: 'recovering' as AgentTaskStatus,
-                    error: undefined,
-                    retryCount: (t.retryCount ?? 0) + 1,
-                  }
-                : t,
-            ),
-          }));
-
+        pauseTask: async (taskId, reason) => {
           try {
-            const result = await invoke<SubmitGoalResponse>('agi_submit_goal', {
-              request: {
-                description: task.goal,
-                priority: 'medium',
-              },
-            });
-
-            const newTaskId = result.goalId;
-
-            // Update the original task as abandoned and create a new one
-            set((state) => ({
-              tasks: [
-                ...state.tasks.map((t) =>
-                  t.id === taskId
-                    ? {
-                        ...t,
-                        status: 'cancelled' as AgentTaskStatus,
-                        recoverySummary: `Retried from checkpoint (iteration ${task.lastCheckpointIteration ?? 0}). New task: ${newTaskId}`,
-                      }
-                    : t,
+            await invoke('agi_pause_goal', { goalId: taskId });
+            await get().getTaskStatus(taskId);
+            if (reason) {
+              set((state) => ({
+                tasks: state.tasks.map((task) =>
+                  task.id === taskId ? { ...task, pauseReason: reason } : task,
                 ),
-                {
-                  id: newTaskId,
-                  goal: task.goal,
-                  status: 'pending' as AgentTaskStatus,
-                  createdAt: new Date().toISOString(),
-                  iterations: task.lastCheckpointIteration ?? 0,
-                  retryCount: (task.retryCount ?? 0) + 1,
-                  executionMode: task.executionMode,
-                },
-              ],
-            }));
-
-            toast.success('Task retried from last checkpoint');
-            return newTaskId;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            set((state) => ({
-              tasks: state.tasks.map((t) =>
-                t.id === taskId
-                  ? {
-                      ...t,
-                      status: 'failed' as AgentTaskStatus,
-                      error: `Retry failed: ${msg}`,
-                    }
-                  : t,
-              ),
-            }));
-            toast.error('Failed to retry task: ' + msg);
-            return null;
+              }));
+            }
+            toast.info('Agent task paused');
+          } catch (error) {
+            toast.error('Failed to pause agent task');
+            console.error('[AgentTaskStore] pauseTask error:', error);
           }
         },
 
-        restartFromBeginning: async (taskId) => {
-          const task = get().tasks.find((t) => t.id === taskId);
-          if (!task) return null;
-          if (
-            task.status !== 'failed' &&
-            task.status !== 'expired' &&
-            task.status !== 'paused' &&
-            task.status !== 'cancelled'
-          ) {
-            toast.error('Only failed, expired, paused, or cancelled tasks can be restarted');
-            return null;
-          }
-
-          // Mark as recovering
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId
-                ? {
-                    ...t,
-                    status: 'recovering' as AgentTaskStatus,
-                    error: undefined,
-                  }
-                : t,
-            ),
-          }));
-
+        resumeTask: async (taskId) => {
           try {
-            const result = await invoke<SubmitGoalResponse>('agi_submit_goal', {
-              request: {
-                description: task.goal,
-                priority: 'medium',
-              },
-            });
-
-            const newTaskId = result.goalId;
-
-            set((state) => ({
-              tasks: [
-                ...state.tasks.map((t) =>
-                  t.id === taskId
-                    ? {
-                        ...t,
-                        status: 'cancelled' as AgentTaskStatus,
-                        recoverySummary: `Restarted from beginning. New task: ${newTaskId}`,
-                      }
-                    : t,
-                ),
-                {
-                  id: newTaskId,
-                  goal: task.goal,
-                  status: 'pending' as AgentTaskStatus,
-                  createdAt: new Date().toISOString(),
-                  retryCount: (task.retryCount ?? 0) + 1,
-                  executionMode: task.executionMode,
-                },
-              ],
-            }));
-
-            toast.success('Task restarted from the beginning');
-            return newTaskId;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            set((state) => ({
-              tasks: state.tasks.map((t) =>
-                t.id === taskId
-                  ? {
-                      ...t,
-                      status: 'failed' as AgentTaskStatus,
-                      error: `Restart failed: ${msg}`,
-                    }
-                  : t,
-              ),
-            }));
-            toast.error('Failed to restart task: ' + msg);
-            return null;
+            await invoke('agi_resume_goal', { goalId: taskId });
+            await get().getTaskStatus(taskId);
+            toast.info('Agent task resumed');
+          } catch (error) {
+            toast.error('Failed to resume agent task');
+            console.error('[AgentTaskStore] resumeTask error:', error);
           }
-        },
-
-        abandonWithSummary: (taskId) => {
-          const task = get().tasks.find((t) => t.id === taskId);
-          if (!task) return;
-
-          const iterationInfo = task.iterations
-            ? `Completed ${task.iterations} iteration(s). `
-            : '';
-          const resultInfo = task.result ? `Last result: ${task.result}. ` : '';
-          const errorInfo = task.error ? `Error: ${task.error}. ` : '';
-
-          const summary = `Task abandoned. ${iterationInfo}${resultInfo}${errorInfo}Goal: ${task.goal}`;
-
-          set((state) => ({
-            tasks: state.tasks.map((t) =>
-              t.id === taskId
-                ? {
-                    ...t,
-                    status: 'cancelled' as AgentTaskStatus,
-                    completedAt: t.completedAt ?? new Date().toISOString(),
-                    recoverySummary: summary,
-                  }
-                : t,
-            ),
-          }));
-          toast.info('Task abandoned with summary saved');
         },
 
         getStatusLabel: (status) => {
           const labels: Record<AgentTaskStatus, string> = {
-            pending: 'Pending',
+            queued: 'Queued',
             running: 'Running',
+            awaiting_input: 'Awaiting input',
+            ready_for_review: 'Ready for review',
             completed: 'Completed',
             failed: 'Failed',
             cancelled: 'Cancelled',
             paused: 'Paused',
-            expired: 'Expired',
-            recovering: 'Recovering',
+            archived: 'Archived',
           };
           return labels[status] ?? 'Unknown';
-        },
-
-        isRecoverable: (taskId) => {
-          const task = get().tasks.find((t) => t.id === taskId);
-          if (!task) return false;
-          return task.status === 'failed' || task.status === 'expired' || task.status === 'paused';
         },
 
         resetOnLogout: () => {
@@ -776,22 +516,6 @@ function upsertSubmittedAgentTask(tasks: AgentTask[], submitted: AgentTask): Age
     ...existing,
     goal: existing.goal || submitted.goal,
     executionMode: existing.executionMode ?? submitted.executionMode,
-  };
-  return nextTasks;
-}
-
-function upsertTerminalAgentTask(tasks: AgentTask[], terminal: AgentTask): AgentTask[] {
-  const existingIndex = tasks.findIndex((task) => task.id === terminal.id);
-  if (existingIndex === -1) {
-    return [...tasks, terminal];
-  }
-
-  const existing = tasks[existingIndex]!;
-  const nextTasks = [...tasks];
-  nextTasks[existingIndex] = {
-    ...existing,
-    ...terminal,
-    createdAt: existing.createdAt,
   };
   return nextTasks;
 }
@@ -872,7 +596,7 @@ export function applyAgentTaskGoalSubmitted(payload: AgiGoalSubmittedPayload): v
         {
           id: payload.goal_id,
           goal: payload.description,
-          status: 'pending',
+          status: 'queued',
           createdAt: new Date().toISOString(),
         },
       ],
@@ -882,11 +606,6 @@ export function applyAgentTaskGoalSubmitted(payload: AgiGoalSubmittedPayload): v
 
 export function applyAgentTaskGoalPlanCreated(payload: AgiGoalPlanCreatedPayload): void {
   useAgentTaskStore.setState((state) => ({
-    tasks: state.tasks.map((task) =>
-      task.id === payload.goal_id && task.status === 'pending'
-        ? { ...task, status: 'running' }
-        : task,
-    ),
     liveProgressByTask: capLiveTaskRecord({
       ...state.liveProgressByTask,
       [payload.goal_id]: { step: 0, total: payload.total_steps },
@@ -906,14 +625,6 @@ export function applyAgentTaskGoalStepStarted(payload: AgiGoalStepStartedPayload
     };
 
     return {
-      tasks: state.tasks.map((task) =>
-        task.id === payload.goal_id
-          ? {
-              ...task,
-              status: 'running',
-            }
-          : task,
-      ),
       liveStepsByTask: capLiveTaskRecord({
         ...state.liveStepsByTask,
         [payload.goal_id]: upsertLiveStep(existingSteps, nextStep),
@@ -972,7 +683,6 @@ export function applyAgentTaskGoalProgress(payload: AgiGoalProgressPayload): voi
       task.id === payload.goal_id
         ? {
             ...task,
-            status: 'running',
             iterations: payload.completed_steps,
           }
         : task,
@@ -1001,8 +711,6 @@ export function applyAgentTaskGoalAchieved(payload: AgiGoalAchievedPayload): voi
         task.id === payload.goal_id
           ? {
               ...task,
-              status: 'completed',
-              completedAt: task.completedAt ?? new Date().toISOString(),
               iterations: payload.completed_steps,
             }
           : task,
@@ -1033,8 +741,6 @@ export function applyAgentTaskGoalError(payload: AgiGoalErrorPayload): void {
         task.id === payload.goal_id
           ? {
               ...task,
-              status: 'failed',
-              completedAt: task.completedAt ?? new Date().toISOString(),
               error: payload.error,
             }
           : task,
@@ -1057,7 +763,7 @@ export function applyAgentTaskGoalExecutionStarted(
           {
             id: payload.goal_id,
             goal: payload.description,
-            status: 'running',
+            status: 'queued',
             createdAt: new Date().toISOString(),
             executionMode,
           },
@@ -1066,15 +772,10 @@ export function applyAgentTaskGoalExecutionStarted(
     }
 
     const existing = state.tasks[existingIndex]!;
-    if (isTerminalAgentTaskStatus(existing.status)) {
-      return state;
-    }
-
     const tasks = [...state.tasks];
     tasks[existingIndex] = {
       ...existing,
       goal: existing.goal || payload.description,
-      status: 'running',
       executionMode,
     };
     return { tasks };
@@ -1089,8 +790,6 @@ export function applyAgentTaskGoalExecutionCompleted(
       task.id === payload.goal_id
         ? {
             ...task,
-            status: payload.success ? 'completed' : 'failed',
-            completedAt: task.completedAt ?? new Date().toISOString(),
             error: payload.error ?? task.error,
           }
         : task,
@@ -1099,7 +798,50 @@ export function applyAgentTaskGoalExecutionCompleted(
 }
 
 function isTerminalAgentTaskStatus(status: AgentTaskStatus): boolean {
-  return status === 'completed' || status === 'failed' || status === 'cancelled';
+  return (
+    status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'archived'
+  );
+}
+
+export function applyAgentTaskStateChanged(payload: AgentTaskStateChanged): void {
+  useAgentTaskStore.setState((state) => {
+    const completedAt =
+      isTerminalAgentTaskStatus(payload.state) || payload.state === 'ready_for_review'
+        ? new Date().toISOString()
+        : undefined;
+    const existingIndex = state.tasks.findIndex((task) => task.id === payload.taskId);
+    if (existingIndex === -1) {
+      return {
+        tasks: [
+          ...state.tasks,
+          {
+            id: payload.taskId,
+            goal: '',
+            status: payload.state,
+            createdAt: new Date().toISOString(),
+            completedAt,
+            error: payload.state === 'failed' ? payload.summary : undefined,
+          },
+        ],
+      };
+    }
+
+    const tasks = [...state.tasks];
+    const existing = tasks[existingIndex]!;
+    tasks[existingIndex] = {
+      ...existing,
+      status: payload.state,
+      completedAt,
+      pauseReason: payload.state === 'paused' ? payload.summary : undefined,
+      error:
+        payload.state === 'failed'
+          ? payload.summary
+          : payload.state === 'running'
+            ? undefined
+            : existing.error,
+    };
+    return { tasks };
+  });
 }
 
 let agentTaskEventListenersInitialized = false;
@@ -1125,6 +867,12 @@ export async function initializeAgentTaskEventListeners(): Promise<void> {
   agentTaskEventListenersInitialized = true;
 
   try {
+    agentTaskUnlistenFunctions.push(
+      await listen<AgentTaskStateChanged>('agi:task:state_changed', ({ payload }) => {
+        applyAgentTaskStateChanged(payload);
+      }),
+    );
+
     agentTaskUnlistenFunctions.push(
       await listen<AgiGoalExecutionStartedPayload>('agi:goal:parallel_submitted', ({ payload }) => {
         applyAgentTaskGoalExecutionStarted(payload, 'parallel');

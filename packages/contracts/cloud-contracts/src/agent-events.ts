@@ -14,7 +14,7 @@
 import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 
-export const AGENT_EVENT_SCHEMA_VERSION = 2 as const;
+export const AGENT_EVENT_SCHEMA_VERSION = 3 as const;
 
 const NonEmptyStringSchema = z.string().min(1);
 const OptionalNonNegativeIntegerSchema = z.number().int().nonnegative().optional();
@@ -184,6 +184,26 @@ const ContextCompactedSchema = z.object({
   summary: z.string().optional(),
 });
 
+export const AgentTaskStateSchema = z.enum([
+  'queued',
+  'running',
+  'awaiting_input',
+  'ready_for_review',
+  'completed',
+  'failed',
+  'cancelled',
+  'paused',
+  'archived',
+]);
+
+const TaskStateChangedSchema = z.object({
+  type: z.literal('task-state-changed'),
+  taskId: NonEmptyStringSchema,
+  state: AgentTaskStateSchema,
+  previousState: AgentTaskStateSchema.optional(),
+  summary: z.string().optional(),
+});
+
 export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion('type', [
   TextDeltaSchema,
   ReasoningDeltaSchema,
@@ -204,6 +224,7 @@ export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion('typ
   ApprovalResolvedSchema,
   ArtifactProducedSchema,
   ContextCompactedSchema,
+  TaskStateChangedSchema,
 ]);
 
 export const AgentEventEnvelopeSchema: z.ZodType<AgentEventEnvelope> = z.object({

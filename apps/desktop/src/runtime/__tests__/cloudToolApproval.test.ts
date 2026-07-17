@@ -137,7 +137,7 @@ describe('CloudToolApprovalRegistry.resolve — recursive resume carries the REA
             {
               delta: {
                 x_agent_event: {
-                  schemaVersion: 2,
+                  schemaVersion: 3,
                   sessionId: 'session-activity',
                   turnId: 'turn-activity',
                   sequence: 1,

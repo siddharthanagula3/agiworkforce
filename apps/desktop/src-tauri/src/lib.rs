@@ -1202,6 +1202,8 @@ pub fn run() {
             crate::sys::commands::agi_get_goal_status,
             crate::sys::commands::agi_list_goals,
             crate::sys::commands::agi_cancel_goal,
+            crate::sys::commands::agi_pause_goal,
+            crate::sys::commands::agi_resume_goal,
 
             // Reflection Engine
             crate::sys::commands::agi_get_reflection_insights,

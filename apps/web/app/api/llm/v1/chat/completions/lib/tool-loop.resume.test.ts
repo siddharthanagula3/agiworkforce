@@ -212,6 +212,19 @@ describe('runToolLoop — manual approval suspend', () => {
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
 
     expect(agentEvents(output).map((entry) => entry.event)).toEqual([
+      {
+        type: 'task-state-changed',
+        taskId: 'req-1',
+        state: 'queued',
+        summary: 'Task accepted by the agent engine.',
+      },
+      {
+        type: 'task-state-changed',
+        taskId: 'req-1',
+        previousState: 'queued',
+        state: 'running',
+        summary: 'Agent started working.',
+      },
       { type: 'lifecycle', phase: 'started' },
       {
         type: 'approval-requested',
@@ -221,6 +234,13 @@ describe('runToolLoop — manual approval suspend', () => {
         category: 'connector',
         summary: 'Review GitHub action',
         input: { owner: 'acme', repo: 'app', pull_number: 7 },
+      },
+      {
+        type: 'task-state-changed',
+        taskId: 'req-1',
+        previousState: 'running',
+        state: 'awaiting_input',
+        summary: 'The agent needs approval before it can continue.',
       },
       { type: 'lifecycle', phase: 'paused' },
     ]);
@@ -283,17 +303,32 @@ describe('runToolLoop — manual approval resume', () => {
 
     const activity = agentEvents(output);
     expect(activity.map((entry) => entry.event.type)).toEqual([
+      'task-state-changed',
       'lifecycle',
       'approval-resolved',
       'tool-execution-start',
       'tool-execution-end',
+      'task-state-changed',
       'stop',
     ]);
-    expect(activity[0]?.event).toEqual({ type: 'lifecycle', phase: 'resumed' });
-    expect(activity[1]?.event).toEqual({
+    expect(activity[0]?.event).toEqual({
+      type: 'task-state-changed',
+      taskId: 'req-1',
+      previousState: 'awaiting_input',
+      state: 'running',
+      summary: 'Agent resumed after user input.',
+    });
+    expect(activity[1]?.event).toEqual({ type: 'lifecycle', phase: 'resumed' });
+    expect(activity[2]?.event).toEqual({
       type: 'approval-resolved',
       approvalId: 'call_1',
       decision: 'approved',
+    });
+    expect(activity[5]?.event).toMatchObject({
+      type: 'task-state-changed',
+      taskId: 'req-1',
+      previousState: 'running',
+      state: 'ready_for_review',
     });
   });
 

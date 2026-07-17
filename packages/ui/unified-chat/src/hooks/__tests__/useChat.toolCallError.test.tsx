@@ -161,7 +161,7 @@ describe('useChat — addMsg forwards the real fields on message creation', () =
     emit({
       type: 'agent_event',
       envelope: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         sessionId: 'session-1',
         turnId: 'turn-1',
         sequence: 0,
@@ -184,7 +184,7 @@ describe('useChat — addMsg forwards the real fields on message creation', () =
     emit({
       type: 'agent_event',
       envelope: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         sessionId: 'session-1',
         turnId: 'turn-1',
         sequence: 0,

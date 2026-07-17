@@ -40,11 +40,11 @@ const STATUS_CONFIG: Record<
   AgentTask['status'],
   { icon: React.ElementType; color: string; bgColor: string; label: string }
 > = {
-  pending: {
+  queued: {
     icon: Clock,
     color: 'text-yellow-400',
     bgColor: 'bg-yellow-400/10',
-    label: 'Pending',
+    label: 'Queued',
   },
   running: {
     icon: Loader2,
@@ -76,17 +76,23 @@ const STATUS_CONFIG: Record<
     bgColor: 'bg-amber-400/10',
     label: 'Paused',
   },
-  expired: {
+  awaiting_input: {
     icon: AlertCircle,
     color: 'text-orange-400',
     bgColor: 'bg-orange-400/10',
-    label: 'Expired',
+    label: 'Awaiting input',
   },
-  recovering: {
-    icon: Loader2,
-    color: 'text-purple-400',
-    bgColor: 'bg-purple-400/10',
-    label: 'Recovering',
+  ready_for_review: {
+    icon: CheckCircle2,
+    color: 'text-emerald-400',
+    bgColor: 'bg-emerald-400/10',
+    label: 'Ready for review',
+  },
+  archived: {
+    icon: History,
+    color: 'text-slate-400',
+    bgColor: 'bg-slate-400/10',
+    label: 'Archived',
   },
 };
 
@@ -312,7 +318,10 @@ function TaskRow({ task }: { task: AgentTask }) {
                   </div>
                 )}
 
-                {(task.status === 'pending' || task.status === 'running') && (
+                {(task.status === 'queued' ||
+                  task.status === 'running' ||
+                  task.status === 'paused' ||
+                  task.status === 'awaiting_input') && (
                   <button
                     type="button"
                     onClick={() => void handleCancel()}
@@ -493,14 +502,26 @@ export function AgentTaskMonitor() {
 
   // Auto-refresh running tasks every 5 seconds
   useEffect(() => {
-    const hasRunning = tasks.some((t) => t.status === 'running' || t.status === 'pending');
+    const hasRunning = tasks.some(
+      (task) =>
+        task.status === 'queued' ||
+        task.status === 'running' ||
+        task.status === 'paused' ||
+        task.status === 'awaiting_input',
+    );
     const hasBgRunning = bgTasks.some((t) => t.status === 'Running' || t.status === 'Queued');
 
     if (hasRunning || hasBgRunning) {
       intervalRef.current = setInterval(() => {
         const runningTasks = useAgentTaskStore
           .getState()
-          .tasks.filter((t) => t.status === 'running' || t.status === 'pending');
+          .tasks.filter(
+            (task) =>
+              task.status === 'queued' ||
+              task.status === 'running' ||
+              task.status === 'paused' ||
+              task.status === 'awaiting_input',
+          );
         for (const t of runningTasks) {
           void getTaskStatus(t.id);
         }

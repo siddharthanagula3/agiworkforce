@@ -48,7 +48,11 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
-import type { AgentEventStopReason, AgentEventToolCategory } from '@agiworkforce/types/protocol';
+import type {
+  AgentEventStopReason,
+  AgentEventToolCategory,
+  AgentTaskState,
+} from '@agiworkforce/types/protocol';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -860,6 +864,20 @@ export async function* runToolLoop(
     turnId,
     responseModel,
   });
+  const taskId = turnId;
+  let taskState: AgentTaskState | undefined = options.resume ? 'awaiting_input' : undefined;
+
+  function taskStateEvent(state: AgentTaskState, summary: string): SseLine {
+    const previousState = taskState;
+    taskState = state;
+    return eventStream.emit({
+      type: 'task-state-changed',
+      taskId,
+      state,
+      ...(previousState !== undefined ? { previousState } : {}),
+      summary,
+    });
+  }
 
   // Inject MCP tool defs into the llmRequest.
   const mcpTools = options.mcpTools ?? [];
@@ -1027,6 +1045,15 @@ export async function* runToolLoop(
     for (const line of await harvestGeneratedFilesEvents()) {
       yield encoder.encode(line);
     }
+    if (reason === 'cancelled') {
+      yield encoder.encode(taskStateEvent('cancelled', 'Agent work was cancelled.'));
+    } else if (reason === 'error' || reason === 'refusal') {
+      yield encoder.encode(taskStateEvent('failed', 'Agent work ended with an error.'));
+    } else if (reason !== 'tool-use') {
+      yield encoder.encode(
+        taskStateEvent('ready_for_review', 'Agent work finished and is ready for review.'),
+      );
+    }
     yield encoder.encode(eventStream.emit({ type: 'stop', reason }));
     yield encoder.encode(sseDone());
   }
@@ -1165,6 +1192,15 @@ export async function* runToolLoop(
     }
   }
 
+  if (!options.resume) {
+    yield encoder.encode(taskStateEvent('queued', 'Task accepted by the agent engine.'));
+  }
+  yield encoder.encode(
+    taskStateEvent(
+      'running',
+      options.resume ? 'Agent resumed after user input.' : 'Agent started working.',
+    ),
+  );
   yield encoder.encode(
     eventStream.emit({
       type: 'lifecycle',
@@ -1454,6 +1490,9 @@ export async function* runToolLoop(
             }),
           );
         }
+        yield encoder.encode(
+          taskStateEvent('awaiting_input', 'The agent needs approval before it can continue.'),
+        );
         yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
         // Emit [DONE] so the client knows the current stream is complete
         // and the approval prompt is the terminal event for this turn.

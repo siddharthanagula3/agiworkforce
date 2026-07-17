@@ -5,6 +5,7 @@ import type {
   AgentEventSource,
   AgentEventStopReason,
   AgentEventToolCategory,
+  AgentTaskState,
 } from '@agiworkforce/types/protocol';
 
 export type AgentActivityRunStatus =
@@ -125,6 +126,8 @@ export interface AgentActivityState {
   updatedAtMs: number;
   completedAtMs?: number;
   stopReason?: AgentEventStopReason;
+  taskId?: string;
+  taskState?: AgentTaskState;
   entries: AgentActivityEntry[];
 }
 
@@ -441,6 +444,28 @@ export function applyAgentActivityEvent(
           emittedAtMs: envelope.emittedAtMs,
         },
       ];
+      return next;
+
+    case 'task-state-changed':
+      next.taskId = event.taskId;
+      next.taskState = event.state;
+      if (event.state === 'awaiting_input') {
+        next.status = 'awaiting-approval';
+      } else if (event.state === 'paused') {
+        next.status = 'paused';
+      } else if (event.state === 'failed') {
+        next.status = 'failed';
+        next.completedAtMs = envelope.emittedAtMs;
+      } else if (event.state === 'cancelled' || event.state === 'archived') {
+        next.status = 'cancelled';
+        next.completedAtMs = envelope.emittedAtMs;
+      } else if (event.state === 'ready_for_review' || event.state === 'completed') {
+        next.status = 'completed';
+        next.completedAtMs = envelope.emittedAtMs;
+      } else {
+        next.status = 'running';
+        next.completedAtMs = undefined;
+      }
       return next;
 
     case 'error':
