@@ -33,6 +33,7 @@ import type {
   WebSearchResult,
 } from '@agiworkforce/unified-chat';
 import {
+  parseAgentEventDelta,
   parseGeneratedFilesDelta,
   parseSearchResultsDelta,
   parseToolApprovalRequestDelta,
@@ -40,6 +41,7 @@ import {
   parseToolStatusDelta,
   resolveGeneratedFileUri,
 } from '@agiworkforce/cloud-contracts';
+import { applyAgentActivityEvent, type AgentActivityState } from '@agiworkforce/client-runtime';
 
 interface ToolCallBufferEntry {
   id: string;
@@ -103,6 +105,8 @@ export interface CloudStreamDeltaSink {
    * 'tool'` message the resume request's thread needs.
    */
   getToolResult: (toolCallId: string) => { content: string; isError: boolean } | undefined;
+  /** Latest portable projection of the validated canonical activity stream. */
+  getAgentActivity: () => AgentActivityState | undefined;
 }
 
 /** Extracts `{url,title,snippet,domain}` from one contract `SearchResultSource`. */
@@ -202,6 +206,7 @@ function mapCodeExecutionResultPayload(payload: unknown): {
 export function createCloudStreamDeltaSink(
   emit: (event: StreamEvent) => void,
   apiBaseUrl: string,
+  initialAgentActivity?: AgentActivityState,
 ): CloudStreamDeltaSink {
   const toolCallBuffer = new Map<string, ToolCallBufferEntry>();
   let inThinkingBlock = false;
@@ -209,6 +214,7 @@ export function createCloudStreamDeltaSink(
   let streamError: { message: string; code?: string; retryable?: boolean } | undefined;
   let suspended = false;
   let accumulatedContent = '';
+  let agentActivity: AgentActivityState | undefined = initialAgentActivity;
   // Deep Research status carries forward across deltas (some fields, e.g.
   // `sources`/`iteration`, are only present on SOME status updates) — mirrors
   // apps/web/lib/hooks/useChatStream.ts's currentResearch merge exactly.
@@ -267,6 +273,15 @@ export function createCloudStreamDeltaSink(
         : undefined;
     if (typeof rawFinishReason === 'string' && rawFinishReason) {
       finishReason = rawFinishReason;
+    }
+
+    // Canonical managed-cloud activity. Validate at the untrusted SSE boundary
+    // before either the UI or persistence layer can observe it, then maintain
+    // the same portable projection Web and Mobile consume.
+    const agentEnvelope = parseAgentEventDelta(delta?.['x_agent_event']);
+    if (agentEnvelope) {
+      agentActivity = applyAgentActivityEvent(agentActivity, agentEnvelope);
+      emit({ type: 'agent_event', envelope: agentEnvelope });
     }
 
     // Mid-stream provider failure (additive marker — see getStreamError's
@@ -510,5 +525,6 @@ export function createCloudStreamDeltaSink(
     getAccumulatedContent: () => accumulatedContent,
     getPendingApprovalCalls: () => [...pendingApprovalCalls],
     getToolResult: (toolCallId) => toolResults.get(toolCallId),
+    getAgentActivity: () => agentActivity,
   };
 }

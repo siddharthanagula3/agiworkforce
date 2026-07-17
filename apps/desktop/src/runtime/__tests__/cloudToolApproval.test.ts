@@ -19,11 +19,22 @@ import { CloudToolApprovalRegistry, type ResolveApprovalOutcome } from '../cloud
 
 function suspendedSink(
   calls: { toolCallId: string; name: string; args: Record<string, unknown> }[],
+  agentActivity?: {
+    schemaVersion: 1;
+    sessionId: string;
+    turnId: string;
+    lastSequence: number;
+    status: 'running';
+    startedAtMs: number;
+    updatedAtMs: number;
+    entries: [];
+  },
 ) {
   return {
     isSuspended: () => true,
     getAccumulatedContent: () => '',
     getPendingApprovalCalls: () => calls,
+    getAgentActivity: () => agentActivity,
   };
 }
 
@@ -32,6 +43,7 @@ function completedSink() {
     isSuspended: () => false,
     getAccumulatedContent: () => 'done',
     getPendingApprovalCalls: () => [],
+    getAgentActivity: () => undefined,
   };
 }
 
@@ -91,6 +103,71 @@ describe('CloudToolApprovalRegistry.hasLiveTurn', () => {
 });
 
 describe('CloudToolApprovalRegistry.resolve — recursive resume carries the REAL tool result', () => {
+  it('continues the same canonical activity projection across approval resume', async () => {
+    const registry = new CloudToolApprovalRegistry();
+    registry.recordTurnOutcome(
+      'conv-activity',
+      'gpt-5',
+      [{ role: 'user', content: 'write the file' }],
+      suspendedSink([{ toolCallId: 'call_1', name: 'write_file', args: { path: '/tmp/a' } }], {
+        schemaVersion: 1,
+        sessionId: 'session-activity',
+        turnId: 'turn-activity',
+        lastSequence: 0,
+        status: 'running',
+        startedAtMs: 1_000,
+        updatedAtMs: 1_000,
+        entries: [],
+      }),
+    );
+
+    sendCloudApprovalResume.mockImplementationOnce(
+      async (
+        _model: string,
+        _messages: unknown,
+        _approvals: unknown,
+        _onChunk: (text: string) => void,
+        onDone: () => void,
+        _onError: (error: Error) => void,
+        _signal: AbortSignal | undefined,
+        onEvent: (payload: Record<string, unknown>) => void,
+      ) => {
+        onEvent({
+          choices: [
+            {
+              delta: {
+                x_agent_event: {
+                  schemaVersion: 2,
+                  sessionId: 'session-activity',
+                  turnId: 'turn-activity',
+                  sequence: 1,
+                  emittedAtMs: 2_000,
+                  event: { type: 'stop', reason: 'end-turn' },
+                },
+              },
+            },
+          ],
+        });
+        onDone();
+      },
+    );
+
+    const outcome = await registry.resolve(
+      'conv-activity',
+      'call_1',
+      'approved',
+      () => {},
+      'https://example.test',
+      () => {},
+    );
+
+    expect(outcome?.agentActivity).toMatchObject({
+      turnId: 'turn-activity',
+      lastSequence: 1,
+      status: 'completed',
+    });
+  });
+
   it('replays the actual x_tool_result content (not a placeholder) when a resume suspends again on a further tool', async () => {
     const registry = new CloudToolApprovalRegistry();
     registry.recordTurnOutcome(

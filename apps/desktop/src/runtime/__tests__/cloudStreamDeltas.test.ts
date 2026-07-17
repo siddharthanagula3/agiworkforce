@@ -32,6 +32,40 @@ function payload(delta: Record<string, unknown>): Record<string, unknown> {
 }
 
 describe('cloudStreamDeltas — every x_* delta key the wire can emit', () => {
+  it('x_agent_event: validates, emits, and projects the canonical activity state', () => {
+    const { sink, events } = makeSink();
+    sink.onEvent(
+      payload({
+        x_agent_event: {
+          schemaVersion: 2,
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          sequence: 0,
+          emittedAtMs: 1_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      }),
+    );
+
+    expect(events).toContainEqual({
+      type: 'agent_event',
+      envelope: expect.objectContaining({ turnId: 'turn-1', sequence: 0 }),
+    });
+    expect(sink.getAgentActivity()).toMatchObject({
+      turnId: 'turn-1',
+      status: 'running',
+      lastSequence: 0,
+    });
+  });
+
+  it('x_agent_event: rejects malformed envelopes instead of publishing untrusted activity', () => {
+    const { sink, events } = makeSink();
+    sink.onEvent(payload({ x_agent_event: { schemaVersion: 2, event: { type: 'lifecycle' } } }));
+
+    expect(events.some((event) => event.type === 'agent_event')).toBe(false);
+    expect(sink.getAgentActivity()).toBeUndefined();
+  });
+
   it('x_search_results: emits a search_results event, not silently dropped', () => {
     const { sink, events } = makeSink();
     sink.onEvent(
