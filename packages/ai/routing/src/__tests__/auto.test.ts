@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getAllowedModelsForTier } from '@agiworkforce/types';
 import { resolveAutoRoute } from '../auto';
 
 describe('resolveAutoRoute', () => {
@@ -98,6 +99,58 @@ describe('resolveAutoRoute', () => {
       modelKey: 'gpt-5.6-sol',
       provider: 'openai',
     });
+  });
+
+  it('admits basic exactly like pro (budget-differentiated tier, not a free downgrade)', () => {
+    const args = {
+      selection: 'auto-balanced',
+      taskType: 'reasoning',
+      trustMode: 'managed_cloud',
+    } as const;
+    const asBasic = resolveAutoRoute({ ...args, subscriptionTier: 'basic' });
+    const asPro = resolveAutoRoute({ ...args, subscriptionTier: 'pro' });
+    const asFree = resolveAutoRoute({ ...args, subscriptionTier: 'free' });
+
+    expect(asBasic).toEqual(asPro);
+    expect(asBasic).not.toEqual(asFree);
+  });
+
+  it('never resolves a flagship model for pro or basic (flagship is max/enterprise only)', () => {
+    const flagship = new Set(
+      getAllowedModelsForTier('flagship_additions').map((id) => id.toLowerCase()),
+    );
+    expect(flagship.size).toBeGreaterThan(0);
+    for (const subscriptionTier of ['pro', 'basic'] as const) {
+      for (const selection of ['auto', 'auto-balanced', 'auto-max'] as const) {
+        for (const taskType of ['reasoning', 'coding', 'chat'] as const) {
+          const result = resolveAutoRoute({
+            selection,
+            taskType,
+            subscriptionTier,
+            trustMode: 'managed_cloud',
+          });
+          // Either the profile is refused outright (auto-max is not admitted
+          // for pro-class tiers — it fails closed, never downgrades to a
+          // flagship route) or the resolved chain is flagship-free.
+          if (result.status === 'selected') {
+            expect(flagship.has(result.modelKey.toLowerCase())).toBe(false);
+            for (const fallback of result.fallbacks ?? []) {
+              expect(flagship.has(fallback.modelKey.toLowerCase())).toBe(false);
+            }
+          }
+        }
+      }
+    }
+
+    // And the fail-closed half explicitly: pro-class tiers cannot invoke the
+    // premium profile at all.
+    const denied = resolveAutoRoute({
+      selection: 'auto-max',
+      taskType: 'reasoning',
+      subscriptionTier: 'pro',
+      trustMode: 'managed_cloud',
+    });
+    expect(denied.status).toBe('unavailable');
   });
 
   it('ignores a provider overlay when the subscription tier does not permit it', () => {

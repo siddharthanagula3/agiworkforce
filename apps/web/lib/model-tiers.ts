@@ -15,19 +15,19 @@ import {
 type PaidTier = 'pro' | 'max' | 'enterprise';
 
 function normalizeTier(tier: string): 'free' | PaidTier {
+  // Basic ($8/mo, formerly 'hobby') shares PRO's model set — the tiers are
+  // differentiated by usage budget
+  // (BILLING_PLAN_PRICING.basic.monthlyUsageBudgetUsd in
+  // @agiworkforce/types), not by allowlist. Founder directive 2026-07-16:
+  // flagship models (Opus/Fable/Sol class) are max/enterprise ONLY — the
+  // earlier basic→'max' mapping wrongly let an $8 subscriber pick flagship
+  // models a $20 Pro user cannot.
   switch (tier.toLowerCase()) {
     case 'pro':
     case 'team':
-      return 'pro';
-    // Basic ($8/mo, formerly 'hobby') has the SAME model/feature access as
-    // Pro/Max — it's differentiated only by a lower per-provider usage
-    // budget (BILLING_PLAN_PRICING.basic.monthlyUsageBudgetUsd in
-    // @agiworkforce/types), not by a smaller model allowlist. Mapping to
-    // 'max' here (the broadest PaidTier) unlocks flagship models too;
-    // without this case it fell through to 'free', which zeroed out model
-    // access entirely for every Basic subscriber.
     case 'basic':
     case 'hobby':
+      return 'pro';
     case 'max':
       return 'max';
     case 'enterprise':
