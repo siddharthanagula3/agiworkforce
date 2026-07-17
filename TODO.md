@@ -223,6 +223,26 @@ Decoder::OllamaNative`; (2) `providers/ollama.rs` streaming path swapped
    The confirmed implementation defects are tracked as
    `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`.
 
+## PRE-MERGE MIGRATION PASS (the one runbook; run before merging chore/repo-restructure-2026-07 to main)
+
+Landed branch code selects/writes schema that prod Neon does not have yet.
+Vercel deploys from `main`, so the branch is inert in prod until merge — but
+the merge MUST NOT happen before this pass. Order:
+
+1. Verify applied-state read-only first: `select column_name from
+information_schema.columns where table_name='web_conversations'` (and the
+   0052-0055 objects) against prod Neon — 0044 is confirmed applied; 0052-0055
+   status is unverified, do not assume.
+2. Probe each unapplied migration on a disposable Neon branch (W9 gate).
+3. Apply in sequence: 0043 (audit immutability, AUDIT-IMMUT-01), any
+   unapplied of 0052-0055, 0056 (managed-usage lifecycle —
+   SVC-MANAGED-USAGE-0056-DEPLOY-SEQ-01), 0057 (durable scheduling),
+   0058 (drop legacy teams — DESTRUCTIVE, founder eyes required),
+   0059 (conversation star/archive).
+4. Then merge to main and redeploy; then run the post-deploy verification
+   list (star/archive persistence, managed send on local :3100 no longer
+   503s, schedules CRUD).
+
 ## W9 Wave Status (2026-07-15 — CODE-COMPLETE) + Pending External Gates
 
 All four confirmed-broken W9 items are fixed and verified (worker-control
@@ -248,8 +268,16 @@ externals before full wave closure:
 - `packages/contracts/types/src/user.ts` `SubscriptionTier` still lists `'hobby'`
   although the 2026-06-30 pricing decision removed Plus+Hobby and
   `TIER_POLICIES_DEFINITION`/`getTierPolicy` normalize unknown values to
-  free (verified by test during W5 stage-2). Remove the stale member at
-  final shape when the types package next opens for edits.
+  free (verified by test during W5 stage-2). SCOPE CORRECTION 2026-07-16:
+  this is NOT a one-line member removal — live consumers branch on the
+  literal: `apps/web/app/api/llm/v1/models/route.ts` uses `'hobby'` as its
+  internal economy-tier key (`getAllowedModelsForTier('hobby')`), the
+  extension paywall stack (`managedModelPicker`, `freeTrialClient`,
+  `providerStreamClient` incl. a stale `'pro_plus'`), web `constants/llm.ts`,
+  and `InlinePaywallCard` tier unions. Removing the member requires a
+  deliberate tier-vocabulary sweep (rename the internal economy alias,
+  purge `hobby`/`pro_plus` unions, align the gallery SQL check constraint)
+  with paywall tests — schedule as its own slice, do not drive-by it.
 
 ## Wiring-Gap Audit (2026-07-16, web) — founder freeze directive
 
