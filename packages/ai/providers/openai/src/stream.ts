@@ -25,7 +25,7 @@ interface ToolCallState {
 
 function mapFinishReason(
   reason: OpenAIChatCompletionChunk['choices'][number]['finish_reason'],
-): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'error' | 'cancel' {
+): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel' {
   switch (reason) {
     case 'stop':
       return 'end_turn';
@@ -35,7 +35,11 @@ function mapFinishReason(
     case 'function_call':
       return 'tool_use';
     case 'content_filter':
-      return 'error';
+      // OpenAI's safety layer stopped the response — the same honest concept
+      // as Anthropic's `stop_reason: 'refusal'`, mapped to the same
+      // first-class StreamChunkStop member (not 'error': that means
+      // transport/provider failure).
+      return 'refusal';
     default:
       return 'end_turn';
   }

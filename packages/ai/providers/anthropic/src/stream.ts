@@ -42,7 +42,7 @@ void stopReasonMap; // silence "unused" while we keep the comment in place
 
 function mapStopReason(
   reason: Anthropic.Message['stop_reason'] | null | undefined,
-): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'error' | 'cancel' {
+): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel' {
   switch (reason) {
     case 'end_turn':
       return 'end_turn';
@@ -55,17 +55,12 @@ function mapStopReason(
     case 'refusal':
       // Anthropic's streaming safety classifiers intervened mid-generation
       // (docs.claude.com: "when streaming classifiers intervene to handle
-      // potential policy violations"). StreamChunkStop['reason'] has no
-      // dedicated refusal member, so this maps to 'error' -- NOT the
-      // 'end_turn' default -- matching the sibling OpenAI adapter's
-      // `content_filter` -> 'error' convention (packages/ai/providers/openai/
-      // src/stream.ts's mapFinishReason). Both api-gateway (routes/llm.ts)
-      // and the OpenAI-wire assembler (packages/ai/provider-protocol/src/
-      // openai-wire-compat.ts's x_stream_error side-channel) already treat
-      // 'error' as "surface this as an abnormal stop", so a refusal is
-      // reported to the caller/client distinctly from a normal completion
-      // instead of silently billing/rendering it as one.
-      return 'error';
+      // potential policy violations"). StreamChunkStop['reason'] now has a
+      // first-class 'refusal' member (mirroring the agent event envelope's
+      // Refusal stop), so this maps to it directly -- the sibling OpenAI
+      // adapter maps wire `content_filter` to the same member. Distinct from
+      // 'error' (transport/provider failure) and never a normal completion.
+      return 'refusal';
     // `pause_turn` (long-running server-tool turn paused, resumable via a
     // follow-up request) also falls through to the 'end_turn' default below.
     // That's a distinct, tracked gap -- the harness has no continuation

@@ -25,13 +25,27 @@ import { InlinePaywallCard } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
-import { ChevronDown, ArrowRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { ChevronDown, ArrowRight, AlertCircle, RefreshCw, ShieldAlert } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import {
   isMessageContinuable,
   hasStreamError,
   getStreamErrorMessage,
 } from '../../lib/continue-generation';
+
+/**
+ * A safety refusal: the provider's safety layer stopped the response.
+ * Reaches this surface as `metadata.finishReason` 'refusal' (the canonical
+ * StreamChunkStop member, emitted on the legacy web wire as the literal
+ * reason) or 'content_filter' (the OpenAI wire vocabulary on the
+ * passthrough path). Distinct from streamError (transport/provider failure)
+ * and from continuable truncation — it gets its own honest notice, never a
+ * generic error and never a silent stop.
+ */
+function isRefusalFinish(message: ChatMessage | undefined | null): boolean {
+  const reason = (message?.metadata as { finishReason?: unknown } | undefined)?.finishReason;
+  return reason === 'refusal' || reason === 'content_filter';
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -434,6 +448,23 @@ const ChatMessageListComponent = ({
     hasStreamError(lastMessage),
   );
 
+  /**
+   * Safety refusal notice (see isRefusalFinish): the provider declined to
+   * finish the response. Shown on the last assistant message once streaming
+   * has stopped; mutually exclusive with Continue and the stream-error
+   * notice. Unlike the stream-error notice it does not require onRegenerate
+   * — the honest "declined" state must render regardless; the Retry action
+   * inside it is conditional.
+   */
+  const showRefusalNotice = Boolean(
+    !isLoading &&
+    !lastMessage?.isStreaming &&
+    lastMessage?.role === 'assistant' &&
+    !showContinue &&
+    !showStreamErrorNotice &&
+    isRefusalFinish(lastMessage),
+  );
+
   /** Show follow-up suggestions when last message is a completed assistant reply */
   const showFollowUps =
     onSendMessage &&
@@ -597,6 +628,30 @@ const ChatMessageListComponent = ({
                   <RefreshCw className="h-3 w-3" aria-hidden="true" />
                   Retry
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Safety refusal notice · same placement as the stream-error
+              notice. Any partial content is left exactly as it streamed —
+              this only ADDS the honest "declined" signal. Neutral styling on
+              purpose: a refusal is not a failure of the app or the model. */}
+          {showRefusalNotice && lastMessage && (
+            <div className="px-4 pt-1 md:px-12 lg:px-20">
+              <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+                <ShieldAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>The model declined to finish this response for safety reasons.</span>
+                {onRegenerate && (
+                  <button
+                    type="button"
+                    onClick={() => onRegenerate(lastMessage.id)}
+                    className="ml-auto flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted"
+                    aria-label="Regenerate this response"
+                  >
+                    <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                    Retry
+                  </button>
+                )}
               </div>
             </div>
           )}

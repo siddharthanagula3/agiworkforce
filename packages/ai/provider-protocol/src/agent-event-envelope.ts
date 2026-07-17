@@ -30,20 +30,20 @@ const STOP_REASON_TO_AGENT_EVENT: Record<
   max_tokens: 'max-tokens',
   tool_use: 'tool-use',
   stop_sequence: 'stop-sequence',
+  refusal: 'refusal',
   cancel: 'cancelled',
   error: 'error',
 };
 
 /**
- * `AgentEventStopReason.Refusal` has no source today: no `StreamChunkStop`
- * producer emits it yet (`packages/ai/providers/anthropic/src/stream.ts`'s
- * `mapStopReason` still collapses Anthropic's real `refusal` stop_reason
- * into `'error'` — the documented, tracked gap this envelope's `Refusal`
- * member exists to eventually receive; wiring the adapter to actually emit
- * it is execution program §W6 item 1, not this file). So the reverse
- * mapping below necessarily has no `'refusal'` entry to draw from — see the
- * `stopReasonRoundTrip` describe block in the test file for why that
- * asymmetry is intentional and tested, not an oversight.
+ * Every member round-trips losslessly now that `StreamChunkStop['reason']`
+ * carries the first-class `'refusal'` member and both live emitters produce
+ * it (Anthropic `stop_reason: 'refusal'` and OpenAI wire
+ * `finish_reason: 'content_filter'` — see
+ * `packages/ai/providers/{anthropic,openai}/src/stream*.ts`). The historical
+ * asymmetry (envelope `Refusal` collapsing down to `'error'`) is closed —
+ * see the `stopReasonRoundTrip` describe block in the test file, which pins
+ * the symmetric behavior.
  */
 const AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK: Record<
   AgentEventStopReason,
@@ -53,7 +53,7 @@ const AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK: Record<
   'max-tokens': 'max_tokens',
   'tool-use': 'tool_use',
   'stop-sequence': 'stop_sequence',
-  refusal: 'error',
+  refusal: 'refusal',
   cancelled: 'cancel',
   error: 'error',
 };
