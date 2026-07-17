@@ -408,6 +408,19 @@ agi-work-wiring teammate frees apps/web:
   picker-locking them affects the DEFAULT model on low-RAM devices, so it is
   a product decision (honest lock vs a lower-RAM text tier), not a drive-by.
 
+## Mobile IAP store-console setup (founder action, no code change now)
+
+- Apple notice 2026-07-15 (forwarded by founder 2026-07-17): App Store
+  Connect API moved IAP/subscription review submission to version-based v2
+  resources (InAppPurchaseVersion / SubscriptionVersion, up to 200 items per
+  submission); the old images/localizations/submissions resources are
+  deprecated and will be removed. ZERO current code impact: mobile IAP is
+  on-device react-native-iap (StoreKit 2 / Play Billing) with PLACEHOLDER
+  SKUs (`iapProducts.ts`) and the repo has no ASC API automation. Applies
+  only when the founder creates the real SKUs in App Store Connect and
+  submits them for review — use the new v2 grouped-submission workflow (and
+  v2-based tooling if fastlane/EAS automation is added then).
+
 ## Ponytail dedup queue (one-canonical-owner, non-urgent)
 
 - web store roots overlap (flagged during the W12 manifest, 2026-07-17):
