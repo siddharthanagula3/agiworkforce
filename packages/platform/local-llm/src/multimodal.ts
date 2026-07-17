@@ -103,6 +103,26 @@ export function effectiveVisionIn(
   return Boolean(model.capabilities.visionIn) && state.mmprojInstalled;
 }
 
+/**
+ * Effective vision capability for a TIER-2 (ExecuTorch) VLM. The tier-2 .pte
+ * is a single artifact with the vision projector embedded — there is no
+ * mmproj pair — so the honest install-state evidence is the model itself
+ * being installed with a vision-capable preset. Same capability-honesty rule
+ * as `effectiveVisionIn`: the catalog `visionIn` flag alone never lights up
+ * vision UI or routing.
+ */
+export function effectiveTier2VisionIn(
+  model: OnDeviceModel,
+  state: { modelInstalled: boolean },
+): boolean {
+  return (
+    Boolean(model.capabilities.visionIn) &&
+    model.supportedRuntimes.includes('executorch') &&
+    Boolean(model.executorchPreset) &&
+    state.modelInstalled
+  );
+}
+
 function normalizeHex(hex: string): string {
   return hex
     .trim()
