@@ -19,18 +19,20 @@
 use crate::core::agent::context_compactor::{
     should_auto_compact, CompactionConfig, ContextCompactor,
 };
+use crate::core::llm::llm_router::{LLMRouter, RouterPreferences};
 use crate::core::llm::models_config;
 use crate::core::llm::token_counter::TokenCounter;
 use crate::core::llm::ChatMessage;
 use crate::data::db::models::Message;
 use crate::data::db::repository;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Emitter;
+use tokio::sync::RwLock;
 use tracing::{debug, info};
 
-use super::AppDatabase;
+use super::{compaction::persist_compacted_context, AppDatabase};
 
 /// Minimum number of conversation messages required before we even consider
 /// compacting.  Very short conversations do not benefit from summarization.
@@ -85,6 +87,7 @@ pub struct CompactionCompletedEvent {
 /// * `llm_messages` — the mutable vec of chat messages about to be sent to
 ///   the LLM.  On compaction this is rewritten in-place.
 /// * `model` — the model ID string used to look up the context window size.
+/// * `reserved_output_tokens` — response capacity excluded from the input budget.
 /// * `db` — database handle for reading/writing conversation messages.
 /// * `conversation_id` — the current conversation ID (skipped for incognito
 ///   conversations with id <= 0).
@@ -95,10 +98,13 @@ pub struct CompactionCompletedEvent {
 pub async fn maybe_compact_context(
     llm_messages: &mut Vec<ChatMessage>,
     model: &str,
+    reserved_output_tokens: usize,
     db: &AppDatabase,
     conversation_id: i64,
     user_id: &str,
     app_handle: &tauri::AppHandle,
+    router: Arc<RwLock<LLMRouter>>,
+    preferences: RouterPreferences,
 ) -> Result<bool, String> {
     // Skip incognito or invalid conversations
     if conversation_id <= 0 {
@@ -110,6 +116,9 @@ pub async fn maybe_compact_context(
 
     // Look up the context window for this model
     let context_window = resolve_context_window(model);
+    let usable_input_tokens = context_window
+        .saturating_sub(reserved_output_tokens.min(context_window.saturating_sub(1)))
+        .max(1);
 
     // Build the auto-compaction config (uses 95% threshold by default)
     let auto_config = CompactionConfig::default();
@@ -122,14 +131,14 @@ pub async fn maybe_compact_context(
 
     if !should_auto_compact(
         total_tokens,
-        context_window,
+        usable_input_tokens,
         &auto_config,
         last_compact_time,
     ) {
         let threshold_pct = (auto_config.auto_compact_threshold * 100.0) as u32;
         debug!(
             "[Chat] Auto-compaction not needed: {} tokens / {} window (threshold {}%)",
-            total_tokens, context_window, threshold_pct,
+            total_tokens, usable_input_tokens, threshold_pct,
         );
         return Ok(false);
     }
@@ -150,15 +159,15 @@ pub async fn maybe_compact_context(
         return Ok(false);
     }
 
-    let percentage = if context_window > 0 {
-        (total_tokens as f32 / context_window as f32) * 100.0
+    let percentage = if usable_input_tokens > 0 {
+        (total_tokens as f32 / usable_input_tokens as f32) * 100.0
     } else {
         0.0
     };
 
     info!(
         "[Chat] Auto-compaction triggered at {}/{} tokens ({:.1}%)",
-        total_tokens, context_window, percentage,
+        total_tokens, usable_input_tokens, percentage,
     );
 
     // Emit "auto-triggered" event so frontend can show progress immediately
@@ -167,33 +176,32 @@ pub async fn maybe_compact_context(
         &CompactionAutoTriggeredEvent {
             conversation_id,
             current_tokens: total_tokens,
-            max_tokens: context_window,
+            max_tokens: usable_input_tokens,
             percentage,
         },
     );
 
     // Configure the compactor — target half the context window so there is
     // plenty of room for the model's reply and future messages.
-    let threshold = (context_window as f64 * auto_config.auto_compact_threshold as f64) as usize;
+    let threshold =
+        (usable_input_tokens as f64 * auto_config.auto_compact_threshold as f64) as usize;
     let compaction_config = CompactionConfig {
         max_tokens: threshold,
-        target_tokens: context_window / 2,
+        target_tokens: usable_input_tokens / 2,
         keep_recent: KEEP_RECENT_MESSAGES,
         min_messages: MIN_MESSAGES_FOR_AUTO_COMPACT,
         ..auto_config
     };
-    let compactor = ContextCompactor::new(compaction_config);
-
-    // Generate a summary of the older messages
-    let summary = compactor
-        .generate_summary(&messages)
+    let compactor = ContextCompactor::with_router(compaction_config, router, preferences);
+    let result = compactor
+        .compact_messages(&messages)
         .await
-        .map_err(|e| format!("Auto-compaction summary generation failed: {e}"))?;
-
-    let compacted_db_messages = compactor.get_compacted_messages(&messages, &summary);
+        .map_err(|e| format!("Auto-compaction failed: {e}"))?
+        .ok_or_else(|| "Auto-compaction selected no eligible historical messages".to_string())?;
+    let compacted_db_messages = result.messages;
 
     // Persist the compacted state
-    persist_auto_compaction(
+    persist_compacted_context(
         db,
         conversation_id,
         user_id,
@@ -208,20 +216,14 @@ pub async fn maybe_compact_context(
 
     // Calculate stats
     let tokens_before = total_tokens;
-    let tokens_after_db: usize = compacted_db_messages
-        .iter()
-        .map(|m| m.tokens.unwrap_or(0) as usize)
-        .sum();
+    let tokens_after_db = result.tokens_after;
     // The LLM messages include system prompts that are not in the DB messages,
     // so estimate the overhead from non-history messages.
-    let history_tokens: usize = messages
-        .iter()
-        .map(|m| m.tokens.unwrap_or(0) as usize)
-        .sum();
+    let history_tokens = ContextCompactor::calculate_tokens(&messages);
     let overhead_tokens = total_tokens.saturating_sub(history_tokens);
     let tokens_after = tokens_after_db + overhead_tokens;
 
-    let messages_compacted = messages.len().saturating_sub(compacted_db_messages.len());
+    let messages_compacted = result.messages_compacted;
     let savings_percent = if tokens_before > 0 {
         ((tokens_before.saturating_sub(tokens_after)) as f32 / tokens_before as f32) * 100.0
     } else {
@@ -305,93 +307,6 @@ fn rebuild_llm_messages(llm_messages: &mut Vec<ChatMessage>, compacted_db_messag
     }
 }
 
-/// Persist the compacted context to the database.
-///
-/// This mirrors the logic in `compaction.rs::persist_compacted_context` but
-/// is kept separate to avoid tight coupling and to allow the auto-compaction
-/// path to evolve independently.
-fn persist_auto_compaction(
-    db: &AppDatabase,
-    conversation_id: i64,
-    user_id: &str,
-    original_messages: &[Message],
-    compacted_messages: &[Message],
-) -> Result<(), String> {
-    // The first compacted message should be the summary (id == 0, System role)
-    let summary_message = compacted_messages
-        .first()
-        .filter(|m| m.id == 0 && m.role == crate::data::db::models::MessageRole::System)
-        .ok_or_else(|| "Auto-compaction produced no summary message".to_string())?;
-
-    let keep_recent_count = compacted_messages
-        .len()
-        .checked_sub(1)
-        .ok_or_else(|| "Auto-compaction output is missing recent messages".to_string())?;
-    let recent_start = original_messages.len().saturating_sub(keep_recent_count);
-    let old_messages = &original_messages[..recent_start];
-    if old_messages.is_empty() {
-        return Ok(()); // Nothing to compact
-    }
-
-    let summary_created_at = original_messages
-        .get(recent_start)
-        .map(|m| m.created_at - chrono::Duration::seconds(1))
-        .unwrap_or_else(|| old_messages[old_messages.len() - 1].created_at);
-    let summary_created_at_sql = summary_created_at.format("%Y-%m-%d %H:%M:%S").to_string();
-    let summary_branch_id = old_messages
-        .last()
-        .and_then(|m| m.branch_id.clone())
-        .unwrap_or_else(|| "main".to_string());
-
-    let conn = db.connection()?;
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|e| format!("Failed to start auto-compaction transaction: {e}"))?;
-
-    // Mark conversation as updated
-    tx.execute(
-        "UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND user_id = ?2",
-        rusqlite::params![conversation_id, user_id],
-    )
-    .map_err(|e| format!("Failed to update conversation timestamp: {e}"))?;
-
-    // Remove old messages
-    for msg in old_messages {
-        tx.execute(
-            "DELETE FROM messages WHERE id = ?1 AND conversation_id = ?2",
-            rusqlite::params![msg.id, conversation_id],
-        )
-        .map_err(|e| format!("Failed to remove compacted message {}: {e}", msg.id))?;
-    }
-
-    // Insert summary message
-    tx.execute(
-        "INSERT INTO messages (
-            conversation_id, user_id, role, content, tokens, cost,
-            provider, model, created_at, parent_message_id, branch_id
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-        rusqlite::params![
-            conversation_id,
-            user_id,
-            summary_message.role.as_str(),
-            summary_message.content,
-            summary_message.tokens,
-            summary_message.cost,
-            summary_message.provider.as_deref(),
-            summary_message.model.as_deref(),
-            summary_created_at_sql,
-            summary_message.parent_message_id,
-            summary_branch_id,
-        ],
-    )
-    .map_err(|e| format!("Failed to save compacted summary: {e}"))?;
-
-    tx.commit()
-        .map_err(|e| format!("Failed to commit auto-compaction: {e}"))?;
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -438,8 +353,11 @@ mod tests {
 
         let compacted_db = vec![
             make_db_msg(
-                crate::data::db::models::MessageRole::System,
-                "[Compacted Context]\n\nSummary of older conversation",
+                crate::data::db::models::MessageRole::Assistant,
+                &format!(
+                    "{}\nSummary of older conversation",
+                    agiworkforce_agent_core::context::UNTRUSTED_SUMMARY_MARKER
+                ),
             ),
             make_db_msg(
                 crate::data::db::models::MessageRole::User,
@@ -449,13 +367,15 @@ mod tests {
 
         rebuild_llm_messages(&mut llm_messages, &compacted_db);
 
-        assert_eq!(llm_messages.len(), 4); // 2 system + 1 compacted system + 1 user
+        assert_eq!(llm_messages.len(), 4); // 2 system + 1 untrusted assistant summary + 1 user
         assert_eq!(llm_messages[0].role, "system");
         assert_eq!(llm_messages[0].content, "You are helpful.");
         assert_eq!(llm_messages[1].role, "system");
         assert_eq!(llm_messages[1].content, "OS: macOS");
-        assert_eq!(llm_messages[2].role, "system");
-        assert!(llm_messages[2].content.contains("Compacted Context"));
+        assert_eq!(llm_messages[2].role, "assistant");
+        assert!(llm_messages[2]
+            .content
+            .contains(agiworkforce_agent_core::context::UNTRUSTED_SUMMARY_MARKER));
         assert_eq!(llm_messages[3].role, "user");
         assert_eq!(llm_messages[3].content, "latest question");
     }

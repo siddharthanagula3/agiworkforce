@@ -120,6 +120,7 @@ pub async fn chat_send_message(
         &project_context_state,
         &memory_state,
         &app_handle,
+        _llm_state.router.clone(),
         request,
         provider_enum,
         model,

@@ -291,8 +291,8 @@ mod r5_context_compactor_ordering {
         }
     }
 
-    #[test]
-    fn get_compacted_messages_keeps_recent_messages_at_end() {
+    #[tokio::test]
+    async fn compact_messages_keeps_recent_messages_at_end() {
         let config = CompactionConfig {
             max_tokens: 100_000,
             target_tokens: 50_000,
@@ -307,8 +307,12 @@ mod r5_context_compactor_ordering {
             .map(|i| make_message(i, &format!("message-{}", i), 1000))
             .collect();
 
-        let summary = "Summary of old messages";
-        let compacted = compactor.get_compacted_messages(&messages, summary);
+        let compacted = compactor
+            .compact_messages(&messages)
+            .await
+            .expect("compaction")
+            .expect("compacted result")
+            .messages;
 
         // The compacted list should have: 1 summary + 3 recent messages = 4 total
         assert_eq!(
@@ -318,14 +322,16 @@ mod r5_context_compactor_ordering {
             compacted.len()
         );
 
-        // First message should be the summary (System role with [Compacted Context] prefix)
+        // Historical summaries are assistant data, never privileged system instructions.
         assert!(
-            matches!(compacted[0].role, MessageRole::System),
-            "First compacted message should be System (summary)"
+            matches!(compacted[0].role, MessageRole::Assistant),
+            "First compacted message should be an Assistant summary"
         );
         assert!(
-            compacted[0].content.contains("[Compacted Context]"),
-            "Summary message must contain [Compacted Context] prefix"
+            compacted[0]
+                .content
+                .contains(agiworkforce_agent_core::context::UNTRUSTED_SUMMARY_MARKER),
+            "Summary message must be explicitly framed as untrusted"
         );
 
         // The last 3 messages should be the RECENT ones (messages 6, 7, 8)
@@ -343,8 +349,8 @@ mod r5_context_compactor_ordering {
         );
     }
 
-    #[test]
-    fn get_compacted_messages_old_messages_are_not_in_output() {
+    #[tokio::test]
+    async fn compact_messages_old_messages_are_not_in_output() {
         let config = CompactionConfig {
             max_tokens: 100_000,
             target_tokens: 50_000,
@@ -362,8 +368,12 @@ mod r5_context_compactor_ordering {
             make_message(5, "recent-message-2", 1000),
         ];
 
-        let summary = "compacted old messages";
-        let compacted = compactor.get_compacted_messages(&messages, summary);
+        let compacted = compactor
+            .compact_messages(&messages)
+            .await
+            .expect("compaction")
+            .expect("compacted result")
+            .messages;
 
         // Verify that old messages are NOT in the output (beyond the summary)
         let content_strings: Vec<&str> = compacted.iter().map(|m| m.content.as_str()).collect();

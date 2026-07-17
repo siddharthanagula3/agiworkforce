@@ -3,12 +3,13 @@ use super::*;
 use crate::core::agent::prompt_engineer::PromptEngineer;
 use crate::core::llm::{
     cost_calculator::CostCalculator,
-    llm_router::{RouterContext, RouterPreferences, RoutingStrategy},
+    llm_router::{LLMRouter, RouterContext, RouterPreferences, RoutingStrategy},
     token_counter::TokenCounter,
     ChatMessage, LLMRequest, Provider, TaskType, ThinkingParameter,
 };
 use std::collections::HashSet;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct SendMessageFlags {
@@ -194,6 +195,7 @@ pub(super) async fn prepare_send_message(
     project_context_state: &State<'_, crate::sys::commands::project_context::ProjectContextState>,
     memory_state: &State<'_, crate::sys::commands::memory::MemoryState>,
     app_handle: &tauri::AppHandle,
+    router: Arc<RwLock<LLMRouter>>,
     request: ChatSendMessageRequest,
     provider_enum: Option<Provider>,
     model: String,
@@ -223,7 +225,7 @@ pub(super) async fn prepare_send_message(
         cloud_sync_enabled,
     )?;
 
-    let history = load_message_history(db, conversation.id, flags.incognito)?;
+    let mut history = load_message_history(db, conversation.id, flags.incognito)?;
 
     let mut llm_messages = vec![ChatMessage {
         role: "system".to_string(),
@@ -375,6 +377,33 @@ pub(super) async fn prepare_send_message(
         agent_instruction.push_str(docs);
     }
 
+    // Run automatic compaction against the exact prospective request, including
+    // injected system context. If it persists a compacted history, reload the
+    // DB rows and then append them to the real request so the current turn's
+    // multimodal attachment parts are reconstructed rather than flattened.
+    let mut prospective_messages = llm_messages.clone();
+    append_history_messages(
+        &mut prospective_messages,
+        &history,
+        user_message.id,
+        multimodal_parts.as_ref(),
+    );
+    if !flags.incognito
+        && super::context_monitor::maybe_compact_context(
+            &mut prospective_messages,
+            &model,
+            request.max_output_tokens.unwrap_or(DEFAULT_MAX_TOKENS) as usize,
+            db,
+            conversation.id,
+            &request.user_id,
+            app_handle,
+            router,
+            preferences.clone(),
+        )
+        .await?
+    {
+        history = load_message_history(db, conversation.id, false)?;
+    }
     append_history_messages(
         &mut llm_messages,
         &history,
@@ -583,14 +612,12 @@ pub(super) fn load_project_scope_prompt(
         .optional();
 
     match row {
-        Ok(Some((name, description, instructions, knowledge_json))) => {
-            format_project_scope_prompt(
-                &name,
-                description.as_deref(),
-                instructions.as_deref(),
-                knowledge_json.as_deref(),
-            )
-        }
+        Ok(Some((name, description, instructions, knowledge_json))) => format_project_scope_prompt(
+            &name,
+            description.as_deref(),
+            instructions.as_deref(),
+            knowledge_json.as_deref(),
+        ),
         Ok(None) => {
             debug!(
                 "[Chat] Conversation is scoped to project {project_id}, but no active project row exists — skipping project context"
@@ -1532,8 +1559,11 @@ mod tests {
         assert!(prompt.contains("Budget is 2M."));
 
         // Archived projects must stop injecting context.
-        conn.execute("UPDATE projects SET is_archived = 1 WHERE id = 'proj-1'", [])
-            .unwrap();
+        conn.execute(
+            "UPDATE projects SET is_archived = 1 WHERE id = 'proj-1'",
+            [],
+        )
+        .unwrap();
         assert!(load_project_scope_prompt(&conn, "proj-1").is_none());
 
         // Unscoped conversations stay unscoped.
