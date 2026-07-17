@@ -2031,8 +2031,10 @@ pub fn run() {
             // Voice (TTS, Wake Word, PTT)
             crate::sys::commands::voice::voice_tts_speak,
             // AGI Dictation in-app speech recording
+            crate::sys::commands::voice::dictation_list_input_devices,
             crate::sys::commands::voice::speech_start_recording,
             crate::sys::commands::voice::speech_stop_and_transcribe,
+            crate::sys::commands::voice::speech_cancel_recording,
 
             // System automation permissions (macOS Accessibility, Screen Recording)
             crate::sys::commands::check_automation_permissions,

@@ -66,9 +66,7 @@ pub enum DictationOutcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BeginError {
     /// Another session owns the pipeline; a second capture must never start.
-    Busy {
-        active_source: DictationSource,
-    },
+    Busy { active_source: DictationSource },
     /// The requesting source is not admitted in this build (fail closed).
     SourceUnavailable,
 }
@@ -156,7 +154,11 @@ impl DictationCoordinator {
 
     /// Advance the active session forward. Only the forward edges of the
     /// machine are legal: `Capturing -> Transcribing -> Injecting`.
-    pub fn advance(&self, session_id: &str, to: DictationPhase) -> Result<DictationPhase, SessionError> {
+    pub fn advance(
+        &self,
+        session_id: &str,
+        to: DictationPhase,
+    ) -> Result<DictationPhase, SessionError> {
         let mut guard = self.lock();
         let active = guard.as_mut().ok_or(SessionError::NoActiveSession)?;
         if active.id != session_id {
@@ -314,7 +316,10 @@ mod tests {
             Err(SessionError::StaleSession)
         );
         assert_eq!(coordinator.snapshot().phase, DictationPhase::Capturing);
-        assert_eq!(coordinator.snapshot().session_id.as_deref(), Some(newer.as_str()));
+        assert_eq!(
+            coordinator.snapshot().session_id.as_deref(),
+            Some(newer.as_str())
+        );
     }
 
     #[test]
@@ -336,7 +341,10 @@ mod tests {
                     .advance(&id, DictationPhase::Injecting)
                     .expect("to injecting");
             }
-            assert_eq!(coordinator.end(&id, DictationOutcome::Cancelled), Ok(target));
+            assert_eq!(
+                coordinator.end(&id, DictationOutcome::Cancelled),
+                Ok(target)
+            );
             assert_eq!(coordinator.snapshot().phase, DictationPhase::Idle);
         }
     }

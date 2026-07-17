@@ -93,7 +93,9 @@ fn parse_outcome(outcome: &str) -> Result<DictationOutcome, String> {
 
 fn session_error_message(error: SessionError) -> String {
     match error {
-        SessionError::StaleSession => "Stale dictation session ID (a newer session owns the pipeline)".to_string(),
+        SessionError::StaleSession => {
+            "Stale dictation session ID (a newer session owns the pipeline)".to_string()
+        }
         SessionError::NoActiveSession => "No active dictation session".to_string(),
         SessionError::IllegalTransition { from, to } => {
             format!("Illegal dictation transition: {from:?} -> {to:?}")
@@ -232,8 +234,7 @@ pub async fn voice_start_global_ptt(app: tauri::AppHandle) -> Result<(), String>
                     if let Some(session_id) = snapshot.session_id {
                         // No global capture pipeline exists yet (plan phase
                         // 3+), so a release cancels rather than transcribes.
-                        let _ = DICTATION_COORDINATOR
-                            .end(&session_id, DictationOutcome::Cancelled);
+                        let _ = DICTATION_COORDINATOR.end(&session_id, DictationOutcome::Cancelled);
                         emit_dictation_event(
                             &app_for_sink,
                             "session-ended",
