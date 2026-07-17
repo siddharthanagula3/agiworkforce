@@ -47,7 +47,7 @@ function messageStart(id: string): Event {
 }
 
 describe('translateAnthropicStream — stop_reason mapping', () => {
-  it('maps a refusal stop_reason to an explicit error outcome, not a silent end_turn', async () => {
+  it('maps a refusal stop_reason to the first-class refusal outcome, not error or a silent end_turn', async () => {
     const events: Event[] = [
       messageStart('msg_refusal'),
       {
@@ -71,7 +71,7 @@ describe('translateAnthropicStream — stop_reason mapping', () => {
     const out = await collect(translateAnthropicStream(fromArray(events)));
     const stops = out.filter((c) => c.type === 'stop');
     expect(stops).toHaveLength(1);
-    expect(stops[0]).toEqual({ type: 'stop', reason: 'error' });
+    expect(stops[0]).toEqual({ type: 'stop', reason: 'refusal' });
 
     // Only one stop chunk -- the truncation-safety `finally` fallback must
     // NOT fire a second one now that message_delta already emitted a reason.

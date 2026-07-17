@@ -14,6 +14,10 @@ const STOP_REASONS: ReadonlySet<StreamChunkStop['reason']> = new Set([
   'max_tokens',
   'tool_use',
   'stop_sequence',
+  // Refusal is a first-class safety stop (agent-event envelope member): a
+  // billable honest terminal stop, NOT a failed attempt — it must never hit
+  // the incomplete-stream refund/retry branches in routes/llm.ts.
+  'refusal',
   'error',
   'cancel',
 ]);

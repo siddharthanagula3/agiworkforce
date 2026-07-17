@@ -343,6 +343,28 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
   });
 });
 
+describe('OpenAIWireAssembler safety refusal (first-class StreamChunkStop refusal member)', () => {
+  it("default mode: a 'refusal' stop reaches the wire as finish_reason 'content_filter' — the OpenAI wire's own safety vocabulary, never a normal 'stop'", () => {
+    const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW });
+    const chunk = assembler.sseChunk({ type: 'stop', reason: 'refusal' });
+    expect(
+      (chunk as { choices: Array<{ finish_reason?: string }> }).choices[0]!.finish_reason,
+    ).toBe('content_filter');
+  });
+
+  it("legacy-web mode: a 'refusal' stop emits the literal finish_reason 'refusal' (the legacy wire's literal-passthrough rule), never 'error' and never 'stop'", () => {
+    const assembler = new OpenAIWireAssembler({ model: 'm', wireMode: 'legacy-web', now: NOW });
+    const wire: Record<string, unknown>[] = [];
+    for (const c of assembler.sseChunks({ type: 'stop', reason: 'refusal' })) wire.push(c);
+    const finishReasons = wire
+      .map(
+        (e) => (e as { choices?: Array<{ finish_reason?: unknown }> }).choices?.[0]?.finish_reason,
+      )
+      .filter((f): f is string => typeof f === 'string');
+    expect(finishReasons).toEqual(['refusal']);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01: signed thinking continuity across
 // a server-side tool-loop step.

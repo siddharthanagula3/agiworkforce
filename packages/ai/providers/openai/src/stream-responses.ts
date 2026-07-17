@@ -30,13 +30,15 @@ interface OpenItem {
 
 function mapIncompleteReason(
   reason: string | undefined,
-): 'max_tokens' | 'stop_sequence' | 'error' | 'end_turn' {
+): 'max_tokens' | 'stop_sequence' | 'refusal' | 'end_turn' {
   switch (reason) {
     case 'max_output_tokens':
     case 'max_tokens':
       return 'max_tokens';
     case 'content_filter':
-      return 'error';
+      // Safety-layer stop — first-class 'refusal', same member the
+      // Chat Completions adapter maps wire `content_filter` to.
+      return 'refusal';
     case 'stop_sequence':
       return 'stop_sequence';
     default:

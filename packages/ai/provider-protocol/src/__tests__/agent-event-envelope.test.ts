@@ -105,36 +105,31 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
     expect(agentEventToStreamChunk({ type: 'lifecycle', phase: 'heartbeat' })).toBeNull();
   });
 
-  describe('stop reason round trip — the honest-vocabulary gap is intentional and tested, not silently lossy', () => {
-    it('the five reasons StreamChunkStop already has round-trip exactly', () => {
+  describe('stop reason round trip — the honest vocabulary is symmetric: every member round-trips losslessly', () => {
+    it('every StreamChunkStop reason round-trips exactly, refusal included', () => {
       for (const reason of [
         'end_turn',
         'max_tokens',
         'tool_use',
         'stop_sequence',
+        'refusal',
         'cancel',
+        'error',
       ] as const) {
         const chunk: StreamChunk = { type: 'stop', reason };
         expect(agentEventToStreamChunk(streamChunkToAgentEvent(chunk)!)).toEqual(chunk);
       }
     });
 
-    it("'error' round-trips exactly (both 'error' and the not-yet-wired 'refusal' target land on the same wire value today)", () => {
-      const chunk: StreamChunk = { type: 'stop', reason: 'error' };
-      expect(agentEventToStreamChunk(streamChunkToAgentEvent(chunk)!)).toEqual(chunk);
-    });
-
-    it("AgentEventStopReason 'refusal' maps DOWN to StreamChunk 'error' (lossy on purpose): no producer emits 'refusal' from a real StreamChunk yet, so this is a one-way escape hatch for the envelope to carry a refusal outcome, not a claim that it round-trips", () => {
+    it("AgentEventStopReason 'refusal' maps DOWN to the first-class StreamChunk 'refusal' — the historical collapse to 'error' (the pre-emitter-wiring asymmetry this block used to pin) is closed and must not return", () => {
       const streamChunk = agentEventToStreamChunk({ type: 'stop', reason: 'refusal' });
-      expect(streamChunk).toEqual({ type: 'stop', reason: 'error' });
+      expect(streamChunk).toEqual({ type: 'stop', reason: 'refusal' });
+      expect(streamChunk).not.toEqual({ type: 'stop', reason: 'error' });
 
-      // Mapping that same StreamChunk back up does NOT recover 'refusal' —
-      // proves the asymmetry is real and documents exactly where the
-      // execution-program §W6 item 1 fix (Anthropic adapter emitting an
-      // honest refusal outcome) needs to land for this to close.
+      // And back up: the round trip recovers 'refusal' exactly. A refusal is
+      // never re-generalized into 'error' at this edge.
       const roundTripped = streamChunkToAgentEvent(streamChunk!);
-      expect(roundTripped).toEqual({ type: 'stop', reason: 'error' });
-      expect(roundTripped).not.toEqual({ type: 'stop', reason: 'refusal' });
+      expect(roundTripped).toEqual({ type: 'stop', reason: 'refusal' });
     });
   });
 });
