@@ -10,6 +10,8 @@
  * matching the design doc's "mocked executor" verification approach.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 // buildToolLoopStream (tool-loop-anthropic.ts) is the table-driven adapter
 // dispatch every provider now goes through (task #34's tool-loop slice) --
@@ -96,6 +98,19 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
+function agentEvents(output: string): AgentEventEnvelope[] {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .flatMap((line) => {
+      const payload = JSON.parse(line.slice('data: '.length)) as {
+        choices?: Array<{ delta?: { x_agent_event?: unknown } }>;
+      };
+      const event = parseAgentEventDelta(payload.choices?.[0]?.delta?.x_agent_event);
+      return event ? [event] : [];
+    });
+}
+
 describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
@@ -160,6 +175,36 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(output).toContain('"status":"completed"');
     expect(output).toContain('The answer is 2.');
     expect(output).toContain('data: [DONE]');
+
+    const activity = agentEvents(output);
+    expect(activity.map((entry) => entry.sequence)).toEqual([0, 1, 2, 3]);
+    expect(activity.map((entry) => entry.event.type)).toEqual([
+      'lifecycle',
+      'tool-execution-start',
+      'tool-execution-end',
+      'stop',
+    ]);
+    expect(activity[0]).toMatchObject({
+      sessionId: 'req-1',
+      turnId: 'req-1',
+      event: { type: 'lifecycle', phase: 'started' },
+    });
+    expect(activity[1]?.event).toEqual({
+      type: 'tool-execution-start',
+      toolCallId: 'call_1',
+      name: 'execute_code',
+      category: 'code-execution',
+      summary: 'Running code',
+      input: { language: 'python', code: 'print(1+1)' },
+    });
+    expect(activity[2]?.event).toMatchObject({
+      type: 'tool-execution-end',
+      toolCallId: 'call_1',
+      name: 'execute_code',
+      output: '2\n',
+      isError: false,
+    });
+    expect(activity[3]?.event).toEqual({ type: 'stop', reason: 'end-turn' });
   });
 
   it('fails closed with an explicit error when no E2B executor is available (no key configured)', async () => {
@@ -342,6 +387,18 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(output).toContain('x_generated_files');
     expect(output).toContain('/api/files/asset-png');
     expect(output.indexOf('x_generated_files')).toBeLessThan(output.lastIndexOf('data: [DONE]'));
+
+    const artifactEvent = agentEvents(output).find(
+      (entry) => entry.event.type === 'artifact-produced',
+    );
+    expect(artifactEvent?.event).toEqual({
+      type: 'artifact-produced',
+      artifactId: 'asset-png',
+      name: 'chart.png',
+      mimeType: 'image/png',
+      uri: '/api/files/asset-png',
+      sizeBytes: 9,
+    });
   });
 
   it('emits an honest inline note (never silence) when chart persistence fails', async () => {

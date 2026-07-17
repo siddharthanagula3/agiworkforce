@@ -39,12 +39,16 @@
  *     `ToolTimeline` in the client.
  *   - Emits `x_tool_approval_request` events when a tool needs user approval.
  *   - Emits `x_tool_result` events when a tool completes.
+ *   - Emits the canonical `x_agent_event` envelope alongside those legacy
+ *     fields while Web, Desktop Cloud, and Mobile Cloud migrate to one inline
+ *     activity timeline.
  */
 
 import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
+import type { AgentEventStopReason, AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -74,6 +78,7 @@ import {
 } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
 import type { ObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import { createAgentEventStreamEmitter, toAgentEventJson } from './agent-event-stream';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -213,6 +218,83 @@ export function toolStatusPhrase(toolName: string): string | undefined {
     if (pattern.test(toolName)) return phrase;
   }
   return undefined;
+}
+
+function humanizeIdentifier(value: string): string {
+  const humanized = value
+    .replace(/^mcp__[^_]+__/, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return humanized.toLowerCase() === 'github' ? 'GitHub' : humanized;
+}
+
+function mcpServerLabel(toolName: string): string | null {
+  const parsed = parseQualifiedToolName(toolName);
+  return parsed ? humanizeIdentifier(parsed.serverId) : null;
+}
+
+function canonicalToolCategory(
+  toolName: string,
+  offeredTools: WebMcpToolDef[],
+): AgentEventToolCategory {
+  if (isWebSearchTool(toolName)) return 'web-search';
+  if (isUrlFetchTool(toolName)) return 'web-fetch';
+  if (toolName === 'execute_code') return 'code-execution';
+  if (toolName === 'write_file' || toolName === 'create_folder') return 'filesystem';
+
+  const offered = offeredTools.find((tool) => tool.qualifiedName === toolName);
+  if (offered?.origin === 'connector') return 'connector';
+  if (parseQualifiedToolName(toolName)) return 'mcp';
+
+  if (/skill/i.test(toolName)) return 'skill';
+  if (/memory|relevant_chat/i.test(toolName)) return 'memory';
+  if (/computer|browser|screenshot|click|navigate/i.test(toolName)) return 'computer-use';
+  if (/shell|terminal|bash|command/i.test(toolName)) return 'shell';
+  if (/file|folder|directory|grep|ripgrep|search_codebase/i.test(toolName)) return 'filesystem';
+  if (/artifact|document|spreadsheet|presentation|pdf/i.test(toolName)) return 'artifact';
+  return 'other';
+}
+
+function canonicalToolSummary(
+  toolName: string,
+  category: AgentEventToolCategory,
+  args?: Record<string, unknown>,
+): string {
+  const phrase =
+    (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
+    toolStatusPhrase(toolName);
+  if (phrase) return phrase;
+
+  const server = mcpServerLabel(toolName);
+  if (category === 'connector') return `Using ${server ?? 'connected'} connector`;
+  if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
+  return `Running ${humanizeIdentifier(toolName)}`;
+}
+
+function canonicalApprovalSummary(toolName: string, category: AgentEventToolCategory): string {
+  const server = mcpServerLabel(toolName);
+  if (category === 'connector') return `Review ${server ?? 'connector'} action`;
+  if (category === 'mcp') return `Review ${server ?? 'MCP'} action`;
+  return `Review ${humanizeIdentifier(toolName)} action`;
+}
+
+function canonicalStopReason(finishReason: string | null): AgentEventStopReason {
+  if (finishReason === 'length') return 'max-tokens';
+  if (finishReason === 'content_filter' || finishReason === 'refusal') return 'refusal';
+  if (finishReason === 'cancelled' || finishReason === 'cancel') return 'cancelled';
+  if (finishReason === 'error') return 'error';
+  return 'end-turn';
+}
+
+function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
+  return sources.filter((source) => {
+    try {
+      new URL(source.url);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -772,6 +854,12 @@ export async function* runToolLoop(
   const approvalMode = options.approvalMode ?? 'manual';
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
+  const turnId = processed.requestId || crypto.randomUUID();
+  const eventStream = createAgentEventStreamEmitter({
+    sessionId: processed.conversationId ?? turnId,
+    turnId,
+    responseModel,
+  });
 
   // Inject MCP tool defs into the llmRequest.
   const mcpTools = options.mcpTools ?? [];
@@ -891,7 +979,21 @@ export async function* runToolLoop(
       }
     }
 
-    if (files.length > 0) lines.push(generatedFilesEvent(files, responseModel));
+    if (files.length > 0) {
+      lines.push(generatedFilesEvent(files, responseModel));
+      for (const file of files) {
+        lines.push(
+          eventStream.emit({
+            type: 'artifact-produced',
+            artifactId: file.id,
+            name: file.file_name,
+            mimeType: file.mime_type,
+            uri: file.uri,
+            sizeBytes: file.byte_count,
+          }),
+        );
+      }
+    }
     if (failedCount > 0) {
       const plural = failedCount === 1 ? 'file' : 'files';
       lines.push(
@@ -919,10 +1021,13 @@ export async function* runToolLoop(
    * state). Callers must `return` immediately after exhausting this generator
    * so exactly one flush -- and one `[DONE]` -- happens per invocation.
    */
-  async function* flushTerminal(): AsyncGenerator<Uint8Array> {
+  async function* flushTerminal(
+    reason: AgentEventStopReason = 'end-turn',
+  ): AsyncGenerator<Uint8Array> {
     for (const line of await harvestGeneratedFilesEvents()) {
       yield encoder.encode(line);
     }
+    yield encoder.encode(eventStream.emit({ type: 'stop', reason }));
     yield encoder.encode(sseDone());
   }
 
@@ -940,8 +1045,21 @@ export async function* runToolLoop(
 
     // Emit "running" status for all tools. Include tc.args so the client can
     // render a syntax-highlighted Request block in ToolCallCard (detectCodeBlock).
+    const startedAt = new Map<string, number>();
     for (const tc of calls) {
       yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
+      const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
+      startedAt.set(tc.id, Date.now());
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'tool-execution-start',
+          toolCallId: tc.id,
+          name: tc.qualifiedName,
+          category,
+          summary: canonicalToolSummary(tc.qualifiedName, category, tc.args),
+          input: toAgentEventJson(tc.args),
+        }),
+      );
     }
 
     const results: {
@@ -984,6 +1102,36 @@ export async function* runToolLoop(
       yield encoder.encode(
         toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
       );
+      yield encoder.encode(
+        eventStream.emit({
+          type: 'tool-execution-end',
+          toolCallId: tc.id,
+          name: tc.qualifiedName,
+          output: toAgentEventJson(content),
+          isError,
+          elapsedMs: Math.max(0, Date.now() - (startedAt.get(tc.id) ?? Date.now())),
+        }),
+      );
+
+      const canonicalSources = validCanonicalSources([
+        ...(source ? [source] : []),
+        ...(sources ?? []),
+      ]);
+      if (canonicalSources.length > 0) {
+        const queryValue = isWebSearchTool(tc.qualifiedName)
+          ? tc.args['query']
+          : isUrlFetchTool(tc.qualifiedName)
+            ? tc.args['url']
+            : undefined;
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'source-list',
+            toolCallId: tc.id,
+            ...(typeof queryValue === 'string' ? { query: queryValue } : {}),
+            sources: canonicalSources,
+          }),
+        );
+      }
 
       // Fetched pages join the citations flow (dedupe by URL, stable positions).
       if (source && !fetchedSources.some((s) => s.url === source.url)) {
@@ -1017,6 +1165,13 @@ export async function* runToolLoop(
     }
   }
 
+  yield encoder.encode(
+    eventStream.emit({
+      type: 'lifecycle',
+      phase: options.resume ? 'resumed' : 'started',
+    }),
+  );
+
   try {
     // ── Manual-approval resume preamble (stateless) ─────────────────────────
     // When resuming, the suspended assistant tool_call turn is the last
@@ -1039,6 +1194,14 @@ export async function* runToolLoop(
 
       if (pending.length === 0) {
         yield encoder.encode(
+          eventStream.emit({
+            type: 'error',
+            message: 'No pending tool call was available to resume.',
+            code: 'approval_resume_missing_tool_call',
+            retryable: false,
+          }),
+        );
+        yield encoder.encode(
           sseData({
             choices: [
               { delta: { content: '\n\nError: no pending tool call to resume.' }, index: 0 },
@@ -1046,7 +1209,7 @@ export async function* runToolLoop(
             model: responseModel,
           }),
         );
-        yield encoder.encode(sseDone());
+        yield* flushTerminal('error');
         return;
       }
 
@@ -1059,6 +1222,14 @@ export async function* runToolLoop(
       for (const a of options.resume.approvals) {
         if (!pendingIds.has(a.toolCallId)) {
           yield encoder.encode(
+            eventStream.emit({
+              type: 'error',
+              message: 'Approval referenced an unknown tool call.',
+              code: 'approval_resume_unknown_tool_call',
+              retryable: false,
+            }),
+          );
+          yield encoder.encode(
             sseData({
               choices: [
                 {
@@ -1069,7 +1240,7 @@ export async function* runToolLoop(
               model: responseModel,
             }),
           );
-          yield encoder.encode(sseDone());
+          yield* flushTerminal('error');
           return;
         }
       }
@@ -1095,6 +1266,15 @@ export async function* runToolLoop(
       for (const p of pending) {
         if (alreadyResolved.has(p.id)) continue;
         const decision = approvalById.get(p.id);
+        if (decision) {
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'approval-resolved',
+              approvalId: p.id,
+              decision: decision === 'approved' ? 'approved' : 'denied',
+            }),
+          );
+        }
         if (decision === 'approved' && isToolOffered(p.qualifiedName, mcpTools)) {
           toRun.push(p);
         } else if (decision === 'approved') {
@@ -1167,6 +1347,14 @@ export async function* runToolLoop(
             model: responseModel,
           }),
         );
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'error',
+            message: classified.message,
+            ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+            retryable: classified.retryable,
+          }),
+        );
         // Additive x_stream_error marker (see openai-wire-compat.ts's
         // sseChunks() 'error' case for the base-path twin of this) -- the
         // tool-loop hand-rolls its own SSE emission (no OpenAIWireAssembler),
@@ -1197,7 +1385,7 @@ export async function* runToolLoop(
         // files generated by earlier steps' execution tools, plus a closing
         // [DONE] -- previously this `break`d straight to the loop's exit,
         // skipping both (harvest only ran on natural finish or maxSteps).
-        yield* flushTerminal();
+        yield* flushTerminal('error');
         return;
       }
 
@@ -1214,7 +1402,7 @@ export async function* runToolLoop(
       // files (file cards need durable URLs before the stream closes), then
       // emit [DONE] and exit.
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
-        yield* flushTerminal();
+        yield* flushTerminal(canonicalStopReason(finishReason));
         return;
       }
 
@@ -1253,7 +1441,20 @@ export async function* runToolLoop(
           yield encoder.encode(
             toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
           );
+          const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'approval-requested',
+              approvalId: tc.id,
+              toolCallId: tc.id,
+              name: tc.qualifiedName,
+              category,
+              summary: canonicalApprovalSummary(tc.qualifiedName, category),
+              input: toAgentEventJson(tc.args),
+            }),
+          );
         }
+        yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
         // Emit [DONE] so the client knows the current stream is complete
         // and the approval prompt is the terminal event for this turn.
         yield encoder.encode(sseDone());
@@ -1276,7 +1477,15 @@ export async function* runToolLoop(
       { maxSteps, provider: processed.provider },
       '[tool-loop] max steps reached without terminal stop',
     );
-    yield* flushTerminal();
+    yield encoder.encode(
+      eventStream.emit({
+        type: 'error',
+        message: `Agent stopped after reaching the ${maxSteps}-step execution limit.`,
+        code: 'max_agent_steps_reached',
+        retryable: false,
+      }),
+    );
+    yield* flushTerminal('error');
   } finally {
     // Lifecycle cleanup: only relevant if an E2B execution tool actually ran during this
     // loop invocation. Runs on every `return` above (manual-approval suspend, provider

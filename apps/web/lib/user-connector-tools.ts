@@ -131,6 +131,7 @@ const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
     qualifiedName: `mcp__${GITHUB_SERVER_ID}__get_pull_request_diff`,
     serverId: GITHUB_SERVER_ID,
     toolName: 'get_pull_request_diff',
+    origin: 'connector',
     description:
       'Fetch the unified diff of a GitHub pull request in a repository the connected GitHub App installation can access.',
     inputSchema: {
@@ -148,6 +149,7 @@ const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
     qualifiedName: `mcp__${GITHUB_SERVER_ID}__post_issue_comment`,
     serverId: GITHUB_SERVER_ID,
     toolName: 'post_issue_comment',
+    origin: 'connector',
     description:
       'Post a comment on a GitHub issue or pull request in a repository the connected GitHub App installation can access.',
     inputSchema: {
@@ -169,6 +171,7 @@ const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
     qualifiedName: `mcp__${GITHUB_SERVER_ID}__post_pull_request_review`,
     serverId: GITHUB_SERVER_ID,
     toolName: 'post_pull_request_review',
+    origin: 'connector',
     description:
       'Post a review (comment only) on a GitHub pull request the connected GitHub App installation can access.',
     inputSchema: {
@@ -486,6 +489,7 @@ function catalogToConnectorToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
     serverId: t.serverName,
     toolName: t.toolName,
     description: t.description ?? t.fallbackDescription,
+    origin: 'connector',
     inputSchema: t.inputSchema,
   }));
 }

@@ -14,6 +14,8 @@
  */
 
 import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 // DNS mock for the third test's url_fetch call — its SSRF guard
 // (assertResolvedPublicHostname) does a real node:dns/promises.lookup;
@@ -35,6 +37,19 @@ vi.mock('./tool-loop-anthropic', () => ({
 import { runToolLoop, searchResultsEvent } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
+
+function agentEvents(output: string): AgentEventEnvelope[] {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .flatMap((line) => {
+      const payload = JSON.parse(line.slice('data: '.length)) as {
+        choices?: Array<{ delta?: { x_agent_event?: unknown } }>;
+      };
+      const event = parseAgentEventDelta(payload.choices?.[0]?.delta?.x_agent_event);
+      return event ? [event] : [];
+    });
+}
 
 /** Build a provider SSE ReadableStream from data lines. */
 function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
@@ -189,6 +204,21 @@ describe('tool-loop web_search integration', () => {
       expect(output).toContain('"title":"Today in the news"');
       expect(output).toContain('"encrypted_content":"A summary of the top stories."');
       expect(output).toContain('"position":1');
+
+      expect(
+        agentEvents(output).find((entry) => entry.event.type === 'source-list')?.event,
+      ).toEqual({
+        type: 'source-list',
+        toolCallId: 'call_web_search_1',
+        query: 'today news',
+        sources: [
+          {
+            url: 'https://news.example/today',
+            title: 'Today in the news',
+            snippet: 'A summary of the top stories.',
+          },
+        ],
+      });
 
       // 4. Final answer streamed and the stream terminated — NOT via x_stream_error
       //    (that path is turn-terminating and reserved for whole-provider-call
