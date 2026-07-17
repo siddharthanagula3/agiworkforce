@@ -560,14 +560,19 @@ enum Command {
     },
     /// Run app server for IDE integration.
     AppServer {
+        /// Transport: `stdio`, `ws`, or a WebSocket bind address such as `127.0.0.1:8788`.
         #[arg(long, default_value = "stdio")]
         listen: String,
+        /// Permit a non-loopback WebSocket bind after network controls are configured.
         #[arg(long)]
         allow_public_listen: bool,
+        /// WebSocket bearer token (required unless AGI_APP_SERVER_TOKEN is set).
         #[arg(long)]
         auth_token: Option<String>,
+        /// Browser origin allowed to open the WebSocket; repeat for multiple origins.
         #[arg(long = "allowed-origin")]
         allowed_origin: Vec<String>,
+        /// Accept `?token=` for browser clients. Prefer headers because URLs are logged.
         #[arg(long)]
         allow_query_token: bool,
     },
@@ -1712,13 +1717,13 @@ pub async fn run_main() -> Result<()> {
                 allowed_origin,
                 allow_query_token,
             } => {
+                let workspace_root = std::env::current_dir()?;
+                let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
+                    app_config.clone(),
+                    workspace_root,
+                )?);
+                let capabilities = host.capabilities();
                 if listen == "stdio" {
-                    let workspace_root = std::env::current_dir()?;
-                    let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
-                        app_config.clone(),
-                        workspace_root,
-                    )?);
-                    let capabilities = host.capabilities();
                     return app_server::run_developer_session_stdio(host, capabilities).await;
                 }
 
@@ -1726,41 +1731,40 @@ pub async fn run_main() -> Result<()> {
                 // Override at runtime via AGI_CLI_SERVER_ADDR env var.
                 let cli_server_addr = std::env::var("AGI_CLI_SERVER_ADDR")
                     .unwrap_or_else(|_| "127.0.0.1:8788".to_string());
-                let cfg = {
-                    let addr: std::net::SocketAddr = listen
-                        .trim_start_matches("ws://")
-                        .parse()
-                        .unwrap_or_else(|_| {
-                            cli_server_addr
-                                .parse()
-                                .expect("AGI_CLI_SERVER_ADDR (or default 127.0.0.1:8788) must be a valid SocketAddr")
-                        });
-                    if !allow_public_listen && !addr.ip().is_loopback() {
-                        anyhow::bail!(
-                            "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
-                        );
-                    }
-                    let token = auth_token
-                        .clone()
-                        .or_else(|| std::env::var("AGI_APP_SERVER_TOKEN").ok())
-                        .map(|token| token.trim().to_string())
-                        .filter(|token| !token.is_empty())
-                        .unwrap_or_else(|| {
-                            let token = uuid::Uuid::new_v4().to_string();
-                            eprintln!("Generated app-server auth token: {token}");
-                            token
-                        });
-                    app_server::AppServerConfig {
-                        transport: app_server::AppServerTransport::WebSocket { addr },
-                        ws_security: app_server::WebSocketSecurity {
-                            auth_token: Some(token),
-                            allowed_origins: allowed_origin.clone(),
-                            allow_query_token: *allow_query_token,
-                        },
-                        ..Default::default()
-                    }
-                };
-                app_server::run_app_server(cfg, app_server::make_dispatch()).await
+                let addr: std::net::SocketAddr = listen
+                    .trim_start_matches("ws://")
+                    .parse()
+                    .unwrap_or_else(|_| {
+                        cli_server_addr.parse().expect(
+                            "AGI_CLI_SERVER_ADDR (or default 127.0.0.1:8788) must be a valid SocketAddr",
+                        )
+                    });
+                if !allow_public_listen && !addr.ip().is_loopback() {
+                    anyhow::bail!(
+                        "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
+                    );
+                }
+                let token = auth_token
+                    .clone()
+                    .or_else(|| std::env::var("AGI_APP_SERVER_TOKEN").ok())
+                    .map(|token| token.trim().to_string())
+                    .filter(|token| !token.is_empty())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "WebSocket app-server requires --auth-token or AGI_APP_SERVER_TOKEN; auth tokens are never printed"
+                        )
+                    })?;
+                app_server::run_developer_session_websocket(
+                    addr,
+                    app_server::WebSocketSecurity {
+                        auth_token: Some(token),
+                        allowed_origins: allowed_origin.clone(),
+                        allow_query_token: *allow_query_token,
+                    },
+                    host,
+                    capabilities,
+                )
+                .await
             }
             Command::Models { action } => handle_models_command(action, &app_config).await,
             Command::Plugin { action } => {

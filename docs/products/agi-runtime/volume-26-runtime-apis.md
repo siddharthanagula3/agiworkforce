@@ -14,7 +14,7 @@ Trust modes govern every contract. **Local** sessions stay on the host; APIs her
 
 ## IPC APIs — local client communication
 
-The primary local-client contract is the **app-server JSON-RPC transport** (`crates/agiworkforce-app-server/src/lib.rs`): a `2.0` JSON-RPC envelope over stdio (default) with methods `initialize`, `tools/list`, `tools/call` (`{name, arguments}`), and `shutdown`. Tool dispatch is injected via the `ToolDispatch` trait so the transport never depends on tool implementations. This is **consumed only by the CLI** today, plus a second `run_mcp_server` entry point that speaks MCP on stdio exposing a single agent-facing tool. **✅ Built** (`crates/agiworkforce-app-server/src/lib.rs`).
+The primary local-client contract is the **typed developer-session protocol** (`crates/agiworkforce-protocol/src/developer_session.rs`, transported by `crates/agiworkforce-app-server/src/lib.rs`): JSONL over stdio or one JSON object per authenticated WebSocket text frame. It exposes `initialize`; thread start/list/read/resume/fork/archive; turn start/steer/interrupt; `approval/respond`; streamed notifications; and `shutdown`. The CLI supplies one `CliDeveloperSessionHost` to both transports, so tools, MCP attachments, trust policy, and approval behavior do not diverge. **✅ Built.** A separate generic `ToolDispatch` JSON-RPC API remains available to Rust embedders. Reverse MCP execution is **🟡 Partial**: `agi mcp-server` completes the stdio handshake but advertises no tools until execution and approvals are wired.
 
 Desktop IPC to the local host is gated by a filesystem **IPC token** (`.ipc_token` in the app-data dir) read by clients such as the native-messaging host (`apps/desktop/src-tauri/src/bin/native_messaging_host.rs`) and compared in constant time on the host. **✅ Built**. Chrome↔Desktop IPC uses native messaging over stdio via host `com.agiworkforce.browser` (`apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs`), framed as `RealtimeEvent::NativeMessage` / `NativeResponse`. **✅ Built**. A single documented, versioned public IPC schema spanning all surfaces is **🔭 Planned**.
 
@@ -26,7 +26,7 @@ Pairing and device HTTP live in services, not the local host: `services/signalin
 
 ## WebSocket APIs — real-time communication
 
-Three real WebSocket servers exist. (1) **app-server `/ws`** — JSON-RPC over WS; requires a non-empty auth token presented as `Authorization: Bearer`, header `x-agi-app-server-token`, or (opt-in only) `?token=`, plus an origin allowlist. **✅ Built** (`crates/agiworkforce-app-server/src/lib.rs`). (2) **Desktop `127.0.0.1` realtime host** — accepts Chrome extension, VS Code extension, and the Tauri webview; hardened with `MAX_CONNECTIONS = 32`, five auth failures per 60 s → 300 s IP lockout, a 4 MiB max frame, and constant-time token checks. **✅ Built** (`apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`). (3) **Signaling relay** — `services/signaling-server/src/index.ts` relays WebRTC `register` / `signal` (`offer|answer|ice|control`) / `heartbeat` between roles `desktop|mobile`, enforcing a strict control-action allowlist (`approval_request/response`, `sync_request/response`, `dispatch_request/response`, `heartbeat/heartbeat_ack`, `cancel`), per-role HMAC pair tokens, and offline approval queueing. **✅ Built**. The Desktop↔Mobile companion channel that would consume this end-to-end is **🟡 Partial** — `apps/mobile/lib/v1FeatureFlags.ts` sets `companion:false` and `dispatch:false`, and the desktop last-mile is unwired. CLI and VS Code remote attach are **🔭 Planned**.
+Three real WebSocket servers exist. (1) **app-server `/ws`** — the full typed developer-session protocol over WS; requires a non-empty auth token presented as `Authorization: Bearer`, header `x-agi-app-server-token`, or (opt-in only) `?token=`, plus an origin allowlist. **✅ Built** (`crates/agiworkforce-app-server/src/lib.rs`). (2) **Desktop `127.0.0.1` realtime host** — accepts Chrome extension, VS Code extension, and the Tauri webview; hardened with `MAX_CONNECTIONS = 32`, five auth failures per 60 s → 300 s IP lockout, a 4 MiB max frame, and constant-time token checks. **✅ Built** (`apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`). (3) **Signaling relay** — `services/signaling-server/src/index.ts` relays WebRTC `register` / `signal` (`offer|answer|ice|control`) / `heartbeat` between roles `desktop|mobile`, enforcing a strict control-action allowlist (`approval_request/response`, `sync_request/response`, `dispatch_request/response`, `heartbeat/heartbeat_ack`, `cancel`), per-role HMAC pair tokens, and offline approval queueing. **✅ Built**. The Desktop↔Mobile companion channel that would consume this end-to-end is **🟡 Partial** — `apps/mobile/lib/v1FeatureFlags.ts` sets `companion:false` and `dispatch:false`, and the desktop last-mile is unwired. VS Code can drive the stdio developer session; remote attach is **🔭 Planned**.
 
 ## Event APIs — publish runtime events
 
@@ -38,7 +38,8 @@ The de-facto SDK today is `packages/client/client-runtime` (command registry, `h
 
 ## Repository map
 
-- `crates/agiworkforce-app-server/src/lib.rs` — JSON-RPC/MCP stdio + WS host, `ToolDispatch`.
+- `crates/agiworkforce-protocol/src/developer_session.rs` — versioned typed thread/turn/approval contract.
+- `crates/agiworkforce-app-server/src/lib.rs` — developer-session stdio/WS transport plus generic `ToolDispatch` embedding API.
 - `crates/agiworkforce-{protocol,task-runtime,plugin-runtime,command-registry}` — shared runtime crates.
 - `apps/desktop/src-tauri/src/integrations/realtime/` — `127.0.0.1` WS/IPC host, `events.rs`, presence.
 - `apps/desktop/src-tauri/src/bin/native_messaging_host.rs`, `.../integrations/native_messaging/manifest.rs` — `com.agiworkforce.browser` host + manifests.
@@ -54,7 +55,7 @@ Claude Code Remote Control (research preview) and OpenAI Codex remote connection
 
 ## Acceptance / Definition of Done
 
-- [ ] **Build:** app-server (`initialize`/`tools/list`/`tools/call`/`shutdown`) and the `127.0.0.1` host build and pass their surface checks; `/health` and `/pair` respond; native-messaging round-trip verified.
+- [ ] **Build:** app-server thread/turn/approval methods pass over stdio and WebSocket; the `127.0.0.1` host builds and passes its surface checks; `/health` and `/pair` respond; native-messaging round-trip verified.
 - [ ] **Trust:** no API path routes Local→BYOK/Cloud without explicit fork; BYOK never reachable from Web/Mobile; remote-control stays a window (compute on host); cross-device sync only via the Neon delta-sync path.
 - [ ] **Security:** every WS/HTTP entry authenticates (Bearer/IPC token/pair token, constant-time); origin allowlist enforced; rate limits, connection caps, lockouts, and frame-size limits active; pair/IPC tokens never logged.
 - [ ] Every capability in this volume carries a ✅/🟡/🔭 label with a real path; 🟡/🔭 items list the concrete gap.

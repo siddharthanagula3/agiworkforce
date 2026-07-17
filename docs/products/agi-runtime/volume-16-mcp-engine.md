@@ -42,13 +42,14 @@ Real controls exist at both boundaries. **Gateway:** every MCP route requires a 
 
 ## Lifecycle — manage server lifecycle
 
-The shared client owns connect/close and transport selection across stdio, SSE, and streamable-http (default). The gateway keeps a live handle map, coalesces concurrent catalog builds, caches the catalog (default 60s TTL), replaces and cleanly closes stale handles, and closes all handles on graceful shutdown. ✅ Built — `services/api-gateway/src/mcp/sharedClient.ts` (`getSharedMcpCatalog`, `callSharedMcpTool`, `closeAllSharedMcpHandles`), `packages/tools/mcp/src/transport.ts`. The reverse direction — an AGI surface acting **as** an MCP server exposing a single `agiworkforce_exec` tool over stdio — is a distinct lifecycle consumed only by the CLI. ✅ Built — `crates/agiworkforce-app-server/src/lib.rs` (`run_mcp_server`). Health checks, automatic restart/backoff, per-user pooling, idle eviction, and cross-surface presence of MCP servers are 🔭 (`apps/web/app/api/control-plane/status` exists but no `surface_heartbeats` table).
+The shared client owns connect/close and transport selection across stdio, SSE, and streamable-http (default). The gateway keeps a live handle map, coalesces concurrent catalog builds, caches the catalog (default 60s TTL), replaces and cleanly closes stale handles, and closes all handles on graceful shutdown. ✅ Built — `services/api-gateway/src/mcp/sharedClient.ts` (`getSharedMcpCatalog`, `callSharedMcpTool`, `closeAllSharedMcpHandles`), `packages/tools/mcp/src/transport.ts`. The reverse direction — an AGI surface acting **as** an MCP server with real execution — is 🟡 Partial: `agi mcp-server` completes the stdio handshake but advertises no tools until the agent execution and approval channel are wired. The unused shared-crate helper that advertised an uncallable `agiworkforce_exec` tool was removed. Health checks, automatic restart/backoff, per-user pooling, idle eviction, and cross-surface presence of MCP servers are 🔭 (`apps/web/app/api/control-plane/status` exists but no `surface_heartbeats` table).
 
 ## Repository map
 
 - `crates/agiworkforce-protocol/src/mcp.rs` — MCP wire types (`Tool`, `Resource`, `ResourceTemplate`, `ResourceContent`, `CallToolResult`) + adapters.
 - `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — manifest MCP server discovery (`mcpServers`, `.mcp.json`).
-- `crates/agiworkforce-app-server/src/lib.rs` — `run_mcp_server` (CLI-as-MCP-server) + `ToolDispatch::list_tools`.
+- `apps/cli/src/app_server.rs` — honest empty-catalog MCP stdio server pending reverse execution wiring.
+- `crates/agiworkforce-app-server/src/lib.rs` — typed developer-session transport plus generic `ToolDispatch` embedding API.
 - `packages/tools/mcp/src/{connect,transport,types}.ts` — `@agiworkforce/mcp` SDK client, transport resolver, catalog builder.
 - `services/api-gateway/src/mcp/{mcpConfig,sharedClient,mcpRoutes}.ts` + `mcp-servers.json` — gateway proxy, allowlist, routes.
 - `services/skill-vetting/src/skillspector/nodes/analyzers/mcp_*.py` — MCP tool-poisoning / rug-pull / least-privilege static analysis.

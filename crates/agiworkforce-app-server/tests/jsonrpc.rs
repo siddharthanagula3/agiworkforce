@@ -1,8 +1,8 @@
 //! Public-API JSON-RPC integration test for the app-server `Processor`.
 //!
 //! Exercises the full lifecycle (initialize → tools/list → tools/call → shutdown)
-//! through the public `ToolDispatch` trait, mirroring how the cli wires its
-//! own `CliToolDispatch` in production.
+//! through the public `ToolDispatch` trait. The CLI's live app-server uses the
+//! typed developer-session host instead of this generic embedding API.
 
 use agiworkforce_app_server::{JsonRpcRequest, JsonRpcResponse, Processor, ToolDispatch};
 use async_trait::async_trait;

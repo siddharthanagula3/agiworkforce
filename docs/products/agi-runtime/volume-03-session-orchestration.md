@@ -14,7 +14,7 @@ The three trust modes shape every requirement. **Local** sessions run on-host an
 
 ## Session Creation
 
-Creation mints a session with a stable identifier, a trust mode, and an owner. **✅ Built** — `TaskRegistry::create()` (`crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`) assigns a UUID, a `TaskKind`, `TaskStatus::Pending`, and a pre-created output file under `~/.agiworkforce/tasks/{id}.out`. **✅ Built** — the local app-server bounds admission via `AppServerConfig { max_sessions: 10, session_timeout_secs: 3600 }` (`crates/agiworkforce-app-server/src/lib.rs`), consumed only by the CLI. **✅ Built** — pairing sessions are created by `POST /pairings` in `services/signaling-server/src/index.ts` (collision-safe codes, per-role HMAC `pairTokens`, TTL). A unified session object carrying trust mode + surface + provider label at creation is **🔭 Planned**. Requirement: creation records the trust mode explicitly and refuses to inherit Cloud/BYOK context into a Local session.
+Creation mints a session with a stable identifier, a trust mode, and an owner. **✅ Built** — the CLI developer-session host creates durable thread/turn identifiers and records the session's provider and trust configuration. **🔭 Planned** — local app-server admission and idle-expiry limits; the removed `AppServerConfig` fields were inert and did not bound live sessions. **✅ Built** — pairing sessions are created by `POST /pairings` in `services/signaling-server/src/index.ts` (collision-safe codes, per-role HMAC `pairTokens`, TTL). A unified session object carrying trust mode + surface + provider label at creation is **🔭 Planned**. Requirement: creation records the trust mode explicitly and refuses to inherit Cloud/BYOK context into a Local session.
 
 ## Session Registry — active session catalog
 
@@ -42,7 +42,7 @@ Creation mints a session with a stable identifier, a trust mode, and an owner. *
 
 ## Concurrent Sessions — multiple active sessions
 
-**✅ Built** — `TaskRegistry` runs many tasks concurrently (keyed map + independent output files); the app-server caps concurrency at `max_sessions: 10`; the relay holds many independent pairings with per-IP connection and message rate limits. **🔭 Planned** — per-trust-mode and per-plan concurrency ceilings: Free / Basic ($8 · ₹399) / Pro ($20) / Max ($100 and $200) / Enterprise (custom). Local and BYOK are free access modes, not metered by plan; no credit top-ups gate concurrency. Requirement: a busy Cloud quota must never throttle Local sessions.
+**✅ Built** — the developer-session host and relay hold independent concurrent threads/pairings; the relay enforces per-IP connection and message rate limits. **🔭 Planned** — app-server connection/session ceilings and per-trust-mode and per-plan concurrency ceilings: Free / Basic ($8 · ₹399) / Pro ($20) / Max ($100 and $200) / Enterprise (custom). Local and BYOK are free access modes, not metered by plan; no credit top-ups gate concurrency. Requirement: a busy Cloud quota must never throttle Local sessions.
 
 ## Session Cleanup — archive and remove completed sessions
 
@@ -51,7 +51,7 @@ Creation mints a session with a stable identifier, a trust mode, and an owner. *
 ## Repository map
 
 - `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — task session registry, status machine, output persistence, stall watchdog.
-- `crates/agiworkforce-app-server/src/lib.rs` — local JSON-RPC/WS host, `max_sessions`/`session_timeout_secs` (CLI-only).
+- `crates/agiworkforce-app-server/src/lib.rs` — typed developer-session stdio/WS host plus the generic direct-tool embedding API.
 - `services/signaling-server/src/index.ts` — pairing sessions, rehydration, offline approval queue, cleanup.
 - `apps/mobile/services/companion.ts` — remote-window health, reconnect, resume signals (flag-gated off).
 - `apps/web/app/api/chat/sync/route.ts` (+ `memory/sync`, `projects/sync`) — Managed-Cloud delta persistence/resume.

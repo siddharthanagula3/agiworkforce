@@ -40,12 +40,10 @@ target assembled from real parts, labeling every gap.
 Requirement: durable per-session records (id, kind, status, timing, output location) held
 **local-only**; sessions never leave the host.
 
-**✅ Built.** `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` defines `Task { id: TaskId (Uuid),
-kind: TaskKind, status: TaskStatus, command, output_path, started_at, ended_at, exit_code,
-error }` in a `TaskRegistry` with validated status transitions (`TaskError::
-InvalidTransition`; `Pending→Running→{Completed,Failed,Stopped}`). The local tool host bounds
-live sessions via `AppServerConfig { max_sessions, session_timeout_secs }`
-(`crates/agiworkforce-app-server/src/lib.rs`, consumed only by the CLI). Remote-Control pairing
+**🟡 Partial.** The CLI developer-session host maintains durable thread/turn identifiers and
+session files on the local host, but the former task-runtime crate was removed and has no live
+replacement registry. The local app-server also lacks enforceable connection/session limits and
+idle expiry; both are 🔭 Planned. Remote-Control pairing
 sessions are held in `services/signaling-server/src/index.ts` (`Session { code, createdAt,
 expiresAt, participants }`, roles `desktop | mobile`) — ephemeral relay state, not a
 conversation store. **🔭 Planned:** a durable cross-restart session-resume record and
@@ -74,7 +72,7 @@ Requirement: transient execution state (task status, connection health, pairing/
 queues) held where the compute runs; never a shared mutable table across trust modes.
 
 **✅ Built (host).** Task lifecycle is the `TaskStatus` machine in task-runtime; the
-app-server tracks live session count against `max_sessions`. **✅ Built (relay).** The
+app-server connection/session admission is not yet bounded. **🔭 Planned.** The
 signaling server holds per-`Session` runtime state: heartbeat freshness
 (`STALE_SESSION_HEARTBEAT_THRESHOLD_MS`), **offline approval queueing**
 (`MAX_PENDING_APPROVALS_PER_SESSION`, `PENDING_APPROVAL_TTL_MS`), and pending rehydrations —
@@ -138,7 +136,7 @@ any Cloud-side grant record is Neon+RLS and Managed-Cloud only.
 ## Repository map
 
 - `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `Task`/`TaskRegistry`/`TaskStatus` session records.
-- `crates/agiworkforce-app-server/src/lib.rs` — `max_sessions`/`session_timeout_secs` bounds.
+- `crates/agiworkforce-app-server/src/lib.rs` — typed developer-session transports; enforceable connection/session bounds are planned.
 - `crates/agiworkforce-protocol/src/{permissions.rs,request_permissions.rs,models.rs}` — sandbox/permission model + provider reads.
 - `crates/agiworkforce-{execpolicy,plugin-runtime}` — exec gating, plugin manifests.
 - `crates/agiworkforce-utils-cache/src/lib.rs` — in-memory LRU + `sha1_digest`.

@@ -1,21 +1,16 @@
-//! AGI Workforce app-server — JSON-RPC stdio + WebSocket transport exposing
-//! the tool catalog and `tools/call` dispatch to programmatic clients
-//! (desktop bridge, MCP host, automation scripts).
+//! AGI Workforce app-server transport layer.
 //!
-//! Tool dispatch is injected via the [`ToolDispatch`] trait so this crate
-//! never depends on the cli's tool implementations. The cli wires its own
-//! `CliToolDispatch` at construction.
+//! The primary developer-session protocol runs the full host-owned agent over
+//! typed JSONL stdio or authenticated WebSocket: threads, turns, streaming,
+//! interruption, MCP status, and approval round-trips share one contract.
 //!
-//! Methods supported:
+//! A legacy direct-tool JSON-RPC surface remains available to embedders through
+//! [`run_app_server`]. Tool dispatch is injected through [`ToolDispatch`], so
+//! this crate never depends on CLI tool implementations. Its methods are:
 //! - `initialize` — handshake, returns capabilities + server info.
 //! - `tools/list` — enumerated catalog from `ToolDispatch::list_tools`.
 //! - `tools/call` — dispatches via `ToolDispatch::call_tool` with `{name, arguments}` params.
 //! - `shutdown` — clean exit (stdio mode closes the loop).
-//!
-//! A second entry point `run_mcp_server` speaks the MCP wire protocol on
-//! stdio with a single `agiworkforce_exec` tool — used when the cli is
-//! launched as an MCP server from another agent. That path does NOT use the
-//! `ToolDispatch` trait by design (it exposes a single, agent-facing entry).
 
 mod developer_sessions;
 
@@ -24,6 +19,10 @@ pub use developer_sessions::{
     DeveloperSessionHostError, DeveloperSessionProcessor,
 };
 
+use agiworkforce_protocol::developer_session::{
+    method as developer_method, AppServerCapabilities, AppServerNotification, AppServerRequest,
+    AppServerResponse,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
@@ -67,11 +66,9 @@ pub enum AppServerTransport {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AppServerConfig {
     pub transport: AppServerTransport,
-    pub max_sessions: usize,
-    pub session_timeout_secs: u64,
     pub ws_security: WebSocketSecurity,
 }
 
@@ -82,17 +79,6 @@ pub struct WebSocketSecurity {
     /// Accept `?token=` during the WebSocket upgrade. Disabled by default
     /// because URL tokens are commonly captured by logs and browser history.
     pub allow_query_token: bool,
-}
-
-impl Default for AppServerConfig {
-    fn default() -> Self {
-        Self {
-            transport: AppServerTransport::default(),
-            max_sessions: 10,
-            session_timeout_secs: 3600,
-            ws_security: WebSocketSecurity::default(),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +250,69 @@ async fn run_ws(
     Ok(())
 }
 
+/// Run the full typed developer-session protocol over an authenticated
+/// WebSocket. Each connection receives its own handshake/client identity while
+/// sharing the host's durable threads, turns, tools, MCP attachments, and
+/// approval continuations.
+pub async fn run_developer_session_websocket(
+    addr: SocketAddr,
+    security: WebSocketSecurity,
+    host: Arc<dyn DeveloperSessionHost>,
+    capabilities: AppServerCapabilities,
+) -> Result<()> {
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    eprintln!("Developer app server on ws://{}", listener.local_addr()?);
+    serve_developer_session_websocket(listener, security, host, capabilities).await
+}
+
+/// Serve the full typed developer-session protocol on an already-bound TCP
+/// listener. Accepting a listener keeps port selection race-free for embedded
+/// hosts and integration tests.
+pub async fn serve_developer_session_websocket(
+    listener: tokio::net::TcpListener,
+    security: WebSocketSecurity,
+    host: Arc<dyn DeveloperSessionHost>,
+    capabilities: AppServerCapabilities,
+) -> Result<()> {
+    if security
+        .auth_token
+        .as_deref()
+        .is_none_or(|token| token.trim().is_empty())
+    {
+        anyhow::bail!("WebSocket app-server requires a non-empty auth token");
+    }
+
+    let listen_addr = listener.local_addr()?;
+    let app = Router::new()
+        .route(
+            "/ws",
+            get({
+                let host = Arc::clone(&host);
+                let capabilities = capabilities.clone();
+                let security = security.clone();
+                move |ws: WebSocketUpgrade, headers: HeaderMap, uri: Uri| {
+                    let host = Arc::clone(&host);
+                    let capabilities = capabilities.clone();
+                    let security = security.clone();
+                    async move {
+                        match validate_ws_request(&headers, &uri, listen_addr, &security) {
+                            Ok(()) => ws
+                                .on_upgrade(move |socket| {
+                                    handle_developer_session_ws(socket, host, capabilities)
+                                })
+                                .into_response(),
+                            Err(status) => status.into_response(),
+                        }
+                    }
+                }
+            }),
+        )
+        .route("/health", get(|| async { "ok" }));
+
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
 fn validate_ws_request(
     headers: &HeaderMap,
     uri: &Uri,
@@ -370,6 +419,124 @@ async fn handle_ws(mut socket: WebSocket, proc: Arc<Processor>) {
     }
 }
 
+async fn handle_developer_session_ws(
+    socket: WebSocket,
+    host: Arc<dyn DeveloperSessionHost>,
+    capabilities: AppServerCapabilities,
+) {
+    let mut processor = DeveloperSessionProcessor::new(host, capabilities);
+    let mut notifications = processor.subscribe();
+    let (mut sender, mut receiver) = futures_util::StreamExt::split(socket);
+    let mut initialized = false;
+
+    loop {
+        tokio::select! {
+            incoming = futures_util::StreamExt::next(&mut receiver) => {
+                let Some(incoming) = incoming else {
+                    break;
+                };
+                let message = match incoming {
+                    Ok(message) => message,
+                    Err(error) => {
+                        eprintln!("Developer app-server WebSocket receive error: {error}");
+                        break;
+                    }
+                };
+
+                match message {
+                    Message::Text(text) => {
+                        let (response, is_initialize, is_shutdown) =
+                            match serde_json::from_str::<AppServerRequest>(text.as_str()) {
+                                Ok(request) => {
+                                    let is_initialize = request.method == developer_method::INITIALIZE;
+                                    let is_shutdown = request.method == developer_method::SHUTDOWN;
+                                    (processor.process(request).await, is_initialize, is_shutdown)
+                                }
+                                Err(error) => (
+                                    AppServerResponse::failure(
+                                        serde_json::Value::Null,
+                                        -32700,
+                                        format!("Parse error: {error}"),
+                                    ),
+                                    false,
+                                    false,
+                                ),
+                            };
+                        if is_initialize && response.error.is_none() {
+                            initialized = true;
+                        }
+                        if send_developer_ws_json(&mut sender, &response).await.is_err() {
+                            break;
+                        }
+                        if is_shutdown && response.error.is_none() {
+                            break;
+                        }
+                    }
+                    Message::Binary(_) => {
+                        let response = AppServerResponse::failure(
+                            serde_json::Value::Null,
+                            -32700,
+                            "Developer-session requests must be UTF-8 JSON text",
+                        );
+                        if send_developer_ws_json(&mut sender, &response).await.is_err() {
+                            break;
+                        }
+                    }
+                    Message::Ping(payload) => {
+                        if futures_util::SinkExt::send(&mut sender, Message::Pong(payload))
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                    Message::Pong(_) => {}
+                    Message::Close(_) => break,
+                }
+            }
+            notification = notifications.recv(), if initialized => {
+                match notification {
+                    Ok(notification) => {
+                        if send_developer_ws_json(&mut sender, &notification).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        let warning = match AppServerNotification::new(
+                            "server/warning",
+                            serde_json::json!({
+                                "code": "notification_lag",
+                                "skipped": skipped,
+                            }),
+                        ) {
+                            Ok(warning) => warning,
+                            Err(error) => {
+                                eprintln!("Developer app-server warning serialization failed: {error}");
+                                break;
+                            }
+                        };
+                        if send_developer_ws_json(&mut sender, &warning).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        }
+    }
+
+    let _ = futures_util::SinkExt::close(&mut sender).await;
+}
+
+async fn send_developer_ws_json(
+    sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
+    value: &impl Serialize,
+) -> Result<()> {
+    let serialized = serde_json::to_string(value)?;
+    futures_util::SinkExt::send(sender, Message::Text(serialized.into())).await?;
+    Ok(())
+}
+
 async fn run_stdio(dispatch: Arc<dyn ToolDispatch>) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     let proc = Processor::new(dispatch);
@@ -403,77 +570,6 @@ async fn run_stdio(dispatch: Arc<dyn ToolDispatch>) -> Result<()> {
         if is_shutdown {
             break;
         }
-    }
-    Ok(())
-}
-
-/// MCP-protocol stdio handler. Exposes a single `agiworkforce_exec` tool —
-/// the entry point used when the cli is launched as an MCP server from
-/// another agent. Independent of the `ToolDispatch` trait.
-pub async fn run_mcp_server() -> Result<()> {
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-    let mut reader = BufReader::new(tokio::io::stdin());
-    let mut stdout = tokio::io::stdout();
-    let mut initialized = false;
-    let mut line = String::new();
-    loop {
-        line.clear();
-        if reader.read_line(&mut line).await? == 0 {
-            break;
-        }
-        let t = line.trim();
-        if t.is_empty() {
-            continue;
-        }
-        let req: serde_json::Value = match serde_json::from_str(t) {
-            Ok(v) => v,
-            Err(e) => {
-                let resp = JsonRpcResponse::err(None, -32700, format!("Parse error: {e}"));
-                let j = serde_json::to_string(&resp)?;
-                stdout.write_all(j.as_bytes()).await?;
-                stdout.write_all(b"\n").await?;
-                stdout.flush().await?;
-                continue;
-            }
-        };
-        let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
-        let id = req.get("id").cloned();
-        let resp = match method {
-            "initialize" => {
-                initialized = true;
-                JsonRpcResponse::ok(
-                    id,
-                    serde_json::json!({
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {"tools": {}},
-                        "serverInfo": {
-                            "name": "agiworkforce",
-                            "version": env!("CARGO_PKG_VERSION"),
-                        },
-                    }),
-                )
-            }
-            "tools/list" if initialized => JsonRpcResponse::ok(
-                id,
-                serde_json::json!({
-                    "tools": [{
-                        "name": "agiworkforce_exec",
-                        "description": "Execute prompt via AGI Workforce",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {"prompt": {"type": "string"}},
-                            "required": ["prompt"],
-                        },
-                    }],
-                }),
-            ),
-            "notifications/initialized" => continue,
-            _ => JsonRpcResponse::err(id, -32601, format!("Unknown: {}", method)),
-        };
-        let j = serde_json::to_string(&resp)?;
-        stdout.write_all(j.as_bytes()).await?;
-        stdout.write_all(b"\n").await?;
-        stdout.flush().await?;
     }
     Ok(())
 }
