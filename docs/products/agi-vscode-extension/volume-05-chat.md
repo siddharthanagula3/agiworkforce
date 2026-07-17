@@ -61,7 +61,7 @@ The defining constraint on this surface: **chat is developer-session-scoped and 
 
 ## Competitor notes
 
-Claude Code's VS Code extension and OpenAI Codex's IDE extension both offer chat/edit/agent modes, `@` file references, editor context, diagnostics, inline diff review, and cloud handoff — each bound to a single vendor. AGI's deliberate divergence: (1) **multi-provider** — the model is chosen from `packages/types/src/models.json` via `agi-workforce.selectModel`, not hardwired; (2) **per-surface trust** — Local + BYOK + Managed with visible labels; (3) **local-first, no silent sync** — VS Code chat lives in `globalState` and never auto-syncs to app chat. Remote control of an editor session from phone/web (Claude Code `/remote-control` — banner above the prompt, session URL, Open in browser) is a 🔭 parity target, not a fourth trust mode.
+Claude Code's VS Code extension and OpenAI Codex's IDE extension both offer chat/edit/agent modes, `@` file references, editor context, diagnostics, inline diff review, and cloud handoff — each bound to a single vendor. AGI's deliberate divergence: (1) **multi-provider** — the model is chosen from `packages/contracts/types/src/models.json` via `agi-workforce.selectModel`, not hardwired; (2) **per-surface trust** — Local + BYOK + Managed with visible labels; (3) **local-first, no silent sync** — VS Code chat lives in `globalState` and never auto-syncs to app chat. Remote control of an editor session from phone/web (Claude Code `/remote-control` — banner above the prompt, session URL, Open in browser) is a 🔭 parity target, not a fourth trust mode.
 
 ## Acceptance / Definition of Done
 
@@ -76,6 +76,6 @@ Chat is production-ready on this surface when: the sidebar panel and `@agi` part
 - Silently routing a Local or BYOK conversation to Managed Cloud, or auto-syncing VS Code chat to app chat / Neon. Both violate the surface trust boundary.
 - Claiming citations, CLI-shared sessions, cross-device resume, or apply-from-chat as shipped — they are 🔭/🟡; never label them ✅ without a path.
 - Bypassing `render.ts` (raw `innerHTML` of model output) or relaxing the DOMPurify/CSP config.
-- Hardcoding or inventing a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Surfacing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups in any paywall/upgrade copy — note the manifest's `agiWorkforce.tier` enum still lists `hobby`/`pro_plus` (🟡 legacy gap, reconciled separately); specs use the canon ladder.
 - Referencing Supabase, or renaming Next.js `proxy.ts` back to `middleware.ts`, in any related backend touchpoint.

@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 
-AGI Workforce is a multi-surface AI workspace that unifies 20+ LLM providers — including local models — into a single application spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome Extension**, and **VS Code Extension**. Each surface enforces its own trust boundary: Local mode keeps data on-device, BYOK (Bring Your Own Key) lets users route to their own provider accounts, and a managed cloud mode (currently waitlisted) adds hosted inference.
+AGI Workforce is a multi-surface AI workspace that unifies 20+ LLM providers — including local models — into a single application spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome Extension**, and **VS Code Extension**. Each surface enforces its own trust boundary: Local mode keeps data on-device, BYOK (Bring Your Own Key) lets users route to their own provider accounts, and a managed cloud mode (public alpha, open by default) adds hosted inference.
 
 ## What the Project Does
 
@@ -14,7 +14,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 ## Key Features
 
-- **Multi-provider model routing** — Catalog of 57 models from OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Perplexity, Qwen, Moonshot, ZhipuAI, Cohere, AI21, Groq, Together, Fireworks, Cerebras, DeepInfra, Sambanova, NVIDIA NIM, OpenRouter, Azure OpenAI, AWS Bedrock, and Ollama / LM Studio for local inference. Task-aware routing selects models by category (fast completion, code generation, complex reasoning, vision, long context, computer use).
+- **Multi-provider model routing** — Catalog of 60 models from OpenAI, Anthropic, Google, xAI, DeepSeek, Mistral, Perplexity, Qwen, Moonshot, ZhipuAI, Cohere, AI21, Groq, Together, Fireworks, Cerebras, DeepInfra, Sambanova, NVIDIA NIM, OpenRouter, Azure OpenAI, AWS Bedrock, and Ollama / LM Studio for local inference. Task-aware routing selects models by category (fast completion, code generation, complex reasoning, vision, long context, computer use).
 - **Local-first privacy** — Desktop and mobile surfaces run local models via Ollama, LM Studio, and on-device inference (llama.rn, ExecuTorch). No data leaves the device in Local mode.
 - **Bring Your Own Key (BYOK)** — Users provide their own API keys; AGI Workforce routes requests directly to the user's provider account.
 - **Agentic execution** — Swarm-based orchestration with task decomposition, parallel sub-agent spawning, dependency-graph execution, and result aggregation. The CLI provides an interactive TUI and one-shot execution mode.
@@ -65,7 +65,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
    ┌──────┴──────┐     ┌─────────────────┐
    │  Neon       │     │  Rust Crates    │
    │  PostgreSQL │     │  protocol,      │
-   │  (42 migr.) │     │  sandbox-policy,│
+   │  (52 migr.) │     │  sandbox-policy,│
    │             │     │  command-registry│
    │             │     │  app-server,    │
    │             │     │  + 13 more      │
@@ -74,20 +74,21 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 ### Monorepo Structure
 
-| Directory                   | Contents                                                                                                |
-| --------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `apps/mobile`               | Expo 55 / React Native iOS + Android app with on-device LLM support                                     |
-| `apps/web`                  | Next.js 16 web application — product site, chat, billing, docs, admin                                   |
-| `apps/desktop`              | Tauri 2 desktop app — React 19 frontend + Rust native backend                                           |
-| `apps/cli`                  | Rust CLI binary (`agi`) — interactive TUI, one-shot exec, daemon mode                                   |
-| `apps/extension`            | Chrome Extension (Manifest V3) — browser automation, side panel, native messaging                       |
-| `apps/extension-vscode`     | VS Code extension — IDE-native AI surface                                                               |
-| `apps/sandbox`              | Cross-origin artifact renderer (iframe sandbox)                                                         |
-| `packages/`                 | 20 shared TypeScript packages (types, providers, routing, runtime, stores, MCP, etc.)                   |
-| `packages/providers/`       | Per-provider adapter packages (Anthropic, Google, OpenAI, DeepSeek, xAI, Ollama, LM Studio, Perplexity) |
-| `crates/`                   | 17 Rust crates (protocol, sandbox-policy, command-registry, async-utils, etc.)                          |
-| `services/api-gateway`      | Express 5 API gateway — LLM proxy, Clerk auth, rate limiting, Redis caching                             |
-| `services/signaling-server` | Express 5 WebRTC/WebSocket signaling server for cross-device sync                                       |
+| Directory                   | Contents                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/mobile`               | Expo 55 / React Native iOS + Android app with on-device LLM support                                                                                          |
+| `apps/web`                  | Next.js 16 web application — product site, chat, billing, docs, admin                                                                                        |
+| `apps/desktop`              | Tauri 2 desktop app — React 19 frontend + Rust native backend                                                                                                |
+| `apps/cli`                  | Rust CLI binary (`agi`) — interactive TUI, one-shot exec, daemon mode                                                                                        |
+| `apps/extension`            | Chrome Extension (Manifest V3) — browser automation, side panel, native messaging                                                                            |
+| `apps/extension-vscode`     | VS Code extension — IDE-native AI surface                                                                                                                    |
+| `apps/sandbox`              | Cross-origin artifact renderer (iframe sandbox)                                                                                                              |
+| `packages/`                 | 21 shared TypeScript packages (types, providers, routing, runtime, stores, MCP, etc.)                                                                        |
+| `packages/ai/providers/`    | 14 per-provider adapter packages (Anthropic, Google, OpenAI, DeepSeek, xAI, Moonshot, OpenRouter, Groq, Qwen, Zhipu, Mistral, Ollama, LM Studio, Perplexity) |
+| `crates/`                   | 13 Rust crates (protocol, llm, agent-core, mcp, sandbox-policy, execpolicy, etc.)                                                                            |
+| `services/api-gateway`      | Express 5 API gateway — LLM proxy, Clerk auth, rate limiting, Redis caching                                                                                  |
+| `services/signaling-server` | Express 5 WebRTC/WebSocket signaling server for cross-device sync                                                                                            |
+| `tools/skill-vetting`       | Skill vetting scanner (NVIDIA SkillSpector fork) — developer/CI supply-chain vetting                                                                         |
 
 ## Tech Stack
 
@@ -150,7 +151,7 @@ The application is structured as a polyglot monorepo (TypeScript + Rust) with si
 
 ### Multi-Provider Model Catalog
 
-The `packages/types/src/models.json` catalog contains verified model definitions with per-model capability flags (streaming, tools, vision, thinking, computer use, agentic, image/video generation, search, research, code execution), pricing data, benchmark scores, and quality tiers. Task-aware routing in `packages/routing/` selects models by task category.
+The `packages/contracts/types/src/models.json` catalog contains verified model definitions with per-model capability flags (streaming, tools, vision, thinking, computer use, agentic, image/video generation, search, research, code execution), pricing data, benchmark scores, and quality tiers. Task-aware routing in `packages/ai/routing/` selects models by task category.
 
 ### Swarm Orchestration
 
@@ -345,7 +346,7 @@ pnpm check:model-catalog      # Model catalog integrity
 
 **Active development — pre-v1.0 MVP.**
 
-Development follows a serial surface order: **Mobile → Website → Desktop → CLI → Chrome Extension → VS Code Extension**. Mobile is the current release priority, targeting public App Store release with Local-first chat and Cloud waitlist entry.
+Development follows a serial surface order: **Mobile → Website → Desktop → CLI → Chrome Extension → VS Code Extension**. Mobile is the current release priority, targeting public App Store release with Local-first chat and public-alpha Cloud entry (sign-in gated, no invite/waitlist).
 
 | Surface           | Version | Status                                               |
 | ----------------- | ------- | ---------------------------------------------------- |
@@ -356,7 +357,7 @@ Development follows a serial surface order: **Mobile → Website → Desktop →
 | Chrome Extension  | 1.2.0   | Active development — browser automation + side panel |
 | VS Code Extension | 0.3.0   | Active development — IDE integration                 |
 
-Managed Cloud remains in waitlist/private beta until metering, abuse controls, and provider terms are finalized.
+Managed Cloud is in public alpha and open by default (founder decision, 2026-06-27); metering, abuse controls, and provider terms must keep pace with public usage, but they no longer gate access.
 
 ## Screenshots
 

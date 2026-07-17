@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-06-28
+Last updated: 2026-07-11
 
 This is the locked naming policy for AGI Workforce. New files, docs, packages, branches, commands, and release notes should follow this unless a current decision doc explicitly overrides it.
 
@@ -55,11 +55,11 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Use `CHANGELOG.md` for completed work.
 - Do not add `TASKS.md`, `FIXME.md`, or `AUDIT_LOG.md` at root.
 - Use inline `TODO(<owner-or-area>):` comments only for small local follow-up notes that are next to the affected code.
-- Put durable findings in `docs/agent-context/known-flaws.md`, `docs/security/`, or `audit/`.
+- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `audit/`, `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28 — do not cite them as existing or route new work there without a current decision doc.)
 
 ## Directory Names
 
-- Use lowercase kebab-case for new documentation, report, and audit directories: `docs/current`, `docs/agent-context`, `audit/tool-parity`.
+- Use lowercase kebab-case for new documentation directories: `docs/current`, `docs/agent-context`, `docs/research`.
 - Use existing ecosystem casing where the platform requires it: `.github`, `CODEOWNERS`, `Cargo.toml`, `package.json`, Expo/Tauri/native folders.
 - Apps live in `apps/<surface>`.
 - Shared TypeScript packages live in `packages/<domain>`.
@@ -73,8 +73,8 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 
 - Markdown docs: lowercase kebab-case, except root all-caps convention files such as `README.md`, `CHANGELOG.md`, `AGENTS.md`, `CODEOWNERS`.
 - Active plan docs: `docs/plans/<topic>.md`.
-- Historical archive folders: `docs/archive/YYYY-MM-DD-<reason>/`.
-- Audit/evidence files: `audit/<area>/<topic>-YYYY-MM-DD.md` when the date matters; otherwise `audit/<area>/<topic>.md`.
+- Historical archive folders (if a future archiving need arises; `docs/archive/` does not currently exist — removed 2026-06-28): `docs/archive/YYYY-MM-DD-<reason>/`.
+- Durable findings currently belong in `docs/agent-context/known-flaws.md`, not a standalone `audit/` directory (removed 2026-06-28).
 - Research summaries: `docs/research/<topic>-YYYY-MM-DD.md`.
 - Design prompts and generated design specs: `docs/design/<topic>-YYYY-MM-DD.md`.
 - TypeScript/React source files should follow the local app's existing convention; new domain feature files should prefer kebab-case filenames and PascalCase exported React components.
@@ -105,7 +105,7 @@ Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-str
 - Rust crates: `agiworkforce-<domain>` for shared crates and `agiworkforce-cli` for the CLI Cargo package.
 - TypeScript import aliases should point to packages or same-app domains, not another app's source tree.
 - Public API names should describe the domain, not implementation history. Avoid names that mention reference projects unless they are explicit compatibility adapters.
-- Shared persistent or wire contracts live in `packages/types`. Local duplicate contract shapes need an explicit migration baseline and removal plan.
+- Shared persistent or wire contracts live in `packages/contracts/types`. Local duplicate contract shapes need an explicit migration baseline and removal plan.
 - UI files should not call network/auth clients directly. Keep provider, Neon/Clerk, browser/computer-use, generated-file, and transport mechanics in feature services, integrations, packages, or service-layer modules.
 
 ## Branches, Commits, PRs

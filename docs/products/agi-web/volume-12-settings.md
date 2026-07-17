@@ -56,7 +56,7 @@ Cross-device settings sync is **allowlist-gated and lands last** (canon). The fo
 
 ## Billing
 
-🟡 Partial — `apps/web/features/settings/sections/BillingSection.tsx` + `apps/web/app/settings/billing/page.tsx` render plan/usage over Stripe (`0012_stripe.sql`, `0003_subscriptions.sql`), managed cloud open by default. **Spec ladder (use exactly): Free $0 · Basic $8 (₹399) · Pro $20 · Max $100 and $200 · Enterprise custom.** No credit top-ups. Gap: `apps/web/lib/pricing.ts` and `packages/types/src/billing-catalog.ts` still encode older tiers (`pro/max/team`; catalog lacks Basic) — tracked reconciliation task, flag 🟡. Never surface Plus/Hobby/`pro_plus`.
+🟡 Partial — `apps/web/features/settings/sections/BillingSection.tsx` + `apps/web/app/settings/billing/page.tsx` render plan/usage over Stripe (`0012_stripe.sql`, `0003_subscriptions.sql`), managed cloud open by default. **Spec ladder (use exactly): Free $0 · Basic $8 (₹399) · Pro $20 · Max $100 and $200 · Enterprise custom.** No credit top-ups. Gap: `apps/web/lib/pricing.ts` and `packages/contracts/types/src/billing-catalog.ts` still encode older tiers (`pro/max/team`; catalog lacks Basic) — tracked reconciliation task, flag 🟡. Never surface Plus/Hobby/`pro_plus`.
 
 ## Data Controls
 
@@ -72,7 +72,7 @@ Cross-device settings sync is **allowlist-gated and lands last** (canon). The fo
 - `apps/web/features/settings/**` — `sections/*`, `schemas/settings-validation.ts`, `components/Settings/*`, `components/{WebSettingsModal,LanguageSelector,AdvancedModeToggle}.tsx`, `services/{user-preferences,totp-2fa}.ts`.
 - `apps/web/components/settings/AppearanceSettings.tsx`.
 - `apps/web/app/api/settings/{preferences,sync,2fa,api-keys,audit-logs}/route.ts`; `apps/web/app/api/user/{data,export,delete-account}`; `apps/web/app/api/memory/{route,sync}.ts`.
-- `apps/web/app/i18n/index.ts`; `apps/web/lib/pricing.ts`; `packages/types/src/billing-catalog.ts`.
+- `apps/web/app/i18n/index.ts`; `apps/web/lib/pricing.ts`; `packages/contracts/types/src/billing-catalog.ts`.
 - Neon: `0028`, `0042`, `0038` (sync), `0025`, `0010`, `0040`, `0012`, `0003`, `0008`, `0037`, `0043`.
 
 ## Competitor notes
@@ -92,5 +92,5 @@ Claude, ChatGPT, and Codex expose a single-provider account with theme, language
 - Widening the sync allowlist to a secret-bearing namespace, or syncing via a denylist.
 - Reintroducing removed tiers (Plus, Hobby, `pro_plus`), inventing Pro/Max INR prices, or adding credit top-ups.
 - Claiming voice transcription or an accent picker as shipped without a real path; leaving dead toggles.
-- Hardcoding or inventing model IDs in settings (catalog IDs come only from `packages/types/src/models.json`).
+- Hardcoding or inventing model IDs in settings (catalog IDs come only from `packages/contracts/types/src/models.json`).
 - Referencing Supabase, renaming `proxy.ts` to `middleware.ts`, or persisting preferences to client-only state without surfacing failures.

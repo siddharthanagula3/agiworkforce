@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-06-06
+Last updated: 2026-07-14
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -35,7 +35,8 @@ Public v1 launches with:
 
 - Local Mode: local-first chat and local tools where technically available.
 - BYOK Mode: direct user-owned provider keys with explicit provider labels.
-- Multi-provider model selection: model IDs and capability metadata come from `packages/types/src/models.json`.
+- Multi-provider model selection: hand-maintained model knowledge lives only in
+  `packages/ai/model-registry/catalog`; compatibility catalogs are generated.
 - One normal chat surface that can also work with selected files, reference files, project context, generated files, artifacts, tools, connectors, and images.
 
 Managed cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta launch gate has been removed.
@@ -76,14 +77,14 @@ The original Local thread remains Local forever. A BYOK continuation is a new re
 
 ## Surface Roles
 
-| Surface | Role                                                                                                                                                                        | Sync boundary                                                                                                                                                                                                      |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web     | Account, projects, synced app chats, artifacts, billing/waitlist, admin, web routes. Web chat is subscription-backed through Neon/account state; Web does not expose BYOK.  | Normal app chat sync allowed.                                                                                                                                                                                      |
-| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges.                        | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred.                                                                                                                  |
-| Mobile  | Small on-device Local LLM chat, continuity, approvals, preview/share, and public-alpha Cloud chat for signed-in users (no invite/waitlist). Mobile v1 does not expose BYOK. | Cloud app chat sync is allowed only for signed-in entitled Cloud chats. Local Mode chats, memory, projects, files, profile, and personalization stay local unless the user explicitly chooses a reviewed transfer. |
-| CLI     | Developer agent and terminal engine.                                                                                                                                        | Workspace/session scoped; no automatic sync into app chats.                                                                                                                                                        |
-| VS Code | IDE-native developer assistant.                                                                                                                                             | Workspace scoped; handoff to app chat must be explicit and redacted.                                                                                                                                               |
-| Chrome  | Browser context, page capture/action approvals, native messaging.                                                                                                           | Page data is task scoped; no default global chat memory sync.                                                                                                                                                      |
+| Surface | Role                                                                                                                                                                                                     | Sync boundary                                                                                                                                                                                                      |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web     | Account, projects, synced app chats, artifacts, billing, admin, web routes, and capacity-specific access requests. Web chat is subscription-backed through Neon/account state; Web does not expose BYOK. | Normal app chat sync allowed.                                                                                                                                                                                      |
+| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges.                                                     | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred.                                                                                                                  |
+| Mobile  | Small on-device Local LLM chat, continuity, approvals, preview/share, and public-alpha Cloud chat for signed-in users (no invite/waitlist). Mobile v1 does not expose BYOK.                              | Cloud app chat sync is allowed only for signed-in entitled Cloud chats. Local Mode chats, memory, projects, files, profile, and personalization stay local unless the user explicitly chooses a reviewed transfer. |
+| CLI     | Developer agent, terminal engine, and canonical local developer-session host used by VS Code.                                                                                                            | Workspace/session scoped; no automatic sync into app chats.                                                                                                                                                        |
+| VS Code | IDE-native thin client and presentation adapter over the CLI-hosted Rust developer session.                                                                                                              | One local-runtime process per trusted workspace; handoff to app chat must be explicit and redacted.                                                                                                                |
+| Chrome  | Browser context, page capture/action approvals, native messaging, and browser-local conversations.                                                                                                       | Conversations persist in extension-local storage and never join consumer app-chat sync implicitly; transfer requires explicit selected/redacted handoff.                                                           |
 
 ## Competitive Baseline
 
@@ -197,19 +198,51 @@ This section is based on code inspection and verification, not only docs.
 
 Shared contracts:
 
-- `packages/types/src/suite-contracts.ts` has `PrivacyMode`, `ProviderMode`, `ChatExecutionMode`, synced/developer surface separation, generated-file trust-boundary validation, and `assertSurfaceCanSyncChats`.
-- `packages/types/src/models.json` is the canonical model catalog. Agents must not invent or hardcode model IDs.
-- `packages/types/src/model-catalog.ts` now restores `requireProviderDefaultModel`, so provider defaults can be resolved from the catalog instead of scattered literals.
+- `packages/contracts/types/src/suite-contracts.ts` has `PrivacyMode`, `ProviderMode`, `ChatExecutionMode`, synced/developer surface separation, generated-file trust-boundary validation, and `assertSurfaceCanSyncChats`.
+- `packages/ai/model-registry/catalog/models.curation.json`, `models.synced.json`,
+  `harnesses.json`, and `routing-policies.json` are the authoring inputs for
+  model identity, provider-model keys, routes, capabilities, harnesses, runtime
+  profiles, and policy. The compiler owns
+  `packages/ai/model-registry/generated/registry.{json,ts}`,
+  `packages/contracts/types/src/models.json`, and the generated protocol/model-registry
+  Rust projections. Agents must never edit those generated files directly,
+  invent IDs, or maintain an application-specific managed-model list.
+- `packages/contracts/types/src/model-catalog.ts` now restores `requireProviderDefaultModel`, so provider defaults can be resolved from the catalog instead of scattered literals.
 
 Web:
 
 - The Web typecheck now passes after fixing a stale default-model helper import and a temporary-conversation array lookup bug.
 - Web has chat, model/provider plumbing, artifacts/tool timelines, settings hooks, integrations, and admin/account direction, but product parity is partial. Web runtime data must be Neon-backed; no Web BYOK/free env-key chat.
+- The managed Web chat API now admits Auto aliases and explicit model selections
+  through `@agiworkforce/routing` with the implemented `web/cloud-chat` runtime
+  profile before quota reservation or provider dispatch. Unknown models and
+  partially implemented harness requirements fail closed. The unused
+  `apps/web/lib/modelRouter.ts` and
+  `apps/web/core/ai/orchestration/model-router.ts` policy copies were removed.
+- Clear natural-language image-generation requests in the shipping Web chat UI
+  dispatch to the existing managed media flow. The generic text-chat API rejects
+  media harnesses before billing/provider execution instead of sending an image
+  model through a text adapter.
+- `/chat` still mounts `WebChatPage`; `UnifiedChatPage`/`WebShellV3` are internal
+  convergence code and are not a second public Web chat route. Their existence
+  must not be mistaken for production adoption of the shared chat shell.
 - Remaining Web gaps include settings parity, connector/app directory parity, global search, and complete projects/files/memory parity. Cloud Managed is public alpha and should be presented as available (no longer waitlist-gated).
 
 Desktop:
 
 - Desktop has a strong v3 chat shell with sidebar, model popover, composer, artifact workbench, connectors/MCP direction, local generated files, and focused settings modals.
+- Desktop is one installed Tauri application, not separate Local and Cloud apps. The workspace/storage plane is `local` or `cloud`; every conversation separately persists an immutable `execution_mode` (`local_only`, `byok`, or `cloud_managed`). Local-to-BYOK creates a new `byok` fork, and Rust provider admission rejects providers outside that conversation boundary. The shipping shared-chat selector and send preflight also filter by `execution_mode`; managed and canonical BYOK selections pass through the registry-backed route, lifecycle, harness, and runtime-profile policy before persistence or dispatch. Dynamic host-discovered Local/BYOK models remain privileged-runtime admitted. Desktop managed Cloud remains fail-closed until the existing `CloudRuntime` is selected and `desktop/cloud-chat` is marked wired.
+- Desktop model routing is owned by `@agiworkforce/routing` through the shared
+  chat send pipeline. The unused Desktop-only `lib/modelRouter.ts`, its orphaned
+  Zustand routing methods, and tests of that parallel policy were removed; do
+  not recreate application-specific model pools or keyword routers.
+- Desktop model discovery is reachability-based: Rust advertises a catalog
+  model only when that exact provider is configured; registering Managed Cloud
+  never makes direct BYOK providers appear available. IPC/API discovery payloads
+  are runtime-validated, canonical capability/lifecycle metadata comes from the
+  generated registry, and discovery failure produces an explicit empty state
+  instead of synthesized models or universal capabilities. Runtime capability
+  probing is reserved for dynamically discovered Ollama models.
 - `apps/desktop/src/features/v3/DesktopShellV3.tsx` no longer exposes separate
   AGI Work and AGI Code mode placeholders. It exposes chat plus AGI Work Projects,
   Artifacts, Scheduled, and Dispatch subpanels. AGI Code remains missing or
@@ -231,20 +264,55 @@ Mobile:
 CLI:
 
 - `apps/cli/src/agent/mod.rs` has Local/BYOK/Managed privacy modes and blocks Local sessions from silently using non-local provider modes.
+- `apps/cli/src/app_server/developer_host.rs` is the canonical local
+  developer-session runtime used by both the CLI and VS Code. The shared
+  app-server protocol owns admission and transport; the CLI host owns
+  workspace-scoped persistence, live turns, streaming, approvals,
+  cancellation, tool execution, and MCP attachment.
+- MCP discovery is asynchronous and status-bearing (`mcp/loading`,
+  `mcp/ready`, `mcp/unavailable`). Failure or timeout degrades the session
+  without blocking startup.
+- App-server capabilities currently report `checkpoints: false` and
+  `worktrees: false`. Legacy UI or commands do not prove those shared runtime
+  capabilities; keep them gated until implemented and verified in the Rust
+  owner.
 - CLI has Claude Code-style directions such as slash commands, memory, MCP/plugins/hooks/skills, managed sessions, workspaces, voice, and provider dispatch, but it needs a stricter parity pass against Claude Code and Codex CLI.
 
 Chrome:
 
 - `apps/extension` owns MV3 popup/side panel/content/background/native bridge/page capture/scheduled-task/workflow-recording direction.
-- It has explicit sync-boundary comments and tests asserting Chrome is a developer surface, not a consumer chat-history sync surface.
-- Remaining parity gaps are polished side panel UX, permissions UX, Chrome-to-Desktop bridge hardening, and invite-gated cloud bridge flows.
+- `apps/extension/src/features/background/conversation-history.ts` owns the
+  browser conversation store in `chrome.storage.local`, including migration,
+  active-conversation selection, bounded retention, mutation serialization,
+  and CRUD used by the side panel. This is intentionally separate from
+  Web/Mobile/Desktop app-chat sync.
+- Remaining parity gaps are polished side panel UX, permissions UX,
+  Chrome-to-Desktop bridge hardening, and the explicit selected/redacted handoff
+  flow.
 
 VS Code:
 
-- `apps/extension-vscode` owns IDE chat, terminal capture, patch/checkpoint flows, model picker, and workspace-scoped context.
+- `apps/extension-vscode` owns IDE context and presentation. Its typed JSONL
+  client and `LocalRuntimePool` connect to one CLI app-server process per
+  trusted workspace. The former extension-owned `ConversationStore`,
+  checkpoint manager, and agent loop were removed; do not recreate a second
+  execution or persistence owner in the extension.
 - It must align with Codex/Claude IDE baselines: chat/edit/agent modes, @ file
   references, editor context, diagnostics, diff review where supported,
   approvals, cloud handoff preview, and local application of remote diffs.
+
+Build and release ownership:
+
+- `turbo.json` is the Node workspace task graph. Root lint/typecheck/test/build
+  commands delegate to package-owned tasks, and CI uses Turbo affected
+  selection plus a static graph regression check.
+- CLI releases use `v-cli-*` tags, validate Cargo/npm version agreement, and
+  publish Sigstore-verified checksum bundles. Desktop releases use
+  `v-desktop-*` tags and Tauri updater signatures. These are separate product
+  channels; no workflow or installer may resolve an unfiltered latest release.
+- This does not establish all-platform release readiness. Desktop macOS and
+  Windows signing/notarization and a green full-repo verification baseline
+  remain required.
 
 Services:
 
@@ -294,13 +362,13 @@ Everything else is supporting context, evidence, or historical material unless a
 
 Treat these as evidence or working notes, not source of truth:
 
-- `tasks/**`
-- `reports/**`
-- `docs/archive/**`
-- old dated audit subdirectories
+- `docs/agent-context/known-flaws.md` findings not yet promoted into a current doc
+- `docs/research/**` dated research summaries
 - local screenshot/reference corpora
 - generated parity reports
 - stale PRDs and launch plans
+
+(The former `tasks/**`, `reports/**`, `docs/archive/**`, and standalone `audit/` directories were removed repo-wide on 2026-06-28 — do not cite them as existing.)
 
 Do not delete evidence casually. Classify first, then archive, compress, externalize, or remove only when the current docs and checks no longer depend on it.
 
@@ -317,14 +385,10 @@ For every feature claim:
 - run visual or e2e checks for launch-critical UI,
 - record unresolved risks in `docs/agent-context/known-flaws.md` or the active plan.
 
-Last recorded verified repo baseline from the prior audit. Re-run these on the
-current dirty worktree before using them as fresh verification:
-
-- `pnpm --filter @agiworkforce/web typecheck` passes.
-- `pnpm --filter @agiworkforce/web test -- core/ai/llm/unified-language-model.test.ts core/integrations/web-search-handler.test.ts` passes.
-- `pnpm --filter @agiworkforce/types test` passes.
-- `pnpm typecheck:all` passes.
-- `pnpm lint` passes.
-- `cargo check --workspace --locked` passes.
-- `pnpm check:llm-operability` passes.
-- `git diff --check` passes.
+Do not reuse the prior green baseline as current evidence. On this 2026-07-14
+reconciliation run, `pnpm check:llm-operability` passed through generated-model
+and CI guardrail checks, then stopped because
+`crates/agiworkforce-model-registry/README.md` lacks the required `Purpose`
+marker. Full `git diff --check` also finds unrelated Mobile documentation
+whitespace. Re-run the authoritative commands and record their exact output
+before making any completion or release-readiness claim.

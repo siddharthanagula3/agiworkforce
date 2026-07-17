@@ -33,7 +33,7 @@ Any other document **references** the owner; it must not restate the definition.
 - **Doc-to-doc:** relative Markdown links (`[title](relative-path.md)`), section anchors where useful.
 - **Requirement references:** inline ID, e.g., "(`AGI-TRUST-0001`)". The ID resolves in [requirement-id-system.md](requirement-id-system.md).
 - **Term references:** use the exact glossary term; on first significant use in a doc, link to the glossary.
-- **Source references:** repo-relative path in backticks (e.g., `packages/types/src/models.json`).
+- **Source references:** repo-relative path in backticks (e.g., `packages/contracts/types/src/models.json`).
 
 ## 3. Required "Related" front-matter
 

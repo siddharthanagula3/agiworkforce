@@ -22,7 +22,7 @@ Authentication exists to gate _Managed_ access and to scope synced data to the r
 
 - Web auth routes: `apps/web/app/api/auth/` — `set-token/route.ts`, `clear-token/route.ts`, `sso-check/route.ts`, `desktop-token/route.ts` (+ `__tests__/keysource-entropy.test.ts`), `device/code/route.ts`, `device/token/route.ts`, `device/approve/route.ts`.
 - Gateway middleware: `services/api-gateway/src/middleware/auth.ts`, `managedComputeGate.ts`, `planGate.ts`; routes `src/routes/auth.ts`, `src/routes/deviceAuth.ts`; tests `__tests__/middleware/auth.test.ts`, `__tests__/routes/{auth,deviceAuth}.test.ts`.
-- Identity/auth types: `packages/api/src/auth.ts`; protocol `crates/agiworkforce-protocol/src/auth.rs`.
+- Identity/auth types: `packages/client/desktop-command-client/src/auth.ts`; protocol `crates/agiworkforce-protocol/src/auth.rs`.
 - MFA + devices (schema): `apps/web/db/neon/0025_two_factor.sql`, `0013_devices.sql`, `0029_device_authorization_contract.sql`; web 2FA UI `apps/web/features/settings/components/Settings/TwoFactor.tsx`, service `features/settings/services/totp-2fa.test.ts`.
 - Tenancy/orgs: `apps/web/db/neon/0015_organizations.sql`, `0030_allow_enterprise_subscription_tier.sql`; RLS isolation `0037_rls_user_isolation.sql`.
 - CLI privacy/identity: `apps/cli/src/agent/mod.rs` (Local/BYOK/Managed guards).

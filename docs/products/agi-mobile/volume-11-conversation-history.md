@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/mobile/stores/chatStore.ts`, `apps/mobile/stores/chat/chatMessageStore.ts`, `apps/mobile/stores/chat/chatCloudMessageStore.ts`, `apps/mobile/stores/chat/chatViewStore.ts`, `apps/mobile/stores/chat/chatExecutionStore.ts`, `apps/mobile/storage/conversations.ts`, `apps/mobile/storage/migrations.ts`, `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/src/features/sidebar/components/ConversationItem.tsx`, `apps/mobile/app/_layout.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/mobile/stores/chatStore.ts`, `apps/mobile/stores/chat/chatMessageStore.ts`, `apps/mobile/stores/chat/chatCloudMessageStore.ts`, `apps/mobile/stores/chat/chatViewStore.ts`, `apps/mobile/stores/chat/chatExecutionStore.ts`, `apps/mobile/storage/conversations.ts`, `apps/mobile/storage/migrations.ts`, `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/src/features/sidebar/components/ConversationItem.tsx`, `apps/mobile/app/_layout.tsx`, `apps/mobile/lib/v1FeatureFlags.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -22,7 +22,7 @@ The split is physical. Local conversations live in their own MMKV namespace plus
 
 ## Filters — sorting + filtering
 
-🟡 Partial — the storage layer supports the primitives: `listConversations({ archived })` filters archived vs active, and the `ORDER BY pinned DESC, updated_at DESC` clause encodes the default sort (`storage/conversations.ts`). What is **not** built is a user-facing filter/sort control surface — there are no mode chips (Local / Cloud), no "sort by created vs updated" toggle, and no project filter wired into the history list. Requirement before ✅: filter controls that (a) never blend namespaces — a "Cloud only" filter must read the cloud store, a "Local only" filter the local store; (b) default to `pinned DESC, updatedAt DESC`; (c) expose archived as an explicit filter state, not a hidden mode; (d) read `packages/types/src/models.json` for any model-based filter — never hardcode an id.
+🟡 Partial — the storage layer supports the primitives: `listConversations({ archived })` filters archived vs active, and the `ORDER BY pinned DESC, updated_at DESC` clause encodes the default sort (`storage/conversations.ts`). What is **not** built is a user-facing filter/sort control surface — there are no mode chips (Local / Cloud), no "sort by created vs updated" toggle, and no project filter wired into the history list. Requirement before ✅: filter controls that (a) never blend namespaces — a "Cloud only" filter must read the cloud store, a "Local only" filter the local store; (b) default to `pinned DESC, updatedAt DESC`; (c) expose archived as an explicit filter state, not a hidden mode; (d) read `packages/contracts/types/src/models.json` for any model-based filter — never hardcode an id.
 
 ## Pinned Chats
 
@@ -45,7 +45,7 @@ The split is physical. Local conversations live in their own MMKV namespace plus
 - `apps/mobile/src/features/sidebar/components/ConversationItem.tsx` — list-row actions (pin/archive/delete entry points).
 - `apps/mobile/app/_layout.tsx` — sync loop lifecycle.
 - `apps/mobile/lib/v1FeatureFlags.ts` — `cloudChat`, `crossDeviceSync:false`, `byokKeys:false`.
-- Shared: `packages/types/src/models.json` (model ids), `apps/web/app/api/{chat/sync,search}` (cloud endpoints), Neon delta-sync.
+- Shared: `packages/contracts/types/src/models.json` (model ids), `apps/web/app/api/{chat/sync,search}` (cloud endpoints), Neon delta-sync.
 
 ## Competitor notes
 
@@ -65,6 +65,6 @@ History is production-ready only when every operation routes to the owning names
 - Merging Local and Cloud rows into one namespace, or letting a filter/sort read across both stores.
 - Auto-uploading Local history to Managed Cloud, or treating sync as a Local→Cloud transfer.
 - Claiming unified recency, filter UI, or store-level archive as shipped — they are 🟡 until wired.
-- Hardcoding or inventing a model id instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model id instead of reading `packages/contracts/types/src/models.json`.
 - Setting both `cloudChat` and `crossDeviceSync` true, or reviving the dormant flag as a second gate.
 - Referencing Supabase, or any removed tier (Plus / pro_plus / Hobby) in history copy.

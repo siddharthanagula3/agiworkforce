@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (root) and `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/manifest.json`; `apps/extension/src/features/computer-use/{cloudAgentClient,cdpDriver,agentLoop,escalationEngine}.ts`; `apps/extension/src/features/native-bridge/{providerStreamClient,sendQueue}.ts`; `apps/extension/src/pairing.ts`; `apps/extension/src/background/{memory-bridge,policy}.ts`; `apps/extension/src/features/background/conversation-history.ts`; `apps/extension/THREAT_MODEL.md`, `MANIFEST_NOTES.md`. Model IDs come from `packages/types/src/models.json` only.
+Authority: `AGENTS.md` (root) and `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/manifest.json`; `apps/extension/src/features/computer-use/{cloudAgentClient,cdpDriver,agentLoop,escalationEngine}.ts`; `apps/extension/src/features/native-bridge/{providerStreamClient,sendQueue}.ts`; `apps/extension/src/pairing.ts`; `apps/extension/src/background/{memory-bridge,policy}.ts`; `apps/extension/src/features/background/conversation-history.ts`; `apps/extension/THREAT_MODEL.md`, `MANIFEST_NOTES.md`. Model IDs come from `packages/contracts/types/src/models.json` only.
 
 ## Overview & stance
 
@@ -56,7 +56,7 @@ There is **no shipped correlation/request-ID scheme** in the extension today, an
 - `apps/extension/src/features/native-bridge/` — `providerStreamClient.ts` (429/5xx/paywall), `sendQueue.ts` (volatile fallback), `pairing.ts` (re-export).
 - `apps/extension/src/pairing.ts` — pairing state machine, token/fingerprint regex, `ALLOWED_BRIDGE_HOSTS` guard.
 - `apps/extension/src/background/` — `memory-bridge.ts` (200-row cap), `policy.ts`; `features/background/conversation-history.ts` (100 / 30-day).
-- `apps/extension/manifest.json`, `THREAT_MODEL.md`, `MANIFEST_NOTES.md`; `packages/types/src/models.json` (model SSOT).
+- `apps/extension/manifest.json`, `THREAT_MODEL.md`, `MANIFEST_NOTES.md`; `packages/contracts/types/src/models.json` (model SSOT).
 
 ## Competitor notes
 

@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/services/{api,streaming,authSession,cloudSyncEngine,notifications,modelDownload,companion,realtime,dispatchRealtime,remoteChatGate}.ts`, `apps/mobile/lib/{egressGuard,v1FeatureFlags,constants,dispatchHmac}.ts`, `apps/mobile/src/features/image/services/imagegen.ts`, `apps/web/app/api/**`, `services/signaling-server`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/services/{api,streaming,authSession,cloudSyncEngine,notifications,modelDownload,companion,realtime,dispatchRealtime,remoteChatGate}.ts`, `apps/mobile/lib/{egressGuard,v1FeatureFlags,constants,dispatchHmac}.ts`, `apps/mobile/src/features/image/services/imagegen.ts`, `apps/web/app/api/**`, `services/signaling-server`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 This volume specifies the network API surface that AGI Mobile consumes. Mobile exposes exactly two trust modes — **Local** (on-device LLM, free) and **Managed Cloud** (public alpha, open by default). There is **no BYOK on mobile**: no endpoint, screen, or token store accepts a user provider key. Every Cloud API is Neon-backed and reached through the managed gateway at `${API_URL}` (default `https://agiworkforce.com`, `apps/mobile/lib/constants.ts`).
 
-The hard rule is fail-closed egress. All outbound HTTPS flows through `guardedFetch` (`apps/mobile/lib/egressGuard.ts`) via `secureFetch`; in Local mode the guard refuses the call before any I/O, so Local chats, memory, and files never reach a Cloud route. Cloud routes require a real Clerk auth gate (`remoteChatGate.ts` returns a disabled/sign-in reason and `assertRemoteChatAllowed` throws when Cloud is off — fail-closed). Model IDs are never sent as invented strings; the gateway and `packages/types/src/models.json` own the catalog and clients pass only optional overrides.
+The hard rule is fail-closed egress. All outbound HTTPS flows through `guardedFetch` (`apps/mobile/lib/egressGuard.ts`) via `secureFetch`; in Local mode the guard refuses the call before any I/O, so Local chats, memory, and files never reach a Cloud route. Cloud routes require a real Clerk auth gate (`remoteChatGate.ts` returns a disabled/sign-in reason and `assertRemoteChatAllowed` throws when Cloud is off — fail-closed). Model IDs are never sent as invented strings; the gateway and `packages/contracts/types/src/models.json` own the catalog and clients pass only optional overrides.
 
 ## Authentication APIs ✅ Built
 
@@ -48,7 +48,7 @@ Remote Control is a secure **window** over a host session, not a trust mode — 
 
 - Clients: `apps/mobile/services/{api,streaming,authSession,cloudSyncEngine,notifications,modelDownload,companion,realtime,dispatchRealtime,remoteChatGate,secureFetch}.ts`; `apps/mobile/lib/{egressGuard,v1FeatureFlags,constants,dispatchHmac,pinning}.ts`; `apps/mobile/src/features/image/services/imagegen.ts`.
 - Gateway/Neon routes: `apps/web/app/api/{llm/v1/chat/completions, v1/providers/[providerId]/stream, chat/sync, chat/conversations, memory, memory/sync, memory/search, projects, projects/sync, projects/[id]/knowledge-files, media/image/generate, mobile/push-token, auth/device, device, settings/sync}`.
-- Shared: `services/signaling-server`, `packages/types/src/models.json`.
+- Shared: `services/signaling-server`, `packages/contracts/types/src/models.json`.
 
 ## Competitor notes
 
@@ -67,5 +67,5 @@ Production-ready when every Cloud route is Neon-backed, Clerk-authenticated, pay
 - Adding a BYOK / provider-key entry, screen, or endpoint to mobile.
 - Auto-routing Local chats, memory, files, or projects to any Cloud route without an explicit reviewed transfer.
 - Faking unbuilt routes (`/api/upload`, `/api/media/image/{status,list}`, remote runtime control) as shipped, or claiming companion/dispatch works while the flags are off.
-- Hardcoding or inventing model IDs instead of deferring to the gateway + `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of deferring to the gateway + `packages/contracts/types/src/models.json`.
 - Referencing Supabase, or citing removed tiers ("Plus", `pro_plus`, "Hobby") in any API contract — use Free / Basic / Pro / Max / Enterprise.

@@ -24,7 +24,7 @@ Auth errors are typed `CliError::Auth { provider, message }` (`apps/cli/src/erro
 
 ## Provider Failure
 
-Upstream provider faults map to `CliError::Api`, `CliError::RateLimited { retry_after }`, and `CliError::Paywall` (`apps/cli/src/errors.rs`). ✅ Built. On rate-limit or 5xx, the fallback chain rotates to the next primary and continues (`apps/cli/src/routing/fallback.rs` — `FallbackOn::RateLimit` default; `FallbackOn::All` adds network/server) — the deliberate answer to the "rate-limit cliff." ✅ Built. A `Paywall` (Managed limit exhausted) must render the server-provided upgrade path using canon tiers (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise), never invented tiers or INR figures. Requirements: fallback model IDs come only from the catalog (`packages/types/src/models.json`); provider failure never escalates a Local session to a non-local provider.
+Upstream provider faults map to `CliError::Api`, `CliError::RateLimited { retry_after }`, and `CliError::Paywall` (`apps/cli/src/errors.rs`). ✅ Built. On rate-limit or 5xx, the fallback chain rotates to the next primary and continues (`apps/cli/src/routing/fallback.rs` — `FallbackOn::RateLimit` default; `FallbackOn::All` adds network/server) — the deliberate answer to the "rate-limit cliff." ✅ Built. A `Paywall` (Managed limit exhausted) must render the server-provided upgrade path using canon tiers (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise), never invented tiers or INR figures. Requirements: fallback model IDs come only from the catalog (`packages/contracts/types/src/models.json`); provider failure never escalates a Local session to a non-local provider.
 
 ## Local Runtime Failure
 
@@ -78,7 +78,7 @@ Production-ready when every edge case above returns a typed error with a remedia
 ## Anti-patterns
 
 - Silently routing a broken Local session to BYOK/Managed to "keep going" — always require the explicit consent fork; never auto-sync a failed CLI session to app chat.
-- Hardcoding a fallback model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a fallback model ID instead of reading `packages/contracts/types/src/models.json`.
 - Rendering removed tiers (Plus / pro_plus / Hobby) or invented Pro/Max INR prices in a paywall/quota message.
 - Swallowing disk-full or network errors and reporting success; leaking raw tokens in auth errors.
 - Referencing Supabase, renaming `proxy.ts` to `middleware.ts`, or using `agiworkforce <cmd>` in examples — use the `agi` binary.

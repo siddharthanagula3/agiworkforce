@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and verified against `apps/mobile/src/features/projects/store.ts`, `apps/mobile/stores/projects/cloudProjectStore.ts`, `apps/mobile/stores/projects/projectSyncStateStore.ts`, `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/app/(app)/(tabs)/projects.tsx`, `apps/mobile/src/features/projects/components/*`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/stores/chat/chatExecutionStore.ts`, `packages/types/src/suite-contracts.ts`, and `apps/web/app/api/projects/sync/route.ts`.
+Authority: Grounded in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and verified against `apps/mobile/src/features/projects/store.ts`, `apps/mobile/stores/projects/cloudProjectStore.ts`, `apps/mobile/stores/projects/projectSyncStateStore.ts`, `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/app/(app)/(tabs)/projects.tsx`, `apps/mobile/src/features/projects/components/*`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/stores/chat/chatExecutionStore.ts`, `packages/contracts/types/src/suite-contracts.ts`, and `apps/web/app/api/projects/sync/route.ts`.
 
 ## Overview & stance
 
@@ -42,7 +42,7 @@ There is no search/filter inside Projects today — the tab renders a flat `Flat
 
 ## Sharing — shared access — 🔭 Planned
 
-There is no user-to-user project sharing on mobile. The shared `ProjectRecord` contract (`packages/types/src/suite-contracts.ts`) carries `allowedSurfaces` and `defaultPrivacyMode`, but that is **surface scoping** (which AGI surfaces may open a synced cloud project), not multi-user collaboration. True shared access (invites, roles, org seats) is 🔭 Planned and is an **Enterprise** capability — never a consumer mobile feature, and never a path that exposes a Local project to another user without an explicit reviewed transfer.
+There is no user-to-user project sharing on mobile. The shared `ProjectRecord` contract (`packages/contracts/types/src/suite-contracts.ts`) carries `allowedSurfaces` and `defaultPrivacyMode`, but that is **surface scoping** (which AGI surfaces may open a synced cloud project), not multi-user collaboration. True shared access (invites, roles, org seats) is 🔭 Planned and is an **Enterprise** capability — never a consumer mobile feature, and never a path that exposes a Local project to another user without an explicit reviewed transfer.
 
 ## Repository map
 
@@ -53,11 +53,11 @@ There is no user-to-user project sharing on mobile. The shared `ProjectRecord` c
 - `apps/mobile/services/cloudSyncEngine.ts` — `pushProjects`/`pullProjects`/`markProjectForSync`/`isManagedSyncEnabled`.
 - `apps/mobile/stores/chat/chatExecutionStore.ts` — project-instructions system-message injection.
 - `apps/mobile/lib/v1FeatureFlags.ts` — `projects: true`, `crossDeviceSync: false`, `byokKeys: false`.
-- `packages/types/src/suite-contracts.ts` — `ProjectRecord`. `apps/web/app/api/projects/sync/route.ts` — server delta-sync.
+- `packages/contracts/types/src/suite-contracts.ts` — `ProjectRecord`. `apps/web/app/api/projects/sync/route.ts` — server delta-sync.
 
 ## Competitor notes
 
-ChatGPT and Claude mobile both offer Projects as cloud-only containers (instructions + files + chats) tied to one account. AGI's deliberate divergence: **trust-mode-aware projects** — a fully on-device Local project (free, no account, never synced) sits beside Managed-Cloud projects that delta-sync across Web/Mobile/Desktop, with physical store separation guaranteeing no leak. AGI is multi-provider (model ids come only from `packages/types/src/models.json`), and **mobile carries no BYOK**, so a project never holds provider keys. Like the competitors, heavy document grounding is cloud/host-backed, not on-device.
+ChatGPT and Claude mobile both offer Projects as cloud-only containers (instructions + files + chats) tied to one account. AGI's deliberate divergence: **trust-mode-aware projects** — a fully on-device Local project (free, no account, never synced) sits beside Managed-Cloud projects that delta-sync across Web/Mobile/Desktop, with physical store separation guaranteeing no leak. AGI is multi-provider (model ids come only from `packages/contracts/types/src/models.json`), and **mobile carries no BYOK**, so a project never holds provider keys. Like the competitors, heavy document grounding is cloud/host-backed, not on-device.
 
 ## Acceptance / Definition of Done
 
@@ -74,5 +74,5 @@ Production-ready when: create/rename/delete/instructions work in both Local and 
 - Hard-deleting a cloud project before the server acks its tombstone.
 - Auto-sending a Local project's chats, files, or instructions to Cloud without an explicit reviewed transfer.
 - Faking Search/Knowledge/Sharing with non-functional UI, or claiming retrieval/cross-device file sync that no cited path implements.
-- Hardcoding or inventing a model id (read `packages/types/src/models.json`); inventing routes/env/INR prices.
+- Hardcoding or inventing a model id (read `packages/contracts/types/src/models.json`); inventing routes/env/INR prices.
 - Referencing Supabase, or any "Plus"/`pro_plus`/"Hobby" tier — the stack is Clerk + Neon + Stripe and the ladder is Free/Basic/Pro/Max/Enterprise.

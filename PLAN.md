@@ -1,657 +1,257 @@
-# Anthropic Applications Parity Transition Plan
+# AGI Workforce Production Restructure
 
-Status: Current
+Status: Active
 Owner: Founder + platform lead
-Last updated: 2026-05-23 (post R27-PARITY Phase D complete — 5 stages shipped on origin/main, 42 commits, 137 files, +14267/-808. See `CHANGELOG.md` R27 entry and archived `docs/archive/2026-06-05-doc-reset/docs/audit/2026-05-23-r27-v1-backlog.md`).
-
-## Mission
-
-Locked product thesis: AGI Workforce is an OpenAI/Anthropic-style application suite, not just a chat app and not just a CLI.
-
-AGI Workforce is not trying to become the next frontier-model lab. The target is to become the next Anthropic/OpenAI-style application platform: Claude Code, Claude Desktop, Claude Web, Claude Mobile, Claude connectors, Claude artifacts, Claude-for-work style admin controls, ChatGPT Projects, Canvas, Apps, Desktop, Codex app, and Codex remote/mobile workflows, but with AGI Workforce differentiation.
-
-The baseline is feature parity. The reason users should stay is:
-
-- Local-first privacy.
-- Explicit BYOK trust boundary.
-- Privacy-controlled managed compute.
-- Future managed cloud only after billing, fraud, quota, and provider-term risk are solved.
-- Multi-provider routing instead of one model family.
-- Cross-surface continuity across CLI, Desktop, Mobile, Web, VS Code, and Chrome.
-- One shared Rust/TypeScript engine contract instead of six drifting apps.
-
-## Non-Negotiables
-
-- Do not copy proprietary Anthropic code unless it becomes open source under a compatible license and legal review clears it.
-- Public behavior, official docs, user-visible workflows, and compatible migration paths are fair implementation targets.
-- MIT/Apache open-source references can inform architecture, but copied code must preserve license obligations.
-- Local chats must never silently route to BYOK or managed cloud.
-- Local to BYOK is an explicit fork or continuation draft with context selection, redaction, and preview.
-- Normal cloud chat sync is only for Web, Mobile, and Desktop.
-- CLI, VS Code, and Chrome do not silently join global chat history; they stay local/workspace/task scoped unless the user explicitly hands off a redacted preview into a synced app chat.
-- SDKs are adapters, not architecture. AGI owns runtime schemas, event streams, privacy modes, tool contracts, routing, and usage accounting.
-- Actions, routes, and command handlers own domain policy; repeated operational mechanics move behind explicit service-layer functions only when reuse or risk justifies it.
-- Vercel AI Gateway is never a default path for Local or strict BYOK. It can only appear behind explicit Managed mode labeling and consent.
-- Managed cloud remains waitlist/private beta until usage metering, fraud controls, refunds, chargebacks, and provider terms are settled.
-- Every parity claim needs a source, an AGI file path, and verification evidence.
-- Do not claim full file-by-file completion unless the file path, owner area, parity relevance, and verification result are recorded in an evidence ledger.
-- Naming is locked by `docs/engineering/naming-conventions.md`: public brand `AGI`, formal platform `AGI Workforce`, primary CLI command `agi`, compatibility CLI alias `agiworkforce`, and internal repo/package/crate identifiers `agiworkforce`.
-- Local hooks are part of repo operability: commit messages, pre-commit checks, and pre-push checks must stay wired and enforced by `pnpm check:hooks`.
-
-## 2026-06-03 Demo-Readiness Repair Plan
-
-Status: awaiting implementation approval. This plan is based on `TODO.md` Wave 1 findings verified by reading source. Do not implement until the founder explicitly approves.
-
-### Objective
-
-Make the public website and the minimum cross-surface demo honest, smooth, and defensible within the event window. The demo should show AGI as a suite with a working web trial, local/BYOK/desktop/CLI strengths, and waitlisted managed cloud without overclaiming features that are not yet wired.
-
-### Priority order
-
-#### P0 - Blockers before public demo
-
-1. **Model catalog correctness**
-   - Fix findings: F01, F14.
-   - Rationale: fake or unverifiable provider model IDs are the highest-risk hallucination vector. Pricing, routing, CLI catalog, and web model picker all depend on this.
-   - Work:
-     - Verify every active provider `apiModelId` against official provider docs or live provider model-list APIs.
-     - Remove `gpt-5.5` as an OpenAI API ID unless there is a real provider mapping; if keeping it for UI, make it an internal alias resolved before API calls.
-     - Move Auto Economy trial model, prompt limit, input cap, and output cap into a shared server-owned config returned through headers or a typed endpoint.
-   - Breaking-change risk: medium. Users may see different model labels if unsupported labels are removed. Prefer alias mapping and clear display labels.
-
-2. **Website account-bound free trial and waitlist**
-   - Fix findings: F02 plus preserve already-working three-prompt Auto Economy path.
-   - Rationale: website is the first public surface. The user asked for free Auto Economy capped to three prompts and tied to the logged-in customer.
-   - Work:
-     - Require Clerk auth for the account-bound cloud waitlist submit path.
-     - Add/store `user_id` in `cloud_managed_waitlist` or a linked table while retaining normalized email for notification.
-     - Keep any anonymous waitlist path separate with anonymous copy, source, and rate limit.
-     - Ensure free users cannot switch out of Auto Economy, cannot burn expensive tools, and see the managed-cloud modal instead of a pricing redirect.
-   - Breaking-change risk: low to medium. Needs migration or additive schema change.
-
-3. **Website chat demo correctness**
-   - Fix findings: F03, F10, F11, F12, F13.
-   - Rationale: these are the user-visible bugs most likely to appear during a live walkthrough.
-   - Work:
-     - Normalize search result metadata shape across `useChatStream`, `chatStore`, and `MessageBubble`.
-     - Wire collapsed sidebar Search to the same dialog as expanded sidebar.
-     - Either implement pre-send incognito temporary conversation state or hide/disable incognito until a persisted conversation exists.
-     - Restrict attachment UI/copy to image-only on web until file contents are actually sent, or implement text/PDF/code extraction.
-     - Preserve original turn metadata for regenerate, or block regenerate on turns with unsupported metadata.
-   - Breaking-change risk: low. Keep behavior narrow and additive.
-
-4. **Public claim freeze and brand correction**
-   - Fix findings: F04, F05, F09, F15, F20, F21, F22.
-   - Rationale: a funding or job conversation punishes overclaiming more than missing optional features. Public copy must match runtime.
-   - Work:
-     - Prominent public product mark becomes `AGI`; keep `AGI Workforce` only where formal company/platform naming is intentional.
-     - Remove or relabel scripted "live" hero claims unless backed by a real endpoint.
-     - Soften security/compliance pages to "in progress", "configured for", or "available when evidence exists" unless proof artifacts are present.
-     - Align mobile page to actual v1 local-only capabilities.
-     - Align VS Code README/config and Chrome extension naming.
-   - Breaking-change risk: low. Mostly copy and presentation, but legally important.
-
-5. **Mobile launch safety**
-   - Fix findings: F06, F07.
-   - Rationale: mobile local mode can be a strong pitch, but cloud/dispatch/pinning placeholders are release blockers.
-   - Work:
-     - Provision real TLS SPKI pins before cloud-host requests are enabled, or keep cloud features disabled and remove cloud-host claims from mobile demo.
-     - Remove transitional unsigned dispatch acceptance before or on 2026-06-05, or keep dispatch hidden.
-   - Breaking-change risk: medium. Pinning can break network calls if wrong; stage with exact host certificates.
-
-6. **Desktop tool path reliability**
-   - Fix findings: F08, F19.
-   - Rationale: desktop is a core differentiator; a missing Tauri managed state can crash IPC.
-   - Work:
-     - Register `RateLimitState` in Tauri setup before commands are invoked.
-     - Make product demos use `chat_send_message` for tool calls, since direct `llm_send_message` is intentionally non-tool chat.
-     - Keep local/BYOK/cloud trust-boundary labels clear.
-   - Breaking-change risk: low if state is registered once; medium if UI paths are changed broadly.
-
-#### P1 - Needed for a strong suite demo, not first website blocker
-
-7. **CLI demo readiness**
-   - Fix findings: F16, F17, F18.
-   - Rationale: CLI already has real local tools and local model discovery. The remaining work is avoiding dead flags and unsupported cloud claims.
-   - Work:
-     - Either implement `stream-json` and partial-message output or remove them from user-facing help.
-     - Wire headless permission decisions through the SDK/control channel or remove the unused helper.
-     - Keep `cloud_exec` as explicit private beta/waitlist until a backend contract exists.
-   - Breaking-change risk: medium if CLI output contracts change. Preserve stable JSON where it exists.
-
-8. **Chrome and VS Code extension demo scope**
-   - Fix findings: F20, F21, F22, F23, F24.
-   - Rationale: these can be shown as companion surfaces only if the setup path is honest and permissions are explainable.
-   - Work:
-     - VS Code: align defaults/docs, decide API-key/BYOK/local/cloud setup story, and avoid claiming cloud sign-in before it exists.
-     - Chrome: document least-privilege permission story, confirm sender validation/pairing/approval gates for browser actions, and verify desktop `/pair`.
-   - Breaking-change risk: medium for extension permissions and Marketplace packaging.
-
-#### P2 - Post-demo hardening
-
-9. **Evidence ledger and claims guardrail**
-   - Rationale: prevents future LLM-generated public claims from drifting beyond implementation.
-   - Work:
-     - Add a small claims ledger mapping public marketing/security claims to source code, proof artifact, and last verification date.
-     - Add a guardrail script that flags hard claims such as "compliant", "notarized", "HSTS preload", "every table", "live", and unverified model IDs unless evidence is recorded.
-
-10. **Reference-guided UI improvement**
-    - Rationale: after truthfulness blockers are handled, use the reference corpus and frontend-design skill to improve the website without generic LLM landing-page output.
-    - Work:
-      - Use `/Users/siddhartha/Desktop/claude_reference`, `/Users/siddhartha/Desktop/claude settings modal`, and allowed visual references for familiarity.
-      - Keep the first viewport usable: product chat/trial first, no generic marketing hero that delays the actual experience.
-      - Preserve AGI differentiation: lightweight Tauri desktop, local/BYOK, managed cloud waitlist, multi-provider routing, cross-surface continuity.
-
-### Sequencing rationale
-
-- Fix catalog and claims before UI polish. A polished site with fake model IDs or unsupported compliance claims creates diligence risk.
-- Fix website chat before desktop/mobile/extension polish because the website is the public entry point and the requested free Auto Economy trial depends on it.
-- Fix mobile/extension public copy before presenting those surfaces. Hidden local-only features are acceptable; overclaimed unavailable features are not.
-- Apply the code-structure rule during fixes: reuse existing service/helpers for repeated mechanics, but do not create a service for one-off domain logic.
-
-### Verification plan after approval
-
-The user has asked to stop testing first, so no verification commands run during this planning step. After implementation approval and code edits:
-
-- Website: manual browser smoke for sign-in, three free Auto Economy prompts, fourth prompt waitlist modal, search dialog, regenerate, attachment gating, pricing/upgrade modal behavior.
-- API: targeted route checks for waitlist auth/user binding, chat ownership, CSRF, rate-limit behavior.
-- Model catalog: provider ID verification script plus manual official-doc spot check for OpenAI, Anthropic, Google, Ollama/local, and managed auto modes.
-- Desktop: Tauri command registration check and manual chat tool-call flow through `chat_send_message`.
-- CLI: `agi --help`, local Ollama auto-detect, list/read/edit/write tool calls, JSON output smoke, and cloud waitlist error path.
-- Mobile: local-only flow on staged device/simulator, pinning state, no hidden cloud claims.
-- Extensions: VS Code first-run setup, Chrome pairing and permission/approval path.
-
-## Source Corpus
-
-Locked AGI product decision:
-
-- OpenAI/Anthropic application suite thesis: `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md`
-- Suite thesis evidence: `audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md`
-
-Official Anthropic feature sources to keep current:
-
-- Claude Code overview: `https://docs.anthropic.com/en/docs/claude-code/overview`
-- Claude Code desktop: `https://code.claude.com/docs/en/desktop`
-- Claude Code web/cloud sessions: `https://code.claude.com/docs/en/claude-code-on-the-web`
-- Claude Code slash commands: `https://docs.anthropic.com/en/docs/claude-code/slash-commands`
-- Claude Code MCP: `https://docs.anthropic.com/en/docs/claude-code/mcp`
-- Claude Code hooks: `https://docs.anthropic.com/en/docs/claude-code/hooks`
-- Claude Code subagents: `https://docs.anthropic.com/en/docs/claude-code/sub-agents`
-- Claude Code output styles: `https://docs.anthropic.com/en/docs/claude-code/output-styles`
-- Claude Code settings: `https://docs.anthropic.com/en/docs/claude-code/settings`
-- Claude projects help: `https://support.claude.com/en/articles/9517075-what-are-projects`
-- Claude artifacts help: `https://support.anthropic.com/en/articles/9487310-what-are-artifacts-and-how-do-i-use-them`
-- Claude artifact publishing/sharing help: `https://support.claude.com/en/articles/9547008-publishing-and-sharing-artifacts`
-- Claude computer use tool: `https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool`
-- Claude file creation help: `https://support.claude.com/en/articles/12111783-create-and-edit-files-with-claude`
-- Claude mobile iOS app actions: `https://support.claude.com/en/articles/11869619-using-claude-with-ios-apps`
-- Claude connectors help: `https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities`
-- Claude desktop/web connector split: `https://support.claude.com/en/articles/11725091-when-to-use-desktop-and-web-connectors`
-
-Official OpenAI feature sources to keep current:
-
-- OpenAI Codex app features: `https://developers.openai.com/codex/app/features`
-- OpenAI Codex remote connections: `https://developers.openai.com/codex/remote-connections`
-- ChatGPT Projects: `https://help.openai.com/en/articles/10169521-projects-in-chatgpt`
-- ChatGPT Canvas: `https://help.openai.com/en/articles/9930697-what-is-the-canvas-featue-in-chatgpt-and-how-do-i-use-it`
-- Apps in ChatGPT: `https://help.openai.com/en/articles/11487775-apps-in-chatgpt`
-- ChatGPT desktop: `https://chatgpt.com/features/desktop/`
-- OpenAI computer use: `https://developers.openai.com/api/docs/guides/tools-computer-use`
-- OpenAI Code Interpreter: `https://developers.openai.com/api/docs/guides/tools-code-interpreter`
-- OpenAI file inputs: `https://developers.openai.com/api/docs/guides/file-inputs`
-- OpenAI Codex artifacts: `https://developers.openai.com/codex/app/features#work-with-non-code-artifacts`
-- ChatGPT data analysis: `https://help.openai.com/en/articles/8437071-advanced-data-analysis`
-- ChatGPT agent: `https://help.openai.com/en/articles/11752874-chatgpt-agent`
-
-Local reference corpus:
-
-- `/Users/siddhartha/Desktop/reference/src`
-- `/Users/siddhartha/Desktop/reference/codex-cli`
-- `/Users/siddhartha/Desktop/reference/claw-code`
-- `/Users/siddhartha/Desktop/reference/openclaw`
-- `/Users/siddhartha/Desktop/reference/opencode`
-- `/Users/siddhartha/Desktop/reference/gemini-cli`
-- `/Users/siddhartha/Desktop/reference/ui`
-- Latest Claude desktop modal references:
-  - `/Users/siddhartha/Desktop/reference/ui/desktop/claude/2026-05-13/extended`
-  - `/Users/siddhartha/Desktop/reference/ui/desktop/claude-max20x/2026-05-15`
-
-AGI Workforce surface corpus:
-
-- `apps/cli`
-- `apps/desktop`
-- `apps/mobile`
-- `apps/web`
-- `apps/extension-vscode`
-- `apps/extension`
-- `apps/sandbox`
-- `packages`
-- `crates`
-- `services`
-- `apps/web/db/neon`
-- `docs`
-- `tasks`
-
-## Current Implementation Baseline
-
-The CLI now has the first enforceable parity foundation:
-
-- Claude-style tool aliases such as `Read`, `Bash`, `Grep`, `TodoWrite`.
-- 83 registered slash commands in the shared command registry.
-- Shared TUI/REPL parity dispatcher in `apps/cli/src/claude_parity.rs`.
-- `/add-dir` and `--add-dir` additional workspace roots.
-- `/files` file attachment into context with budget/truncation.
-- Claude migration imports prompts, skills, agents, hooks, settings, MCP configs, and legacy Claude config.
-- Local/BYOK/Managed privacy modes in `AgentSession`.
-- Send-time block when Local mode would route to a cloud/BYOK provider.
-- `/privacy-mode` and `/continue-with-byok` for explicit trust-boundary changes.
-- Shared suite chat execution contracts now define `ChatExecutionMode`, `ChatIntent`, connector status snapshots, permission decisions, and compact tool events for all six surfaces.
-- VS Code sidebar model switching now has a host-backed inline popover instead of a broken pill click path.
-- Mobile remote chat now fails closed while v1 is Local Mode + Local LLMs, including attachment upload avoidance and a typed error path until secure Mobile BYOK key storage or Cloud Managed access is enabled.
-- Mobile chat, drawer, settings, onboarding, model picker, add-to-chat, and task-chip surfaces now express the locked three-mode product model: Local Mode + Local LLMs active, Mobile BYOK disabled until secure key storage ships, and Cloud Managed visible as waitlist.
-- Mobile model selection is local-first from `@agiworkforce/local-llm`; cloud provider rows are locked display rows and cannot become active model ids in v1.
-- Mobile local model selection now has preparation/readiness state, selected-model runtime resolution, ExecuTorch preset install records, and local token streaming for installed models.
-- Mobile Artifacts and Code Sessions now exist as Claude-inspired preview/control surfaces. Mobile previews and shares artifacts, and it controls Desktop/future Cloud Managed code environments instead of running heavy compute locally.
-
-This is not enough to claim Claude Code parity. It is the foundation.
-
-## Parity Matrix
-
-| Anthropic application area   | AGI target                                                                                                     | Engine owner                                                                                                                    | Surface owners            | Status          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | --------------- |
-| Claude Code slash commands   | Built-in commands, aliases, dynamic custom commands, MCP slash prompts                                         | `apps/cli`, `crates/agiworkforce-command-registry`                                                                              | CLI/TUI, REPL             | Partial         |
-| Claude Code tools            | Read/write/edit/bash/search/web/todo/task with Claude-compatible names                                         | `apps/cli/src/features/exec/tools`                                                                                              | CLI, Desktop, VS Code     | Partial         |
-| Claude Code permissions      | Read-only, accept edits, bypass, plan mode, per-tool allow/deny                                                | `apps/cli`, `crates/sandbox-policy`                                                                                             | CLI, Desktop              | Partial         |
-| Claude Code memory           | Project/user/local memory files and migration                                                                  | `apps/cli/src/memory*`, `packages/skills`                                                                                       | All surfaces              | Partial         |
-| Claude Code settings         | Hierarchical settings, local project settings, output style persistence                                        | `apps/cli/src/config.rs`                                                                                                        | CLI/Desktop/Web           | Partial         |
-| Claude Code hooks            | PreToolUse/PostToolUse/UserPromptSubmit/Stop/SubagentStop/PreCompact/SessionStart/SessionEnd                   | `apps/cli/src/features/hooks`                                                                                                   | CLI, future cloud runners | Partial         |
-| Claude Code subagents        | Agent definitions, tool-scoped agents, task delegation, separate context                                       | `apps/cli/src/agents.rs`, task runtime crates                                                                                   | CLI/Desktop/VS Code       | Partial         |
-| Claude MCP/connectors        | MCP servers, OAuth, prompts as slash commands, marketplace                                                     | `apps/cli/src/mcp`, `packages/mcp`, Desktop MCP commands                                                                        | CLI/Desktop/Web           | Partial         |
-| Claude artifacts             | Dedicated artifact workspace, runnable previews, sandboxed rendering, sharing                                  | `apps/desktop`, `apps/web`, `apps/sandbox`, `packages/unified-chat`                                                             | Desktop/Web/Mobile        | Partial         |
-| Claude/ChatGPT file creation | Compute sessions, generated-file manifests, native PDF/DOCX/XLSX/PPTX creation, preview, download, app library | `packages/types`, `crates/agiworkforce-task-runtime`, `apps/desktop/src-tauri/src/features/document`, `apps/web`, `apps/mobile` | Desktop/Web/Mobile/CLI    | Partial         |
-| Claude/ChatGPT computer use  | Screenshot/action loop over isolated browser or desktop session                                                | `packages/browser-tool`, future computer session protocol                                                                       | Desktop/Web/CLI/Chrome    | Partial         |
-| Claude projects              | Project instructions, files, memory, shared chats, model/provider defaults                                     | `packages/stores`, `apps/*`                                                                                                     | Desktop/Web/Mobile        | Partial/unclear |
-| Claude mobile                | Chat, files, voice, camera, privacy mode, local/BYOK onboarding                                                | `apps/mobile`, `packages/local-llm`                                                                                             | Mobile                    | Partial         |
-| Claude desktop               | Rich chat shell, MCP, local files, artifacts, connectors                                                       | `apps/desktop`, `src-tauri`                                                                                                     | Desktop                   | Partial         |
-| Claude web                   | Chat, projects, artifacts, sharing, account, onboarding                                                        | `apps/web`                                                                                                                      | Web                       | Partial         |
-| Claude enterprise            | Admin policy, audit logs, SSO, team billing, compliance                                                        | `services`, `apps/web/db/neon`, `packages/compliance`                                                                           | Web/Desktop               | Early           |
-| Claude GitHub automation     | PR/issue mention workflow, review comments, CI action                                                          | `services`, GitHub app future                                                                                                   | Web/Cloud/CLI             | Early           |
-
-## Transition Workstreams
-
-### 1. Exploration And Evidence
-
-Goal: build an evidence-backed parity ledger before making broad claims.
-
-Tasks:
-
-- Inventory every AGI surface file excluding generated/build directories.
-- Inventory every local reference repo with license notes.
-- Build a Claude/Anthropic official feature ledger from official docs.
-- Map every feature to AGI paths and current status.
-- Record unknowns explicitly.
-
-Deliverables:
-
-- `docs/decisions/2026-05-20-openai-anthropic-application-suite-thesis.md`
-- `audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md`
-- `audit/anthropic-apps-parity/feature-ledger.md`
-- `audit/anthropic-apps-parity/file-inventory.md`
-- `audit/anthropic-apps-parity/reference-notes.md`
-- `audit/anthropic-apps-parity/surface-gap-ledger.md`
-- `audit/anthropic-apps-parity/competitive-baseline-2026-05-20.md`
-- `audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md`
-- `audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md`
-- Agentic development outlook: archived at `docs/archive/2026-05-30/audit/repo-organization/agentic-development-outlook-2026-05-20.md`
-- Parallel-agent lane map: `docs/agent-context/lanes.json`
-- Shared-file collision policy: `docs/agent-context/shared-files.md`
-- Parallel-agent workflow: `docs/engineering/parallel-agent-playbook.md`
-- Autonomous software-company roadmap: `docs/engineering/autonomous-software-company-roadmap.md`
-- Delegated research prompt bank: `docs/research/agentic-company-research-prompts.md`
-- Updates to this `PLAN.md` and root `TODO.md`.
-
-### 1A. Root Document Contract
-
-Goal: stop competing plans from drifting.
-
-Rules:
-
-- `PLAN.md` is the live strategy and execution plan.
-- `TODO.md` is the live actionable queue.
-- `CHANGELOG.md` records completed implementation and exploration slices only.
-- `AGI_WORKFORCE.md` is a compact repo entry point; its former long wave-history version is archived.
-- `docs/README.md` is the durable documentation index.
-- `docs/current/` is the compact current source-of-truth layer for product, architecture, commercial posture, and repo operability.
-- `audit/anthropic-apps-parity/` stores evidence, inventories, ledgers, and source-backed claims.
-- `tasks/` stores execution logs and historical working notes.
-- Superseded plans should be archived or clearly marked historical rather than competing with this plan.
-- Former top-level long-form PRD, roadmap, pricing, architecture, hosting, scaling, ownership, handoff, and strategy docs stay in `docs/archive/2026-05-21-docs-consolidation/`.
-
-### 1B. Pre-Release Repo Organization
-
-Goal: make AGI Workforce simple for future engineers, marketing, GTM, support, and release operators before public release.
-
-Rules:
-
-- Treat this as a pre-release cleanup window. There are no public users, release promises, or migration commitments yet, so structural cleanup is allowed when it preserves behavior and history.
-- Keep the product code root shape: `apps/`, `packages/`, `crates/`, `services/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, `scripts/`, with Neon migrations under `apps/web/db/neon/`.
-- Remove root clutter by moving scratch markdown/images and generated reports into dated archive/report folders.
-- Keep tool-required folders such as `.claude`, `.codex`, `.cursor`, `.opencode`, and `.agents` until each tool contract is documented.
-- Use the existing domain-first app reorganization plan as a sub-plan, not the whole repo strategy.
-- Add ownership, naming, import-boundary, docs-status, and root-clutter guardrails before hiring engineers.
-- Keep `apps/web/features` as the canonical Web product-domain root; `apps/web/src` is reserved for layer primitives, and `apps/web/src/features` is forbidden.
-- Make the repo LLM-operable through canonical `AGENTS.md`, `docs/agent-context/`, machine-readable repo/risk/command/doc-status maps, and known-flaws tracking.
-- Keep report retention, CI baselines, and provisional CODEOWNERS coverage enforced through `pnpm check:llm-operability`.
-
-Deliverable:
-
-- `docs/plans/pre-release-repo-organization-2026-05-20.md`
-- `docs/agent-context/`
-- `scripts/check-structure-conventions.mjs`
-
-### 1C. Agent-Native Development
-
-Goal: build the repo for a future where humans direct, review, and release while LLM agents do most exploration, implementation, refactoring, and verification work.
-
-Long-term assumption:
-
-- Development will become increasingly agentic: multiple agents in isolated sessions/worktrees, scoped tasks, evidence-backed edits, resumable context, generated PRs, and human approval gates.
-- The repo itself must become part of the product. If the repo is hard for agents to navigate, AGI Workforce will move slower than competitors even if the product idea is strong.
-- Humans still own product judgment, architecture, privacy, safety, billing risk, and final review. Agents accelerate work; they do not replace accountability.
-
-Rules:
-
-- Treat `AGENTS.md`, `docs/agent-context/`, `PLAN.md`, `TODO.md`, and `CHANGELOG.md` as the agent operating system.
-- Keep agent instructions layered: root instructions stay short; path-specific rules live close to code.
-- Make every workstream splittable by owner path so parallel agents can work without overlapping writes.
-- Keep smallest-useful and pre-merge verification commands close to each app/package/crate/service.
-- Require evidence for broad claims: source link, AGI path, test/check result, and status.
-- Keep local/BYOK/managed trust boundaries explicit in code owners, docs, schemas, and tests.
-- Add CI guardrails that catch stale docs, root clutter, missing README ownership, generated artifact drift, and import-boundary breaks.
-- Use `/Users/siddhartha/Desktop/reference/src` and the wider `/Users/siddhartha/Desktop/reference` corpus for architecture lessons, not unreviewed code copying.
-
-Deliverable:
-
-- `docs/archive/2026-05-30/audit/repo-organization/agentic-development-outlook-2026-05-20.md`
-- `docs/engineering/agent-native-development.md`
-
-### 1D. Parallel Agent Operating Model
-
-Goal: make AGI Workforce easy to split across 15+ parallel coding agents, Claude Code TeamCreate-style teammates, Codex subagents, Cursor agents, opencode tasks, and future internal agents.
-
-Rules:
-
-- Every implementation task gets one `laneId` from `docs/agent-context/lanes.json`.
-- Lane-owned paths are the only write paths for feature agents.
-- Shared files such as lockfiles, root docs, CI, shared schemas, migrations, and native projects go through a named integrator lane.
-- Each lane states required checks and escalation owners before work begins.
-- Exploration agents can read broadly, but implementation agents write narrowly.
-- The integrator owns `PLAN.md`, `TODO.md`, `CHANGELOG.md`, `docs/agent-context/**`, shared manifests, and final commits.
-- Parallel work should prefer 18 writer lanes plus 4 review/verification lanes when the task pool is large enough.
-
-Deliverables:
-
-- `docs/agent-context/lanes.json`
-- `docs/agent-context/shared-files.md`
-- `docs/agent-context/task-manifest.schema.json`
-- `docs/engineering/parallel-agent-playbook.md`
-- `docs/engineering/service-layer-architecture.md`
-- `.github/PULL_REQUEST_TEMPLATE/parallel-agent-change.md`
-- `scripts/check-lane-ownership.mjs`
-
-### 1E. Autonomous Software Company Loop
-
-Goal: design AGI Workforce so customer feedback, bug reports, support cases, telemetry, and release outcomes can eventually create a reviewed patch flow without depending on a large manual team.
-
-Target loop:
-
-1. User feedback enters through Web, Desktop, Mobile, CLI, support email, voice intake, or app-store review.
-2. Intake scrubs secrets and classifies privacy risk.
-3. Triage groups duplicates, maps issue to a repo lane, estimates severity, and opens an internal case.
-4. The case creates a GitHub issue or queue item with reproduction evidence.
-5. A patch agent works in an isolated branch/worktree inside the assigned lane.
-6. Verification agents run tests, screenshots, static checks, and regression probes.
-7. A human or trusted release gate reviews high-risk changes.
-8. Merge links to release notes, app update channels, and customer follow-up.
-
-Rules:
-
-- This automation is future product infrastructure, not a reason to remove human review from privacy, billing, security, release, or data-retention changes.
-- Managed cloud compute for users remains waitlisted/private beta until abuse, refunds, disputes, quota, provider costs, and retention are solved.
-- Support automation should assist humans first: classify, route, draft, reproduce, and close loops; it should not promise refunds, credits, or legal answers without policy gates.
-
-Deliverables:
-
-- `docs/engineering/autonomous-software-company-roadmap.md`
-- `docs/research/agentic-company-research-prompts.md`
-- Future schemas under `packages/types` for feedback, support, release-fix links, and agent-patch tasks.
-
-### 2. CLI As Engine
-
-Goal: make CLI the canonical engine that every surface can reuse.
-
-Tasks:
-
-- Finish slash-command runtime unification.
-- Add custom project/user slash commands from `.agiworkforce/commands` and imported `.claude/commands`.
-- Add MCP prompt slash-command discovery.
-- Add `/agents` interactive management equivalent for CLI/TUI.
-- Add hook matcher compatibility with Claude tool names.
-- Persist output styles and privacy mode in project-local settings.
-- Add privacy labels to session exports and managed session metadata.
-
-### 3. Local And BYOK Onboarding
-
-Goal: users can start private/local and intentionally escalate to BYOK.
-
-Tasks:
-
-- Build first-run flow: Local, BYOK, managed waitlist.
-- Add key setup UX for OpenAI/Anthropic/Gemini/Ollama/LM Studio.
-- Add Local model health check and install guidance.
-- Add provider smoke test before saving key config.
-- Add Local -> BYOK fork UI on Desktop/Mobile/Web.
-- Add secret scan and payload preview before any Local -> BYOK handoff.
-- Local -> BYOK forks must store the accepted redacted preview payload and hash evidence only; they must not clone original Local messages into the BYOK conversation.
-
-### 3A. Chat Sync Boundary
-
-Goal: match user expectations without leaking developer context.
-
-Rules:
-
-- Web, Mobile, and Desktop share normal chat history, projects, artifacts, and user-visible app settings.
-- CLI sessions are local/workspace scoped by default.
-- VS Code sessions are workspace scoped by default.
-- Chrome sessions are browser/task scoped by default.
-- Developer sessions may be explicitly handed off to Web/Mobile/Desktop only through preview, redaction, privacy labels, and user confirmation.
-- Synced app chat and developer session history must use separate schemas, even if a unified UI can search both later.
-
-### 3B. Provider SDK Boundary
-
-Goal: use OpenAI, Anthropic, and Vercel SDKs without surrendering AGI's runtime.
-
-Rules:
-
-- AGI owns the provider adapter interface, normalized event stream, tool schema, conversation schema, and privacy boundary.
-- OpenAI and Anthropic official SDKs are allowed inside provider adapters for transport, streaming, retries, and error handling.
-- Vercel AI SDK is allowed in Web/Next.js streaming and UI paths when converted into AGI-owned schemas.
-- OpenAI Agents SDK, Anthropic Agent SDK, and Vercel `ToolLoopAgent` are research/prototype references, not the core AGI agent loop.
-- OpenAI Responses should become the preferred native OpenAI path for modern reasoning/tool/multimodal work, with `store: false` by default for Local/BYOK.
-- Chat Completions remains supported for OpenAI-compatible endpoints and legacy proxy surfaces.
-- Vercel AI Gateway belongs only in explicit Managed mode experiments, not default BYOK or Local.
-
-Deliverable:
-
-- `audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md`
-
-### 4. Artifacts
-
-Goal: match Claude artifacts as a baseline and exceed with cross-surface continuity.
-
-Tasks:
-
-- Define artifact schema in shared packages.
-- Ensure Desktop and Web render artifacts through sandboxed origins.
-- Make CLI able to list/export/open artifacts.
-- Make Mobile request, view, download, and share artifacts; local on-device heavy compute can be deferred.
-- Add artifact versioning, diff, file tree, and share/export controls.
-- Web chat artifacts should render as compact inline cards and open in the sidecar artifact workbench, not duplicate full previews below the assistant message.
-- Claude desktop is the preferred UI baseline. Settings, connectors, plugin browsing, global search, project file preview, and project edit flows should open as focused modals or overlays first; route-sized/full-screen surfaces are reserved for deep workflows such as artifact split-pane viewing, code dashboards, projects indexes, and long-running research traces.
-- Before copying any reference behavior from screenshots, verify the path, filename, dimensions/type, and visible screen content match the intended surface. Mismatched or stale captures are evidence only after a fresh visual check.
-
-### 4A. Compute, Computer Use, And Generated Files
-
-Goal: match Claude and ChatGPT's practical file-generation and computer-use behavior without compromising AGI's Local/BYOK boundary.
-
-Rules:
-
-- File creation is a compute-session feature, not a loose UI export button.
-- Generated files must have a manifest with owner, source session, privacy mode, checksum, storage location, preview, and expiry when applicable.
-- Local mode writes files locally and never uploads them silently.
-- BYOK mode may use provider models, but generated files should remain local unless the user explicitly approves a transfer.
-- Managed compute is future-only until billing, abuse, quota, retention, and deletion controls exist.
-- Computer use is a screenshot/action loop behind an AGI-owned protocol that can map to Playwright, local desktop, VNC, Anthropic tools, or OpenAI tools.
-- Mobile is a full request/preview/download/share surface for generated files, but not the first local heavy-compute runtime. It should delegate heavy generation to Desktop/local host or future Managed compute.
-
-Tasks:
-
-- Define `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` in shared types.
-- Extend `SharedArtifact` to reference generated native files and preview derivatives.
-- [x] Wrap `packages/browser-tool` behind a shared `ComputerAction` protocol.
-- [x] Convert Desktop PDF/DOCX/XLSX/PPTX tools into generated-file manifest producers.
-- [x] Add local compute-session work directories with TTL metadata and audit events.
-- [x] Add shared generated-file presentation helpers and first-pass Desktop/Web/Mobile status, preview, download, share, source, checksum, and privacy labels.
-- [x] Add generated-file request, status, preview, download, and share controls to Web, Mobile, and Desktop. (Round 7 — shared `GeneratedFileCard` in `packages/unified-chat` adopted by `apps/web` `ArtifactPreview`, `apps/desktop` `InlineDocumentGeneration`, and `apps/mobile` `ArtifactFullScreen` via an RN-native mirror that consumes the same `GeneratedFilePresentation` from `@agiworkforce/types`.)
-- [x] Add provider-container adapters that convert OpenAI Code Interpreter-style file annotations into AGI `GeneratedFile` records.
-- [x] Add tests proving Local mode does not upload generated files, BYOK transfer requires explicit approval, and Managed mode files carry TTL/quota/deletion metadata.
-
-Deliverable:
-
-- `audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md`
-
-### 5. Projects, Memory, And Files
-
-Goal: make projects feel like Claude Projects plus developer-grade local trust.
-
-Tasks:
-
-- [x] Define project schema: instructions, files, memory, privacy mode, provider defaults. (Round 10 — `@agiworkforce/types` `suite-contracts.ts` extends `ProjectRecord` with `instructions`, `defaultModelId`, `knowledgeFileCount`, `memberCount`, `lastUsedAt`, `iconEmoji`, `accentColor`, `importedFrom`. Adds `ProjectMember`, `ProjectMemberRole`, `ProjectKnowledgeFile`, `ProjectInstructions`, `ProjectAccentColor`, `ProjectImportSource`. New `summarizeProjectHeader()` derives `ProjectHeaderPresentation` (title/description/icon/accent/privacy/provider/staysLocal/default-model/file-count/member-count/last-used/imported-from/surface chips canonical-ordered). Helpers `normalizeProjectAccentColor()` + `projectMemberRoleLabel()`. 15 new vitest tests pin accent fallback, canonical surface ordering, singular/plural count formatting, imported-from labelling, staysLocal flip across local/byok/managed, and default-model passthrough.)
-- Support project-level memory and imported Claude project instructions.
-- Add file inclusion policy and per-file privacy labels. (Round 8 — per-file privacy chip shipped on **all three consumer surfaces**: Web composer attachments via `ChatComposerNew.attachmentPrivacyShortLabel`, Desktop `AttachmentPreview` via `ChatInputArea.attachmentPrivacyShortLabel`, Mobile `AttachmentPreview` via `ChatInput.attachmentPrivacyShortLabel`. Each thumbnail stamps the outbound destination ('Local' / 'BYOK' / 'Managed') with a lock-icon chip sourced from `SendPreviewPresentation.privacyShortLabel`. File-inclusion policy itself — project-scoped rules controlling which files attach to which projects/turns — remains open as a separate slice.)
-- Add project export/import bundle.
-- [x] Add visible "what will be sent" previews for cloud/BYOK turns. (Round 8 — shared `SendPreview` in `packages/unified-chat` + Mobile RN mirror in `apps/mobile`. Adopted by `apps/web` `WebChatPage` above the composer, `apps/mobile` chat tab above `ChatInput`, and `apps/desktop` chat shell above `ChatInputArea`. All three surfaces share `SendPreviewPresentation` from `@agiworkforce/types`, mapping their provider taxonomies to ProviderMode + destinationHost.)
-
-### 6. Connectors And MCP Marketplace
-
-Goal: Claude connectors parity through MCP and browser/IDE bridges.
-
-Tasks:
-
-- Unify Desktop/CLI MCP server registry.
-- [x] Add OAuth status and refresh UX. (Round 8 — Desktop `OAuthConnectorCard` accepts an optional `expiresAt` unix timestamp and renders a colored "Expires in X" / "Expired" badge. When `onRefresh` is supplied AND the badge is amber/red, an explicit "Refresh token" button appears above Disconnect. `ConnectorGallery` batch-fetches `mcp_oauth_status` for each connected provider after `fetchConnected` resolves; `mcp_oauth_refresh` powers the refresh action and updates the local expiry map.)
-- Add MCP prompts as slash commands.
-- Add connector install/uninstall across Desktop/Web/CLI.
-- Keep connector customization modal-first: browse in the connector gallery, add custom remote MCP servers through a focused modal, and escalate to settings only for deep MCP/server management.
-- [x] Add Chrome and VS Code bridge status to connector hub. (Round 9 — Desktop `BridgeStatusCard` derives Chrome (native-messaging `connection_state`) + VS Code (websocket port 8787) rows from the Tauri `extension_status` payload exposed via `@agiworkforce/api`'s `browserExtension.extensionStatus()`. Token-invalid degrades both rows. Renders above the status filter pills in `ConnectorGallery` with a refresh button + first recommendation surfaced. Diagnostics shape `ExtensionStatusDiagnostics` promoted to the canonical type export.)
-
-### 7. Agents, Tasks, And Automation
-
-Goal: Claude subagents plus AGI cross-provider/task runtime.
-
-Tasks:
-
-- Add visual agent manager.
-- Add queryable subagent runtime snapshots for status, model, prompt, and execution metadata.
-- Add per-agent tool and model restrictions.
-- Add task execution history and background task UI.
-- Add GitHub PR/issue automation design for private beta.
-- Add cloud runners only after managed cloud policy is approved.
-
-### 8. Teams, Admin, And Compliance
-
-Goal: enterprise-grade trust without creating uncapped bootstrapped burn.
-
-Tasks:
-
-- Admin policy model for Local/BYOK/Managed availability. First shared contract and database foundation exists in `packages/types/src/enterprise` and `apps/web/db/neon/`.
-- Audit log schema. Enterprise audit events and audit export request tables now exist in the canonical migration path.
-- Team key vault / BYOK policy. Provider policy tables exist; key vault implementation remains open.
-- SSO/SAML/OIDC. Existing Web SSO/SCIM tables are represented in the canonical Neon migration path so fresh environments do not depend on retired migration roots.
-- Billing waitlist and invoice-first enterprise option. Managed credit accounts default to `public_launch_blocked = true` and `billing_mode = invoice_ach`.
-- Support and feedback loops. Support cases, feedback cases, and release-fix links now have shared schema foundations.
-
-## Execution Phases
-
-### Phase 0: Control Plane
-
-- Create root `PLAN.md`.
-- Create root `TODO.md`.
-- Add CHANGELOG entry for the transition.
-- Start parallel exploration agents.
-- Freeze the rule: root docs are current control plane; old docs become references.
-
-### Phase 1: Evidence Ledger
-
-- Produce a complete file inventory excluding generated directories.
-- Produce Anthropic feature ledger from official docs.
-- Produce local reference ledger with license notes.
-- Produce AGI surface gap table.
-- Track per-file audit completion only when each path has evidence.
-
-### Phase 1 Status As Of 2026-05-20
-
-- Scoped repo inventory exists: 6118 files excluding generated/build directories.
-- Local reference architecture/license notes exist for Codex CLI, Gemini CLI, OpenClaw, opencode, claw-code, and `reference/src`.
-- Surface gap ledger exists for projects, artifacts, MCP/connectors, agents/subagents, hooks, memory, privacy, onboarding/import, and teams/admin/billing.
-- The current exploration was targeted and file-backed. It is not yet a complete line-by-line audit of all 6118 files.
-
-### Phase 2: CLI Parity Hardening
-
-- Finish runtime slash parity.
-- Add custom commands and MCP prompt commands.
-- Persist privacy/output settings.
-- Add tests for every registered slash command having TUI/REPL behavior.
-
-### Phase 3: Cross-Surface Privacy
-
-- Carry Local/BYOK/Managed mode through Desktop, Mobile, Web, VS Code, Chrome.
-- Add visible labels and route previews.
-- Make Local -> BYOK an explicit fork everywhere.
-- Ensure Local -> BYOK forks are preview-only transfers, not hidden full-thread copies.
-- Implement Web/Mobile/Desktop-only chat sync.
-- Keep CLI/VS Code/Chrome out of global chat sync unless explicit handoff is implemented.
-- Define provider modes and SDK boundaries so Local/BYOK/Managed cannot route through an unintended SDK or gateway.
-
-### Phase 4: Artifacts And Projects
-
-- Normalize artifact and project contracts.
-- Wire Desktop/Web first.
-- Mobile view-only and CLI export/list follow.
-
-### Phase 5: Connectors And Agents
-
-- MCP marketplace and OAuth status.
-- Agent manager and subagent execution.
-- Background tasks and GitHub automation prototype.
-
-### Phase 6: Managed Cloud Readiness
-
-- Usage ledger. First canonical table: `organization_usage_ledger`.
-- Provider price table. First canonical table: `provider_cost_snapshots`.
-- Quota and balance reservation.
-- Fraud/risk controls.
-- Invoice/ACH-first enterprise private beta. First canonical table: `managed_credit_accounts`.
-
-## Definition Of Done
-
-AGI Workforce can claim Anthropic Applications parity only when:
-
-- The parity ledger has no unclassified Anthropic app features.
-- Every baseline feature has an AGI implementation or explicit product exception.
-- Local/BYOK/Managed privacy labels are visible across all user-facing surfaces.
-- A Claude user can import settings, memory, commands, agents, skills, and MCP configs.
-- A developer can use CLI/VS Code/Desktop without losing Claude Code muscle memory.
-- Artifacts and projects work across at least Desktop and Web.
-- Mobile can start private/local and explicitly continue with BYOK.
-- Tests cover migration, privacy boundaries, and command parity.
+Last updated: 2026-07-15
+Detailed plan: `docs/plans/monorepo-restructure-2026-07-08.md`
+Organization sequence: `docs/plans/pre-release-repo-organization-2026-05-20.md`
+
+## Objective
+
+Transform AGI Workforce into one production-grade, agent-native,
+multi-provider platform across Web, Desktop, Mobile, CLI, VS Code, and Chrome.
+The work is complete only when the repository is structurally coherent, all
+approved renames and moves are finished, shared capabilities have canonical
+owners, all six applications have verified end-to-end flows, and the relevant
+build, test, security, release, and runtime checks pass.
+
+Passing an isolated test, completing a demo path, writing an audit, or moving
+files without repairing consumers does not satisfy this plan. Migration remains
+incremental so broad moves are never combined with behavioral changes, but the
+final success criterion is the full platform outcome.
+
+## Locked Product And Trust Boundaries
+
+- Web is Managed Cloud only.
+- Desktop is one installed Tauri application with isolated Local, BYOK, and
+  Managed Cloud composition roots. It is not split into separate user-facing
+  Local and Cloud applications.
+- Mobile supports isolated on-device Local and Managed Cloud; it has no BYOK.
+- Web, Desktop Cloud, and Mobile Cloud share cloud conversations, projects,
+  memory, settings, account state, and managed artifact infrastructure.
+- CLI and VS Code share local developer sessions and workspace context.
+- Chrome owns browser-scoped conversations. Context leaves that boundary only
+  through an explicit selected and redacted transfer.
+- Local data never reaches BYOK or Managed Cloud without an explicit fork,
+  context selection, secret scan, payload preview, consent, and visible target.
+- Managed artifact sandboxes serve Web, Desktop Cloud, and Mobile Cloud and
+  never leak into Local or developer runtimes.
+
+## Canonical Ownership Rules
+
+- `packages/ai/model-registry` owns model identity, routes, lifecycle,
+  capabilities, limits, pricing, evidence, harnesses, runtime profiles, and
+  routing policy. TypeScript and Rust artifacts are generated from it.
+- `packages/ai/routing` owns task classification and trust/capability-aware model
+  admission. Applications may provide surface adapters but not independent
+  routing tables.
+- Provider-aware request, stream, tool, reasoning, citation, artifact, usage,
+  cancellation, retry, and error contracts must have one cross-surface owner.
+- Reusable mechanics belong in packages, crates, or services. Applications own
+  surface policy, presentation, and platform adapters.
+- Deployable services remain coarse until independent scaling, security, data,
+  or operational ownership proves a split is necessary.
+- Applications, tests, docs, selectors, calculators, and adapters must not
+  maintain independent managed-model lists or guessed provider capabilities.
+
+## Target Repository Meaning
+
+```text
+apps/            user-facing product surfaces
+packages/        shared TypeScript domains, contracts, services, and UI
+crates/          shared Rust protocols, runtimes, policies, and mechanics
+services/        independently deployed backend processes only
+apps/web/db/neon canonical database migrations
+infrastructure/  deployment, environment definitions, and isolated sandbox renderer
+scripts/         supported repository automation
+tests/           genuinely cross-surface and system-level verification
+docs/            current architecture, decisions, plans, research, and runbooks
+```
+
+The macro layout is retained. The restructure consolidates ownership inside
+this shape; it does not create taxonomy-driven directories with no runtime
+consumer.
+
+## Execution Ledger
+
+### Completed And Verified
+
+- Established the generated model registry, schema validation, TypeScript and
+  Rust artifacts, runtime profiles, harness metadata, and drift checks.
+- Established one Rust app-server developer-session owner for CLI and VS Code,
+  with workspace-scoped persistence, turns, streaming, approvals, cancellation,
+  and nonblocking MCP discovery status. VS Code now uses a thin typed client and
+  one local-runtime process per trusted workspace instead of owning a second
+  conversation store, checkpoint manager, or agent loop.
+- Established Chrome-owned browser conversation persistence in
+  `chrome.storage.local`, separate from consumer app-chat synchronization.
+- Added the Turbo task graph, package-owned task commands, affected CI
+  selection, and product-specific CLI/Desktop release-tag validation and
+  signing paths.
+- Replaced Web shipping model routing with the canonical registry-backed
+  classifier and resolver; retired the duplicate Web routers in that path.
+- Ratified Desktop as one application with isolated runtime/storage/credential
+  boundaries and immutable conversation execution modes.
+- Migrated Mobile Managed Cloud picker rows, provider roster, canonical labels,
+  defaults, and tier fallback to the `mobile/cloud-chat` runtime profile.
+- Removed Mobile fake model aliases and the app-owned OpenAI probe default.
+- Admitted Mobile managed media routes in the registry and added canonical
+  capability fallback from an explicit text model to a specialist image model.
+- Added natural-language image dispatch for Mobile new-chat and existing-chat
+  entry points and consolidated image-turn state transitions into one shared
+  action.
+- Moved Auto profile identity/copy to the canonical routing policy, exposed
+  Economy/Balanced/Best in both Mobile Local and Cloud pickers, and made Auto
+  follow the active conversation boundary instead of forcing Local.
+- Routed Mobile Cloud Auto turns through `mobile/cloud-chat` to a concrete
+  admitted model while preserving requested/resolved model provenance.
+- Verified Mobile server-side web search end to end in code/tests and corrected
+  its runtime-profile declaration from `partial` to `implemented`.
+- Replaced Mobile Local-store-plus-Cloud-mirroring with a mode-aware repository
+  owner; Cloud sends, streaming, approvals, retry, edit, delete, image, and fork
+  flows now mutate Cloud state directly while Local remains device-only.
+- Removed the Mobile display-time Local/Cloud message union and legacy overlap
+  workaround so rendering follows the owning conversation repository.
+- Routed Mobile voice through the same canonical chat/media dispatch and gates
+  as the composer while preserving the voice contract that waits for the
+  completed assistant turn before text-to-speech.
+- Added an explicit Chrome-to-Desktop context-review queue with authenticated
+  acknowledgement, expiry, malformed-payload rejection, accept/discard, and no
+  automatic send or Local-data egress.
+- Established server-version compare-and-swap chat, memory, project, and
+  settings sync across Web, Mobile, and Desktop, including server-owned clocks,
+  append-only message identity, conflict winners, tombstones, in-flight edit
+  preservation, strict version validation, and cross-language fixtures.
+- Made shared composer drafts conversation-scoped and store-owned so context
+  insertion preserves existing work and only the originating send clears it.
+- Hardened CLI MCP execution with Local-only stdio transport, discovered-tool
+  identity validation, and fail-closed approval for privileged execution.
+- Removed the unreachable Desktop v3 private composer family and duplicate
+  voice-input store; the shipped Desktop shell has one composer and voice-store
+  owner.
+- Completed the remaining registry adoption for Web media/reasoning/cache,
+  Desktop media/embeddings, Mobile Tier-1 system models, and shared routing
+  metadata; corrected catalog-driven video cost reservations.
+- Hardened product release workflows, signing/verification contracts, extension
+  packaging, and static CI guardrails; remaining release prerequisites require
+  external account identities, credentials, or dashboard configuration.
+- Removed Desktop's duplicate persisted plan entitlement and made backend auth
+  the owner for admission, visible plan, model reloads, and canonical app state.
+- Added a shared Rust OpenAI Responses request/stream dialect and routed
+  Desktop registry-classified reasoning models through it while preserving
+  Chat Completions for chat and OpenAI-compatible providers.
+- Applied the persisted Desktop terminal-sandbox policy to LLM-agent terminal
+  execution through the canonical native sandbox command builder, without
+  weakening the independent tool-approval boundary.
+- Consolidated Managed Cloud media requests into shared strict schemas and one
+  Desktop native adapter, removing the duplicate direct HTTP implementation
+  and preserving registry-selected model provenance across surfaces.
+- Replaced API-gateway no-op user scoping with migration-backed PostgreSQL RLS
+  on the verified gateway tables, fail-closed identity propagation, named
+  allowlisted system clients, and tenant-isolation regression coverage.
+- Added durable managed-credit settlement and idempotent reconciliation for
+  every post-provider completion path, including retry/recovery classification
+  and a one-minute reconciliation schedule.
+- Added one Desktop runtime composition root that selects Tauri Local/BYOK,
+  admitted Managed Cloud, and browser Web runtimes without weakening the
+  existing signed-build/authentication admission gate.
+- Added stateful per-turn Auto routing for CLI/VS Code developer sessions,
+  prompt-cache route continuity, and ordered provider-distinct fallback output
+  in both generated TypeScript and Rust policy consumers.
+
+### Active Workstream
+
+Four non-overlapping lanes are active in parallel:
+
+1. Restore Desktop artifact persistence/reopen fidelity and canonical rich
+   type/version ownership through the live shared-chat runtime, including the
+   Incognito no-disk invariant.
+2. Finish cross-deployable provider-factory ownership for Web and API Gateway
+   while keeping authentication, metering, transport, and deployment policy in
+   their owning deployables.
+3. Execute the remaining mechanical waves M6-M8 in order (M0-M5 completed
+   2026-07-15 per `docs/plans/monorepo-restructure-2026-07-08.md` Appendix B).
+4. Finish the canonical Auto-router migration across Chrome and remaining
+   stateful consumer paths, then wire Managed-gateway fallback execution.
+
+### Remaining Workstreams
+
+1. Execute approved renames and moves in the locked M1-M8 mechanical sequence,
+   beginning only after M0 is green and repairing imports, manifests, build
+   graphs, generated outputs, docs, ownership maps, release automation, and
+   intentional compatibility layers after every wave.
+2. Consolidate remaining cross-surface provider execution, streaming
+   normalization, retries, tool events, citations, usage, and errors without
+   hiding provider-native differences.
+3. Close remaining managed-cloud deletion and recovery gaps after the verified
+   RLS and durable-usage foundations.
+4. Consolidate shared cloud artifacts, telemetry, authorization, and account
+   policy for Web, Desktop Cloud, and Mobile Cloud after sync lands.
+5. Complete code-verifiable Desktop Cloud admission and end-to-end runtime
+   wiring while keeping Local and BYOK isolated; signed-build/live-auth proof
+   remains a release-environment gate.
+6. Complete every classified merge/delete disposition and approved rename,
+   repairing
+   imports, manifests, build graphs, generated outputs, docs, ownership maps,
+   release automation, and compatibility layers.
+7. Complete the CI/CD rollout beyond the current Turbo affected graph and
+   separate CLI/Desktop release channels: restore a green full verification
+   baseline, finish platform signing/notarization, remote caching, migrations,
+   observability, security, and recovery for every shipping surface.
+8. Run the final requirement-by-requirement completion audit against current
+   code and runtime evidence.
+
+## Exact Resume Point
+
+Resume the four active lanes from their current diffs; do not restart their
+already-verified work. The classification and disposition manifest are
+complete. Mechanical waves M0-M8 are done (2026-07-15: M6 microcrate merges
+with the `utils-template` delete adjustment; M7 `tools/` root +
+skill-vetting move; M8 facade deletion with zero-importer proof and the
+ownership guards rewritten to anti-regression form — all gates green); the
+T-wave regroup is the next and only mechanical wave allowed to run, and it
+must WAIT until the in-flight behavior lanes (W5 item 3, W9 fixes) and the
+external provider-factory session quiesce, strictly per
+`docs/plans/restructure-execution-program-2026-07-15.md` (the 12-wave
+execution program that now sequences all remaining work; orchestrator +
+Sonnet teammate model per its §3). Behavior lanes W5 (discipline
+contracts), W6 (provider/billing correctness), and W9 pre-verification run
+in parallel with disjoint write sets. The finalized target structure and
+research-corpus adjudication are recorded in
+`docs/plans/target-structure-finalization-2026-07-15.md`.
+
+Before the final completion claim, rerun Desktop full tests after the registry
+model-type update, Web typecheck after chat/memory sync, all repository
+operability guards, `pnpm typecheck:all`, `pnpm test`, and
+`cargo check --workspace`; inspect the final diff and unresolved external
+release prerequisites separately.
+
+## Current Evidence Commands
+
+```bash
+pnpm --filter @agiworkforce/model-registry test
+pnpm --filter @agiworkforce/routing test
+pnpm --filter @agiworkforce/types test
+pnpm --filter @agiworkforce/mobile typecheck
+pnpm --filter @agiworkforce/mobile test
+pnpm check:agent-context
+pnpm check:repo-organization
+pnpm check:boundaries
+pnpm check:structure-conventions
+pnpm check:service-layer
+pnpm check:llm-operability
+pnpm typecheck:all
+pnpm test
+cargo check --workspace
+```
+
+The smallest relevant command runs first during each slice. The full list is a
+final-stage requirement, not evidence that unfinished surfaces are complete.
+
+## Completion Gate
+
+Do not mark this plan complete until current evidence proves every explicit
+objective and boundary above, every remaining workstream is closed, all
+intentional compatibility layers are documented, no required renames remain,
+and the six shipping surfaces plus services, packages, crates, migrations,
+release paths, and recovery controls pass their authoritative verification.

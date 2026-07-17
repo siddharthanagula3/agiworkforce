@@ -14,7 +14,7 @@ owners of local stores); `docs/current/source-of-truth.md`; `docs/products/READM
 `apps/desktop/src-tauri/src/sys/telemetry/logging.rs`,
 `apps/desktop/src-tauri/src/core/mcp/logs.rs`,
 `apps/mobile/stores/settingsStore.ts`, `apps/mobile/lib/biometricFlagStore.ts`,
-`crates/agiworkforce-task-runtime/src/lib.rs`,
+`crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`,
 `crates/agiworkforce-app-server/src/lib.rs`,
 `crates/agiworkforce-utils-cache/src/lib.rs`,
 `apps/web/app/api/{chat,memory,projects}/sync/route.ts`,
@@ -61,7 +61,7 @@ the single-row `user_settings` (0028) reusing the 0038 sequence/trigger; setting
 Requirement: durable per-session state (id, kind, status, timing, output location) with
 local-only retention; sessions never leave the host or sync to Cloud.
 
-**✅ Built.** `crates/agiworkforce-task-runtime/src/lib.rs` defines `Task { id: TaskId
+**✅ Built.** `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` defines `Task { id: TaskId
 (Uuid), kind: TaskKind, status: TaskStatus, command, output_path: PathBuf, started_at,
 ended_at, exit_code, error }` with validated status transitions (`TaskError::
 InvalidTransition`); task output is streamed to `output_path` on the local disk. The CLI's
@@ -125,7 +125,7 @@ the biometric flag _does_ use the OS keychain (`apps/mobile/lib/biometricFlagSto
 iOS Keychain / Android Keystore via SecureStore); Mobile has **no BYOK** and stores no
 provider keys. Managed-Cloud access is brokered by
 `apps/desktop/src-tauri/src/core/llm/providers/managed_cloud_provider.rs`, not by a stored
-user key. Provider model IDs come only from `packages/types/src/models.json`.
+user key. Provider model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Log Storage — runtime logs
 
@@ -150,7 +150,7 @@ stay on the host; no runtime log is auto-synced to Cloud.
 - `apps/desktop/src-tauri/src/sys/security/{storage.rs,machine_key.rs,secret_manager.rs}` — encrypted vault + keys.
 - `apps/desktop/src-tauri/src/sys/security/{audit_logger.rs,log_redaction.rs}`; `sys/logging/mod.rs`; `sys/telemetry/logging.rs`; `core/mcp/logs.rs` — logs + audit.
 - `apps/mobile/stores/settingsStore.ts` (encrypted MMKV); `apps/mobile/lib/biometricFlagStore.ts` (SecureStore/keychain).
-- `crates/agiworkforce-task-runtime/src/lib.rs` — `Task`/`output_path` session records.
+- `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `Task`/`output_path` session records.
 - `crates/agiworkforce-app-server/src/lib.rs` — `max_sessions`/`session_timeout_secs`.
 - `crates/agiworkforce-utils-cache/src/lib.rs` — in-memory LRU + `sha1_digest`.
 - `apps/web/app/api/{chat,memory,projects}/sync/route.ts` — Neon delta-sync (cursor + tombstones + upsert).
@@ -189,6 +189,6 @@ storage path can move Local/BYOK data into Neon without an explicit consented fo
   in-memory cache across the trust boundary.
 - Enabling settings sync ahead of the allowlist gate, or inventing a monolithic runtime
   storage daemon the repo does not have.
-- Hardcoding or inventing model IDs (read only from `packages/types/src/models.json`),
+- Hardcoding or inventing model IDs (read only from `packages/contracts/types/src/models.json`),
   referencing removed tiers (`Plus`/`pro_plus`/`Hobby`) or credit top-ups, or naming
   Supabase — the stack is Clerk + Neon + Stripe.

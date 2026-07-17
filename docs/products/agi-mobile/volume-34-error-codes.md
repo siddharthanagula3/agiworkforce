@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/api.ts`, `apps/mobile/services/llmGate.ts`, `apps/mobile/services/secureFetch.ts`, `apps/mobile/lib/egressGuard.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/services/offlineQueue.ts`, `packages/types/src/models.json`.
+Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`, and verified repo paths: `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/api.ts`, `apps/mobile/services/llmGate.ts`, `apps/mobile/services/secureFetch.ts`, `apps/mobile/lib/egressGuard.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/services/offlineQueue.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -49,7 +49,7 @@ Remote Control is **not** a fourth trust mode: the phone is a secure remote wind
 
 - **VALIDATION_PAIRING_FORMAT** — ✅ Built. Regex rejection of malformed pairing input (`apps/mobile/services/companion.ts`).
 - **VALIDATION_DISPATCH_SCHEMA** — ✅ Built. Dispatch agent/payload schema validation rejects malformed control messages (`apps/mobile/lib/dispatchAgentValidator.ts`; covered by `apps/mobile/__tests__/dispatch-payload-schema.test.ts`).
-- **VALIDATION_MODEL_ID_UNKNOWN** — 🔭 Planned. Reject any model ID not present in `packages/types/src/models.json`; never fall back to a guessed/hardcoded ID.
+- **VALIDATION_MODEL_ID_UNKNOWN** — 🔭 Planned. Reject any model ID not present in `packages/contracts/types/src/models.json`; never fall back to a guessed/hardcoded ID.
 - **VALIDATION_INPUT_TOO_LARGE / UNSUPPORTED_FILE** — 🔭 Planned. Composer/upload guards for size and MIME type with clear, testable limits.
 
 ## Recovery Guidance — user steps
@@ -67,7 +67,7 @@ Remote Control is **not** a fourth trust mode: the phone is a secure remote wind
 - `apps/mobile/lib/{egressGuard,pinning,dispatchHmac,dispatchAgentValidator,v1FeatureFlags,constants}.ts`
 - `apps/mobile/stores/connectionStore.ts`
 - `apps/mobile/__tests__/{auth-401,egress-guard,cloud-gate-public-alpha,api-paywall,dispatch-payload-schema,dispatchHmac}.test.ts`
-- Shared: `packages/compliance` (LLM-gate errors), `packages/types/src/models.json` (model-ID validation source).
+- Shared: `packages/contracts/compliance` (LLM-gate errors), `packages/contracts/types/src/models.json` (model-ID validation source).
 
 ## Competitor notes
 
@@ -86,6 +86,6 @@ Production-ready when every user-facing failure maps to a stable code + safe mes
 - Adding a BYOK / "invalid API key" error path to Mobile.
 - Recovering a Local-mode error by silently sending to Managed Cloud.
 - Surfacing retired tier names (Plus, pro_plus, Hobby) in paywall copy, or inventing INR prices for Pro/Max.
-- Hardcoding or guessing a model ID in a validation message instead of reading `packages/types/src/models.json`.
+- Hardcoding or guessing a model ID in a validation message instead of reading `packages/contracts/types/src/models.json`.
 - Claiming the companion/dispatch error codes are shipped while their flags are off, or referencing Supabase.
 - Putting raw tokens, request bodies, or PII into a code's message or telemetry.

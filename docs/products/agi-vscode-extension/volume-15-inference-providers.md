@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (root) and `apps/extension-vscode/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `docs/surfaces/vscode-extension.md`; and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `packages/providers/`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (root) and `apps/extension-vscode/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `docs/surfaces/vscode-extension.md`; and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/features/model-picker/modelConstants.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/core/commandSetup.ts`, `packages/ai/providers/`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 This volume defines how the AGI VS Code extension reaches inference: through the AGI Managed-Cloud subscription, through user-supplied keys (BYOK), and through local runtimes. VS Code is a full trust surface — **Local + BYOK + Managed Cloud** — but each mode is a distinct trust boundary with an explicit, visibly-labeled selection. The extension is workspace-scoped: there is **no automatic app-chat sync**, and any handoff to app chat is explicit and redacted (Volume-cross-ref: sync/trust volumes).
 
-The model picker never hardcodes model IDs. `modelConstants.ts` derives every option from the shared catalog in `packages/types/src/models.json` via `@agiworkforce/types` helpers (`getCoreManualModelOptions`, `getModelMetadataById`, `getModelContextLimits`, `getModelCostRates`) ✅ (`apps/extension-vscode/src/features/model-picker/modelConstants.ts`). The provider client set lives in `packages/providers/` (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `perplexity`, `ollama`, `lmstudio`) ✅. Providers not present as a client package or in the extension's `providerStreamProvider` enum are **🔭 Planned** here, not shipped.
+The model picker never hardcodes model IDs. `modelConstants.ts` derives every option from the shared catalog in `packages/contracts/types/src/models.json` via `@agiworkforce/types` helpers (`getCoreManualModelOptions`, `getModelMetadataById`, `getModelContextLimits`, `getModelCostRates`) ✅ (`apps/extension-vscode/src/features/model-picker/modelConstants.ts`). The provider client set lives in `packages/ai/providers/` (`anthropic`, `openai`, `google`, `xai`, `deepseek`, `perplexity`, `ollama`, `lmstudio`) ✅. Providers not present as a client package or in the extension's `providerStreamProvider` enum are **🔭 Planned** here, not shipped.
 
 ## AGI subscription (Managed Cloud): included models
 
@@ -32,7 +32,7 @@ Metered usage is the model; **no credit top-ups** (policy). The extension expose
 
 ### Billing
 
-Billing is **Stripe on the web account** (`agiworkforce.com/pricing`); the extension performs **no in-editor checkout** — it reads the resolved plan and links out. 🟡 Gap: `agiWorkforce.tier` in `package.json` still encodes retired tiers (`hobby`, `pro_plus`) and `agi-workforce.openInviteCodeModal` ("Unlock Cloud Features") is a stale invite/waitlist gate; both contradict the canon ladder and the open-by-default alpha and must be reconciled with `packages/types/src/billing-catalog.ts` (separate tracked task).
+Billing is **Stripe on the web account** (`agiworkforce.com/pricing`); the extension performs **no in-editor checkout** — it reads the resolved plan and links out. 🟡 Gap: `agiWorkforce.tier` in `package.json` still encodes retired tiers (`hobby`, `pro_plus`) and `agi-workforce.openInviteCodeModal` ("Unlock Cloud Features") is a stale invite/waitlist gate; both contradict the canon ladder and the open-by-default alpha and must be reconciled with `packages/contracts/types/src/billing-catalog.ts` (separate tracked task).
 
 ## BYOK (Desktop / CLI / VS Code only)
 
@@ -40,23 +40,23 @@ BYOK is sanctioned on VS Code. A single API key is stored in VS Code SecretStora
 
 ### OpenAI
 
-🟡 Catalog `gpt-*`/`o*` rows + `packages/providers/openai` client + `providerStreamProvider: "openai"` (auto-inferred from `gpt-*` prefix). Direct-key BYOK fork not yet wired.
+🟡 Catalog `gpt-*`/`o*` rows + `packages/ai/providers/openai` client + `providerStreamProvider: "openai"` (auto-inferred from `gpt-*` prefix). Direct-key BYOK fork not yet wired.
 
 ### Anthropic
 
-🟡 Catalog `claude-*` rows + `packages/providers/anthropic` + enum `"anthropic"` (auto from `claude-*`). Extended-thinking axis via `agiWorkforce.agent.thinking`/`agent.effort`. Fork ceremony 🔭.
+🟡 Catalog `claude-*` rows + `packages/ai/providers/anthropic` + enum `"anthropic"` (auto from `claude-*`). Extended-thinking axis via `agiWorkforce.agent.thinking`/`agent.effort`. Fork ceremony 🔭.
 
 ### Google
 
-🟡 Catalog `gemini-*` rows + `packages/providers/google` + enum `"google"` (auto from `gemini-*`). Fork ceremony 🔭.
+🟡 Catalog `gemini-*` rows + `packages/ai/providers/google` + enum `"google"` (auto from `gemini-*`). Fork ceremony 🔭.
 
 ### xAI
 
-🟡 Catalog `grok-*` rows + `packages/providers/xai` + enum `"xai"`. Fork ceremony 🔭.
+🟡 Catalog `grok-*` rows + `packages/ai/providers/xai` + enum `"xai"`. Fork ceremony 🔭.
 
 ### OpenRouter
 
-🔭 A registry entry exists (`open_router`) in `packages/types/src/models.json`, but there is no `packages/providers/openrouter` client and no `providerStreamProvider` enum value in the extension. Planned aggregator BYOK.
+🔭 A registry entry exists (`open_router`) in `packages/contracts/types/src/models.json`, but there is no `packages/ai/providers/openrouter` client and no `providerStreamProvider` enum value in the extension. Planned aggregator BYOK.
 
 ### Groq
 
@@ -68,7 +68,7 @@ BYOK is sanctioned on VS Code. A single API key is stored in VS Code SecretStora
 
 ### DeepSeek
 
-🟡 Catalog rows + `packages/providers/deepseek` + enum `"deepseek"`. Fork ceremony 🔭.
+🟡 Catalog rows + `packages/ai/providers/deepseek` + enum `"deepseek"`. Fork ceremony 🔭.
 
 ## Local (on-device runtime)
 
@@ -76,15 +76,15 @@ Local runs on-device and is never silently routed to BYOK or Cloud. The catalog 
 
 ### Ollama
 
-🟡 `packages/providers/ollama` client + enum `"ollama"`/`"ollama-cloud"`. Runtime detection/model-list in-extension not wired (Phase-A stub). Non-catalog local engine IDs stay grounded in `packages/providers/ollama`, not re-listed here.
+🟡 `packages/ai/providers/ollama` client + enum `"ollama"`/`"ollama-cloud"`. Runtime detection/model-list in-extension not wired (Phase-A stub). Non-catalog local engine IDs stay grounded in `packages/ai/providers/ollama`, not re-listed here.
 
 ### LM Studio
 
-🟡 `packages/providers/lmstudio` client + enum `"lmstudio"`. In-extension endpoint discovery/health not yet wired.
+🟡 `packages/ai/providers/lmstudio` client + enum `"lmstudio"`. In-extension endpoint discovery/health not yet wired.
 
 ### llama.cpp
 
-🔭 No `packages/providers/llamacpp` client, no registry entry, no enum value. Planned local runtime.
+🔭 No `packages/ai/providers/llamacpp` client, no registry entry, no enum value. Planned local runtime.
 
 ## Repository map
 
@@ -93,8 +93,8 @@ Local runs on-device and is never silently routed to BYOK or Cloud. The catalog 
 - `apps/extension-vscode/src/core/commandSetup.ts`, `src/utils/api.ts` — key storage, sign-in, tier/usage fetch.
 - `apps/extension-vscode/src/features/account-auth/deviceAuth.ts`, `src/features/cloud-bridge/` — cloud auth + (stale) invite modal.
 - `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts` — localhost bridge to local/desktop compute.
-- `packages/providers/{anthropic,openai,google,xai,deepseek,perplexity,ollama,lmstudio}` — provider clients.
-- `packages/types/src/models.json` — SSOT model catalog + provider registry.
+- `packages/ai/providers/{anthropic,openai,google,xai,deepseek,perplexity,ollama,lmstudio}` — provider clients.
+- `packages/contracts/types/src/models.json` — SSOT model catalog + provider registry.
 
 ## Competitor notes
 
@@ -110,7 +110,7 @@ Production-ready when: the picker only ever shows catalog-derived IDs; the activ
 
 ## Anti-patterns
 
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Silently routing Local chats/files to BYOK or Cloud, or skipping the fork ceremony and provider label.
 - Claiming OpenRouter, Groq, Together, or llama.cpp are shipped — they have no client package and no extension wiring (🔭).
 - Reintroducing retired tiers (`hobby`, `pro_plus`, "Plus", "Hobby") or credit top-ups; offering BYOK on Web or Mobile.

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-06-27
+Last updated: 2026-07-16
 
 This is the implementation-facing parity matrix for AGI. It turns the high-level source of truth into feature, option, component, contract, and surface requirements that technical agents can execute without inventing their own product.
 
@@ -34,15 +34,44 @@ Surface abbreviations:
 - `VSC`: VS Code extension
 - `CHR`: Chrome extension
 
+## 2026-07-16 Mounted Frontend Reconciliation
+
+The detailed current frontend contract is `docs/current/frontend-experience-contract.md`; the sanitized live Claude evidence is `docs/research/claude-live-frontend-system-2026-07-16.md`.
+
+The table below records production mounts and end-to-end reality found by the 2026-07-16 source audit. It supersedes older optimistic row text elsewhere in this file when they conflict. A source file, mock route, feature flag, or component is not capability evidence without a production mount and runtime path.
+
+| Capability                  | W                    | D                                                            | M                          | CLI                                      | VSC                                       | CHR                                      |
+| --------------------------- | -------------------- | ------------------------------------------------------------ | -------------------------- | ---------------------------------------- | ----------------------------------------- | ---------------------------------------- |
+| Primary shell               | Present              | Present                                                      | Present                    | Present                                  | Present                                   | Present                                  |
+| Chat/history                | Present              | Present across Local/BYOK/Cloud, Cloud path still incomplete | Present across Local/Cloud | Developer sessions, not consumer history | Developer sessions through CLI app-server | Separate browser-task history            |
+| First-class Work/Cowork run | Missing              | Missing                                                      | Missing                    | N/A                                      | N/A                                       | Workflow UI is not Cloud Work            |
+| Projects                    | Present              | Present                                                      | Present                    | Workspace only                           | Workspace only                            | N/A                                      |
+| General file ingestion      | Partial              | Partial/Present                                              | Partial                    | Developer files                          | Developer context                         | Images/screenshots only                  |
+| Artifacts/viewers           | Present/Partial      | Present/Partial                                              | Partial                    | Developer files/diffs only               | Developer files/diffs only                | Missing                                  |
+| Search/research             | Present/Partial      | Present/Partial                                              | Partial                    | Tool-driven                              | Workspace search                          | Page operations, no research run         |
+| Tools/approvals             | Present/Partial      | Present/Partial                                              | Present/Partial            | Present                                  | Present                                   | Present/Partial                          |
+| Voice                       | Dictation input only | Composer voice plus broken system-wide claim                 | Voice conversation present | Missing                                  | Missing                                   | Speech input only                        |
+| Remote developer control    | Missing              | Companion components unmounted                               | Static/feature-off Code UI | Host relay missing                       | Host relay missing                        | Native bridge is not Code Remote Control |
+
+Critical evidence:
+
+- Web production chat is `apps/web/features/chat/pages/WebChatPage.tsx`; `UnifiedChatPage.tsx` and `features/chat/v3/WebShellV3.tsx` are unmounted alternatives.
+- Desktop production shell is `apps/desktop/src/features/v3/DesktopShellV3.tsx`; its `V3Mode` is currently only `chat`.
+- Mobile Code reads the hardcoded empty `apps/mobile/src/features/code-sessions/data.ts` array and has no live session client.
+- VS Code's primary chat uses the CLI app-server while code-action/provider-stream settings retain a second execution path.
+- Chrome's production `apps/extension/src/side_panel.ts` is a 7,728-line ownership hotspot. Quick mode's previously cosmetic persistence is fixed: outgoing turns carry the preference and the Managed Cloud boundary applies the admitted `auto-economy` route without mutating the saved picker selection. The monolith split remains open.
+- Chrome restricted-page UX now keeps Managed Cloud chat usable, shows an accessible restriction notice, and disables only page context/browser automation instead of silently removing the visible state.
+- `packages/ai/model-registry/catalog/harnesses.json` remains the authority for `wired`, `partial`, and `unwired` runtime capability states.
+
 ## Global Product Rules
 
-| Rule                                             | Applies to             | Required implementation behavior                                                                                                                                                                                                                                               | AGI anchors                                                                                     |
-| ------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| One AGI suite, six surfaces                      | W, D, M, CLI, VSC, CHR | Every feature must declare the surfaces it supports and the sync/trust boundary it crosses.                                                                                                                                                                                    | `packages/types/src/suite-contracts.ts`, `docs/agent-context/repo-map.json`                     |
-| One chat, not split file-chat vs normal-chat     | W, D, M                | The same conversation accepts normal prompts, selected files, reference files, images, project context, tools, artifacts, and generated files. File-focused work is a conversation state, not a separate product.                                                              | `apps/web/features/chat`, `apps/desktop/src/features/v3`, `packages/unified-chat`               |
-| Local/BYOK/Managed are separate trust boundaries | All                    | Local never silently routes to BYOK/Managed. Local to BYOK is explicit fork with selection, scan, preview, label, and consent. Managed cloud is public alpha, open by default (2026-06-27; env kill-switch only); it stays subscription/entitlement-gated, not waitlist-gated. | `packages/types/src/suite-contracts.ts`, `apps/cli/src/agent/mod.rs`, `apps/mobile/stores/chat` |
-| Model IDs are catalog-owned                      | All                    | UI selectors, tests, route defaults, provider adapters, and docs read from `packages/types/src/models.json` and capability metadata. No invented/hardcoded current model IDs.                                                                                                  | `packages/types/src/models.json`, `packages/types/src/model-catalog.ts`                         |
-| Feature completion requires an end-to-end path   | All                    | A feature is not complete unless user action reaches service/runtime, returns a visible result, persists when required, and has test/visual verification.                                                                                                                      | `docs/agent-context/commands.json`, `docs/agent-context/known-flaws.md`                         |
+| Rule                                             | Applies to             | Required implementation behavior                                                                                                                                                                                                                                               | AGI anchors                                                                                               |
+| ------------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| One AGI suite, six surfaces                      | W, D, M, CLI, VSC, CHR | Every feature must declare the surfaces it supports and the sync/trust boundary it crosses.                                                                                                                                                                                    | `packages/contracts/types/src/suite-contracts.ts`, `docs/agent-context/repo-map.json`                     |
+| One chat, not split file-chat vs normal-chat     | W, D, M                | The same conversation accepts normal prompts, selected files, reference files, images, project context, tools, artifacts, and generated files. File-focused work is a conversation state, not a separate product.                                                              | `apps/web/features/chat`, `apps/desktop/src/features/v3`, `packages/ui/unified-chat`                      |
+| Local/BYOK/Managed are separate trust boundaries | All                    | Local never silently routes to BYOK/Managed. Local to BYOK is explicit fork with selection, scan, preview, label, and consent. Managed cloud is public alpha, open by default (2026-06-27; env kill-switch only); it stays subscription/entitlement-gated, not waitlist-gated. | `packages/contracts/types/src/suite-contracts.ts`, `apps/cli/src/agent/mod.rs`, `apps/mobile/stores/chat` |
+| Model IDs are catalog-owned                      | All                    | UI selectors, tests, route defaults, provider adapters, and docs read from `packages/contracts/types/src/models.json` and capability metadata. No invented/hardcoded current model IDs.                                                                                        | `packages/contracts/types/src/models.json`, `packages/contracts/types/src/model-catalog.ts`               |
+| Feature completion requires an end-to-end path   | All                    | A feature is not complete unless user action reaches service/runtime, returns a visible result, persists when required, and has test/visual verification.                                                                                                                      | `docs/agent-context/commands.json`, `docs/agent-context/known-flaws.md`                                   |
 
 ## Chat Shell And Empty State
 
@@ -83,7 +112,7 @@ Sources: ChatGPT capabilities and file/voice/tool overview, ChatGPT macOS Chat B
 | Capability-aware tools    | All               | Frontier apps expose tools only when model/tool/runtime can support them.       | Tool options must reflect provider capabilities: function calling/tool use, vision, image generation, search, code execution, file creation, structured output.                                                                                                                                  | Partial.                                                                                |
 | Auto-routing              | All               | Competitors route internally; AGI must be explicit.                             | Auto-routing must explain chosen provider/model, ask before trust-boundary crossing, and never silently substitute from Local.                                                                                                                                                                   | Partial/Gated.                                                                          |
 
-Code anchors: `packages/types/src/models.json`, `packages/types/src/model-catalog.ts`, `packages/types/src/suite-contracts.ts`, `packages/providers`, `apps/web/core/ai/llm`, `apps/cli/src/models`, `apps/desktop/src/features/settings/tabs/ModelsKeys`.
+Code anchors: `packages/contracts/types/src/models.json`, `packages/contracts/types/src/model-catalog.ts`, `packages/contracts/types/src/suite-contracts.ts`, `packages/ai/providers`, `apps/web/core/ai/llm`, `apps/cli/src/models`, `apps/desktop/src/features/settings/tabs/ModelsKeys`.
 
 ## Files, Artifacts, Canvas, And Generated Outputs
 
@@ -184,7 +213,7 @@ This is a locked AGI IA target. Agents must not invent new top-level settings ca
 | Extensions    | Desktop extensions installed locally, filesystem, contact7/context7, desktop commander, Apify, app notes, Excel/local apps, configure/details/uninstall.                                                                                                                                                                               | Partial.                                              |
 | Developer     | MCP config/logs, hooks, skills/plugins, provider diagnostics, feature flags, local runtime logs, sandbox/network allowlist, crash reports.                                                                                                                                                                                             | Partial.                                              |
 
-Code anchors: `apps/desktop/src/features/settings`, `apps/mobile/src/features/settings`, `apps/web/features/settings`, `packages/types/src/suite-contracts.ts`.
+Code anchors: `apps/desktop/src/features/settings`, `apps/mobile/src/features/settings`, `apps/web/features/settings`, `packages/contracts/types/src/suite-contracts.ts`.
 
 ## Desktop Surface
 
@@ -198,19 +227,19 @@ Code anchors: `apps/desktop/src/features/settings`, `apps/mobile/src/features/se
 | Local compute host    | File generation, MCP, local models, native messaging, browser/computer-use approvals.                                                                                                                                            | Partial.                                                                               |
 | Cloud mode onboarding | Managed cloud is public alpha on Web + Mobile. Desktop cloud is a fast-follow (DCL-1…4): desktop shows honest "coming soon," keeps Local + BYOK, and never claims cloud is "available" until the shared-backend wiring verifies. | Coming soon (desktop); Local + BYOK shipped.                                           |
 
-Primary paths: `apps/desktop/src/features/v3`, `apps/desktop/src/features/settings`, `apps/desktop/src/features/connectors`, `apps/desktop/src-tauri`, `packages/unified-chat`.
+Primary paths: `apps/desktop/src/features/v3`, `apps/desktop/src/features/settings`, `apps/desktop/src/features/connectors`, `apps/desktop/src-tauri`, `packages/ui/unified-chat`.
 
 ## Web Surface
 
-| Component          | Required behavior                                                                                                                                                    | Current AGI status |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| Synced app chat    | ChatGPT/Claude-style chat with projects, files, artifacts, tools, settings, account.                                                                                 | Partial.           |
-| Projects           | Create/manage/share/move chat/sources/project memory.                                                                                                                | Partial.           |
-| Artifacts          | Sidecar, cards, source/preview, export, share/publish gates.                                                                                                         | Partial.           |
-| Billing/usage      | Stripe/payment links, invoices, credits, limits. Managed cloud is public alpha (open by default); a Team/Enterprise early-access interest list is the only waitlist. | Partial/Gated.     |
-| Connectors/apps    | Directory, OAuth/custom apps, sync/search/write action permissions.                                                                                                  | Partial/Missing.   |
-| AGI Code dashboard | Repo selector, activity heatmap, sessions, PRs, routines, run history; managed cloud sessions are public alpha (entitlement-gated, not invite-gated).                | Partial/Missing.   |
-| Admin/team         | Organization policy, audit, connector controls, managed compute readiness.                                                                                           | Partial/Gated.     |
+| Component          | Required behavior                                                                                                                                                                                                                                                             | Current AGI status |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Synced app chat    | ChatGPT/Claude-style chat with projects, files, artifacts, tools, settings, account.                                                                                                                                                                                          | Partial.           |
+| Projects           | Create/manage/share/move chat/sources/project memory.                                                                                                                                                                                                                         | Partial.           |
+| Artifacts          | Sidecar, cards, source/preview, export, share/publish gates.                                                                                                                                                                                                                  | Partial.           |
+| Billing/usage      | Stripe/payment links, invoices, credits, limits. Managed cloud is public alpha (open by default); Team is a real, purchasable per-seat tier (reinstated 2026-07-11), not an interest list — only genuinely-unavailable hosted capacity should route to a request-access flow. | Partial/Gated.     |
+| Connectors/apps    | Directory, OAuth/custom apps, sync/search/write action permissions.                                                                                                                                                                                                           | Partial/Missing.   |
+| AGI Code dashboard | Repo selector, activity heatmap, sessions, PRs, routines, run history; managed cloud sessions are public alpha (entitlement-gated, not invite-gated).                                                                                                                         | Partial/Missing.   |
+| Admin/team         | Organization policy, audit, connector controls, managed compute readiness.                                                                                                                                                                                                    | Partial/Gated.     |
 
 Primary paths: `apps/web/app`, `apps/web/features`, `apps/web/core`, `apps/web/stores`, `services/api-gateway`, `apps/web/db/neon`.
 
@@ -240,7 +269,7 @@ Primary paths: `apps/mobile/app`, `apps/mobile/src/features`, `apps/mobile/store
 | Sessions/worktrees   | Codex projects/worktrees and Claude sessions.        | Resume/fork/branch, worktree isolation, PR creation/review, diff preview, local/cloud continuation.                      | Partial.                                    |
 | Voice                | Claude Code voice and AGI voice requirement.         | Dictation/transcription, local fallback, voice settings.                                                                 | Partial.                                    |
 
-Primary paths: `apps/cli/src`, `crates/agiworkforce-*`, `packages/types/src/suite-contracts.ts`.
+Primary paths: `apps/cli/src`, `crates/agiworkforce-*`, `packages/contracts/types/src/suite-contracts.ts`.
 
 ## VS Code Extension
 
@@ -269,17 +298,17 @@ Primary paths: `apps/extension/src`, `apps/extension/native-host`, `apps/extensi
 
 ## Billing, Usage, Waitlist, And Commercial Gates
 
-| Component / option   | Required behavior                                                                                                                                 | Current AGI status |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
-| Plan display         | Current plan, local/BYOK/free state, managed public-alpha status, adjust plan.                                                                    | Partial.           |
-| Stripe/payment       | Payment link/checkout, invoices, due date, status, action.                                                                                        | Partial/Missing.   |
-| Usage limits         | Current session, weekly limits, credits, monthly spend limit, current balance, auto reload.                                                       | Partial/Missing.   |
-| Team/Enterprise list | Early-access interest list for Team/Enterprise tiers and genuinely-unavailable hosted capacity (managed cloud chat itself is public alpha, open). | Partial/Gated.     |
-| Promo/invite codes   | Optional promo codes redeem plan credits/offers; they do NOT gate managed-cloud access (cloud is open public alpha).                              | Partial/Gated.     |
-| Abuse/fraud controls | Metering, quotas, refund/chargeback reserve, provider terms.                                                                                      | Missing/Gated.     |
-| Enterprise           | Org policy, audit, SSO/SCIM, connector policy, managed-credit ledger, support workflow.                                                           | Partial/Gated.     |
+| Component / option       | Required behavior                                                                                                                                                                                                   | Current AGI status |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| Plan display             | Current plan, local/BYOK/free state, managed public-alpha status, adjust plan.                                                                                                                                      | Partial.           |
+| Stripe/payment           | Payment link/checkout, invoices, due date, status, action.                                                                                                                                                          | Partial/Missing.   |
+| Usage limits             | Current session, weekly limits, credits, monthly spend limit, current balance, auto reload.                                                                                                                         | Partial/Missing.   |
+| Enterprise interest list | Early-access interest list for genuinely-unavailable hosted capacity only (managed cloud chat itself is public alpha, open; Team is a real, purchasable per-seat tier as of 2026-07-11, not an interest-list item). | Partial/Gated.     |
+| Promo/invite codes       | Optional promo codes redeem plan credits/offers; they do NOT gate managed-cloud access (cloud is open public alpha).                                                                                                | Partial/Gated.     |
+| Abuse/fraud controls     | Metering, quotas, refund/chargeback reserve, provider terms.                                                                                                                                                        | Missing/Gated.     |
+| Enterprise               | Org policy, audit, SSO/SCIM, connector policy, managed-credit ledger, support workflow.                                                                                                                             | Partial/Gated.     |
 
-Primary paths: `apps/web/features`, `apps/mobile/app/(app)/billing`, `services/api-gateway`, `packages/types/src/enterprise`, `apps/web/db/neon`.
+Primary paths: `apps/web/features`, `apps/mobile/app/(app)/billing`, `services/api-gateway`, `packages/contracts/types/src/enterprise`, `apps/web/db/neon`.
 
 ## Competitor Deltas (verified 2026-07-09 — fold into rows on next full matrix pass)
 

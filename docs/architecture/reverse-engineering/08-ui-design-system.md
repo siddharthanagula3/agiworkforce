@@ -2,19 +2,19 @@
 
 Status: Current
 Owner: Web/Design lead
-Last updated: 2026-07-10
+Last updated: 2026-07-14
 
 The UI is a three-layer stack: **design tokens** (colors/type/spacing) → **`@agiworkforce/ui`** (pure primitives) → **`@agiworkforce/unified-chat`** (the chat experience + composed components). Web and desktop consume all three; extension/vscode/mobile consume tokens and pieces as their platforms allow. Claude reference images are the primary visual reference (`docs/research/claudeai-component-spec-2026-07-10.md`).
 
-## 8.1 Design tokens — `packages/design-tokens`
+## 8.1 Design tokens — `packages/ui/design-tokens`
 
 The canonical token source. Exports `"."` (JS tokens) + `"./chat.css"` (CSS vars):
 
 - `agiPalette` (light/dark), radii, typography, shadows.
 - Per-surface CSS-var maps: `agiChatCssVars`, `agiNativeColors` (RN), `agiExtensionCssVars` (Chrome), `agiVsCodeCssVars` (VS Code). Each surface themes the shared primitives with its own var map, so one component library renders correctly in every host.
-- No dependencies — tokens are the root of the UI DAG. `packages/ui` consumes tokens; nothing consumes upward.
+- No dependencies — tokens are the root of the UI DAG. `packages/ui/ui` consumes tokens; nothing consumes upward.
 
-## 8.2 Primitives — `packages/ui`
+## 8.2 Primitives — `packages/ui/ui`
 
 `@agiworkforce/ui` is **pure presentation** (strict boundary: no store/IO/Next; only presentation + plain config data). Structure:
 
@@ -26,12 +26,12 @@ The canonical token source. Exports `"."` (JS tokens) + `"./chat.css"` (CSS vars
 
 **Residual forks (tracked, decision-gated):** ~8 web-divergent primitives whose a11y/error features `ui` should gain before their web forks migrate (`Button isLoading`, `Input hasError`, the `form.tsx` FormField collision, legacy-toast-vs-sonner retirement, bespoke/aceternity + sidebar components that stay web-local or move to a `ui/marketing` subpath). See `docs/plans/monorepo-restructure-2026-07-08.md` P3.
 
-## 8.3 The chat experience — `packages/unified-chat`
+## 8.3 The chat experience — `packages/ui/unified-chat`
 
 `@agiworkforce/unified-chat` composes `ui` + `design-tokens` into the actual chat product:
 
 - **Components:** `ChatInterface.tsx` (the composer + message stream shell), `SettingsShell.tsx` + `SettingsModal.tsx` (settings composed on the `ui` shell), `ProjectCard.tsx`, message/markdown/tool-call renderers.
-- **Rendering:** `react-markdown` + remark/rehype + `katex` for markdown/math; one shared markdown/tool-call renderer; sandboxed-artifact HTML (rendered cross-origin via `apps/sandbox`).
+- **Rendering:** `react-markdown` + remark/rehype + `katex` for markdown/math; one shared markdown/tool-call renderer; sandboxed-artifact HTML (rendered cross-origin via `infrastructure/sandbox`).
 - **Logic libs:** host-bridge/runtime/capabilities, prompt classifier + routing decision, cloud chat-persistence client, plus the shared stores (area 6).
 - **Consumers:** web (~31 files) and desktop (~25 files) — both still carry parallel chat trees on top of it; adoption + deletion is P3/wave 6.
 

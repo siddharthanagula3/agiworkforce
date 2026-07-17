@@ -26,7 +26,7 @@ Cloud is canonical only for what belongs in the cloud (accounts, synced app chat
 - **Realtime/sync store:** `services/signaling-server/src/db.ts`, `connection-manager.ts`; gateway persistence in `services/api-gateway`.
 - **Local mobile storage:** `apps/mobile/lib/mmkv.ts` (key-value), `apps/mobile/lib/secureStorage.ts` (SecureStore), local model cache via `apps/mobile/services/modelDownload.ts`.
 - **Local desktop storage:** SQLite + Stronghold/Keychain in `apps/desktop/src-tauri` (Cargo deps + capabilities in `src-tauri/capabilities/default.json`).
-- **Contracts:** `packages/types/src/suite-contracts.ts` (`PrivacyMode`, storage-scope + generated-file trust-boundary validation); `packages/data-layer`, `packages/stores`.
+- **Contracts:** `packages/contracts/types/src/suite-contracts.ts` (`PrivacyMode`, storage-scope + generated-file trust-boundary validation); `packages/platform/data-layer`, `packages/platform/artifacts`.
 - **Artifact isolation:** `apps/sandbox` (cross-origin renderer; storage isolation primitive, Vol 14).
 
 ## Competitor notes

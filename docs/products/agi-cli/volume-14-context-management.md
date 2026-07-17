@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/cli/AGENTS.md`. Grounded in real repo code: `apps/cli/src/context.rs`, `apps/cli/src/compaction.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/agent/chat.rs`, `apps/cli/src/repl/slash_commands.rs`, `apps/cli/src/repl/registry.rs`, `apps/cli/src/claude_parity.rs`, `apps/cli/src/path_security.rs`; model context windows via `apps/cli/src/model_catalog.rs` → `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/cli/AGENTS.md`. Grounded in real repo code: `apps/cli/src/context.rs`, `apps/cli/src/compaction.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/agent/chat.rs`, `apps/cli/src/repl/slash_commands.rs`, `apps/cli/src/repl/registry.rs`, `apps/cli/src/claude_parity.rs`, `apps/cli/src/path_security.rs`; model context windows via `apps/cli/src/model_catalog.rs` → `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -40,7 +40,7 @@ Context management is how AGI CLI decides what the model sees on every turn: rep
 
 ## Context Window Management
 
-✅ Built — `apps/cli/src/agent/chat.rs` + `apps/cli/src/compaction.rs`. Per-model limits come from `context_limit()` → `model_catalog::context_window` → `packages/types/src/models.json` (never hardcoded here), with `DEFAULT_CONTEXT_LIMIT = 128_000` for unknown models. On each send, if usage exceeds 90% the loop auto-compacts to 70% of the limit, firing `PreCompact`/`PostCompact` hooks and printing `format_context_report` (`Context: [####…] NN% (xK / yK tokens)`); at `CONTEXT_WARN_THRESHOLD = 0.85` it warns without compacting. `/context` (`/ctx`) prints the live report on demand. 🟡 Partial: `CompressionConfig.auto_trigger_fraction` (0.90) is a config field but the send loop currently uses a hardcoded `0.90`; the two should be unified so the threshold is configurable, not duplicated.
+✅ Built — `apps/cli/src/agent/chat.rs` + `apps/cli/src/compaction.rs`. Per-model limits come from `context_limit()` → `model_catalog::context_window` → `packages/contracts/types/src/models.json` (never hardcoded here), with `DEFAULT_CONTEXT_LIMIT = 128_000` for unknown models. On each send, if usage exceeds 90% the loop auto-compacts to 70% of the limit, firing `PreCompact`/`PostCompact` hooks and printing `format_context_report` (`Context: [####…] NN% (xK / yK tokens)`); at `CONTEXT_WARN_THRESHOLD = 0.85` it warns without compacting. `/context` (`/ctx`) prints the live report on demand. 🟡 Partial: `CompressionConfig.auto_trigger_fraction` (0.90) is a config field but the send loop currently uses a hardcoded `0.90`; the two should be unified so the threshold is configurable, not duplicated.
 
 ## Repository map
 
@@ -51,7 +51,7 @@ Context management is how AGI CLI decides what the model sees on every turn: rep
 - `apps/cli/src/repl/slash_commands.rs`, `apps/cli/src/repl/registry.rs`, `apps/cli/src/claude_parity.rs` — `/context`, `/compact`, `/clear`, `/memory`, `/add-dir`, `/attach`, `/privacy-mode`.
 - `apps/cli/src/path_security.rs` — workspace-root validation.
 - `apps/cli/src/memory.rs`, `apps/cli/src/memory_pipeline.rs` — memory/rules injected into the system prompt.
-- `packages/types/src/models.json` — SSOT for per-model context windows.
+- `packages/contracts/types/src/models.json` — SSOT for per-model context windows.
 
 ## Competitor notes
 
@@ -68,7 +68,7 @@ Production-ready when repository/workspace/file/conversation context assembles d
 ## Anti-patterns
 
 - Silently routing Local repo/file/conversation context to BYOK or Managed Cloud, or auto-syncing CLI context to app chat.
-- Hardcoding a model's context window instead of reading `packages/types/src/models.json`; inventing model IDs.
+- Hardcoding a model's context window instead of reading `packages/contracts/types/src/models.json`; inventing model IDs.
 - Using the 4-bytes/token estimate for billing instead of provider-reported counts.
 - Compacting in a way that orphans tool calls (skipping `normalize_tool_pairs`) or discards the newest turn/active plan.
 - Reading files or directories outside registered workspace roots.

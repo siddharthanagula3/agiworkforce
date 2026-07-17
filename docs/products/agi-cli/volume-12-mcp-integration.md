@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: grounds in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), the surface rules in `apps/cli/AGENTS.md`, and verified repo code: `apps/cli/src/mcp/{mod.rs,http.rs,sse.rs,resources.rs,elicitation.rs,oauth_flow.rs,oauth_store.rs,connection_pool.rs,status.rs}`, `apps/cli/src/app_server.rs`, `apps/cli/src/lib.rs`, `apps/cli/src/cli_options.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/ecosystem.rs`, and `crates/agiworkforce-app-server/{src/lib.rs,README.md}`. Model IDs (where referenced) come only from `packages/types/src/models.json`.
+Authority: grounds in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), the surface rules in `apps/cli/AGENTS.md`, and verified repo code: `apps/cli/src/mcp/{mod.rs,http.rs,sse.rs,resources.rs,elicitation.rs,oauth_flow.rs,oauth_store.rs,connection_pool.rs,status.rs}`, `apps/cli/src/app_server.rs`, `apps/cli/src/lib.rs`, `apps/cli/src/cli_options.rs`, `apps/cli/src/agent/mod.rs`, `apps/cli/src/ecosystem.rs`, and `crates/agiworkforce-app-server/{src/lib.rs,README.md}`. Model IDs (where referenced) come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -82,6 +82,6 @@ Claude Code and Codex CLI both consume MCP servers and can run as MCP servers; C
 - Do **not** claim `agi mcp add` (or any `agi mcp …` management command) exists — only `agi mcp-server` and `agi app-server` ship; use config files or `agi ecosystem import`.
 - Do **not** let a Local session silently reach a remote MCP server, or route MCP tool arguments/files to BYOK/Managed without an explicit fork.
 - Do **not** describe Resources as shipped — enumeration/reading is 🔭.
-- Do **not** hardcode or invent model IDs (use `packages/types/src/models.json`), routes, env vars, or INR prices; pricing is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise — never "Plus", "Hobby", `pro_plus`, or credit top-ups.
+- Do **not** hardcode or invent model IDs (use `packages/contracts/types/src/models.json`), routes, env vars, or INR prices; pricing is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise — never "Plus", "Hobby", `pro_plus`, or credit top-ups.
 - Do **not** reference Supabase (Clerk + Neon + Stripe only), enable `allow_query_token` by default, or auto-approve server elicitations.
 - Do **not** use the `agiworkforce` binary in examples — it is a compatibility alias only.

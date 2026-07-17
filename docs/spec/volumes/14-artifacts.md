@@ -1,7 +1,7 @@
 # Volume 14 — Artifacts
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 14)
-Authority: this manual, `docs/strategy/02-gap-analysis.md` §2 (artifacts polish), `docs/strategy/10-oss-corpus-port-plan.md` §6 (`defineToolCallRenderer`), `docs/agent-context/repo-map.json` (sandbox renderer), `docs/agent-context/risk-map.json` (artifact-rendering), `packages/types/src/suite-contracts.ts`.
+Authority: this manual, `docs/strategy/02-gap-analysis.md` §2 (artifacts polish), `docs/strategy/10-oss-corpus-port-plan.md` §6 (`defineToolCallRenderer`), `docs/agent-context/repo-map.json` (sandbox renderer), `docs/agent-context/risk-map.json` (artifact-rendering), `packages/contracts/types/src/suite-contracts.ts`.
 
 ## Philosophy & Cloud/Local stance
 
@@ -29,7 +29,7 @@ Cloud/Local sets where an artifact is stored and rendered. **Rendering is always
 - Sandbox renderer (isolation): `apps/sandbox` (static `index.html`, `postMessage`-only, deployed to sandbox.agiworkforce.com — see `docs/agent-context/repo-map.json` + risk-map `artifact-rendering`).
 - Web artifact surface: `apps/web/features/chat/` (artifact/tool timelines) + `apps/web/features/media/`.
 - Canvas/visual artifacts (direction): `apps/desktop/src/features/{canvas,dynamic-canvas}/` (visual design workspace is **Missing/Gated** — see source-of-truth P0 #13).
-- Manifest/trust contracts: `packages/types/src/` (Vol 38), `packages/types/src/suite-contracts.ts`.
+- Manifest/trust contracts: `packages/contracts/types/src/` (Vol 38), `packages/contracts/types/src/suite-contracts.ts`.
 - Renderer-tool pattern reference: CopilotKit `defineToolCallRenderer` (`docs/strategy/10` §6, MIT `packages/*` only).
 
 ## Competitor notes

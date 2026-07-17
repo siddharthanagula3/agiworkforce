@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, plus the surface code cited per-section below and the shared token source `packages/design-tokens/src/index.ts`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, plus the surface code cited per-section below and the shared token source `packages/ui/design-tokens/src/index.ts`.
 
 ## Overview & stance
 
@@ -56,11 +56,11 @@ This volume defines the reusable UI primitives the AGI Browser Companion renders
 
 ## Typography
 
-🟡 Partial — the type ramp is defined inline in `src/side_panel.ts:injectStyles` (UI stack `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`; code stack `'JetBrains Mono','SF Mono',Consolas,monospace`; sizes 10–16px). Gap: no shared typography token scale in `packages/design-tokens`, so sizes are hardcoded per component. Requirement: promote a named type scale (body/label/code/heading) to tokens so panel, overlay, and future popup stay consistent.
+🟡 Partial — the type ramp is defined inline in `src/side_panel.ts:injectStyles` (UI stack `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`; code stack `'JetBrains Mono','SF Mono',Consolas,monospace`; sizes 10–16px). Gap: no shared typography token scale in `packages/ui/design-tokens`, so sizes are hardcoded per component. Requirement: promote a named type scale (body/label/code/heading) to tokens so panel, overlay, and future popup stay consistent.
 
 ## Colors
 
-✅ Built — `packages/design-tokens/src/index.ts` exports `agiExtensionCssVars` (dark + light), consumed via `src/tokens.ts:getExtensionTokensCss`. Component CSS uses `var(--agi-ext-*)` (surface, text, border, accent, danger/success/warning/info, scrim, shadows); `computerUsePanel.ts` mandates "DESIGN TOKENS ONLY — no hex colours." Requirements: no raw hex; danger/high-risk states use `--agi-ext-danger*`; light/dark parity; state colors reused across approval and escalation UI.
+✅ Built — `packages/ui/design-tokens/src/index.ts` exports `agiExtensionCssVars` (dark + light), consumed via `src/tokens.ts:getExtensionTokensCss`. Component CSS uses `var(--agi-ext-*)` (surface, text, border, accent, danger/success/warning/info, scrim, shadows); `computerUsePanel.ts` mandates "DESIGN TOKENS ONLY — no hex colours." Requirements: no raw hex; danger/high-risk states use `--agi-ext-danger*`; light/dark parity; state colors reused across approval and escalation UI.
 
 ## Animations
 
@@ -73,13 +73,13 @@ This volume defines the reusable UI primitives the AGI Browser Companion renders
 - `apps/extension/src/features/side-panel/{computerUsePanel,voice,onboarding,markdown}.ts` — approval cards, step log, voice
 - `apps/extension/src/features/content/in-page-panel/{launcher,panel,panelStyles}.ts` — floating overlay (Shadow DOM)
 - `apps/extension/src/assets/icons.ts` — Lucide SVG icon set
-- `apps/extension/src/tokens.ts` + `packages/design-tokens/src/index.ts` — token source (`agiExtensionCssVars`)
+- `apps/extension/src/tokens.ts` + `packages/ui/design-tokens/src/index.ts` — token source (`agiExtensionCssVars`)
 - `apps/extension/src/background.ts` — context menus, OS notifications, approval routing
 - `apps/extension/src/features/cloud-bridge/InviteCodeModal.ts` — legacy dialog primitive (to be reworked)
 
 ## Competitor notes
 
-Claude for Chrome centers a side panel with a plan/approval flow and site permissions; ChatGPT's browser surface leans on a popup + injected controls; Codex has no first-party Chrome UI (browser work runs host-side). AGI's divergence: (1) a **single canonical side panel** (no popup indirection) doubling as the computer-use action log; (2) **fail-closed approval cards** with server-issued request IDs for CDP escalation; (3) a **thin bridged chat** holding no keys and no BYOK UI — unlike Desktop/CLI/VS Code where BYOK is allowed, the extension is Cloud-only by design; (4) a **token-driven, hex-free** set shared through `packages/design-tokens`; (5) local-first history (`chrome.storage.local`, never synced), no Projects/global-memory UI.
+Claude for Chrome centers a side panel with a plan/approval flow and site permissions; ChatGPT's browser surface leans on a popup + injected controls; Codex has no first-party Chrome UI (browser work runs host-side). AGI's divergence: (1) a **single canonical side panel** (no popup indirection) doubling as the computer-use action log; (2) **fail-closed approval cards** with server-issued request IDs for CDP escalation; (3) a **thin bridged chat** holding no keys and no BYOK UI — unlike Desktop/CLI/VS Code where BYOK is allowed, the extension is Cloud-only by design; (4) a **token-driven, hex-free** set shared through `packages/ui/design-tokens`; (5) local-first history (`chrome.storage.local`, never synced), no Projects/global-memory UI.
 
 ## Acceptance / Definition of Done
 
@@ -92,7 +92,7 @@ Production-ready when every primitive renders from design tokens, injects CSS vi
 ## Anti-patterns
 
 - Adding a BYOK/provider-key input, provider label, or checkout/billing UI (out of scope; keys and billing live on account/dev surfaces).
-- Hardcoding a model ID in composer/model UI instead of reading `packages/types/src/models.json` via `@agiworkforce/types`.
+- Hardcoding a model ID in composer/model UI instead of reading `packages/contracts/types/src/models.json` via `@agiworkforce/types`.
 - Auto-approving actions, animating an approval card so it looks auto-dismissed, or honoring an approval response without the exact server `requestId`.
 - Raw hex colors, inline `<style>` blocks (breaks CSP `style-src 'self'`), or page-CSS leakage into the overlay.
 - Surfacing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups; use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise only.

@@ -51,9 +51,9 @@ Each reconciliation is a small, reviewable change; none moves or deletes files. 
 
 The repository currently encodes pricing in three places that disagree:
 
-- `packages/types/src/billing-catalog.ts` (SSOT): `pro $20`, `max $100`, `team $25`; tiers `local-only/byok/free/pro/max/team/enterprise`.
+- `packages/contracts/types/src/billing-catalog.ts` (SSOT): `pro $20`, `max $100`, `team $25`; tiers `local-only/byok/free/pro/max/team/enterprise`.
 - `apps/desktop/src/constants/pricing.ts` (UI): adds `hobby` ($5 target) and `pro_plus` ($49.99) that resolve to `$0` through the SSOT function.
-- `packages/types/src/design-system/user-identity.ts` (comment): `Pro $29.99 / Pro+ $49.99 / Max $299.99`.
+- `packages/contracts/types/src/design-system/user-identity.ts` (comment): `Pro $29.99 / Pro+ $49.99 / Max $299.99`.
 
 The India/₹ "Cheapest" tier referenced externally is **not present in the repository**. Documentation **must not** assert a pricing number until the implementation is unified. Recommended canonical: `billing-catalog.ts`. This is primarily a **code** divergence; the documentation records it as UNKNOWN-pending-resolution and points future authors at the SSOT. Tracked as a doc+code reconciliation item; the code fix is out of scope for this documentation bootstrap.
 

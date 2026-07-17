@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/AGENTS.md`; `apps/extension/THREAT_MODEL.md`. Grounded in real code: `apps/extension/manifest.json`; `apps/extension/src/features/content/{page-metadata,dom-helpers,nlweb,browserTool}.ts` and `in-page-panel/pageActions.ts`; `apps/extension/src/features/native-bridge/providerStreamClient.ts`; `apps/extension/src/features/computer-use/{cloudAgentClient,agentLoop}.ts`; `apps/extension/src/features/background/{conversation-history,tasks}.ts`; `apps/extension/src/background.ts`. Model facts: `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/extension/AGENTS.md`; `apps/extension/THREAT_MODEL.md`. Grounded in real code: `apps/extension/manifest.json`; `apps/extension/src/{page-metadata,dom-helpers,nlweb}.ts`; `apps/extension/src/features/content/browserTool.ts` and `in-page-panel/pageActions.ts`; `apps/extension/src/features/native-bridge/providerStreamClient.ts`; `apps/extension/src/features/computer-use/{cloudAgentClient,agentLoop}.ts`; `apps/extension/src/features/background/{conversation-history,tasks}.ts`; `apps/extension/src/background.ts`. Model facts: `packages/contracts/types/src/models.json`. (Corrected 2026-07-11: `page-metadata.ts`/`dom-helpers.ts`/`nlweb.ts` live at the top level of `apps/extension/src/`, not under `features/content/` — that path held a duplicate fork deleted by commit `59c8f4650` for missing security fixes; `browserTool.ts` genuinely does live under `features/content/`.)
 
 ## Overview & stance
 
 This volume specifies the comprehension-oriented "assistant" surface of the **AGI Browser Companion** — the everyday page-understanding features (ask, summarize, explain, translate, notes, research) that sit on top of the permission-gated browser agent, not a standalone consumer chatbot.
 
-The trust model is fixed and narrow. The extension is a **thin bridged chat**: it holds **no provider keys and runs no inference**. Every model call is streamed through the AGI cloud gateway — either the OpenAI-compatible agent path (`callCloud` → `POST /api/llm/v1/chat/completions`, `cloudAgentClient.ts`) or the SSE provider proxy (`streamFromProvider` → `/api/v1/providers/<id>/stream`, `providerStreamClient.ts`). The EGRESS rule is absolute: no provider host (openai.com, anthropic.com, …) is ever contacted from the extension; requests are validated against the gateway allowlist (`validateGatewayUrl`, `background/policy.ts`). **BYOK does not exist on this surface** (Desktop/CLI/VS Code only), and there is **no Local inference** — Chrome is Managed-Cloud-backed for assistant features. Model IDs are read only from `packages/types/src/models.json` (`cloudAgentClient.ts` resolves `managed_cloud.taskRouting.computer_use`); never hardcoded. History and saved notes live in `chrome.storage.local` only (device-scoped, never synced; no Projects, no conversation sync). Page content is treated as **data, never instructions** (prompt-injection defense), and sensitive strings are redacted before entering a prompt (`redactSensitiveText`).
+The trust model is fixed and narrow. The extension is a **thin bridged chat**: it holds **no provider keys and runs no inference**. Every model call is streamed through the AGI cloud gateway — either the OpenAI-compatible agent path (`callCloud` → `POST /api/llm/v1/chat/completions`, `cloudAgentClient.ts`) or the SSE provider proxy (`streamFromProvider` → `/api/v1/providers/<id>/stream`, `providerStreamClient.ts`). The EGRESS rule is absolute: no provider host (openai.com, anthropic.com, …) is ever contacted from the extension; requests are validated against the gateway allowlist (`validateGatewayUrl`, `background/policy.ts`). **BYOK does not exist on this surface** (Desktop/CLI/VS Code only), and there is **no Local inference** — Chrome is Managed-Cloud-backed for assistant features. Model IDs are read only from `packages/contracts/types/src/models.json` (`cloudAgentClient.ts` resolves `managed_cloud.taskRouting.computer_use`); never hardcoded. History and saved notes live in `chrome.storage.local` only (device-scoped, never synced; no Projects, no conversation sync). Page content is treated as **data, never instructions** (prompt-injection defense), and sensitive strings are redacted before entering a prompt (`redactSensitiveText`).
 
 ## Ask About Current Page
 
@@ -64,7 +64,7 @@ Multi-step, task-scoped research across a session (gather → extract → synthe
 - `apps/extension/src/features/computer-use/cloudAgentClient.ts` — gateway agent path, `image_url`/`screenshot`, model from `models.json`.
 - `apps/extension/src/features/background/{conversation-history,tasks}.ts` — `chrome.storage.local` history (100/30-day) and scheduled tasks.
 - `apps/extension/src/background.ts` + `src/background/policy.ts` — context menus and gateway allowlist / egress validation.
-- `packages/types/src/models.json` — the only source of model IDs.
+- `packages/contracts/types/src/models.json` — the only source of model IDs.
 
 ## Competitor notes
 
@@ -82,7 +82,7 @@ A feature ships only when it is gateway-mediated, permission-gated, redacted, an
 
 - Adding provider keys or on-device inference, contacting a provider host directly, or introducing BYOK/Local on Chrome — all break the EGRESS/per-surface rules.
 - Syncing history, notes, or memory to Neon/cloud, or reintroducing Projects/conversation sync (`chrome.storage.local` is the only store).
-- Hardcoding a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Rendering a paywall/tier from client guesses or naming removed tiers. Note: `providerStreamClient.ts` still types `PaywallRequiredTier` as `'hobby' | 'pro' | 'pro_plus' | 'max'` with legacy `PaywallFeature` entries — **🟡 tracked reconciliation gap**: the canon ladder has no Plus/Hobby/pro_plus; do not treat that code as authoritative for tiers.
 - Writing back to the page silently, or without refusing password/credential fields.
 - Referencing Supabase, or using `middleware.ts` instead of `proxy.ts` for the Next.js gateway proxy.

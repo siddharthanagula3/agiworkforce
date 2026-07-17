@@ -26,7 +26,7 @@ Treat as evidence/working notes, never as law: `audit/**`, `reports/**`, `tasks/
 ## The Operating Laws (binding on every session)
 
 1. **Trust boundaries are absolute.** Local never silently routes to BYOK or Managed. Local→BYOK is an explicit fork (context selection, secret scan, payload preview, provider label, consent). Any networking change must pass the trust-boundary contract tests. A violation is a P0.
-2. **Model IDs are catalog-owned.** Read every model ID/capability from `packages/types/src/models.json`. Never invent or hardcode one.
+2. **Model IDs are catalog-owned.** Read every model ID/capability from `packages/contracts/types/src/models.json`. Never invent or hardcode one.
 3. **Adapt, never copy proprietary.** Study `claude-code` for intent; port only from license-clean donors (see Vol 7 / `PORTING-TRACKER.md`). Preserve upstream attribution. The license gate (`scripts/check-licenses.mjs`) must pass.
 4. **Verify before done.** No feature is complete on build success alone. Inspect the path, run the surface check from `docs/agent-context/commands.json`, run targeted + trust-boundary tests, run e2e/visual for UI, record residual risk in `known-flaws.md`.
 5. **No theater.** No fake tests, swallowed mock assertions, fabricated data, dead controls, or claims beyond shipped scope. Marketing copy may not exceed what the parity matrix marks `Present`.
@@ -47,7 +47,7 @@ Non-negotiable. A change that violates one is a release blocker, not a bug. Mach
 5. **Stacks are fixed:** Desktop = Rust/Tauri; Mobile = Expo/React Native; Web = Next.js; backend = Neon + Clerk.
 6. **Shared `packages/`/`crates/` are the preferred implementation point.** Platform-specific code is the justified exception.
 7. **Billing is subscription-first.** Tokens pass through at cost; monetize the software/governance layer.
-8. **Multi-provider is core; no provider lock-in.** Model IDs/capabilities come from `packages/types/src/models.json`.
+8. **Multi-provider is core; no provider lock-in.** Model IDs/capabilities come from `packages/contracts/types/src/models.json`.
 9. **Trust boundaries are a product invariant.** Local→BYOK→Managed is never crossed silently; a violation is P0.
 
 ## Engineering Rules
@@ -81,7 +81,7 @@ Volumes 1–8 are platform law. 9–33 are domain law. 34–40 are program + gov
 | 5   | Applications (all surfaces)                | `docs/strategy/12–14`, per-surface `AGENTS.md`                     |
 | 6   | Runtime (cloud/local/hybrid)               | `docs/strategy/04`, `docs/strategy/10`                             |
 | 7   | Providers & abstraction                    | `docs/current/byok-open-model-provider-strategy.md`, `models.json` |
-| 8   | Model Layer                                | `packages/types/src/models.json`, `model-catalog.ts`               |
+| 8   | Model Layer                                | `packages/contracts/types/src/models.json`, `model-catalog.ts`     |
 | 9   | Conversation System                        | this manual                                                        |
 | 10  | Prompt System                              | this manual                                                        |
 | 11  | Context System                             | this manual                                                        |
@@ -111,7 +111,7 @@ Volumes 1–8 are platform law. 9–33 are domain law. 34–40 are program + gov
 | 35  | Implementation Audit & Tech Debt           | `docs/strategy/03`                                                 |
 | 36  | Roadmap & Release Readiness                | `docs/strategy/07`, `11`, `12–14`                                  |
 | 37  | Founder Report (GTM/Fundraising)           | `docs/strategy/05`, `06`                                           |
-| 38  | Schemas & Contracts                        | `packages/types`, this manual                                      |
+| 38  | Schemas & Contracts                        | `packages/contracts/types`, this manual                            |
 | 39  | Output Directory Structure                 | this manual                                                        |
 | 40  | Governance & the Session Loop              | `docs/strategy/11`                                                 |
 
@@ -133,7 +133,7 @@ Volumes 1–8 are platform law. 9–33 are domain law. 34–40 are program + gov
 ## Volume 3 — Modes & Trust
 
 - Modes: **Local** (on-device/local host), **BYOK** (user key, direct), **Managed Cloud** (AGI-managed; public alpha, open by default, env kill-switch only). **Hybrid** = routing across them with explicit, consented boundary crossings.
-- Privacy modes and labels come from `packages/types/src/suite-contracts.ts`; never hardcode new wording. `assertSurfaceCanSyncChats` governs sync.
+- Privacy modes and labels come from `packages/contracts/types/src/suite-contracts.ts`; never hardcode new wording. `assertSurfaceCanSyncChats` governs sync.
 - Web/Mobile v1 expose no BYOK. CLI/VS Code/Chrome stay workspace/task-scoped (no auto app-chat sync). Authority: `docs/current/source-of-truth.md`, `trust-mode-surface-matrix.md`.
 
 ## Volume 4 — Tenancy, Identity, Entitlement
@@ -285,7 +285,7 @@ Volumes 1–8 are platform law. 9–33 are domain law. 34–40 are program + gov
 ## Volume 33 — Developer Experience
 
 - Scope: CLI, SDK, API, documentation, examples, templates, scaffolding, devtools, debugging, profiling.
-- Rules: scaffolds emit the canonical structure (Vol 2 / naming-conventions); SDK + API are first-party contracts in `packages/types`; docs live under `docs/`; examples are runnable.
+- Rules: scaffolds emit the canonical structure (Vol 2 / naming-conventions); SDK + API are first-party contracts in `packages/contracts/types`; docs live under `docs/`; examples are runnable.
 
 ## Volume 34 — Competitive Parity
 
@@ -310,7 +310,7 @@ Volumes 1–8 are platform law. 9–33 are domain law. 34–40 are program + gov
 ## Volume 38 — Schemas & Contracts
 
 - Scope: JSON schemas, CSV schemas, wire/persistent contracts.
-- Rules: shared contracts in `packages/types`; model catalog in `models.json`; generated types under `*/generated/`; validate every tool/LLM/API/IPC input (Zod/serde) — no unvalidated external input.
+- Rules: shared contracts in `packages/contracts/types`; model catalog in `models.json`; generated types under `*/generated/`; validate every tool/LLM/API/IPC input (Zod/serde) — no unvalidated external input.
 
 ## Volume 39 — Output Directory Structure
 

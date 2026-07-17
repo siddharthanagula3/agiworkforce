@@ -182,8 +182,8 @@ Target package categories:
 | Provider/runtime | `packages/providers`, `packages/llm-normalize`, `packages/llm-runtime`, `packages/routing` | Provider-specific code behind AGI-owned adapters.   |
 | UI/product       | `packages/unified-chat`, `packages/design-tokens`, future shared surface UI                | No direct provider calls.                           |
 | Local tools      | `packages/browser-tool`, `packages/apply-patch`, `packages/local-llm`, `packages/mcp`      | Must expose privacy and permission metadata.        |
-| Data/compliance  | `packages/data-layer`, `packages/compliance`, `packages/stores`                            | Data ownership and audit behavior documented.       |
-| Utilities        | `packages/utils`, `packages/runtime`                                                       | Small, dependency-light, non-product-specific.      |
+| Data/compliance  | `packages/data-layer`, `packages/compliance`, `packages/artifacts`, `packages/sync`        | Data ownership and audit behavior documented.       |
+| Utilities        | `packages/utils`, `packages/client-runtime`                                                | Small, dependency-light, non-product-specific.      |
 
 Rules:
 

@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root); `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `apps/extension/manifest.json`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/computer-use/cloudAgentClient.ts`, `apps/extension/src/features/side-panel/markdown.ts`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/side_panel.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/THREAT_MODEL.md`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `apps/extension/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `apps/extension/manifest.json`, `apps/extension/src/features/native-bridge/providerStreamClient.ts`, `apps/extension/src/features/computer-use/cloudAgentClient.ts`, `apps/extension/src/features/side-panel/markdown.ts`, `apps/extension/src/features/background/conversation-history.ts`, `apps/extension/src/side_panel.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/THREAT_MODEL.md`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -28,7 +28,7 @@ A conversation is a linear list of user/assistant turns held in side-panel state
 
 - **✅ Built** — `apps/extension/src/features/native-bridge/providerStreamClient.ts` streams from `POST /api/v1/providers/<id>/stream`; `apps/extension/src/features/computer-use/cloudAgentClient.ts` streams from `POST /api/llm/v1/chat/completions`. Both parse `data: …\n\n` SSE frames and emit typed chunks (`text-delta`, `thinking-delta`, `tool-use-*`, `usage`, `stop`, `paywall`).
 - **✅ Built** — Egress is validated by `validateGatewayUrl` (`apps/extension/src/background/policy.ts`); requests carry the CSRF header and a Clerk bearer token; **no provider host is ever contacted**.
-- Requirement: the outbound token is a short-lived Clerk session JWT from `chrome.storage.session`; the streamed model ID must come from `packages/types/src/models.json` (never hardcoded — `cloudAgentClient.ts` reads `managed_cloud.taskRouting`). Stop-generation is wired via the send button's `data-mode="stop"` toggle and `_ctx.isStreaming` (**✅ Built**, `side_panel.ts`).
+- Requirement: the outbound token is a short-lived Clerk session JWT from `chrome.storage.session`; the streamed model ID must come from `packages/contracts/types/src/models.json` (never hardcoded — `cloudAgentClient.ts` reads `managed_cloud.taskRouting`). Stop-generation is wired via the send button's `data-mode="stop"` toggle and `_ctx.isStreaming` (**✅ Built**, `side_panel.ts`).
 
 ## Markdown
 
@@ -90,7 +90,7 @@ Claude for Chrome, ChatGPT, and Codex ship rich in-extension chat (regenerate, e
 Build
 
 - [ ] `pnpm --filter @agiworkforce/extension typecheck` and `pnpm --filter @agiworkforce/extension test` pass; `pnpm lint:extension` clean.
-- [ ] Every model ID resolves from `packages/types/src/models.json`; none hardcoded.
+- [ ] Every model ID resolves from `packages/contracts/types/src/models.json`; none hardcoded.
 
 Trust / security
 
@@ -105,6 +105,6 @@ Trust / security
 - Contacting a provider host directly, or bypassing `validateGatewayUrl`.
 - Syncing chat history/memory to Neon or any server; treating extension history as cloud state.
 - Auto-attaching page content without explicit consent, or feeding page text to the model as instructions.
-- Hardcoding a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Emitting removed tiers ("Plus", `pro_plus`, "Hobby") or inventing INR prices; referencing Supabase; renaming Next.js `proxy.ts` to `middleware.ts`.
 - Injecting model output via raw `innerHTML`, or rendering unsanitized HTML/`<img>`/event handlers.

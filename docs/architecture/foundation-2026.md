@@ -1,9 +1,9 @@
-# Foundation 2026 — Cross-Surface Architecture
+# Foundation 2026 — Historical Cross-Surface Snapshot
 
-> **Status**: Accepted (2026-05-09)
+> **Status**: Historical snapshot; superseded for current ownership by `docs/current/source-of-truth.md` and `docs/architecture/reverse-engineering/` (2026-07-14)
 > **Authors**: `docs-engineer@agi-foundation-integration` (synthesised from Foundation Sprint reports 1.2–1.8).
-> **Scope**: Six shipping surfaces (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext) + two backend services (`api-gateway`, `signaling-server`) + nine shared TS packages.
-> **Audience**: Future sub-agents reasoning about state, commands, queues, dispatch, retries, or services. This document is the primary architectural reference; ADRs in `docs/decisions/` enumerate the specific trade-offs.
+> **Scope**: A point-in-time record of the 2026-05-09 Foundation Sprint; package counts, framework versions, paths, and ownership below are not current inventory.
+> **Audience**: Engineers investigating the origin of the Foundation primitives. Do not use this file as current repository control or implementation status.
 
 ---
 
@@ -11,15 +11,15 @@
 
 Six surfaces share one chat layer and ten-plus providers. Before the Foundation Sprint, that sharing was implicit: each surface had its own zustand store, its own retry logic, its own send queue (or none), its own context-propagation gaps. The Sprint replaced the implicit sharing with seven concrete primitives:
 
-| #   | Primitive                                                | Lives in                                                                                     | Replaces                                                        |
-| --- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| 1   | `createStore` + `onChangeAppState`                       | `packages/runtime/src/state/`                                                                | 64 ad-hoc zustand stores                                        |
-| 2   | `messageQueueManager`                                    | `packages/runtime/src/queue/` + `apps/cli/src/message_queue.rs`                              | per-surface send paths                                          |
-| 3   | `AsyncLocalStorage<AgentContext>` + `tokio::task_local!` | `packages/runtime/src/context/` + `apps/desktop/src-tauri/src/sys/commands/agent_context.rs` | implicit per-command state                                      |
-| 4   | `@agiworkforce/llm-runtime`                              | `packages/llm-runtime/`                                                                      | inline retry + watchdog in 8 providers + api-gateway            |
-| 5   | Outbound-worker direction inversion                      | `services/api-gateway/src/worker/`                                                           | inbound-only `/ws` bridge                                       |
-| 6   | Orphan packages wiring                                   | `apps/{desktop,web,mobile,extension,extension-vscode}/`, `services/api-gateway/`             | unreferenced `mcp/`, `skills/`, `apply-patch/`, `browser-tool/` |
-| 7   | Desktop Dispatch listener                                | `apps/desktop/src/services/dispatch.ts` + Rust HMAC module                                   | unsigned-message transitional window                            |
+| #   | Primitive                                                | Lives in                                                                                                   | Replaces                                                        |
+| --- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| 1   | `createStore` + `onChangeAppState`                       | `packages/client/client-runtime/src/state/`                                                                | 64 ad-hoc zustand stores                                        |
+| 2   | `messageQueueManager`                                    | `packages/client/client-runtime/src/queue/` + `apps/cli/src/message_queue.rs`                              | per-surface send paths                                          |
+| 3   | `AsyncLocalStorage<AgentContext>` + `tokio::task_local!` | `packages/client/client-runtime/src/context/` + `apps/desktop/src-tauri/src/sys/commands/agent_context.rs` | implicit per-command state                                      |
+| 4   | `@agiworkforce/provider-runtime`                         | `packages/ai/provider-runtime/`                                                                            | inline retry + watchdog in 8 providers + api-gateway            |
+| 5   | Outbound-worker direction inversion                      | `services/api-gateway/src/worker/`                                                                         | inbound-only `/ws` bridge                                       |
+| 6   | Orphan packages wiring                                   | `apps/{desktop,web,mobile,extension,extension-vscode}/`, `services/api-gateway/`                           | unreferenced `mcp/`, `skills/`, `apply-patch/`, `browser-tool/` |
+| 7   | Desktop Dispatch listener                                | `apps/desktop/src/services/dispatch.ts` + Rust HMAC module                                                 | unsigned-message transitional window                            |
 
 Five strategic decisions accepted alongside the technical sprint anchor every section: **maximalist surface coverage**, **3-VM parallel build**, **foundation-first sprint sequencing**, **both-equal customer focus** (consumer + builder), and **strategic-acquisition optionality**. The strategic decisions are formalised in `docs/decisions/2026-05-09-strategic-*` ADRs and referenced where they shape a primitive's design.
 
@@ -39,8 +39,8 @@ flowchart TB
   end
 
   subgraph SHARED["Shared TS packages"]
-    RT["@agiworkforce/runtime<br/>state · queue · context"]
-    LLM["@agiworkforce/llm-runtime<br/>retry · watchdog · headers · fallback"]
+    RT["@agiworkforce/client-runtime<br/>state · queue · context"]
+    LLM["@agiworkforce/provider-runtime<br/>retry · watchdog · headers · fallback"]
     PROV["@agiworkforce/providers/*<br/>8 vendor adapters"]
     MCP["@agiworkforce/mcp"]
     SKL["@agiworkforce/skills"]
@@ -106,7 +106,7 @@ Desktop alone had 64 zustand stores at sprint start. Many fanned out side effect
 
 ### 2.2 Solution
 
-A 34-LOC `createStore` primitive ports the Anthropic reference verbatim into `packages/runtime/src/state/createStore.ts:1-62`. It pairs with a single fan-out choke point in `packages/runtime/src/state/onChangeAppState.ts:1-265` covering four channels (cache invalidation, telemetry, persistence, model-switch broadcast). The canonical app-shape is a six-domain object (`auth`, `chat`, `settings`, `subscriptions`, `mcp`, `memory`) declared in `packages/runtime/src/state/AppStateStore.ts:1-217`. A singleton `appStateStore` is wired with `onChangeAppState` as its `onChange` callback so every `setState` automatically fans out.
+A 34-LOC `createStore` primitive ports the Anthropic reference verbatim into `packages/client/client-runtime/src/state/createStore.ts:1-62`. It pairs with a single fan-out choke point in `packages/client/client-runtime/src/state/onChangeAppState.ts:1-265` covering four channels (cache invalidation, telemetry, persistence, model-switch broadcast). The canonical app-shape is a six-domain object (`auth`, `chat`, `settings`, `subscriptions`, `mcp`, `memory`) declared in `packages/client/client-runtime/src/state/AppStateStore.ts:1-217`. A singleton `appStateStore` is wired with `onChangeAppState` as its `onChange` callback so every `setState` automatically fans out.
 
 Two correctness tricks make this usable from React 19:
 
@@ -117,14 +117,14 @@ Twelve high-traffic stores are bridged to `appStateStore` via `apps/desktop/src/
 
 ### 2.3 Citations
 
-- `packages/runtime/src/state/createStore.ts:52` — `Object.is` short-circuit.
-- `packages/runtime/src/state/createStore.ts:53` — `onChange` fires before listeners.
-- `packages/runtime/src/state/onChangeAppState.ts:75-94` — Channel 1 (API cache invalidation).
-- `packages/runtime/src/state/onChangeAppState.ts:111-153` — Channel 2 (telemetry).
-- `packages/runtime/src/state/onChangeAppState.ts:162-176` — Channel 3 (persistence).
-- `packages/runtime/src/state/onChangeAppState.ts:192-213` — Channel 4 (model-switch broadcast).
-- `packages/runtime/src/state/onChangeAppState.ts:220-228` — circular re-entrancy guard (`MAX_FANOUT_DEPTH = 2`).
-- `packages/runtime/src/state/AppStateStore.ts:171-172` — `chat.activeModelId` initialised to `null`, never a literal model string.
+- `packages/client/client-runtime/src/state/createStore.ts:52` — `Object.is` short-circuit.
+- `packages/client/client-runtime/src/state/createStore.ts:53` — `onChange` fires before listeners.
+- `packages/client/client-runtime/src/state/onChangeAppState.ts:75-94` — Channel 1 (API cache invalidation).
+- `packages/client/client-runtime/src/state/onChangeAppState.ts:111-153` — Channel 2 (telemetry).
+- `packages/client/client-runtime/src/state/onChangeAppState.ts:162-176` — Channel 3 (persistence).
+- `packages/client/client-runtime/src/state/onChangeAppState.ts:192-213` — Channel 4 (model-switch broadcast).
+- `packages/client/client-runtime/src/state/onChangeAppState.ts:220-228` — circular re-entrancy guard (`MAX_FANOUT_DEPTH = 2`).
+- `packages/client/client-runtime/src/state/AppStateStore.ts:171-172` — `chat.activeModelId` initialised to `null`, never a literal model string.
 
 ### 2.4 Trade-offs
 
@@ -148,7 +148,7 @@ Every surface had its own send pipeline. Desktop streamed directly through zusta
 
 ### 3.2 Solution
 
-A factory-built priority queue ships in `packages/runtime/src/queue/messageQueueManager.ts:1-376` with three lanes (`now`, `next`, `later`), FIFO-within-priority, per-lane cap of 100, atomic compare-and-swap dequeue, `popAllEditable` reconstruction, and AbortSignal cancellation. Each call to `createMessageQueue(options)` returns an isolated instance — there is no module-level singleton because the six surfaces need independent queue state.
+A factory-built priority queue ships in `packages/client/client-runtime/src/queue/messageQueueManager.ts:1-376` with three lanes (`now`, `next`, `later`), FIFO-within-priority, per-lane cap of 100, atomic compare-and-swap dequeue, `popAllEditable` reconstruction, and AbortSignal cancellation. Each call to `createMessageQueue(options)` returns an isolated instance — there is no module-level singleton because the six surfaces need independent queue state.
 
 State is held inside a `createStore<readonly QueuedCommand[]>` from §2 so the queue inherits `Object.is` short-circuiting and `useSyncExternalStore`-compatible snapshots for free. Persistence is opt-in via `QueueStorageAdapter`; `next` and `later` lanes serialise on every mutation, `now` lane is volatile by design (urgent messages are dropped on process death).
 
@@ -156,7 +156,7 @@ Surface adapters wire the queue into existing send paths:
 
 | Surface       | Send entrypoint                                                                                              | Storage backend                             |
 | ------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| Desktop / Web | `packages/unified-chat/src/hooks/useChat.ts` → `packages/unified-chat/src/queue/sendQueue.ts`                | `Storage` API on web; in-memory on desktop  |
+| Desktop / Web | `packages/ui/unified-chat/src/hooks/useChat.ts` → `packages/ui/unified-chat/src/queue/sendQueue.ts`          | `Storage` API on web; in-memory on desktop  |
 | Mobile        | `apps/mobile/stores/chatStore.ts` → `apps/mobile/lib/sendQueue.ts`                                           | MMKV via `createKvStorageAdapter`           |
 | Chrome ext    | `apps/extension/src/side_panel.ts` → `apps/extension/src/sendQueue.ts`                                       | `chrome.storage.local`                      |
 | VS Code ext   | `apps/extension-vscode/src/providers/sidebarProvider.ts` → `apps/extension-vscode/src/services/sendQueue.ts` | `vscode.Memento` (`context.workspaceState`) |
@@ -166,8 +166,8 @@ The CLI Rust port mirrors the contract (priority order, FIFO, lane cap, compare-
 
 ### 3.3 Citations
 
-- `packages/runtime/src/queue/types.ts` — `QueuePriority`, `LANE_CAP = 100`, `QueueFullError`, `QueueDequeueRaceError`.
-- `packages/runtime/src/queue/messageQueueManager.ts:1-376` — `createMessageQueue` factory + `createWebStorageAdapter` + `createKvStorageAdapter`.
+- `packages/client/client-runtime/src/queue/types.ts` — `QueuePriority`, `LANE_CAP = 100`, `QueueFullError`, `QueueDequeueRaceError`.
+- `packages/client/client-runtime/src/queue/messageQueueManager.ts:1-376` — `createMessageQueue` factory + `createWebStorageAdapter` + `createKvStorageAdapter`.
 - `apps/cli/src/message_queue.rs` — Rust port, declared in `apps/cli/src/main.rs`, currently `#[allow(dead_code)]` pending REPL integration.
 - `tasks/research/exec/1.4-report.md` §1.2 — surface adapter table.
 
@@ -195,7 +195,7 @@ The desktop surface registers 1,483 Tauri commands sharing one JS process. Multi
 
 Two parallel context stores, one per language runtime, with no IPC bridge:
 
-**TypeScript side** (`packages/runtime/src/context/agentContext.ts:1-155`):
+**TypeScript side** (`packages/client/client-runtime/src/context/agentContext.ts:1-155`):
 
 - An `AsyncLocalStorage<AgentContext>` instance binds context to the async execution chain. `runWithContext(ctx, () => fn())` enters the chain; `getAgentContext()` reads it from any await/then descendant.
 - `AgentContext` is `readonly`: `requestId`, `origin: AgentOrigin`, `planTier`, `conversationId`, `activeModelId`, `invokingRequestId`, `createdAt`.
@@ -213,7 +213,7 @@ Two parallel context stores, one per language runtime, with no IPC bridge:
 
 ### 4.3 Citations
 
-- `packages/runtime/src/context/agentContext.ts:1-155` — TS `AsyncLocalStorage` wrapper.
+- `packages/client/client-runtime/src/context/agentContext.ts:1-155` — TS `AsyncLocalStorage` wrapper.
 - `apps/desktop/src-tauri/src/sys/commands/agent_context.rs:1-190` — Rust `task_local!` mirror.
 - `apps/desktop/src-tauri/src/sys/commands/mod.rs` — module registration line.
 - Commit `5982b2c80` — full sprint deliverable.
@@ -232,7 +232,7 @@ Two parallel context stores, one per language runtime, with no IPC bridge:
 
 ---
 
-## 5. `@agiworkforce/llm-runtime`
+## 5. `@agiworkforce/provider-runtime`
 
 ### 5.1 Problem
 
@@ -240,7 +240,7 @@ Eight provider adapters (`anthropic`, `openai`, `google`, `ollama`, `xai`, `deep
 
 ### 5.2 Solution
 
-A new shared package `packages/llm-runtime/` consolidates the runtime concerns that every provider must perform identically:
+A new shared package `packages/ai/provider-runtime/` consolidates the runtime concerns that every provider must perform identically:
 
 | Module                  | Purpose                                                                                                                                                                                                                                |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -252,15 +252,15 @@ A new shared package `packages/llm-runtime/` consolidates the runtime concerns t
 | `gateway.ts` (152 LOC)  | Fingerprints upstream gateway responses into a stable bucket so retry decisions stay consistent across edge nodes                                                                                                                      |
 | `history.ts` (363 LOC)  | `repairMessageHistory(messages)` cleans tool-call sequences mid-conversation when a fallback swaps providers — the differentiator-3 enabler (Claude → GPT → Llama in one thread)                                                       |
 
-The eight provider packages and the api-gateway's `services/api-gateway/src/routes/providerStream.ts` import from `@agiworkforce/llm-runtime` instead of inlining classification. Per-provider `retry-after.ts` files remain as backward-compat shims that re-export from the shared package.
+The eight provider packages and the api-gateway's `services/api-gateway/src/routes/providerStream.ts` import from `@agiworkforce/provider-runtime` instead of inlining classification. Per-provider `retry-after.ts` files remain as backward-compat shims that re-export from the shared package.
 
 ### 5.3 Citations
 
-- `packages/llm-runtime/src/retry.ts:1-389` — withRetry generator + RetryContext.
-- `packages/llm-runtime/src/watchdog.ts:1-191` — `StreamIdleTimeoutError`, half-time warning at 45s, default timeout 90s.
-- `packages/llm-runtime/src/headers.ts:1-137` — `LatchedHeaderStore`, `MAX_TRACKED_SESSIONS = 64`.
-- `packages/llm-runtime/src/errors.ts` — `classifyError` with 30+ branches.
-- `packages/llm-runtime/src/fallback.ts` — reads only from `@agiworkforce/types` (locked rule).
+- `packages/ai/provider-runtime/src/retry.ts:1-389` — withRetry generator + RetryContext.
+- `packages/ai/provider-runtime/src/watchdog.ts:1-191` — `StreamIdleTimeoutError`, half-time warning at 45s, default timeout 90s.
+- `packages/ai/provider-runtime/src/headers.ts:1-137` — `LatchedHeaderStore`, `MAX_TRACKED_SESSIONS = 64`.
+- `packages/ai/provider-runtime/src/errors.ts` — `classifyError` with 30+ branches.
+- `packages/ai/provider-runtime/src/fallback.ts` — reads only from `@agiworkforce/types` (locked rule).
 - Commit `aa77e8e7d` — sprint deliverable, 102 unit tests including a 100-iteration property test fuzzing randomised provider failures.
 
 ### 5.4 Trade-offs
@@ -355,7 +355,7 @@ Workers POST `/work/:wid/heartbeat` every 30s. Missed heartbeats > 90s mark the 
 - Apply Supabase migrations (Wave 5.1, branch `task-w51-worker-migrations`).
 - Replace base64url JSON with HS256 JWT once the refresh scheduler is in place.
 - Enforce Tier 4 `X-Trusted-Device-Token` (currently logged only).
-- Wire `withRetry` from `@agiworkforce/llm-runtime` into the poll loop.
+- Wire `withRetry` from `@agiworkforce/provider-runtime` into the poll loop.
 - Migration window for legacy `/ws` bridge: 30 days, tracked via `worker_registrations.worker_type`.
 
 ---
@@ -473,9 +473,9 @@ Lifecycle:
 The seven primitives are not independent. A typical user-initiated chat flow on **desktop** touches all of them:
 
 1. User types into the composer. The text lands in `unifiedChatStore.input`, bridged to `appStateStore.chat` by the §2 state bridge.
-2. User hits Enter. `useChat.sendMessage` is called from `packages/unified-chat/src/hooks/useChat.ts`. It enqueues into the §3 message queue (per-surface, lane `now`).
+2. User hits Enter. `useChat.sendMessage` is called from `packages/ui/unified-chat/src/hooks/useChat.ts`. It enqueues into the §3 message queue (per-surface, lane `now`).
 3. The queue immediately drains. `sendOne(cmd)` calls into the provider adapter selected by `appStateStore.chat.activeModelId` (resolved from `models.json`, never hardcoded).
-4. The provider adapter wraps the request with `withRetry` and `withStreamIdleWatchdog` from §5 `@agiworkforce/llm-runtime`. The retry generator is given a sticky `RetryContext` containing the active model and thinking config.
+4. The provider adapter wraps the request with `withRetry` and `withStreamIdleWatchdog` from §5 `@agiworkforce/provider-runtime`. The retry generator is given a sticky `RetryContext` containing the active model and thinking config.
 5. If the request originates from a Tauri command (e.g. a model-switch from the menu bar), §4 `AsyncLocalStorage<AgentContext>` carries `requestId`, `planTier`, and `conversationId` through every await without any explicit threading. Rust-side handlers read the same context via `try_get_request_id()`.
 6. The §1 stream watchdog detects a 90-second silence and aborts; the §5 retry generator catches `StreamIdleTimeoutError`, classifies it as retryable, and re-enters with the same `RetryContext`.
 7. On successful first byte, `appStateStore.setState` toggles `chat.isStreaming = true`. The §2 `onChangeAppState` channels fan out: Channel 2 emits a telemetry event with `changedFields: ['chat.isStreaming']`, Channel 4 broadcasts to listening surfaces (Chrome ext, VS Code ext) on `port 8787` if model changed.
@@ -491,19 +491,19 @@ This composition is the architectural payoff of the sprint: a single send action
 
 The sprint did not invent these strategic positions; they were locked in `tasks/research/strategic-decisions-2026-05-09.md` and reaffirmed during sprint planning. They are documented in the ADR set at `docs/decisions/2026-05-09-strategic-*.md`. Their architectural consequences:
 
-| Strategic decision                                      | Architectural consequence                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Maximalist surface coverage** (six surfaces shipping) | Justifies per-surface queue factory (§3), per-surface state bridges (§2), per-surface MCP adapters (§7); rejects "consolidate to a single surface" as cost-saving counter-proposal                                                                                                                                                                                  |
-| **3-VM parallel build**                                 | Foundation Sprint ran 7 branches concurrently (1.2–1.8); merge-train coordinator (Wave 5.5) is the rebase strategy. `try_with` over `with` (§4) traces directly to needing incremental adoption across parallel branches                                                                                                                                            |
-| **Foundation-first sprint sequencing**                  | This document exists. Each primitive lands before any feature work that depends on it; ADRs capture the consequences of each landing                                                                                                                                                                                                                                |
-| **Both-equal customer focus** (consumer + builder)      | Drives the `@agiworkforce/skills` progressive-disclosure UX for consumers (§7) and the four-tier worker auth ladder for builder-owned worker clusters (§6)                                                                                                                                                                                                          |
-| **Strategic-acquisition optionality**                   | `@agiworkforce/llm-runtime` and `@agiworkforce/runtime` are independently shippable npm packages; their `package.json` files declare clean `exports` and zero internal-only dependencies. Drives `WorkSecret` codec living in `types.ts` (no class), `LatchedHeaderStore` being per-process not persisted, etc. — the recurring theme is "primitives stay portable" |
+| Strategic decision                                      | Architectural consequence                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Maximalist surface coverage** (six surfaces shipping) | Justifies per-surface queue factory (§3), per-surface state bridges (§2), per-surface MCP adapters (§7); rejects "consolidate to a single surface" as cost-saving counter-proposal                                                                                                                                                                                              |
+| **3-VM parallel build**                                 | Foundation Sprint ran 7 branches concurrently (1.2–1.8); merge-train coordinator (Wave 5.5) is the rebase strategy. `try_with` over `with` (§4) traces directly to needing incremental adoption across parallel branches                                                                                                                                                        |
+| **Foundation-first sprint sequencing**                  | This document exists. Each primitive lands before any feature work that depends on it; ADRs capture the consequences of each landing                                                                                                                                                                                                                                            |
+| **Both-equal customer focus** (consumer + builder)      | Drives the `@agiworkforce/skills` progressive-disclosure UX for consumers (§7) and the four-tier worker auth ladder for builder-owned worker clusters (§6)                                                                                                                                                                                                                      |
+| **Strategic-acquisition optionality**                   | `@agiworkforce/provider-runtime` and `@agiworkforce/client-runtime` are independently shippable npm packages; their `package.json` files declare clean `exports` and zero internal-only dependencies. Drives `WorkSecret` codec living in `types.ts` (no class), `LatchedHeaderStore` being per-process not persisted, etc. — the recurring theme is "primitives stay portable" |
 
 ---
 
 ## 11. What this document does not cover
 
-- Per-provider quirks (`packages/llm-normalize/`) — see `THIRD_PARTY_LICENSES.md` for OpenClaw attribution and the package readme for the cross-provider quirk catalog.
+- Per-provider quirks (`packages/ai/provider-protocol/`) — see `THIRD_PARTY_LICENSES.md` for OpenClaw attribution and the package readme for the cross-provider quirk catalog.
 - Stripe webhook idempotency — the `process_stripe_event_idempotent` RPC migration is canonical at `supabase/migrations/20260505000007_stripe_webhook_idempotency.sql`; not a Foundation Sprint deliverable.
 - The Wave 5.4 timestamp-collision reconciliation between `supabase/migrations/20260505000001` and `000002` — see `tasks/research/exec/w54-supabase-timestamp-reconcile.md` (in flight).
 - Detailed CLI TUI architecture — see `~/Desktop/reference/codex-cli/codex-rs/` for the upstream port reference and `apps/cli/src/tui/` for the current implementation.

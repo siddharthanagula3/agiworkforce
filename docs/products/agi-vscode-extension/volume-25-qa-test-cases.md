@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and repo paths cited inline — `apps/extension-vscode/package.json`, `src/features/desktop-bridge/desktopBridge.ts`, `src/core/{commandSetup,advancedFeatures}.ts`, `src/providers/terminalProvider.ts`, `src/integrations/*`, `src/__tests__/*`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and repo paths cited inline — `apps/extension-vscode/package.json`, `src/features/desktop-bridge/desktopBridge.ts`, `src/core/{commandSetup,advancedFeatures}.ts`, `src/providers/terminalProvider.ts`, `src/integrations/*`, `src/__tests__/*`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -60,7 +60,7 @@ Model Context Protocol tools. 🟡 Partial — `apps/extension-vscode/package.js
 
 Model/provider selection and streaming. 🟡 Partial — `src/features/model-picker/*`, `src/integrations/providerStreamClient.ts`, `src/integrations/providerSwitchGuard.ts`, `src/integrations/tierResolver.ts`; `useProviderStream` default `false` with "AGI account web auth … not wired in the VS Code extension yet" (`package.json`).
 
-- Model picker lists only available models; IDs originate from `packages/types/src/models.json` — QA asserts no hardcoded/invented ID leaks. Default `auto-economy` is a routing alias, not a catalog ID.
+- Model picker lists only available models; IDs originate from `packages/contracts/types/src/models.json` — QA asserts no hardcoded/invented ID leaks. Default `auto-economy` is a routing alias, not a catalog ID.
 - `providerStreamProvider=auto` infers the provider from the model-id prefix; explicit values route directly.
 - BYOK: setting/clearing a key is explicit and the active provider label is visible; Local never routes to a cloud provider without an explicit fork. `providerSwitchGuard` enforces per-tier in-thread switching; the tier is resolved via `tierResolver`, not client state.
 - **Gap 🟡:** `agiWorkforce.tier` enum (`local,byok,hobby,pro,pro_plus,max`) still encodes the retired `hobby` and `pro_plus` tiers (`max` itself is a current canon tier) and lacks `free`/`basic`/`enterprise`; it must reconcile to the canon ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) under a separate billing-catalog task.
@@ -88,7 +88,7 @@ Trust boundaries, workspace trust, and bridge auth. ✅ Built — `package.json`
 - `src/providers/` — `terminalProvider.ts`, `diffDecorationProvider.ts`, `codeActionProvider.ts`, `diagnosticsProvider.ts`, `agentModeProvider.ts`.
 - `src/integrations/` — `patchEngine.ts`, `providerStreamClient.ts`, `providerSwitchGuard.ts`, `tierResolver.ts`.
 - `src/__tests__/` — `extension.test.ts`, `security.test.ts`, `chatParticipant.test.ts`, `api.test.ts`, `configDefaults.test.ts`.
-- `packages/types/src/models.json` — model-ID SSOT.
+- `packages/contracts/types/src/models.json` — model-ID SSOT.
 
 ## Competitor notes
 
@@ -106,6 +106,6 @@ Production-ready when unit, webview, and integration suites pass, every manifest
 
 - Silently routing Local chats/files to BYOK or Cloud, or performing an implicit app-chat sync from the IDE.
 - Faking capability: do not label MCP, remote control, or shared CLI sessions as ✅ when they are 🟡/🔭.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`; surfacing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups (the `agiWorkforce.tier` enum drift is a tracked 🟡, not a license to keep them).
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`; surfacing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups (the `agiWorkforce.tier` enum drift is a tracked 🟡, not a license to keep them).
 - Referencing Supabase, renaming `proxy.ts` back to `middleware.ts`, spawning shell-interpreted git/terminal commands, or running git/terminal writes in an untrusted workspace.
 - Treating the localhost bridge as a trust upgrade: it stays authenticated, rate-limited, and same-user-scoped until the socket/pipe migration lands.

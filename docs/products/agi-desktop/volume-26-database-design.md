@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md`; and repo paths — `apps/desktop/src-tauri/src/data/database/{sqlite_pool,pool,security}.rs`, `apps/desktop/src-tauri/src/data/db/{migrations,encryption,repository,models}.rs`, `apps/desktop/src-tauri/src/data/cloud_sync.rs`, `apps/desktop/src-tauri/src/core/embeddings/{mod,cache,generator,indexer,similarity}.rs`, `apps/desktop/src-tauri/src/core/agi/semantic_search.rs`, `apps/desktop/src-tauri/src/core/llm/models_config.rs`, `apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/db/neon/{0001_mvp_chat,0002_profiles,0003_subscriptions,0006_projects,0010_memory,0013_devices,0016_misc,0036_media_assets,0037_rls_user_isolation,0038_cloud_sync_versioning,0039_artifact_cloud_sync,0040_memory_cloud_sync,0041_projects_cloud_sync,0043_audit_log_immutability}.sql`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md`; and repo paths — `apps/desktop/src-tauri/src/data/database/{sqlite_pool,pool,security}.rs`, `apps/desktop/src-tauri/src/data/db/{migrations,encryption,repository,models}.rs`, `apps/desktop/src-tauri/src/data/cloud_sync.rs`, `apps/desktop/src-tauri/src/core/embeddings/{mod,cache,generator,indexer,similarity}.rs`, `apps/desktop/src-tauri/src/core/agi/semantic_search.rs`, `apps/desktop/src-tauri/src/core/llm/models_config.rs`, `apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/db/neon/{0001_mvp_chat,0002_profiles,0003_subscriptions,0006_projects,0010_memory,0013_devices,0016_misc,0036_media_assets,0037_rls_user_isolation,0038_cloud_sync_versioning,0039_artifact_cloud_sync,0040_memory_cloud_sync,0041_projects_cloud_sync,0043_audit_log_immutability}.sql`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-AGI Desktop is the full-trust surface (Local + BYOK + Managed Cloud) and the local-private compute host. Its data design is therefore **two-store, one-directional-gated**: an embedded SQLite database owns all on-device state (Local and BYOK), and Neon Postgres owns Managed-Cloud state. **Local/BYOK rows never sync.** A SQLite row becomes eligible for cloud delta-sync only when it is minted with a `cloud_id` and `app_mode='cloud'` (`data/cloud_sync.rs`, migration v66); everything else stays on the machine. Cross-device sync is Web↔Mobile↔Desktop only, over the Neon delta-sync APIs (`apps/web/app/api/{chat,memory,projects}/sync`), Managed-Cloud chats only. Integer primary keys never leave the device — only `cloud_id` (UUIDv7) crosses the wire, and `user_id` is derived server-side from the verified Clerk session with RLS `WITH CHECK` as the DB backstop (`0037_rls_user_isolation.sql`). Stack is **Clerk + Neon + Stripe**; there is no Supabase. Model IDs come only from `packages/types/src/models.json`.
+AGI Desktop is the full-trust surface (Local + BYOK + Managed Cloud) and the local-private compute host. Its data design is therefore **two-store, one-directional-gated**: an embedded SQLite database owns all on-device state (Local and BYOK), and Neon Postgres owns Managed-Cloud state. **Local/BYOK rows never sync.** A SQLite row becomes eligible for cloud delta-sync only when it is minted with a `cloud_id` and `app_mode='cloud'` (`data/cloud_sync.rs`, migration v66); everything else stays on the machine. Cross-device sync is Web↔Mobile↔Desktop only, over the Neon delta-sync APIs (`apps/web/app/api/{chat,memory,projects}/sync`), Managed-Cloud chats only. Integer primary keys never leave the device — only `cloud_id` (UUIDv7) crosses the wire, and `user_id` is derived server-side from the verified Clerk session with RLS `WITH CHECK` as the DB backstop (`0037_rls_user_isolation.sql`). Stack is **Clerk + Neon + Stripe**; there is no Supabase. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Cloud (Neon Postgres)
 
@@ -42,7 +42,7 @@ Cloud attachments/artifacts are stored as `public.media_assets` with artifact cl
 
 ### Subscriptions
 
-Billing state is `public.subscriptions` with Stripe linkage and metered usage (**✅ Built (schema)** — `0003_subscriptions.sql`, `0012_stripe.sql`, `0033_auto_economy_trial_usage.sql`, `0044_fix_increment_usage_unit_bug.sql`; Enterprise tier allowed by `0030_allow_enterprise_subscription_tier.sql`). Specs use the canon ladder — **Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise; no Plus/pro_plus/Hobby; no credit top-ups.** The schema/`packages/types/src/billing-catalog.ts` still encode older tiers — reconciliation is a separate tracked task. **🟡 Partial** (tier reconciliation gap).
+Billing state is `public.subscriptions` with Stripe linkage and metered usage (**✅ Built (schema)** — `0003_subscriptions.sql`, `0012_stripe.sql`, `0033_auto_economy_trial_usage.sql`, `0044_fix_increment_usage_unit_bug.sql`; Enterprise tier allowed by `0030_allow_enterprise_subscription_tier.sql`). Specs use the canon ladder — **Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise; no Plus/pro_plus/Hobby; no credit top-ups.** The schema/`packages/contracts/types/src/billing-catalog.ts` still encode older tiers — reconciliation is a separate tracked task. **🟡 Partial** (tier reconciliation gap).
 
 ### Telemetry
 
@@ -80,7 +80,7 @@ BYOK/local provider config (base URLs, health, selection) is stored on-device; e
 
 ### Model Registry
 
-The model catalog is a single source of truth loaded from `packages/types/src/models.json` via `include_str!` at build time (**✅ Built** — `core/llm/models_config.rs`); it is code-embedded, not a mutable SQLite table, so IDs can never be invented or drift. Installed Ollama models are discovered at runtime, not hardcoded. **✅ Built.**
+The model catalog is a single source of truth loaded from `packages/contracts/types/src/models.json` via `include_str!` at build time (**✅ Built** — `core/llm/models_config.rs`); it is code-embedded, not a mutable SQLite table, so IDs can never be invented or drift. Installed Ollama models are discovered at runtime, not hardcoded. **✅ Built.**
 
 ## Repository map
 
@@ -89,7 +89,7 @@ The model catalog is a single source of truth loaded from `packages/types/src/mo
 - `apps/desktop/src-tauri/src/data/{cloud_sync,memory_sync,projects_sync,settings_sync}.rs`
 - `apps/desktop/src-tauri/src/core/embeddings/{mod,cache,chunker,generator,indexer,similarity}.rs`; `core/agi/{semantic_search,memory_persistence}.rs`
 - `apps/desktop/src-tauri/src/core/llm/{models_config}.rs`; `core/llm/providers/direct_api_provider.rs`; `sys/security/{storage,secret_manager,machine_key}.rs`
-- `apps/web/app/api/{chat,memory,projects}/sync/route.ts`; `apps/web/db/neon/00*.sql`; `packages/types/src/models.json`
+- `apps/web/app/api/{chat,memory,projects}/sync/route.ts`; `apps/web/db/neon/00*.sql`; `packages/contracts/types/src/models.json`
 
 ## Competitor notes
 
@@ -106,7 +106,7 @@ The data domain is production-ready when Local/BYOK rows are provably unsyncable
 ## Anti-patterns
 
 - Syncing Local/BYOK rows, or minting a `cloud_id` outside the Managed-Cloud path; sending INTEGER PKs or `user_id` over the wire.
-- Storing model IDs in a mutable table or hardcoding them instead of reading `packages/types/src/models.json`.
+- Storing model IDs in a mutable table or hardcoding them instead of reading `packages/contracts/types/src/models.json`.
 - Claiming a persistent local vector database exists (it is 🔭 Planned) or labeling in-memory TF-IDF recall as a vector DB.
 - Referencing Supabase (migrated away), removed tiers ("Plus", `pro_plus`, "Hobby"), credit top-ups, or invented INR prices for Pro/Max.
 - Disabling RLS or bypassing `withUser()`/GUC binding on cloud queries; renaming `proxy.ts`/`proxy` back to `middleware.ts` in any shared web build path.

@@ -10,7 +10,7 @@ Developers are the top of the funnel and the credibility engine — they adopt A
 ## Binding rules
 
 1. Scaffolds/generators emit the canonical structure: folder-per-tool/command/feature, one concern per file, co-located prompt/UI/validators, barrels (`index.ts`/`mod.rs`) — and pass `check:structure-conventions` (Vol 2, `docs/strategy/15`).
-2. SDK and API are first-party contracts defined in `packages/types`; generated types live under `*/generated/`. No drift between docs and the typed contract (Vol 38).
+2. SDK and API are first-party contracts defined in `packages/contracts/types`; generated types live under `*/generated/`. No drift between docs and the typed contract (Vol 38).
 3. Docs live under `docs/`; root docs are restricted by `docs/engineering/naming-conventions.md`. Don't scatter READMEs.
 4. Every documented API/route/env/flag must exist in code; do not invent surface area (Operating Law 5). Mark unknowns or file a tracked gap.
 5. Examples and templates are runnable and version-pinned; a broken example is a bug.
@@ -21,9 +21,9 @@ Developers are the top of the funnel and the credibility engine — they adopt A
 ## Repository map (real paths)
 
 - CLI (Rust dev engine): `apps/cli/` (`src/agent/mod.rs` privacy modes); shared protocol `crates/agiworkforce-protocol/src/` (`items.rs`, `mcp.rs`, `custom_prompts.rs`, `plan_tool.rs`); command registry/parse `crates/agiworkforce-protocol/src/parse_command.rs`.
-- SDK/API contracts: `packages/types/src/` (`suite-contracts.ts`, `models.json`, `model-catalog.ts`, `artifacts.ts`, `memory.ts`, `research.ts`, `workflow.ts`, `voice.ts`, `mcp-apps.ts`, `command-capabilities.ts`); generated types under `packages/*/generated/` and `apps/*/generated/`.
-- Programmatic API surface: `packages/api/src/` (`agent.ts`, `mcp.ts`, `skills.ts`, `marketplace.ts`, `lsp.ts`, `artifacts.ts`, `memory.ts`, `settings.ts`, `governance.ts`, `security.ts`).
-- Runtime helpers: `packages/runtime/src/` (`command.ts`, `http.ts`, `detect.ts`, `errors.ts`); utils `packages/utils/src/` (`validation.ts`, `retry.ts`, `crypto.ts`).
+- SDK/API contracts: `packages/contracts/types/src/` (`suite-contracts.ts`, `models.json`, `model-catalog.ts`, `artifacts.ts`, `memory.ts`, `research.ts`, `workflow.ts`, `voice.ts`, `mcp-apps.ts`, `command-capabilities.ts`); generated types under `packages/*/generated/` and `apps/*/generated/`.
+- Programmatic API surface: `packages/client/desktop-command-client/src/` (`agent.ts`, `mcp.ts`, `skills.ts`, `marketplace.ts`, `lsp.ts`, `artifacts.ts`, `memory.ts`, `settings.ts`, `governance.ts`, `security.ts`).
+- Runtime helpers: `packages/client/client-runtime/src/` (`command.ts`, `http.ts`, `detect.ts`, `errors.ts`); utils `packages/platform/utils/src/` (`validation.ts`, `retry.ts`, `crypto.ts`).
 - API gateway (public API): `services/api-gateway/src/routes/` (`chat.ts`, `usage.ts`, `sync.ts`, `dotfile.ts`); MCP `src/mcp/`.
 - VS Code DX: `apps/extension-vscode/` (provider client → `agiworkforce.com/api/llm/v1`, diff/edit/checkpoint providers).
 - Structure/convention enforcement: `pnpm check:structure-conventions`, `check:repo-organization`, `check:boundaries`, `check:agent-context`; command inventory `docs/agent-context/commands.json`.
@@ -43,7 +43,7 @@ Both incumbents win developers with a shared instruction format and an SDK/MCP/S
 
 ### SDK & API contracts
 
-- [ ] SDK/API types defined in `packages/types`; consumers import from there, not local copies.
+- [ ] SDK/API types defined in `packages/contracts/types`; consumers import from there, not local copies.
 - [ ] Generated types isolated under `*/generated/` and reproducible.
 - [ ] Every public route/method has a typed contract and a validation schema (Vol 38).
 - [ ] API versioning + deprecation policy documented; no silent breaking changes.
@@ -76,13 +76,13 @@ Both incumbents win developers with a shared instruction format and an SDK/MCP/S
 
 ## Definition of Done
 
-Scaffolds emit canonical structure and pass `check:structure-conventions`/`check:boundaries` without manual fixup; SDK/API contracts are in `packages/types` with generated types isolated and reproducible; every documented API/env/flag is verified to exist in code; examples and templates run on first try; CLI `--help` lists only working flags (R14 closed) and respects trust mode; docs placement passes the naming-convention/repo-organization checks; no DX path silently crosses a trust boundary or transmits a BYOK key (Vol 30).
+Scaffolds emit canonical structure and pass `check:structure-conventions`/`check:boundaries` without manual fixup; SDK/API contracts are in `packages/contracts/types` with generated types isolated and reproducible; every documented API/env/flag is verified to exist in code; examples and templates run on first try; CLI `--help` lists only working flags (R14 closed) and respects trust mode; docs placement passes the naming-convention/repo-organization checks; no DX path silently crosses a trust boundary or transmits a BYOK key (Vol 30).
 
 ## Anti-patterns
 
 - Documenting routes, envs, flags, or SDK methods that don't exist in code (Operating Law 5).
 - Scaffolds that produce non-canonical structure and fail the structure checks.
-- Duplicating contracts in app code instead of importing from `packages/types`.
+- Duplicating contracts in app code instead of importing from `packages/contracts/types`.
 - CLI flags accepted in `--help` that bail at runtime (R14).
 - Stale or non-runnable examples; templates that don't build.
 - Stray root-level docs/READMEs that violate naming-conventions.

@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `apps/cli/src/{agent/mod.rs,lib.rs,cli_options.rs,models.rs,sandbox.rs,mcp/,hooks.rs}`, `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-command-registry/src/lib.rs`, `apps/cli/Cargo.toml`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); grounded in `apps/cli/src/{agent/mod.rs,lib.rs,cli_options.rs,models.rs,sandbox.rs,mcp/,hooks.rs}`, `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-command-registry/src/lib.rs`, `apps/cli/Cargo.toml`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume is the QA test-case catalog for AGI CLI, the pure-Rust (Ratatui TUI) developer surface. Its central obligation is proving the three trust modes stay separate: `PrivacyMode::{Local,Byok,Managed}` in `apps/cli/src/agent/mod.rs` must keep a Local session from silently reaching a non-local provider, and Local→BYOK must stay an explicit, consented fork. Sessions are workspace/session-scoped — no automatic app-chat sync; any handoff is explicit and redacted. Cases below assert observable behavior and cite the code under test. Examples use the `agi` binary (`agiworkforce` is an alias per `apps/cli/Cargo.toml`). Model IDs in fixtures resolve from `packages/types/src/models.json` — never hardcode a catalog ID.
+This volume is the QA test-case catalog for AGI CLI, the pure-Rust (Ratatui TUI) developer surface. Its central obligation is proving the three trust modes stay separate: `PrivacyMode::{Local,Byok,Managed}` in `apps/cli/src/agent/mod.rs` must keep a Local session from silently reaching a non-local provider, and Local→BYOK must stay an explicit, consented fork. Sessions are workspace/session-scoped — no automatic app-chat sync; any handoff is explicit and redacted. Cases below assert observable behavior and cite the code under test. Examples use the `agi` binary (`agiworkforce` is an alias per `apps/cli/Cargo.toml`). Model IDs in fixtures resolve from `packages/contracts/types/src/models.json` — never hardcode a catalog ID.
 
 ## Functional
 
@@ -80,7 +80,7 @@ Production-ready when trust-boundary, BYOK-handoff, tool-schema, and command-sur
 
 - Asserting trust behavior without exercising `validate_privacy_boundary`/`consume_byok_handoff`, or `#[ignore]`-ing those tests.
 - Faked/always-green tests, swallowed mock assertions, or production stubs presented as passing QA.
-- Hardcoding/inventing model IDs (resolve from `packages/types/src/models.json`), citing counts without checking source, or asserting shipped state with no repo path.
+- Hardcoding/inventing model IDs (resolve from `packages/contracts/types/src/models.json`), citing counts without checking source, or asserting shipped state with no repo path.
 - Referencing removed tiers ("Plus"/`pro_plus`/"Hobby"), inventing Pro/Max INR prices, adding credit top-ups, or referencing Supabase.
 - Using `agiworkforce <cmd>` in examples (alias only), or treating Remote Control as a fourth trust mode.
 - Letting the stale cloud private-beta gate (`apps/cli/src/cloud.rs`) hard-block public-alpha access, or shipping the Windows/Landlock sandbox fallthrough as silent.

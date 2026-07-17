@@ -18,14 +18,14 @@ Cloud/Local divergence is where we _deliberately diverge_, not match. Incumbents
 3. **Marketing is gated to `Present`.** A capability may not appear in public copy until its matrix row is `Present` (Operating Law 5; `strategy/03` §4 marketing-vs-reality theme). `Partial`/`Missing`/`Gated` rows are roadmap, not claims.
 4. **Competitor facts decay — re-verify.** All competitor facts in `strategy/01` are web-sourced June 2026; model lineups, pricing, and stack choices drift. Re-confirm from a primary source before any external use or before building to a competitor detail.
 5. **Match the job, diverge on trust.** Where an incumbent's design assumes cloud egress, re-derive the AGI version inside the active trust boundary (Vol 3). Never import a competitor flow that would silently cross Local→BYOK/Managed.
-6. **Model IDs from the catalog.** Competitor docs name competitor model IDs; AGI selectors/tests/routes read only `packages/types/src/models.json`.
+6. **Model IDs from the catalog.** Competitor docs name competitor model IDs; AGI selectors/tests/routes read only `packages/contracts/types/src/models.json`.
 
 ## Repository map / authority docs
 
 - Parity ledger: `docs/current/parity-implementation-matrix.md` (rows, surfaces W/D/M/CLI/VSC/CHR, status `Present`/`Partial`/`Missing`/`Gated`).
 - Teardown + gap framing: `docs/strategy/01-competitive-teardown.md`, `02-gap-analysis.md`.
 - Reference reading: `docs/strategy/09-reference-codebases.md` (`claude-code`, `odysseus`), `10-oss-corpus-port-plan.md`.
-- Contracts that encode the divergence: `packages/types/src/suite-contracts.ts`, `packages/types/src/models.json`.
+- Contracts that encode the divergence: `packages/contracts/types/src/suite-contracts.ts`, `packages/contracts/types/src/models.json`.
 - Local UI reference for visual parity: `/Users/siddhartha/Desktop/claude_reference` (study-only).
 
 ## Competitor notes (the reverse-engineering summary)

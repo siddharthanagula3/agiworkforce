@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root), `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`, and real repo paths: `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/data/contextBuilder.ts`, `apps/extension-vscode/src/data/checkpointManager.ts`, `apps/extension-vscode/src/integrations/patchEngine.ts`, `apps/extension-vscode/src/providers/diffDecorationProvider.ts`, `apps/extension-vscode/package.json`. Model IDs come only from `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root), `apps/extension-vscode/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `docs/surfaces/vscode-extension.md`, and real repo paths: `apps/extension-vscode/src/core/commandSetup.ts`, `apps/extension-vscode/src/data/contextBuilder.ts`, `apps/extension-vscode/src/data/checkpointManager.ts`, `apps/extension-vscode/src/integrations/patchEngine.ts`, `apps/extension-vscode/src/providers/diffDecorationProvider.ts`, `apps/extension-vscode/package.json`. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -45,7 +45,7 @@ A working-tree summary is Built via `getGitContext()` (`apps/extension-vscode/sr
 
 ## Competitor notes
 
-Claude Code's VS Code extension and Codex IDE extension offer AI commit messages, PR review with inline comments, conflict assistance, inline diff review with approvals, and cloud-handoff previews. AGI's deliberate divergence: **multi-provider** — the diff, commit-draft, review, and conflict layers run through any provider chosen in the model picker (IDs sourced from `packages/types/src/models.json`), not a single vendor; **BYOK allowed here** (Desktop/CLI/VS Code only); **per-surface trust with visible labels** on every AI-driven Git action; **local-first Git** — `git` runs locally via `execFile`/`vscode.git` regardless of LLM mode, and **no automatic app-chat sync** — any handoff of diffs or summaries is explicit and redacted.
+Claude Code's VS Code extension and Codex IDE extension offer AI commit messages, PR review with inline comments, conflict assistance, inline diff review with approvals, and cloud-handoff previews. AGI's deliberate divergence: **multi-provider** — the diff, commit-draft, review, and conflict layers run through any provider chosen in the model picker (IDs sourced from `packages/contracts/types/src/models.json`), not a single vendor; **BYOK allowed here** (Desktop/CLI/VS Code only); **per-surface trust with visible labels** on every AI-driven Git action; **local-first Git** — `git` runs locally via `execFile`/`vscode.git` regardless of LLM mode, and **no automatic app-chat sync** — any handoff of diffs or summaries is explicit and redacted.
 
 ## Acceptance / Definition of Done
 
@@ -58,6 +58,6 @@ Claude Code's VS Code extension and Codex IDE extension offer AI commit messages
 - Routing staged diffs, commit content, conflict hunks, or repo summaries to Cloud/BYOK without explicit consent, redaction, and a provider label.
 - Running `git` through a shell or forwarding attacker-controlled args (regresses PR-3B / F-12); auto-committing without user confirmation; appending machine co-author trailers.
 - Claiming AI commit messages, PR review, or merge-conflict resolution are shipped — they are 🔭; only cite ✅ with a real path.
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`), routes, env vars, or command names.
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`), routes, env vars, or command names.
 - Referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups — use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise. 🟡 Note: `package.json:contributes.configuration` still lists a `agiWorkforce.tier` enum with `hobby`/`pro_plus`; that reconciliation is a separate tracked task.
 - Referencing Supabase (fully migrated to Clerk + Neon + Stripe); treating a real Git conflict as a patch hunk because both use `<<<<<<<` markers.

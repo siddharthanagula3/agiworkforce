@@ -50,7 +50,7 @@ Requirements: any animation driven by runtime events — token streaming, tool b
 
 ## Competitor notes
 
-Claude Code, ChatGPT, and Codex handle accessibility at the app layer (web ARIA, native iOS/Android AT) and localize their own first-party UIs; their remote-control/on-the-web flows announce host events from a cloud-rendered surface. AGI's deliberate divergence: accessibility is a **trust-scoped runtime contract**, not just per-app polish. Approval prompts are security-critical and must be fully accessible so no user is nudged into approving Local→BYOK forks or Cloud routing blind; announcements and localized strings must never carry Local/BYOK payload across the boundary to satisfy an AT request. Runtime strings are emitted as codes + params so multi-provider, multi-surface localization stays consistent, and model identifiers in any localized string come from `packages/types/src/models.json`, never hardcoded.
+Claude Code, ChatGPT, and Codex handle accessibility at the app layer (web ARIA, native iOS/Android AT) and localize their own first-party UIs; their remote-control/on-the-web flows announce host events from a cloud-rendered surface. AGI's deliberate divergence: accessibility is a **trust-scoped runtime contract**, not just per-app polish. Approval prompts are security-critical and must be fully accessible so no user is nudged into approving Local→BYOK forks or Cloud routing blind; announcements and localized strings must never carry Local/BYOK payload across the boundary to satisfy an AT request. Runtime strings are emitted as codes + params so multi-provider, multi-surface localization stays consistent, and model identifiers in any localized string come from `packages/contracts/types/src/models.json`, never hardcoded.
 
 ## Acceptance / Definition of Done
 
@@ -66,5 +66,5 @@ Production-ready when every runtime-facing dialog a surface renders is keyboard-
 - Do not leak Local/BYOK payload into announcements, localized strings, or AT snapshots that reach a Cloud sink.
 - Do not claim a cross-surface runtime a11y/localization contract is shipped; the runtime emits typed English events today (🟡) and the shared hint/string-key contract is 🔭.
 - Do not pre-format prose in runtime events; emit stable keys + parameters so surfaces localize.
-- Do not hardcode or invent model IDs in any localized string; read `packages/types/src/models.json`.
+- Do not hardcode or invent model IDs in any localized string; read `packages/contracts/types/src/models.json`.
 - Do not reference Supabase, `middleware.ts` (use `proxy.ts`), or removed tiers ("Plus", `pro_plus`, "Hobby"); pricing is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise, no top-ups (Pro/Max INR are TBD — do not invent).

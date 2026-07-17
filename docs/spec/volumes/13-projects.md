@@ -1,7 +1,7 @@
 # Volume 13 — Projects
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 13)
-Authority: this manual, `docs/current/source-of-truth.md` (Surface Roles, P0 #6/#7), `docs/strategy/02-gap-analysis.md` §2, Vol 4 (tenancy/RBAC), Vol 11/12 (context/memory), `packages/types/src/suite-contracts.ts`.
+Authority: this manual, `docs/current/source-of-truth.md` (Surface Roles, P0 #6/#7), `docs/strategy/02-gap-analysis.md` §2, Vol 4 (tenancy/RBAC), Vol 11/12 (context/memory), `packages/contracts/types/src/suite-contracts.ts`.
 
 ## Philosophy & Cloud/Local stance
 
@@ -29,9 +29,9 @@ Cloud/Local sets where a project lives and whether it syncs. Web projects are Ne
 - Project memory/knowledge: `apps/desktop/src/features/memory/` (scoped), Vol 12.
 - Project files: `apps/desktop/src/features/file-upload/`, Vol 15.
 - Project artifacts/tasks/agents: `apps/desktop/src/features/{artifacts,background-tasks,agent}/`, Vols 14/17.
-- Tenancy/RBAC + scope tags: `packages/types/src/` contracts, `apps/web/db/neon` (RLS), Vol 4.
-- Trust scoping: `packages/types/src/suite-contracts.ts`.
-- Model/provider defaults: `packages/types/src/models.json`, `packages/types/src/model-catalog.ts` (`requireProviderDefaultModel`).
+- Tenancy/RBAC + scope tags: `packages/contracts/types/src/` contracts, `apps/web/db/neon` (RLS), Vol 4.
+- Trust scoping: `packages/contracts/types/src/suite-contracts.ts`.
+- Model/provider defaults: `packages/contracts/types/src/models.json`, `packages/contracts/types/src/model-catalog.ts` (`requireProviderDefaultModel`).
 
 ## Competitor notes
 

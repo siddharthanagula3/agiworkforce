@@ -27,7 +27,7 @@ Requirement: choose the correct shell/interpreter per host OS, build a safe subp
 
 Requirement: run a single command as a tracked unit with a stable id, working directory, resolved environment, and sandbox boundary; never route it off-host.
 
-- 🟡 Partial — `crates/agiworkforce-task-runtime/src/lib.rs`: `TaskRegistry::create(TaskKind::LocalShell, command)` records a `Task { id, command, output_path, status, exit_code, error }` and enforces a legal status machine (`Pending → Running → {Completed|Failed|Stopped}`). **Gap:** the registry tracks the unit and its output file but does not itself `spawn` an OS process — the PTY/`tokio::process` spawner binding argv to this lifecycle is 🔭.
+- 🟡 Partial — `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`: `TaskRegistry::create(TaskKind::LocalShell, command)` records a `Task { id, command, output_path, status, exit_code, error }` and enforces a legal status machine (`Pending → Running → {Completed|Failed|Stopped}`). **Gap:** the registry tracks the unit and its output file but does not itself `spawn` an OS process — the PTY/`tokio::process` spawner binding argv to this lifecycle is 🔭.
 - ✅ Built — `crates/agiworkforce-execpolicy` (`Policy`, `PolicyParser`, `Decision`, `blocking_append_allow_prefix_rule`): an allow/deny gate matching a candidate argv against per-program and network rules before execution — where "ask before acting" is decided.
 - ✅ Built — `crates/sandbox-policy/src/lib.rs`: `SandboxPolicy { ReadOnly, WorkspaceWrite { writable_roots }, ExternalSandbox, DangerFullAccess }`, defaulting to `WorkspaceWrite` for unrecognized modes — commands run inside a filesystem boundary.
 - ✅ Built — `crates/agiworkforce-app-server/src/lib.rs`: the local JSON-RPC-over-stdio + WebSocket tool host exposes a single `agiworkforce_exec` tool, is consumed **only by the CLI**, requires a non-empty WS auth token, and enforces an IP allowlist.
@@ -36,7 +36,7 @@ Requirement: run a single command as a tracked unit with a stable id, working di
 
 Requirement: observe a running command for liveness, detect stalls, and expose stop/cancel — locally and to an approved remote window.
 
-- 🟡 Partial — `crates/agiworkforce-task-runtime/src/lib.rs`: `StallWatchdog::spawn(registry, task_id, timeout)` polls the task's output file for byte growth (derived 100 ms–500 ms interval); if no new output appears within `timeout`, it marks the task `Failed` with error `"stall timeout"`, and aborts when the task reaches a terminal state.
+- 🟡 Partial — `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`: `StallWatchdog::spawn(registry, task_id, timeout)` polls the task's output file for byte growth (derived 100 ms–500 ms interval); if no new output appears within `timeout`, it marks the task `Failed` with error `"stall timeout"`, and aborts when the task reaches a terminal state.
 - 🟡 Partial — `TaskRegistry::stop(id)` marks a running task `Stopped` and rejects illegal transitions, giving a cancel primitive. **Gap:** `stop` flips registry state but does not yet signal/kill the underlying OS process (the spawner is 🔭), so real SIGTERM/kill wiring is outstanding.
 - 🔭 Planned — remote monitoring parity: a paired phone/web window receiving live process status and issuing `cancel` through `services/signaling-server` (roles `desktop|mobile`, HMAC `pairTokens`, approval-gated). The signaling verbs exist; the desktop↔mobile companion last mile is 🟡 (`apps/mobile/lib/v1FeatureFlags.ts` `companion:false`/`dispatch:false`; control events re-emitted as a `'mobile-companion:control'` window event with no listener).
 
@@ -46,13 +46,13 @@ Requirement: stream stdout and stderr incrementally with correct text decoding, 
 
 - ✅ Built — `crates/agiworkforce-protocol/src/exec_output.rs`: `StreamOutput<T> { text, truncated_after_lines }` and `ExecToolCallOutput { exit_code, stdout, stderr, aggregated_output, duration, timed_out }` are the streaming data model — separate stdout/stderr plus an aggregated view, with an explicit truncation marker.
 - ✅ Built — same file: `bytes_to_string_smart` uses `chardetng` + `encoding_rs` to detect legacy code pages (CP1251/CP866/Windows-1252) and decode them instead of emitting replacement junk. Testable: mixed smart-quote bytes render as `"…"`, not Cyrillic.
-- 🟡 Partial — `crates/agiworkforce-task-runtime/src/lib.rs`: `read_output(id, max_bytes)` tails the task's output file up to `max_bytes` (seeking past the head), giving bounded reads over time. **Gap:** this is pull-based file tailing, not a push stream emitting incremental `StreamOutput` chunks as bytes arrive — the live chunk pump is 🔭.
+- 🟡 Partial — `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`: `read_output(id, max_bytes)` tails the task's output file up to `max_bytes` (seeking past the head), giving bounded reads over time. **Gap:** this is pull-based file tailing, not a push stream emitting incremental `StreamOutput` chunks as bytes arrive — the live chunk pump is 🔭.
 
 ## Exit Codes — handle process completion
 
 Requirement: capture the true process exit code (and timeout/kill distinction), close the task deterministically, and surface completion to callers and any remote window.
 
-- 🟡 Partial — `crates/agiworkforce-task-runtime/src/lib.rs`: `Task.exit_code: Option<i32>` and `update_status(id, status, exit_code, error)` record completion; the state machine guarantees a task ends in exactly one terminal state, with tests asserting `exit_code == Some(0)` on clean exit.
+- 🟡 Partial — `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`: `Task.exit_code: Option<i32>` and `update_status(id, status, exit_code, error)` record completion; the state machine guarantees a task ends in exactly one terminal state, with tests asserting `exit_code == Some(0)` on clean exit.
 - ✅ Built — `crates/agiworkforce-protocol/src/exec_output.rs`: `ExecToolCallOutput` carries `exit_code`, `duration`, and a distinct `timed_out` flag so "exited 137 via timeout" is not confused with "exited 0". This is the completion contract returned to callers.
 - 🔭 Planned — end-to-end reconciliation: mapping a real `std::process::ExitStatus` (Unix signal-derived and Windows codes) into `Task.exit_code` + `ExecToolCallOutput.timed_out`, then emitting one completion event over the app-server transport and, when paired, to the remote window. The fields exist; the spawner that populates them from a live child is outstanding.
 
@@ -61,7 +61,7 @@ Requirement: capture the true process exit code (and timeout/kill distinction), 
 - `crates/agiworkforce-protocol/src/exec_output.rs` — `StreamOutput`, `ExecToolCallOutput`, encoding-aware byte→string decoding.
 - `crates/agiworkforce-protocol/src/shell_environment.rs` — subprocess env construction, secret excludes, Windows `PATHEXT`.
 - `crates/agiworkforce-protocol/src/config_types.rs` — `ShellEnvironmentPolicy` and inherit modes.
-- `crates/agiworkforce-task-runtime/src/lib.rs` — `TaskKind::LocalShell`, `TaskRegistry`, `StallWatchdog`, `read_output`, `stop`.
+- `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `TaskKind::LocalShell`, `TaskRegistry`, `StallWatchdog`, `read_output`, `stop`.
 - `crates/agiworkforce-execpolicy/` — command allow/deny policy engine.
 - `crates/sandbox-policy/src/lib.rs` — filesystem sandbox modes.
 - `crates/agiworkforce-app-server/src/lib.rs` — CLI-only local `agiworkforce_exec` tool host (stdio + WS, token + IP allowlist).

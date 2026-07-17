@@ -13,7 +13,7 @@ Related: [documentation-migration-plan.md](documentation-migration-plan.md), [ad
 
 This inventory marks existing documentation against the implementation, per [documentation-constitution.md](documentation-constitution.md) Article I. Status values are defined in [documentation-standards.md](documentation-standards.md) §2. **No document is deleted automatically**; "Superseded/Deprecated" items are archived only after verification (Article VI).
 
-Verification basis: the implementation review behind this foundation (surfaces, `packages/types/src/models.json`, `billing-catalog.ts`, `apps/web/db/neon`, `trust-mode-surface-matrix.md`, `docs/agent-context/known-flaws.md`, GitHub state) as of 2026-06-25.
+Verification basis: the implementation review behind this foundation (surfaces, `packages/contracts/types/src/models.json`, `billing-catalog.ts`, `apps/web/db/neon`, `trust-mode-surface-matrix.md`, `docs/agent-context/known-flaws.md`, GitHub state) as of 2026-06-25.
 
 ## 1. Foundation layer (this bootstrap)
 

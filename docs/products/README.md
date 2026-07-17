@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-06-30
+Last updated: 2026-07-11
 
 This directory holds the per-product specification volumes for the AGI suite. Each
 product is a folder of numbered volume files (`volume-NN-<topic>.md`). This README is
@@ -23,7 +23,7 @@ and in what order — writing a spec is not authorization to implement.
 5. `docs/current/byok-open-model-provider-strategy.md`
 6. `docs/agent-context/repo-map.json`
 
-Model IDs come **only** from `packages/types/src/models.json` — never invent or hardcode
+Model IDs come **only** from `packages/contracts/types/src/models.json` — never invent or hardcode
 one. This SSOT rule binds **LLM / provider-catalog** model IDs. Non-LLM engine
 identifiers that are not catalog entries — e.g. speech-to-text engines (Deepgram
 `nova-3`), on-device embedding models (`nomic-embed-text`), or third-party image
@@ -49,7 +49,7 @@ AGI is **six** first-class user surfaces — there is **no seventh user-facing p
 **AGI Runtime** is the **internal shared execution layer**, not a user surface or a
 "seventh app." It is the shared Rust/TS that the surfaces compile in plus the local
 host and remote-control/companion fabric: `crates/agiworkforce-{protocol,task-runtime,
-plugin-runtime,command-registry,app-server}`, `packages/runtime`, the desktop
+plugin-runtime,command-registry,app-server}`, `packages/client/client-runtime`, the desktop
 `127.0.0.1` WebSocket/IPC host (`apps/desktop/src-tauri/src/integrations/realtime`),
 the Chrome native-messaging host (`com.agiworkforce.browser`, bridge port 8787), the
 `services/signaling-server` relay, and the Neon cloud delta-sync APIs
@@ -79,27 +79,30 @@ Normal chat **data sync** (Neon delta-sync) is only Web ↔ Mobile ↔ Desktop a
 Managed-Cloud chats. CLI, VS Code, and Chrome stay workspace/task-scoped; any handoff to
 app chat is explicit and redacted, never automatic.
 
-## Pricing & subscription model (founder decision, 2026-06-30 — resolves register D1)
+## Pricing & subscription model (founder decision, 2026-07-11 — supersedes the 2026-06-30 ladder)
 
 Access modes (free, not plans): **Local** (on-device/local runtime), **BYOK** (Desktop/
 CLI/VS Code only).
 
 Managed-Cloud subscription ladder (use these names **everywhere**):
 
-| Plan       | USD / mo      | INR / mo  | Notes                                          |
-| ---------- | ------------- | --------- | ---------------------------------------------- |
-| Free       | $0            | ₹0        | Entry cloud chat, limited usage.               |
-| Basic      | $8            | ₹399      | ChatGPT-Go-style entry paid tier (US + India). |
-| Pro        | $20           | (INR TBD) | Main paid tier.                                |
-| Max        | $100 and $200 | (INR TBD) | Two power tiers (higher usage/limits/models).  |
-| Enterprise | custom        | custom    | Org controls, SSO, admin, seats, contracts.    |
+| Plan       | USD                        | INR / mo  | Notes                                                                                                                              |
+| ---------- | -------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Free       | $0                         | ₹0        | Entry cloud chat, limited usage.                                                                                                   |
+| Basic      | $7/mo                      | ₹399      | Entry paid tier. **IAP-first** — purchasable only via App Store/Play Store; web pricing page hands off to "Get it on iOS/Android." |
+| Pro        | $20/mo · $200/yr           | (INR TBD) | Main paid tier.                                                                                                                    |
+| Max        | $100/mo, $200/mo           | (INR TBD) | Two power tiers (higher usage/limits/models), monthly-only.                                                                        |
+| Team       | $30/seat/mo · $299/seat/yr | (INR TBD) | Per-seat, between Max and Enterprise. **Reinstated** — supersedes the 2026-06-30 "served by Enterprise" removal.                   |
+| Enterprise | custom                     | custom    | Org controls, SSO, admin, seats, contracts.                                                                                        |
 
 - **Removed forever:** "Plus", `pro_plus`, "Hobby". Do not mention them.
-- "Team" needs are served by **Enterprise / org seats**, not a separate consumer tier.
+- **"Team" is a real, separate per-seat tier again** — do not describe it as "served by Enterprise" or route it to an interest-only list.
 - Max has **two price points** ($100 and $200) — present as Max tiers, not as "Plus".
-- INR is fixed for Basic (₹399); Pro/Max INR are **TBD** — do not invent INR numbers.
-- **No credit top-ups** (policy; the code path stays env-gated off). Usage is metered.
-- The repo's `packages/types/src/billing-catalog.ts` and pricing UIs still encode older
+- INR is fixed for Basic (₹399); Pro/Max/Team INR are **TBD** — do not invent INR numbers.
+- Metering is **token/value-based** (micro-dollar ledger), displayed to users as **credits**, never flat prompt counts. Included budgets and exact credit conversion are in `docs/plans/tier-metering-reconciliation-wave2-2026-07-11.md`.
+- **Top-ups are ENABLED for paid tiers** — supersedes the 2026-06-30 "no top-ups" policy. Opt-in, off by default, with per-tier payout parity (a tier's top-up credits-per-$ matches its subscription credits-per-$), 12-month expiry, and a monthly cap.
+- **No discount anchors of any kind** (no strikethroughs, no "% off," no "was $X"). Flat prices; real annual options (Pro/Team) may be framed honestly.
+- The repo's `packages/contracts/types/src/billing-catalog.ts` and pricing UIs still encode older
   tiers; that code reconciliation is a separate tracked task. Specs use the model above.
 
 ## Chrome scope (Q3 decision)

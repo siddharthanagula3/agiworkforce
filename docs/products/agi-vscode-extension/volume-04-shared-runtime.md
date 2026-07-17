@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/extension.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/providers/agentMode/{agentLoop,agentUI}.ts`, `apps/extension-vscode/src/providers/agentModeProvider.ts`, `apps/extension-vscode/src/integrations/{providerStreamClient,providerSwitchGuard,tierResolver,patchEngine}.ts`, `apps/extension-vscode/src/data/{contextBuilder,contextBudget,workspaceIndexer,projectInstructions,conversationStore,checkpointManager,sendQueue,tokenCounter,usageMeter}.ts`, `apps/extension-vscode/src/memory/memoryStore.ts`, `packages/runtime/src/index.ts`, and `packages/types/src/models.json`.
+Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `apps/extension-vscode/src/extension.ts`, `apps/extension-vscode/src/features/desktop-bridge/desktopBridge.ts`, `apps/extension-vscode/src/providers/agentMode/{agentLoop,agentUI}.ts`, `apps/extension-vscode/src/providers/agentModeProvider.ts`, `apps/extension-vscode/src/integrations/{providerStreamClient,providerSwitchGuard,tierResolver,patchEngine}.ts`, `apps/extension-vscode/src/data/{contextBuilder,contextBudget,workspaceIndexer,projectInstructions,conversationStore,checkpointManager,sendQueue,tokenCounter,usageMeter}.ts`, `apps/extension-vscode/src/memory/memoryStore.ts`, `packages/client/client-runtime/src/index.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -14,10 +14,10 @@ This volume specifies how the VS Code extension **consumes** the shared AGI Runt
 
 A "session" is a chat/agent thread bound to the active workspace. Requirements: (1) every session records its trust mode and provider label; (2) the message pipeline is queued and backpressured; (3) provider streaming flows through one client, not per-feature ad-hoc `fetch`.
 
-- **Message queue / backpressure** — ✅ Consumed from shared runtime: `createMessageQueue`, `MessageQueue`, `QueueFullError`, `QueuedCommand` from `@agiworkforce/runtime` (`packages/runtime/src/index.ts`), used in `apps/extension-vscode/src/data/sendQueue.ts`.
+- **Message queue / backpressure** — ✅ Consumed from shared runtime: `createMessageQueue`, `MessageQueue`, `QueueFullError`, `QueuedCommand` from `@agiworkforce/client-runtime` (`packages/client/client-runtime/src/index.ts`), used in `apps/extension-vscode/src/data/sendQueue.ts`.
 - **Agent orchestration** — 🟡 The extension runs a local `AgentLoop` (`apps/extension-vscode/src/providers/agentMode/agentLoop.ts`) wired by `agentModeProvider.ts`. Gap: this is a surface-local loop; the target is to drive it from the shared task runtime (`crates/agiworkforce-task-runtime`, `crates/agiworkforce-command-registry`) so CLI and VS Code share one engine.
 - **Provider streaming** — 🟡 `apps/extension-vscode/src/integrations/providerStreamClient.ts` mirrors the web SSE client, but `agiWorkforce.useProviderStream` defaults `false` and the setting notes web auth is **not yet wired** (`apps/extension-vscode/package.json`).
-- **Shared CLI sessions** — 🔭 A common developer-session schema in `packages/types` is the target; not wired.
+- **Shared CLI sessions** — 🔭 A common developer-session schema in `packages/contracts/types` is the target; not wired.
 
 ## Context Engine
 
@@ -53,7 +53,7 @@ Every mutating action is gated by workspace trust and an explicit agent mode.
 Settings live in the `agiWorkforce.*` namespace.
 
 - **Settings surface** — ✅ `contributes.configuration.properties` (`apps/extension-vscode/package.json`): endpoint, gateway URL, model, streaming, context lines, agent mode/effort/thinking/maxIterations, inline completions, desktop bridge port/enabled, telemetry (default off).
-- **Tier resolution** — 🟡 `apps/extension-vscode/src/integrations/tierResolver.ts` and the `agiWorkforce.tier` enum still encode removed tiers (`hobby`, `pro_plus`). Canon tiers are **Free / Basic $8 (₹399) / Pro $20 / Max $100 & $200 / Enterprise**; Local + BYOK are free access modes. Reconciling `packages/types/src/billing-catalog.ts` and this enum is a separate tracked task.
+- **Tier resolution** — 🟡 `apps/extension-vscode/src/integrations/tierResolver.ts` and the `agiWorkforce.tier` enum still encode removed tiers (`hobby`, `pro_plus`). Canon tiers are **Free / Basic $8 (₹399) / Pro $20 / Max $100 & $200 / Enterprise**; Local + BYOK are free access modes. Reconciling `packages/contracts/types/src/billing-catalog.ts` and this enum is a separate tracked task.
 - **Settings sync** — 🔭 Allowlist-gated cross-device settings sync lands last; not wired here.
 
 ## Conversation Storage
@@ -76,11 +76,11 @@ Settings live in the `agiWorkforce.*` namespace.
 - `apps/extension-vscode/src/data/{contextBuilder,contextBudget,workspaceIndexer,projectInstructions,conversationStore,checkpointManager,sendQueue,tokenCounter,usageMeter}.ts` — context + storage.
 - `apps/extension-vscode/src/integrations/{providerStreamClient,providerSwitchGuard,tierResolver,patchEngine}.ts` — provider + tier + patch.
 - `apps/extension-vscode/src/memory/memoryStore.ts`, `apps/extension-vscode/src/protocol/bridgeMessages.ts`.
-- `packages/runtime/src/index.ts` (message queue, state store); shared crates `crates/agiworkforce-task-runtime`, `crates/agiworkforce-command-registry`.
+- `packages/client/client-runtime/src/index.ts` (message queue, state store); shared crates `crates/agiworkforce-task-runtime`, `crates/agiworkforce-command-registry`.
 
 ## Competitor notes
 
-Claude Code and Codex IDE extensions each drive a single-vendor agent loop with editor context, `@` file references, diagnostics, inline diff review, and approvals; cloud handoff previews and local application of remote diffs are their remote-session model. AGI's deliberate divergence: **multi-provider** (auto-inferred from the model-id prefix on the provider-stream path, `apps/extension-vscode/package.json`), **BYOK where allowed** (Desktop/CLI/VS Code only), **per-surface trust** with visible provider labels, and **local-first** conversation storage that never auto-syncs to app chat. Remote control of an editor session from phone/web (Claude Code `/remote-control` parity: banner, session URL, open-in-browser) is 🔭. Model IDs come only from `packages/types/src/models.json`.
+Claude Code and Codex IDE extensions each drive a single-vendor agent loop with editor context, `@` file references, diagnostics, inline diff review, and approvals; cloud handoff previews and local application of remote diffs are their remote-session model. AGI's deliberate divergence: **multi-provider** (auto-inferred from the model-id prefix on the provider-stream path, `apps/extension-vscode/package.json`), **BYOK where allowed** (Desktop/CLI/VS Code only), **per-surface trust** with visible provider labels, and **local-first** conversation storage that never auto-syncs to app chat. Remote control of an editor session from phone/web (Claude Code `/remote-control` parity: banner, session URL, open-in-browser) is 🔭. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Acceptance / Definition of Done
 
@@ -93,10 +93,10 @@ The domain is production-ready when the extension consumes shared runtime primit
 
 ## Anti-patterns
 
-- Reimplementing the agent loop, queue, or dispatch inside the extension instead of consuming `@agiworkforce/runtime` / shared crates.
+- Reimplementing the agent loop, queue, or dispatch inside the extension instead of consuming `@agiworkforce/client-runtime` / shared crates.
 - Auto-syncing VS Code conversations, context, or memory into Web/Mobile/Desktop app chat (handoff must be explicit + redacted).
 - Silently promoting a Local session to BYOK or Cloud, or hiding the active provider label.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Reintroducing removed tiers (`Plus`, `pro_plus`, `Hobby`) or credit top-ups in tier logic or copy.
 - Referencing Supabase, or renaming `proxy.ts` back to `middleware.ts` in any web-facing config the extension calls.
 - Weakening the bridge token permission check, allowlist, or rate limit; forwarding bridge-supplied command arguments.

@@ -38,7 +38,7 @@ Replace the decision core (`sys/security/command_validator.rs` 687 + `sys/securi
 
 ### (b) Protocol ts-rs codegen -> packages/types — M
 
-Export test `crates/agiworkforce-protocol/tests/export_bindings.rs` using `export_all_to` on root envelope types (recursive — no need to annotate all 200+). Committed tree at `packages/types/src/generated/protocol/` (web builds can't run cargo) + generated barrel + prettier/eslint ignores. Subpath export `"./protocol"` — NOT root re-export (name collisions with hand-authored `Provider`/`ToolEvent`). Drift guard `pnpm check:protocol-types` (regenerate + `git diff --exit-code`) in the cargo-capable CI job.
+Export test `crates/agiworkforce-protocol/tests/export_bindings.rs` using `export_all_to` on root envelope types (recursive — no need to annotate all 200+). Committed tree at `packages/types/src/generated/protocol/` (web builds can't run cargo) + generated barrel + prettier/eslint ignores. Subpath export `"./protocol"` — NOT root re-export (name collisions with hand-authored `Provider`/`ToolEvent`). The cargo-capable CI drift guard, `pnpm check:protocol-types`, generates into an isolated tree and compares it with the working tree without mutation; `pnpm generate:protocol-types` performs the explicit update.
 
 ## Execution status (2026-07-09)
 

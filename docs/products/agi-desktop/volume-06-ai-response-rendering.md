@@ -82,7 +82,7 @@ Claude, ChatGPT, and Codex all render GFM Markdown, highlighted code with copy, 
 - Injecting `dangerouslySetInnerHTML` from streamed content on this local host.
 - Showing a provider/trust label the renderer can't prove, or silently rendering Local output as if it were Cloud.
 - Sending Local/BYOK message content to Cloud purely to render/format/export it.
-- Hardcoding or inventing model IDs in renderer code — model IDs come only from `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs in renderer code — model IDs come only from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (Plus/pro_plus/Hobby), inventing INR prices, or wiring credit top-ups into any render/export gate.
 - Referencing Supabase or renaming Next.js `proxy.ts` to `middleware.ts` in any shared render path.
 - Claiming inline Mermaid/SVG/rich-clipboard as shipped — they are 🟡/🔭 until the cited paths prove otherwise.

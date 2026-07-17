@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/cli/AGENTS.md`, `docs/cli/COMMAND_SURFACE.md`. Grounded in real CLI source: `apps/cli/src/agent/mod.rs`, `apps/cli/src/auth.rs`, `apps/cli/src/auth_oauth.rs`, `apps/cli/src/oauth.rs`, `apps/cli/src/cloud.rs`, `apps/cli/src/config.rs`, `apps/cli/src/local_models.rs`, `apps/cli/src/tier_cache.rs`, `apps/cli/src/mcp/oauth_store.rs`, `apps/cli/src/lib.rs`, and `crates/agiworkforce-app-server/src/lib.rs`. Model IDs come only from `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/cli/AGENTS.md`, `docs/cli/COMMAND_SURFACE.md`. Grounded in real CLI source: `apps/cli/src/agent/mod.rs`, `apps/cli/src/auth.rs`, `apps/cli/src/auth_oauth.rs`, `apps/cli/src/oauth.rs`, `apps/cli/src/cloud.rs`, `apps/cli/src/config.rs`, `apps/cli/src/local_models.rs`, `apps/cli/src/tier_cache.rs`, `apps/cli/src/mcp/oauth_store.rs`, `apps/cli/src/lib.rs`, and `crates/agiworkforce-app-server/src/lib.rs`. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -30,7 +30,7 @@ Tokens persist as `AuthEntry::OAuth { refresh, access, expires, account_id }` or
 
 ### Subscription Verification
 
-`apps/cli/src/tier_cache.rs` resolves the account tier via the AGI Workforce API with a 1-hour on-disk TTL at `~/.agiworkforce/cache/tier.toml` and a 3s fetch timeout — ✅ Built. `UserTier` currently enumerates `Free, Pro, Max, Enterprise, Byok` and lacks a **Basic ($8 / ₹399)** variant required by the 2026-06-30 pricing ladder — 🟡 Partial (gap: add `Basic`; keep in sync with `normalizeProductTier` in `packages/types/src/model-catalog.ts`). Removed tiers (Plus, `pro_plus`, Hobby) must never reappear.
+`apps/cli/src/tier_cache.rs` resolves the account tier via the AGI Workforce API with a 1-hour on-disk TTL at `~/.agiworkforce/cache/tier.toml` and a 3s fetch timeout — ✅ Built. `UserTier` currently enumerates `Free, Pro, Max, Enterprise, Byok` and lacks a **Basic ($8 / ₹399)** variant required by the 2026-06-30 pricing ladder — 🟡 Partial (gap: add `Basic`; keep in sync with `normalizeProductTier` in `packages/contracts/types/src/model-catalog.ts`). Removed tiers (Plus, `pro_plus`, Hobby) must never reappear.
 
 ### Usage Limits
 
@@ -120,7 +120,7 @@ Claude Code and Codex CLI center on a single first-party subscription/API-key pa
 ## Anti-patterns
 
 - Silently routing Local chats/files/sessions to BYOK or Managed Cloud, or auto-syncing CLI sessions to app chat.
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Reintroducing removed tiers (Plus, `pro_plus`, Hobby), credit top-ups, or invented Pro/Max INR prices.
 - Printing API keys or tokens in logs, `{:?}`, or transcripts; weakening `0o600`/keyring storage.
 - Referencing Supabase (fully migrated; use Clerk + Neon + Stripe) or renaming `proxy.ts` to `middleware.ts`.

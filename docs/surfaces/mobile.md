@@ -10,21 +10,21 @@ The lead launch surface. A single iOS + Android app where someone gets free priv
 
 ## Status at HEAD
 
-| Item                                                        | State                                      |
-| ----------------------------------------------------------- | ------------------------------------------ |
-| Onboarding flow + 5.1.2(i) consent modal                    | ✅ shipped 2026-05-18 (commit `157157c35`) |
-| Chat surface + provenance badge + mode-switch modal         | ✅ shipped 2026-05-18 (commit `f8418351f`) |
-| Tier 1/2/3 native modules + runtime selector                | ✅ shipped 2026-05-18 (commit `adea9adc6`) |
-| `models.json` deprecation calendar + three-tier router      | ✅ shipped 2026-05-18 (commit `569e42df4`) |
-| BYOK key management + Keychain                              | 🚧 working tree (uncommitted)              |
-| BYOK direct-provider client + `@agiworkforce/llm-normalize` | 🚧 working tree                            |
-| SQLCipher + MMKV storage                                    | 🚧 working tree                            |
-| Detox e2e (5 specs)                                         | 🚧 working tree (testIDs land first)       |
-| Apple Privacy Manifest + App Store listing                  | 🚧 working tree                            |
-| EAS Build pipeline                                          | 🚧 working tree                            |
-| `@agiworkforce/compliance` (Article 50)                     | 🚧 working tree                            |
-| TestFlight build                                            | ⏳ M2 milestone (target Jul 19)            |
-| Public launch                                               | ⏳ M3 milestone (target Aug 6-16)          |
+| Item                                                            | State                                      |
+| --------------------------------------------------------------- | ------------------------------------------ |
+| Onboarding flow + 5.1.2(i) consent modal                        | ✅ shipped 2026-05-18 (commit `157157c35`) |
+| Chat surface + provenance badge + mode-switch modal             | ✅ shipped 2026-05-18 (commit `f8418351f`) |
+| Tier 1/2/3 native modules + runtime selector                    | ✅ shipped 2026-05-18 (commit `adea9adc6`) |
+| `models.json` deprecation calendar + three-tier router          | ✅ shipped 2026-05-18 (commit `569e42df4`) |
+| BYOK key management + Keychain                                  | 🚧 working tree (uncommitted)              |
+| BYOK direct-provider client + `@agiworkforce/provider-protocol` | 🚧 working tree                            |
+| SQLCipher + MMKV storage                                        | 🚧 working tree                            |
+| Detox e2e (5 specs)                                             | 🚧 working tree (testIDs land first)       |
+| Apple Privacy Manifest + App Store listing                      | 🚧 working tree                            |
+| EAS Build pipeline                                              | 🚧 working tree                            |
+| `@agiworkforce/compliance` (Article 50)                         | 🚧 working tree                            |
+| TestFlight build                                                | ⏳ M2 milestone (target Jul 19)            |
+| Public launch                                                   | ⏳ M3 milestone (target Aug 6-16)          |
 
 ## Verified codebase numbers (2026-05-17 audit)
 
@@ -136,8 +136,8 @@ apps/mobile/
 | `ios/agiworkforce/PrivacyInfo.xcprivacy`                 | Apple Privacy Manifest with 4 required-reason API categories, tracked in the root Xcode-consumed project.        |
 | `apps/mobile/store-listing/ios/review-notes.md`          | App Review notes — cites Nov 13 2025 5.1.2(i) update + 2.5.2 self-containment argument.                          |
 | `apps/mobile/scripts/release/README.md`                  | Founder runbook for App Store / Play submission.                                                                 |
-| `packages/local-llm/`                                    | Shared package — tier selection + capability detection + catalog.                                                |
-| `packages/compliance/`                                   | `@agiworkforce/compliance` — Article 50 disclosure + machine-readable AI-content marking.                        |
+| `packages/platform/local-llm/`                           | Shared package — tier selection + capability detection + catalog.                                                |
+| `packages/contracts/compliance/`                         | `@agiworkforce/compliance` — Article 50 disclosure + machine-readable AI-content marking.                        |
 
 ## Build + test commands
 
@@ -181,7 +181,7 @@ See `apps/mobile/scripts/release/README.md` (8-section runbook). High-level:
 
 ## Provider integrations on mobile
 
-12 named providers via `packages/types/src/models.json`. **Chinese-HQ providers default-OFF** until per-provider user opt-in (PRD V5 R-023). Three-tier route via `apps/mobile/api/llm-client.ts`:
+12 named providers via `packages/contracts/types/src/models.json`. **Chinese-HQ providers default-OFF** until per-provider user opt-in (PRD V5 R-023). Three-tier route via `apps/mobile/api/llm-client.ts`:
 
 ```
 Local (Apple FM / Gemini Nano / executorch / llama.rn)
@@ -200,8 +200,8 @@ Cache-discount magnitude locked at 90% per V5 §10 lock #23.
 3. **Expo config drift** — `apps/mobile/app.config.js` is canonical; do not recreate root
    `app.json` or `apps/mobile/app.json` before EAS builds.
 4. **Brand rename in `app.config.js:5`** — still reads "AGI Workforce", should be "AGI" (public brand 2026-05-15)
-5. **`LSMinimumSystemVersion`** is now 15.1 in `ios/agiworkforce/Info.plist`; keep screenshots/store metadata aligned with that support floor
-6. **Apple Privacy Manifest sync** — canonical Xcode-consumed copy is `ios/agiworkforce/PrivacyInfo.xcprivacy`; store-review copy is `apps/mobile/store-listing/ios/PrivacyInfo.xcprivacy`. Keep them synchronized before EAS Build runs
+5. **`LSMinimumSystemVersion`** support floor (15.1) is declared via `app.config.js`/config plugins and lands in the generated `apps/mobile/ios/AGIWorkforce/Info.plist` at prebuild (root `ios/` was deleted 2026-07-16); keep screenshots/store metadata aligned with that floor
+6. **Apple Privacy Manifest sync** — the source of truth is `app.config.js`'s privacy-manifest config, generated into `apps/mobile/ios/AGIWorkforce/PrivacyInfo.xcprivacy` at prebuild; store-review locked copy is `apps/mobile/store-listing/ios/PrivacyInfo.xcprivacy`. Keep the locked copy synchronized before EAS Build runs (KNOWN DRIFT 2026-07-16: the locked copy is missing the C56D.1 FileTimestamp reason code and the NSPrivacyTrackingDomains key that the generated manifest carries — reconcile before any App Store submission)
 7. **Detox testIDs** — already wired by onboarding/byok teammates; wire chat-UI testIDs to enable specs
 
 ## Gotchas
@@ -210,8 +210,8 @@ Cache-discount magnitude locked at 90% per V5 §10 lock #23.
 - **Apple 5.1.2(i) is the rejection-risk single point.** Legacy consent modal copy is archived under `docs/archive/2026-05-21-docs-consolidation/PRD-APPENDIX-B-API-CONTRACTS.md` §B.7. Promote reviewed final legal copy into a current legal doc before shipment. No pre-checked toggles. No bundled consent.
 - **No in-app code execution UI on iOS.** Apple's 2.5.2 enforcement against Replit / Vibecode / Anything (Mar-Apr 2026) is the precedent. Mobile v1 = controller + chat surface only. Code execution lives on desktop / CLI / web. V5 §10 lock #25.
 - **Chinese-HQ providers default-OFF.** DeepSeek, Moonshot/Kimi, Qwen, Zhipu require user opt-in per provider. V5 §17 R-023.
-- **Kimi K2 family discontinues 2026-05-25 (7 days from V5 lock).** `packages/types/src/models.json` already pins `kimi-k2.6`.
-- **DeepSeek V4-Pro promo expires 2026-05-31 15:59 UTC.** Auto-reroute logic already wired in `packages/routing/`.
+- **Kimi K2 family discontinues 2026-05-25 (7 days from V5 lock).** `packages/contracts/types/src/models.json` already pins `kimi-k2.6`.
+- **DeepSeek V4-Pro promo expires 2026-05-31 15:59 UTC.** Auto-reroute logic already wired in `packages/ai/routing/`.
 - **Article 50 disclosure must ship pre-2026-08-02.** EU AI Act enforcement starts 4 days before mobile launch target. €15M / 3% global turnover penalty exposure.
 
 ## Current References

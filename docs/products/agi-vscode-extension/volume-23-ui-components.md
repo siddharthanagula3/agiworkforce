@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `src/providers/chatEditorPanel.ts`, `src/features/sidebar-webview/{sidebarProvider.ts,webviewContent.ts}`, `src/webview/render.ts`, `src/providers/diffDecorationProvider.ts`, `src/core/commandSetup.ts`, `src/providers/agentMode/agentUI.ts`, `src/features/model-picker/{index.ts,modelConstants.ts}`, `src/data/tokenCounter.ts`, `src/extension.ts`, `src/features/desktop-bridge/desktopBridge.ts`. Model facts (never re-listed): `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), `apps/extension-vscode/AGENTS.md`, and real repo paths: `apps/extension-vscode/package.json`, `src/providers/chatEditorPanel.ts`, `src/features/sidebar-webview/{sidebarProvider.ts,webviewContent.ts}`, `src/webview/render.ts`, `src/providers/diffDecorationProvider.ts`, `src/core/commandSetup.ts`, `src/providers/agentMode/agentUI.ts`, `src/features/model-picker/{index.ts,modelConstants.ts}`, `src/data/tokenCounter.ts`, `src/extension.ts`, `src/features/desktop-bridge/desktopBridge.ts`. Model facts (never re-listed): `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -53,7 +53,7 @@ AI edits are reviewed as inline decorations, never silently applied by default (
 
 Quick Pick is the primary command-driven picker surface (`src/core/commandSetup.ts`, `src/providers/agentMode/agentUI.ts`).
 
-- **Model picker**: `agi-workforce.selectModel` builds provider-grouped items via `buildGroupedQuickPickItems()` (`src/features/model-picker/modelConstants.ts`), using separators per provider. Model IDs are sourced from the picker options/`packages/types/src/models.json` — never hardcoded in UI copy. ✅ Built.
+- **Model picker**: `agi-workforce.selectModel` builds provider-grouped items via `buildGroupedQuickPickItems()` (`src/features/model-picker/modelConstants.ts`), using separators per provider. Model IDs are sourced from the picker options/`packages/contracts/types/src/models.json` — never hardcoded in UI copy. ✅ Built.
 - Conversation switcher, agent-action sheet, feedback-type picker, and agent-mode/effort pickers all use `showQuickPick` with `QuickPickItemKind.Separator` grouping. ✅ Built (`src/core/commandSetup.ts`).
 - Approval pickers for agent tool execution must default to the safe choice and clearly name the target (`src/providers/agentMode/agentUI.ts`). ✅ Built.
 
@@ -109,7 +109,7 @@ Security
 
 - Silently routing a Local chat/file to BYOK or Cloud, or hiding the provider label.
 - Auto-syncing an editor session to app chat, or handing off unredacted context.
-- Hardcoding model IDs in UI strings instead of reading `packages/types/src/models.json` / the picker options.
+- Hardcoding model IDs in UI strings instead of reading `packages/contracts/types/src/models.json` / the picker options.
 - Showing removed tiers ("Plus", `pro_plus`, "Hobby") or inventing INR prices for Pro/Max, or offering credit top-ups.
 - Rendering unsanitized markdown/raw HTML in a webview, or bypassing the CSP nonce.
 - Auto-applying diffs without review, or making a destructive action's confirm the default button.

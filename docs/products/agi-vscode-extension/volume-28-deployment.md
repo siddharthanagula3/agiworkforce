@@ -20,7 +20,7 @@ This volume defines how the AGI VS Code Extension is built, packaged, published,
 
 ## Versioning
 
-🟡 Partial. The single source of truth is `package.json` `version` (`0.3.0`), governed by SemVer and a Keep-a-Changelog history (✅ `CHANGELOG.md`), with release tags of the form `vscode-vX.Y.Z` (✅ compare/tag links `CHANGELOG.md:65-66`). The running version is resolved at runtime by `getExtensionVersion()` (✅ `src/platform/version.ts`) and reported through telemetry, feedback, GitHub-issue prefill, and the desktop-bridge handshake, so a stale hardcoded literal never masks the real build. The compatibility floor is `engines.vscode: "^1.100.0"` (✅ `package.json:12-14`), required by the `@agi` chat participant and webview APIs. Requirements: bump `version` and add a dated `CHANGELOG.md` entry before packaging; the Marketplace rejects re-publishing an existing version, so every publish is a new number; drop `preview: true` only at GA; never enumerate concrete model IDs in release notes (CHANGELOG already scrubbed rot-prone IDs — `CHANGELOG.md:30`), which come only from `packages/types/src/models.json`.
+🟡 Partial. The single source of truth is `package.json` `version` (`0.3.0`), governed by SemVer and a Keep-a-Changelog history (✅ `CHANGELOG.md`), with release tags of the form `vscode-vX.Y.Z` (✅ compare/tag links `CHANGELOG.md:65-66`). The running version is resolved at runtime by `getExtensionVersion()` (✅ `src/platform/version.ts`) and reported through telemetry, feedback, GitHub-issue prefill, and the desktop-bridge handshake, so a stale hardcoded literal never masks the real build. The compatibility floor is `engines.vscode: "^1.100.0"` (✅ `package.json:12-14`), required by the `@agi` chat participant and webview APIs. Requirements: bump `version` and add a dated `CHANGELOG.md` entry before packaging; the Marketplace rejects re-publishing an existing version, so every publish is a new number; drop `preview: true` only at GA; never enumerate concrete model IDs in release notes (CHANGELOG already scrubbed rot-prone IDs — `CHANGELOG.md:30`), which come only from `packages/contracts/types/src/models.json`.
 
 ## Updates
 
@@ -63,7 +63,7 @@ The domain is production-ready when a reproducible, versioned `.vsix` builds fro
 - Claiming a live Marketplace or Open VSX listing before one exists (both are 🟡/🔭 today).
 - Re-publishing an existing version, or publishing without bumping `version` + CHANGELOG.
 - Committing `vsce`/`ovsx` PATs, or baking any secret into the `.vsix`.
-- Hardcoding a model ID in release notes or the manifest; IDs come only from `packages/types/src/models.json`.
+- Hardcoding a model ID in release notes or the manifest; IDs come only from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers. The `agiWorkforce.tier` enum still encodes `hobby`/`pro_plus` (`package.json:818-838`) — a known 🟡 reconciliation gap; copy uses Free / Basic / Pro / Max / Enterprise only, never Plus/Hobby/pro_plus, and never offers top-ups.
 - Treating a Marketplace unpublish as remediation for a Managed-Cloud incident (use the server-side kill-switch), or making deployment a data-egress event.
 - Referencing Supabase (fully migrated away) or Next.js `middleware.ts` (Web uses `proxy.ts`); the stack is Clerk + Neon + Stripe.

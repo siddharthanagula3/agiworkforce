@@ -1,7 +1,7 @@
 # Volume 11 — Context System
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 11)
-Authority: this manual, `docs/strategy/09-reference-codebases.md` (context cascade, RAG tool selection), `docs/strategy/10-oss-corpus-port-plan.md` §2/§4 (compaction, memory), `packages/types/src/suite-contracts.ts`.
+Authority: this manual, `docs/strategy/09-reference-codebases.md` (context cascade, RAG tool selection), `docs/strategy/10-oss-corpus-port-plan.md` §2/§4 (compaction, memory), `packages/contracts/types/src/suite-contracts.ts`.
 
 ## Philosophy & Cloud/Local stance
 
@@ -24,14 +24,14 @@ Cloud/Local changes the _eligible sources and the retrieval/embedding location_.
 
 ## Repository map
 
-- Context assembly + chat lib: `packages/unified-chat/src/lib/`, `apps/web/features/chat/lib/`, `apps/web/features/chat/services/`.
+- Context assembly + chat lib: `packages/ui/unified-chat/src/lib/`, `apps/web/features/chat/lib/`, `apps/web/features/chat/services/`.
 - Memory sources (assembled into context): `apps/desktop/src/features/memory/` (`MemorySearch.tsx`, `MemoryManager.tsx`), Vol 12.
 - Projects/knowledge sources: `apps/web/features/projects/`, `apps/desktop/src/features/projects/` (Vol 13).
 - Files/ingestion sources: `apps/desktop/src/features/file-upload/`, `apps/mobile/services/docParser.ts` (Vol 15).
-- Connectors/MCP/skills sources: `apps/web/features/connectors/`, `apps/desktop/src/features/{connectors,mcp}/`, `packages/mcp/src/`, `packages/skills/src/`.
-- Trust scoping primitives: `packages/types/src/suite-contracts.ts` (`PrivacyMode`, `ChatExecutionMode`, `assertSurfaceCanSyncChats`).
-- Model windows/capabilities (budgeting): `packages/types/src/models.json`.
-- Routing/runtime (where assembly runs): `packages/routing/`, `packages/runtime/`, `packages/llm-runtime/`.
+- Connectors/MCP/skills sources: `apps/web/features/connectors/`, `apps/desktop/src/features/{connectors,mcp}/`, `packages/tools/mcp/src/`, `packages/tools/skills/src/`.
+- Trust scoping primitives: `packages/contracts/types/src/suite-contracts.ts` (`PrivacyMode`, `ChatExecutionMode`, `assertSurfaceCanSyncChats`).
+- Model windows/capabilities (budgeting): `packages/contracts/types/src/models.json`.
+- Routing/runtime (where assembly runs): `packages/ai/routing/`, `packages/client/client-runtime/`, `packages/ai/provider-runtime/`.
 
 ## Competitor notes
 

@@ -6,7 +6,7 @@ Accepted — 2026-05-09.
 
 ## Context
 
-The platform may, at some point, find itself in a position where parts of it have value to acquirers independent of the whole. Examples that have come up in informal discussion: `@agiworkforce/llm-runtime` as a standalone retry/watchdog library, `@agiworkforce/runtime` (state + queue + context) as a state library competing with zustand or jotai, the worker direction-inversion protocol as an off-the-shelf SDK for cross-device agent fleets.
+The platform may, at some point, find itself in a position where parts of it have value to acquirers independent of the whole. Examples that have come up in informal discussion: `@agiworkforce/llm-runtime` as a standalone retry/watchdog library, `@agiworkforce/client-runtime` (state + queue + context) as a state library competing with zustand or jotai, the worker direction-inversion protocol as an off-the-shelf SDK for cross-device agent fleets.
 
 Maintaining acquisition optionality has a real architectural cost. Internal-only dependencies between packages (e.g. `@agiworkforce/llm-runtime` reaching into `@agiworkforce/auth` for telemetry) make the package non-portable. Conversely, every package optimised for portability adds boilerplate (clean `package.json` exports, no implicit globals, explicit interface boundaries).
 
@@ -23,7 +23,7 @@ We optimise for independent shippability. Architectural patterns this drives:
 - `LatchedHeaderStore` (§5) is per-process, not persisted — persistence would couple it to a storage backend.
 - `WorkSecret` codec lives in `types.ts` as functions, not a class — the codec round-trips cleanly across any FFI without `instanceof` semantics. (See `2026-05-09-worksecret-codec-in-types.md`.)
 - `dispatch.ts` accepts `rotateKey: () => Promise<...>` as injection rather than importing Supabase. (See `2026-05-09-dispatch-supabase-rpc-injection.md`.)
-- `@agiworkforce/runtime` (state + queue + context) has zero application-specific imports — `AppStateStore.ts` is generic over its domain shape.
+- `@agiworkforce/client-runtime` (state + queue + context) has zero application-specific imports — `AppStateStore.ts` is generic over its domain shape.
 
 ## Consequences
 

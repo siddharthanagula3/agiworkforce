@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `docs/surfaces/cli.md`. Grounded in `apps/cli/src/agent/{mod,chat,executor,prompt}.rs`, `apps/cli/src/routing/{fallback,strategy}.rs`, `apps/cli/src/models/{streaming,sse_decoder,provider_dispatch,mod}.rs`, `apps/cli/src/{errors,compaction,cost_ledger,sandbox,hooks}.rs`, `apps/cli/src/platform/runtime/{tool_catalog,session_control}.rs`, `crates/agiworkforce-app-server/src/lib.rs`, and model IDs from `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/cli/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `docs/surfaces/cli.md`. Grounded in `apps/cli/src/agent/{mod,chat,executor,prompt}.rs`, `apps/cli/src/routing/{fallback,strategy}.rs`, `apps/cli/src/models/{streaming,sse_decoder,provider_dispatch,mod}.rs`, `apps/cli/src/{errors,compaction,cost_ledger,sandbox,hooks}.rs`, `apps/cli/src/platform/runtime/{tool_catalog,session_control}.rs`, `crates/agiworkforce-app-server/src/lib.rs`, and model IDs from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies the AGI CLI **inference engine**: how a turn goes from a user message to a streamed, tool-augmented model response and back. The CLI is the pure-Rust surface with the widest trust exposure — Local + BYOK + Managed Cloud — so the runtime's first duty is boundary enforcement, not throughput. Every turn passes through `AgentSession::validate_privacy_boundary` (`apps/cli/src/agent/mod.rs`) before any bytes leave the process; a `PrivacyMode::Local` session with a non-local provider fails closed. Sessions are workspace/session-scoped: the runtime never auto-syncs a turn to app chat, and Local→BYOK is an explicit, consented fork. Model IDs come from `packages/types/src/models.json` and the catalog — never hardcoded.
+This volume specifies the AGI CLI **inference engine**: how a turn goes from a user message to a streamed, tool-augmented model response and back. The CLI is the pure-Rust surface with the widest trust exposure — Local + BYOK + Managed Cloud — so the runtime's first duty is boundary enforcement, not throughput. Every turn passes through `AgentSession::validate_privacy_boundary` (`apps/cli/src/agent/mod.rs`) before any bytes leave the process; a `PrivacyMode::Local` session with a non-local provider fails closed. Sessions are workspace/session-scoped: the runtime never auto-syncs a turn to app chat, and Local→BYOK is an explicit, consented fork. Model IDs come from `packages/contracts/types/src/models.json` and the catalog — never hardcoded.
 
 ## Conversation Context
 
@@ -63,7 +63,7 @@ The runtime tracks spend in `AgentSession.cost_ledger` (`apps/cli/src/cost_ledge
 - `apps/cli/src/safety/{approval,dangerous_commands}.rs` — approval + risk classification.
 - `apps/cli/src/platform/runtime/{tool_catalog,session_control}.rs` — tool catalog, managed sessions.
 - `crates/agiworkforce-app-server/src/lib.rs` — JSON-RPC/WS tool host.
-- `packages/types/src/models.json` — model-ID + capability SSOT.
+- `packages/contracts/types/src/models.json` — model-ID + capability SSOT.
 
 ## Competitor notes
 
@@ -78,7 +78,7 @@ Claude Code and Codex run a single-vendor runtime (Anthropic / OpenAI) with clou
 ## Anti-patterns
 
 - Routing or rotating a Local session to BYOK/Managed without re-validating the privacy boundary.
-- Hardcoding a model ID anywhere in the runtime; read from `packages/types/src/models.json`.
+- Hardcoding a model ID anywhere in the runtime; read from `packages/contracts/types/src/models.json`.
 - Retrying hard errors (auth, invalid payload) or ignoring `Retry-After` / backoff caps.
 - Executing model/tool output as shell, SQL, or privileged action without approval gates.
 - Claiming the `CompositeRouter`, cost-aware routing, or remote control as shipped — they are 🟡/🔭.

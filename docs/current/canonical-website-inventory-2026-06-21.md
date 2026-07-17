@@ -8,8 +8,8 @@ Status: Reference (grounded in `~/Desktop/reference/claude_reference` web + sett
 implementation in shared packages (`@agiworkforce/unified-chat`, `@agiworkforce/ui`), reused
 by desktop + mobile. Rule throughout: **website == desktop minus desktop-only extras**.
 Reference UI is Claude.ai; **structure is borrowed, content is not** — model IDs come from
-`packages/types/src/models.json`, pricing is agiworkforce Local/Pro($20)/Max($80). Icon family
-is **lucide-react** (the convention in `packages/ui/src/settings-nav.ts`); every icon below is
+`packages/contracts/types/src/models.json`, pricing is agiworkforce Local/Pro($20)/Max($80). Icon family
+is **lucide-react** (the convention in `packages/ui/ui/src/settings-nav.ts`); every icon below is
 a concrete lucide name.
 
 > **Product-truth firewall (load-bearing).** The reference shows Claude models (Opus 4.7 /
@@ -68,7 +68,7 @@ name+mode+`ChevronDown`; Adaptive-thinking toggle; More models `ChevronRight`; e
 
 **Model selector = structure only:** two-tier menu (current-gen models + descriptors +
 checkmark; divider; Adaptive-thinking toggle; divider; More models › flyout for legacy). The
-**model LIST + descriptors come from `packages/types/src/models.json` + provider capability
+**model LIST + descriptors come from `packages/contracts/types/src/models.json` + provider capability
 metadata** — do NOT hardcode the reference's "Opus 4.7 / Sonnet 4.6 / Haiku 4.5".
 
 Greeting `BrandedGreeting` + `getGreeting()` (`lib/greetings`); starburst → `Sparkles`. Chips
@@ -113,7 +113,7 @@ rendered markdown or line-numbered YAML+md. `SkillMentionPicker` exists (compose
 
 ### 2F. Settings Shell + Sections
 
-`SettingsShell` + `SettingsModal` (exist); nav SSOT `packages/ui/src/settings-nav.ts` (reuse
+`SettingsShell` + `SettingsModal` (exist); nav SSOT `packages/ui/ui/src/settings-nav.ts` (reuse
 verbatim). Modal: "Settings" + `X`; left search + icon'd nav (active = pill); right pane
 (label/desc left, control right). Canonical sections (lucide icons fixed in settings-nav):
 General `Settings2` · Account `CreditCard` (active-sessions table) · Personalization
@@ -188,8 +188,8 @@ already cover parity.
 
 ---
 
-**Grounding paths:** shared = `packages/unified-chat/src/components/`, `packages/ui/src/`;
-settings SSOT `packages/ui/src/settings-nav.ts`; model catalog SSOT
-`packages/types/src/models.json`; web routes `apps/web/app/`. Highest-confidence net-new shared
+**Grounding paths:** shared = `packages/ui/unified-chat/src/components/`, `packages/ui/ui/src/`;
+settings SSOT `packages/ui/ui/src/settings-nav.ts`; model catalog SSOT
+`packages/contracts/types/src/models.json`; web routes `apps/web/app/`. Highest-confidence net-new shared
 components: `DirectoryModal`, `ConnectorCard`, `ConnectorDetailPane`, `ToolPermissionControl`,
 `SkillsListColumn`, `SkillDetailPane`, `CustomizeShell`, `ArtifactGalleryCard`.

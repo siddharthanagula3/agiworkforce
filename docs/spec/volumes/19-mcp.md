@@ -1,7 +1,7 @@
 # Volume 19 — MCP (Model Context Protocol)
 
 Status: Canonical (depth expansion of `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 19)
-Authority: this manual · `docs/strategy/10-oss-corpus-port-plan.md` (MCP Python SDK OAuth reference, deferred tools) · `docs/strategy/09-reference-codebases.md` (deferred tools + ToolSearch, per-agent envelopes) · `crates/agiworkforce-protocol/src/mcp.rs` · `apps/cli/src/features/mcp/` · `packages/api/src/mcp.ts`
+Authority: this manual · `docs/strategy/10-oss-corpus-port-plan.md` (MCP Python SDK OAuth reference, deferred tools) · `docs/strategy/09-reference-codebases.md` (deferred tools + ToolSearch, per-agent envelopes) · `crates/agiworkforce-protocol/src/mcp.rs` · `apps/cli/src/features/mcp/` · `packages/client/desktop-command-client/src/mcp.ts`
 
 ## Philosophy & Cloud/Local stance
 
@@ -24,10 +24,10 @@ Cloud/Local/Hybrid changes which servers are reachable and how auth flows, never
 
 - MCP protocol types: `crates/agiworkforce-protocol/src/mcp.rs`; dynamic/deferred tool plumbing: `crates/agiworkforce-protocol/src/dynamic_tools.rs`.
 - CLI MCP client: `apps/cli/src/features/mcp/mod.rs` (server lifecycle, tool exposure); permissions via `crates/agiworkforce-execpolicy/` + `request_permissions.rs`.
-- TS MCP API: `packages/api/src/mcp.ts`; MCP-app surfaces: `packages/types/src/mcp-apps.ts`, `packages/types/src/webmcp.ts`.
+- TS MCP API: `packages/client/desktop-command-client/src/mcp.ts`; MCP-app surfaces: `packages/contracts/types/src/mcp-apps.ts`, `packages/contracts/types/src/webmcp.ts`.
 - Gateway-side MCP config/registry: `services/api-gateway/src/mcp/mcpConfig.ts`, `services/api-gateway/mcp-servers.json`, `services/api-gateway/src/mcp/__tests__/sharedClient.test.ts`.
 - Plugin-delivered MCP servers (manifest declares them): `crates/agiworkforce-plugin-runtime/` fixtures (`.agiworkforce-plugin/plugin.json`) — Vol 22.
-- Connector layer that may ride MCP transport: Vol 20 (`packages/unified-chat/src/lib/connectorPermissionStore.ts`).
+- Connector layer that may ride MCP transport: Vol 20 (`packages/ui/unified-chat/src/lib/connectorPermissionStore.ts`).
 
 ## Competitor notes
 

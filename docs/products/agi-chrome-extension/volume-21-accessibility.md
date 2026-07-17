@@ -48,7 +48,7 @@ Requirements: wrap non-essential motion in `@media (prefers-reduced-motion: redu
 
 The extension ships **English-only**: there is no `_locales/` directory, no `default_locale` in the manifest, and no `chrome.i18n.getMessage`/`__MSG_*` usage — all UI strings are hardcoded in TypeScript. Autofill reads page `aria-label`/`aria-labelledby`/`aria-required` to map fields, which is locale-agnostic input, not output localization. ✅ Built (field-label reading) — `apps/extension/src/jobAutofill.runtime.js`, `apps/extension/src/content.ts`.
 
-Requirements (all 🔭 Planned — none in repo): add `default_locale` + `_locales/<lang>/messages.json`; route user strings through `chrome.i18n.getMessage`; set `dir`/`lang` on the panel root with RTL support; localize dates/numbers via `Intl`. Provider IDs stay out of scope — they come only from `packages/types/src/models.json` and are never hardcoded or translated.
+Requirements (all 🔭 Planned — none in repo): add `default_locale` + `_locales/<lang>/messages.json`; route user strings through `chrome.i18n.getMessage`; set `dir`/`lang` on the panel root with RTL support; localize dates/numbers via `Intl`. Provider IDs stay out of scope — they come only from `packages/contracts/types/src/models.json` and are never hardcoded or translated.
 
 ## Repository map
 
@@ -79,6 +79,6 @@ Production-ready when: all panel/options/onboarding/approval flows pass an autom
 - Focus that escapes an open modal, or focus not restored on close.
 - Motion as the only "busy" signal; ignoring `prefers-reduced-motion`.
 - Reintroducing inline `<style>`/`innerHTML` and breaking the CSP `unsafe-inline` removal.
-- Hardcoding a model ID into any label or localized string — IDs come only from `packages/types/src/models.json`.
+- Hardcoding a model ID into any label or localized string — IDs come only from `packages/contracts/types/src/models.json`.
 - Supabase references, or removed tiers ("Plus", `pro_plus`, "Hobby") / invented INR prices in paywall copy — tiers are Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise, no top-ups.
 - Claiming localization, high-contrast, or reduced-motion is shipped — 🔭 Planned until a cited path proves otherwise.

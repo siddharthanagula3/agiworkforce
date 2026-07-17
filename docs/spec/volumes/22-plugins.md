@@ -27,8 +27,8 @@ The trust posture mirrors skills, scaled up: plugins install **only from an allo
 - Hooks contributed by plugins: `apps/cli/src/features/hooks/` (`hooks.rs`), typed lifecycle (`docs/strategy/09`).
 - Commands contributed by plugins: folder-per-command convention (`docs/strategy/15` §3); CLI command registry.
 - MCP servers contributed by plugins: Vol 19 (`apps/cli/src/features/mcp/`, `crates/agiworkforce-protocol/src/mcp.rs`).
-- TS plugin/marketplace API: `packages/api/src/marketplace.ts`; settings surface: Desktop settings includes a Plugins section (source-of-truth Desktop section).
-- Vetting (adopt SkillSpector wholesale, Apache-2.0): wire scanner model IDs to `packages/types/src/models.json`; submit-time lint via a `validate_plugins`-style check (`docs/strategy/10` §5).
+- TS plugin/marketplace API: `packages/client/desktop-command-client/src/marketplace.ts`; settings surface: Desktop settings includes a Plugins section (source-of-truth Desktop section).
+- Vetting (adopt SkillSpector wholesale, Apache-2.0): wire scanner model IDs to `packages/contracts/types/src/models.json`; submit-time lint via a `validate_plugins`-style check (`docs/strategy/10` §5).
 
 ## Competitor notes
 

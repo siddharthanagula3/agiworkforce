@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, and the shipped surfaces this volume grounds in: `apps/extension/src/features/content/autofill/{detector,filler,linkedin,lever,greenhouse,ashby}.ts`, `apps/extension/src/features/computer-use/{agentLoop,cdpDriver,escalationEngine,cloudAgentClient}.ts`, `apps/extension/src/features/content/{browserTool,page-metadata}.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/manifest.json`. Model-by-plan gating for the bridged chat draws model facts only from `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/extension/AGENTS.md`, `apps/extension/THREAT_MODEL.md`, and the shipped surfaces this volume grounds in: `apps/extension/src/features/content/autofill/{detector,filler,linkedin,lever,greenhouse,ashby}.ts`, `apps/extension/src/features/computer-use/{agentLoop,cdpDriver,escalationEngine,cloudAgentClient}.ts`, `apps/extension/src/features/content/browserTool.ts`, `apps/extension/src/page-metadata.ts`, `apps/extension/src/background/policy.ts`, `apps/extension/manifest.json`. Model-by-plan gating for the bridged chat draws model facts only from `packages/contracts/types/src/models.json`. (Corrected 2026-07-11: `page-metadata.ts` lives at the top level of `apps/extension/src/`, not under `features/content/` — that path held a duplicate fork deleted by commit `59c8f4650` for missing security fixes.)
 
 ## Overview & stance
 
@@ -50,13 +50,13 @@ Trust boundaries constrain the whole surface. The extension holds **no provider 
 
 ## User Approval — ask-before-acting plans + high-risk approvals
 
-🟡 Partial — `agentLoop.onBeforeAction` is a per-action gate that is **fail-closed**: a 30s timeout or callback error resolves DENY, and approval is bound to the specific pending action (no spam-approve). Escalation hand-offs are surfaced via `emitEscalationEvent` for the side panel banner. Gaps: the default gate is `undefined` (allow-all) and the side-panel confirmation dialog is still a documented "seam for day-2"; **whole-plan** approval (approve a multi-step plan up front) and **high-risk-action classification** are not yet built; **high-risk-site detection/intervention** is 🔭 (no such classifier exists in `apps/extension/src`). Entitlement/plan gating for the bridged chat is server-side: a 429 `{kind:'paywall', requiredTier}` renders the paywall (tiers Free / Basic / Pro / Max / Enterprise), with model-by-plan gating from `packages/types/src/models.json`.
+🟡 Partial — `agentLoop.onBeforeAction` is a per-action gate that is **fail-closed**: a 30s timeout or callback error resolves DENY, and approval is bound to the specific pending action (no spam-approve). Escalation hand-offs are surfaced via `emitEscalationEvent` for the side panel banner. Gaps: the default gate is `undefined` (allow-all) and the side-panel confirmation dialog is still a documented "seam for day-2"; **whole-plan** approval (approve a multi-step plan up front) and **high-risk-action classification** are not yet built; **high-risk-site detection/intervention** is 🔭 (no such classifier exists in `apps/extension/src`). Entitlement/plan gating for the bridged chat is server-side: a 429 `{kind:'paywall', requiredTier}` renders the paywall (tiers Free / Basic / Pro / Max / Enterprise), with model-by-plan gating from `packages/contracts/types/src/models.json`.
 
 ## Repository map
 
 - `apps/extension/src/features/content/autofill/{detector,filler,linkedin,lever,greenhouse,ashby,index}.ts` — job-form detection + deterministic fill.
 - `apps/extension/src/features/computer-use/{agentLoop,cdpDriver,escalationEngine,cloudAgentClient}.ts` — CDP computer-use loop, action layer, escalation boundary, gateway egress.
-- `apps/extension/src/features/content/{browserTool,page-metadata,dom-helpers,nlweb,webmcp}.ts` — action bridge + page context extraction.
+- `apps/extension/src/features/content/browserTool.ts` — action bridge. `apps/extension/src/{page-metadata,dom-helpers,nlweb,webmcp}.ts` (top-level, not `features/content/`) — page context extraction.
 - `apps/extension/src/background/policy.ts` — message/origin allowlist, gateway/bridge URL validation, scheduled-task gating.
 - `apps/extension/manifest.json`, `apps/extension/THREAT_MODEL.md` — permissions, CSP egress lock, threat model.
 
@@ -79,4 +79,4 @@ The domain is production-ready when interaction is deterministic-first, allowlis
 - Auto-submitting forms, or clicking Submit/purchase/delete without explicit approval.
 - Treating fenced page text as instructions; ignoring a `SECURITY WARNING` injection prefix.
 - Claiming structured table/list extraction, whole-plan approval, or high-risk-site intervention as shipped — they are 🔭.
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`); referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups; referencing Supabase; renaming `proxy.ts` to `middleware.ts`.
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`); referencing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups; referencing Supabase; renaming `proxy.ts` to `middleware.ts`.

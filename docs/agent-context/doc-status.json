@@ -1,16 +1,14 @@
 {
   "version": 2,
-  "lastUpdated": "2026-06-25",
+  "lastUpdated": "2026-07-16",
   "currentSourcesOfTruth": [
     "AGENTS.md",
-    "AGI_WORKFORCE.md",
     "CLAUDE.md",
-    "PLAN.md",
-    "TODO.md",
     "docs/current/README.md",
     "docs/current/source-of-truth.md",
     "docs/current/agi-product-requirements.md",
     "docs/current/parity-implementation-matrix.md",
+    "docs/current/frontend-experience-contract.md",
     "docs/current/byok-open-model-provider-strategy.md",
     "docs/current/provider-capability-matrix.md",
     "docs/current/trust-mode-surface-matrix.md",
@@ -38,13 +36,12 @@
     "docs/00-foundation/owner-decision-register.md",
     "docs/00-foundation/master-documentation-roadmap.md",
     "docs/00-foundation/engineering-constitution-authority-map.md",
-    "docs/03-runtimes/context-runtime/bk-11.01-deterministic-context-assembly.md",
-    "docs/implementation-backlog.md"
+    "docs/03-runtimes/context-runtime/bk-11.01-deterministic-context-assembly.md"
   ],
   "currentEvidence": [
-    "docs/intentional-divergences.md",
     "docs/reference/REFERENCE_INDEX.md",
-    "docs/reference/REFERENCE_STRUCTURE.md"
+    "docs/reference/REFERENCE_STRUCTURE.md",
+    "docs/research/claude-live-frontend-system-2026-07-16.md"
   ],
   "supportingRules": [
     "docs/agent-context/repo-map.json",

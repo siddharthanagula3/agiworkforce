@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `crates/agiworkforce-protocol/src/error.rs`; `crates/agiworkforce-app-server/src/lib.rs`; `packages/runtime/src/{offline-queue,offline-sync,queue,state}`; `services/signaling-server/src/index.ts`; `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`; `apps/mobile/services/companion.ts`; `apps/web/app/api/chat/sync/route.ts`; and the Repository map below.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `crates/agiworkforce-protocol/src/error.rs`; `crates/agiworkforce-app-server/src/lib.rs`; `packages/client/client-runtime/src/{offline-queue,offline-sync,queue,state}`; `services/signaling-server/src/index.ts`; `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`; `apps/mobile/services/companion.ts`; `apps/web/app/api/chat/sync/route.ts`; and the Repository map below.
 
 ## Overview & stance
 
-AGI Runtime is the internal shared execution layer — not a user surface and not a seventh product. This volume specifies how that layer degrades and recovers when things go wrong: a provider 500s mid-turn, a session file is truncated, the network drops, the disk fills, or a task is killed halfway. There is no monolithic runtime daemon today; the Runtime is assembled from the local app-server (JSON-RPC-over-stdio + WebSocket, CLI-only), `packages/runtime`, the Desktop `127.0.0.1` WS/IPC host, the Chrome native-messaging bridge, `services/signaling-server`, and the Neon delta-sync APIs. Recovery must be coherent across all of them.
+AGI Runtime is the internal shared execution layer — not a user surface and not a seventh product. This volume specifies how that layer degrades and recovers when things go wrong: a provider 500s mid-turn, a session file is truncated, the network drops, the disk fills, or a task is killed halfway. There is no monolithic runtime daemon today; the Runtime is assembled from the local app-server (JSON-RPC-over-stdio + WebSocket, CLI-only), `packages/client/client-runtime`, the Desktop `127.0.0.1` WS/IPC host, the Chrome native-messaging bridge, `services/signaling-server`, and the Neon delta-sync APIs. Recovery must be coherent across all of them.
 
 Trust boundaries shape every recovery path. Recovery must **never** silently promote a Local or BYOK session to Managed Cloud: a provider outage on a BYOK session retries against the same BYOK key or surfaces to the user, never through the cloud gateway. Only Managed-Cloud chats participate in Neon delta-sync recovery; Local/BYOK rows carry no `cloud_id` and are never pushed or pulled (`apps/web/app/api/chat/sync/route.ts`). Remote Control is a window, not a mode: if a phone loses its link mid-task, the task keeps running on the host and the window reattaches. BYOK exists only on Desktop, CLI, and VS Code.
 
@@ -18,7 +18,7 @@ The local session loop already distinguishes transient from terminal provider er
 
 - Retries use bounded exponential backoff; the ceiling is a hard retry-limit, after which the error is surfaced with provider name and status, never swallowed.
 - On BYOK, a failing provider retries against the **same** user key or stops; it must not fall back to the managed gateway. Provider label stays visible throughout.
-- Cross-provider failover (auto-switch to a second catalog model on sustained 5xx) is **🔭 Planned** — no failover orchestrator exists in `error.rs`. Model IDs for any such policy come only from `packages/types/src/models.json`.
+- Cross-provider failover (auto-switch to a second catalog model on sustained 5xx) is **🔭 Planned** — no failover orchestrator exists in `error.rs`. Model IDs for any such policy come only from `packages/contracts/types/src/models.json`.
 
 ## Session Corruption — recover sessions
 
@@ -30,7 +30,7 @@ The app-server holds sessions in memory with a `max_sessions` cap and a `session
 
 ## Network Failure — handle connectivity issues
 
-Connectivity loss is the best-covered edge today. `packages/runtime/src/offline-queue/index.ts` enqueues messages and tool-execution requests with bounded exponential backoff (1s base, 30s cap, `maxRetries`) and try/catch around every persist. `offline-sync/index.ts` runs an explicit `ONLINE / OFFLINE / SYNCING / ERROR` state machine, debounces sync on connectivity restore, and schedules backoff retries on sync failure. **✅ Built**.
+Connectivity loss is the best-covered edge today. `packages/client/client-runtime/src/offline-queue/index.ts` enqueues messages and tool-execution requests with bounded exponential backoff (1s base, 30s cap, `maxRetries`) and try/catch around every persist. `offline-sync/index.ts` runs an explicit `ONLINE / OFFLINE / SYNCING / ERROR` state machine, debounces sync on connectivity restore, and schedules backoff retries on sync failure. **✅ Built**.
 
 - Managed-Cloud delta-sync is resumable and idempotent: `computePullCursor` (`apps/web/app/api/chat/sync/route.ts`) deliberately re-requests the overlap window rather than skipping rows, and pushes UPSERT by `id`, so a dropped sync mid-page never loses or duplicates data. **✅ Built**.
 - The signaling relay queues approvals sent while the mobile window is disconnected and delivers them on reconnect, with heartbeat-based stale-session cleanup (`services/signaling-server/src/index.ts` — `QueuedApproval`, heartbeat). **✅ Built** on the relay.
@@ -46,7 +46,7 @@ Storage exhaustion is only partially defended. The offline queue wraps persisten
 
 ## Interrupted Tasks — recover interrupted execution
 
-User interruption is a first-class, non-fatal signal: `AgiworkforceErr::Interrupted` (Ctrl-C) is modeled explicitly and included in `is_retryable` so the loop can unwind cleanly (`crates/agiworkforce-protocol/src/error.rs`). **✅ Built**. Cancellation propagates over the relay via the `cancel` verb (`services/signaling-server/src/index.ts`). The priority send pipeline (`packages/runtime/src/queue/messageQueueManager.ts`) preserves queued-but-unsent user turns across mutations, so an interrupt does not drop pending input.
+User interruption is a first-class, non-fatal signal: `AgiworkforceErr::Interrupted` (Ctrl-C) is modeled explicitly and included in `is_retryable` so the loop can unwind cleanly (`crates/agiworkforce-protocol/src/error.rs`). **✅ Built**. Cancellation propagates over the relay via the `cancel` verb (`services/signaling-server/src/index.ts`). The priority send pipeline (`packages/client/client-runtime/src/queue/messageQueueManager.ts`) preserves queued-but-unsent user turns across mutations, so an interrupt does not drop pending input.
 
 - A cancelled tool call must leave no half-applied side effects the runtime silently ignores; partial output is labeled interrupted, not presented as complete.
 - Resume-after-crash from a durable checkpoint is **🔭 Planned** — app-server sessions are in-memory with a 3600s idle timeout, so a killed host cannot resume a task, only restart.
@@ -56,8 +56,8 @@ User interruption is a first-class, non-fatal signal: `AgiworkforceErr::Interrup
 
 - `crates/agiworkforce-protocol/src/error.rs` — retryable/terminal taxonomy, retry limits, interruption.
 - `crates/agiworkforce-app-server/src/lib.rs` — CLI-only session host; session cap + idle timeout.
-- `packages/runtime/src/{errors.ts,offline-queue,offline-sync}` — dispatch errors; offline enqueue/backoff/sync state machine.
-- `packages/runtime/src/{queue/messageQueueManager.ts,state/AppStateStore.ts}` — priority send lanes; persisted app state (hook deferred).
+- `packages/client/client-runtime/src/{errors.ts,offline-queue,offline-sync}` — dispatch errors; offline enqueue/backoff/sync state machine.
+- `packages/client/client-runtime/src/{queue/messageQueueManager.ts,state/AppStateStore.ts}` — priority send lanes; persisted app state (hook deferred).
 - `services/signaling-server/src/index.ts` — offline approval queueing, heartbeat, reconnect, `cancel`.
 - `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs` — WS host, IP lockout.
 - `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts` — companion reconnect (gated off).
@@ -79,7 +79,7 @@ The domain is production-ready when every edge path above degrades without data 
 
 - Silently rerouting a failed Local/BYOK turn to Managed Cloud, or reclassifying a recovered session's trust mode.
 - Claiming durable session resume, cross-provider failover, or disk-full pre-flight as shipped — all are 🔭 today.
-- Hardcoding a fallback model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding a fallback model ID instead of reading `packages/contracts/types/src/models.json`.
 - Swallowing a provider error instead of surfacing it after the retry limit, or presenting interrupted/partial output as complete.
 - Referencing removed tiers (Plus, `pro_plus`, Hobby) or credit top-ups in any degraded-mode messaging; reference Supabase (fully migrated to Clerk + Neon + Stripe).
 - Inventing routes, env vars, or a monolithic runtime daemon the repo does not have.

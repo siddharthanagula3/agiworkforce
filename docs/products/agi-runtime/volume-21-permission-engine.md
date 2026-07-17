@@ -68,4 +68,4 @@ The engine is production-ready when a single evaluation path returns the same ve
 - Letting the agent write `.agiworkforce`/`.git`/`.agents` or forge its own persistent allow rules.
 - Persisting a grant with no attribution or (for network) no justification; skipping revocation.
 - Claiming the companion approval loop is shipped (it is 🟡: `companion:false`, Desktop last mile unwired).
-- Inventing a monolithic runtime daemon, hardcoding a model ID (use `packages/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups, or referencing Supabase.
+- Inventing a monolithic runtime daemon, hardcoding a model ID (use `packages/contracts/types/src/models.json`), referencing removed tiers (Plus/Hobby/`pro_plus`) or credit top-ups, or referencing Supabase.

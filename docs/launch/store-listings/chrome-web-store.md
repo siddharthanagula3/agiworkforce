@@ -1,55 +1,46 @@
-# Chrome Web Store listing — AGI Workforce browser automation
+# Chrome Web Store listing — AGI Browser Companion
 
-## Item name (45 chars)
+Status: Draft; capability claims must be re-verified against the packaged build
+Owner: Extension lead
+Last updated: 2026-07-15
 
-`AGI Workforce — multi-model browser AI`
+## Item name
 
-## Short description (132 chars)
+`AGI Browser Companion`
 
-`Browser automation + chat across Claude, GPT, Gemini, and 10+ LLMs. Pair with the AGI Workforce desktop app or hit the cloud.`
+## Short description
 
-## Detailed description (16,384 chars max)
+`Managed Cloud chat, approved-site page context, and permissioned browser actions in a Chrome side panel.`
 
-```
-AGI Workforce browser extension — multi-model AI in your browser.
+## Detailed description
+
+```text
+Use AGI from the page you are already viewing.
 
 WHAT IT DOES
 
-• Browser-side chat with Claude, GPT, Gemini, and 10+ LLM providers
-• Bidirectional bridge to the AGI Workforce desktop app (when running) — talk to the same agent from your browser as your menu bar
-• Falls back to the cloud gateway when the desktop bridge isn't running
-• LinkedIn / Lever job autofill (existing v1.2.0 feature)
-• Side panel chat — never lose your place in the page
+• Opens AGI Managed Cloud chat in a Chrome side panel
+• Keeps browser conversations on this browser, separate from AGI app chats
+• Adds selected text or an explicitly captured page to a request
+• Summarizes, explains, translates, and extracts information from a page
+• Runs approved browser actions with an ask-before-acting control
+• Can hand selected, redacted context to AGI Desktop for explicit review
 
-KEY FEATURES
+PRIVACY AND CONTROL
 
-• 10+ providers reachable from a single popup: Anthropic Claude, OpenAI GPT, Google Gemini, xAI Grok, DeepSeek, Mistral, Qwen, Moonshot Kimi, Perplexity, Ollama (via desktop bridge)
-• Bring your own keys — paste them into the extension, stored only in chrome.storage.local
-• Provider switching mid-conversation — same chat, any model
-• Tool use — let the agent click, type, and summarize on the active tab (with explicit permission)
+• Chrome has no Local or BYOK chat mode
+• AGI never silently falls back from Managed Cloud chat to Desktop inference
+• Page content is sent only through an explicit chat/capture action
+• Native context handoff requires preview and approval; it never sends a chat
+• Browser actions default to asking before acting
+• Provider/model admission and account entitlements are verified by AGI Cloud
 
-PRIVACY
-
-• Host permissions limited to localhost (for the desktop bridge) and explicit allowlists you grant per-site
-• BYOK keys live in chrome.storage.local, never leave your browser unless you call the provider directly
-• No analytics. No tracking pixels. No selling data.
-• Open contribution guidelines + visible source on the publisher dashboard
-
-WHO IT'S FOR
-
-• Developers who want one chat surface across Claude / GPT / Gemini in any tab
-• People paired with the AGI Workforce desktop app who want a browser-side companion
-• Job seekers using the LinkedIn / Lever autofill (existing feature)
-
-PRICING
-
-The extension itself is free. Optional Hobby tier ($5/mo) for managed cloud routing if you don't want to bring your own keys.
+AGI Browser Companion requires an AGI account for Managed Cloud chat. Feature
+availability and usage limits depend on the account plan shown by AGI Cloud.
 
 LINKS
 
 • Website: https://agiworkforce.com
-• Desktop app: https://agiworkforce.com/download
-• Docs: https://agiworkforce.com/docs
 • Privacy: https://agiworkforce.com/privacy
 • Support: support@agiworkforce.com
 ```
@@ -57,56 +48,53 @@ LINKS
 ## Category
 
 Primary: **Productivity**
-Tags: AI, Chat, Assistant, Browser Automation, Developer Tools
 
-## Language
+## Screenshots
 
-English (default; add localizations later).
+Use screenshots from the exact store candidate, not design mocks:
 
-## Promotional images (Chrome Web Store specific)
-
-| Image              | Dimensions | Required?                      |
-| ------------------ | ---------- | ------------------------------ |
-| Small promo tile   | 440 × 280  | Yes for featured               |
-| Large promo tile   | 920 × 680  | Optional                       |
-| Marquee promo tile | 1400 × 560 | Optional but boosts visibility |
-
-Recommend the small + large at minimum.
-
-## Screenshots (1280 × 800, up to 5)
-
-1. **Hero**: side-panel chat with the provider picker visible. Caption: "One panel. Every model."
-2. **Provider switch**: same chat thread alternating Claude / GPT / Gemini badges. Caption: "Mid-conversation switching."
-3. **BYOK**: settings page showing API key entry. Caption: "Bring your own keys."
-4. **Desktop bridge**: connection status indicator. Caption: "Pairs with the desktop app."
-5. **Tool use**: agent clicking + summarizing a page. Caption: "More than chat."
+1. Managed Cloud side-panel chat and server-admitted model picker.
+2. Selected-page-context preview before send.
+3. Ask-before-acting browser approval.
+4. Browser-local conversation history.
+5. Explicit Desktop context-handoff review.
 
 ## Privacy policy URL
 
 `https://agiworkforce.com/privacy`
 
-## Single purpose justification (Chrome Web Store asks for this for MV3)
+## Single-purpose justification
 
+```text
+This extension is AGI's browser companion. Its side-panel chat, explicit page
+context capture, permissioned browser actions, and reviewed Desktop handoff all
+serve the single purpose of helping a user work with the page they are viewing.
 ```
-This extension provides a single coherent feature: a multi-provider AI chat
-panel in the browser, with optional bridge to the AGI Workforce desktop
-app. All host permissions, storage, and tab access are in service of that
-single feature.
-```
 
-## Permissions justification (per-permission)
+## Permission justifications
 
-| Permission                      | Justification                                                                                |
-| ------------------------------- | -------------------------------------------------------------------------------------------- |
-| `activeTab`                     | To run summarize / fill / extract on the user's current tab when they invoke an agent action |
-| `tabs`                          | To switch back to the chat tab from the popup; needed for cross-tab conversation continuity  |
-| `storage`                       | To persist user's BYOK keys (encrypted), conversation history, and settings                  |
-| `nativeMessaging`               | To pair with the AGI Workforce desktop app via native message host                           |
-| `alarms`                        | Heartbeat to keep the desktop bridge connection alive                                        |
-| `contextMenus`                  | "Ask AGI Workforce" right-click action on selected text                                      |
-| `sidePanel`                     | Render the chat surface in Chrome 114+ side panel                                            |
-| `scripting`                     | Inject autofill scripts (LinkedIn / Lever) when user explicitly opts in                      |
-| `cookies`                       | Required by the LinkedIn autofill flow to identify session                                   |
-| `notifications`                 | Notify when a long-running agent action completes                                            |
-| `tabGroups`                     | Group tabs the agent opens during a multi-step task                                          |
-| `host_permissions: localhost/*` | Talk to the AGI Workforce desktop bridge (default port 8787, user-configurable)              |
+| Permission                 | Justification                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `activeTab`                | Read or act on the current page only after a user invokes the corresponding feature.                                                       |
+| `tabs`                     | Inspect the active target and manage tabs created by an approved browser task.                                                             |
+| `storage`                  | Store browser-local conversations, site approvals, settings, and automation records.                                                       |
+| `nativeMessaging`          | Authenticate an explicit context handoff to the installed AGI Desktop native host.                                                         |
+| `alarms`                   | Run user-created schedules and connection maintenance.                                                                                     |
+| `contextMenus`             | Offer explicit selected-text actions.                                                                                                      |
+| `sidePanel`                | Host the browser companion UI.                                                                                                             |
+| `scripting`                | Execute an explicitly invoked page-context or approved-site action.                                                                        |
+| `cookies`                  | Support Clerk Native API session synchronization and declared site workflows; never read arbitrary cookies for chat context.               |
+| `notifications`            | Notify about user-created background or scheduled work.                                                                                    |
+| `tabGroups`                | Group tabs opened by an approved browser workflow.                                                                                         |
+| `debugger`                 | Drive permissioned computer-use actions through Chrome DevTools Protocol, with attach/detach lifecycle controls.                           |
+| Loopback host permissions  | Reach only the paired local Desktop bridge; runtime URL validation rejects non-loopback hosts.                                             |
+| AGI/Clerk host permissions | Authenticate and call exact configured Managed Cloud and Clerk origins. Production packaging rejects broad or missing Clerk configuration. |
+
+## Submission blockers
+
+- Production Clerk Native API enabled.
+- Stable CRX ID configured and present in Clerk `allowed_origins`.
+- Store package produced with live public configuration.
+- Manual permission review and packaged-build behavior verification.
+- Current screenshots and promotional assets.
+- Chrome Web Store privacy disclosures reconciled with the exact manifest.

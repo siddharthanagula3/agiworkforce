@@ -696,7 +696,7 @@ export function defaultPermissionForTool(destructive: boolean): ConnectorPermiss
 
 /**
  * Storage location enum — per DECISIONS.md D1.
- * Resolved at runtime via packages/runtime/src/detect.ts.
+ * Resolved at runtime via packages/client-runtime/src/detect.ts.
  */
 export type ConnectorPermissionStorage = 'local-vault' | 'cloud-supabase';
 ```

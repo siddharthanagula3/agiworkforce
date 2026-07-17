@@ -50,13 +50,29 @@ auth". The prod-wide 500 was a separate issue (fixed in PR #392 — `type:module
    - For production OAuth (Google/GitHub) you must add your **own** OAuth
      credentials in the Clerk dashboard (dev uses Clerk's shared ones).
 
-4. **Redeploy production** so the new public key is baked into the build:
+4. **Configure the Chrome extension against the same production instance:**
+   - Enable Native API in Clerk's Native applications settings.
+   - Set the extension release environment values from
+     `apps/extension/.env.example`: the `pk_live_…` publishable key, exact
+     Clerk Frontend API origin, exact Sync Host origin, and stable CRX public
+     key.
+   - Build the stable extension ID from that public key and add
+     `chrome-extension://<id>` to the production Clerk instance's
+     `allowed_origins`.
+   - Run `pnpm --filter @agiworkforce/extension package`; the package command
+     rejects test keys, missing origins, malformed origins, and missing CRX key.
+
+   Clerk's current side-panel Sync Host implementation updates after the panel
+   is closed and reopened; do not claim live cross-window refresh until the SDK
+   supports it and the behavior is re-verified.
+
+5. **Redeploy production** so the new public key is baked into the build:
 
    ```bash
    vercel --prod --yes --archive=tgz
    ```
 
-5. **Verify:**
+6. **Verify:**
    ```bash
    npx clerk@latest deploy status          # expect state: complete
    curl -s https://agiworkforce.com/login | grep -o 'clerk.accounts.dev\|Development mode'   # should be EMPTY now

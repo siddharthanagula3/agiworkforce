@@ -2,16 +2,15 @@
 
 Status: Current
 Owner: Docs/platform
-Last updated: 2026-06-05
+Last updated: 2026-07-11
 
 Read root `AGENTS.md` before this file. This file applies to documentation work under `docs/`.
 
 ## Lane Contract
 
 - Current product truth lives in `docs/current/`, `docs/decisions/CURRENT_DECISIONS.md`, root `PLAN.md`, root `TODO.md`, and `docs/agent-context/`.
-- Evidence lives in `audit/` and `reports/`; promote only verified durable conclusions into current docs.
-- Historical material lives in `docs/archive/`; never cite it as current unless a current doc explicitly references it.
-- Working notes in `tasks/` and archived hardening/report collections are rebuild inputs, not source of truth.
+- Durable evidence and findings live in `docs/agent-context/known-flaws.md`; dated point-in-time research lives in `docs/research/`. Promote only verified durable conclusions into current docs.
+- The former `audit/`, `reports/`, `tasks/`, and `docs/archive/` directories were removed repo-wide on 2026-06-28 (clean-repo pass). Do not cite them as existing; do not recreate them without a current decision doc. If a future archiving need arises, use `docs/archive/<date>-<reason>/` per `docs/engineering/naming-conventions.md`.
 
 ## High-Risk Areas
 
@@ -24,7 +23,7 @@ Read root `AGENTS.md` before this file. This file applies to documentation work 
 
 - Do not preserve stale claims for politeness. If code or current sources do not prove a claim, remove it or mark it unknown.
 - Do not move executable Markdown contracts such as `SKILL.md`, agent prompts, command prompts, or store metadata unless their loader/consumer is checked.
-- Do not bulk-archive `tasks/**`, `audit/**`, `reports/**`, or feature READMEs without checking source references and guardrails.
+- Do not bulk-archive feature READMEs or other current docs without checking source references and guardrails.
 - When archiving, preserve the original path under `docs/archive/<date>-<reason>/` and add a short manifest entry.
 
 ## Verification

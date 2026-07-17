@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/desktop/AGENTS.md`, and the desktop voice implementation: `apps/desktop/src/features/voice/`, `apps/desktop/src/stores/settings/voice.ts`, `apps/desktop/src/stores/voiceInputStore.ts`, `apps/desktop/src/features/settings/VoiceSettings.tsx`, `apps/desktop/src/features/settings/VoicePersonaSelector.tsx`, `apps/desktop/src/features/v3/MicSettings.tsx`, `apps/desktop/src/features/chat/AudioPreview.tsx`, `apps/desktop/src/api/voice.ts`, `apps/desktop/src-tauri/src/features/speech/{tts.rs,local_tts.rs,deepgram.rs}`, `apps/desktop/src-tauri/src/sys/commands/{voice.rs,voice_global.rs}`, and catalog IDs from `packages/types/src/models.json`.
+Authority: Grounds in `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/desktop/AGENTS.md`, and the desktop voice implementation: `apps/desktop/src/features/voice/`, `apps/desktop/src/stores/settings/voice.ts`, `apps/desktop/src/stores/voiceInputStore.ts`, `apps/desktop/src/features/settings/VoiceSettings.tsx`, `apps/desktop/src/features/settings/VoicePersonaSelector.tsx`, `apps/desktop/src/features/v3/MicSettings.tsx`, `apps/desktop/src/features/chat/AudioPreview.tsx`, `apps/desktop/src/api/voice.ts`, `apps/desktop/src-tauri/src/features/speech/{tts.rs,local_tts.rs,deepgram.rs}`, `apps/desktop/src-tauri/src/sys/commands/{voice.rs,voice_global.rs}`, and catalog IDs from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -16,11 +16,11 @@ Full voice-conversation mode runs a listen → transcribe → LLM → speak turn
 
 ## Speech Recognition
 
-Three STT engines are selectable: `local_whisper` (offline, Local), `deepgram` (cloud streaming — Nova-3/Nova-2 per `apps/desktop/src-tauri/src/features/speech/deepgram.rs`), and `openai_whisper` (cloud, catalog `whisper-1` in `packages/types/src/models.json`). Blob transcription (`voiceTranscribeBlob`), native recording (`speechStartRecording`/`speechStopAndTranscribe`), and live Deepgram streaming with interim + final results are all wired. **✅ Built** — `apps/desktop/src/api/voice.ts`, `apps/desktop/src/stores/voiceInputStore.ts`, `deepgram.rs`. Optional AI/basic/none dictation post-processing cleans transcripts before insert. **🟡 Gap:** selecting a cloud STT engine from a Local session is a plain provider switch today; the Local→BYOK/Cloud fork ceremony (secret scan, payload preview, explicit consent) is not yet enforced on the voice path.
+Three STT engines are selectable: `local_whisper` (offline, Local), `deepgram` (cloud streaming — Nova-3/Nova-2 per `apps/desktop/src-tauri/src/features/speech/deepgram.rs`), and `openai_whisper` (cloud, catalog `whisper-1` in `packages/contracts/types/src/models.json`). Blob transcription (`voiceTranscribeBlob`), native recording (`speechStartRecording`/`speechStopAndTranscribe`), and live Deepgram streaming with interim + final results are all wired. **✅ Built** — `apps/desktop/src/api/voice.ts`, `apps/desktop/src/stores/voiceInputStore.ts`, `deepgram.rs`. Optional AI/basic/none dictation post-processing cleans transcripts before insert. **🟡 Gap:** selecting a cloud STT engine from a Local session is a plain provider switch today; the Local→BYOK/Cloud fork ceremony (secret scan, payload preview, explicit consent) is not yet enforced on the voice path.
 
 ## Text-to-Speech
 
-Four speech paths exist: on-device **Piper** neural TTS (offline, Local — `apps/desktop/src-tauri/src/features/speech/local_tts.rs`), **system TTS** (`speak_sync`, e.g. macOS `say`), **OpenAI TTS** (catalog `tts-1` / `tts-1-hd` in `packages/types/src/models.json`), and **ElevenLabs** (`voice_id`-addressed). **✅ Built** — `apps/desktop/src-tauri/src/features/speech/tts.rs` with `voiceTtsSpeak`, `speakLocal`, and `configureTts` bridged through `apps/desktop/src/api/voice.ts`. Piper voices download on demand (`downloadPiperVoice`). Local TTS keeps text on-device; cloud TTS carries a provider label and is BYOK/Managed-Cloud.
+Four speech paths exist: on-device **Piper** neural TTS (offline, Local — `apps/desktop/src-tauri/src/features/speech/local_tts.rs`), **system TTS** (`speak_sync`, e.g. macOS `say`), **OpenAI TTS** (catalog `tts-1` / `tts-1-hd` in `packages/contracts/types/src/models.json`), and **ElevenLabs** (`voice_id`-addressed). **✅ Built** — `apps/desktop/src-tauri/src/features/speech/tts.rs` with `voiceTtsSpeak`, `speakLocal`, and `configureTts` bridged through `apps/desktop/src/api/voice.ts`. Piper voices download on demand (`downloadPiperVoice`). Local TTS keeps text on-device; cloud TTS carries a provider label and is BYOK/Managed-Cloud.
 
 ## Playback Controls
 
@@ -55,7 +55,7 @@ Device hot-plug is handled: a `devicechange` listener re-enumerates inputs when 
 - `apps/desktop/src/features/chat/{AudioPreview.tsx,VoiceRecordingStatus.tsx,VoiceInputButton.tsx,InlineToolResults/InlineVoiceResult.tsx}` — chat playback + inline results.
 - `apps/desktop/src/api/voice.ts` — Tauri command bridge.
 - `apps/desktop/src-tauri/src/features/speech/{tts.rs,local_tts.rs,deepgram.rs}`, `apps/desktop/src-tauri/src/sys/commands/{voice.rs,voice_global.rs}`, `apps/desktop/src-tauri/src/lib.rs` — Rust STT/TTS backend + command registration.
-- `packages/types/src/models.json` — catalog IDs for cloud STT/TTS (`whisper-1`, `tts-1`, `tts-1-hd`).
+- `packages/contracts/types/src/models.json` — catalog IDs for cloud STT/TTS (`whisper-1`, `tts-1`, `tts-1-hd`).
 
 ## Competitor notes
 
@@ -73,7 +73,7 @@ Voice is production-ready on Desktop when: (1) a full Local voice conversation (
 
 - Do **not** silently send Local-mode microphone audio to Deepgram, OpenAI, ElevenLabs, or Managed Cloud — that violates the Local trust boundary.
 - Do **not** treat cloud STT/TTS selection as a bare dropdown; it is a Local→BYOK/Cloud fork requiring consent + a visible provider label.
-- Do **not** hardcode or invent STT/TTS model IDs — cloud catalog IDs (`whisper-1`, `tts-1`, `tts-1-hd`) come from `packages/types/src/models.json`; Deepgram Nova / Piper voice identifiers stay grounded in `deepgram.rs` / `local_tts.rs`.
+- Do **not** hardcode or invent STT/TTS model IDs — cloud catalog IDs (`whisper-1`, `tts-1`, `tts-1-hd`) come from `packages/contracts/types/src/models.json`; Deepgram Nova / Piper voice identifiers stay grounded in `deepgram.rs` / `local_tts.rs`.
 - Do **not** reference removed tiers ("Plus", `pro_plus`, "Hobby"), invent INR prices for Pro/Max, or add voice credit top-ups.
 - Do **not** reference Supabase or rename `proxy.ts` to `middleware.ts`.
 - Do **not** claim persona-to-voice mapping, playback-speed UI, output-device selection, or seek/scrub as shipped — they are 🟡/🔭 until a cited path proves them.

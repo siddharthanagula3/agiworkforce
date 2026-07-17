@@ -49,16 +49,16 @@ Target flow:
 
 ## Required Architecture
 
-| Layer               | Owner Paths                                                      | Purpose                                                          |
-| ------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Intake schema       | `packages/types/src/feedback.ts`, `apps/web/db/neon/**`          | Shared feedback/case/release-link contract.                      |
-| Product intake APIs | `apps/web/app/api/feedback/**`, Desktop/mobile feedback commands | Canonical feedback submission with privacy labels and redaction. |
-| Triage service      | `services/ops-triage` or `apps/web/app/api/ops/**`               | Classify, dedupe, route, and create GitHub issues.               |
-| Agent task router   | `docs/agent-context/lanes.json`, future service queue            | Map case to lane, owner, checks, and blocked paths.              |
-| Patch automation    | GitHub issues/PRs + coding agent tasks                           | Create draft PRs, not direct merges.                             |
-| Verification store  | `case_verifications`, CI artifacts                               | Record test commands, screenshots, logs, commit SHA.             |
-| Release closure     | release workflows, updater APIs                                  | Link release version/channel to fixed case IDs.                  |
-| Support console     | `apps/web/app/admin/support/**`                                  | Inbox, dedupe, status, owner assignment, customer response.      |
+| Layer               | Owner Paths                                                       | Purpose                                                          |
+| ------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Intake schema       | `packages/contracts/types/src/feedback.ts`, `apps/web/db/neon/**` | Shared feedback/case/release-link contract.                      |
+| Product intake APIs | `apps/web/app/api/feedback/**`, Desktop/mobile feedback commands  | Canonical feedback submission with privacy labels and redaction. |
+| Triage service      | `services/ops-triage` or `apps/web/app/api/ops/**`                | Classify, dedupe, route, and create GitHub issues.               |
+| Agent task router   | `docs/agent-context/lanes.json`, future service queue             | Map case to lane, owner, checks, and blocked paths.              |
+| Patch automation    | GitHub issues/PRs + coding agent tasks                            | Create draft PRs, not direct merges.                             |
+| Verification store  | `case_verifications`, CI artifacts                                | Record test commands, screenshots, logs, commit SHA.             |
+| Release closure     | release workflows, updater APIs                                   | Link release version/channel to fixed case IDs.                  |
+| Support console     | `apps/web/app/admin/support/**`                                   | Inbox, dedupe, status, owner assignment, customer response.      |
 
 ## Safety Policy
 

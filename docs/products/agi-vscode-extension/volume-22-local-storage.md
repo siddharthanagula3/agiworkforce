@@ -21,7 +21,7 @@ There is **no SQLite/embedded database and no app-chat schema**. "Session state"
 - Checkpoint metadata: `globalState` key `agiWorkforce.checkpoints`, capped at 20. ✅ Built — `apps/extension-vscode/src/data/checkpointManager.ts`.
 - Sessions history browsing: command `agi-workforce.showSessionsHistory` reads the above. ✅ Built — `apps/extension-vscode/package.json`.
 
-Requirements: every record store MUST declare a stable key, a bounded size, and a deterministic prune order; records MUST NOT contain provider secrets (those live in SecretStorage). A **shared session database with the CLI** (unified developer-session schema in `packages/types` / Rust crates) is a target direction, not wired. 🔭 Planned — per `apps/extension-vscode/AGENTS.md` ("Shared developer-session schemas belong in `packages/types`").
+Requirements: every record store MUST declare a stable key, a bounded size, and a deterministic prune order; records MUST NOT contain provider secrets (those live in SecretStorage). A **shared session database with the CLI** (unified developer-session schema in `packages/contracts/types` / Rust crates) is a target direction, not wired. 🔭 Planned — per `apps/extension-vscode/AGENTS.md` ("Shared developer-session schemas belong in `packages/contracts/types`").
 
 ## Configuration
 
@@ -29,9 +29,9 @@ User configuration is the `agiWorkforce.*` settings tree, declared in `package.j
 
 Workspace-trust gating is mandatory: in untrusted workspaces the endpoint/gateway/CLI-path/system-prompt/auto-apply/telemetry/tier keys cannot be overridden by workspace settings, and agent file writes are disabled until trust is granted. ✅ Built — `capabilities.untrustedWorkspaces.restrictedConfigurations` in `apps/extension-vscode/package.json`; trust-restricted accessors read `inspect().globalValue` only (`src/utils/api.ts`, `getCloudApiEndpoint`/`getGatewayUrl`).
 
-Requirements: sensitive keys (`apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agent.autoApply`, `telemetryEndpoint`, `tier`) MUST refuse workspace-scoped overrides when the workspace is untrusted. The default model MUST be a resolver alias (`agiWorkforce.model` default `auto-economy`), never a hardcoded catalog model ID — real IDs resolve only from `packages/types/src/models.json`.
+Requirements: sensitive keys (`apiEndpoint`, `gatewayUrl`, `cliPath`, `systemPrompt`, `agent.autoApply`, `telemetryEndpoint`, `tier`) MUST refuse workspace-scoped overrides when the workspace is untrusted. The default model MUST be a resolver alias (`agiWorkforce.model` default `auto-economy`), never a hardcoded catalog model ID — real IDs resolve only from `packages/contracts/types/src/models.json`.
 
-🟡 Partial gap: the `agiWorkforce.tier` enum still encodes removed tiers (`hobby`, `pro_plus`) in `apps/extension-vscode/package.json`. Per canon the tier ladder is Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise; this reconciliation is a separate tracked task (`packages/types/src/billing-catalog.ts`).
+🟡 Partial gap: the `agiWorkforce.tier` enum still encodes removed tiers (`hobby`, `pro_plus`) in `apps/extension-vscode/package.json`. Per canon the tier ladder is Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise; this reconciliation is a separate tracked task (`packages/contracts/types/src/billing-catalog.ts`).
 
 ## Workspace Cache
 
@@ -92,7 +92,7 @@ Production-ready when every store has a bounded, keyed, rebuildable contract; se
 - Writing chat/memory/session rows to Neon or any `apps/web/app/api/*/sync` endpoint from the extension.
 - Storing API keys, account tokens, or the bridge token in settings JSON, `globalState`, or plaintext files.
 - Silently routing a Local session to BYOK or Cloud, or hiding the active provider label.
-- Hardcoding a catalog model ID instead of resolving from `packages/types/src/models.json`.
+- Hardcoding a catalog model ID instead of resolving from `packages/contracts/types/src/models.json`.
 - Reintroducing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups; referencing Supabase (fully migrated — use Clerk + Neon + Stripe).
 - Letting the workspace index or send queue grow unbounded, or treating derived cache as a source of truth.
 - Accepting workspace-scoped overrides of sensitive config in untrusted workspaces.

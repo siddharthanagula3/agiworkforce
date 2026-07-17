@@ -72,4 +72,4 @@ Claude Code Remote Control pushes to Claude iOS/Android when the local session d
 - Do **not** claim remote push ships — no server-side sender exists; label it 🔭 until `push_token` is actually consumed.
 - Do **not** silently drop offline approvals; honor the queue + TTL and surface expiry.
 - Do **not** ship raw stack traces or unbounded error strings in failure notifications.
-- Do **not** hardcode model IDs (read `packages/types/src/models.json`), reference Supabase, revive `middleware.ts` (use `proxy.ts`), or mention removed tiers (Plus / pro_plus / Hobby) or credit top-ups; the ladder is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
+- Do **not** hardcode model IDs (read `packages/contracts/types/src/models.json`), reference Supabase, revive `middleware.ts` (use `proxy.ts`), or mention removed tiers (Plus / pro_plus / Hobby) or credit top-ups; the ladder is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.

@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: grounded in `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and verified against `apps/mobile/services/docParser.ts`, `apps/mobile/storage/docChunks.ts`, `apps/mobile/src/features/memory/services/ragChunker.ts`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx`, `apps/mobile/src/features/media/photo-picker.ts`, `apps/mobile/src/features/image/services/{ocr,vision}.ts`, `apps/mobile/app/(app)/{scan,camera}.tsx`, `apps/mobile/app/(app)/(tabs)/chat.tsx`, and `packages/types/src/models.json`.
+Authority: grounded in `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and verified against `apps/mobile/services/docParser.ts`, `apps/mobile/storage/docChunks.ts`, `apps/mobile/src/features/memory/services/ragChunker.ts`, `apps/mobile/src/features/chat/components/AttachmentPreview.tsx`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx`, `apps/mobile/src/features/media/photo-picker.ts`, `apps/mobile/src/features/image/services/{ocr,vision}.ts`, `apps/mobile/app/(app)/{scan,camera}.tsx`, `apps/mobile/app/(app)/(tabs)/chat.tsx`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 This volume covers how AGI Mobile lets a user attach a file to a chat — pick, parse, chunk, preview, and route it. The governing constraint is from `apps/mobile/AGENTS.md`: **mobile must not become the heavy-compute surface first.** Light, on-device parsing (plain text, CSV, text-layer PDFs, native OCR) stays Local; heavy or generative work (image-only PDF rendering, Office binary parsing, image generation) is **cloud-backed** through the Managed Cloud gateway.
 
-Mobile exposes only two trust modes: **Local** (small on-device LLM, free) and **Managed Cloud** (public alpha, open by default). There is **no BYOK on mobile** — never add an API-key affordance to the upload flow. A file destined for a Local chat is parsed and reasoned over on-device and never silently leaves the device; a file destined for a Cloud chat travels to Managed Cloud only after explicit send, with a visible per-file destination label. The `appMode` split is real today: the document picker in `AddToChatSheet.tsx` only surfaces the "File" card when `appMode === 'cloud'`, while Camera/Photos are available in both modes. Model IDs and vision/audio capability come only from `packages/types/src/models.json` — never hardcode one.
+Mobile exposes only two trust modes: **Local** (small on-device LLM, free) and **Managed Cloud** (public alpha, open by default). There is **no BYOK on mobile** — never add an API-key affordance to the upload flow. A file destined for a Local chat is parsed and reasoned over on-device and never silently leaves the device; a file destined for a Cloud chat travels to Managed Cloud only after explicit send, with a visible per-file destination label. The `appMode` split is real today: the document picker in `AddToChatSheet.tsx` only surfaces the "File" card when `appMode === 'cloud'`, while Camera/Photos are available in both modes. Model IDs and vision/audio capability come only from `packages/contracts/types/src/models.json` — never hardcode one.
 
 ## PDFs
 
@@ -26,7 +26,7 @@ Mobile exposes only two trust modes: **Local** (small on-device LLM, free) and *
 
 ## Images
 
-✅ Built (capture/pick) / 🟡 Partial (understanding). Picking is `apps/mobile/src/features/media/photo-picker.ts` (`expo-image-picker`, EXIF stripped, quality 0.85) plus the Camera card; results become `Attachment` objects. Local image _understanding_ is OCR-plus-text-LLM only: `apps/mobile/src/features/image/services/vision.ts` explicitly does **not** advertise on-device vision-language until a native image bridge exists. Cloud chats send images to vision-capable models declared in `packages/types/src/models.json`. **Image generation is cloud-backed** via `imagegen.ts` (`FEATURES.imageGen`), never an on-device pass. Requirement: never present OCR-fallback as true multimodal vision.
+✅ Built (capture/pick) / 🟡 Partial (understanding). Picking is `apps/mobile/src/features/media/photo-picker.ts` (`expo-image-picker`, EXIF stripped, quality 0.85) plus the Camera card; results become `Attachment` objects. Local image _understanding_ is OCR-plus-text-LLM only: `apps/mobile/src/features/image/services/vision.ts` explicitly does **not** advertise on-device vision-language until a native image bridge exists. Cloud chats send images to vision-capable models declared in `packages/contracts/types/src/models.json`. **Image generation is cloud-backed** via `imagegen.ts` (`FEATURES.imageGen`), never an on-device pass. Requirement: never present OCR-fallback as true multimodal vision.
 
 ## Audio
 
@@ -59,7 +59,7 @@ Mobile exposes only two trust modes: **Local** (small on-device LLM, free) and *
 - `apps/mobile/app/(app)/{scan,camera,image,voice}.tsx` — capture/OCR/voice screens.
 - `apps/mobile/app/(app)/(tabs)/chat.tsx`, `apps/mobile/app/(app)/chat/[id].tsx` — `expo-document-picker` entry.
 - `apps/mobile/services/fileCreation.ts` — export (PDF/text) via `expo-print`.
-- `packages/types/src/models.json` — vision/audio capability + context windows.
+- `packages/contracts/types/src/models.json` — vision/audio capability + context windows.
 
 ## Competitor notes
 
@@ -79,5 +79,5 @@ The domain is production-ready when on-device parsing (CSV, text PDF, OCR), cont
 - Auto-sending a Local-origin file to Managed Cloud without preview + consent.
 - Advertising an Office/scanned-PDF or vision/audio/video capability the code cannot deliver (faking transcripts, OCR-as-vision, or stub parsers).
 - Building a heavy on-device DOCX/XLSX/PPTX or PDF-rasterizer parser on mobile first instead of cloud-backing it.
-- Hardcoding a model ID or context window instead of reading `packages/types/src/models.json`.
+- Hardcoding a model ID or context window instead of reading `packages/contracts/types/src/models.json`.
 - Referencing Supabase, or any removed tier (Plus / pro_plus / Hobby) in upload entitlement copy.

@@ -77,4 +77,4 @@ Production-ready when: no conversation/message/artifact route derives `user_id` 
 - Adding Local or BYOK to Web; routing Local/BYOK data into the cloud sync store.
 - Renaming `proxy.ts` → `middleware.ts`; referencing Supabase; weakening CSP to `unsafe-inline` scripts.
 - Re-granting blanket UPDATE/DELETE on `security_audit_logs` to `app_rls` (breaks immutability).
-- Hardcoding model IDs (use `packages/types/src/models.json`), inventing INR prices, or reintroducing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups.
+- Hardcoding model IDs (use `packages/contracts/types/src/models.json`), inventing INR prices, or reintroducing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups.

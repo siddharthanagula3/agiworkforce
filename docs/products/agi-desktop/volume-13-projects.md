@@ -44,7 +44,7 @@ Projects are searchable by name and description and appear in the global ⌘K se
 
 ## Workspace Organization
 
-Projects organize the workspace by linking conversations, scoping a working folder, and tracking recent folders (Claude-Code-style project folder). ✅ Built — conversation linking (`linkConversation`/`unlinkConversation`, `getProjectForConversation`) and folder scope (`currentFolder`, `recentFolders`, `setCurrentFolder`) in `projectStore.ts`; new V3 chats scope to a project at creation via `setConversationProject` (`DesktopShellV3.tsx`). The V3 shell exposes Projects as one panel of the AGI Work area (`projects | artifacts | scheduled | dispatch`); the AGI Code surface (`CodeModeHome.tsx`) exists but is **not mounted** — 🟡. Per-project settings (`defaultModel`, provider, context window) persist via `project_update_settings`; any model default comes from `packages/types/src/models.json`, never an invented ID.
+Projects organize the workspace by linking conversations, scoping a working folder, and tracking recent folders (Claude-Code-style project folder). ✅ Built — conversation linking (`linkConversation`/`unlinkConversation`, `getProjectForConversation`) and folder scope (`currentFolder`, `recentFolders`, `setCurrentFolder`) in `projectStore.ts`; new V3 chats scope to a project at creation via `setConversationProject` (`DesktopShellV3.tsx`). The V3 shell exposes Projects as one panel of the AGI Work area (`projects | artifacts | scheduled | dispatch`); the AGI Code surface (`CodeModeHome.tsx`) exists but is **not mounted** — 🟡. Per-project settings (`defaultModel`, provider, context window) persist via `project_update_settings`; any model default comes from `packages/contracts/types/src/models.json`, never an invented ID.
 
 ## Repository map
 
@@ -73,5 +73,5 @@ Production-ready when the V3-mounted Projects panel reaches parity with the stor
 - Do not silently push a Local or BYOK project to Managed Cloud, or let a project's trust default cross devices via sync.
 - Do not claim knowledge/RAG or full CRUD works from the V3 panel without a mounted, wired path — cite the real surface or mark 🟡/🔭.
 - Do not inject custom instructions as a hidden prompt; the user must see them. Do not move a file's bytes off-device implicitly.
-- Do not hardcode or invent a per-project default model ID — read from `packages/types/src/models.json`.
+- Do not hardcode or invent a per-project default model ID — read from `packages/contracts/types/src/models.json`.
 - Do not reference "Plus", `pro_plus`, "Hobby", credit top-ups, or Supabase; use Free / Basic ($8·₹399) / Pro ($20) / Max ($100 & $200) / Enterprise and the Clerk + Neon + Stripe stack.

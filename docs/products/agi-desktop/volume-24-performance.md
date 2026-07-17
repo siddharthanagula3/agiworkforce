@@ -88,4 +88,4 @@ Performance is production-ready when startup, idle, streaming, and large-thread 
 - Do not route Local chats/files to BYOK/Cloud to "improve" latency; Local→BYOK is an explicit, consented fork only.
 - Do not claim conversation virtualization as shipped — the `react-window` dep is not yet wired (🟡).
 - Do not busy-poll the WS host, streaming loop, or resource monitor; keep idle CPU near zero, and hold a wake lock only during active work.
-- Do not hardcode or invent model IDs (use `packages/types/src/models.json`), reference Supabase (Clerk + Neon + Stripe only), or cite removed tiers (Plus/pro_plus/Hobby) or top-ups; pricing is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
+- Do not hardcode or invent model IDs (use `packages/contracts/types/src/models.json`), reference Supabase (Clerk + Neon + Stripe only), or cite removed tiers (Plus/pro_plus/Hobby) or top-ups; pricing is Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.

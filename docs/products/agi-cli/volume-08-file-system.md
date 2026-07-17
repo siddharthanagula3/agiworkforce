@@ -68,7 +68,7 @@ Two invariants hold everywhere below: **path confinement** — every path is res
 
 ## Competitor notes
 
-Claude Code and Codex CLI expose the same file-tool family (read/write/edit/multi-edit, glob/grep, unified-diff patch) with diff previews and approval prompts; ChatGPT surfaces file editing mainly through its cloud/agent runtime, not a local BYOK CLI. AGI's deliberate divergence: **per-surface trust** and **local-first**. The provider/model behind an edit is user-selectable (BYOK on this surface) and the Local privacy guard means a file read on a Local session physically cannot be routed to a cloud provider without the explicit, previewed BYOK/Managed fork — a guarantee the single-vendor CLIs do not offer. Model IDs come only from `packages/types/src/models.json`; file tooling never hardcodes one.
+Claude Code and Codex CLI expose the same file-tool family (read/write/edit/multi-edit, glob/grep, unified-diff patch) with diff previews and approval prompts; ChatGPT surfaces file editing mainly through its cloud/agent runtime, not a local BYOK CLI. AGI's deliberate divergence: **per-surface trust** and **local-first**. The provider/model behind an edit is user-selectable (BYOK on this surface) and the Local privacy guard means a file read on a Local session physically cannot be routed to a cloud provider without the explicit, previewed BYOK/Managed fork — a guarantee the single-vendor CLIs do not offer. Model IDs come only from `packages/contracts/types/src/models.json`; file tooling never hardcodes one.
 
 ## Acceptance / Definition of Done
 

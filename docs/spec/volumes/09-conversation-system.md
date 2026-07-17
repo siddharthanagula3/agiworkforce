@@ -1,7 +1,7 @@
 # Volume 09 — Conversation System
 
 Status: Canonical (expands `docs/spec/AGI_CODE_MASTER_SPEC.md` Vol 9)
-Authority: this manual, `docs/current/source-of-truth.md` (UX Lock, Trust Modes), `packages/types/src/suite-contracts.ts`, `docs/strategy/02-gap-analysis.md`.
+Authority: this manual, `docs/current/source-of-truth.md` (UX Lock, Trust Modes), `packages/contracts/types/src/suite-contracts.ts`, `docs/strategy/02-gap-analysis.md`.
 
 ## Philosophy & Cloud/Local stance
 
@@ -14,7 +14,7 @@ Cloud/Local changes _where a thread lives and whether it can sync_, never the th
 1. **One chat accepts everything.** Prompts + files + reference files + images + project context + tools + connectors + artifacts in a single thread. Never route a user into a separate experience to attach a file (source-of-truth P0 #3).
 2. **Trust mode is a thread property, immutable in place.** A thread carries its `ChatExecutionMode` (`local_only` / `byok` / `cloud_managed`). Changing trust requires a fork, not an edit.
 3. **The Local original is preserved on fork.** A Local→BYOK/Managed continuation is a new branch recording: source thread id, selected context, secret-scan result, payload preview hash, provider label, and explicit consent. The Local thread is never mutated or migrated.
-4. **Every message carries provider + privacy labels.** Each assistant turn records the resolved provider, model id (from `packages/types/src/models.json`), and `PrivacyMode`. Labels render in the UI and are never hardcoded — pull display copy from `suite-contracts.ts`.
+4. **Every message carries provider + privacy labels.** Each assistant turn records the resolved provider, model id (from `packages/contracts/types/src/models.json`), and `PrivacyMode`. Labels render in the UI and are never hardcoded — pull display copy from `suite-contracts.ts`.
 5. **Temporary chats never persist pre-send and never update memory.** A temporary thread holds no durable record before the first send and is excluded from memory generation, reference-chat search, and sync.
 6. **Branch/fork records lineage.** Forks store parent id + branch point + the redaction hash when the fork crosses a trust boundary.
 7. **Delete is recoverable, then irreversible.** Soft-delete (recoverable window) → hard-delete (purges rows + blobs + vector entries within the thread's storage scope). Hard-delete respects Managed retention/deletion policy (Vol 25/30).
@@ -24,11 +24,11 @@ Cloud/Local changes _where a thread lives and whether it can sync_, never the th
 
 ## Repository map
 
-- One-chat shell + queue + stores: `packages/unified-chat/src/` (`components/`, `hooks/`, `stores/`, `queue/`, `lib/`).
+- One-chat shell + queue + stores: `packages/ui/unified-chat/src/` (`components/`, `hooks/`, `stores/`, `queue/`, `lib/`).
 - Web conversation surface: `apps/web/features/chat/` (`components/`, `hooks/`, `stores/`, `services/`, `commands/`, `v3/`).
 - Desktop conversation UI: `apps/desktop/src/features/chat/` — incl. `BranchNavigator.tsx`, `ChatStream.tsx`, `CheckpointManager.tsx`, `ChatMessageList.tsx`, `AttachmentPreview.tsx`.
-- Trust labels + sync gate: `packages/types/src/suite-contracts.ts` (`PrivacyMode`, `ProviderMode`, `ChatExecutionMode`, `assertSurfaceCanSyncChats`, display-copy maps).
-- Model ids/capabilities: `packages/types/src/models.json` (catalog only — never invent ids).
+- Trust labels + sync gate: `packages/contracts/types/src/suite-contracts.ts` (`PrivacyMode`, `ProviderMode`, `ChatExecutionMode`, `assertSurfaceCanSyncChats`, display-copy maps).
+- Model ids/capabilities: `packages/contracts/types/src/models.json` (catalog only — never invent ids).
 - Mobile remote-send gate (fail-closed): `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/llmGate.ts`.
 - Canonical persistence: `apps/web/db/neon` (conversation/message tables, RLS).
 - Sync engine (mobile): `apps/mobile/services/cloudSyncEngine.ts`, `offlineQueue.ts`.

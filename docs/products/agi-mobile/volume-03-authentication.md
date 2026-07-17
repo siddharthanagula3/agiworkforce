@@ -86,4 +86,4 @@ Production-ready when an account-less user completes onboarding and reaches Loca
 - Implementing an in-app password-reset form instead of web delegation.
 - Faking a "trusted devices" or "active sessions" manager that does not exist (label 🔭).
 - Shipping the `pk_test_…` Clerk key, or storing tokens outside SecureStore.
-- Hardcoding model IDs (read `packages/types/src/models.json`) or referencing Supabase, "Plus", `pro_plus`, or "Hobby".
+- Hardcoding model IDs (read `packages/contracts/types/src/models.json`) or referencing Supabase, "Plus", `pro_plus`, or "Hobby".

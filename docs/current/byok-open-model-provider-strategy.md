@@ -6,7 +6,7 @@ Last updated: 2026-05-28
 
 This document defines how AGI should think about BYOK providers, open-weight models, hosted open-model APIs, and local model runtimes before implementation agents add or rank models.
 
-Use this with `docs/current/source-of-truth.md`, `docs/current/parity-implementation-matrix.md`, and `packages/types/src/models.json`.
+Use this with `docs/current/source-of-truth.md`, `docs/current/parity-implementation-matrix.md`, and `packages/contracts/types/src/models.json`.
 
 ## Core Decision
 
@@ -49,7 +49,7 @@ A recent hosted-open-model measurement paper makes this explicit: production use
 
 ## Current AGI Catalog Position
 
-`packages/types/src/models.json` currently has:
+`packages/contracts/types/src/models.json` currently has:
 
 - 25 providers,
 - 84 model entries,
@@ -187,13 +187,13 @@ MCP, or server-side state.
 
 Default policy:
 
-| Provider route                             | SDK decision                                                                                                                                                                                                                                             | Current repo position                                                                                                                                                                                                                 |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenAI native API                          | Use the official `openai` TypeScript SDK for native OpenAI Responses/Chat transport, especially provider-native tools such as web search, file search, remote MCP, shell/code/computer-use, and generated files.                                         | `packages/providers/openai` already depends on `openai` and uses `client.responses.create` / `client.chat.completions.create`. Keep OpenAI `max` disabled; use `xhigh` only where supported.                                          |
-| Anthropic native API                       | Use the official `@anthropic-ai/sdk` for Claude Messages streaming, tool use, beta helpers, extended thinking, and replay signatures.                                                                                                                    | `packages/providers/anthropic` already depends on `@anthropic-ai/sdk`. Web legacy fetch paths should migrate toward the package adapter instead of inventing a second Anthropic contract.                                             |
-| Google Gemini native API                   | REST is acceptable for basic Gemini `streamGenerateContent` chat/function-calling/thinking. Use/install official `@google/genai` when implementing Gemini-native built-in tools, Files API, Interactions, Live API, Vertex routing, or SDK-only helpers. | `packages/providers/google` currently uses direct REST for API-key Gemini chat, function declarations, function responses, and thinking signatures. Do not install `@google/genai` until a native Google tool/file/live path uses it. |
-| OpenAI-compatible hosted/open-model routes | Do not assume the OpenAI SDK means full OpenAI capability parity. Use the OpenAI-compatible transport only for the subset the provider docs confirm.                                                                                                     | OpenRouter, Groq, Mistral, DeepSeek, xAI, LM Studio, and similar routes need per-provider capability gates for tools, reasoning, files, streaming usage, and retention.                                                               |
-| Vercel AI SDK                              | Useful for common streaming/UI provider abstraction and provider options. Not a substitute for native provider SDKs when a provider-specific tool or sandbox/file lifecycle has semantics the AI SDK does not expose yet.                                | `apps/web` already has `ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, and `@ai-sdk/google`. Use provider options only after checking the matching provider docs and package docs.                                                       |
+| Provider route                             | SDK decision                                                                                                                                                                                                                                             | Current repo position                                                                                                                                                                                                                    |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI native API                          | Use the official `openai` TypeScript SDK for native OpenAI Responses/Chat transport, especially provider-native tools such as web search, file search, remote MCP, shell/code/computer-use, and generated files.                                         | `packages/ai/providers/openai` already depends on `openai` and uses `client.responses.create` / `client.chat.completions.create`. Keep OpenAI `max` disabled; use `xhigh` only where supported.                                          |
+| Anthropic native API                       | Use the official `@anthropic-ai/sdk` for Claude Messages streaming, tool use, beta helpers, extended thinking, and replay signatures.                                                                                                                    | `packages/ai/providers/anthropic` already depends on `@anthropic-ai/sdk`. Web legacy fetch paths should migrate toward the package adapter instead of inventing a second Anthropic contract.                                             |
+| Google Gemini native API                   | REST is acceptable for basic Gemini `streamGenerateContent` chat/function-calling/thinking. Use/install official `@google/genai` when implementing Gemini-native built-in tools, Files API, Interactions, Live API, Vertex routing, or SDK-only helpers. | `packages/ai/providers/google` currently uses direct REST for API-key Gemini chat, function declarations, function responses, and thinking signatures. Do not install `@google/genai` until a native Google tool/file/live path uses it. |
+| OpenAI-compatible hosted/open-model routes | Do not assume the OpenAI SDK means full OpenAI capability parity. Use the OpenAI-compatible transport only for the subset the provider docs confirm.                                                                                                     | OpenRouter, Groq, Mistral, DeepSeek, xAI, LM Studio, and similar routes need per-provider capability gates for tools, reasoning, files, streaming usage, and retention.                                                                  |
+| Vercel AI SDK                              | Useful for common streaming/UI provider abstraction and provider options. Not a substitute for native provider SDKs when a provider-specific tool or sandbox/file lifecycle has semantics the AI SDK does not expose yet.                                | `apps/web` already has `ai`, `@ai-sdk/openai`, `@ai-sdk/anthropic`, and `@ai-sdk/google`. Use provider options only after checking the matching provider docs and package docs.                                                          |
 
 Do not add SDK dependencies just to "be ready." Add an SDK only when an
 implemented code path uses it, and include provider-doc references in the
@@ -276,7 +276,7 @@ Official provider/model docs:
 
 ## Next Implementation Step
 
-Before adding more models to `packages/types/src/models.json`, create a model-provider sync task that records:
+Before adding more models to `packages/contracts/types/src/models.json`, create a model-provider sync task that records:
 
 - official source URL,
 - source checked date,

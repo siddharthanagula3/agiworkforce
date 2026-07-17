@@ -75,5 +75,5 @@ Production-ready when read-only Git analysis is unattended and truthful, every m
 - Auto-committing, auto-pushing, force-pushing, or `reset --hard` without approval; downgrading a `DANGEROUS_PREFIXES` entry.
 - Claiming a built-in commit-message generator, native PR commands, or a merge-conflict resolver — those are 🔭 Planned; do not describe them as shipped.
 - Conflating `/branch`/`/fork` (conversation fork) with Git branching in docs or UI.
-- Hardcoding or inventing model IDs for the review/commit model (read from `packages/types/src/models.json`), inventing routes/env vars/INR prices, referencing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups, or referencing Supabase (use Clerk + Neon + Stripe).
+- Hardcoding or inventing model IDs for the review/commit model (read from `packages/contracts/types/src/models.json`), inventing routes/env vars/INR prices, referencing removed tiers ("Plus"/`pro_plus`/"Hobby") or credit top-ups, or referencing Supabase (use Clerk + Neon + Stripe).
 - Using `agiworkforce <cmd>` in examples — the user-facing binary is `agi`.

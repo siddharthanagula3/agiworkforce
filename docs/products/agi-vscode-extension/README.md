@@ -8,7 +8,7 @@ AGI VS Code Extension is the IDE-native developer surface, workspace-scoped, tha
 
 ## Pricing
 
-Pricing follows the shared platform model across every AGI surface: Free, Basic ($8 · ₹399), Pro ($20), Max ($100 and $200), and Enterprise. There is no Plus tier and no Hobby tier, and there are no top-ups. Local and BYOK are free access modes wherever this surface allows them, so a developer can run the extension against local or bring-your-own-key providers without a paid plan; Managed inference is what the paid tiers unlock.
+Pricing follows the shared platform model across every AGI surface: Free, Basic ($7 · ₹399), Pro ($20), Max ($100 and $200), Team ($30/seat), and Enterprise. There is no Plus tier and no Hobby tier; top-ups are enabled for paid tiers (capped, opt-in). Local and BYOK are free access modes wherever this surface allows them, so a developer can run the extension against local or bring-your-own-key providers without a paid plan; Managed inference is what the paid tiers unlock.
 
 These volumes are target/design specs, not a claim of shipped state. They are governed by [../README.md](../README.md) (the product canon) and `docs/current/source-of-truth.md`. Every capability claim must carry a mandatory status label: ✅ shipped and verified, 🟡 partial or in progress, or 🔭 planned / unwired. When in doubt, mark it 🔭 and record a tracked gap rather than overstating readiness.
 

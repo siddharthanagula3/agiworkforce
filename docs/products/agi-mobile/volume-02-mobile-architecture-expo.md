@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`. Grounded in `apps/mobile/{app.config.js,eas.json,package.json}`, `apps/mobile/app/**`, `apps/mobile/stores/**`, `apps/mobile/services/**`, `apps/mobile/storage/db.ts`, `apps/mobile/lib/{secureStorage,pinning,mmkv,v1FeatureFlags}.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md`. Grounded in `apps/mobile/{app.config.js,eas.json,package.json}`, `apps/mobile/app/**`, `apps/mobile/stores/**`, `apps/mobile/services/**`, `apps/mobile/storage/db.ts`, `apps/mobile/lib/{secureStorage,pinning,mmkv,v1FeatureFlags}.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
-This volume specifies AGI Mobile's client architecture: the Expo runtime, navigation, state, networking, storage, OTA, build, and release machinery. AGI Mobile exposes **two** trust modes only — **Local** (a small on-device LLM, free) and **Managed Cloud** (public alpha, open by default). **Mobile has NO BYOK.** "Provider Configuration" on mobile means on-device model management (download/select/remove weights), never API-key entry. The architecture keeps Local compute on-device and never silently routes Local chats, files, or memory to Cloud; cross-device data sync is Managed-Cloud chats only, via Neon delta-sync. A phone may also act as a **remote window** over a Desktop/CLI session (compute stays on host, outbound-only, QR + HMAC paired, approval-gated) — not a third storage tier and never moving Local host data to the cloud. Model IDs come only from `packages/types/src/models.json`.
+This volume specifies AGI Mobile's client architecture: the Expo runtime, navigation, state, networking, storage, OTA, build, and release machinery. AGI Mobile exposes **two** trust modes only — **Local** (a small on-device LLM, free) and **Managed Cloud** (public alpha, open by default). **Mobile has NO BYOK.** "Provider Configuration" on mobile means on-device model management (download/select/remove weights), never API-key entry. The architecture keeps Local compute on-device and never silently routes Local chats, files, or memory to Cloud; cross-device data sync is Managed-Cloud chats only, via Neon delta-sync. A phone may also act as a **remote window** over a Desktop/CLI session (compute stays on host, outbound-only, QR + HMAC paired, approval-gated) — not a third storage tier and never moving Local host data to the cloud. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Expo Architecture
 
@@ -60,7 +60,7 @@ Release is script-driven under `apps/mobile/scripts/release/` (`preflight.sh`, `
 - `apps/mobile/lib/**` — `secureStorage`, `mmkv`, `pinning`, `egressGuard`, `sendQueue`, `v1FeatureFlags`.
 - `apps/mobile/native/**`, `/ios`, `apps/mobile/ios` — native modules and iOS projects.
 - `apps/mobile/scripts/release/**` — release/submit automation.
-- Shared: `packages/local-llm` (on-device tiers/catalog), `packages/types/src/models.json` (model SSOT).
+- Shared: `packages/platform/local-llm` (on-device tiers/catalog), `packages/contracts/types/src/models.json` (model SSOT).
 
 ## Competitor notes
 
@@ -79,6 +79,6 @@ Production-ready when: every outbound request flows through `secureFetch` with p
 - Adding a BYOK / API-key entry screen, env, or store to mobile — forbidden; "Provider Configuration" is on-device model management only.
 - Auto-sending or silently syncing Local chats/files/memory to Cloud.
 - Faking unsupported capability (e.g. presenting OTA as production-ready, or pinning as enforced, while it is 🟡 Partial).
-- Hardcoding or inventing model IDs — read `packages/types/src/models.json`. (Note: comments in `lib/v1FeatureFlags.ts` still say "Hobby tier"; canon retired that name — use Free/Basic/Pro/Max/Enterprise; treat the code naming as a tracked reconciliation gap.)
+- Hardcoding or inventing model IDs — read `packages/contracts/types/src/models.json`. (Note: comments in `lib/v1FeatureFlags.ts` still say "Hobby tier"; canon retired that name — use Free/Basic/Pro/Max/Enterprise; treat the code naming as a tracked reconciliation gap.)
 - Referencing Supabase (removed; stack is Clerk + Neon + Stripe).
 - Bypassing `secureFetch`, hand-editing `/ios` instead of config plugins, or OTA-shipping native ABI changes.

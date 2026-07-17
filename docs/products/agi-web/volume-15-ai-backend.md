@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`; grounded in `apps/web/app/api/llm/v1/chat/completions/**`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/app/api/media/**`, `apps/web/lib/llm-providers/**`, `apps/web/lib/runtime/memory-context.ts`, `apps/web/lib/e2b/**`, `apps/web/lib/prompt-cache-helper.ts`, `apps/web/lib/cost-tracker.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, `apps/web/AGENTS.md`; grounded in `apps/web/app/api/llm/v1/chat/completions/**`, `apps/web/app/api/{chat,memory,projects}/sync/route.ts`, `apps/web/app/api/media/**`, `apps/web/lib/llm-providers/**`, `apps/web/lib/runtime/memory-context.ts`, `apps/web/lib/e2b/**`, `apps/web/lib/prompt-cache-helper.ts`, `apps/web/lib/cost-tracker.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 AGI Web is the **cloud-only** surface: no BYOK, no Local mode. Every inference request runs against **server-side provider keys** held only on the Vercel/Next.js backend (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, … read in `apps/web/lib/llm-providers/factory.ts`) — the browser never sees a key and cannot supply one. This volume covers the AI backend that powers Web chat: how context, memory, routing, tools, retrieval, search, vision, image generation, code execution, streaming, retries, and cost controls behave on the managed-cloud trust boundary.
 
-Because the only trust mode here is **Managed Cloud**, all AI work is subscription-backed through Neon account state and metered credits. There is no free env-key chat: the free path is a bounded Auto-Economy trial gated per model (`apps/web/lib/services/free-trial-service.ts`). Managed cloud is public alpha, open by default (`buildManagedComputeGateResponse`; `AGI_MANAGED_COMPUTE_PRIVATE_BETA` remains only as an incident kill-switch). Model IDs are resolved **only** from `packages/types/src/models.json` — never hardcoded.
+Because the only trust mode here is **Managed Cloud**, all AI work is subscription-backed through Neon account state and metered credits. There is no free env-key chat: the free path is a bounded Auto-Economy trial gated per model (`apps/web/lib/services/free-trial-service.ts`). Managed cloud is public alpha, open by default (`buildManagedComputeGateResponse`; `AGI_MANAGED_COMPUTE_PRIVATE_BETA` remains only as an incident kill-switch). Model IDs are resolved **only** from `packages/contracts/types/src/models.json` — never hardcoded.
 
 ## Context Management
 
@@ -67,7 +67,7 @@ Because the only trust mode here is **Managed Cloud**, all AI work is subscripti
 - `apps/web/app/api/media/{image,video}/**`, `apps/web/app/api/search/route.ts`, `apps/web/app/api/mcp/route.ts`.
 - `apps/web/lib/llm-providers/**` (factory + 12 adapters, base, context-management, cache-retention).
 - `apps/web/lib/{runtime/memory-context.ts,mcp-tool-executor.ts,e2b/**,prompt-cache-helper.ts,cost-tracker.ts,egress-policy.ts,assert-quota.ts}`.
-- `packages/types/src/models.json`, `packages/routing` (classifier).
+- `packages/contracts/types/src/models.json`, `packages/ai/routing` (classifier).
 
 ## Competitor notes
 
@@ -84,7 +84,7 @@ Production-ready when: model IDs resolve only from models.json; auth + managed-c
 ## Anti-patterns
 
 - Adding a BYOK key field or Local runtime toggle to Web (trust-boundary violation).
-- Hardcoding or inventing model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Presenting `pro_plus`/"Plus"/"Hobby" as tiers, or adding credit top-ups — use Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise.
 - Referencing Supabase, renaming `proxy.ts` to `middleware.ts`, or shipping provider keys to the browser.
 - Claiming RAG/retrieval or default E2B execution as shipped — they are 🔭/🟡; silent tool no-ops or auto-running unapproved mutating tools.

@@ -4,13 +4,13 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: grounds in `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real surface paths `apps/mobile/services/companion.ts`, `apps/mobile/lib/dispatchHmac.ts`, `apps/mobile/stores/agentStore.ts`, `apps/mobile/stores/agentControlStore.ts`, `apps/mobile/services/companionNotifications.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/src/features/companion/components/`, and `packages/types/src/models.json`.
+Authority: grounds in `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real surface paths `apps/mobile/services/companion.ts`, `apps/mobile/lib/dispatchHmac.ts`, `apps/mobile/stores/agentStore.ts`, `apps/mobile/stores/agentControlStore.ts`, `apps/mobile/services/companionNotifications.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/src/features/companion/components/`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
 Runtime Actions are the controls a phone uses to **govern a session that is executing somewhere else** — approve or reject a tool call, pause/resume/cancel a run, read its plan and logs, and receive live status. On AGI Mobile this is the **Remote Control window**, not a fourth trust mode: compute stays on the paired Desktop host, the link is outbound-only, paired by QR + HMAC, and every consequential action is approval-gated. The phone never becomes the executor.
 
-Trust shaping is strict. A **Local** on-device chat has no agentic tool runtime to govern — Runtime Actions do not apply, and Local data is never streamed to a host to "enable" them. **Managed Cloud** sessions may surface server-side status, but the agentic execute-with-tools loop AGI targets runs on Desktop. **Mobile has NO BYOK** — there is no key entry, no provider-credential affordance anywhere in this domain; "provider configuration" on mobile means on-device model management only. Model identity shown in any plan/log view must come from `packages/types/src/models.json`; never hardcode an ID.
+Trust shaping is strict. A **Local** on-device chat has no agentic tool runtime to govern — Runtime Actions do not apply, and Local data is never streamed to a host to "enable" them. **Managed Cloud** sessions may surface server-side status, but the agentic execute-with-tools loop AGI targets runs on Desktop. **Mobile has NO BYOK** — there is no key entry, no provider-credential affordance anywhere in this domain; "provider configuration" on mobile means on-device model management only. Model identity shown in any plan/log view must come from `packages/contracts/types/src/models.json`; never hardcode an ID.
 
 Everything in this volume depends on the companion fabric, which is **feature-flagged off**: `apps/mobile/lib/v1FeatureFlags.ts` ships `companion: false`, `dispatch: false`, and `agents: false`. The transport, HMAC signing, control-message builders, and UI exist, but the last-mile desktop wiring to live task execution is not complete. So the dominant label here is **🟡 Partial**.
 
@@ -36,7 +36,7 @@ Cancel terminates a run; it is destructive and must require explicit intent. `se
 
 ## View Plans
 
-A plan is the agent's proposed multi-step sequence the user reviews **before** high-risk steps run; on mobile it is read-and-gate, never authored. Today `apps/mobile/src/features/companion/components/ExecutionStream.tsx` renders step progress and the tool-call timeline, and `apps/mobile/src/features/agents/components/ToolTimeline.tsx` shows ordered steps — but there is no discrete "plan object" approval view, and plan steps must each route through the per-step Approvals gate above rather than a single bulk "approve plan." Model labels in any plan view resolve from `packages/types/src/models.json`. **🔭 Planned** — a dedicated plan-review/approve surface is design intent; only step/tool display exists today (and is gated off).
+A plan is the agent's proposed multi-step sequence the user reviews **before** high-risk steps run; on mobile it is read-and-gate, never authored. Today `apps/mobile/src/features/companion/components/ExecutionStream.tsx` renders step progress and the tool-call timeline, and `apps/mobile/src/features/agents/components/ToolTimeline.tsx` shows ordered steps — but there is no discrete "plan object" approval view, and plan steps must each route through the per-step Approvals gate above rather than a single bulk "approve plan." Model labels in any plan view resolve from `packages/contracts/types/src/models.json`. **🔭 Planned** — a dedicated plan-review/approve surface is design intent; only step/tool display exists today (and is gated off).
 
 ## View Logs
 
@@ -57,7 +57,7 @@ Live updates push out-of-app signals for state the user must act on: `approval_r
 - `apps/mobile/src/features/agents/components/` — `AgentCard.tsx`, `ToolTimeline.tsx`, `AgentStatusBadge.tsx`.
 - `apps/mobile/app/(app)/companion/` — companion route and `agent/[id].tsx` detail.
 - `apps/mobile/lib/v1FeatureFlags.ts` — `companion`/`dispatch`/`agents` gates (all `false`).
-- Shared/host: `crates/agiworkforce-{protocol,task-runtime}`, `packages/runtime`, `apps/desktop/src-tauri/src/integrations/realtime`, `services/signaling-server`.
+- Shared/host: `crates/agiworkforce-{protocol,task-runtime}`, `packages/client/client-runtime`, `apps/desktop/src-tauri/src/integrations/realtime`, `services/signaling-server`.
 
 ## Competitor notes
 
@@ -68,7 +68,7 @@ ChatGPT and Claude mobile increasingly run agentic/"on the web" tasks **in their
 Production-ready gate: every Runtime Action is HMAC-signed and replay-protected; approve/reject is explicit and per-request with fail-closed timeouts; pause/resume/cancel reflect host acknowledgement (no optimistic lies); logs are read-only and redacted; notifications honor prefs and leak no content; and the companion fabric is wired to real desktop task execution before any flag flips on.
 
 - [ ] Build: companion screens render with `FEATURES.companion/dispatch/agents` on in a dev build; approve/reject/pause/resume/cancel/emergency-stop each emit a signed envelope verified by the desktop peer.
-- [ ] Trust: no BYOK/key affordance anywhere in this domain; Local chats expose no Runtime Actions; model labels resolve only from `packages/types/src/models.json`.
+- [ ] Trust: no BYOK/key affordance anywhere in this domain; Local chats expose no Runtime Actions; model labels resolve only from `packages/contracts/types/src/models.json`.
 - [ ] Security: unsigned/expired/replayed control messages rejected; rejected/timed-out approvals never execute on the host; notifications and logs redact secrets and error stacks.
 
 ## Anti-patterns

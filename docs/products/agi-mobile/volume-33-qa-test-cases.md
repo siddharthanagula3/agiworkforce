@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real harnesses under `apps/mobile/` — `detox.config.js`, `scripts/screenshots/specs/`, `.maestro/cloud-chat-smoke.yaml`, `scripts/wave0-smoke/`, `__tests__/` (incl. `__tests__/priority-level-1/security/`), `jest.config.js`, `package.json`, plus `services/remoteChatGate.ts`, `lib/egressGuard.ts`, `services/performanceMonitor.ts`, `lib/v1FeatureFlags.ts`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/mobile/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md`, and the real harnesses under `apps/mobile/` — `detox.config.js`, `scripts/screenshots/specs/`, `.maestro/cloud-chat-smoke.yaml`, `scripts/wave0-smoke/`, `__tests__/` (incl. `__tests__/priority-level-1/security/`), `jest.config.js`, `package.json`, plus `services/remoteChatGate.ts`, `lib/egressGuard.ts`, `services/performanceMonitor.ts`, `lib/v1FeatureFlags.ts`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -73,7 +73,7 @@ Guard against re-breaking shipped fixes (login-loop, forced sign-in wall, LogBox
 - `apps/mobile/services/remoteChatGate.ts`, `lib/egressGuard.ts`, `services/secureFetch.ts`, `scripts/check-tls-pins.mjs` — gate + egress + pinning under test.
 - `apps/mobile/services/performanceMonitor.ts`, `services/streaming.ts`, `src/features/chat/components/MessageList.tsx` — performance capture + render under test.
 - `apps/mobile/lib/v1FeatureFlags.ts` — feature gates QA reads (`byokKeys: false`, `cloudChat: true`).
-- `packages/types/src/models.json` — model metadata SSOT; tests must read IDs here, never hardcode.
+- `packages/contracts/types/src/models.json` — model metadata SSOT; tests must read IDs here, never hardcode.
 
 ## Competitor notes
 
@@ -93,6 +93,6 @@ Production-ready means launch-critical flows are proven on a booted simulator wi
 - Adding a BYOK / API-key field to satisfy a test fixture — Mobile has no BYOK, ever.
 - Faking a green e2e by stubbing the network so a dead Cloud backend still "passes," or asserting a "streaming"/"connected" state that no longer reflects reality.
 - Routing Local chats/files to Cloud to make a test simpler, or making the phone the first heavy local PDF/PPTX/DOCX/image-gen surface (image gen is cloud-backed).
-- Hardcoding or inventing model IDs in tests instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs in tests instead of reading `packages/contracts/types/src/models.json`.
 - Referencing Supabase (removed — Clerk + Neon + Stripe only) or reintroducing "Plus"/`pro_plus`/"Hobby"; inventing INR prices for Pro/Max.
 - Treating the local screenshot harness as App Store submission evidence (`scripts/screenshots/README.md`) — store release still needs the real device matrix + founder approval.

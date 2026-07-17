@@ -72,6 +72,6 @@ A build is production-ready for observability when doctor, cost metrics, and the
 - Logging or tracing raw prompts, file contents, or unredacted tool arguments.
 - A `--debug`/`--verbose` flag that also loosens approvals, sandbox, or routing.
 - Auto-uploading crash reports, or uploading any crash/telemetry payload without explicit consent.
-- Hardcoding pricing or model IDs into metrics instead of reading `apps/cli/src/model_catalog.rs` / `packages/types/src/models.json`.
+- Hardcoding pricing or model IDs into metrics instead of reading `apps/cli/src/model_catalog.rs` / `packages/contracts/types/src/models.json`.
 - Claiming a telemetry/crash-report backend exists (none does), inventing env vars or routes, referencing Supabase, or citing removed tiers ("Plus", `pro_plus`, "Hobby") or credit top-ups.
 - Using `agiworkforce <cmd>` in examples — the user-facing binary is `agi`.

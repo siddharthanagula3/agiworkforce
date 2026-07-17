@@ -70,5 +70,5 @@ The domain is production-ready when activation is non-blocking and budgeted, ind
 - Buffering full completions instead of streaming; ignoring the `CancellationToken`.
 - Unbounded indexing or unbounded completion caches; re-scanning unchanged roots.
 - Silently routing Local or BYOK context to Managed Cloud, or auto-syncing IDE context into Web/Mobile/Desktop app chat.
-- Hardcoding or inventing model IDs (read from `packages/types/src/models.json`), referencing removed tiers (Plus/Hobby/pro_plus), adding credit top-ups, or referencing Supabase.
+- Hardcoding or inventing model IDs (read from `packages/contracts/types/src/models.json`), referencing removed tiers (Plus/Hobby/pro_plus), adding credit top-ups, or referencing Supabase.
 - Claiming shipped indexing/streaming behavior without a real repo path.

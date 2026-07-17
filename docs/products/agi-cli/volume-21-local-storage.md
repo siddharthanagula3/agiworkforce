@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (binding canon); `docs/surfaces/cli.md`. Grounded in real repo paths: `apps/cli/src/config.rs`, `apps/cli/src/sessions.rs`, `apps/cli/src/platform/runtime/session.rs`, `apps/cli/src/platform/runtime/session_control.rs`, `apps/cli/src/auth.rs`, `apps/cli/src/mcp/oauth_store.rs`, `apps/cli/src/model_catalog.rs`, `apps/cli/src/models/openrouter_models.rs`, `apps/cli/src/tier_cache.rs`, `apps/cli/src/local_models.rs`, `apps/cli/src/daemon.rs`, `apps/cli/src/approval_audit.rs`, `apps/cli/src/repl/mod.rs`, `apps/cli/src/agent/mod.rs`, and `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root) and `apps/cli/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (binding canon); `docs/surfaces/cli.md`. Grounded in real repo paths: `apps/cli/src/config.rs`, `apps/cli/src/sessions.rs`, `apps/cli/src/platform/runtime/session.rs`, `apps/cli/src/platform/runtime/session_control.rs`, `apps/cli/src/auth.rs`, `apps/cli/src/mcp/oauth_store.rs`, `apps/cli/src/model_catalog.rs`, `apps/cli/src/models/openrouter_models.rs`, `apps/cli/src/tier_cache.rs`, `apps/cli/src/local_models.rs`, `apps/cli/src/daemon.rs`, `apps/cli/src/approval_audit.rs`, `apps/cli/src/repl/mod.rs`, `apps/cli/src/agent/mod.rs`, and `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -46,7 +46,7 @@ CLI supports all three trust modes (Local + BYOK + Managed), and local storage m
 
 ## Model Registry
 
-✅ Built — `apps/cli/src/model_catalog.rs`. The single source of truth is `packages/types/src/models.json`, compiled into the binary via `include_str!` (Tier 1); the runtime cache above is Tier 2; locally discovered models (`apps/cli/src/local_models.rs`) are Tier 3. Model IDs are read from `models.json` — never invented, hardcoded, or maintained in a separate CLI table. Requirement: unknown hosted IDs fail closed (`AgentSession::new_checked`), and any parse failure of `models.json` is a hard error, not a silent fallback.
+✅ Built — `apps/cli/src/model_catalog.rs`. The single source of truth is `packages/contracts/types/src/models.json`, compiled into the binary via `include_str!` (Tier 1); the runtime cache above is Tier 2; locally discovered models (`apps/cli/src/local_models.rs`) are Tier 3. Model IDs are read from `models.json` — never invented, hardcoded, or maintained in a separate CLI table. Requirement: unknown hosted IDs fail closed (`AgentSession::new_checked`), and any parse failure of `models.json` is a hard error, not a silent fallback.
 
 ## Repository map
 
@@ -56,7 +56,7 @@ CLI supports all three trust modes (Local + BYOK + Managed), and local storage m
 - `apps/cli/src/model_catalog.rs`, `apps/cli/src/models/openrouter_models.rs`, `apps/cli/src/tier_cache.rs`, `apps/cli/src/local_models.rs` — registry + caches
 - `apps/cli/src/daemon.rs`, `apps/cli/src/approval_audit.rs`, `apps/cli/src/repl/mod.rs`, `apps/cli/src/shell_snapshot.rs` — logs, audit, REPL history, snapshots
 - `apps/cli/src/agent/mod.rs` — `PrivacyMode` enforcement over stored state
-- `packages/types/src/models.json` — model registry SSOT
+- `packages/contracts/types/src/models.json` — model registry SSOT
 
 ## Competitor notes
 
@@ -75,7 +75,7 @@ Production-ready when every artifact resolves under `~/.agiworkforce/` (or the O
 - Writing CLI session/history into Neon or any synced app table — breaks the workspace-scoped rule in `apps/cli/src/sessions.rs`.
 - Silently uploading a Local transcript, or treating drafting as consent for a BYOK/Managed handoff.
 - Storing provider keys world-readable, in `config.toml`, or in a session file instead of `0o600` `auth.json` / the keyring.
-- Hardcoding or inventing model IDs, or maintaining a CLI model table beside `packages/types/src/models.json`.
+- Hardcoding or inventing model IDs, or maintaining a CLI model table beside `packages/contracts/types/src/models.json`.
 - Unbounded caches or logs; caches that hold prompt/chat content.
 - Referencing Supabase (fully migrated away), Next.js `middleware.ts` (use `proxy.ts`), removed tiers (`Plus`, `pro_plus`, `Hobby`), credit top-ups, or invented INR prices for Pro/Max.
 - Using `agiworkforce <cmd>` in examples — the primary binary is `agi`.

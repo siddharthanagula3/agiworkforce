@@ -77,6 +77,6 @@ Production-ready gate: core signed-out (marketing, pricing, sign-in) and signed-
 - Do **not** claim WCAG conformance or "shipped" a11y without a cited repo path; unbuilt items stay **🔭**.
 - Do **not** use `outline: none` without a visible focus indicator, or convey state by color alone.
 - Do **not** re-enable a webfont via a third-party CDN that the `font-src` CSP in `apps/web/proxy.ts` blocks — self-host under `apps/web/public/fonts/`.
-- Do **not** invent locales, INR prices for Pro/Max, model IDs, routes, or env vars; model IDs come only from `packages/types/src/models.json`.
+- Do **not** invent locales, INR prices for Pro/Max, model IDs, routes, or env vars; model IDs come only from `packages/contracts/types/src/models.json`.
 - Do **not** reference removed tiers ("Plus", `pro_plus`, "Hobby"), credit top-ups, `middleware.ts`, or Supabase.
 - Do **not** re-implement dialog/skip-link primitives per page — reuse the shared components.

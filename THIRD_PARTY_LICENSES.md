@@ -9,39 +9,39 @@ that travels with that code.
 - **Upstream**: [openclaw/openclaw](https://github.com/openclaw/openclaw)
 - **License**: MIT
 - **Copyright**: © 2025 Peter Steinberger
-- **Imported into**: `packages/llm-normalize/src/`
+- **Imported into**: `packages/ai/provider-protocol/src/`
 - **Files derived from OpenClaw**:
-  - `packages/llm-normalize/src/openai-responses-payload-policy.ts`
+  - `packages/ai/provider-protocol/src/openai-responses-payload-policy.ts`
     ← `src/agents/openai-responses-payload-policy.ts`
-  - `packages/llm-normalize/src/openai-reasoning-effort.ts`
+  - `packages/ai/provider-protocol/src/openai-reasoning-effort.ts`
     ← `src/agents/openai-reasoning-effort.ts`
-  - `packages/llm-normalize/src/system-prompt-cache-boundary.ts`
+  - `packages/ai/provider-protocol/src/system-prompt-cache-boundary.ts`
     ← `src/agents/system-prompt-cache-boundary.ts`
-  - `packages/llm-normalize/src/anthropic-payload-policy.ts`
+  - `packages/ai/provider-protocol/src/anthropic-payload-policy.ts`
     ← `src/agents/anthropic-payload-policy.ts` (Sprint 2)
-  - `packages/llm-normalize/src/openai-completions-compat.ts`
+  - `packages/ai/provider-protocol/src/openai-completions-compat.ts`
     ← `src/agents/openai-completions-compat.ts` (Sprint 2)
-  - `packages/llm-normalize/src/provider-attribution.ts`
+  - `packages/ai/provider-protocol/src/provider-attribution.ts`
     ← simplified port of `src/agents/provider-attribution.ts` (Sprint 2 — stripped plugin-manifest scanning, kept pure capability resolution)
-  - `packages/llm-normalize/src/lib/prompt-cache-stability.ts`
+  - `packages/ai/provider-protocol/src/lib/prompt-cache-stability.ts`
     ← `src/agents/prompt-cache-stability.ts`
-  - `packages/llm-normalize/src/lib/string-utils.ts`
+  - `packages/ai/provider-protocol/src/lib/string-utils.ts`
     ← subset of `src/shared/string-coerce.ts`
-  - `packages/llm-normalize/src/openai-tool-schema.ts`
+  - `packages/ai/provider-protocol/src/openai-tool-schema.ts`
     ← `src/agents/openai-tool-schema.ts` (Sprint 3 — drops the strict-tool-setting re-export which depends on provider-attribution-via-plugin-runtime)
-  - `packages/llm-normalize/src/tool-parameter-schema.ts`
+  - `packages/ai/provider-protocol/src/tool-parameter-schema.ts`
     ← simplified port of `src/agents/pi-tools-parameter-schema.ts` (Sprint 3 — replaces ModelCompatConfig sourcing with explicit `unsupportedKeywords` arg)
-  - `packages/llm-normalize/src/lib/clean-for-gemini.ts`
+  - `packages/ai/provider-protocol/src/lib/clean-for-gemini.ts`
     ← `src/agents/schema/clean-for-gemini.ts` (Sprint 3 — TypeBox return type replaced with `unknown`)
-  - `packages/types/src/provider-adapter.ts`
+  - `packages/contracts/types/src/provider-adapter.ts`
     ← interface shape adapted from `packages/plugin-sdk/src/provider-entry.ts` (`ProviderPlugin` type) (Sprint 2)
-  - `packages/mcp/src/types.ts`
+  - `packages/tools/mcp/src/types.ts`
     ← shape mirrors `src/config/types.mcp.ts` and `src/agents/pi-bundle-mcp-types.ts` (Sprint 4a — code is freshly written, only the config/catalog shapes are aligned for ecosystem compat; not a literal port)
-  - `packages/skills/src/types.ts`, `loader.ts`, `merge.ts`, `format.ts`
+  - `packages/tools/skills/src/types.ts`, `loader.ts`, `merge.ts`, `format.ts`
     ← skill format and precedence rules mirror OpenClaw's `src/agents/skills/*` (Sprint 4a — code is freshly written; the markdown+YAML-frontmatter file format and the 6-tier precedence order are the ecosystem-compatibility surface, not OpenClaw-licensed material)
-  - `packages/llm-normalize/src/anthropic-tool-payload-compat.ts`
+  - `packages/ai/provider-protocol/src/anthropic-tool-payload-compat.ts`
     ← `src/agents/pi-embedded-runner/anthropic-family-tool-payload-compat.ts` (Tier-1D — generic `StreamFn` type replaces the `@mariozechner/pi-agent-core` dependency so adapters don't need to inherit pi-agent-core types)
-  - `packages/apply-patch/src/parse.ts`, `apply-update.ts`, `types.ts`, `index.ts`
+  - `packages/tools/apply-patch/src/parse.ts`, `apply-update.ts`, `types.ts`, `index.ts`
     ← `src/agents/apply-patch.ts` + `apply-patch-update.ts` (deferred-completion pass — minimal `FSBridge` interface (5 methods: readFile/writeFile/remove/mkdirp/exists) replaces OpenClaw's sandbox-aware `SandboxFsBridge` + `boundary-file-read` + `fs-safe` stack; default `nodeFSBridge()` provided for real disk)
 - **Adaptations**:
   - Stripped OpenClaw plugin-sdk imports; helpers are pure functions
@@ -80,9 +80,9 @@ SOFTWARE.
 - **Upstream**: [NVIDIA/skillspector](https://github.com/NVIDIA/skillspector)
 - **License**: Apache-2.0
 - **Copyright**: © NVIDIA Corporation
-- **Imported into**: `services/skill-vetting/`
-- **Adoption**: Vendored the runnable scanner package (`src/skillspector/**`, 57 modules + YARA rules) plus `pyproject.toml`. Upstream `LICENSE` and `THIRD_PARTY_NOTICES.md` are preserved verbatim at `services/skill-vetting/LICENSE` and `services/skill-vetting/THIRD_PARTY_NOTICES.md`.
-- **Local changes**: trimmed upstream `tests/`, `docs/`, `Dockerfile`, `extensions/`, `uv.lock` (kept only the two sample fixtures under `samples/`); added our `README.md` and `verify.sh`; rewrote `model_registry.yaml` to AGI catalog model IDs sourced from `packages/types/src/models.json`. No upstream source files were modified.
+- **Imported into**: `tools/skill-vetting/`
+- **Adoption**: Vendored the runnable scanner package (`src/skillspector/**`, 57 modules + YARA rules) plus `pyproject.toml`. Upstream `LICENSE` and `THIRD_PARTY_NOTICES.md` are preserved verbatim at `tools/skill-vetting/LICENSE` and `tools/skill-vetting/THIRD_PARTY_NOTICES.md`.
+- **Local changes**: trimmed upstream `tests/`, `docs/`, `Dockerfile`, `extensions/`, `uv.lock` (kept only the two sample fixtures under `samples/`); added our `README.md` and `verify.sh`; rewrote `model_registry.yaml` to AGI catalog model IDs sourced from `packages/contracts/types/src/models.json`. No upstream source files were modified.
 
 ## Porting policy
 

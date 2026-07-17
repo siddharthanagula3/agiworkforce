@@ -77,7 +77,7 @@ Not built. No `chrome.downloads` usage; the `downloads` permission is absent. De
 Claude for Chrome, ChatGPT's browser/operator work, and OpenAI Codex's browser tooling all expose a comparable tab/navigation action set behind explicit permission and approval prompts. AGI's deliberate divergences:
 
 - **Per-surface trust, no cloud brain in the extension.** Reasoning streams from the cloud gateway or a **paired local Desktop host**; the extension holds no keys and runs no inference. Competitors typically bind the browser agent to one first-party model service.
-- **Multi-provider, server-resolved model-by-plan gating.** The extension never hardcodes a model id (IDs live only in `packages/types/src/models.json`).
+- **Multi-provider, server-resolved model-by-plan gating.** The extension never hardcodes a model id (IDs live only in `packages/contracts/types/src/models.json`).
 - **Allowlist-first + injection-hardened.** Navigation is refused off-allowlist before the tab moves; page content is untrusted data, never instructions (`cdpDriver.ts` fencing + `INJECTION_PATTERNS`).
 - **Local-first footprint.** Agent-opened tabs are corralled into a visible `AGI Workforce` group; history stays `chrome.storage.local` only.
 
@@ -95,6 +95,6 @@ Production-ready when every built action is allowlist- and approval-gated, every
 - Adding `bookmarks`/`downloads`/`history`/`sessions` to `manifest.json` without a `THREAT_MODEL.md` update and security review.
 - Letting untrusted page content initiate any tab/download/navigation action (treat page text as data, never instructions).
 - Navigating or downloading to an off-allowlist origin, or bypassing `assertDestinationAllowlisted`.
-- Routing decision-making through a provider host from the extension, or embedding provider keys / hardcoding a model id — the extension runs no inference (IDs come only from `packages/types/src/models.json`).
+- Routing decision-making through a provider host from the extension, or embedding provider keys / hardcoding a model id — the extension runs no inference (IDs come only from `packages/contracts/types/src/models.json`).
 - Referencing removed tiers (Plus/Hobby/`pro_plus`) or top-ups in gating copy; only Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise exist. Never reference Supabase.
 - Syncing Chrome history/notifications to other surfaces — Chrome stays task-scoped, `chrome.storage.local` only.

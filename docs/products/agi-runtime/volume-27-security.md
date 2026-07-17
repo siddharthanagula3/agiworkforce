@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md`; and the real runtime sources this volume grounds in — `services/signaling-server/src/index.ts`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/bin/native_messaging_host.rs`, `services/api-gateway/src/routes/{mobile,pair}.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app/_layout.tsx`, `apps/desktop/src-tauri/Cargo.toml`, `crates/{sandbox-policy,agiworkforce-execpolicy,agiworkforce-network-proxy}`, and `apps/web/db/neon/{0014_security,0037_rls_user_isolation,0043_audit_log_immutability}.sql`. Model IDs (where relevant) come only from `packages/types/src/models.json`.
+Authority: `AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/desktop/AGENTS.md`; and the real runtime sources this volume grounds in — `services/signaling-server/src/index.ts`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `apps/desktop/src-tauri/src/bin/native_messaging_host.rs`, `services/api-gateway/src/routes/{mobile,pair}.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app/_layout.tsx`, `apps/desktop/src-tauri/Cargo.toml`, `crates/{sandbox-policy,agiworkforce-execpolicy,agiworkforce-network-proxy}`, and `apps/web/db/neon/{0014_security,0037_rls_user_isolation,0043_audit_log_immutability}.sql`. Model IDs (where relevant) come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -76,4 +76,4 @@ Claude Code Remote Control ("nothing moves to the cloud") and Codex QR-paired re
 - Weakening the origin allowlist back to `starts_with`, or rate-limiting before authenticating.
 - Re-granting blanket `UPDATE/DELETE` on `security_audit_logs` to `app_rls` (silently breaks immutability).
 - Claiming companion/dispatch, cross-surface presence, or sandbox enforcement as shipped — they are 🟡/🔭.
-- Hardcoding or inventing model IDs (use `packages/types/src/models.json`), referencing Supabase, `middleware.ts`, or removed tiers (Plus/Hobby/pro_plus/top-ups).
+- Hardcoding or inventing model IDs (use `packages/contracts/types/src/models.json`), referencing Supabase, `middleware.ts`, or removed tiers (Plus/Hobby/pro_plus/top-ups).

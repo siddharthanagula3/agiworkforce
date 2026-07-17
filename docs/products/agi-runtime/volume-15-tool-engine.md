@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/cli/AGENTS.md` (nearest surface rules for the app-server consumer). Grounded in `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-command-registry/src/lib.rs`, `apps/cli/src/app_server.rs`, `apps/cli/src/platform/runtime/tool_catalog.rs`, `apps/cli/src/tool_search.rs`, `apps/cli/src/tool_filters.rs`, `apps/cli/src/mcp/mod.rs`, `crates/agiworkforce-task-runtime/src/lib.rs`, and `services/signaling-server/src/index.ts`.
+Authority: `AGENTS.md` (repo root); `docs/current/source-of-truth.md`; `docs/products/README.md` (canon); `apps/cli/AGENTS.md` (nearest surface rules for the app-server consumer). Grounded in `crates/agiworkforce-app-server/src/lib.rs`, `crates/agiworkforce-command-registry/src/lib.rs`, `apps/cli/src/app_server.rs`, `apps/cli/src/platform/runtime/tool_catalog.rs`, `apps/cli/src/tool_search.rs`, `apps/cli/src/tool_filters.rs`, `apps/cli/src/mcp/mod.rs`, `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`, and `services/signaling-server/src/index.ts`.
 
 ## Overview & stance
 
@@ -18,7 +18,7 @@ The engine keeps two registries. **Commands** are modeled as metadata-rich recor
 
 - ✅ Built — command + tool catalogs (`crates/agiworkforce-command-registry/src/lib.rs`; `apps/cli/src/platform/runtime/tool_catalog.rs`).
 - ✅ Built — app-server `tools/list` catalog with seven wired schemas (`apps/cli/src/app_server.rs`, `cli_tool_catalog()`).
-- 🟡 Partial — MCP-server-registered tools: `McpServerConfig`/`PluginManifest` exist (`crates/agiworkforce-plugin-runtime/src/lib.rs`) and the CLI loads live MCP tools (`apps/cli/src/mcp/mod.rs`), but they are not merged into one cross-surface registry.
+- 🟡 Partial — MCP-server-registered tools: `McpServerConfig`/`PluginManifest` exist (`crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`) and the CLI loads live MCP tools (`apps/cli/src/mcp/mod.rs`), but they are not merged into one cross-surface registry.
 - 🔭 Planned — a unified runtime registry spanning surfaces (blocked: `surface_heartbeats` table absent; only `apps/web/app/api/control-plane/status` stub exists).
 
 ## Discovery — discover tools dynamically
@@ -54,7 +54,7 @@ The only retry today is transport-level: an MCP `tools/call` that fails with a c
 
 ## Timeouts — prevent hanging tools
 
-`McpTimeouts` bounds each MCP phase — `initialize` 30s, `list_tools` 10s, `call_tool` 120s, `health_check` 5s — overridable via `mcp_initialize_timeout` / `mcp_call_tool_timeout` config (`apps/cli/src/mcp/mod.rs`; `apps/cli/src/config.rs`). Long-running background tasks are watched by `StallWatchdog`, which fails a task with `"stall timeout"` when its output file stops growing (`crates/agiworkforce-task-runtime/src/lib.rs`). The app-server carries `session_timeout_secs` (default 3600) (`crates/agiworkforce-app-server/src/lib.rs`).
+`McpTimeouts` bounds each MCP phase — `initialize` 30s, `list_tools` 10s, `call_tool` 120s, `health_check` 5s — overridable via `mcp_initialize_timeout` / `mcp_call_tool_timeout` config (`apps/cli/src/mcp/mod.rs`; `apps/cli/src/config.rs`). Long-running background tasks are watched by `StallWatchdog`, which fails a task with `"stall timeout"` when its output file stops growing (`crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs`). The app-server carries `session_timeout_secs` (default 3600) (`crates/agiworkforce-app-server/src/lib.rs`).
 
 - ✅ Built — per-phase MCP timeouts + stall watchdog.
 - 🟡 Partial — app-server session timeout exists, but built-in `tools/call` has no hard per-invocation wall-clock on the local dispatch path.
@@ -69,13 +69,13 @@ The only retry today is transport-level: an MCP `tools/call` that fails with a c
 - `apps/cli/src/tool_search.rs` — deferred-tool discovery / on-demand schema loader.
 - `apps/cli/src/tool_filters.rs` — allow/deny tool-call enforcement.
 - `apps/cli/src/mcp/mod.rs` — MCP client, timeouts, reconnect-retry, result extraction.
-- `crates/agiworkforce-plugin-runtime/src/lib.rs` — `McpServerConfig`, `PluginManifest`.
-- `crates/agiworkforce-task-runtime/src/lib.rs` — `StallWatchdog` stall timeout.
+- `crates/agiworkforce-plugin-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `McpServerConfig`, `PluginManifest`.
+- `crates/agiworkforce-task-runtime (REMOVED 2026-07-08, zero dependents — no replacement crate exists yet; treat as an unbuilt gap, not a live path)/src/lib.rs` — `StallWatchdog` stall timeout.
 - `services/signaling-server/src/index.ts` — remote dispatch/approval verbs.
 
 ## Competitor notes
 
-Claude Code, ChatGPT, and Codex ship a single-vendor tool loop bound to their own model and cloud. AGI's deliberate divergence: the engine is provider-neutral (model IDs resolve only from `packages/types/src/models.json`) and **per-surface trust-scoped** — the app-server refuses mutating tools locally rather than assuming a cloud approval UI, and BYOK invocation is confined to Desktop/CLI/VS Code. Deferred-tool search mirrors Claude Code's `ToolSearchTool` while the MCP client keeps AGI open to third-party tool servers. Remote control follows Claude Code Remote Control / Codex parity: the tool loop runs on the host and the phone is an approval-gated window — nothing moves to the cloud implicitly.
+Claude Code, ChatGPT, and Codex ship a single-vendor tool loop bound to their own model and cloud. AGI's deliberate divergence: the engine is provider-neutral (model IDs resolve only from `packages/contracts/types/src/models.json`) and **per-surface trust-scoped** — the app-server refuses mutating tools locally rather than assuming a cloud approval UI, and BYOK invocation is confined to Desktop/CLI/VS Code. Deferred-tool search mirrors Claude Code's `ToolSearchTool` while the MCP client keeps AGI open to third-party tool servers. Remote control follows Claude Code Remote Control / Codex parity: the tool loop runs on the host and the phone is an approval-gated window — nothing moves to the cloud implicitly.
 
 ## Acceptance / Definition of Done
 

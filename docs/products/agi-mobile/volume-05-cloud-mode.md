@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: grounds in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and the real repo paths cited inline — `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/cloudSettingsMapping.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/offlineQueue.ts`, `apps/mobile/services/authSession.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/src/features/billing/service.ts`, and the Neon delta-sync routes under `apps/web/app/api/{chat,memory,projects,settings}/sync/route.ts`. Model IDs come only from `packages/types/src/models.json`.
+Authority: grounds in `AGENTS.md` (repo root), `docs/current/source-of-truth.md`, `apps/mobile/AGENTS.md`, `docs/products/README.md` (canon), and the real repo paths cited inline — `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/cloudSettingsMapping.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/offlineQueue.ts`, `apps/mobile/services/authSession.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/src/features/billing/service.ts`, and the Neon delta-sync routes under `apps/web/app/api/{chat,memory,projects,settings}/sync/route.ts`. Model IDs come only from `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -16,7 +16,7 @@ The governing rule everywhere below: **Cloud is a distinct trust boundary**. Loc
 
 ✅ Built — `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/services/authSession.ts`.
 
-The cloud backend is **Clerk** (identity/session), **Neon Postgres** (the delta-sync store of record), and **Stripe** (billing). Never reference Supabase. Mobile is a thin client: the Clerk session JWT (`@clerk/expo`, cached in `expo-secure-store`) is bridged to non-React callers as a `Bearer` token (`apps/mobile/services/authSession.ts`) and every cloud call routes through `api` → `guardedFetch`. Requirements: (1) all cloud reads/writes carry a fresh Clerk token; (2) no cloud call executes in Local mode; (3) IDs are client-generated UUIDv7 (time-ordered, collision-free) so push/pull are idempotent; (4) model selection reads only `packages/types/src/models.json` (e.g. `claude-opus-4.8`, `gpt-5.5`) — never a hardcoded ID.
+The cloud backend is **Clerk** (identity/session), **Neon Postgres** (the delta-sync store of record), and **Stripe** (billing). Never reference Supabase. Mobile is a thin client: the Clerk session JWT (`@clerk/expo`, cached in `expo-secure-store`) is bridged to non-React callers as a `Bearer` token (`apps/mobile/services/authSession.ts`) and every cloud call routes through `api` → `guardedFetch`. Requirements: (1) all cloud reads/writes carry a fresh Clerk token; (2) no cloud call executes in Local mode; (3) IDs are client-generated UUIDv7 (time-ordered, collision-free) so push/pull are idempotent; (4) model selection reads only `packages/contracts/types/src/models.json` (e.g. `claude-opus-4.8`, `gpt-5.5`) — never a hardcoded ID.
 
 ## Conversation Synchronization
 
@@ -64,7 +64,7 @@ Sends that fail on network error enqueue into an **MMKV-backed** FIFO queue that
 - `apps/mobile/stores/chat/{chatCloudMessageStore,cloudSyncStateStore}.ts`, `apps/mobile/stores/{memory,projects,settings}/*` — cloud stores + per-domain cursors.
 - `apps/mobile/src/features/billing/*` — Stripe portal client (gated).
 - `apps/web/app/api/{chat,memory,projects,settings}/sync/route.ts` — Neon delta-sync SSOT.
-- `packages/types/src/models.json` — only source of model IDs.
+- `packages/contracts/types/src/models.json` — only source of model IDs.
 
 ## Competitor notes
 
@@ -83,7 +83,7 @@ Production-ready when: cloud sync is exercised across Web ↔ Mobile ↔ Desktop
 - Adding a BYOK / API-key entry to mobile (forbidden — `byokKeys` stays false).
 - Auto-routing Local chats, memory, or projects to the cloud without an explicit reviewed transfer.
 - Spreading the full settings store into the sync payload, or syncing keys/device tokens/biometrics/`autoApproveMode`.
-- Hardcoding or inventing a model ID instead of reading `packages/types/src/models.json`.
+- Hardcoding or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Referencing Supabase, or naming "Plus" / `pro_plus` / "Hobby" / credit top-ups in any pricing surface.
 - Claiming cross-device continuity or billing is fully shipped — both are 🟡 with gates noted above.
 - Treating Remote Control as a cloud sync path or a fourth trust mode.

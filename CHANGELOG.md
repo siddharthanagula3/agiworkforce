@@ -2,9 +2,695 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-09
+Last updated: 2026-07-16
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — trust-boundary, sync, and operability hardening] — 2026-07-15
+
+### Changed
+
+- Connected Chrome Quick mode end to end instead of leaving a cosmetic toggle:
+  both normal and page-capture side-panel sends now snapshot Quick into the
+  typed `CHAT_MESSAGE` contract, the background worker forwards it to the
+  privileged Managed Cloud handler, and the handler applies the canonical,
+  account-admitted `auto-economy` profile for that turn without changing the
+  user's saved model-picker selection. Invalid Quick payloads fail closed.
+  Added a routing regression test; all 1,096 extension tests, extension
+  typecheck, and extension lint pass.
+
+- Repaired Chrome's dead restricted-page UI. Browser-internal pages now render
+  a compact accessible status notice explaining that page access and
+  automation are unavailable, while Managed Cloud chat remains usable. The
+  page-context control and page-specific command chips fail closed. Added a
+  mounted-source regression; the full extension suite now passes 1,097 tests,
+  plus typecheck, lint, and production build.
+
+- Established the canonical six-surface frontend experience contract in
+  `docs/current/frontend-experience-contract.md` and recorded a sanitized,
+  read-only live Claude UI audit in
+  `docs/research/claude-live-frontend-system-2026-07-16.md`. The contract now
+  distinguishes Cloud Conversation, Cloud Work, Local Consumer, Developer
+  Session, Browser Task, Remote Projection, and explicit Handoff Snapshot;
+  inventories layouts, screens, composer variants, message actions, inline
+  tool/search/file events, artifact renderers, settings, icons, accessibility,
+  responsive behavior, package ownership, release compatibility, and
+  definition-of-done. The parity matrix now carries a source-backed mounted
+  frontend reconciliation, the trust-mode matrix records the verified
+  competitor persistence/runtime topology, and the current-doc map links the
+  new contract. No private account values or proprietary product assets were
+  copied.
+
+- Completed mechanical wave W4 (the T-wave): regrouped `packages/` from a
+  flat layout into six domain groups — `contracts` (types, cloud-contracts,
+  trust-boundaries, licensing, compliance), `ai` (providers, provider-runtime,
+  provider-protocol, routing, search, model-registry), `client`
+  (client-runtime, desktop-command-client, sync), `ui` (ui, design-tokens,
+  unified-chat), `tools` (mcp, skills, apply-patch, browser-tool), and
+  `platform` (artifacts, data-layer, local-llm, utils) — and executed the two
+  confirmed renames `llm-runtime`→`provider-runtime` and
+  `llm-normalize`→`provider-protocol` (56 consumers updated). Every import,
+  alias, tsconfig depth, turbo tag, workspace glob, guard path-literal,
+  lanes/repo-map/CODEOWNERS path, and the ts-rs codegen path followed the
+  move; zero behavior change. The dispatched wave agent completed ~90% then
+  terminated mid-wave, so the orchestrator finished it: forced the pnpm
+  workspace relink (stale hoisted `node_modules/@agiworkforce/*` symlinks that
+  `--force` wouldn't rewrite required removing the hoist dir and reinstalling),
+  cleared the stale Turbopack `.next`/`.turbo` cache, updated three ownership
+  guards' flat-`packages/` directory scan to derive each package's parent group
+  dir, corrected their stale package→package lockfile-link relative targets
+  (e.g. `../types`→`../../contracts/types`), fixed the model-registry
+  `compile.mjs` repo-root computation (now three levels up from
+  `packages/ai/model-registry`) and its types path, and restored per-package
+  README ownership by making each group dir a scan root. Verified:
+  `typecheck:all` 45/45, full `check:llm-operability` chain green,
+  `check:protocol-types` (261 modules at the new `contracts/types` path),
+  `sync:models:check` green, turbo dry graph resolves, web dev server compiles
+  and serves 200, `git diff --check` clean.
+- Completed mechanical wave M6: merged the six single-consumer Rust
+  microcrates into their owners (`utils-cache`→`agiworkforce-utils-image`
+  module `cache`; `utils-home-dir` + `utils-rustls-provider`→
+  `agiworkforce-network-proxy` modules `home_dir`/`rustls_provider`;
+  `async-utils` + `utils-string`→`agiworkforce-protocol` modules
+  `async_utils`/`string_utils`), preserving module APIs and in-file tests.
+  Disposition adjustment recorded: `agiworkforce-utils-template` was
+  DELETED rather than merged — zero source references existed anywhere
+  (declared-but-unused dependency of `protocol`). Cargo workspace 21→15
+  members, `repo-map.json#workspaceUnits` 64→58; full
+  `cargo check --workspace`, merged-module unit tests, and the
+  organization/boundary/structure/agent-context guards are green.
+- Completed mechanical wave M7: added the guarded `tools/` root
+  (`check-repo-organization` allowlist + scoped `tools/AGENTS.md` validated
+  by `check-agent-context`) and moved the vendored NVIDIA SkillSpector fork
+  `services/skill-vetting` → `tools/skill-vetting` byte-identical (75 files
+  incl. LICENSE + THIRD_PARTY_NOTICES). `tools/skill-vetting/verify.sh`
+  proven green from the new path (malicious→DO_NOT_INSTALL, safe→SAFE);
+  repo-map gains a Tools platform zone and reclassifies the unit
+  `service`→`tool` (`move`→`keep`); CODEOWNERS `/tools/` entry and
+  README/TODO references updated. `THIRD_PARTY_LICENSES.md` — found
+  deleted in the worktree as collateral of the entitlements-licensing lane
+  (repeat of the 2026-07-08 P0 incident) — was restored from HEAD content
+  with the SkillSpector attribution corrected to `tools/skill-vetting/`;
+  `pnpm check:licenses` green.
+- Completed mechanical wave M8: deleted the `@agiworkforce/services` and
+  `@agiworkforce/stores` compatibility facades (59 tracked files) with
+  zero external importers proven pre-delete across source imports,
+  manifests, config aliases, and literal path forms; pnpm workspace
+  50→48 projects with `pnpm install --frozen-lockfile` green before and
+  after; `repo-map.json#workspaceUnits` 58→56; the
+  `shared-package-integration` lane retired from `lanes.json`; the two
+  ownership guards (`check-service-domain-ownership`,
+  `check-artifact-sync-ownership`) rewritten from facade-shape assertions
+  to facade-must-not-reappear anti-regression checks (both green);
+  CODEOWNERS and Status-Current architecture/foundation docs updated to
+  the canonical owners.
+- Fixed SVC-GATEWAY-MANAGED-GATE-INVERTED-01: the api-gateway's
+  managed-compute gate still ran the retired private-beta rules — an
+  inverted `=1`-to-enable env check (closed by default, denying with the
+  false claim "waitlisted and private beta only") AND a second
+  undocumented `x-agi-managed-compute-beta` header gate that would have
+  kept blocking every real caller even after the env fix (the Chrome
+  extension's client comment already described that header as a legacy
+  no-op). The gateway now parses the kill-switch byte-identically to
+  web's reference (`0`/`false`/`off` re-gates; anything else including
+  unset stays open per the 2026-06-27 public-alpha ruling), denial copy
+  and accountStatus values are honest, and 18 middleware tests pin the
+  semantics including a header-inertness regression (gateway suite 201
+  passing). The PUBLIC-ALPHA-CUTOVER incident runbook's rollback line —
+  which instructed the now-no-op `=1` and would have left managed compute
+  OPEN during an incident while appearing to close it — and the VS Code
+  cloud blueprint's private-beta assumption were corrected the same day.
+- Rebuilt the marketing device mockups on one exact-size system (founder
+  directive: no irregular sizes or shapes): a single `DEVICE_GEOMETRY`
+  source of truth defines seven canonical device geometries (desktop
+  720×480, web/editor 720×450, chrome 720×480, terminal 640×400,
+  side-panel 400×520, phone 270×585 — exact 19.5:9), and mockups scale
+  proportionally ONLY via container queries (every internal dimension
+  authored in design-pixel units), making stretch/reflow impossible by
+  construction — the same panel card previously rendered as both a
+  compact box and an edge-to-edge banner. Clipped strings fixed at the
+  cause (character-count caps removed), the phone mockup renders its
+  full frame instead of a squat truncating card, and ~1,500 lines of
+  divergent legacy frame CSS collapsed into one system with zero page
+  edits (thin wrappers preserve every call site). PROOF BY MEASUREMENT:
+  135 rendered mockups across all 17 landing/marketing/product pages ×
+  4 viewport widths (360/768/1280/1680) — every device type measures
+  exactly one aspect ratio (≤1.5% tolerance), zero clipped text, zero
+  failures; 27 new component tests, web typecheck clean.
+- Rebalanced the sign-in/sign-up pages and made them genuinely mobile
+  responsive (founder screenshot directive): the Clerk card now leads the
+  DOM (focus order and mobile stacking put auth first), the brand panel
+  is top-aligned beside the card with a deliberate type scale instead of
+  floating in a dead zone, and at ≤920px the page stacks card-first with
+  condensed brand copy — verified by measurement (zero horizontal
+  overflow, zero clipped strings) and before/after screenshots at
+  320/390/768/1024/1440 on both pages. Root causes fixed rather than
+  patched: the "Last used" pill was missing from the theme-following
+  Clerk override block entirely (dark-variable pill floating outside a
+  light card corner — now a token-driven chip on the button edge that
+  flips correctly in dark mode), and every Tailwind class in the Clerk
+  appearance config proved inert (never generated), so card geometry is
+  now enforced in the scoped CSS override block. DOM-order contract
+  pinned by a new component test.
+- Completed the W10 mobile-SLM code side (device QA remains the external
+  gate): most of the wave had already landed in prior commits (tier-3
+  llama.rn initMultimodal, mmproj lifecycle, effectiveVisionIn gating,
+  the checksum-verified Qwen3-VL-2B catalog entry — checksums re-verified
+  against HuggingFace this pass). New this pass: the mislabeled
+  `lfm2-vl-1.6b` catalog entry was corrected to its TRUE identity —
+  `lfm2-vl-450m` (the stored artifact size/checksum were always the 450M
+  model's; the real 1.6B is a 2.4GB download that contradicts the
+  low-RAM-tier intent) — with `visionIn` honestly false until tier-2
+  image plumbing exists, plus a regression test pinning the old id dead;
+  a pure, tested `hasSufficientRAMForMultimodal` (≥3.5GB) gate landed in
+  local-llm with exact wiring instructions handed off to the in-flight
+  model-picker rewrite lane; and the STALE ROOT `ios/` TREE WAS DELETED
+  (closing MOBILE-IOS-PREBUILD-DRIFT-01) after exhaustive proof no build
+  path referenced it — config plugins + `expo prebuild` into the
+  gitignored `apps/mobile/ios/` are now the single canonical iOS path,
+  mirroring Android, with the allowlist, lanes, README, AGENTS, surface
+  doc, and both QA runbooks corrected. A locked App-Store privacy-manifest
+  copy drift was found and tracked
+  (MOBILE-PRIVACY-MANIFEST-LOCKED-COPY-DRIFT-01). Suites: local-llm
+  73/73, mobile 1809 passing (2 pre-existing other-lane failures),
+  model-catalog + availability-invariant + sync checks green.
+- Made Bearer credentials authoritative for identity resolution
+  (WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01): a request presenting
+  any Authorization Bearer header now resolves identity from that bearer
+  (API key or Clerk JWT) or is rejected — the cookie-session fallback is
+  structurally unreachable in that branch, so the CSRF bypass principal
+  and the authenticated principal can no longer be different users. The
+  blast-radius audit proved every live bearer-sending client uses fresh
+  Clerk tokens (identical principal, no behavior change), corrected 43
+  test fixtures that had encoded the old cookie-fallback assumption, and
+  deleted the dead Supabase-era `ChatSettings.tsx` component that sent a
+  localStorage token as a garbage bearer (zero importers proven; the
+  same-named type in shared/types is unrelated and untouched). A
+  Headers-spec quirk (trailing-space trimming makes an empty bearer read
+  as no-bearer) is pinned by test. rt-02/rt-04 unmodified; full web
+  suite 4389 green.
+- Moved desktop schedules onto durable local storage (W9): a new
+  `SchedulerStore` (encrypted SQLite via the same keyed-connection idiom
+  as checkpoint_store) persists every scheduled job; user-initiated
+  mutations persist-before-mutate with rollback so memory and disk cannot
+  diverge, the background runner persists best-effort to avoid re-firing
+  executed jobs, and app startup hydrates persisted jobs with defaults
+  registered only when absent — previously every restart silently wiped
+  all user schedules. The frontend store no longer masks native failures:
+  a rejected invoke surfaces an error and leaves state untouched instead
+  of optimistically mutating and shadow-persisting to localStorage (both
+  shadow mechanisms — the manual key and the zustand persist middleware —
+  are now confined to the explicit non-Tauri preview branch). Discovered
+  and fixed en route: the weekly memory-decay default job had NEVER
+  registered since shipping (invalid cron day-of-week convention,
+  silently swallowed — DESKTOP-SCHEDULER-WEEKLY-DECAY-CRON-01). Verified:
+  scheduler suite 51/51 including restart-simulation tests against a real
+  db file, desktop typecheck clean, honesty suite 6/6; the live
+  app-relaunch smoke remains an explicit device-level external gate.
+- Unified the API-key system onto one real path (W9): Settings-issued
+  keys previously minted `agi_`-prefixed sha256 keys that NO code path
+  could ever authenticate (the Argon2id verifier had zero production
+  callers and the auth path only accepted Clerk). Issuance and revocation
+  now go through `ApiKeyService` (sk*live*/sk*test* + Argon2id), and
+  `getClerkAuthUser` gained a fail-closed API-key branch ahead of the
+  Clerk JWT path. Three deeper bugs fixed en route: the generated secret
+  used base64url while the verifier's pattern forbade `-` (~40% of real
+  keys would have failed their own verifier), `verifyKey` never filtered
+  `revoked_at` (revoked keys authenticated forever), and revocation
+  hard-DELETEd rows against the soft-delete audit design. Verified with
+  a real-crypto issue→authenticate round-trip test, revoked/invalid
+  rejections, Clerk-path regressions, DoS suite unmodified 10/10, full
+  web suite 4343 green. The follow-on (WEB-APIKEY-CSRF-BLOCK-01) was
+  fixed the same evening: the CSRF layer now cryptographically verifies
+  sk-prefixed bearers via ApiKeyService before exempting them — mirroring
+  the audited Clerk-JWT branch, with no auth-resolution reorder (a naive
+  auth-first dedup would have conflated cookie-auth success with bearer
+  verification and reintroduced the forgery case). Garbage keys cost one
+  indexed lookup, never an Argon2 call; the attack-case test proves a
+  garbage sk bearer riding a session cookie still 403s; rt-04 stayed
+  unmodified 15/15; verified API keys now POST to the completions route
+  end-to-end (full web suite 4360 green). A pre-existing bearer+cookie
+  principal-divergence quirk was documented as
+  WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01 (not worsened, not yet
+  fixed).
+- Deleted the dead legacy Teams system (W9): the parallel
+  org-membership stack (`/api/teams` routes + `features/teams/**`,
+  tables `teams`/`team_members` from migration 0007 with a divergent
+  role vocabulary and sentinel-UUID invite rows) rendered nowhere and
+  had zero callers — System A (`organizations`/`organization_members`,
+  wired to live Settings) is the single canonical model. Drop migration
+  `0058_drop_legacy_teams.sql` created but NOT applied (founder-gated
+  live step). Desktop's separate Tauri/SQLite-local teams feature was
+  traced and confirmed unrelated (no HTTP coupling).
+- Fixed the two remaining surfaces contradicting the managed-compute
+  public-alpha ruling with hardcoded "gated" claims: the admin console
+  (`AdminConsolePage.tsx` — its "Launch Gate: Blocked" tile had frozen
+  the incident-only denial code as permanent copy; all three
+  managed-compute status elements now derive from the live
+  `isManagedComputePrivateBetaEnabled()` gate per render, with a 5-test
+  forbidden-language regression suite covering unset/kill-switch/legacy
+  values) and the public `/security` trust page (two "remains gated
+  until audits/controls are proven" claims replaced with the honest
+  public-alpha + controls-keep-pace framing; old copy grep-proven gone
+  repo-wide, web typecheck clean).
+- Completed the W8 dead-code sweep (P1 residual): deleted the orphan
+  `apps/web/src/` skeleton (6 empty barrels + README; the
+  structure-conventions guard now enforces it never reappears), the stray
+  `src-tauri/test.db`, the dead agent-mode trio (`agentModeStore` +
+  `AgentModeSwitcher` in unified-chat and desktop's unwired
+  `features/chat/AgentModeSwitcher` — resolving the dual agent-mode-store
+  drift tracked in UI-AGENTMODE-DEFAULT-01), eight dead `features/v3`
+  components (the three planned `AgiWorkHome`/`CodeModeHome`/
+  `AgiWorkDispatch` plus five siblings proven equally orphaned), and
+  `SearchModalCmdK` (closing
+  DESKTOP-SIDEBAR-SEARCHMODALCMDK-DEAD-CODE-01). Every deletion carried a
+  zero-importer proof; barrel edits were pure line removals preserving
+  concurrent lanes' content. Verified: web 4340/4340, unified-chat
+  644/644, desktop 1782 passing (4 failures traced to the in-flight
+  model-catalog lane's dirt, not this sweep — and the previously-failing
+  connectorsStore test now passes), full guard battery green. The web
+  composer's own `AgentModeSwitcher.tsx` was initially excluded pending a
+  liveness check, then deleted the same evening once the orchestrator's
+  trace proved it dead too: its only references were its own test and a
+  barrel-export line, `ChatComposerNew.tsx` explicitly notes the mode
+  "state removed from UI", and the live `AgentMode` type had already been
+  extracted to `features/chat/types/agentMode.ts` (kept — consumed by
+  chat-preferences-store). Verified post-delete: web typecheck clean,
+  Composer suite 85/85.
+  `refusal` stop reason now maps to an explicit error outcome instead of
+  falling through to `end_turn` (a safety-refused generation was billed
+  and rendered as a clean completion; regression suite pins all stop-reason
+  mappings and the still-open `pause_turn` gap —
+  PROVIDER-ANTHROPIC-PAUSE-TURN-01). Promotional pricing is now
+  date-aware in BOTH billing paths (`apps/web` LLMCostCalculator and
+  api-gateway `managedUsageBilling`): once `promo_expires_at` passes, the
+  full rate block — input, output, cached_input, cached_write — switches
+  to `post_promo_prices` (previously promo rates were billed forever;
+  boundary-instant regression tests on both sides, gateway suite 224
+  passing). The stale refund test now asserts the real
+  `settleCreditsDurably` settlement path (1 reservation + 1 negative
+  refund settlement with idempotency key). OpenAI Responses-native hosted
+  tools were investigated and deliberately DEFERRED, not wired: the
+  catalog/registry stays truthful, and wiring collides with the
+  intentional `useResponsesApi:false` + Perplexity-backed web-search
+  product decision on the web chat route (decision tracked in TODO.md).
+- Fixed `WEB-APPSHELL-MOBILE-SIDEBAR-01`: narrow viewports (≤768px) on
+  `/projects`, `/projects/[id]`, `/library`, and `/schedules` now get a
+  compact header with an accessible Open-navigation control and a modal
+  drawer (backdrop, Escape, focus return, `aria-expanded`,
+  close-on-navigate) instead of a persistent ~260px sidebar crushing the
+  content; desktop keeps the persistent/collapsible sidebar. Landed
+  TDD-first (6 component tests) and verified rendered at 320/390/768/1280.
+- Fixed the VS Code webview P0 pair: disabled `<option>` models no longer
+  become clickable fallback rows (intentional RED now green, webview
+  13/13), and the attachment-chip X now removes the host-side pending file
+  through a new ID-based `removePendingAttachment` protocol
+  (`attachFilesAck` carries `{id, name}`; uploading chips defer removal
+  until their id arrives; full extension suite 543/543).
+
+### Added
+
+- Added the enterprise-Local design doc (W11/P7, design-before-code):
+  `docs/plans/enterprise-local-design-2026-07-15.md` supersedes the
+  2026-07-09 draft with file:line-grounded rulings — offline licensing is
+  CONSUME-conditional-on-FD-1/FD-3 (both crate and package proven real:
+  cargo 9/9 + vitest 40/40, but unwired; delete if decisions slip past the
+  breaking window), desktop needs BOTH its TS and Rust enforcement planes
+  wired to signed org-policy or it's a bypass, VS Code has no enforcement
+  chokepoint today, audit surfaces are per-file receipts not session logs,
+  and the self-hosted gateway's real blocker is workspace packaging, not
+  configuration. Two stale enterprise-doc claims corrected along the way
+  (the cited `supabase/migrations/...` enterprise foundation migration
+  never existed post-Supabase-migration; SSO/SCIM/audit/ledger tables are
+  a tracked gap), and the review surfaced a real gateway defect now
+  registered as SVC-GATEWAY-MANAGED-GATE-INVERTED-01: the gateway still
+  ran the retired closed-by-default private-beta gate while web runs the
+  public-alpha kill-switch semantics — fix dispatched same evening.
+- Added the one versioned agent event envelope (W5's final item):
+  `agiworkforce-protocol` gained `agent_events` — a versioned,
+  sequence-numbered envelope whose 11 event variants are each justified
+  by at least one of the three REAL streaming dialects (web StreamChunk
+  vocabulary, app-server JSON-RPC turn notifications, desktop SSE
+  chunks), with three legacy-wire-only concepts deliberately excluded and
+  documented. The stop vocabulary finally gets the first-class
+  `Refusal` member (canonical target for both Anthropic `refusal` and
+  OpenAI `content_filter` — the gap the W6 refusal fix documented), and
+  a per-turn `sequence` field closes the app-server dialect's real
+  ordering gap. Generated into TS through the existing ts-rs pipeline
+  (261 protocol modules verified), with the web-edge adapter in
+  llm-normalize proving lossless round-trip against the production
+  fixture sequence verbatim — including a test that pins the current
+  refusal-mapping asymmetry as visible rather than silently lossy.
+  Emitter convergence (web SSE, app-server, desktop adopting the
+  envelope) is the recorded follow-on. Gates: protocol crate 252 tests,
+  llm-normalize 77/77, check:protocol-types green, cargo workspace
+  clean.
+- Landed the W5 guardrail batch: the Rust toolchain is now pinned at the
+  root (`rust-toolchain.toml`, 1.94.0 with clippy+rustfmt — matching every
+  CI workflow's existing pin); a real `deny.toml` supply-chain gate exists
+  (license allowlist derived from the actual dependency graph — permissive
+  OR-branches deliberately excluded so a future license narrowing fails
+  loudly; sources locked to crates-io plus the two patched fork URLs) with
+  bans/sources/licenses green — licenses required marking all 15
+  first-party crates `publish = false` (real hardening against accidental
+  publication of proprietary code) — and the advisories category honestly
+  RED: 40 pre-existing RUSTSEC findings are now baselined and tracked
+  (RUST-DEPENDENCY-ADVISORIES-01; full catalog in
+  docs/security/rust-dependency-advisories-2026-07-16.md). Machine
+  indexes for agents now exist under `docs/agent-context/generated/`
+  (dependency-graph, module-summaries with zero unknown purposes,
+  contract-registry) with a deterministic generator and a byte-exact
+  drift check wired into `check:llm-operability`. Scoped AGENTS.md files
+  added for unified-chat, cloud-contracts, llm-runtime, and llm-normalize
+  (all four validated by check:agent-context; model-registry's
+  concurrent-lane file is existence-enforced pending pattern alignment).
+- Wired the discipline-wave contracts into their first real consumers on
+  every surface (W5 stage 2): `/api/me` now returns a server-authoritative
+  `capability_handshake` document built from four REAL layers (models.json
+  catalog ∩ the same getTierPolicy entitlements the route already used ∩
+  the platform surface matrix ∩ an honestly-documented settings
+  placeholder), validated by the extended cloud-contracts schema, golden
+  fixture, and a tier-honesty test; web conversation creation labels and
+  invariant-asserts a `cloud_chat` session at the real persistence
+  boundary; desktop's composition root labels Local/BYOK/Cloud sessions,
+  resolves ExecutionProfile from the real toggle, and asserts the
+  RETURNED runtime class agrees with the resolved profile (adversarial
+  mis-wired-factory tests prove the check is not tautological); mobile
+  labels sessions from the real appMode and proves ExecutionProfile
+  agreement against the actual guardedFetch egress decisions per mode.
+  Drift-guard tests pin every emitted label field-by-field to the
+  getSessionKindDefaults SSOT. Known gaps recorded, not faked:
+  per-session capability-document versioning uses explicit placeholder
+  versions (staleness detection not yet real) and routing-admission
+  integration has no caller yet. Suites: web (28 new/extended tests),
+  desktop runtime 83, mobile targeted 61, cloud-contracts 146 — all
+  green.
+- Added the discipline-wave session contracts (W5 stage 1) in
+  `@agiworkforce/types`: a discriminated 11-kind session taxonomy
+  (`sessions/taxonomy.ts` — every session carries execution location,
+  execution authority, storage scope, trust boundary, sync policy, host
+  requirement, capability-document reference, retention, and handoff
+  policy, with cross-field invariant validators mirroring the trust-kernel
+  pattern and 8 of 11 kinds type-pinned sync-ineligible); an
+  ExecutionProfile resolver (`sessions/execution-profile.ts` — one visible
+  Local/Cloud toggle deterministically resolves the identity, data,
+  inference, tools, and workflow planes; BYOK modeled as a Local sub-mode);
+  and the server-authoritative capability handshake
+  (`capability-handshake/` — effective-capability document as the
+  intersection of model ∩ tier ∩ surface ∩ settings layer grants over the
+  existing `PlatformCapability` vocabulary, plus a pure admission evaluator
+  where a missing MANDATORY requirement always rejects with a typed
+  denial). Zod wire schema landed in `@agiworkforce/cloud-contracts`
+  (strict layer enum from the shared const array; open string capability
+  ids per the established wire-compat precedent). Verified: types suite
+  381 passing, cloud-contracts 140 passing, boundaries green. Consumer
+  wiring (web chat, desktop composition root, mobile appMode, routing
+  admission) is stage 2.
+- Added a durable Managed Cloud usage-request lifecycle with RLS-bound
+  reservation, provider-start, final settlement, delivery audit, lease
+  recovery, and request-body fingerprinting for exactly-once financial
+  handling across retries and process loss.
+- Added an explicit Chrome-to-Desktop context review queue with authenticated
+  native-message acknowledgement, expiry, malformed-payload rejection,
+  accept/discard controls, late-mount recovery, and no automatic send.
+- Added server-version compare-and-swap chat, memory, project, and settings
+  synchronization, including server-owned clocks, append-only message identity,
+  conflict winners, tombstones, in-flight edit preservation, cross-language
+  fixtures, and strict cursor/version range validation.
+- Added CLI MCP approval as a fail-closed execution boundary and restricted
+  Local mode to stdio MCP servers; remote MCP transports and metadata are
+  removed when entering Local mode.
+- Added release guardrails and CI packaging for both VS Code and Chrome
+  extensions, including archive-content and version-coherence checks.
+- Added a provider-aware Rust OpenAI Responses dialect with typed request
+  items, flat function tools, structured-output formatting, and normalized
+  text, reasoning, tool-call, usage, lifecycle, incomplete, failed, and error
+  stream events.
+- Added strict shared Managed Cloud image/video request schemas with golden
+  fixtures, consumed by Web validation, Desktop native commands, and Mobile
+  image dispatch.
+- Added fail-safe Rust-to-TypeScript protocol generation: bindings compile in
+  an isolated staging tree and Cargo target, required protocol roots are
+  validated, and generated modules are published non-destructively only after
+  successful export and formatting.
+
+### Changed
+
+- Made Web, Desktop, and Mobile Managed Cloud chat carry a stable
+  per-operation `Idempotency-Key`; automatic Mobile network retries reuse the
+  same key while deliberate sends, continuations, comparisons, and approval
+  resumes create distinct operation identities.
+- Renamed the generic Desktop Tauri command wrapper to
+  `@agiworkforce/desktop-command-client` at
+  `packages/desktop-command-client`, updated every import, mock, manifest,
+  lockfile, configuration, documentation, and ownership reference, removed
+  unused Web and shared-store dependency declarations, and added a structural
+  guard against partial or case-variant stale renames without matching the
+  separate `@agiworkforce/api-gateway` service.
+- Renamed the shared TypeScript client runtime to
+  `@agiworkforce/client-runtime` at `packages/client-runtime`, updated every
+  consumer/import/mock/alias/manifest/lock/docs/ownership reference, and added
+  a structural guard that rejects partial renames, case-variant stale names,
+  stale relative lock links, and lost public subpath exports.
+- Extracted managed-cloud wire schemas and typed clients from the generic
+  Services package into `@agiworkforce/cloud-contracts`, moved signed org
+  policy and its golden corpus into `@agiworkforce/licensing`, migrated direct
+  Web/Desktop/Mobile consumers, and retained Services compatibility re-exports.
+- Extracted artifact derivation, publish, cloud merge/apply, and shared state
+  into `@agiworkforce/artifacts`; extracted cross-surface delta apply, cursor
+  rules, and the TypeScript/Rust fixture corpus into `@agiworkforce/sync`.
+  Web/Desktop/Mobile now import the domain owners directly, while Services and
+  Stores remain guarded compatibility facades until M8.
+- Extracted the final three implementations from the generic Services package:
+  Managed Cloud host classification now belongs to
+  `@agiworkforce/trust-boundaries`, model-switch cache consequences belong to
+  `@agiworkforce/routing`, and registry-derived search harness availability
+  belongs to `@agiworkforce/search`. Web, Desktop, and Mobile import the owners
+  directly; Services is now a guarded, tested, re-export-only facade.
+- Made Auto routing stateful across CLI/VS Code developer-session turns: the
+  typed protocol carries the current task, persisted sessions retain the
+  selected profile, concrete model, previous task, and immutable trust mode,
+  and VS Code classifies every Auto turn through the shared routing package.
+- Made the TypeScript and Rust Auto resolvers preserve a still-preferred route
+  for prompt-cache continuity and emit registry-ordered, provider-distinct
+  fallback candidates. BYOK developer sessions install those direct-provider
+  fallbacks; Managed sessions keep failover behind the AGI gateway boundary.
+- Moved Desktop and shared-chat composer drafts to one store-owned,
+  conversation-scoped contract so context insertion preserves existing text
+  and never sends without the user.
+- Replaced per-project synchronization writes with one set-based PostgreSQL
+  compare-and-swap statement for an entire push batch.
+- Made Web custom MCP connector settings use the real persisted endpoint and
+  aligned tests with the public-alpha MCP incident kill-switch semantics.
+- Made shared chat Markdown headings semantic `h1` through `h6` elements while
+  retaining inline formatting and the existing visual hierarchy.
+- Isolated CLI and Desktop release tags, channels, concurrency, artifact
+  ordering, signing verification, and failure recovery; Mobile beta/store
+  builds now submit the exact intended EAS artifact.
+- Migrated remaining Web media/reasoning/cache consumers, Desktop media and
+  embedding consumers, and Mobile Tier-1 system-model selection to generated
+  registry slots and metadata.
+
+### Fixed
+
+- Fixed Managed Cloud chat retries reaching providers more than once or
+  escaping durable metering, and moved successful stream terminals behind
+  financial settlement so clients never observe `[DONE]` before the outcome
+  is durable.
+- Fixed custom research, MCP/E2B tool loops, and approval resumes settling only
+  their single-turn estimate: all provider calls now contribute canonical
+  input, output, cache-read, cache-write, extended-cache, and reasoning usage
+  to the same managed request lifecycle. Research no longer performs a second
+  legacy credit adjustment, reported failures with no observed usage release
+  their reservation, and these streams expose exactly one route-owned `[DONE]`
+  only after durable settlement.
+- Fixed `/api/llm/v1/models` silently treating an explicitly presented invalid
+  Authorization credential as an anonymous/free request; invalid presented
+  credentials now return `401 invalid_api_key`.
+- Fixed managed Gateway chat streams reporting provider failures as successful
+  `[DONE]` completions: pre-output failures now retain HTTP status, committed
+  streams emit one safe `x_stream_error`, provider reads honor response
+  backpressure, and one bounded lifecycle owns deadline, disconnect, and
+  iterator cleanup for streaming and non-streaming requests.
+- Fixed Web composer attachment validation reporting an image-capability error
+  for unsupported non-image files and removed its render-phase dropped-file
+  state update.
+- Fixed Web image-generation persistence tests to exercise the real UUID
+  idempotency contract instead of invalid synthetic message identifiers.
+- Fixed sync cursors outside PostgreSQL `bigint` range reaching database calls
+  and becoming internal errors instead of validation failures.
+- Fixed Local CLI MCP tools executing without a positive approval decision or
+  accepting a tool identity that was not present in discovery metadata.
+- Fixed VSIX packages leaking source maps, tests, agent context, and development
+  configuration, and fixed Chrome release ZIPs retaining removed stale files.
+- Fixed monorepo-relative Tauri, Vercel, Rust-cache, updater, Linux signature,
+  and Windows Authenticode release paths and checks.
+- Fixed Desktop pricing and General settings showing every signed-in customer
+  as Free by reading the backend-owned unified account plan instead of the
+  stale app-mode copy.
+- Fixed the Desktop plans dialog and shared `AccessibleDialog`/`PromptDialog`
+  wrappers overriding Radix accessibility ownership and emitting
+  missing-title or missing-description diagnostics despite visible labels.
+- Fixed Web video reservations using a flat 30-cent estimate: catalog pricing
+  now reserves 240 cents for default six-second Veo and 480 cents for eight
+  seconds at 4K, with provider/model/duration/resolution validation.
+- Fixed Desktop rejecting the registry's specialized `embedding` model type
+  and removed request-time model-family capability inference.
+- Fixed Desktop OpenAI reasoning models sending Chat Completions bodies by
+  routing registry-classified reasoning models through `/v1/responses` while
+  retaining Chat Completions for chat and OpenAI-compatible providers.
+- Fixed the Desktop LLM-agent terminal executor bypassing the user's Terminal
+  Sandbox setting; agent commands now use the same native sandbox command
+  owner and allowed-directory policy as the manual terminal and fail closed on
+  invalid configured backends.
+- Fixed cross-surface media request drift: Web now resolves canonical catalog
+  IDs, Desktop preserves selected model/provider/video settings and omits absent
+  values, and the duplicate Desktop agent media HTTP client—including its
+  hardcoded `imagen3` and incorrect synchronous-video assumption—is removed.
+
+### Removed
+
+- Removed Mobile Managed Cloud chat's provider-specific stream bypass; even a
+  stale `EXPO_PUBLIC_USE_PROVIDER_STREAM=1` build now uses the canonical billed
+  chat-completions contract.
+- Removed the unreachable Desktop v3-only composer family and its duplicate
+  model, attachment, microphone-settings, and voice-store owners. The shipped
+  Desktop shell now has one explicit composer owner in `unified-chat`, and the
+  obsolete translation blocks and isolated tests are gone.
+- Removed Desktop `appModeStore`'s duplicate persisted plan entitlement;
+  account auth now owns Cloud admission, managed-model reloads, visible plan,
+  and canonical app-state subscription tier.
+- Removed the retired `packages/services/src/cloud-contracts` owner and the
+  licensing generator's cross-package fixture writes.
+
+### Verified
+
+- Managed usage/idempotency: Gateway 217 passed with 4 skipped plus build and
+  lint; Web chat/models/lifecycle 291 passed across 35 files plus typecheck and
+  changed-file lint; Mobile 11 focused tests plus typecheck/lint; Desktop 25
+  focused tests plus typecheck/lint; shared utility 4 tests plus typecheck/lint.
+  Migration `0056_managed_usage_request_lifecycle.sql` is repository-verified
+  but still requires deployment and live two-tenant/lease-recovery proof.
+- API Gateway stream resilience: 23 focused route/lifecycle regressions and the
+  full 198-test Gateway suite pass (4 skipped); Gateway build and lint pass.
+- Desktop command-client rename: Turbo reports 44 workspaces, 220 tasks, and
+  442 task-dependency edges, with only Desktop selected as a downstream
+  consumer; pnpm production and complete graphs contain 151 and 155 internal
+  edges with no cycles; the package passes 14 tests, typecheck, and build;
+  three focused Desktop suites pass 35 tests; all 42 workspace typechecks and
+  the 21-member Cargo workspace check pass; frozen offline installation leaves
+  the lockfile byte-identical.
+- Monorepo graph repair and the client-runtime rename: Turbo reports 44
+  workspaces, 220 tasks, and 446 task-dependency edges; the renamed package's
+  dependent filter selects all eight consumers; pnpm production/complete and
+  Cargo workspace graphs contain no cycles; the client runtime passes 155
+  tests, typecheck, and build; all 42 workspace typechecks and `cargo check
+--workspace` pass.
+- Contract/policy ownership extraction: Cloud Contracts passes 12 files/133
+  tests, Licensing passes 2 files/40 tests, and the Services compatibility
+  facade/remaining mechanics pass 13 files/172 tests; Web, Desktop, and Mobile
+  focused suites pass 234 tests. All 43 TypeScript workspace typechecks and the
+  21-member Cargo workspace check pass; frozen offline installation is clean;
+  pnpm production/complete graphs are acyclic at 157/161 internal edges, Turbo
+  is acyclic at 45 workspaces/225 tasks/457 edges, and Cargo is acyclic at 31
+  workspace edges. The permanent ownership guard and full LLM-operability
+  suite pass.
+- Auto routing: shared TypeScript routing 244/244, Rust registry routing 20/20,
+  developer-session protocol 6/6, VS Code per-turn entry points 30/30, and CLI
+  library 1,666 passed with one ignored; relevant typechecks, lints, and Rust
+  checks pass. Chrome and Managed-gateway execution remain tracked migration
+  work and are not claimed complete.
+- Web: 295 test files and 4,172 tests pass.
+- Unified chat: 44 test files and 624 tests pass; typecheck and lint pass.
+- CLI: 1,666 tests pass with one ignored test; `cargo check` passes.
+- Desktop project synchronization: 18 focused Rust tests pass with warnings
+  denied.
+- Desktop frontend: 169 test files and 1,770 tests pass with one skipped test;
+  TypeScript typecheck and changed-file lint pass.
+- Repository release/operability guardrails, workflow/JSON parsing, shell
+  syntax, a 215-task Turbo dry graph, VSIX packaging, and Chrome ZIP-to-dist
+  comparison pass.
+- Shared UI: 28 test files and 67 tests pass; typecheck and lint pass.
+- Model registry generation/schema/integrity checks pass; Types 302, Local LLM
+  67, Routing 241, and LLM normalization 64 tests pass, with focused Web,
+  Desktop, Mobile, OpenAI, and Google suites and surface typechecks green.
+- Managed Cloud chat and memory synchronization: shared contracts/apply logic
+  109 tests, Web routes 18 tests, Mobile stores/engine 104 tests, Desktop memory
+  14 tests, and Desktop cloud/fixture replay 51 tests pass; TypeScript
+  typechecks, scoped lint, warnings-denied Desktop Rust checking, formatting,
+  and scoped diff validation pass.
+- Shared Rust LLM Responses support: 74 crate tests pass; Desktop Responses,
+  endpoint, decoder, and complete provider-adapter coverage passes (75 focused
+  tests total), with warnings-denied crate checking, formatting, fixture JSONL
+  parsing, and scoped diff validation green. Live OpenAI-key verification
+  remains external.
+- Desktop agent terminal executor: all 15 focused warnings-denied Rust tests
+  pass, including enabled sandbox wrapping, disabled byte-preserving launch
+  behavior, and invalid-backend fail-closed behavior; the whole Desktop crate
+  check is green.
+- Managed media contracts: Services 325 tests, Web image/video routes 70 tests,
+  Mobile image dispatch 3 tests, and Desktop native/agent adapters 8
+  warnings-denied Rust tests pass; boundary, service-layer, lint, formatting,
+  and scoped diff checks are green.
+- Protocol generation: 246 modules export deterministically; an intentionally
+  unavailable Cargo executable exits nonzero while preserving the generated
+  tree byte-for-byte, and the Types package typecheck passes.
+
+## [Unreleased — canonical registry and Mobile trust ownership] — 2026-07-14
+
+### Added
+
+- Added one generated model-registry owner for model identity, lifecycle,
+  capabilities, pricing, evidence, harnesses, runtime profiles, and routing
+  policies, with generated TypeScript and Rust artifacts.
+- Added one Rust app-server developer-session owner for CLI and VS Code, with a
+  typed protocol, per-workspace VS Code runtime pool, streamed events,
+  approvals, cancellation, persistence, and nonblocking MCP status.
+- Added a Chrome-owned browser conversation store in `chrome.storage.local`,
+  isolated from consumer app-chat synchronization.
+- Added a Turbo task graph with package-owned tasks, affected CI selection, and
+  static graph verification.
+- Added product-specific release channels: `v-cli-*` with verified Sigstore
+  checksum bundles and `v-desktop-*` with Tauri updater signatures.
+- Added canonical trust- and capability-aware task routing for Web and Mobile.
+- Added a mode-aware Mobile conversation repository that resolves Local and
+  Managed Cloud message ownership from the conversation boundary.
+
+### Changed
+
+- Migrated Mobile model pickers, defaults, provider rows, tier fallbacks, and
+  Auto profiles to registry-owned runtime profiles and routing policy.
+- Routed Mobile Cloud chat, voice, natural-language image requests, retries,
+  edits, deletion, forks, approvals, and image turns through their owning
+  Cloud repository and canonical dispatch path.
+- Made voice dispatch share typed-message gates and routing while awaiting the
+  completed assistant turn before text-to-speech.
+- Made VS Code a thin presentation/context adapter over the CLI-hosted local
+  developer runtime instead of a second execution and persistence owner.
+- Made MCP discovery asynchronous and explicitly surfaced loading, ready, and
+  unavailable states without blocking developer-session startup.
+
+### Removed
+
+- Removed Mobile fake model aliases, the app-owned OpenAI probe default,
+  Local-store-plus-Cloud-mirroring writes, and display-time Local/Cloud message
+  union workarounds.
+- Removed the VS Code-owned `ConversationStore`, checkpoint manager, and local
+  agent-loop providers. Shared app-server checkpoint/worktree capabilities
+  remain disabled until the Rust owner implements them.
+
+### Fixed
+
+- Fixed Mobile Auto incorrectly forcing Local mode instead of following the
+  immutable conversation boundary.
+- Fixed Cloud Auto turns retaining an unresolved pseudo-model instead of a
+  concrete admitted execution model with requested/resolved provenance.
+- Fixed Cloud retry/edit/image/fork flows mutating the Local message store or
+  leaving replaced Cloud rows on the server.
+- Corrected Mobile managed web-search capability metadata after verifying the
+  server-side implementation and route contract.
+- Prevented CLI installers and Desktop release workflows from resolving another
+  product's unfiltered latest release.
 
 ## [Unreleased — monorepo restructure P1-P5 + Rust codegen] — 2026-07-09
 
@@ -367,7 +1053,7 @@ Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status 
 
 ### Added
 
-- `ExtensionStatusDiagnostics` canonical type in `@agiworkforce/api/browserExtension`, re-exported from the package root for ergonomic consumption. `extensionStatus()` is now strongly typed instead of returning `unknown`. The previously-local `ExtensionStatusDiagnosticsPayload` interface in `apps/desktop/src/hooks/useAgenticEvents.ts` is removed; the preflight checker now consumes the canonical shape.
+- `ExtensionStatusDiagnostics` canonical type in `@agiworkforce/desktop-command-client/browserExtension`, re-exported from the package root for ergonomic consumption. `extensionStatus()` is now strongly typed instead of returning `unknown`. The previously-local `ExtensionStatusDiagnosticsPayload` interface in `apps/desktop/src/hooks/useAgenticEvents.ts` is removed; the preflight checker now consumes the canonical shape.
 - Desktop `BridgeStatusCard` in `apps/desktop/src/features/connectors/`. Derives a Chrome row (from `diagnostics.native_connection.state` + `extension_id`) and a VS Code row (from `transport.websocket_port` + overall status). Token-invalid degrades both rows. Color-coded state dot (emerald connected / amber connecting / rose error / zinc disconnected). Refresh button refetches; first diagnostics recommendation surfaces as an amber footer. Best-effort hidden outside Tauri. 8 vitest tests pin every state path.
 - BridgeStatusCard mounted in `ConnectorGallery` above the status filter pills so consumers see bridge health when they open the connector hub.
 
@@ -489,7 +1175,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - `.github/pull_request_template.md` plus product/surface, refactor/move, security/privacy, docs/research, and release/infra PR templates.
 - `docs/engineering/` for internal engineering workflow and agent-native development rules, including worktree/session isolation.
 - Path-scoped high-risk `AGENTS.md` files for CLI, Web, Mobile, Desktop, Chrome extension, VS Code extension, services, and provider adapters.
-- P0/P1 ownership READMEs for `apps/web`, `apps/desktop`, `apps/extension`, `services/api-gateway`, `services/signaling-server`, `packages/types`, `packages/runtime`, `packages/providers`, and `packages/unified-chat`.
+- P0/P1 ownership READMEs for `apps/web`, `apps/desktop`, `apps/extension`, `services/api-gateway`, `services/signaling-server`, `packages/types`, `packages/client-runtime`, `packages/providers`, and `packages/unified-chat`.
 - README ownership coverage for every top-level package, every provider leaf package, every top-level Rust crate, and existing app/package/crate READMEs that lacked required ownership markers.
 - `audit/anthropic-apps-parity/` evidence ledger with:
   - `README.md` - evidence folder contract.
@@ -659,7 +1345,7 @@ This entry starts the explicit transition from ad hoc Claude-like improvements t
 - Mobile projects now has a canonical `apps/mobile/src/features/projects` barrel, with `ProjectCard` moved out of legacy `components/projects`.
 - Mobile billing now has a canonical `apps/mobile/src/features/billing` barrel, with `UpsellCard` moved out of legacy `components/billing`.
 - Mobile schedules now has a canonical `apps/mobile/src/features/schedules` domain containing schedule components, API calls, state, and public barrel; old schedule component/service/store paths are removed and guarded.
-- Package boundary checks now reject workspace package deep imports unless the subpath is explicitly exported by that package; `@agiworkforce/runtime/state` and `@agiworkforce/runtime/queue` are now formal exports.
+- Package boundary checks now reject workspace package deep imports unless the subpath is explicitly exported by that package; `@agiworkforce/client-runtime/state` and `@agiworkforce/client-runtime/queue` are now formal exports.
 - Web, Mobile, and Desktop feature roots now require local ownership READMEs for every top-level feature folder.
 - CLI release automation now uses the single canonical `.github/workflows/release-cli.yml`, removes the duplicate workflow, restores linux-arm64 release coverage, uses stable GitHub archive names expected by the installer/Homebrew tap, and guards CI against the old Web filter drift.
 - Supabase migration split is now guarded: root `supabase/migrations` remains canonical, legacy `apps/web/supabase/migrations` is frozen by `pnpm check:supabase-migrations`, and new legacy SQL files fail operability checks.
@@ -932,7 +1618,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 - **Desktop tauri embedding command registration** (`c53048041`) — `__cmd__*` re-exports removed; commands now route directly through `crate::core::embeddings::*`.
 - **Desktop release build lint** (`ee317c714`) — `mcp/transport.rs` SSL bypass code cfg-gated behind `#[cfg(debug_assertions)]` so release builds don't trip `-D unreachable-code` / `-D unused-mut`.
 - **Expo prebuild** (`859b053e4`) — `@xmldom/xmldom` override tightened from `>=0.8.13` to `^0.8.13` to keep within `@expo/plist@0.5.2`'s `^0.8.8` peer range.
-- **Production web build** (`0da0cd24a`) — Turbopack `resolveAlias` browser stub for `node:async_hooks` added so `@agiworkforce/runtime` barrel re-export doesn't pull `AsyncLocalStorage` into client chunks.
+- **Production web build** (`0da0cd24a`) — Turbopack `resolveAlias` browser stub for `node:async_hooks` added so `@agiworkforce/client-runtime` barrel re-export doesn't pull `AsyncLocalStorage` into client chunks.
 
 ### Verified
 
@@ -1103,7 +1789,7 @@ Cross-surface campaign fire #1 through fire #12+ per `MASTER_PLAN.md` §10. **11
 - **Web** lint: 2 errors + 13 warnings → 0/0 (`911bfd2ed`) — setState-in-useMemo bug, lucide `Image` → `ImageIcon`, eslint-disable cleanup.
 - **CLI** workspace `Cargo.toml` adopts 33 codex-rs clippy deny lints (`fceaee92f`) — omits `unwrap_used` + `expect_used` (2,409 sites pending future cleanup). 13 utility/leaf crates inherit via `[lints] workspace = true` (`1c1789eaa`).
 - **Packages** `posttest=pnpm build` hook on 19 workspace packages (`91fafd3cf`) — catches the case where a test-only fix leaves the package un-buildable (Gemini-CLI pattern).
-- **VS Code** TypeScript project references via new `tsconfig.build.json` (`291bf6ccb`) — `composite: true` + `noEmit: false` on `packages/types` + `packages/runtime`. `pnpm --filter agi-workforce check:refs` enforces DAG at compile time.
+- **VS Code** TypeScript project references via new `tsconfig.build.json` (`291bf6ccb`) — `composite: true` + `noEmit: false` on `packages/types` + `packages/client-runtime`. `pnpm --filter agi-workforce check:refs` enforces DAG at compile time.
 - **Web** light-mode token overrides in `globals.css` (`cb16170b9`) — `[data-theme='light'][data-design='agi']` block defines light-mode values for all `--agi-*` CSS custom properties. Activates by setting `data-theme="light"` on `<html>` or any ancestor.
 
 ### Documentation

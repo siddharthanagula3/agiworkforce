@@ -20,7 +20,7 @@ Native OS title bar (`decorations: true`) rendered by the platform; the in-app "
 
 ## Sidebar — search, collapse, new chat, projects, artifacts, recents, account (UX Lock)
 
-The sidebar is the shell's spine and is **UX-locked**: it expands to 240px / collapses to a 64px icon rail. Locked contents, top to bottom: window-chrome row (wordmark + collapse); **New chat** button; **Search** (⌘K); per-mode nav (Artifacts, Scheduled, Dispatch — Dispatch tagged Beta); a ChatGPT-style **Projects** folder section (max six visible, create-project affordance); **Recents** grouped by recency (Last hour / Today / Yesterday / Past week / Past month), pinned conversations floated to a no-cap top group, non-pinned capped at 30 with "Show all"; the `UpdatePill`; the **Local↔Cloud** toggle; and the account footer (avatar, name/email, plan display name, sign-in entry, settings gear). **✅ Built** — `apps/desktop/src/features/v3/Sidebar.tsx`. Requirement: the account footer must render the real plan name from `packages/types/src/billing-catalog.ts` reconciled to the canon ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) — the catalog still encodes legacy tiers, so any stale label is a **🟡** gap to flag, never invent.
+The sidebar is the shell's spine and is **UX-locked**: it expands to 240px / collapses to a 64px icon rail. Locked contents, top to bottom: window-chrome row (wordmark + collapse); **New chat** button; **Search** (⌘K); per-mode nav (Artifacts, Scheduled, Dispatch — Dispatch tagged Beta); a ChatGPT-style **Projects** folder section (max six visible, create-project affordance); **Recents** grouped by recency (Last hour / Today / Yesterday / Past week / Past month), pinned conversations floated to a no-cap top group, non-pinned capped at 30 with "Show all"; the `UpdatePill`; the **Local↔Cloud** toggle; and the account footer (avatar, name/email, plan display name, sign-in entry, settings gear). **✅ Built** — `apps/desktop/src/features/v3/Sidebar.tsx`. Requirement: the account footer must render the real plan name from `packages/contracts/types/src/billing-catalog.ts` reconciled to the canon ladder (Free / Basic $8·₹399 / Pro $20 / Max $100 & $200 / Enterprise) — the catalog still encodes legacy tiers, so any stale label is a **🟡** gap to flag, never invent.
 
 ## Navigation
 
@@ -96,7 +96,7 @@ Production-ready when: the shell renders with the active trust mode always visib
 
 - Showing a cloud/provider label on a Local session, or letting a tray/deep-link action silently escalate trust mode.
 - Claiming AGI Code, multiple windows, Dock badges, or deep-link routing are shipped — they are 🟡/🔭.
-- Hardcoding or inventing model IDs (read only from `packages/types/src/models.json`), routes, env vars, or command names.
+- Hardcoding or inventing model IDs (read only from `packages/contracts/types/src/models.json`), routes, env vars, or command names.
 - Referencing removed tiers (Plus, `pro_plus`, Hobby), credit top-ups, or inventing Pro/Max INR prices.
 - Any Supabase reference (fully migrated to Clerk + Neon + Stripe) or renaming Next.js `proxy.ts` back to `middleware.ts`.
 - Disabling updater signature verification or weakening the CSP `connect-src` allowlist.

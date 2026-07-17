@@ -16,7 +16,7 @@ Context assembly is bounded, not exhaustive. ✅ Built: `chatEditorPanel.ts` cap
 
 ## Binary files
 
-Non-text content is detected and skipped, never fed to a model as garbage. ✅ Built: in `chatEditorPanel.ts`, resolved `@file` content is scanned for a NUL byte (`rawContent.includes('\x00')`) and, when found, replaced with `[binary file skipped]`; sensitive paths are refused via a denylist (`[refused: matches sensitive-file denylist]`) before any read. Requirements: (1) images, archives, and compiled artifacts must never be streamed as prompt text; (2) the skip is surfaced, not swallowed; (3) binary/size guards run before content leaves the device in any trust mode. 🔭 Planned: multimodal image attachment for vision-capable models (gated on capability metadata from `packages/types/src/models.json`, never a hardcoded model ID).
+Non-text content is detected and skipped, never fed to a model as garbage. ✅ Built: in `chatEditorPanel.ts`, resolved `@file` content is scanned for a NUL byte (`rawContent.includes('\x00')`) and, when found, replaced with `[binary file skipped]`; sensitive paths are refused via a denylist (`[refused: matches sensitive-file denylist]`) before any read. Requirements: (1) images, archives, and compiled artifacts must never be streamed as prompt text; (2) the skip is surfaced, not swallowed; (3) binary/size guards run before content leaves the device in any trust mode. 🔭 Planned: multimodal image attachment for vision-capable models (gated on capability metadata from `packages/contracts/types/src/models.json`, never a hardcoded model ID).
 
 ## Workspace trust — restricted mode
 
@@ -69,6 +69,6 @@ Production-ready when every failure degrades to a clear, non-crashing, secret-sa
 - Treating `fallbackToVscodeLm` as a "Local" fallback, or hiding which provider served a fallback turn.
 - Feeding binary bytes or oversized files to a model instead of skipping with a visible placeholder.
 - Enabling write/execute in an untrusted workspace, or letting a workspace override a `restrictedConfigurations` key.
-- Claiming shipped state without a real repo path, or inventing a model ID instead of reading `packages/types/src/models.json`.
+- Claiming shipped state without a real repo path, or inventing a model ID instead of reading `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (Plus / `pro_plus` / Hobby) or credit top-ups; the `agiWorkforce.tier` enum still encodes older values — flag as a 🟡 reconciliation gap, do not propagate.
 - Any reference to Supabase (fully migrated away) or Next.js `middleware.ts` (use `proxy.ts`).

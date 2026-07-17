@@ -4,11 +4,11 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and the real desktop paths this volume grounds in: `apps/desktop/src/features/settings/SettingsPanel.tsx`, `apps/desktop/src/features/settings/tabs/**`, `apps/desktop/src/features/settings/__tests__/settings-ia.test.ts`, `packages/ui/src/settings-nav.ts`, `apps/desktop/src/stores/settingsStore.ts`, `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `packages/types/src/models.json`, `packages/types/src/billing-catalog.ts`.
+Authority: `AGENTS.md`, `apps/desktop/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (canon), and the real desktop paths this volume grounds in: `apps/desktop/src/features/settings/SettingsPanel.tsx`, `apps/desktop/src/features/settings/tabs/**`, `apps/desktop/src/features/settings/__tests__/settings-ia.test.ts`, `packages/ui/ui/src/settings-nav.ts`, `apps/desktop/src/stores/settingsStore.ts`, `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx`, `apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs`, `packages/contracts/types/src/models.json`, `packages/contracts/types/src/billing-catalog.ts`.
 
 ## Overview & stance
 
-Desktop is the full-trust surface — **Local + BYOK + Managed Cloud** all selectable with correct visible labels — so its Settings are the most complex of any surface. Settings must never silently move a Local chat, file, or session into BYOK or Cloud: Local→BYOK is an explicit fork (context selection, secret scan, payload preview, provider label, consent), and Managed Cloud is a distinct boundary that is open-by-default for signed-in users but env-gated as a kill-switch. The **locked Settings IA** is the single source of truth in `packages/ui/src/settings-nav.ts` (`SETTINGS_NAV` + `SETTINGS_NAV_GROUPS`), shared with Web so the two cannot drift; `SettingsPanel.tsx` renders local-mode settings and `DesktopCloudSettingsModal.tsx` renders the shared cloud-mode shell. The nav↔renderer contract is test-enforced (`settings-ia.test.ts`). Convergence of older flat panels onto this IA is **🟡** in progress. The subsections below map required domains onto that IA.
+Desktop is the full-trust surface — **Local + BYOK + Managed Cloud** all selectable with correct visible labels — so its Settings are the most complex of any surface. Settings must never silently move a Local chat, file, or session into BYOK or Cloud: Local→BYOK is an explicit fork (context selection, secret scan, payload preview, provider label, consent), and Managed Cloud is a distinct boundary that is open-by-default for signed-in users but env-gated as a kill-switch. The **locked Settings IA** is the single source of truth in `packages/ui/ui/src/settings-nav.ts` (`SETTINGS_NAV` + `SETTINGS_NAV_GROUPS`), shared with Web so the two cannot drift; `SettingsPanel.tsx` renders local-mode settings and `DesktopCloudSettingsModal.tsx` renders the shared cloud-mode shell. The nav↔renderer contract is test-enforced (`settings-ia.test.ts`). Convergence of older flat panels onto this IA is **🟡** in progress. The subsections below map required domains onto that IA.
 
 ## General
 
@@ -52,7 +52,7 @@ Cross-session memory editor (view/edit/delete entries) shared with unified chat.
 
 ## Billing
 
-Plan display, Stripe customer-portal handoff, and invoices. **🟡 Partial** — `apps/desktop/src/features/settings/tabs/Billing/index.tsx` + `BillingSettings.tsx` are wired, but pricing copy must present only the canon ladder — **Free $0 / Basic $8 (₹399) / Pro $20 / Max $100 and $200 / Enterprise** — with no Plus/Hobby/`pro_plus` and no credit top-ups. Gap: `packages/types/src/billing-catalog.ts` and a hardcoded "$20/mo" string in `tabs/General/index.tsx` still encode older/plan-specific values; reconcile to the catalog (tracked separately). INR is fixed only for Basic; Pro/Max INR are TBD.
+Plan display, Stripe customer-portal handoff, and invoices. **🟡 Partial** — `apps/desktop/src/features/settings/tabs/Billing/index.tsx` + `BillingSettings.tsx` are wired, but pricing copy must present only the canon ladder — **Free $0 / Basic $8 (₹399) / Pro $20 / Max $100 and $200 / Enterprise** — with no Plus/Hobby/`pro_plus` and no credit top-ups. Gap: `packages/contracts/types/src/billing-catalog.ts` and a hardcoded "$20/mo" string in `tabs/General/index.tsx` still encode older/plan-specific values; reconcile to the catalog (tracked separately). INR is fixed only for Basic; Pro/Max INR are TBD.
 
 ## Connected Services
 
@@ -68,7 +68,7 @@ Local mode uses `SettingsPanel.tsx` and keeps data on-device: storage-location d
 
 ## Provider Configuration
 
-BYOK key entry (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Perplexity, OpenRouter, NVIDIA NIM), test/verify, local Ollama config, custom models, and default-model selection. **✅ Built** — `apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx` + `CustomModelsSettings.tsx`; keys encrypted and stored locally (`McpClient.saveApiKey`, `llm_check_provider_status`). Model IDs must come only from `packages/types/src/models.json` — never hardcoded. BYOK is Desktop/CLI/VS Code only; this tab must not appear on Web/Mobile.
+BYOK key entry (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Perplexity, OpenRouter, NVIDIA NIM), test/verify, local Ollama config, custom models, and default-model selection. **✅ Built** — `apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx` + `CustomModelsSettings.tsx`; keys encrypted and stored locally (`McpClient.saveApiKey`, `llm_check_provider_status`). Model IDs must come only from `packages/contracts/types/src/models.json` — never hardcoded. BYOK is Desktop/CLI/VS Code only; this tab must not appear on Web/Mobile.
 
 ## Repository map
 
@@ -77,11 +77,11 @@ BYOK key entry (Anthropic, OpenAI, Google, xAI, DeepSeek, Mistral, Perplexity, O
 - `apps/desktop/src/features/settings/*.tsx` — panel components (`MasterPasswordSettings`, `ComputerUseSettings`, `MCPServerSettings`, `VoiceSettings`, `ThemeSettings`, `ThemeEditorDialog`, `PersonalizationSettings`, `BillingSettings`, `NotificationsSettings`, `AllowedDirectoriesSettings`, `DotfileSettings`, `AgentExecutionSettings`, `CustomModelsSettings`).
 - `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx` — shared cloud-mode shell.
 - `apps/desktop/src/features/settings/__tests__/settings-ia.test.ts` — IA contract test.
-- `packages/ui/src/settings-nav.ts` — canonical `SETTINGS_NAV` + groups.
+- `packages/ui/ui/src/settings-nav.ts` — canonical `SETTINGS_NAV` + groups.
 - `apps/desktop/src/stores/{settingsStore,settingsDialogStore}.ts` — persisted state.
 - `apps/desktop/src-tauri/src/integrations/{realtime,native_messaging}/**` — local host / bridge / pairing.
 - `apps/web/app/api/{chat,memory,projects}/sync` — Managed-Cloud delta-sync.
-- `packages/types/src/models.json` — model-ID SSOT; `packages/types/src/billing-catalog.ts` — plan catalog (older-tier gap).
+- `packages/contracts/types/src/models.json` — model-ID SSOT; `packages/contracts/types/src/billing-catalog.ts` — plan catalog (older-tier gap).
 
 ## Competitor notes
 
@@ -99,7 +99,7 @@ Production-ready when every locked IA section resolves to a rendered, store-back
 
 - Silently syncing Local/BYOK chats, files, or memory to Cloud, or re-adding the cloud-sync toggle before it is ungated.
 - Showing BYOK/Provider Configuration on Web or Mobile.
-- Hardcoding model IDs instead of reading `packages/types/src/models.json`.
+- Hardcoding model IDs instead of reading `packages/contracts/types/src/models.json`.
 - Displaying removed tiers (Plus, `pro_plus`, Hobby) or credit top-ups; showing prices that contradict the canon ladder or inventing Pro/Max INR figures.
 - Referencing Supabase (fully migrated to Clerk + Neon + Stripe) or renaming `proxy.ts` back to `middleware.ts`.
 - Claiming a capability is shipped without a real repo path, or letting nav entries orphan (a nav key with no render case).

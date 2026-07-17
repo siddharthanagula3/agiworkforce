@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-06-30
 
-Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/stores/chat/cloudSyncStateStore.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/offlineQueue.ts`, `apps/mobile/stores/connectionStore.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/services/companionNotifications.ts`, `apps/mobile/lib/dispatchHmac.ts`, `apps/mobile/services/heartbeat.ts`, `apps/mobile/services/desktopStatus.ts`, `apps/mobile/lib/clipboard.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app/_layout.tsx`, `packages/types/src/models.json`.
+Authority: `AGENTS.md` (repo root); `apps/mobile/AGENTS.md`; `docs/current/source-of-truth.md`; `docs/products/README.md` (canon). Grounded in real repo paths: `apps/mobile/services/cloudSyncEngine.ts`, `apps/mobile/stores/chat/cloudSyncStateStore.ts`, `apps/mobile/services/remoteChatGate.ts`, `apps/mobile/services/offlineQueue.ts`, `apps/mobile/stores/connectionStore.ts`, `apps/mobile/services/companion.ts`, `apps/mobile/services/companionNotifications.ts`, `apps/mobile/lib/dispatchHmac.ts`, `apps/mobile/services/heartbeat.ts`, `apps/mobile/services/desktopStatus.ts`, `apps/mobile/lib/clipboard.ts`, `apps/mobile/lib/v1FeatureFlags.ts`, `apps/mobile/app/_layout.tsx`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -30,7 +30,7 @@ Cross-device data movement is asymmetric by design. **Managed-Cloud chats** delt
 
 ## Synchronization Status — sync health
 
-🟡 Partial — The engine already tracks health: `apps/mobile/stores/chat/cloudSyncStateStore.ts` holds `status` (`idle | syncing | error`), `lastSyncAt`, `lastError`, and the dirty-row sets (`dirtyConversationIds`, `dirtyMessages`) awaiting push; `apps/mobile/services/offlineQueue.ts` persists failed sends to MMKV and drains them FIFO with exponential backoff on reconnect. What is **not** built is a user-facing sync-health surface: a "last synced" timestamp, a pending-changes count, and an error/offline banner that lets the user retry. Requirements before ✅: a status indicator that reads the sidecar store (never chat content), shows offline/queued/synced/error states, exposes a manual `syncNow()` retry, and **renders nothing in Local mode** (sync is a no-op when `appMode !== 'cloud'` or signed out). It must never display an INR/price string or a model id; any model label reads `packages/types/src/models.json`.
+🟡 Partial — The engine already tracks health: `apps/mobile/stores/chat/cloudSyncStateStore.ts` holds `status` (`idle | syncing | error`), `lastSyncAt`, `lastError`, and the dirty-row sets (`dirtyConversationIds`, `dirtyMessages`) awaiting push; `apps/mobile/services/offlineQueue.ts` persists failed sends to MMKV and drains them FIFO with exponential backoff on reconnect. What is **not** built is a user-facing sync-health surface: a "last synced" timestamp, a pending-changes count, and an error/offline banner that lets the user retry. Requirements before ✅: a status indicator that reads the sidecar store (never chat content), shows offline/queued/synced/error states, exposes a manual `syncNow()` retry, and **renders nothing in Local mode** (sync is a no-op when `appMode !== 'cloud'` or signed out). It must never display an INR/price string or a model id; any model label reads `packages/contracts/types/src/models.json`.
 
 ## Repository map
 
@@ -43,7 +43,7 @@ Cross-device data movement is asymmetric by design. **Managed-Cloud chats** delt
 - `apps/mobile/lib/clipboard.ts` — device-local clipboard.
 - `apps/mobile/lib/v1FeatureFlags.ts` — `cloudChat`, `dispatch:false`, `companion:false`, `crossDeviceSync:false`, `byokKeys:false`.
 - `apps/mobile/app/_layout.tsx` — sync loop lifecycle.
-- Shared: `packages/types/src/models.json` (model ids); `apps/web/app/api/chat/sync` (cloud endpoint); Neon delta-sync; `services/signaling-server` (companion relay).
+- Shared: `packages/contracts/types/src/models.json` (model ids); `apps/web/app/api/chat/sync` (cloud endpoint); Neon delta-sync; `services/signaling-server` (companion relay).
 
 ## Competitor notes
 
@@ -64,4 +64,4 @@ Cross-device is production-ready only when Cloud chats resume and report health 
 - Rendering presence, a shared clipboard, or composer handoff as shipped — they are 🔭 (or 🟡 and flagged off) until wired.
 - Enabling `companion`/`dispatch` without keeping the channel compute-on-host, outbound-only, paired, and approval-gated.
 - Background-scraping the OS clipboard or showing a fake "synced" badge.
-- Hardcoding/inventing a model id instead of reading `packages/types/src/models.json`; referencing Supabase; or naming a removed tier (Plus / pro_plus / Hobby).
+- Hardcoding/inventing a model id instead of reading `packages/contracts/types/src/models.json`; referencing Supabase; or naming a removed tier (Plus / pro_plus / Hobby).

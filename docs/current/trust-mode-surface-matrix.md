@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-06-27
+Last updated: 2026-07-16
 
 The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines `source-of-truth.md` (Local / BYOK / Managed Cloud) into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
 
@@ -45,10 +45,21 @@ Vocabulary:
 
 ## Model env-gating (separate workstream)
 
-Models that run standalone are selectable now. Models that **require a code-execution environment** must be **grayed out** in every model picker until the environment is built. The execution environment will be **E2B** (E2B for Startups credits granted 2026-06-15). Needs a `requiresEnvironment` capability flag in `packages/types/src/models.json` + picker gating. Not yet implemented.
+Models that run standalone are selectable now. Models that **require a code-execution environment** must be **grayed out** in every model picker until the environment is built. The execution environment will be **E2B** (E2B for Startups credits granted 2026-06-15). Needs a `requiresEnvironment` capability flag in `packages/contracts/types/src/models.json` + picker gating. Not yet implemented.
 
-## Open items / to verify against Claude (claude-code-guide research in flight)
+## Verified competitor topology informing this decision
 
-- Exact subscription-vs-API-key (BYOK) auth switching and coexistence.
-- One-account server-side conversation sync mechanics across web/desktop/mobile.
-- Confirmation that coding-agent (CLI/VS Code) history is separate from the chat app — mirrors Claude Code vs claude.ai.
+The July 2026 live-product and official-documentation review confirmed the separation this matrix requires:
+
+- Claude Chat cloud history, Claude Cowork runs, and Claude Code developer sessions are not one undifferentiated conversation store.
+- Claude Code CLI and VS Code share local developer-session/configuration behavior; Remote Control projects that local session to web/mobile without converting it into normal Chat history.
+- OpenAI Chat, desktop-local Work, cloud Work, Codex developer tasks, Remote projection, and browser adapters also retain different persistence/runtime authorities despite unified branding.
+- Browser-side agents retain site/browser-task context and permissions rather than silently joining consumer chat history.
+
+AGI's exact product decision remains founder-owned and stricter where stated above: Web/Desktop Cloud/Mobile Cloud share the consumer Cloud store; Local never syncs; CLI/VS Code share developer sessions; Chrome remains separate.
+
+Evidence:
+
+- `docs/research/competitor-capability-session-architecture-2026-07-15.md`
+- `docs/research/claude-live-frontend-system-2026-07-16.md`
+- `docs/current/frontend-experience-contract.md`

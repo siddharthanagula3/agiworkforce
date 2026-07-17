@@ -4,7 +4,7 @@ Status: Draft spec
 Owner: Founder + platform lead
 Last updated: 2026-07-01
 
-Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (binding canon), and the real routes under `apps/web/app/api/**`, `apps/web/proxy.ts`, `apps/web/lib/{error-handler,errors,csrf,rate-limit}.ts`, `apps/web/lib/server/rls-db.ts`, `packages/utils/src/errors.ts`, `packages/types/src/models.json`.
+Authority: `AGENTS.md`, `apps/web/AGENTS.md`, `docs/current/source-of-truth.md`, `docs/products/README.md` (binding canon), and the real routes under `apps/web/app/api/**`, `apps/web/proxy.ts`, `apps/web/lib/{error-handler,errors,csrf,rate-limit}.ts`, `apps/web/lib/server/rls-db.ts`, `packages/platform/utils/src/errors.ts`, `packages/contracts/types/src/models.json`.
 
 ## Overview & stance
 
@@ -26,7 +26,7 @@ APIs are Next.js 16 App Router route handlers (`app/api/**/route.ts`) fronted by
 
 - `GET/POST /api/chat/sync` (✅ `apps/web/app/api/chat/sync/route.ts`) — delta pull by `?since=<server_version>` (conversations + messages + artifacts, including tombstones) and idempotent UPSERT by `id`. Conversation/artifact metadata is last-writer-wins by `updated_at`; messages are append-only (only a `deleted_at` tombstone mutates an existing message). Pull caps: 500 conversations / 1000 messages / 500 artifacts.
 - CRUD: `/api/chat/conversations`, `/api/chat/conversations/[id]`, `.../messages`, `/api/chat/sessions`, plus `branch`, `folders`, `bookmarks`, `reactions`, `shortcuts` (✅ dirs present).
-- Inference: `POST /api/llm/v1/chat/completions` (✅) is the OpenAI-compatible, streaming gateway; `/api/llm/v2/chat` is the newer path. Model IDs are validated against `packages/types/src/models.json` — never accepted from arbitrary client input.
+- Inference: `POST /api/llm/v1/chat/completions` (✅) is the OpenAI-compatible, streaming gateway; `/api/llm/v2/chat` is the newer path. Model IDs are validated against `packages/contracts/types/src/models.json` — never accepted from arbitrary client input.
 - Requirement: Local/BYOK rows have no `cloud_id` and must never be pushed/pulled.
 
 ## Files
@@ -55,7 +55,7 @@ APIs are Next.js 16 App Router route handlers (`app/api/**/route.ts`) fronted by
 
 ## Billing
 
-**✅ Built (Stripe).** Checkout at `POST /api/checkout` (✅), customer portal at `/api/portal`, webhook ingestion at `/api/stripe-webhook` (✅), plus `/api/billing/{analytics,invoices,payment-methods}` and `/api/usage/*`, `/api/sync-subscription`. Plans map to the canon ladder: **Free $0 · Basic $8 (₹399) · Pro $20 · Max $100 & $200 · Enterprise custom**. 🟡 Gap: `packages/types/src/billing-catalog.ts` still encodes retired tiers (`pro_plus`/Plus/Hobby and a credit-topup path) — reconciliation is a separate tracked task; specs use the canon ladder and there are **no credit top-ups** (the `/api/credit-topup` path stays env-gated off).
+**✅ Built (Stripe).** Checkout at `POST /api/checkout` (✅), customer portal at `/api/portal`, webhook ingestion at `/api/stripe-webhook` (✅), plus `/api/billing/{analytics,invoices,payment-methods}` and `/api/usage/*`, `/api/sync-subscription`. Plans map to the canon ladder: **Free $0 · Basic $8 (₹399) · Pro $20 · Max $100 & $200 · Enterprise custom**. 🟡 Gap: `packages/contracts/types/src/billing-catalog.ts` still encodes retired tiers (`pro_plus`/Plus/Hobby and a credit-topup path) — reconciliation is a separate tracked task; specs use the canon ladder and there are **no credit top-ups** (the `/api/credit-topup` path stays env-gated off).
 
 ## Responses
 
@@ -63,7 +63,7 @@ APIs are Next.js 16 App Router route handlers (`app/api/**/route.ts`) fronted by
 
 ## Errors
 
-**✅ Built.** `apps/web/lib/error-handler.ts` (`handleError`/`withErrorHandler`) maps thrown `AppError`s (codes in `packages/utils/src/errors.ts`: `UNAUTHORIZED`, `FORBIDDEN`, `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `RATE_LIMIT_EXCEEDED`, `PAYMENT_REQUIRED`, `PAYLOAD_TOO_LARGE`, `STRIPE_ERROR`, `CLOUD_DB_ERROR`, `TIMEOUT`, `SERVICE_UNAVAILABLE`, `INTERNAL_ERROR`, …) to HTTP status. Internal messages are logged server-side; clients get generic per-status text except for a small `SAFE_TO_EXPOSE_CODES` set (`CREDIT_REQUIRED`, `SUBSCRIPTION_REQUIRED`, `RATE_LIMITED`, `VALIDATION_ERROR`, `INVALID_MODEL`, `CSRF_REQUIRED`) whose `message`/`details` drive recovery UI. Zod failures become `400 VALIDATION_ERROR` with a `path`/`message` list.
+**✅ Built.** `apps/web/lib/error-handler.ts` (`handleError`/`withErrorHandler`) maps thrown `AppError`s (codes in `packages/platform/utils/src/errors.ts`: `UNAUTHORIZED`, `FORBIDDEN`, `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `RATE_LIMIT_EXCEEDED`, `PAYMENT_REQUIRED`, `PAYLOAD_TOO_LARGE`, `STRIPE_ERROR`, `CLOUD_DB_ERROR`, `TIMEOUT`, `SERVICE_UNAVAILABLE`, `INTERNAL_ERROR`, …) to HTTP status. Internal messages are logged server-side; clients get generic per-status text except for a small `SAFE_TO_EXPOSE_CODES` set (`CREDIT_REQUIRED`, `SUBSCRIPTION_REQUIRED`, `RATE_LIMITED`, `VALIDATION_ERROR`, `INVALID_MODEL`, `CSRF_REQUIRED`) whose `message`/`details` drive recovery UI. Zod failures become `400 VALIDATION_ERROR` with a `path`/`message` list.
 
 ## Pagination
 
@@ -76,7 +76,7 @@ APIs are Next.js 16 App Router route handlers (`app/api/**/route.ts`) fronted by
 - `apps/web/app/api/{chat,projects,memory}/**` — CRUD; `apps/web/app/api/llm/v1/chat/completions` + `llm/v2/chat` — inference gateway.
 - `apps/web/app/api/media/{image,video}/**`, `.../projects/[id]/knowledge-files/**` — media + files.
 - `apps/web/app/api/{checkout,portal,stripe-webhook,billing,usage}/**` — billing.
-- `apps/web/lib/{error-handler,errors,csrf,rate-limit,api-auth}.ts`, `apps/web/lib/server/rls-db.ts`, `packages/utils/src/errors.ts`, `packages/types/src/models.json`.
+- `apps/web/lib/{error-handler,errors,csrf,rate-limit,api-auth}.ts`, `apps/web/lib/server/rls-db.ts`, `packages/platform/utils/src/errors.ts`, `packages/contracts/types/src/models.json`.
 
 ## Competitor notes
 
@@ -95,7 +95,7 @@ Production-ready when every route derives identity server-side, mutations requir
 - Adding a BYOK key field or Local execution path to any Web route (trust-boundary violation).
 - Trusting `user_id` from the request body instead of the Clerk session / RLS.
 - Renaming `proxy.ts` to `middleware.ts` or dropping the exported `proxy`.
-- Hardcoding a model/engine ID instead of resolving from `packages/types/src/models.json`.
+- Hardcoding a model/engine ID instead of resolving from `packages/contracts/types/src/models.json`.
 - Referencing removed tiers (Plus/`pro_plus`/Hobby) or reintroducing credit top-ups; inventing INR prices for Pro/Max.
 - Any Supabase reference (fully migrated to Clerk + Neon + Stripe).
 - Leaking raw SQL/Stripe/Neon error text; returning unbounded, uncapped result sets.
