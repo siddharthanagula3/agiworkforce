@@ -2,6 +2,7 @@ import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
 import { getModelMetadataById, type Effort, type Provider } from '@agiworkforce/types';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
 // Zero-leak chokepoint: the SSE call below targets OUR managed cloud
 // (`${API_URL}/api/llm/...`). Route it through guardedFetch so that, in Local
@@ -18,6 +19,7 @@ import {
   parseToolStatusDelta,
   parseToolResultDelta,
   parseToolApprovalRequestDelta,
+  parseAgentEventDelta,
 } from '@agiworkforce/cloud-contracts';
 
 /**
@@ -109,6 +111,8 @@ export interface StreamDelta {
   x_tool_status?: StreamToolStatus;
   x_tool_result?: StreamToolResult;
   x_tool_approval_request?: StreamToolApprovalRequest;
+  /** Runtime-validated, durable Cloud agent activity envelope. */
+  x_agent_event?: AgentEventEnvelope;
   /** Whole content_block object for a finished server code-execution tool. */
   x_code_result?: unknown;
   /** Whole content_block object for a finished server web-search tool. */
@@ -177,6 +181,17 @@ function sanitizeToolEventFields(delta: StreamDelta): void {
   if (delta.x_tool_approval_request !== undefined) {
     delta.x_tool_approval_request =
       parseToolApprovalRequestDelta(delta.x_tool_approval_request) ?? delta.x_tool_approval_request;
+  }
+  if (delta.x_agent_event !== undefined) {
+    const agentEvent = parseAgentEventDelta(delta.x_agent_event);
+    if (agentEvent) {
+      delta.x_agent_event = agentEvent;
+    } else {
+      // Canonical activity drives durable UI state, so an invalid envelope is
+      // never retained as a permissive fallback. Answer content in the same
+      // delta remains intact.
+      delete delta.x_agent_event;
+    }
   }
 }
 

@@ -21,6 +21,7 @@ import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { ToolCallTimeline } from './ToolCallTimeline';
+import { AgentActivityTimeline } from './AgentActivityTimeline';
 import { getToolDisplayLabel, summarizeToolTimeline } from '@agiworkforce/types';
 import { ApprovalCard } from './ApprovalCard';
 import { StatusStep as StatusStepComponent } from './StatusStep';
@@ -46,6 +47,7 @@ import {
 } from '@/src/features/chat/utils/messageStreamError';
 import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
 import type { ChatMessage, Artifact } from '@/types/chat';
+import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
@@ -125,11 +127,17 @@ export const MessageBubble = memo(function MessageBubble({
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
+  const canonicalActivity = isAssistant
+    ? readAgentActivityState(message.metadata?.agentActivity)
+    : undefined;
   const assistantProvenance = isAssistant ? getProvenance(message.model) : null;
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
   const hasReasoning =
-    isAssistant && message.reasoning !== undefined && modelSupportsThinking(message.model);
+    isAssistant &&
+    !canonicalActivity &&
+    message.reasoning !== undefined &&
+    modelSupportsThinking(message.model);
   // FlashList v2 recycles component instances across list items for
   // performance -- bare useState here would bleed a PRIOR message's UI state
   // (an expanded artifact, an open export sheet, a half-typed edit draft)
@@ -153,9 +161,12 @@ export const MessageBubble = memo(function MessageBubble({
   const reducedMotion = useReducedMotion();
   const themeColors = useThemeColors();
 
-  const handleExpandArtifact = useCallback((artifact: Artifact) => {
-    setExpandedArtifact(artifact);
-  }, [setExpandedArtifact]);
+  const handleExpandArtifact = useCallback(
+    (artifact: Artifact) => {
+      setExpandedArtifact(artifact);
+    },
+    [setExpandedArtifact],
+  );
 
   const handleCloseArtifact = useCallback(() => {
     setExpandedArtifact(null);
@@ -181,9 +192,12 @@ export const MessageBubble = memo(function MessageBubble({
   // Only meaningful when a resolver is actually wired at all.
   const approvalTurnExpired = Boolean(onResolveToolApproval) && !isApprovalTurnLive(message.id);
 
-  const handleImagePress = useCallback((url: string) => {
-    setFullScreenImageUrl(url);
-  }, [setFullScreenImageUrl]);
+  const handleImagePress = useCallback(
+    (url: string) => {
+      setFullScreenImageUrl(url);
+    },
+    [setFullScreenImageUrl],
+  );
 
   const handleCloseFullScreenImage = useCallback(() => {
     setFullScreenImageUrl(null);
@@ -334,7 +348,7 @@ export const MessageBubble = memo(function MessageBubble({
     // Tool-call rows (ToolCallTimeline) sit inside this same accessible container,
     // so VoiceOver never reaches their own onPress — mirror them here too, same
     // rationale as the message actions above.
-    if (isAssistant && message.toolCalls) {
+    if (isAssistant && !canonicalActivity && message.toolCalls) {
       for (const tool of message.toolCalls) {
         actions.push({
           name: `tool-${tool.id}`,
@@ -351,6 +365,7 @@ export const MessageBubble = memo(function MessageBubble({
     onDeleteMessage,
     message.content,
     message.toolCalls,
+    canonicalActivity,
   ]);
 
   const handleAccessibilityAction = useCallback(
@@ -416,7 +431,7 @@ export const MessageBubble = memo(function MessageBubble({
       <Pressable
         onLongPress={handleLongPress}
         delayLongPress={400}
-        accessible={true}
+        accessible={!canonicalActivity}
         accessibilityLabel={`${isUser ? 'Your' : roleLabel} message: ${message.content?.slice(0, 100) || 'empty'}`}
         accessibilityHint="Double tap and hold for message actions"
         accessibilityRole="text"
@@ -520,6 +535,16 @@ export const MessageBubble = memo(function MessageBubble({
             )}
 
             {/* Inline thinking chip (before main content, assistant only) */}
+            {canonicalActivity ? (
+              <AgentActivityTimeline
+                messageId={message.id}
+                activity={canonicalActivity}
+                onResolveApproval={handleResolveToolApproval}
+                approvalExpired={approvalTurnExpired}
+                onResendApproval={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+              />
+            ) : null}
+
             {hasReasoning ? (
               <ThinkingChip
                 thinkingText={message.reasoning ?? ''}
@@ -530,7 +555,7 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {/* Status steps */}
-            {isAssistant && message.steps && message.steps.length > 0 ? (
+            {isAssistant && !canonicalActivity && message.steps && message.steps.length > 0 ? (
               <View style={{ gap: 2 }}>
                 {message.steps.map((step, index) => (
                   <StatusStepComponent
@@ -544,7 +569,10 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {/* Tool calls — unified connected timeline (Claude-style inline tool use) */}
-            {isAssistant && message.toolCalls && message.toolCalls.length > 0 ? (
+            {isAssistant &&
+            !canonicalActivity &&
+            message.toolCalls &&
+            message.toolCalls.length > 0 ? (
               <ToolCallTimeline
                 messageId={message.id}
                 toolCalls={message.toolCalls}

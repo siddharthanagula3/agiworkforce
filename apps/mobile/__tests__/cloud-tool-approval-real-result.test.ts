@@ -113,7 +113,37 @@ function lastAssistantMessage() {
 
 describe('resolveToolApproval — recursive resume carries the REAL tool result', () => {
   it('replays the actual x_tool_result content (not a placeholder) when a resume suspends again on a further tool', async () => {
+    const activityBase = {
+      schemaVersion: 2 as const,
+      sessionId: 'session-approval-1',
+      turnId: 'turn-approval-1',
+    };
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 0,
+          emittedAtMs: 1_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 1,
+          emittedAtMs: 1_100,
+          event: {
+            type: 'approval-requested',
+            approvalId: 'approval-1',
+            toolCallId: 'call_1',
+            name: 'mcp__github__get_pull_request_diff',
+            category: 'mcp',
+            summary: 'Read pull request diff',
+            input: { owner: 'acme', repo: 'app', pull_number: 7 },
+            riskLevel: 'low',
+          },
+        },
+      });
       callbacks.onDelta({
         x_tool_approval_request: {
           tool_call_id: 'call_1',
@@ -134,11 +164,57 @@ describe('resolveToolApproval — recursive resume carries the REAL tool result'
     // second tool.
     mockStreamResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 2,
+          emittedAtMs: 1_200,
+          event: { type: 'approval-resolved', approvalId: 'approval-1', decision: 'approved' },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 3,
+          emittedAtMs: 1_250,
+          event: { type: 'lifecycle', phase: 'resumed' },
+        },
+      });
+      callbacks.onDelta({
         x_tool_result: {
           tool_call_id: 'call_1',
           name: 'mcp__github__get_pull_request_diff',
           content: REAL_RESULT,
           is_error: false,
+        },
+        x_agent_event: {
+          ...activityBase,
+          sequence: 4,
+          emittedAtMs: 1_400,
+          event: {
+            type: 'tool-execution-end',
+            toolCallId: 'call_1',
+            name: 'mcp__github__get_pull_request_diff',
+            output: REAL_RESULT,
+            isError: false,
+            elapsedMs: 300,
+          },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 5,
+          emittedAtMs: 1_500,
+          event: {
+            type: 'approval-requested',
+            approvalId: 'approval-2',
+            toolCallId: 'call_2',
+            name: 'mcp__github__create_comment',
+            category: 'mcp',
+            summary: 'Create pull request comment',
+            input: { body: 'nice PR' },
+            riskLevel: 'medium',
+          },
         },
       });
       callbacks.onDelta({
@@ -160,6 +236,45 @@ describe('resolveToolApproval — recursive resume carries the REAL tool result'
     let capturedMessages: Array<{ role: string; tool_call_id?: string; content?: string }> = [];
     mockStreamResume.mockImplementationOnce(async (body, callbacks: StreamCallbacks) => {
       capturedMessages = body.messages as typeof capturedMessages;
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 6,
+          emittedAtMs: 1_600,
+          event: { type: 'approval-resolved', approvalId: 'approval-2', decision: 'approved' },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 7,
+          emittedAtMs: 1_650,
+          event: { type: 'lifecycle', phase: 'resumed' },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 8,
+          emittedAtMs: 1_800,
+          event: {
+            type: 'tool-execution-end',
+            toolCallId: 'call_2',
+            name: 'mcp__github__create_comment',
+            output: { created: true },
+            isError: false,
+            elapsedMs: 200,
+          },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...activityBase,
+          sequence: 9,
+          emittedAtMs: 1_900,
+          event: { type: 'stop', reason: 'end-turn' },
+        },
+      });
       callbacks.onDone();
     });
 
@@ -172,5 +287,13 @@ describe('resolveToolApproval — recursive resume carries the REAL tool result'
     );
     expect(call1ToolMessage?.content).toBe(REAL_RESULT);
     expect(call1ToolMessage?.content).not.toBe('(executed)');
+    expect(lastAssistantMessage()?.metadata?.agentActivity).toMatchObject({
+      status: 'completed',
+      lastSequence: 9,
+      entries: [
+        expect.objectContaining({ toolCallId: 'call_1', status: 'completed' }),
+        expect.objectContaining({ toolCallId: 'call_2', status: 'completed' }),
+      ],
+    });
   });
 });

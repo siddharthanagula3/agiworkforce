@@ -2,7 +2,12 @@ import { Alert, AppState } from 'react-native';
 import { create } from 'zustand';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
-import { QueueFullError } from '@agiworkforce/client-runtime';
+import {
+  QueueFullError,
+  applyAgentActivityEvent,
+  finishAgentActivityLocally,
+  type AgentActivityState,
+} from '@agiworkforce/client-runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
@@ -68,6 +73,7 @@ import type { UploadFileInput, UploadFileResult } from '@/services/api';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 import { getConversationMessageStore } from './conversationRepository';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
+import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
 
 /** Paywall error state captured when the API returns a tier-cap paywall response. */
 export interface PaywallErrorState {
@@ -472,6 +478,42 @@ function queueCloudTurnForSync(conversationId: string, messages: ChatMessage[]):
       markMessageForSync(conversationId, m.id);
     }
   }
+}
+
+/** Queue one finalized Cloud assistant update and request an immediate push. */
+function pushCloudAssistantUpdate(
+  conversationId: string,
+  messages: ChatMessage[],
+  assistantMessageId: string,
+): void {
+  const assistant = messages.find(
+    (message) => message.id === assistantMessageId && message.role === 'assistant',
+  );
+  if (!assistant) return;
+  queueCloudTurnForSync(conversationId, [assistant]);
+  void syncNow();
+}
+
+/** Close a durable canonical run when Mobile ends it without a server stop envelope. */
+function settleMessageAgentActivity(
+  message: ChatMessage,
+  status: 'failed' | 'cancelled',
+  completedAtMs: number,
+  error?: string,
+): ChatMessage {
+  const activity = readAgentActivityState(message.metadata?.agentActivity);
+  if (!activity) return message;
+  return {
+    ...message,
+    metadata: {
+      ...message.metadata,
+      agentActivity: finishAgentActivityLocally(activity, {
+        status,
+        completedAtMs,
+        ...(error ? { error } : {}),
+      }),
+    },
+  };
 }
 
 /**
@@ -1339,6 +1381,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // ride along when the provider adapter supplied them.
       let turnFinishReason: string | undefined;
       let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
+      let agentActivity: AgentActivityState | undefined;
 
       // Honor the user's per-model Thinking toggle — the same state that drives
       // the Brain badge on ModelSelectorButton. Hardcoding `thinking: true`
@@ -1384,6 +1427,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             const state = get();
             lastDeltaTimes.set(conversationId, Date.now());
+
+            if (delta.x_agent_event) {
+              agentActivity = applyAgentActivityEvent(agentActivity, delta.x_agent_event);
+            }
 
             const prevContentLength = cloudContentRaw.length;
             if (delta.content) cloudContentRaw += delta.content;
@@ -1492,8 +1539,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(toolCalls.length > 0 ? { toolCalls } : {}),
                     // Live thinking-timer anchor: ThinkingChip ticks elapsed
                     // seconds from this while reasoning streams.
-                    ...(thinkingStartedAt !== undefined
-                      ? { metadata: { ...m.metadata, thinkingStartedAt } }
+                    ...(thinkingStartedAt !== undefined || agentActivity
+                      ? {
+                          metadata: {
+                            ...m.metadata,
+                            ...(thinkingStartedAt !== undefined ? { thinkingStartedAt } : {}),
+                            ...(agentActivity ? { agentActivity } : {}),
+                          },
+                        }
                       : {}),
                   }
                 : m,
@@ -1566,6 +1619,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       // tells MessageBubble to show the incomplete-response
                       // notice + retry affordance instead.
                       ...(turnStreamError !== undefined ? { streamError: turnStreamError } : {}),
+                      ...(agentActivity ? { agentActivity } : {}),
                     },
                   }
                 : m,
@@ -1596,11 +1650,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             // Cloud write-through: mirror the finalized assistant reply into the cloud
             // store, queue it, and push immediately (don't wait for the sync interval).
             if (executionMode === 'cloud') {
-              const finalAssistant = updatedMsgs.find((m) => m.id === assistantMessageId);
-              if (finalAssistant) {
-                queueCloudTurnForSync(conversationId, [finalAssistant]);
-              }
-              void syncNow();
+              pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
 
               // Manual-approval suspend: the server emitted x_tool_approval_request
               // for one or more calls and stopped ([DONE] with no final answer yet).
@@ -1639,14 +1689,29 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const currentContent = get().streamingContent;
 
             if (error instanceof ApiPaywallError) {
+              if (agentActivity) {
+                agentActivity = finishAgentActivityLocally(agentActivity, {
+                  status: 'failed',
+                  completedAtMs: Date.now(),
+                  error: 'Usage limit reached. Upgrade to continue.',
+                });
+              }
               const updatedMsgs = msgs.map((m) =>
                 m.id === assistantMessageId
-                  ? { ...m, content: currentContent || '', isStreaming: false }
+                  ? {
+                      ...m,
+                      content: currentContent || '',
+                      isStreaming: false,
+                      ...(agentActivity ? { metadata: { ...m.metadata, agentActivity } } : {}),
+                    }
                   : m,
               );
               currentMsgStore.setState((s) => ({
                 messages: { ...s.messages, [conversationId]: updatedMsgs },
               }));
+              if (executionMode === 'cloud') {
+                pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
+              }
               set({
                 ...streamingFlags(),
                 streamingContent: '',
@@ -1667,18 +1732,29 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (__DEV__) {
               console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
             }
+            if (agentActivity) {
+              agentActivity = finishAgentActivityLocally(agentActivity, {
+                status: 'failed',
+                completedAtMs: Date.now(),
+                error: 'Something went wrong. Please try again.',
+              });
+            }
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
                     ...m,
                     content: currentContent || 'Something went wrong. Please try again.',
                     isStreaming: false,
+                    ...(agentActivity ? { metadata: { ...m.metadata, agentActivity } } : {}),
                   }
                 : m,
             );
             currentMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
             }));
+            if (executionMode === 'cloud') {
+              pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
+            }
             set({
               ...streamingFlags(),
               streamingContent: '',
@@ -1730,12 +1806,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (caughtErr instanceof ApiPaywallError) {
         const updatedMsgs = msgs.map((m) =>
           m.id === assistantMessageId
-            ? { ...m, content: currentContent || '', isStreaming: false }
+            ? settleMessageAgentActivity(
+                { ...m, content: currentContent || '', isStreaming: false },
+                'failed',
+                Date.now(),
+                'Usage limit reached. Upgrade to continue.',
+              )
             : m,
         );
         currentMsgStore.setState((s) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
         }));
+        if (executionMode === 'cloud') {
+          pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
+        }
         set({
           ...streamingFlags(),
           streamingContent: '',
@@ -1752,12 +1836,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (caughtErr instanceof RemoteChatDisabledError) {
         const updatedMsgs = msgs.map((m) =>
           m.id === assistantMessageId
-            ? { ...m, content: caughtErr.message, isStreaming: false }
+            ? settleMessageAgentActivity(
+                { ...m, content: caughtErr.message, isStreaming: false },
+                'failed',
+                Date.now(),
+                caughtErr.message,
+              )
             : m,
         );
         currentMsgStore.setState((s) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
         }));
+        if (executionMode === 'cloud') {
+          pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
+        }
         set({
           ...streamingFlags(),
           streamingContent: '',
@@ -1770,16 +1862,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
       const updatedMsgs = msgs.map((m) =>
         m.id === assistantMessageId
-          ? {
-              ...m,
-              content: currentContent || 'Failed to connect. Check your network and try again.',
-              isStreaming: false,
-            }
+          ? settleMessageAgentActivity(
+              {
+                ...m,
+                content: currentContent || 'Failed to connect. Check your network and try again.',
+                isStreaming: false,
+              },
+              'failed',
+              Date.now(),
+              'Failed to connect. Check your network and try again.',
+            )
           : m,
       );
       currentMsgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: updatedMsgs },
       }));
+      if (executionMode === 'cloud') {
+        pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
+      }
       set({
         ...streamingFlags(),
         streamingContent: '',
@@ -1803,14 +1903,26 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const sweepStore = getConversationMessageStore(conversationId);
       const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
       if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
+        const completedAtMs = Date.now();
+        const settledMessages = sweepMsgs.map((m) =>
+          m.id === assistantMessageId && m.isStreaming
+            ? settleMessageAgentActivity(
+                { ...m, isStreaming: false },
+                controller.signal.aborted ? 'cancelled' : 'failed',
+                completedAtMs,
+                controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
+              )
+            : m,
+        );
         sweepStore.setState((s) => ({
           messages: {
             ...s.messages,
-            [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
-              m.id === assistantMessageId && m.isStreaming ? { ...m, isStreaming: false } : m,
-            ),
+            [conversationId]: settledMessages,
           },
         }));
+        if (executionMode === 'cloud') {
+          pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
+        }
       }
       set({ ...streamingFlags() });
     }
@@ -1919,6 +2031,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // marker finish_reason alone can't reliably carry).
     let turnFinishReason: string | undefined;
     let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
+    let agentActivity = readAgentActivityState(currentMessage?.metadata?.agentActivity);
 
     try {
       await streamToolApprovalResume(
@@ -1933,6 +2046,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           onDelta: (delta: StreamDelta) => {
             if (controller.signal.aborted) return;
             lastDeltaTimes.set(conversationId, Date.now());
+
+            if (delta.x_agent_event) {
+              agentActivity = applyAgentActivityEvent(agentActivity, delta.x_agent_event);
+            }
 
             if (delta.content) cloudContentRaw += delta.content;
             const parsedTags = parseLocalThinking(cloudContentRaw);
@@ -2000,6 +2117,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     reasoning: newReasoning || undefined,
                     isStreaming: true,
                     ...(toolCalls.length > 0 ? { toolCalls } : {}),
+                    ...(agentActivity ? { metadata: { ...m.metadata, agentActivity } } : {}),
                   }
                 : m,
             );
@@ -2036,6 +2154,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               completedAt,
             );
 
+            const hasTurnMetadata =
+              turnFinishReason !== undefined ||
+              turnStreamError !== undefined ||
+              agentActivity !== undefined;
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
@@ -2044,7 +2166,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
                     ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
                     ...(finalCitations.length > 0 ? { citations: finalCitations } : {}),
-                    ...(turnFinishReason !== undefined || turnStreamError !== undefined
+                    ...(hasTurnMetadata
                       ? {
                           metadata: {
                             ...m.metadata,
@@ -2054,6 +2176,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                             ...(turnStreamError !== undefined
                               ? { streamError: turnStreamError }
                               : {}),
+                            ...(agentActivity ? { agentActivity } : {}),
                           },
                         }
                       : {}),
@@ -2114,11 +2237,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               pendingApprovalTurns.delete(assistantMessageId);
             }
 
-            const finalAssistant = updatedMsgs.find((m) => m.id === assistantMessageId);
-            if (finalAssistant) {
-              queueCloudTurnForSync(conversationId, [finalAssistant]);
-            }
-            void syncNow();
+            pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
 
             set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '' });
           },
@@ -2136,6 +2255,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
             const currentContent = get().streamingContent || cloudContentRaw;
+            if (agentActivity) {
+              agentActivity = finishAgentActivityLocally(agentActivity, {
+                status: 'failed',
+                completedAtMs: Date.now(),
+                error: 'Something went wrong. Please try again.',
+              });
+            }
             // Every call in this turn that was approved got optimistically
             // patched to 'running' when the decision was recorded (this
             // resume is what would have reported its real result) -- the
@@ -2154,16 +2280,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                         ? {
                             ...t,
                             status: 'failed' as const,
-                            error: error?.message || 'Resume failed',
+                            error: 'Resume failed. Please try again.',
                           }
                         : t,
                     ),
+                    ...(agentActivity ? { metadata: { ...m.metadata, agentActivity } } : {}),
                   }
                 : m,
             );
             innerMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
             }));
+            pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
             set({
               ...streamingFlags(),
               streamingContent: '',
@@ -2188,16 +2316,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
         const updatedMsgs = msgs.map((m) =>
           m.id === assistantMessageId
-            ? {
-                ...m,
-                content: cloudContentRaw || 'Failed to connect. Check your network and try again.',
-                isStreaming: false,
-              }
+            ? settleMessageAgentActivity(
+                {
+                  ...m,
+                  content:
+                    cloudContentRaw || 'Failed to connect. Check your network and try again.',
+                  isStreaming: false,
+                },
+                'failed',
+                Date.now(),
+                'Failed to connect. Check your network and try again.',
+              )
             : m,
         );
         innerMsgStore.setState((s) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
         }));
+        pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
       }
       set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '' });
     } finally {
@@ -2209,14 +2344,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const sweepStore = getConversationMessageStore(conversationId);
       const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
       if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
+        const completedAtMs = Date.now();
+        const settledMessages = sweepMsgs.map((m) =>
+          m.id === assistantMessageId && m.isStreaming
+            ? settleMessageAgentActivity(
+                { ...m, isStreaming: false },
+                controller.signal.aborted ? 'cancelled' : 'failed',
+                completedAtMs,
+                controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
+              )
+            : m,
+        );
         sweepStore.setState((s) => ({
           messages: {
             ...s.messages,
-            [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
-              m.id === assistantMessageId && m.isStreaming ? { ...m, isStreaming: false } : m,
-            ),
+            [conversationId]: settledMessages,
           },
         }));
+        pushCloudAssistantUpdate(conversationId, settledMessages, assistantMessageId);
       }
       set({ ...streamingFlags() });
     }
@@ -2242,12 +2387,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         const msgs = ownerStore.getState().messages[cid] ?? [];
         const hasStreaming = msgs.some((m) => m.isStreaming);
         if (hasStreaming) {
+          const stoppedAssistantIds = new Set(
+            msgs
+              .filter((message) => message.isStreaming && message.role === 'assistant')
+              .map((message) => message.id),
+          );
+          const completedAtMs = Date.now();
+          const stoppedMessages = msgs.map((m) =>
+            m.isStreaming
+              ? settleMessageAgentActivity({ ...m, isStreaming: false }, 'cancelled', completedAtMs)
+              : m,
+          );
           ownerStore.setState((s) => ({
             messages: {
               ...s.messages,
-              [cid]: msgs.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
+              [cid]: stoppedMessages,
             },
           }));
+          const conversation = ownerStore
+            .getState()
+            .conversations.find((candidate) => candidate.id === cid);
+          if (conversation && executionModeForConversation(conversation) === 'cloud') {
+            queueCloudTurnForSync(
+              cid,
+              stoppedMessages.filter((message) => stoppedAssistantIds.has(message.id)),
+            );
+            void syncNow();
+          }
         }
       }
       // Reflect whatever is still actually streaming — background conversations
@@ -2272,12 +2438,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const ownerStore = getConversationMessageStore(targetId);
     const msgs = ownerStore.getState().messages[targetId] ?? [];
+    const stoppedAssistantIds = new Set(
+      msgs
+        .filter((message) => message.isStreaming && message.role === 'assistant')
+        .map((message) => message.id),
+    );
+    const completedAtMs = Date.now();
+    const stoppedMessages = msgs.map((m) =>
+      m.isStreaming
+        ? settleMessageAgentActivity({ ...m, isStreaming: false }, 'cancelled', completedAtMs)
+        : m,
+    );
     ownerStore.setState((s) => ({
       messages: {
         ...s.messages,
-        [targetId]: msgs.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
+        [targetId]: stoppedMessages,
       },
     }));
+    const conversation = ownerStore
+      .getState()
+      .conversations.find((candidate) => candidate.id === targetId);
+    if (conversation && executionModeForConversation(conversation) === 'cloud') {
+      queueCloudTurnForSync(
+        targetId,
+        stoppedMessages.filter((message) => stoppedAssistantIds.has(message.id)),
+      );
+      void syncNow();
+    }
 
     set({
       ...streamingFlags(),
