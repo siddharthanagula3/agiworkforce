@@ -198,6 +198,10 @@
       },
       {
         "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/extension",
         "to": "@agiworkforce/design-tokens"
       },
       {
