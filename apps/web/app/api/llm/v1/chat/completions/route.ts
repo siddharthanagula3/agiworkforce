@@ -28,6 +28,9 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 
+/** Current Vercel Hobby maximum; durable AGI Work will span workflow steps. */
+export const maxDuration = 300;
+
 /**
  * OpenAI-compatible Chat Completions API
  * Endpoint: POST /v1/chat/completions (via api.agiworkforce.com)
@@ -38,9 +41,9 @@ import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
  * Agentic extension: when remote MCP tools are configured through the validated
  * WEB_MCP_SERVERS_JSON contract, streaming requests enter the
  * tool-loop driver (tool-loop.ts) which executes tools and re-invokes the
- * model up to DEFAULT_MAX_STEPS times.  The approval_mode query parameter
- * controls gating: ?approval_mode=auto skips the per-tool prompt; the default
- * 'manual' suspends and emits x_tool_approval_request events.
+ * model under the bounded policy for the selected work mode. The approval_mode
+ * query parameter controls gating: ?approval_mode=auto skips the per-tool prompt;
+ * the default 'manual' suspends and emits x_tool_approval_request events.
  *
  * Provider dispatch, for the standard (non-agentic) paths below (restructure
  * Wave 2, task #34): Anthropic, Google, OpenAI, and the 9 openai-compat
