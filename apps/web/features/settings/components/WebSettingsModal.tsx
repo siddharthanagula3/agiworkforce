@@ -17,6 +17,7 @@
  *   capabilities -> CapabilitiesSection (memory, tools, artifacts)
  *   memory       -> MemorySection   (MemoryEditor)
  *   notifications -> NotificationsSection (browser/email/mobile-push toggles)
+ *   reflect      -> ReflectSection (on-demand account activity recap)
  *   time-focus   -> TimeFocusSection (account-wide quiet hours + break reminders)
  *   connectors   -> ConnectorsPanel (built-in to shared shell via adapter)
  *   skills       -> SkillsPanel     (built-in to shared shell via adapter)
@@ -41,6 +42,7 @@ import { UsageSection } from '../sections/UsageSection';
 import { CapabilitiesSection } from '../sections/CapabilitiesSection';
 import { MemorySection } from '../sections/MemorySection';
 import { NotificationsSection } from '../sections/NotificationsSection';
+import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 
 // ---------------------------------------------------------------------------
@@ -84,6 +86,7 @@ const SECTION_TO_SEGMENT: Record<string, string> = {
   plugins: 'plugins',
   memory: 'memory',
   notifications: 'notifications',
+  reflect: 'reflect',
   'time-focus': 'time-focus',
 };
 
@@ -476,6 +479,7 @@ export function WebSettingsModal({
     capabilities: <CapabilitiesSection />,
     memory: <MemorySection />,
     notifications: <NotificationsSection />,
+    reflect: <ReflectSection />,
     'time-focus': <TimeFocusSection />,
     // connectors / skills / plugins fall through to adapter-driven built-in panels
   };

@@ -5,6 +5,7 @@ import {
   ManagedCloudCreateConversationRequestSchema,
   ManagedCloudCreateMessageRequestSchema,
   ManagedCloudDeleteConversationResponseSchema,
+  ManagedCloudReflectRecapSchema,
   ManagedCloudMessageWireSchema,
   ManagedCloudUpdateConversationRequestSchema,
   managedCloudConversationPath,
@@ -144,5 +145,59 @@ describe('managed-cloud conversation wire contract', () => {
     expect(managedCloudMessagePath('conversation/id', 'message id')).toBe(
       '/api/chat/conversations/conversation%2Fid/messages/message%20id',
     );
+  });
+
+  it('validates the bounded managed Reflect recap shared by Web and later clients', () => {
+    const recap = ManagedCloudReflectRecapSchema.parse({
+      range: '30d',
+      generatedAt: '2026-07-18T18:00:00.000Z',
+      period: {
+        start: '2026-06-18T18:00:00.000Z',
+        end: '2026-07-18T18:00:00.000Z',
+        label: 'Past 30 days',
+      },
+      summary: {
+        headline: 'Writing led your past 30 days',
+        body: 'You started 3 conversations across 2 active days.',
+      },
+      stats: { totalConversations: 3, activeDays: 2, mostActiveDay: '2026-07-10', peakHour: 15 },
+      dailyActivity: [
+        { date: '2026-07-10', conversationCount: 2 },
+        { date: '2026-07-12', conversationCount: 1 },
+      ],
+      topics: [
+        {
+          id: 'writing',
+          label: 'Writing',
+          description: 'Drafting, editing, and summarization.',
+          conversationCount: 2,
+          percentage: 66.7,
+        },
+      ],
+      insights: [
+        {
+          dimension: 'delegation',
+          title: 'What you handed off',
+          observation: 'Writing appeared in 2 conversations.',
+          nextStep: 'Choose which parts you want to keep doing yourself.',
+        },
+      ],
+      sampled: false,
+      sampledConversationCount: 3,
+    });
+
+    expect(recap.stats.peakHour).toBe(15);
+    expect(
+      ManagedCloudReflectRecapSchema.safeParse({
+        ...recap,
+        topics: [{ ...recap.topics[0], percentage: 101 }],
+      }).success,
+    ).toBe(false);
+    expect(
+      ManagedCloudReflectRecapSchema.safeParse({
+        ...recap,
+        generatedAt: 'sometime today',
+      }).success,
+    ).toBe(false);
   });
 });
