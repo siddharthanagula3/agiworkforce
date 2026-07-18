@@ -72,6 +72,47 @@ export function publicUrlForKey(key: string): string {
   return `${base.replace(/\/$/, '')}/${key}`;
 }
 
+/**
+ * Resolve one of our public R2 URLs back to its object key. This is the
+ * inverse of `publicUrlForKey`, with strict origin/path validation so callers
+ * never turn a user-supplied URL into an SSRF request or an arbitrary key.
+ */
+export function objectKeyFromPublicUrl(value: string): string | null {
+  const configuredBase = env('CLOUDFLARE_R2_PUBLIC_BASE_URL');
+  if (!configuredBase || value.includes('\\') || /%(?:2e|2f|5c)/i.test(value)) return null;
+
+  try {
+    const base = new URL(configuredBase);
+    const candidate = new URL(value);
+    if (
+      candidate.origin !== base.origin ||
+      candidate.username ||
+      candidate.password ||
+      candidate.search ||
+      candidate.hash
+    ) {
+      return null;
+    }
+
+    const basePath = base.pathname.replace(/\/+$/, '');
+    const prefix = `${basePath}/`;
+    if (!candidate.pathname.startsWith(prefix)) return null;
+
+    const key = candidate.pathname.slice(prefix.length);
+    if (
+      !key ||
+      !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(key) ||
+      key.includes('//') ||
+      key.split('/').some((segment) => segment === '.' || segment === '..')
+    ) {
+      return null;
+    }
+    return key;
+  } catch {
+    return null;
+  }
+}
+
 /** Upload bytes directly to R2 from server-side code (no client body-size constraint). */
 export async function putObject(params: {
   key: string;

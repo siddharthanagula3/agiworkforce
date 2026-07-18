@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { ProjectKnowledgeFile } from '@agiworkforce/types';
+import { isTextAttachmentMeta, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 
 interface Props {
@@ -239,11 +239,7 @@ export function FilePreviewModal({ file, onClose }: Props) {
   // to a code language (covers .ts/.tsx/.py/.rs etc. served as
   // application/octet-stream from some storage backends).
   const ext = fileExt(file.fileName);
-  const isText =
-    file.mimeType.startsWith('text/') ||
-    file.mimeType === 'application/json' ||
-    file.mimeType === 'application/xml' ||
-    ext in EXT_LANG;
+  const isText = isTextAttachmentMeta(file.fileName, file.mimeType) || ext in EXT_LANG;
 
   const formatSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -254,8 +250,8 @@ export function FilePreviewModal({ file, onClose }: Props) {
   async function handleDownload() {
     try {
       // Fetch as blob so the download attribute works cross-origin.
-      // Vercel Blob serves content-disposition: inline by default, so a bare
-      // anchor href would open the file in-tab instead of saving it.
+      // Public object storage may serve content-disposition: inline, so a bare
+      // anchor href could open the file in-tab instead of saving it.
       const r = await fetch(file!.storageUri);
       const blob = await r.blob();
       const objectUrl = URL.createObjectURL(blob);

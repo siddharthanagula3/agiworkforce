@@ -9,11 +9,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockGetClerkAuthUser, mockNeonQuery } = vi.hoisted(() => {
-  const mockGetClerkAuthUser = vi.fn();
-  const mockNeonQuery = vi.fn();
-  return { mockGetClerkAuthUser, mockNeonQuery };
-});
+const {
+  mockGetClerkAuthUser,
+  mockNeonQuery,
+  mockExtractProjectKnowledgeFile,
+  MockProjectKnowledgeExtractionError,
+} = vi.hoisted(() => ({
+  mockGetClerkAuthUser: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockExtractProjectKnowledgeFile: vi.fn(),
+  MockProjectKnowledgeExtractionError: class ProjectKnowledgeExtractionError extends Error {},
+}));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -43,6 +49,11 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+vi.mock('@/lib/server/project-knowledge-extraction', () => ({
+  extractProjectKnowledgeFile: mockExtractProjectKnowledgeFile,
+  ProjectKnowledgeExtractionError: MockProjectKnowledgeExtractionError,
+}));
+
 import { GET, POST } from '@/app/api/projects/[id]/knowledge-files/route';
 
 const KB_FILE_ROW = {
@@ -60,6 +71,7 @@ const KB_FILE_ROW = {
   deleted_at: null,
   storage_uri: 'storage/files/spec.pdf',
 };
+const CHECKSUM = 'a'.repeat(64);
 
 function wireAuth() {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
@@ -125,6 +137,7 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
 describe('POST /api/projects/[id]/knowledge-files', () => {
   beforeEach(() => {
     wireAuth();
+    mockExtractProjectKnowledgeFile.mockResolvedValue({ extractedText: null });
   });
 
   it('returns 400 when required fields are missing', async () => {
@@ -136,6 +149,23 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
     expect(json.error?.message ?? '').toMatch(/fileName/i);
+  });
+
+  it('returns 400 before object access when the checksum is not SHA-256', async () => {
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: 'abc123',
+        sourceSurface: 'web',
+        storageUri: 'storage/files/spec.pdf',
+      }),
+      routeContext('proj-1'),
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockExtractProjectKnowledgeFile).not.toHaveBeenCalled();
   });
 
   it('returns 503 when table does not exist (42P01)', async () => {
@@ -150,7 +180,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         fileName: 'spec.pdf',
         mimeType: 'application/pdf',
         byteCount: 1024,
-        checksumSha256: 'abc123',
+        checksumSha256: CHECKSUM,
         sourceSurface: 'web',
         storageUri: 'storage/files/spec.pdf',
       }),
@@ -168,13 +198,16 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
     // Insert returns the new row
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: 'The launch date is October 4.',
+    });
 
     const res = await POST(
       makePostRequest('proj-1', {
         fileName: 'spec.pdf',
         mimeType: 'application/pdf',
         byteCount: 1024,
-        checksumSha256: 'abc123',
+        checksumSha256: CHECKSUM,
         sourceSurface: 'web',
         storageUri: 'storage/files/spec.pdf',
         summary: 'A spec doc',
@@ -187,6 +220,40 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(json.file['id']).toBe('file-1');
     expect(json.file['fileName']).toBe('spec.pdf');
     expect(json.file['storageUri']).toBe('storage/files/spec.pdf');
+    expect(mockExtractProjectKnowledgeFile).toHaveBeenCalledWith({
+      projectId: 'proj-1',
+      storageUri: 'storage/files/spec.pdf',
+      fileName: 'spec.pdf',
+      mimeType: 'application/pdf',
+      byteCount: 1024,
+      checksumSha256: CHECKSUM,
+    });
+    expect(mockNeonQuery.mock.calls[1]?.[0]).toContain('extracted_text');
+    expect(mockNeonQuery.mock.calls[1]?.[1]).toContain('The launch date is October 4.');
+  });
+
+  it('returns a user-safe 400 and does not insert when extraction rejects the object', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockExtractProjectKnowledgeFile.mockRejectedValue(
+      new MockProjectKnowledgeExtractionError('The uploaded file failed its integrity check.'),
+    );
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: CHECKSUM,
+        sourceSurface: 'web',
+        storageUri: 'storage/files/spec.pdf',
+      }),
+      routeContext('proj-1'),
+    );
+
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error?: { message?: string } };
+    expect(json.error?.message).toContain('integrity check');
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
   });
 
   it('returns 400 when sourceSurface is invalid', async () => {
@@ -195,7 +262,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         fileName: 'spec.pdf',
         mimeType: 'application/pdf',
         byteCount: 1024,
-        checksumSha256: 'abc123',
+        checksumSha256: CHECKSUM,
         sourceSurface: 'fax-machine',
         storageUri: 'storage/files/spec.pdf',
       }),
@@ -214,7 +281,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         fileName: 'huge.bin',
         mimeType: 'application/octet-stream',
         byteCount: tooBig,
-        checksumSha256: 'abc123',
+        checksumSha256: CHECKSUM,
         sourceSurface: 'web',
         storageUri: 'storage/files/huge.bin',
       }),
@@ -232,7 +299,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
         fileName: 'payload.bin',
         mimeType: 'application/octet-stream',
         byteCount: 1024,
-        checksumSha256: 'abc123',
+        checksumSha256: CHECKSUM,
         sourceSurface: 'web',
         storageUri: 'storage/files/payload.bin',
       }),
