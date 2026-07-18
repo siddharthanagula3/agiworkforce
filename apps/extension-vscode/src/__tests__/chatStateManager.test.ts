@@ -397,6 +397,70 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted.some((message) => message.type === 'error')).toBe(false);
   });
 
+  it('forwards structured tool request and response activity to the inline timeline', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Search official sources' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_784_335_200_000,
+      toolCallId: 'tool-1',
+      name: 'web_search',
+      category: 'web-search',
+      summary: 'Searching official sources',
+      input: { query: 'AGI Workforce' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1_784_335_200_100,
+      toolCallId: 'tool-1',
+      name: 'web_search',
+      output: { results: 4 },
+      isError: false,
+      elapsedMs: 100,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await send;
+    expect(harness.posted).toContainEqual({
+      type: 'toolCallStart',
+      payload: {
+        toolUseId: 'tool-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Searching official sources',
+        input: { query: 'AGI Workforce' },
+      },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'toolCallEnd',
+      payload: {
+        toolUseId: 'tool-1',
+        output: { results: 4 },
+        isError: false,
+        elapsedMs: 100,
+      },
+    });
+  });
+
   it('settles the UI turn when the local app-server disconnects', async () => {
     const harness = makeHarness();
     let settled = false;

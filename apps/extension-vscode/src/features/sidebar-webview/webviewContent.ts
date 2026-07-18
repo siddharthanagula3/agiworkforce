@@ -806,6 +806,26 @@ export function getWebviewContent(
     }
     .tool-call--open .tool-call__body { display: block; }
 
+    .tool-call__section + .tool-call__section {
+      border-top: 1px solid var(--border);
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+    .tool-call__section-label {
+      color: var(--text-secondary);
+      font-family: var(--vscode-font-family);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .tool-call__payload {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .tool-call-done {
       display: flex;
       align-items: center;
@@ -1693,15 +1713,20 @@ export function getWebviewContent(
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
-        createToolCallEl(msg.payload.toolUseId, msg.payload.name);
+        createToolCallEl(
+          msg.payload.toolUseId,
+          msg.payload.name,
+          msg.payload.category,
+          msg.payload.summary,
+          msg.payload.input
+        );
       }
 
       else if (msg.type === 'toolCallDelta') {
         var tc = toolCallMap[msg.payload.toolUseId];
         if (tc) {
           tc.inputBuf += msg.payload.deltaJson;
-          tc.summaryEl.textContent = tc.inputBuf.slice(0, 60);
-          tc.bodyEl.textContent = tc.inputBuf;
+          tc.requestEl.textContent = tc.inputBuf;
         }
       }
 
@@ -1709,12 +1734,12 @@ export function getWebviewContent(
         var tcEnd = toolCallMap[msg.payload.toolUseId];
         if (tcEnd) {
           tcEnd.el.classList.remove('tool-call--pending');
-          tcEnd.el.classList.add('tool-call--done');
-          // Format JSON body if parseable
-          try {
-            var parsed = JSON.parse(tcEnd.inputBuf);
-            tcEnd.bodyEl.textContent = JSON.stringify(parsed, null, 2);
-          } catch (_) { /* leave as-is */ }
+          tcEnd.el.classList.add(msg.payload.isError ? 'tool-call--error' : 'tool-call--done');
+          tcEnd.responseEl.textContent = formatToolPayload(msg.payload.output);
+          tcEnd.responseSection.style.display = '';
+          if (typeof msg.payload.elapsedMs === 'number') {
+            tcEnd.summaryEl.textContent += ' · ' + formatElapsedMs(msg.payload.elapsedMs);
+          }
         }
       }
 
@@ -1918,7 +1943,7 @@ export function getWebviewContent(
 
     // ── Inline tool-call rendering (design-spec §4) ───────────────────────────
     var toolCallStack = null; // active .tool-call-stack container
-    var toolCallMap = {}; // toolUseId → { el, bodyEl, inputBuf }
+    var toolCallMap = {}; // toolUseId → inline disclosure state
 
     var TOOL_ICONS = {
       bash: '$(terminal)', shell: '$(terminal)', run_command: '$(terminal)',
@@ -1931,13 +1956,30 @@ export function getWebviewContent(
       mcp: '$(plug)', tool: '$(plug)',
     };
 
-    function getToolIcon(name) {
+    function getToolIcon(name, category) {
+      if (category === 'web-search') return '$(search)';
+      if (category === 'web-fetch' || category === 'computer-use') return '$(globe)';
+      if (category === 'shell' || category === 'code-execution') return '$(terminal)';
+      if (category === 'filesystem') return '$(file)';
+      if (category === 'skill') return '$(book)';
+      if (category === 'mcp' || category === 'connector') return '$(plug)';
       var key = name.toLowerCase().replace(/[- ]/g, '_');
       return TOOL_ICONS[key] || '$(symbol-misc)';
     }
 
     function getToolLabel(name) {
-      return name.replace(/_/g, ' ').replace(/\b[a-z]/g, function(c) { return c.toUpperCase(); });
+      return name.replace(/_/g, ' ').replace(/\\b[a-z]/g, function(c) { return c.toUpperCase(); });
+    }
+
+    function formatToolPayload(value) {
+      if (typeof value === 'string') return value;
+      try { return JSON.stringify(value, null, 2); }
+      catch (_) { return String(value); }
+    }
+
+    function formatElapsedMs(value) {
+      if (value < 1000) return value + ' ms';
+      return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
     function ensureToolCallStack() {
@@ -1950,9 +1992,9 @@ export function getWebviewContent(
       return stackEl;
     }
 
-    function createToolCallEl(toolUseId, name) {
+    function createToolCallEl(toolUseId, name, category, summary, input) {
       var stack = ensureToolCallStack();
-      var icon = getToolIcon(name);
+      var icon = getToolIcon(name, category);
       var label = getToolLabel(name);
 
       var wrapper = document.createElement('div');
@@ -1975,6 +2017,7 @@ export function getWebviewContent(
 
       var summaryEl = document.createElement('span');
       summaryEl.className = 'tool-call__summary';
+      summaryEl.textContent = summary || '';
 
       var chevron = document.createElement('span');
       chevron.className = 'tool-call__chevron';
@@ -1988,6 +2031,31 @@ export function getWebviewContent(
       var bodyEl = document.createElement('div');
       bodyEl.className = 'tool-call__body';
 
+      var requestSection = document.createElement('div');
+      requestSection.className = 'tool-call__section';
+      var requestLabel = document.createElement('div');
+      requestLabel.className = 'tool-call__section-label';
+      requestLabel.textContent = 'Request';
+      var requestEl = document.createElement('pre');
+      requestEl.className = 'tool-call__payload';
+      requestEl.textContent = formatToolPayload(input);
+      requestSection.appendChild(requestLabel);
+      requestSection.appendChild(requestEl);
+
+      var responseSection = document.createElement('div');
+      responseSection.className = 'tool-call__section';
+      responseSection.style.display = 'none';
+      var responseLabel = document.createElement('div');
+      responseLabel.className = 'tool-call__section-label';
+      responseLabel.textContent = 'Response';
+      var responseEl = document.createElement('pre');
+      responseEl.className = 'tool-call__payload';
+      responseSection.appendChild(responseLabel);
+      responseSection.appendChild(responseEl);
+
+      bodyEl.appendChild(requestSection);
+      bodyEl.appendChild(responseSection);
+
       wrapper.appendChild(bar);
       wrapper.appendChild(bodyEl);
 
@@ -2000,7 +2068,15 @@ export function getWebviewContent(
       stack.appendChild(wrapper);
       messagesEl.scrollTop = messagesEl.scrollHeight;
 
-      toolCallMap[toolUseId] = { el: wrapper, bodyEl: bodyEl, summaryEl: summaryEl, inputBuf: '' };
+      toolCallMap[toolUseId] = {
+        el: wrapper,
+        bodyEl: bodyEl,
+        summaryEl: summaryEl,
+        requestEl: requestEl,
+        responseEl: responseEl,
+        responseSection: responseSection,
+        inputBuf: ''
+      };
       return toolCallMap[toolUseId];
     }
 

@@ -6,7 +6,7 @@ import type {
   AgentEventStopReason,
   AgentEventToolCategory,
   AgentTaskState,
-} from '@agiworkforce/types/protocol';
+} from '@agiworkforce/types';
 
 export type AgentActivityRunStatus =
   | 'running'
@@ -187,7 +187,10 @@ export function applyAgentActivityEvent(
   current: AgentActivityState | undefined,
   envelope: AgentEventEnvelope,
 ): AgentActivityState {
-  const sameTurn = current?.sessionId === envelope.sessionId && current.turnId === envelope.turnId;
+  const sameTurn =
+    current !== undefined &&
+    current.sessionId === envelope.sessionId &&
+    current.turnId === envelope.turnId;
   const previous = sameTurn && current ? current : createState(envelope);
 
   if (sameTurn && envelope.sequence <= previous.lastSequence) return previous;
@@ -464,7 +467,7 @@ export function applyAgentActivityEvent(
         next.completedAtMs = envelope.emittedAtMs;
       } else {
         next.status = 'running';
-        next.completedAtMs = undefined;
+        delete next.completedAtMs;
       }
       return next;
 

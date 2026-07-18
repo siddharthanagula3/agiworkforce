@@ -45,6 +45,7 @@ pub enum TuiAppEvent {
         call_id: String,
         name: String,
         summary: String,
+        input: serde_json::Value,
     },
     ToolUpdated {
         call_id: String,
@@ -53,8 +54,10 @@ pub enum TuiAppEvent {
     },
     ToolCompleted {
         call_id: String,
+        name: String,
         status: ToolStatus,
         output: String,
+        duration_ms: u64,
     },
     ApprovalRequested(ApprovalRequest),
     ApprovalResolved {

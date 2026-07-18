@@ -97,7 +97,11 @@ describe('chat participant approval lifecycle', () => {
     const response = handler(
       request(undefined, 'Search the web for the latest Rust release and cite sources'),
       { history: [] } as vscode.ChatContext,
-      { progress: vi.fn(), markdown: vi.fn(), button: vi.fn() } as unknown as vscode.ChatResponseStream,
+      {
+        progress: vi.fn(),
+        markdown: vi.fn(),
+        button: vi.fn(),
+      } as unknown as vscode.ChatResponseStream,
       {
         isCancellationRequested: false,
         onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
@@ -321,6 +325,67 @@ describe('chat participant approval lifecycle', () => {
     expect(runtime.respondToApproval).not.toHaveBeenCalled();
   });
 
+  it('shows canonical tool execution summaries in native VS Code chat', async () => {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue({ id: 'thread-1' }),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const stream = {
+      progress: vi.fn(),
+      markdown: vi.fn(),
+      button: vi.fn(),
+    } as unknown as vscode.ChatResponseStream;
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+    } as unknown as vscode.CancellationToken;
+
+    const response = handler(
+      request(undefined, 'Search official sources'),
+      { history: [] } as vscode.ChatContext,
+      stream,
+      token,
+    );
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    for (const listener of listeners) {
+      listener({
+        type: 'tool_execution_start',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence: 0,
+        emittedAtMs: 1_784_335_200_000,
+        toolCallId: 'tool-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Searching official sources',
+        input: { query: 'AGI Workforce' },
+      });
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+    }
+    await response;
+
+    expect(vi.mocked(stream.progress)).toHaveBeenCalledWith('Searching official sources');
+  });
+
   it('resumes the persisted runtime thread carried by VS Code chat history', async () => {
     const listeners = new Set<(event: LocalRuntimeEvent) => void>();
     const runtime = {
@@ -347,9 +412,7 @@ describe('chat participant approval lifecycle', () => {
       isCancellationRequested: false,
       onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
     } as unknown as vscode.CancellationToken;
-    const history = [
-      new vscode.ChatResponseTurn([], { metadata: { localThreadId: 'thread-42' } }),
-    ];
+    const history = [new vscode.ChatResponseTurn([], { metadata: { localThreadId: 'thread-42' } })];
 
     const response = handler(
       request(undefined, 'Continue'),

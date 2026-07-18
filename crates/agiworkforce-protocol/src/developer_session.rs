@@ -12,12 +12,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
+use crate::agent_events::{AgentEvent, AgentEventEnvelope, AGENT_EVENT_SCHEMA_VERSION};
 use crate::protocol::ReviewDecision;
 use crate::task_state::{AgentTaskState, AgentTaskStateChanged};
 use crate::user_input::UserInput;
 
 /// Current wire version for the shared CLI/VS Code developer-session protocol.
-pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 4;
+pub const DEVELOPER_SESSION_PROTOCOL_VERSION: u32 = 5;
 
 pub mod method {
     pub const INITIALIZE: &str = "initialize";
@@ -31,9 +32,36 @@ pub mod method {
     pub const TURN_START: &str = "turn/start";
     pub const TURN_STEER: &str = "turn/steer";
     pub const TURN_INTERRUPT: &str = "turn/interrupt";
+    pub const TURN_AGENT_EVENT: &str = "turn/agent_event";
     pub const APPROVAL_RESPOND: &str = "approval/respond";
     pub const TASK_STATE_CHANGED: &str = "task/state_changed";
     pub const SHUTDOWN: &str = "shutdown";
+}
+
+/// Build a canonical, ordered agent-activity notification for developer-session
+/// clients. `session_id` is the developer thread id; `turn_id` scopes the
+/// monotonically increasing `sequence` counter supplied by the turn host.
+pub fn agent_event_notification(
+    session_id: impl Into<String>,
+    turn_id: impl Into<String>,
+    sequence: u64,
+    event: AgentEvent,
+) -> Result<AppServerNotification, serde_json::Error> {
+    let emitted_at_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| i64::try_from(duration.as_millis()).unwrap_or(i64::MAX))
+        .unwrap_or_default();
+    AppServerNotification::new(
+        method::TURN_AGENT_EVENT,
+        AgentEventEnvelope {
+            schema_version: AGENT_EVENT_SCHEMA_VERSION,
+            session_id: session_id.into(),
+            turn_id: turn_id.into(),
+            sequence,
+            emitted_at_ms,
+            event,
+        },
+    )
 }
 
 /// Build the canonical task-state notification shared by stdio and WebSocket
@@ -452,4 +480,45 @@ pub struct ApprovalResponseParams {
 #[ts(rename_all = "camelCase")]
 pub struct AcknowledgedResponse {
     pub acknowledged: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent_events::{
+        AgentEvent, AgentEventToolCategory, AgentEventToolExecutionStart,
+        AGENT_EVENT_SCHEMA_VERSION,
+    };
+
+    #[test]
+    fn developer_session_v5_wraps_canonical_agent_events() {
+        assert_eq!(DEVELOPER_SESSION_PROTOCOL_VERSION, 5);
+
+        let notification = agent_event_notification(
+            "thread-1",
+            "turn-1",
+            7,
+            AgentEvent::ToolExecutionStart(AgentEventToolExecutionStart {
+                tool_call_id: "tool-1".to_string(),
+                name: "web_search".to_string(),
+                category: AgentEventToolCategory::WebSearch,
+                summary: "Searching official sources".to_string(),
+                input: serde_json::json!({ "query": "AGI Workforce" }),
+            }),
+        )
+        .expect("canonical agent event notification");
+
+        assert_eq!(notification.method, method::TURN_AGENT_EVENT);
+        assert_eq!(
+            notification.params["schemaVersion"],
+            AGENT_EVENT_SCHEMA_VERSION
+        );
+        assert_eq!(notification.params["sessionId"], "thread-1");
+        assert_eq!(notification.params["turnId"], "turn-1");
+        assert_eq!(notification.params["sequence"], 7);
+        assert_eq!(notification.params["event"]["type"], "tool-execution-start");
+        assert!(notification.params["emittedAtMs"]
+            .as_i64()
+            .is_some_and(|value| value > 0));
+    }
 }

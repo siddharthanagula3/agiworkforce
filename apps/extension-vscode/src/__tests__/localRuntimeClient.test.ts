@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
 
 function fakeRuntime(
-  protocolVersion = 3,
+  protocolVersion = 5,
   options: {
     approvals?: boolean;
     ignoreMethods?: readonly string[];
@@ -120,7 +120,7 @@ describe('LocalRuntimeClient', () => {
   afterEach(() => vi.useRealTimers());
 
   it('rejects servers that can silently ignore security-sensitive turn controls', async () => {
-    const runtime = fakeRuntime(2);
+    const runtime = fakeRuntime(4);
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -128,12 +128,12 @@ describe('LocalRuntimeClient', () => {
       spawn: runtime.spawn,
     });
 
-    await expect(client.initialize()).rejects.toThrow('version 3 or newer is required');
+    await expect(client.initialize()).rejects.toThrow('version 5 or newer is required');
     client.dispose();
   });
 
   it('rejects a runtime that cannot carry approval decisions', async () => {
-    const runtime = fakeRuntime(3, { approvals: false });
+    const runtime = fakeRuntime(5, { approvals: false });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',
@@ -219,6 +219,84 @@ describe('LocalRuntimeClient', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(deltas).toEqual(['ok']);
+    client.dispose();
+  });
+
+  it('exposes canonical tool execution events and ignores malformed envelopes', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const events: Array<{ type: string; toolCallId?: string }> = [];
+    client.onEvent((event) => {
+      if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
+        events.push({ type: event.type, toolCallId: event.toolCallId });
+      }
+    });
+    await client.initialize();
+
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/agent_event',
+        params: {
+          schemaVersion: 3,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          sequence: 0,
+          emittedAtMs: 1_784_335_200_000,
+          event: {
+            type: 'tool-execution-start',
+            toolCallId: 'tool-1',
+            name: 'web_search',
+            category: 'web-search',
+            summary: 'Searching official sources',
+            input: { query: 'AGI Workforce' },
+          },
+        },
+      })}\n`,
+    );
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/agent_event',
+        params: {
+          schemaVersion: 3,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          sequence: 1,
+          emittedAtMs: 1_784_335_200_100,
+          event: {
+            type: 'tool-execution-end',
+            toolCallId: 'tool-1',
+            name: 'web_search',
+            output: { results: 4 },
+            isError: false,
+            elapsedMs: 100,
+          },
+        },
+      })}\n`,
+    );
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/agent_event',
+        params: {
+          schemaVersion: 3,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          sequence: 2,
+          emittedAtMs: 1_784_335_200_200,
+          event: { type: 'tool-execution-start', toolCallId: 42 },
+        },
+      })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(events).toEqual([
+      { type: 'tool_execution_start', toolCallId: 'tool-1' },
+      { type: 'tool_execution_end', toolCallId: 'tool-1' },
+    ]);
     client.dispose();
   });
 
@@ -405,7 +483,7 @@ describe('LocalRuntimeClient', () => {
   });
 
   it('force-terminates a runtime that does not acknowledge shutdown', async () => {
-    const runtime = fakeRuntime(3, { ignoreMethods: ['shutdown'] });
+    const runtime = fakeRuntime(5, { ignoreMethods: ['shutdown'] });
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
       cwd: '/workspace',

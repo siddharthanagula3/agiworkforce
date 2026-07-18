@@ -152,6 +152,13 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
         uri: '/files/artifact-1',
       },
       { type: 'context-compacted', summary: 'Context automatically compacted' },
+      {
+        type: 'task-state-changed',
+        taskId: 'turn-1',
+        state: 'ready_for_review',
+        previousState: 'running',
+        summary: 'Ready for review',
+      },
     ];
 
     for (const event of activityEvents) {
