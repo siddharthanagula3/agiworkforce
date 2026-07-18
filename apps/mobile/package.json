@@ -45,6 +45,7 @@
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/search": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/trust-boundaries": "workspace:*",

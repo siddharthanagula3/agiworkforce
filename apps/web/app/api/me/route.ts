@@ -20,6 +20,7 @@ import {
 } from '@agiworkforce/types';
 import type { MeResponse } from '@agiworkforce/cloud-contracts';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
+import { webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
   buildMeCapabilityHandshake,
   toWireCapabilityHandshake,
@@ -102,6 +103,9 @@ async function handleGetMe(request: NextRequest) {
       // The composer gates the "Run code" toggle on this so it is never a
       // cosmetic dead control when the server would ignore code_execution.
       code_execution: e2bCutoverEnabled(),
+      // Safe deployment capability only; never exposes the Perplexity key.
+      // Native provider search remains available independently.
+      generic_web_search: webSearchBackendConfigured(),
     };
 
     // Optional `?surface=` lets a non-web caller (desktop, mobile — both

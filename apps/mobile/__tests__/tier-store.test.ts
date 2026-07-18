@@ -101,7 +101,11 @@ function mePayload(tier: string) {
     created_at: null,
     updated_at: 1751712000,
     plan: { tier, display_name: tier, status: 'active', current_period_end: null },
-    feature_flags: { beta_features: true, advanced_model_access: true },
+    feature_flags: {
+      beta_features: true,
+      advanced_model_access: true,
+      generic_web_search: true,
+    },
     credits: null,
     routing_preferences: {},
   };
@@ -113,6 +117,7 @@ function resetStore() {
     isRefreshing: false,
     lastRefreshedAt: null,
     currentConversationProvider: null,
+    genericWebSearchAvailable: false,
   });
 }
 
@@ -201,6 +206,14 @@ describeRefreshTier('refreshTier — success cases', () => {
     await getState().refreshTier();
 
     expect(mockApiGet).toHaveBeenCalledWith('/api/me');
+  });
+
+  it('hydrates the generic web-search deployment capability', async () => {
+    mockApiGet.mockResolvedValueOnce(mePayload('max'));
+
+    await getState().refreshTier();
+
+    expect(getState().genericWebSearchAvailable).toBe(true);
   });
 });
 

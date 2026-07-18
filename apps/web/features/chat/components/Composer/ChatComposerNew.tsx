@@ -41,7 +41,7 @@ import { getModelMetadata } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useRouter } from 'next/navigation';
 import { EFFORT_LABEL, getModels, type CloudWorkMode } from '@agiworkforce/types';
-import { providerSupportsWebSearch } from '@/lib/web-search-support';
+import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 
@@ -355,15 +355,20 @@ const ChatComposerNewComponent = ({
   const selectedModelMeta = getModelMetadata(composerSelectedModelId);
   const selectedModelCaps = selectedModelMeta?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
-  // A model's catalog `search`/`research` flag is necessary but NOT sufficient: some
-  // providers set search:true for models AGI does not yet wire a web-search path for
-  // (xai/qwen/moonshot). Gate the toggles on BOTH the catalog capability AND the
-  // provider actually executing search, so the toggle is never cosmetic (turning it
-  // on then getting "I can't browse the internet"). anthropic/google/openai inject a
-  // native tool; perplexity searches natively; managed_cloud (Auto) resolves
-  // server-side to a search-capable model — see providerSupportsWebSearch.
+  // Plain search can use either a provider-native path or AGI's generic
+  // function-tool fallback. `/api/me` exposes only whether that fallback is
+  // configured; the shared helper combines it with the selected model's real
+  // native-search/tool capabilities so Web/Desktop/Mobile cannot drift.
   const providerCanWebSearch = providerSupportsWebSearch(selectedModelMeta?.provider);
-  const modelSupportsSearch = (selectedModelCaps?.search ?? false) && providerCanWebSearch;
+  const genericWebSearchConfigured = useBillingStore(
+    (s) => s.featureFlags?.generic_web_search ?? false,
+  );
+  const modelSupportsSearch = isWebSearchAvailable({
+    provider: selectedModelMeta?.provider,
+    modelSupportsNativeSearch: selectedModelCaps?.search,
+    modelSupportsTools: selectedModelCaps?.tools,
+    genericBackendConfigured: genericWebSearchConfigured,
+  });
   // Deep Research is its own capability field in models.json, distinct from
   // plain web search. Current Claude Haiku 4.5, for example, has
   // search:true/research:false, so the two controls cannot share one flag.
@@ -1476,7 +1481,7 @@ const ChatComposerNewComponent = ({
                         disabled={isLoading || disabled || !modelSupportsSearch}
                         title={
                           !modelSupportsSearch
-                            ? "Web search isn't available for this model. Switch to Claude, Gemini, or an Auto mode."
+                            ? "Web search isn't available for this model or Cloud deployment."
                             : undefined
                         }
                       />

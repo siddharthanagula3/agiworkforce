@@ -31,6 +31,10 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock('@/lib/web-search/web-search-tool', () => ({
+  webSearchBackendConfigured: vi.fn(() => true),
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -106,6 +110,7 @@ describe('GET /api/me — shared cloud contract', () => {
       expect(parsed.data.plan.tier).toBe('pro');
       expect(parsed.data.plan.current_period_end).toBeTypeOf('number');
       expect(parsed.data.feature_flags.advanced_model_access).toBe(true);
+      expect(parsed.data.feature_flags.generic_web_search).toBe(true);
       // First real consumer of the capability-handshake contract: the live
       // route must actually include it, not just the isolated service.
       expect(parsed.data.capability_handshake?.granted).toContain('canUseWebSearch');

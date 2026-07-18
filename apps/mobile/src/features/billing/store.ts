@@ -40,6 +40,12 @@ interface TierState {
    */
   codeExecutionAvailable: boolean;
   /**
+   * Whether AGI's generic Cloud web-search function tool has a configured
+   * backend. Native provider search does not depend on this flag. Defaults
+   * false until `/api/me` has been validated.
+   */
+  genericWebSearchAvailable: boolean;
+  /**
    * Provider id of the first model used in the current conversation (e.g.
    * 'anthropic', 'openai').  Set to null when no conversation is active or
    * when a new conversation begins.  Used by the provider-switch guard to
@@ -70,6 +76,7 @@ export const useTierStore = create<TierState>()(
       isRefreshing: false,
       lastRefreshedAt: null,
       codeExecutionAvailable: false,
+      genericWebSearchAvailable: false,
       currentConversationProvider: null,
 
       refreshTier: async () => {
@@ -96,6 +103,7 @@ export const useTierStore = create<TierState>()(
             tier,
             lastRefreshedAt: new Date().toISOString(),
             codeExecutionAvailable: data.feature_flags.code_execution ?? false,
+            genericWebSearchAvailable: data.feature_flags.generic_web_search ?? false,
           });
         } catch (err) {
           // Network failure or auth error — keep the cached tier, don't clear it.
