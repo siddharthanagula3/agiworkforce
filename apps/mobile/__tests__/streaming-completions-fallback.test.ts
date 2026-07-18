@@ -39,7 +39,7 @@ async function loadStreamingService() {
   jest.doMock('@/lib/constants', () => ({
     API_URL: 'https://api.agi.test',
     WS_URL: 'wss://api.agi.test',
-    TIMEOUTS: { STREAMING: 60_000 },
+    TIMEOUTS: { STREAMING: 60_000, STREAM_STALL: 30_000 },
   }));
   jest.doMock('@/lib/egressGuard', () => ({
     guardedFetch: guardedFetchMock,
@@ -315,5 +315,131 @@ describe('completions stream fallback (RN null response.body)', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('follows the durable run journal instead of re-posting after a mid-stream disconnect', async () => {
+    const { streamChat } = await loadStreamingService();
+    const runId = '0190a000-0000-7000-8000-000000000099';
+    const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
+    const encoder = new TextEncoder();
+    const lifecycleEnvelope = {
+      schemaVersion: 3,
+      sessionId: 'session-mobile-durable',
+      turnId: 'turn-mobile-durable',
+      sequence: 0,
+      emittedAtMs: 1_000,
+      event: { type: 'lifecycle', phase: 'started' },
+    } as const;
+    const recoveredTextEnvelope = {
+      schemaVersion: 3,
+      sessionId: 'session-mobile-durable',
+      turnId: 'turn-mobile-durable',
+      sequence: 1,
+      emittedAtMs: 2_000,
+      event: { type: 'text-delta', delta: ' recovered' },
+    } as const;
+    const stopEnvelope = {
+      schemaVersion: 3,
+      sessionId: 'session-mobile-durable',
+      turnId: 'turn-mobile-durable',
+      sequence: 2,
+      emittedAtMs: 3_000,
+      event: { type: 'stop', reason: 'end-turn' },
+    } as const;
+    const reader = {
+      read: jest
+        .fn()
+        .mockResolvedValueOnce({
+          done: false,
+          value: encoder.encode(
+            `data: ${JSON.stringify({ choices: [{ delta: { x_agent_event: lifecycleEnvelope } }] })}\n\n`,
+          ),
+        })
+        .mockRejectedValueOnce(new TypeError('Network request failed')),
+      releaseLock: jest.fn(),
+    };
+    const now = '2026-07-17T20:00:00.000Z';
+
+    guardedFetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({
+          'X-AGI-Agent-Run-Id': runId,
+          'X-AGI-Agent-Run-URL': runPath,
+        }),
+        body: { getReader: () => reader },
+      } as unknown as Response)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            run: {
+              id: runId,
+              userId: 'user-mobile-1',
+              requestId: 'request-mobile-1',
+              conversationId: 'conversation-mobile-1',
+              originSurface: 'mobile',
+              workMode: 'chat',
+              state: 'completed',
+              provider: 'openai',
+              model: 'gpt-5.4-mini',
+              lastEventSequence: 2,
+              cancellationRequestedAt: null,
+              completedAt: now,
+              createdAt: now,
+              updatedAt: now,
+            },
+            events: [recoveredTextEnvelope, stopEnvelope],
+            nextAfterSequence: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const onDelta = jest.fn();
+    const callbacks = {
+      onDelta,
+      onDone: jest.fn(),
+      onError: jest.fn(),
+      onRunReference: jest.fn(),
+    };
+    await streamChat(
+      {
+        model: 'gpt-5.4-mini',
+        messages: [{ role: 'user', content: 'resume this run' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000008',
+      },
+      callbacks,
+    );
+
+    const postCalls = guardedFetchMock.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(postCalls).toHaveLength(1);
+    expect(guardedFetchMock).toHaveBeenNthCalledWith(
+      2,
+      `https://api.agi.test${runPath}?after=0&limit=100`,
+      expect.objectContaining({ signal: expect.anything() }),
+    );
+    expect(onDelta).toHaveBeenCalledWith({
+      content: ' recovered',
+      durableReplay: true,
+      x_agent_event: recoveredTextEnvelope,
+    });
+    expect(onDelta).toHaveBeenCalledWith({
+      durableReplay: true,
+      finish_reason: 'stop',
+      x_agent_event: stopEnvelope,
+    });
+    expect(callbacks.onRunReference).toHaveBeenLastCalledWith({
+      runId,
+      runPath,
+      lastSequence: 2,
+      state: 'completed',
+      cancellationRequestedAt: null,
+    });
+    expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).not.toHaveBeenCalled();
   });
 });

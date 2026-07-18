@@ -12,6 +12,7 @@ import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import {
+  cancelMobileCloudAgentRun,
   streamChat,
   streamToolApprovalResume,
   type StreamDelta,
@@ -19,8 +20,10 @@ import {
 } from '@/services/streaming';
 import {
   parseGeneratedFilesDelta,
+  reconcileManagedCloudPublicText,
   resolveGeneratedFileUri,
   type GeneratedFileWire,
+  type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import {
   createToolCallAccumulator,
@@ -148,6 +151,8 @@ interface ExecutionState {
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const streamingConversations = new Set<string>();
+/** Server-owned Cloud run currently projected into each streaming conversation. */
+const activeCloudRuns = new Map<string, ManagedCloudAgentRunReference>();
 
 /** One tool call the server suspended for user approval (`x_tool_approval_request`). */
 interface PendingApprovalCall {
@@ -193,6 +198,7 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
 /** TEST-ONLY: clear the module-level pending-approval registry between tests. */
 export function __resetPendingApprovalTurnsForTests(): void {
   pendingApprovalTurns.clear();
+  activeCloudRuns.clear();
 }
 
 /** Reactive streaming flags derived from the module-level set — spread into
@@ -205,19 +211,17 @@ function streamingFlags(): { isStreaming: boolean; streamingConversationIds: str
   };
 }
 
-// Foreground stall recovery: iOS suspends the app shortly after backgrounding
-// and can tear down the stream socket without ever rejecting the pending
-// read(). The rolling stall watchdog in services/streaming.ts fires eventually
-// once JS resumes; this listener makes recovery immediate on foreground —
-// any "streaming" conversation whose last delta predates the stall window is
-// aborted, which routes through sendMessage's finally cleanup and returns the
-// composer to its resting state instead of spinning forever.
+// Foreground stall recovery: local streams have no server journal, so abort a
+// stale local reader when iOS resumes. Managed Cloud runs deliberately stay
+// alive here: services/streaming.ts's resumed stall timer switches those runs
+// to durable journal follow. Aborting their caller signal would incorrectly
+// look like an explicit user Stop and strand real server work.
 AppState.addEventListener('change', (nextState) => {
   if (nextState !== 'active') return;
   const now = Date.now();
   for (const cid of Array.from(streamingConversations)) {
     const last = lastDeltaTimes.get(cid) ?? 0;
-    if (now - last > TIMEOUTS.STREAM_STALL) {
+    if (now - last > TIMEOUTS.STREAM_STALL && !activeCloudRuns.has(cid)) {
       abortControllers.get(cid)?.abort();
     }
   }
@@ -1387,6 +1391,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       let turnFinishReason: string | undefined;
       let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
       let agentActivity: AgentActivityState | undefined;
+      let cloudAgentRun: ManagedCloudAgentRunReference | undefined;
+      // Ordinary SSE answer text can arrive immediately before its canonical
+      // text event. Retain it until the journal acknowledges the same public
+      // text so reconnect replay never duplicates an already-visible prefix.
+      let unacknowledgedPublicText = '';
 
       // Honor the user's per-model Thinking toggle — the same state that drives
       // the Brain badge on ModelSelectorButton. Hardcoding `thinking: true`
@@ -1421,6 +1430,31 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
         },
         {
+          onRunReference: (reference) => {
+            cloudAgentRun = {
+              ...reference,
+              lastSequence: Math.max(
+                cloudAgentRun?.lastSequence ?? -1,
+                reference.lastSequence,
+                agentActivity?.lastSequence ?? -1,
+              ),
+            };
+            activeCloudRuns.set(conversationId, { ...cloudAgentRun });
+            const currentMsgStore = getConversationMessageStore(conversationId);
+            currentMsgStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: (s.messages[conversationId] ?? []).map((message) =>
+                  message.id === assistantMessageId
+                    ? {
+                        ...message,
+                        metadata: { ...message.metadata, cloudAgentRun: { ...cloudAgentRun } },
+                      }
+                    : message,
+                ),
+              },
+            }));
+          },
           onDelta: (delta: StreamDelta) => {
             // Regression: a chunk already in flight when the user taps Stop would
             // still land here and unconditionally set isStreaming:true below,
@@ -1434,14 +1468,43 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const state = get();
             lastDeltaTimes.set(conversationId, Date.now());
 
+            const previousParsedTags = parseLocalThinking(cloudContentRaw);
+            let contentChunk = delta.content;
+            const canonicalText =
+              delta.x_agent_event?.event.type === 'text-delta'
+                ? delta.x_agent_event.event.delta
+                : undefined;
+
+            if (delta.durableReplay && canonicalText !== undefined) {
+              const reconciled = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              );
+              unacknowledgedPublicText = reconciled.pending;
+              contentChunk = reconciled.unmatchedIncoming;
+            }
+
             if (delta.x_agent_event) {
               agentActivity = applyAgentActivityEvent(agentActivity, delta.x_agent_event);
             }
 
             const prevContentLength = cloudContentRaw.length;
-            if (delta.content) cloudContentRaw += delta.content;
+            if (contentChunk) cloudContentRaw += contentChunk;
             const parsedTags = parseLocalThinking(cloudContentRaw);
             const newContent = parsedTags.content;
+
+            if (!delta.durableReplay && contentChunk) {
+              const publicDelta = newContent.startsWith(previousParsedTags.content)
+                ? newContent.slice(previousParsedTags.content.length)
+                : '';
+              if (publicDelta) unacknowledgedPublicText += publicDelta;
+            }
+            if (!delta.durableReplay && canonicalText !== undefined) {
+              unacknowledgedPublicText = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              ).pending;
+            }
 
             if (delta.reasoning) {
               if (!thinkingStartTimes.has(conversationId) && !state.streamingReasoning) {
@@ -1457,7 +1520,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             // this the duration ran to end-of-stream, over-counting a 3s think
             // + 30s answer as "Thought for 33s".
             if (
-              delta.content &&
+              contentChunk &&
               !delta.reasoning &&
               thinkingStartTimes.has(conversationId) &&
               !thinkingEndTimes.has(conversationId) &&
@@ -1545,12 +1608,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(toolCalls.length > 0 ? { toolCalls } : {}),
                     // Live thinking-timer anchor: ThinkingChip ticks elapsed
                     // seconds from this while reasoning streams.
-                    ...(thinkingStartedAt !== undefined || agentActivity
+                    ...(thinkingStartedAt !== undefined || agentActivity || cloudAgentRun
                       ? {
                           metadata: {
                             ...m.metadata,
                             ...(thinkingStartedAt !== undefined ? { thinkingStartedAt } : {}),
                             ...(agentActivity ? { agentActivity } : {}),
+                            ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
                           },
                         }
                       : {}),
@@ -1626,6 +1690,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       // notice + retry affordance instead.
                       ...(turnStreamError !== undefined ? { streamError: turnStreamError } : {}),
                       ...(agentActivity ? { agentActivity } : {}),
+                      ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
                     },
                   }
                 : m,
@@ -1635,6 +1700,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
+            activeCloudRuns.delete(conversationId);
 
             currentMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
@@ -1689,6 +1755,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             thinkingStartTimes.delete(conversationId);
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
+            activeCloudRuns.delete(conversationId);
 
             const currentMsgStore = getConversationMessageStore(conversationId);
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
@@ -1708,7 +1775,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       ...m,
                       content: currentContent || '',
                       isStreaming: false,
-                      ...(agentActivity ? { metadata: { ...m.metadata, agentActivity } } : {}),
+                      ...(agentActivity || cloudAgentRun
+                        ? {
+                            metadata: {
+                              ...m.metadata,
+                              ...(agentActivity ? { agentActivity } : {}),
+                              ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+                            },
+                          }
+                        : {}),
                     }
                   : m,
               );
@@ -1751,7 +1826,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...m,
                     content: currentContent || 'Something went wrong. Please try again.',
                     isStreaming: false,
-                    ...(agentActivity ? { metadata: { ...m.metadata, agentActivity } } : {}),
+                    ...(agentActivity || cloudAgentRun
+                      ? {
+                          metadata: {
+                            ...m.metadata,
+                            ...(agentActivity ? { agentActivity } : {}),
+                            ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+                          },
+                        }
+                      : {}),
                   }
                 : m,
             );
@@ -1781,6 +1864,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       thinkingStartTimes.delete(conversationId);
       abortControllers.delete(conversationId);
       streamingConversations.delete(conversationId);
+      activeCloudRuns.delete(conversationId);
 
       if (controller.signal.aborted) {
         set({ ...streamingFlags() });
@@ -2385,6 +2469,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!targetId) {
       const cid = currentId;
       if (cid) {
+        const activeRun = activeCloudRuns.get(cid);
+        activeCloudRuns.delete(cid);
+        if (activeRun) {
+          void cancelMobileCloudAgentRun(activeRun.runId).catch(() => {
+            set({ error: 'Could not stop the Cloud task. Check its activity before retrying.' });
+          });
+        }
         // Mark as cancelled so a sendMessage coroutine that hasn't added to
         // streamingConversations yet (still awaiting pre-stream async ops) will
         // bail out when it reaches the isStreaming=true set point.
@@ -2436,11 +2527,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     thinkingEndTimes.delete(targetId);
     lastDeltaTimes.delete(targetId);
     const ctrl = abortControllers.get(targetId);
+    const activeRun = activeCloudRuns.get(targetId);
+    activeCloudRuns.delete(targetId);
     if (ctrl) {
       ctrl.abort();
       abortControllers.delete(targetId);
     }
     streamingConversations.delete(targetId);
+    if (activeRun) {
+      void cancelMobileCloudAgentRun(activeRun.runId).catch(() => {
+        set({ error: 'Could not stop the Cloud task. Check its activity before retrying.' });
+      });
+    }
 
     const ownerStore = getConversationMessageStore(targetId);
     const msgs = ownerStore.getState().messages[targetId] ?? [];
