@@ -308,6 +308,7 @@ describe('runToolLoop — manual approval resume', () => {
       'approval-resolved',
       'tool-execution-start',
       'tool-execution-end',
+      'text-delta',
       'task-state-changed',
       'stop',
     ]);
@@ -324,7 +325,11 @@ describe('runToolLoop — manual approval resume', () => {
       approvalId: 'call_1',
       decision: 'approved',
     });
-    expect(activity[5]?.event).toMatchObject({
+    expect(activity[5]?.event).toEqual({
+      type: 'text-delta',
+      delta: 'The PR renames a function.',
+    });
+    expect(activity[6]?.event).toMatchObject({
       type: 'task-state-changed',
       taskId: 'req-1',
       previousState: 'running',

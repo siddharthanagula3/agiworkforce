@@ -268,6 +268,9 @@ describe('runResearchLoop', () => {
     // Gathering notes never reach the client; the report does.
     expect(run.raw).not.toContain('secret gathering notes');
     expect(forwardedContent(run)).toBe('Final report [1][2]');
+    expect(canonicalAgentEvents(run).filter((event) => event['type'] === 'text-delta')).toEqual([
+      { type: 'text-delta', delta: 'Final report [1][2]' },
+    ]);
 
     // Cumulative sources: deduped, stable positions.
     const sources = lastSearchResults(run);

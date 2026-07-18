@@ -20,6 +20,17 @@ export interface ManagedCloudAgentRunHandle {
   runPath: string;
 }
 
+/**
+ * Serializable client checkpoint stored with an assistant turn. The stable
+ * handle identifies the server-owned run while `lastSequence` is the exact
+ * replay cursor already projected into that message.
+ */
+export interface ManagedCloudAgentRunReference extends ManagedCloudAgentRunHandle {
+  lastSequence: number;
+  state?: CloudAgentRun['state'];
+  cancellationRequestedAt?: string | null;
+}
+
 export interface ManagedCloudAgentRunClientConfig {
   baseUrl?: string;
   getAuthToken?: () => Promise<string | null>;

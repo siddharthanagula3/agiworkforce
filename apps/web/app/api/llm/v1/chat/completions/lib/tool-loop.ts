@@ -82,7 +82,11 @@ import {
 } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
 import type { ObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
-import { createAgentEventStreamEmitter, toAgentEventJson } from './agent-event-stream';
+import {
+  createAgentEventStreamEmitter,
+  createPublicTextDeltaProjector,
+  toAgentEventJson,
+} from './agent-event-stream';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -206,7 +210,7 @@ export function resolveToolLoopPolicy(
   processed: ProcessedRequest,
   options: Pick<ToolLoopOptions, 'maxSteps' | 'maxDurationMs'>,
 ): ToolLoopPolicy {
-  const isAgiWork = processed.chatRequest.work_mode === 'agiwork';
+  const isAgiWork = processed.chatRequest?.work_mode === 'agiwork';
   return {
     maxSteps: options.maxSteps ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_STEPS : DEFAULT_CHAT_MAX_STEPS),
     maxDurationMs:
@@ -572,14 +576,16 @@ export function searchResultsEvent(sources: FetchedSource[], responseModel: stri
  * Returns everything needed to decide what to do next.
  */
 async function collectProviderStream(stream: ReadableStream): Promise<{
-  lines: SseLine[];
+  lines: Array<{ line: SseLine; publicTextDelta?: string }>;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
   textContent: string;
+  publicTextTail: string;
 }> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
-  const lines: SseLine[] = [];
+  const lines: Array<{ line: SseLine; publicTextDelta?: string }> = [];
+  const publicTextProjector = createPublicTextDeltaProjector();
   let buffer = '';
   let finishReason: string | null = null;
   let textContent = '';
@@ -602,7 +608,7 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
       if (!line) continue;
 
       if (!line.startsWith('data: ')) {
-        lines.push(raw + '\n');
+        lines.push({ line: raw + '\n' });
         continue;
       }
 
@@ -612,17 +618,21 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
         continue;
       }
 
-      // Pass through raw line to client.
-      lines.push(raw + '\n');
-
       try {
         const event = JSON.parse(jsonStr);
+        let publicTextDelta: string | undefined;
 
         // Accumulate text content.
         const textDelta = event?.choices?.[0]?.delta?.content;
         if (typeof textDelta === 'string') {
           textContent += textDelta;
+          publicTextDelta = publicTextProjector.push(textDelta) || undefined;
         }
+
+        // Pass through the provider line first. Its matching canonical public
+        // text event follows immediately, so clients can render the legacy
+        // content wire while the durable journal records the same chunk.
+        lines.push({ line: raw + '\n', publicTextDelta });
 
         // Accumulate tool_call fragments.
         const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
@@ -659,13 +669,14 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
         }
       } catch {
         // Ignore parse errors for incomplete chunks.
+        lines.push({ line: raw + '\n' });
       }
     }
   }
 
   // Flush any remaining buffer.
   if (buffer.trim()) {
-    lines.push(buffer);
+    lines.push({ line: buffer });
   }
 
   // Build pending tool call list.
@@ -685,7 +696,13 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
     });
   }
 
-  return { lines, finishReason, pendingToolCalls, textContent };
+  return {
+    lines,
+    finishReason,
+    pendingToolCalls,
+    textContent,
+    publicTextTail: publicTextProjector.flush(),
+  };
 }
 
 // ─── MCP tool execution ───────────────────────────────────────────────────────
@@ -1495,12 +1512,20 @@ export async function* runToolLoop(
       }
 
       // Collect and pass through the provider stream.
-      const { lines, finishReason, pendingToolCalls, textContent } =
+      const { lines, finishReason, pendingToolCalls, textContent, publicTextTail } =
         await collectProviderStream(providerStream);
 
       // Forward all collected lines to the client.
-      for (const line of lines) {
-        yield encoder.encode(line);
+      for (const entry of lines) {
+        yield encoder.encode(entry.line);
+        if (entry.publicTextDelta) {
+          yield encoder.encode(
+            eventStream.emit({ type: 'text-delta', delta: entry.publicTextDelta }),
+          );
+        }
+      }
+      if (publicTextTail) {
+        yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: publicTextTail }));
       }
 
       if (await options.isCancellationRequested?.()) {
