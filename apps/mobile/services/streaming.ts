@@ -21,10 +21,14 @@ import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
+  createManagedCloudAgentRunClient,
   parseToolStatusDelta,
   parseToolResultDelta,
   parseToolApprovalRequestDelta,
   parseAgentEventDelta,
+  readManagedCloudAgentRunHandle,
+  type ManagedCloudAgentRunClient,
+  type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 
 /**
@@ -135,6 +139,8 @@ export interface StreamDelta {
    * metadata.streamError and drive the incomplete-response notice.
    */
   x_stream_error?: { message: string; code?: string; retryable?: boolean };
+  /** Internal marker: content/event came from the durable run journal. */
+  durableReplay?: true;
 }
 
 export interface StreamCallbacks {
@@ -149,6 +155,8 @@ export interface StreamCallbacks {
    * delta. Drives the stall watchdog so it only fires on true silence.
    */
   onActivity?: () => void;
+  /** Stable, serializable cursor for reconnecting to the server-owned run. */
+  onRunReference?: (reference: ManagedCloudAgentRunReference) => void;
 }
 
 /** Maximum number of reconnect attempts on a network interruption */
@@ -226,6 +234,28 @@ function processSseLine(line: string, callbacks: StreamCallbacks): boolean {
 /** Chat-completions endpoint paths this client posts to. */
 const COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
 const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
+
+/**
+ * Authenticated, trust-boundary-aware Mobile client for the durable managed
+ * run journal. `guardedFetch` keeps Local mode fail-closed, while Cloud mode
+ * uses the same Bearer token and surface label as the initial SSE request.
+ */
+export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
+  return createManagedCloudAgentRunClient({
+    baseUrl: API_URL,
+    getAuthToken,
+    decorateMutationHeaders: (headers) => ({
+      ...headers,
+      'Content-Type': 'application/json',
+      'X-AGI-Surface': 'mobile',
+    }),
+    fetchImpl: (input, init) => guardedFetch(input, init),
+  });
+}
+
+export async function cancelMobileCloudAgentRun(runId: string) {
+  return createMobileCloudAgentRunClient().cancelRun(runId);
+}
 
 async function attemptStream(
   body: {
@@ -334,6 +364,17 @@ async function attemptStream(
 
     callbacks.onError(new Error(`HTTP ${response.status}: ${text}`));
     return false;
+  }
+
+  // The response becomes a server-owned durable run as soon as these headers
+  // are available. Publish the handle before consuming the body so a socket
+  // drop after any tool side effect switches to journal replay instead of
+  // re-posting the completion request.
+  if (response.headers) {
+    const runHandle = readManagedCloudAgentRunHandle(response);
+    if (runHandle) {
+      callbacks.onRunReference?.({ ...runHandle, lastSequence: -1 });
+    }
   }
 
   const reader = response.body?.getReader();
@@ -494,16 +535,108 @@ export async function streamChat(
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
   };
+  let currentRunReference: ManagedCloudAgentRunReference | undefined;
   const timedCallbacks: StreamCallbacks = {
     ...callbacks,
     onActivity: rearmStallWatchdog,
+    onRunReference: (reference) => {
+      currentRunReference = { ...reference };
+      callbacks.onRunReference?.({ ...currentRunReference });
+    },
     onDelta: (delta) => {
       rearmStallWatchdog();
+      if (delta.x_agent_event && currentRunReference) {
+        currentRunReference = {
+          ...currentRunReference,
+          lastSequence: Math.max(currentRunReference.lastSequence, delta.x_agent_event.sequence),
+        };
+        callbacks.onRunReference?.({ ...currentRunReference });
+      }
       callbacks.onDelta(delta);
     },
   };
 
   let lastNetworkError: Error | null = null;
+
+  const publishRunReference = (patch: Partial<ManagedCloudAgentRunReference>): void => {
+    if (!currentRunReference) return;
+    currentRunReference = {
+      ...currentRunReference,
+      ...patch,
+      lastSequence: Math.max(currentRunReference.lastSequence, patch.lastSequence ?? -1),
+    };
+    callbacks.onRunReference?.({ ...currentRunReference });
+  };
+
+  const finishReasonFromStop = (
+    envelope: AgentEventEnvelope,
+  ): StreamDelta['finish_reason'] | undefined => {
+    if (envelope.event.type !== 'stop') return undefined;
+    if (envelope.event.reason === 'max-tokens') return 'length';
+    if (envelope.event.reason === 'cancelled') return 'stopped';
+    if (envelope.event.reason === 'error') return 'error';
+    return 'stop';
+  };
+
+  const followDurableRun = async (): Promise<void> => {
+    if (!currentRunReference) throw new Error('Managed Cloud run handle is unavailable');
+    const client = createMobileCloudAgentRunClient();
+    const followed = await client.followRun(currentRunReference.runId, {
+      afterSequence: currentRunReference.lastSequence,
+      signal: combinedSignal,
+      onEvent: (envelope) => {
+        rearmStallWatchdog();
+        const finishReason = finishReasonFromStop(envelope);
+        timedCallbacks.onDelta({
+          x_agent_event: envelope,
+          ...(envelope.event.type === 'text-delta' ? { content: envelope.event.delta } : {}),
+          ...(finishReason ? { finish_reason: finishReason } : {}),
+          durableReplay: true,
+        });
+      },
+      onSnapshot: (snapshot) => {
+        rearmStallWatchdog();
+        publishRunReference({
+          lastSequence: snapshot.nextAfterSequence,
+          state: snapshot.run.state,
+          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+        });
+      },
+    });
+    publishRunReference({
+      lastSequence: followed.lastSequence,
+      state: followed.run.state,
+      cancellationRequestedAt: followed.run.cancellationRequestedAt,
+    });
+    callbacks.onDone();
+  };
+
+  const resetTimeoutForDurableFollow = (): void => {
+    clearTimeout(timeoutId);
+    timeoutController = new AbortController();
+    timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
+    combinedSignal = signal
+      ? combineAbortSignals([signal, timeoutController.signal])
+      : timeoutController.signal;
+  };
+
+  const recoverFromDurableRun = async (reconnectAttempt: number): Promise<boolean> => {
+    if (!currentRunReference) return false;
+    callbacks.onReconnecting?.(reconnectAttempt);
+    resetTimeoutForDurableFollow();
+    try {
+      await followDurableRun();
+      clearTimeout(timeoutId);
+      return true;
+    } catch (followError) {
+      clearTimeout(timeoutId);
+      if (signal?.aborted) return true;
+      callbacks.onError(
+        followError instanceof Error ? followError : new Error(String(followError)),
+      );
+      return true;
+    }
+  };
 
   for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
     // Bail out immediately if the caller or timeout aborted. A timeout abort
@@ -583,6 +716,7 @@ export async function streamChat(
         return;
       }
       if (timeoutController.signal.aborted) {
+        if (await recoverFromDurableRun(attempt + 1)) return;
         clearTimeout(timeoutId);
         callbacks.onError(
           new Error('The request timed out. Please check your connection and try again.'),
@@ -592,6 +726,7 @@ export async function streamChat(
 
       if (isNetworkError(err)) {
         lastNetworkError = err instanceof Error ? err : new Error(String(err));
+        if (await recoverFromDurableRun(attempt + 1)) return;
         // Continue to next attempt
         continue;
       }
