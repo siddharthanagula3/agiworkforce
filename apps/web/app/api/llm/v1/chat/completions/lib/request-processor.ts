@@ -66,6 +66,12 @@ import {
   loadProjectContext,
 } from '@/lib/services/project-context-service';
 import {
+  applyManagedMemoryContext,
+  formatManagedMemorySystemPrompt,
+  loadManagedMemoryContext,
+  type ManagedMemoryContextDb,
+} from '@/lib/services/managed-memory-context-service';
+import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
   type Skill,
@@ -442,6 +448,24 @@ export function collectManagedPromptMaterials(request: ChatCompletionRequest): s
   return materials;
 }
 
+/**
+ * Apply server-owned account memories when the conversation policy allows it.
+ * Exported so the Temporary Chat boundary and prompt-accounting behavior stay
+ * covered without importing route or database globals into the test.
+ */
+export async function enrichManagedMemoryContext(params: {
+  db: ManagedMemoryContextDb;
+  userId: string;
+  chatRequest: ChatCompletionRequest;
+  isTemporary: boolean;
+}): Promise<void> {
+  if (params.isTemporary) return;
+
+  const memories = await loadManagedMemoryContext(params.db, { userId: params.userId });
+  const prompt = formatManagedMemorySystemPrompt(memories);
+  if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
+}
+
 // Exported so it can be unit-tested without importing the full processRequest stack.
 export const RESEARCH_SYSTEM_PROMPT =
   'You are in deep research mode. Your job is to produce a thorough, well-structured report.' +
@@ -759,6 +783,7 @@ export async function processRequest(
 
   const chatRequest = validationResult.data;
   let userScopedDb: Awaited<ReturnType<typeof getUserScopedDb>> | undefined;
+  let conversationIsTemporary = false;
 
   if (chatRequest.conversation_id) {
     try {
@@ -779,8 +804,12 @@ export async function processRequest(
         };
       }
 
-      const ownedRows = await userScopedDb.db.query<{ id: string; project_id: string | null }>(
-        `select id, project_id
+      const ownedRows = await userScopedDb.db.query<{
+        id: string;
+        project_id: string | null;
+        is_temporary: boolean;
+      }>(
+        `select id, project_id, is_temporary
            from web_conversations
           where id = $1 and user_id = $2 and deleted_at is null
           limit 1`,
@@ -801,6 +830,8 @@ export async function processRequest(
           ),
         };
       }
+
+      conversationIsTemporary = ownedRows[0].is_temporary;
 
       // Project-scoped conversation ("AGI Work"): load the owned project's
       // instructions + knowledge-file manifest and merge them into the system
@@ -849,6 +880,34 @@ export async function processRequest(
           { status: 503 },
         ),
       };
+    }
+  }
+
+  // Managed account memory is server-owned context shared by every Cloud
+  // client. Temporary Chats deliberately opt out. Loading is best-effort so a
+  // memory-store outage cannot take down an otherwise valid chat turn, while
+  // owner mismatch always fails closed by skipping enrichment.
+  if (!conversationIsTemporary) {
+    try {
+      userScopedDb ??= await getUserScopedDb(request);
+      if (userScopedDb.userId !== userId) {
+        logger.error(
+          { userId, scopedUserId: userScopedDb.userId },
+          'Managed memory owner mismatch; continuing without account memory',
+        );
+      } else {
+        await enrichManagedMemoryContext({
+          db: userScopedDb.db,
+          userId,
+          chatRequest,
+          isTemporary: false,
+        });
+      }
+    } catch (error) {
+      logger.error(
+        { error, userId, conversationId: chatRequest.conversation_id },
+        'Managed memory load failed; continuing without account memory',
+      );
     }
   }
 
