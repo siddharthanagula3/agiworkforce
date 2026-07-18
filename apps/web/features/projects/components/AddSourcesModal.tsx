@@ -4,9 +4,9 @@
  * AddSourcesModal - ChatGPT-style "Add sources" dialog for a project.
  *
  * Buttons and what each does:
- *   Upload       - Opens a file picker and uploads via the existing KnowledgeFilesPanel
- *                  upload path (Vercel Blob + /api/projects/[id]/knowledge-files POST).
- *                  Uses the same ALLOWED_MIME_TYPES and MAX_FILE_BYTES as the panel.
+ *   Upload       - Opens a file picker and delegates to the shared project-knowledge
+ *                  upload service (presigned R2 PUT + server registration/extraction).
+ *                  The parent supplies the canonical shared attachment accept contract.
  *   Text input   - Shows a textarea; on submit, the text is converted to a UTF-8 Blob
  *                  and uploaded as "<title>.txt" via the same upload path.
  *   Google Drive - Closes the modal and routes to /connectors so the user can connect
@@ -15,8 +15,8 @@
  *   Slack        - Same as Google Drive: routes to /connectors.
  *
  * The drag-drop area and the Upload button share the same handleUpload() function
- * imported from the parent SourcesPanel (passed as a prop) so upload logic stays
- * in one place.
+ * passed by SourcesPanel; both reachable project views ultimately use the same
+ * project-knowledge upload service.
  */
 
 import { useEffect, useRef, useState } from 'react';
