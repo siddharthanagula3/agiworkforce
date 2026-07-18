@@ -5,6 +5,7 @@ import { useAuth } from '@clerk/expo';
 import { AuthView } from '@clerk/expo/native';
 import { X } from 'lucide-react-native';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { CLERK_NATIVE_AUTH_OPTIONS } from '@/src/integrations/clerk';
 import { useThemeColors } from '@/src/ui/theme';
 
 /**
@@ -17,7 +18,7 @@ import { useThemeColors } from '@/src/ui/theme';
 export default function LoginScreen() {
   const router = useRouter();
   const colors = useThemeColors();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
 
   // Build gate: when cloud auth is disabled, Local Mode is the only path.
   if (!FEATURES.auth) return <Redirect href="/(app)" />;
