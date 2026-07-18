@@ -49,12 +49,32 @@ describe('Mode toggle → cloud sign-in (public alpha)', () => {
 
   it('tapping the Cloud side routes to Clerk sign-in and captures the frame', async () => {
     await element(by.id('chat.mode-toggle.cloud')).tap();
-    await waitFor(element(by.id('cloud-sign-in-screen')))
+    // Clerk's native AuthView covers its React wrapper, so the app-owned close
+    // control is the reliable visible marker that Cloud sign-in is open.
+    await waitFor(element(by.id('cloud-sign-in-dismiss')))
       .toBeVisible()
       .withTimeout(15000);
+    const closeAttributes = (await element(by.id('cloud-sign-in-dismiss')).getAttributes()) as {
+      frame: { x: number; y: number; width: number; height: number };
+    };
+    if (closeAttributes.frame.y >= 120 || closeAttributes.frame.x <= 300) {
+      throw new Error(
+        `Cloud sign-in close control is outside the expected top-right region: ${JSON.stringify(closeAttributes.frame)}`,
+      );
+    }
 
     await device.takeScreenshot('04-cloud-sign-in');
     // Detox writes to its own artifact dir; the pipeline copies to DETOX_CAPTURE_PATH
     console.log(`Captured to ${capturePath}`);
+  });
+
+  it('dismisses Cloud sign-in and returns to the Local chat', async () => {
+    await waitFor(element(by.id('cloud-sign-in-dismiss')))
+      .toBeVisible()
+      .withTimeout(5000);
+    await element(by.id('cloud-sign-in-dismiss')).tap();
+    await waitFor(element(by.id('chat.composer.input')))
+      .toBeVisible()
+      .withTimeout(10000);
   });
 });
