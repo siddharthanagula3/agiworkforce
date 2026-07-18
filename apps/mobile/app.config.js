@@ -183,6 +183,8 @@ const config = {
     ],
   },
   plugins: [
+    'expo-asset',
+    'expo-image',
     'expo-router',
     'expo-secure-store',
     // minSdkVersion 26 (Android 8.0) floor — required by com.google.mlkit:genai-common
@@ -278,10 +280,11 @@ const config = {
     // generated, so this lives as a plugin — direct android/ edits are erased by
     // the next prebuild.
     './native/android/withAGIShareIntent.cjs',
-    // Detox e2e (Android): wires testInstrumentationRunner, androidTestImplementation('com.wix:detox:+'),
-    // and the network security config needed for the Detox test server. iOS side (Podfile) is wired
-    // separately by Detox's own postinstall / `detox init` step, not this plugin.
-    ...(envIsTruthy('EXPO_ENABLE_DETOX') ? ['@config-plugins/detox'] : []),
+    // Detox e2e (Android): wires the test runner and the exact installed Detox Android artifact,
+    // and loopback-only network security for the Detox test server. This local plugin replaces the
+    // Expo-53-only community package so SDK upgrades cannot pull stale Expo native modules.
+    // iOS remains wired through Detox's native build integration.
+    ...(envIsTruthy('EXPO_ENABLE_DETOX') ? ['./native/android/withAGIDetox.cjs'] : []),
   ],
   updates: {
     fallbackToCacheTimeout: 0,
