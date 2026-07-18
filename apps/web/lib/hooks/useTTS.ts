@@ -46,29 +46,42 @@ export interface UseTTSReturn {
 
 export function useTTS(): UseTTSReturn {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const spokenTextRef = useRef<string | null>(null);
 
-  const isSupported = typeof window !== 'undefined' && 'speechSynthesis' in window;
+  useEffect(() => {
+    const browserSupportsSpeech =
+      typeof window !== 'undefined' &&
+      'speechSynthesis' in window &&
+      'SpeechSynthesisUtterance' in window;
+    setIsSupported(browserSupportsSpeech);
+
+    return () => {
+      if (browserSupportsSpeech) window.speechSynthesis.cancel();
+    };
+  }, []);
 
   const stop = useCallback(() => {
     if (!isSupported) return;
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
     utteranceRef.current = null;
+    spokenTextRef.current = null;
   }, [isSupported]);
 
   const speak = useCallback(
     (text: string) => {
       if (!isSupported) return;
 
+      const clean = stripMarkdown(text);
+      if (!clean) return;
+
       // If already speaking the same content, toggle off
-      if (isSpeaking) {
+      if (isSpeaking && spokenTextRef.current === clean) {
         stop();
         return;
       }
-
-      const clean = stripMarkdown(text);
-      if (!clean) return;
 
       // Cancel any previous utterance
       window.speechSynthesis.cancel();
@@ -78,28 +91,28 @@ export function useTTS(): UseTTSReturn {
       utterance.pitch = 1;
       utterance.volume = 1;
 
-      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onstart = () => {
+        if (utteranceRef.current === utterance) setIsSpeaking(true);
+      };
       utterance.onend = () => {
+        if (utteranceRef.current !== utterance) return;
         setIsSpeaking(false);
         utteranceRef.current = null;
+        spokenTextRef.current = null;
       };
       utterance.onerror = () => {
+        if (utteranceRef.current !== utterance) return;
         setIsSpeaking(false);
         utteranceRef.current = null;
+        spokenTextRef.current = null;
       };
 
       utteranceRef.current = utterance;
+      spokenTextRef.current = clean;
       window.speechSynthesis.speak(utterance);
     },
     [isSupported, isSpeaking, stop],
   );
-
-  // Cancel on unmount
-  useEffect(() => {
-    return () => {
-      if (isSupported) window.speechSynthesis.cancel();
-    };
-  }, [isSupported]);
 
   return { isSpeaking, isSupported, speak, stop };
 }

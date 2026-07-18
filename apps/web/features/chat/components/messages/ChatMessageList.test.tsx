@@ -14,6 +14,17 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import { ChatMessageList, groupMessages } from './ChatMessageList';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 
+const ttsMock = vi.hoisted(() => {
+  const state = { isSpeaking: false };
+  const speak = vi.fn(() => {
+    state.isSpeaking = true;
+  });
+  const stop = vi.fn(() => {
+    state.isSpeaking = false;
+  });
+  return { state, speak, stop };
+});
+
 // ---------------------------------------------------------------------------
 // Global setup
 // ---------------------------------------------------------------------------
@@ -21,6 +32,9 @@ import type { ChatMessage } from '@agiworkforce/unified-chat';
 // jsdom doesn't implement scrollIntoView · mock it globally for all tests
 beforeEach(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  ttsMock.state.isSpeaking = false;
+  ttsMock.speak.mockClear();
+  ttsMock.stop.mockClear();
 });
 
 // ---------------------------------------------------------------------------
@@ -40,16 +54,31 @@ vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('@/lib/hooks/useTTS', () => ({
+  useTTS: () => ({
+    isSpeaking: ttsMock.state.isSpeaking,
+    isSupported: true,
+    speak: ttsMock.speak,
+    stop: ttsMock.stop,
+  }),
+}));
+
 // MessageBubble renders content directly so we can assert on text
 vi.mock('./MessageBubble', () => ({
   MessageBubble: ({
     message,
     onRegenerate,
     onDelete,
+    onReadAloud,
+    isReadingAloud,
+    isReadAloudSupported,
   }: {
     message: { id: string; role: string; content: string; isStreaming?: boolean };
     onRegenerate?: () => void;
     onDelete?: () => void;
+    onReadAloud?: (messageId: string, content: string) => void;
+    isReadingAloud?: boolean;
+    isReadAloudSupported?: boolean;
   }) => (
     <div data-testid={`bubble-${message.id}`} data-role={message.role}>
       <span>{message.isStreaming && !message.content ? 'Thinking...' : message.content}</span>
@@ -61,6 +90,14 @@ vi.mock('./MessageBubble', () => ({
       {onDelete && (
         <button onClick={onDelete} aria-label="delete">
           delete
+        </button>
+      )}
+      {message.role === 'assistant' && isReadAloudSupported && onReadAloud && (
+        <button
+          onClick={() => onReadAloud(message.id, message.content)}
+          aria-label={isReadingAloud ? `stop-${message.id}` : `read-${message.id}`}
+        >
+          {isReadingAloud ? 'stop' : 'read'}
         </button>
       )}
     </div>
@@ -233,6 +270,33 @@ describe('ChatMessageList actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'regenerate' }));
     expect(onRegenerate).toHaveBeenCalledWith('msg-2');
+  });
+
+  it('owns one read-aloud controller and switches the active response', () => {
+    const messages = [
+      makeMessage({ id: 'msg-1', role: 'assistant', content: 'First response' }),
+      makeMessage({ id: 'msg-2', role: 'assistant', content: 'Second response' }),
+    ];
+    render(<ChatMessageList messages={messages} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'read-msg-1' }));
+    expect(ttsMock.speak).toHaveBeenCalledWith('First response');
+    expect(screen.getByRole('button', { name: 'stop-msg-1' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'read-msg-2' }));
+    expect(ttsMock.speak).toHaveBeenLastCalledWith('Second response');
+    expect(screen.getByRole('button', { name: 'stop-msg-2' })).toBeInTheDocument();
+  });
+
+  it('stops the response currently being read', () => {
+    const messages = [makeMessage({ id: 'msg-1', role: 'assistant', content: 'Response' })];
+    render(<ChatMessageList messages={messages} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'read-msg-1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'stop-msg-1' }));
+
+    expect(ttsMock.stop).toHaveBeenCalledOnce();
+    expect(ttsMock.speak).toHaveBeenCalledOnce();
   });
 });
 

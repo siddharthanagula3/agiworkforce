@@ -27,6 +27,7 @@ import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ChevronDown, ArrowRight, AlertCircle, RefreshCw, ShieldAlert } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { useTTS } from '@/lib/hooks/useTTS';
 import {
   isMessageContinuable,
   hasStreamError,
@@ -213,6 +214,9 @@ interface MessageGroupRowProps {
     messageId: string,
     opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
   ) => Promise<string>;
+  speakingMessageId: string | null;
+  isReadAloudSupported: boolean;
+  onReadAloud: (messageId: string, content: string) => void;
 }
 
 interface MessageRowProps {
@@ -227,6 +231,9 @@ interface MessageRowProps {
     messageId: string,
     opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
   ) => Promise<string>;
+  speakingMessageId: string | null;
+  isReadAloudSupported: boolean;
+  onReadAloud: (messageId: string, content: string) => void;
 }
 
 // Per-message row component. Stable callbacks bound via useCallback below so
@@ -246,6 +253,9 @@ const MessageRow = ({
   onPaywallUpgrade,
   onPaywallDismiss,
   onRegenerateImage,
+  speakingMessageId,
+  isReadAloudSupported,
+  onReadAloud,
 }: MessageRowProps) => {
   const meta = getMeta(message);
   const paywall = meta?.paywall;
@@ -300,6 +310,9 @@ const MessageRow = ({
       onDelete={onDelete ? handleDelete : undefined}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
       onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
+      onReadAloud={displayRole === 'assistant' ? onReadAloud : undefined}
+      isReadingAloud={speakingMessageId === message.id}
+      isReadAloudSupported={isReadAloudSupported}
     />
   );
 };
@@ -315,6 +328,9 @@ const MessageGroupRow = memo(
     onPaywallUpgrade,
     onPaywallDismiss,
     onRegenerateImage,
+    speakingMessageId,
+    isReadAloudSupported,
+    onReadAloud,
   }: MessageGroupRowProps) => {
     return (
       <div
@@ -331,6 +347,9 @@ const MessageGroupRow = memo(
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
             onRegenerateImage={onRegenerateImage}
+            speakingMessageId={speakingMessageId}
+            isReadAloudSupported={isReadAloudSupported}
+            onReadAloud={onReadAloud}
           />
         ))}
       </div>
@@ -368,7 +387,10 @@ const MessageGroupRow = memo(
       prev.onReact === next.onReact &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss &&
-      prev.onRegenerateImage === next.onRegenerateImage
+      prev.onRegenerateImage === next.onRegenerateImage &&
+      prev.speakingMessageId === next.speakingMessageId &&
+      prev.isReadAloudSupported === next.isReadAloudSupported &&
+      prev.onReadAloud === next.onReadAloud
     );
   },
 );
@@ -397,6 +419,8 @@ const ChatMessageListComponent = ({
 }: ChatMessageListProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const { isSpeaking, isSupported: isReadAloudSupported, speak, stop } = useTTS();
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   /**
    * Whether auto-scroll is active. Disabled when the user manually scrolls
@@ -511,6 +535,19 @@ const ChatMessageListComponent = ({
     [onReact],
   );
 
+  const handleReadAloud = useCallback(
+    (messageId: string, content: string) => {
+      if (isSpeaking && speakingMessageId === messageId) {
+        stop();
+        return;
+      }
+
+      setSpeakingMessageId(messageId);
+      speak(content);
+    },
+    [isSpeaking, speak, speakingMessageId, stop],
+  );
+
   const handlePaywallUpgrade = useCallback(
     (id: string) => onPaywallUpgrade?.(id),
     [onPaywallUpgrade],
@@ -584,6 +621,9 @@ const ChatMessageListComponent = ({
                   onPaywallUpgrade={handlePaywallUpgrade}
                   onPaywallDismiss={handlePaywallDismiss}
                   onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
+                  speakingMessageId={isSpeaking ? speakingMessageId : null}
+                  isReadAloudSupported={isReadAloudSupported}
+                  onReadAloud={handleReadAloud}
                 />
               </React.Fragment>
             );
