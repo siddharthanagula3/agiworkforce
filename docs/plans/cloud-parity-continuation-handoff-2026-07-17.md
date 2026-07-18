@@ -12,6 +12,11 @@ This document is the continuation state for a new Codex chat. It does not replac
 mission, the Claude evidence bundle, or Parts G/J of the dossier. It replaces the original
 handoff's stale statements about the starting HEAD and the old free-tier WIP.
 
+Founder priority update (2026-07-18): implementation and release work is serial in this order:
+**Website → Mobile → Desktop → Chrome Extension → VS Code Extension → CLI**. This newer explicit
+order supersedes the engine-first ordering later in this handoff. Shared code may support later
+surfaces, but do not start their product slices before the active surface advances.
+
 ## Start the next chat with this instruction
 
 > Continue the active AGI Workforce Cloud-parity implementation from

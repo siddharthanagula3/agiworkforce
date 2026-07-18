@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
-import { useConversations } from './useConversations';
+import { useConversations, useProjectConversations } from './useConversations';
 
 const authMocks = vi.hoisted(() => ({
   getToken: vi.fn(),
@@ -96,5 +96,110 @@ describe('useConversations.createConversation', () => {
     });
 
     expect(findPostBody()).not.toHaveProperty('projectId');
+  });
+});
+
+describe('useProjectConversations', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    authMocks.getToken.mockResolvedValue('session-token');
+  });
+
+  it('loads the canonical server project_id listing without reading project.conversationIds', async () => {
+    const projectConversation = {
+      ...WIRE_CONVERSATION,
+      id: 'c0ffee00-0000-4000-8000-000000000002',
+      title: 'Project planning',
+      project_id: 'proj-123',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              conversations: [projectConversation],
+              hasMore: false,
+              nextOffset: 1,
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    const { result } = renderHook(() => useProjectConversations('proj-123'));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/chat/conversations?projectId=proj-123&limit=100&offset=0',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer session-token' }),
+      }),
+    );
+    expect(result.current.conversations).toEqual([
+      expect.objectContaining({
+        id: projectConversation.id,
+        projectId: 'proj-123',
+        title: 'Project planning',
+      }),
+    ]);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('exposes a user-safe error when the project conversation list fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { message: 'Project chats unavailable' } }), {
+            status: 503,
+          }),
+      ),
+    );
+
+    const { result } = renderHook(() => useProjectConversations('proj-123'));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.conversations).toEqual([]);
+    expect(result.current.error).toBe('Project chats unavailable');
+  });
+
+  it('pages and deduplicates older project chats through the same filtered route', async () => {
+    const first = { ...WIRE_CONVERSATION, project_id: 'proj-123' };
+    const second = {
+      ...WIRE_CONVERSATION,
+      id: 'c0ffee00-0000-4000-8000-000000000003',
+      project_id: 'proj-123',
+    };
+    let requestCount = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        requestCount += 1;
+        return new Response(
+          JSON.stringify({
+            conversations: requestCount === 1 ? [first] : [first, second],
+            hasMore: requestCount === 1,
+            nextOffset: requestCount === 1 ? 100 : 102,
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { result } = renderHook(() => useProjectConversations('proj-123'));
+    await waitFor(() => expect(result.current.hasMore).toBe(true));
+
+    await act(async () => result.current.loadMore());
+
+    expect(fetch).toHaveBeenLastCalledWith(
+      '/api/chat/conversations?projectId=proj-123&limit=100&offset=100',
+      expect.any(Object),
+    );
+    expect(result.current.conversations.map((conversation) => conversation.id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+    expect(result.current.hasMore).toBe(false);
   });
 });

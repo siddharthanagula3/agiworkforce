@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-07-11
+Last updated: 2026-07-18
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -25,18 +25,18 @@ being locked into one model lab.
 
 The suite has six first-class surfaces:
 
-1. Mobile
-2. Website
+1. Website
+2. Mobile
 3. Desktop
-4. CLI
-5. Chrome Extension
-6. VS Code Extension
+4. Chrome Extension
+5. VS Code Extension
+6. CLI
 
 The locked development order is exactly the same as the list above. AGI works on
-one surface at a time. The active surface is Mobile. Website work starts only
-after Mobile v1 is publicly released on the App Store, except when the founder
-explicitly asks to use QA, testing, App Store review, or manual waiting time for
-the next surface.
+one surface at a time. The active surface is Website. Work advances through
+Mobile, Desktop, Chrome Extension, VS Code Extension, and CLI in that order,
+unless the founder explicitly authorizes later-surface work during QA, review,
+or another waiting period.
 
 AGI's core differentiation is:
 
@@ -71,19 +71,20 @@ The development order is locked:
 
 | Order | Surface           | Meaning                                                                             |
 | ----- | ----------------- | ----------------------------------------------------------------------------------- |
-| 1     | Mobile            | Active surface. Must reach public App Store release before normal work moves on.    |
-| 2     | Website           | Public site, download/sign-in/account shell, launch support.                        |
+| 1     | Website           | Active surface: public site, signed-in Cloud product, account, and launch support.  |
+| 2     | Mobile            | Native Local/Cloud app; must pass App Store release requirements.                   |
 | 3     | Desktop           | Deepest Local/BYOK host, rich app shell, local files, MCP, artifacts, computer use. |
-| 4     | CLI               | Developer engine and terminal agent.                                                |
-| 5     | Chrome Extension  | Browser context, capture, native bridge, page automation.                           |
-| 6     | VS Code Extension | IDE-native developer workflow.                                                      |
+| 4     | Chrome Extension  | Browser context, capture, native bridge, page automation.                           |
+| 5     | VS Code Extension | IDE-native developer workflow.                                                      |
+| 6     | CLI               | Developer engine and terminal agent.                                                |
 
 The parity ledger may track all six surfaces at all times. Implementation does
-not run on all six at once. A future agent must not start Website, Desktop, CLI,
-Chrome, or VS Code work just because the row exists in a parity matrix. The
-founder must explicitly authorize next-surface work during QA or waiting periods.
+not run on all six at once. A future agent must not start Mobile, Desktop, Chrome,
+VS Code, or CLI work just because the row exists in a parity matrix. The founder
+must explicitly advance the release order or authorize next-surface work during
+QA or waiting periods.
 
-### 2.3 Release Definition
+### 2.3 Mobile Release Definition
 
 Mobile v1 is done only when:
 
@@ -95,7 +96,7 @@ Mobile v1 is done only when:
 - The app's Local trust boundary is verified.
 
 Internal QA or TestFlight alone is not enough to move the primary development
-focus to Website.
+focus from Mobile to Desktop.
 
 ### 2.4 Trust Modes
 
@@ -270,16 +271,17 @@ Users must be able to answer:
 - Is this stored locally, synced, or provider-retained?
 - Can I delete it?
 
-### 4.5 Mobile First, Not Mobile Only
+### 4.5 Website First, One Suite
 
-Mobile is the first release surface because it is the active development focus.
-It is not the deepest surface. Desktop will eventually carry the deepest Local
-and BYOK workflows. CLI, Chrome, and VS Code will eventually carry the deepest
-developer workflows.
+Website is the first release surface and the active development focus. Mobile
+follows, then Desktop, Chrome, VS Code, and CLI. Website-first does not weaken
+the suite boundaries: Desktop will eventually carry the deepest Local and BYOK
+workflows, while Chrome, VS Code, and CLI carry the developer workflows suited
+to their native surfaces.
 
-Mobile v1 should prove AGI can ship a polished, privacy-clear, user-facing AI app
-with Local mode and public-alpha Cloud sign-in entry. It should not try to cram every
-Desktop developer workflow into the first mobile release.
+Website v1 should prove AGI can ship a polished, privacy-clear, user-facing Cloud
+product without pretending later native or developer surfaces are already
+released.
 
 ## 5. Target Users
 
@@ -724,8 +726,8 @@ available choices.
 
 ## 10. Mobile V1 PRD
 
-Mobile is the active surface. All other implementation work waits unless the
-founder explicitly says otherwise.
+Mobile is the second release surface. Mobile implementation becomes active after
+Website release readiness, unless the founder explicitly says otherwise.
 
 ### 10.1 Mobile V1 Goal
 
@@ -1010,8 +1012,7 @@ Minimum QA scenarios:
 
 ## 11. Website Requirements
 
-Website is second in development order. Do not start Website implementation until
-Mobile is publicly released unless explicitly authorized during waiting time.
+Website is first in development order and is the active release surface.
 
 Website's role:
 
@@ -1076,7 +1077,7 @@ support.
 
 ## 13. CLI Requirements
 
-CLI is fourth in development order.
+CLI is sixth in development order.
 
 CLI's role:
 
@@ -1114,7 +1115,7 @@ redacted preview to synced app chat or Cloud.
 
 ## 14. Chrome Extension Requirements
 
-Chrome Extension is fifth in development order.
+Chrome Extension is fourth in development order.
 
 Chrome's role:
 
@@ -1144,7 +1145,7 @@ chat by default.
 
 ## 15. VS Code Extension Requirements
 
-VS Code Extension is sixth in development order.
+VS Code Extension is fifth in development order.
 
 VS Code's role:
 
@@ -1601,15 +1602,15 @@ Mobile release requires:
 
 ### 23.2 Surface Transition Gate
 
-The team may move from Mobile to Website only after:
+The team may move from Website to Mobile only after:
 
-- Mobile public App Store release.
+- Website release-readiness checks pass on the production-intended build.
 - Release notes/changelog updated.
-- Known Mobile v1 gaps documented.
-- Website kickoff scope approved.
+- Known Website v1 gaps documented.
+- Mobile kickoff scope approved.
 
 The only exception is founder-authorized next-surface work during QA, testing,
-manual App Store review, or other waiting periods.
+review, or other waiting periods.
 
 ### 23.3 Completion Evidence
 
@@ -1654,7 +1655,7 @@ These are not blockers to writing the PRD, but they must be answered before
 later implementation phases claim release readiness:
 
 1. Exact Mobile local runtime/model pack shipping mechanism.
-2. Exact Desktop-first/developer-surface BYOK setup timing after Mobile v1.
+2. Exact Desktop-first/developer-surface BYOK setup timing during the Desktop release phase.
 3. Exact App Store privacy nutrition labels after final Mobile data audit.
 4. Exact Cloud invite-code backend and abuse limits.
 5. Exact provider retention metadata schema.

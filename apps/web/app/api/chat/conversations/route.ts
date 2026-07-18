@@ -39,6 +39,11 @@ async function handleGetConversations(request: NextRequest) {
   const url = new URL(request.url);
   const rawQ = url.searchParams.get('q') ?? '';
   const q = rawQ.slice(0, 200).trim();
+  const rawProjectId = url.searchParams.get('projectId');
+  const projectId = rawProjectId?.trim() ?? null;
+  if (rawProjectId !== null && (!projectId || projectId.length > 128)) {
+    throw createError.validation('Invalid projectId');
+  }
 
   // Offset-based pagination so the sidebar can page past the most-recent 50
   // conversations instead of having anything older become unreachable.
@@ -48,32 +53,33 @@ async function handleGetConversations(request: NextRequest) {
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
 
   try {
-    let rows: ChatConversationRow[];
-    // Fetch one extra row to cheaply detect whether another page exists
-    // without a separate count(*) query.
-    if (q) {
-      rows = await getNeonChatDb().query<ChatConversationRow>(
-        `
-          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
-          from web_conversations
-          where user_id = $1 and deleted_at is null and title ilike $2
-          order by pinned desc, updated_at desc
-          limit $3 offset $4
-        `,
-        [userId, `%${q}%`, limit + 1, offset],
-      );
-    } else {
-      rows = await getNeonChatDb().query<ChatConversationRow>(
-        `
-          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
-          from web_conversations
-          where user_id = $1 and deleted_at is null
-          order by pinned desc, updated_at desc
-          limit $2 offset $3
-        `,
-        [userId, limit + 1, offset],
-      );
+    const where = ['user_id = $1', 'deleted_at is null'];
+    const params: unknown[] = [userId];
+    if (projectId) {
+      params.push(projectId);
+      where.push(`project_id = $${params.length}`);
     }
+    if (q) {
+      params.push(`%${q}%`);
+      where.push(`title ilike $${params.length}`);
+    }
+    params.push(limit + 1, offset);
+    const limitParameter = params.length - 1;
+    const offsetParameter = params.length;
+
+    // Fetch one extra row to cheaply detect whether another page exists
+    // without a separate count(*) query. Every shape remains owner-scoped;
+    // projectId only narrows the authenticated user's own conversations.
+    const rows = await getNeonChatDb().query<ChatConversationRow>(
+      `
+        select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+        from web_conversations
+        where ${where.join(' and ')}
+        order by pinned desc, updated_at desc
+        limit $${limitParameter} offset $${offsetParameter}
+      `,
+      params,
+    );
 
     const hasMore = rows.length > limit;
     const conversations = hasMore ? rows.slice(0, limit) : rows;
@@ -111,12 +117,32 @@ async function handleCreateConversation(request: NextRequest) {
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
+  const db = getNeonChatDb();
+
+  if (body.projectId) {
+    let ownedProject: { id: string } | undefined;
+    try {
+      [ownedProject] = await db.query<{ id: string }>(
+        `select id
+           from user_projects
+          where id = $1 and user_id = $2 and is_archived = false
+          limit 1`,
+        [body.projectId, userId],
+      );
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to validate conversation project');
+      throw createError.internal('Failed to validate project');
+    }
+    if (!ownedProject) {
+      throw createError.notFound('Project not found');
+    }
+  }
 
   try {
     // Accept a client-supplied UUID (offline-first id); fall back to the DB default.
     // ON CONFLICT makes a retried create idempotent, and the owner-guarded WHERE
     // ensures a client can never overwrite another user's conversation by id.
-    const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
+    const [conversation] = await db.query<ChatConversationRow>(
       `
         insert into web_conversations (id, user_id, title, model, project_id, is_temporary)
         values (coalesce($5::uuid, gen_random_uuid()), $1, $2, $3, $4, $6)

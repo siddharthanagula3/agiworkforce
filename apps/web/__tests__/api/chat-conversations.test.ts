@@ -153,6 +153,22 @@ describe('Chat Conversations API', () => {
         );
       });
 
+      it('should filter conversations by the authenticated user and selected project', async () => {
+        mockQuery.mockResolvedValueOnce([mockConversations[1]]);
+
+        const request = new NextRequest(
+          'http://localhost/api/chat/conversations?projectId=proj-1&limit=25&offset=0',
+          { headers: { Authorization: 'Bearer valid-token' } },
+        );
+        const response = await GET(request);
+
+        expect(response.status).toBe(200);
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringMatching(/user_id = \$1[\s\S]*project_id = \$2/),
+          ['user-123', 'proj-1', 26, 0],
+        );
+      });
+
       it('should filter out deleted conversations', async () => {
         mockQuery.mockResolvedValueOnce(mockConversations);
 
@@ -263,7 +279,7 @@ describe('Chat Conversations API', () => {
           model: 'auto',
           project_id: 'proj-1',
         };
-        mockQuery.mockResolvedValueOnce([newConv]);
+        mockQuery.mockResolvedValueOnce([{ id: 'proj-1' }]).mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -279,6 +295,27 @@ describe('Chat Conversations API', () => {
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('project_id'),
           expect.arrayContaining(['proj-1']),
+        );
+      });
+
+      it('should reject a project association that is not owned by the authenticated user', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ projectId: 'proj-foreign' }),
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(404);
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringMatching(/user_projects[\s\S]*id = \$1[\s\S]*user_id = \$2/),
+          ['proj-foreign', 'user-123'],
         );
       });
 
