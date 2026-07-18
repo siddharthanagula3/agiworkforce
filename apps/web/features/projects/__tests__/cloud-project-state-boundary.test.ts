@@ -52,4 +52,11 @@ describe('Web Cloud project state boundary', () => {
     expect(listPage).not.toMatch(/finally\s*{\s*removeProject\(/);
     expect(shell).not.toMatch(/finally\s*{\s*removeProjectFromStore\(/);
   });
+
+  it('lists project chats from the canonical server project_id association', () => {
+    const detailPage = source('app/projects/[id]/page.tsx');
+
+    expect(detailPage).toContain('useProjectConversations');
+    expect(detailPage).not.toContain('project.conversationIds');
+  });
 });

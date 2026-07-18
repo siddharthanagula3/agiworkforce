@@ -17,7 +17,7 @@ import {
 } from '@agiworkforce/types';
 import { ChatComposerNew } from '@/features/chat/components/Composer/ChatComposerNew';
 import { useProjectMetaStore } from '@/features/projects/stores/project-meta-store';
-import { useChatStore } from '@shared/stores/web-chat-store';
+import { useProjectConversations } from '@/lib/hooks/useConversations';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';
@@ -92,6 +92,15 @@ export default function ProjectDetailPage() {
     retry: retryProjects,
   } = useManagedCloudProjects();
   const project = projects.find((candidate) => candidate.id === projectId);
+  const {
+    conversations: projectConversations,
+    isLoading: projectChatsLoading,
+    error: projectChatsError,
+    hasMore: hasMoreProjectChats,
+    isLoadingMore: isLoadingMoreProjectChats,
+    retry: retryProjectChats,
+    loadMore: loadMoreProjectChats,
+  } = useProjectConversations(projectId);
   const updateProject = useProjectStore((s) => s.updateProject);
   const removeProject = useProjectStore((s) => s.removeProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
@@ -194,16 +203,6 @@ export default function ProjectDetailPage() {
     return summarizeProjectHeader({ project: record });
   }, [accountId, project]);
 
-  // Web conversation store
-  const allConversations = useChatStore((s) => s.conversations);
-  const conversationMeta = useMemo(() => {
-    const map = new Map<string, { title: string; updatedAt: string }>();
-    allConversations.forEach((c) => {
-      map.set(c.id, { title: c.title, updatedAt: c.updatedAt });
-    });
-    return map;
-  }, [allConversations]);
-
   // Loading state while hydrating from server
   if (projectStatus === 'loading' || projectStatus === 'idle') {
     return (
@@ -301,8 +300,6 @@ export default function ProjectDetailPage() {
       </WebAppShell>
     );
   }
-
-  const conversationIds = project.conversationIds ?? [];
 
   return (
     <WebAppShell>
@@ -559,7 +556,7 @@ export default function ProjectDetailPage() {
           {/* ---------------------------------------------------------------- */}
           {/* Capacity banner                                                  */}
           {/* ---------------------------------------------------------------- */}
-          {conversationIds.length >= MAX_CONVERSATIONS_WARN && (
+          {projectConversations.length >= MAX_CONVERSATIONS_WARN && (
             <div
               role="alert"
               style={{
@@ -574,8 +571,9 @@ export default function ProjectDetailPage() {
                 flexShrink: 0,
               }}
             >
-              This project has {conversationIds.length} conversations. Consider archiving older ones
-              for performance.
+              This project has {hasMoreProjectChats ? 'at least ' : ''}
+              {projectConversations.length} conversations. Consider archiving older ones for
+              performance.
             </div>
           )}
 
@@ -628,92 +626,121 @@ export default function ProjectDetailPage() {
             data-testid={`project-detail-panel-${tab}`}
           >
             {tab === 'chats' ? (
-              conversationIds.length === 0 ? (
+              projectChatsLoading ? (
+                <p
+                  role="status"
+                  style={{ color: 'var(--agi-ink-2)', fontSize: 13, textAlign: 'center' }}
+                >
+                  Loading chats...
+                </p>
+              ) : projectChatsError ? (
+                <div style={{ textAlign: 'center', padding: '32px 16px' }}>
+                  <p role="alert" style={{ color: 'var(--agi-ink-2)', fontSize: 13 }}>
+                    {projectChatsError}
+                  </p>
+                  <button type="button" onClick={() => void retryProjectChats()}>
+                    Retry
+                  </button>
+                </div>
+              ) : projectConversations.length === 0 ? (
                 <EmptyChatsState projectName={project.name} />
               ) : (
-                <ul
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    padding: 0,
-                    margin: 0,
-                  }}
-                >
-                  {conversationIds.map((conversationId) => {
-                    const meta = conversationMeta.get(conversationId);
-                    const title =
-                      meta?.title && meta.title !== 'New Chat'
-                        ? meta.title
-                        : (meta?.title ?? 'Untitled chat');
-                    const dateLabel = formatChatDate(meta?.updatedAt);
-                    return (
-                      <li
-                        key={conversationId}
-                        style={{
-                          listStyle: 'none',
-                          border: '1px solid var(--agi-rule)',
-                          borderRadius: 10,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveProject(project.id);
-                            router.push(`/chat/${encodeURIComponent(conversationId)}`);
-                          }}
-                          title={title}
+                <>
+                  <ul
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      padding: 0,
+                      margin: 0,
+                    }}
+                  >
+                    {projectConversations.map((conversation) => {
+                      const title =
+                        conversation.title && conversation.title !== 'New Chat'
+                          ? conversation.title
+                          : (conversation.title ?? 'Untitled chat');
+                      const dateLabel = formatChatDate(conversation.updatedAt);
+                      return (
+                        <li
+                          key={conversation.id}
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 12,
-                            width: '100%',
-                            background: 'transparent',
-                            border: 0,
-                            padding: '10px 14px',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                          }}
-                          onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.background =
-                              'var(--agi-bg-3)';
-                          }}
-                          onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                            listStyle: 'none',
+                            border: '1px solid var(--agi-rule)',
+                            borderRadius: 10,
+                            overflow: 'hidden',
                           }}
                         >
-                          <span
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveProject(project.id);
+                              router.push(`/chat/${encodeURIComponent(conversation.id)}`);
+                            }}
+                            title={title}
                             style={{
-                              color: 'var(--agi-ink)',
-                              fontSize: 13,
-                              fontWeight: 500,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              minWidth: 0,
-                              flex: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 12,
+                              width: '100%',
+                              background: 'transparent',
+                              border: 0,
+                              padding: '10px 14px',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                            }}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background =
+                                'var(--agi-bg-3)';
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLButtonElement).style.background =
+                                'transparent';
                             }}
                           >
-                            {title}
-                          </span>
-                          {dateLabel && (
                             <span
                               style={{
-                                color: 'var(--agi-ink-2)',
-                                fontSize: 11,
-                                flexShrink: 0,
+                                color: 'var(--agi-ink)',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                minWidth: 0,
+                                flex: 1,
                               }}
                             >
-                              {dateLabel}
+                              {title}
                             </span>
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                            {dateLabel && (
+                              <span
+                                style={{
+                                  color: 'var(--agi-ink-2)',
+                                  fontSize: 11,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {dateLabel}
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {hasMoreProjectChats && (
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                      <button
+                        type="button"
+                        onClick={() => void loadMoreProjectChats()}
+                        disabled={isLoadingMoreProjectChats}
+                      >
+                        {isLoadingMoreProjectChats ? 'Loading...' : 'Load more chats'}
+                      </button>
+                    </div>
+                  )}
+                </>
               )
             ) : (
               /* Sources tab: ChatGPT-style sources experience */

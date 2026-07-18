@@ -16,6 +16,29 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 const CONVERSATIONS_PAGE_SIZE = 50;
+const PROJECT_CONVERSATIONS_PAGE_SIZE = 100;
+
+function useConversationAuthHeaders() {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const getAuthHeaders = useCallback(async () => {
+    if (!isLoaded) {
+      throw new Error('Authentication is still loading');
+    }
+    if (!isSignedIn) {
+      throw new Error('Not authenticated');
+    }
+    const token = await getToken();
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+  }, [getToken, isLoaded, isSignedIn]);
+
+  return { getAuthHeaders, isLoaded, isSignedIn };
+}
 
 function toWebConversation(
   wire: Parameters<typeof normalizeManagedCloudConversation>[0],
@@ -71,7 +94,7 @@ interface UseConversationsReturn {
  * Hook for managing chat conversations
  */
 export function useConversations(): UseConversationsReturn {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { getAuthHeaders, isLoaded, isSignedIn } = useConversationAuthHeaders();
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const isLoading = useChatStore((state) => state.isLoading);
@@ -93,24 +116,6 @@ export function useConversations(): UseConversationsReturn {
   const [hasMoreConversations, setHasMoreConversations] = useState(false);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const nextOffsetRef = useRef(0);
-
-  // Helper to get auth token
-  const getAuthHeaders = useCallback(async () => {
-    if (!isLoaded) {
-      throw new Error('Authentication is still loading');
-    }
-    if (!isSignedIn) {
-      throw new Error('Not authenticated');
-    }
-    const token = await getToken();
-    if (!token) {
-      throw new Error('Not authenticated');
-    }
-    return {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
-  }, [getToken, isLoaded, isSignedIn]);
 
   // Fetch the first page of conversations (resets pagination state)
   const fetchConversations = useCallback(async () => {
@@ -383,6 +388,104 @@ export function useConversations(): UseConversationsReturn {
     deleteConversation,
     setActiveConversation,
   };
+}
+
+interface UseProjectConversationsReturn {
+  conversations: Conversation[];
+  isLoading: boolean;
+  error: string | null;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  retry: () => Promise<void>;
+  loadMore: () => Promise<void>;
+}
+
+/**
+ * Project-detail conversation reader. It uses the same authenticated API and
+ * wire schema as the sidebar without replacing the sidebar's global store with
+ * a project-filtered subset.
+ */
+export function useProjectConversations(
+  projectId: string | undefined,
+): UseProjectConversationsReturn {
+  const { getAuthHeaders, isLoaded, isSignedIn } = useConversationAuthHeaders();
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isLoading, setIsLoading] = useState(Boolean(projectId));
+  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const nextOffsetRef = useRef(0);
+  const requestVersionRef = useRef(0);
+
+  const fetchPage = useCallback(
+    async (offset: number, append: boolean) => {
+      if (!projectId || !isLoaded || !isSignedIn) {
+        if (!projectId || (isLoaded && !isSignedIn)) setIsLoading(false);
+        return;
+      }
+
+      const requestVersion = ++requestVersionRef.current;
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setIsLoading(true);
+      }
+      setError(null);
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(
+          `/api/chat/conversations?projectId=${encodeURIComponent(projectId)}&limit=${PROJECT_CONVERSATIONS_PAGE_SIZE}&offset=${offset}`,
+          { headers },
+        );
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || 'Failed to fetch project chats');
+        }
+
+        const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
+        if (requestVersion !== requestVersionRef.current) return;
+        const page = data.conversations.map(toWebConversation);
+        setConversations((current) => {
+          if (!append) return page;
+          const existingIds = new Set(current.map((conversation) => conversation.id));
+          return [...current, ...page.filter((conversation) => !existingIds.has(conversation.id))];
+        });
+        nextOffsetRef.current = data.nextOffset;
+        setHasMore(data.hasMore);
+      } catch (caught) {
+        if (requestVersion !== requestVersionRef.current) return;
+        setError(caught instanceof Error ? caught.message : 'Failed to fetch project chats');
+        if (!append) {
+          setConversations([]);
+          setHasMore(false);
+        }
+      } finally {
+        if (requestVersion === requestVersionRef.current) {
+          if (append) {
+            setIsLoadingMore(false);
+          } else {
+            setIsLoading(false);
+          }
+        }
+      }
+    },
+    [getAuthHeaders, isLoaded, isSignedIn, projectId],
+  );
+
+  const retry = useCallback(async () => fetchPage(0, false), [fetchPage]);
+  const loadMore = useCallback(async () => fetchPage(nextOffsetRef.current, true), [fetchPage]);
+
+  useEffect(() => {
+    requestVersionRef.current += 1;
+    setConversations([]);
+    setError(null);
+    setHasMore(false);
+    setIsLoading(Boolean(projectId));
+    nextOffsetRef.current = 0;
+    void retry();
+  }, [projectId, retry]);
+
+  return { conversations, isLoading, error, hasMore, isLoadingMore, retry, loadMore };
 }
 
 /**

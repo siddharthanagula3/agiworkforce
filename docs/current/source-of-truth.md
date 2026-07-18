@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-07-14
+Last updated: 2026-07-18
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -10,7 +10,7 @@ For feature-by-feature, option-by-option implementation detail, use `docs/curren
 
 For BYOK providers, hosted open-model APIs, open-weight model priorities, and Desktop model-selector rules, use `docs/current/byok-open-model-provider-strategy.md`.
 
-For the long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements, use `docs/current/agi-product-requirements.md`.
+For the long-form PRD, serial surface order, per-surface release bars, and decision-complete feature requirements, use `docs/current/agi-product-requirements.md`.
 
 ## Product Definition
 
@@ -18,12 +18,12 @@ AGI is the public product brand. AGI Workforce is the formal platform and repo n
 
 AGI is a leading AI application suite across six first-class surfaces:
 
-- Mobile
 - Web
+- Mobile
 - Desktop
-- CLI
 - Chrome extension
 - VS Code extension
+- CLI
 
 The v1 product target is practical parity with current leading AI application ecosystems, with one major differentiation: users can choose Local models, Bring Your Own Key provider access, or AGI managed cloud (public alpha, open by default) instead of being locked into one model lab.
 
@@ -43,14 +43,14 @@ Managed cloud is in public alpha and open by default (founder decision, 2026-06-
 
 Development is serial by surface:
 
-1. Mobile
-2. Website
+1. Website
+2. Mobile
 3. Desktop
-4. CLI
-5. Chrome Extension
-6. VS Code Extension
+4. Chrome Extension
+5. VS Code Extension
+6. CLI
 
-The active surface is Mobile. Mobile v1 is not considered done until it is publicly released on the App Store. Website work does not normally begin before that release. During Mobile QA, testing, App Store review, or other manual waiting periods, next-surface work can start only when the founder explicitly asks for it.
+The active surface is Website. Work proceeds to Mobile, Desktop, Chrome Extension, VS Code Extension, and CLI in that order. A later surface does not become active until the founder advances the release sequence or explicitly authorizes work during QA, review, or another waiting period.
 
 The parity ledger may track all six surfaces at all times, but tracking is not authorization to implement non-active surfaces.
 
