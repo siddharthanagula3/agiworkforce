@@ -1,6 +1,7 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::agent_events::{
-    AgentEvent, AgentEventToolCategory, AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
+    AgentEvent, AgentEventProgressStatus, AgentEventProgressUpdate, AgentEventToolCategory,
+    AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AppServerCapabilities, AppServerClientInfo,
@@ -1079,6 +1080,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             ) {
                 let _ = task_notifications.send(notification);
             }
+            emit_agent_event(
+                &task_thread_id,
+                &task_turn_id,
+                &task_event_sequence,
+                &task_notifications,
+                AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
+                    progress_id: "turn-work".to_string(),
+                    summary: "Working on your request".to_string(),
+                    detail: Some(
+                        "Reviewing the available context and choosing the next safe action."
+                            .to_string(),
+                    ),
+                    status: AgentEventProgressStatus::Running,
+                }),
+            );
 
             while let Some(input) = next_input {
                 let mut agent = task_session.lock().await;
@@ -1180,6 +1196,32 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             } else {
                 (AgentTaskState::Failed, "Agent work ended with an error.")
             };
+            let (progress_summary, progress_detail, progress_status) =
+                if final_status == TurnStatus::Completed {
+                    (
+                        "Work ready for review",
+                        Some("The agent completed this turn.".to_string()),
+                        AgentEventProgressStatus::Completed,
+                    )
+                } else {
+                    (
+                        "Work ended with an error",
+                        Some("The agent could not complete this turn.".to_string()),
+                        AgentEventProgressStatus::Failed,
+                    )
+                };
+            emit_agent_event(
+                &task_thread_id,
+                &task_turn_id,
+                &task_event_sequence,
+                &task_notifications,
+                AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
+                    progress_id: "turn-work".to_string(),
+                    summary: progress_summary.to_string(),
+                    detail: progress_detail,
+                    status: progress_status,
+                }),
+            );
             if let Ok(notification) = task_state_notification(
                 task_turn_id.clone(),
                 state,
@@ -1430,6 +1472,27 @@ fn approval_callback(
     })
 }
 
+fn emit_agent_event(
+    thread_id: &str,
+    turn_id: &str,
+    sequence: &Arc<StdMutex<u64>>,
+    notifications: &broadcast::Sender<AppServerNotification>,
+    event: AgentEvent,
+) {
+    let mut next_sequence = sequence
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Ok(notification) = agent_event_notification(
+        thread_id.to_string(),
+        turn_id.to_string(),
+        *next_sequence,
+        event,
+    ) {
+        let _ = notifications.send(notification);
+        *next_sequence = next_sequence.saturating_add(1);
+    }
+}
+
 fn tool_event_callback(
     thread_id: String,
     turn_id: String,
@@ -1440,15 +1503,7 @@ fn tool_event_callback(
         let Some(event) = map_tool_event(event) else {
             return;
         };
-        let mut next_sequence = sequence
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Ok(notification) =
-            agent_event_notification(thread_id.clone(), turn_id.clone(), *next_sequence, event)
-        {
-            let _ = notifications.send(notification);
-            *next_sequence = next_sequence.saturating_add(1);
-        }
+        emit_agent_event(&thread_id, &turn_id, &sequence, &notifications, event);
     })
 }
 
@@ -1806,6 +1861,47 @@ mod tests {
         assert_eq!(started.params["event"]["type"], "tool-execution-start");
         assert_eq!(completed.params["sequence"], 1);
         assert_eq!(completed.params["event"]["type"], "tool-execution-end");
+    }
+
+    #[tokio::test]
+    async fn progress_and_tool_events_share_one_ordered_turn_sequence() {
+        use crate::tui::app_event::TuiAppEvent;
+        use agiworkforce_protocol::agent_events::{
+            AgentEvent, AgentEventProgressStatus, AgentEventProgressUpdate,
+        };
+
+        let (notifications, mut receiver) = broadcast::channel(4);
+        let sequence = Arc::new(StdMutex::new(0));
+        emit_agent_event(
+            "thread-1",
+            "turn-1",
+            &sequence,
+            &notifications,
+            AgentEvent::ProgressUpdate(AgentEventProgressUpdate {
+                progress_id: "turn-work".to_string(),
+                summary: "Working on your request".to_string(),
+                detail: None,
+                status: AgentEventProgressStatus::Running,
+            }),
+        );
+        tool_event_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            sequence,
+            notifications,
+        )(TuiAppEvent::ToolStarted {
+            call_id: "tool-1".to_string(),
+            name: "read_file".to_string(),
+            summary: "Reading AGENTS.md".to_string(),
+            input: serde_json::json!({ "path": "AGENTS.md" }),
+        });
+
+        let progress = receiver.recv().await.expect("progress notification");
+        let tool = receiver.recv().await.expect("tool notification");
+        assert_eq!(progress.params["sequence"], 0);
+        assert_eq!(progress.params["event"]["type"], "progress-update");
+        assert_eq!(tool.params["sequence"], 1);
+        assert_eq!(tool.params["event"]["type"], "tool-execution-start");
     }
 
     #[test]
