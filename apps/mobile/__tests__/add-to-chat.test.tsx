@@ -161,7 +161,11 @@ function resetStores() {
   });
   useChatAppModeStore.setState({ appMode: 'local' });
   useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
-  useTierStore.setState({ tier: 'free', codeExecutionAvailable: false });
+  useTierStore.setState({
+    tier: 'free',
+    codeExecutionAvailable: false,
+    genericWebSearchAvailable: false,
+  });
 }
 
 const defaultProps = {
@@ -267,6 +271,26 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Web search')).toBeNull();
       // Other tool rows are unaffected by the search-specific gate.
       expect(getByText('Image generation')).toBeTruthy();
+    });
+
+    it('shows Web search in Cloud for a tools-capable model through the generic backend', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: 'qwen-3.5-plus' });
+      useTierStore.setState({ genericWebSearchAvailable: true });
+
+      const { getByText } = renderSheet();
+
+      expect(getByText('Web search')).toBeTruthy();
+    });
+
+    it('hides generic Web search in Cloud when the deployment backend is unavailable', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: 'qwen-3.5-plus' });
+      useTierStore.setState({ genericWebSearchAvailable: false });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Web search')).toBeNull();
     });
   });
 

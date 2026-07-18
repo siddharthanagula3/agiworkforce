@@ -1214,6 +1214,14 @@ const DesktopShell = () => {
       .getState()
       .setCodeExecutionDeploymentEnabled(codeExecutionDeploymentEnabled);
   }, [codeExecutionDeploymentEnabled]);
+  const genericWebSearchDeploymentEnabled = useUnifiedAuthStore(
+    (s) => s.featureFlags['generic_web_search'] ?? false,
+  );
+  useEffect(() => {
+    useChatSettingsStore
+      .getState()
+      .setGenericWebSearchDeploymentEnabled(genericWebSearchDeploymentEnabled);
+  }, [genericWebSearchDeploymentEnabled]);
   const chatHostBridge = useMemo<ChatHostBridge>(
     () => ({
       getSnapshot: () => {

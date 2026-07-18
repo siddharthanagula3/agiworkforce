@@ -53,6 +53,8 @@ export interface FeatureFlags {
   advanced_model_access: boolean;
   /** Deployment capability: the E2B code-execution loop is enabled server-side. */
   code_execution?: boolean;
+  /** Deployment capability: the generic managed web-search backend is configured. */
+  generic_web_search?: boolean;
 }
 
 // /api/me wire shape comes from the shared cloud contract (restructure Wave 4);

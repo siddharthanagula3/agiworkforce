@@ -177,6 +177,9 @@ export class CloudRuntime implements ChatRuntime {
   /** The managed cloud wire forwards the exact `research` request field. */
   readonly supportsResearch = true;
 
+  /** Managed search uses the Cloud route's native-or-generic capability gate. */
+  readonly supportsManagedWebSearch = true;
+
   /**
    * Cloud SSE path supports Continue Generation (same wire as `WebRuntime`).
    */

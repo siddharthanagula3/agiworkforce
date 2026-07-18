@@ -227,6 +227,15 @@ registry, route, and all three client source-card suites pass; live
 post-deployment source-card QA remains a manual production check rather than a
 code-path blocker.
 
+2026-07-17 WP4 generic-search client correction: `/api/me` now exposes the
+boolean `generic_web_search` deployment capability without secret material.
+`@agiworkforce/search` owns the model/provider/deployment availability rule.
+Web, Desktop Managed Cloud, and Mobile Cloud use it in both the composer and
+again at send time; Local keeps its existing on-device/native gate. This removes
+the remaining xAI/Qwen/Moonshot/etc. cosmetic/unreachable-search gap. Focused
+shared-contract and all three surface regressions pass; live provider-backed
+source-card QA remains a manual production check.
+
 2026-07-15 UI control corrections: `UI-WEBSEARCH-TOGGLE-01` is fixed because
 `ChatInput` now reads and writes `chatStore.webSearchEnabled`, the same state
 the send path consumes; the locked default is off and store regression tests

@@ -28,6 +28,7 @@ import {
   type CloudWorkMode,
 } from '@agiworkforce/types';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import { isModelAdmittedForExecutionMode } from '../lib/modelAdmission';
 import { isChatModelSelectable } from '../lib/modelInfo';
 import { useTierStore } from '../stores/tierStore';
@@ -882,7 +883,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         .join('\n\n');
       const modelState = useModelStore.getState();
       const thinkingEnabled = modelState.thinkingEnabled;
-      const webSearchEnabled = store.webSearchEnabled;
+      const requestedWebSearch = store.webSearchEnabled;
 
       // Resolve the selected model's provider so the backend can route it.
       // Without this, a dynamic Local model — e.g. an Ollama model like
@@ -891,6 +892,24 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // routed to Ollama: the send silently no-ops (no /api/chat, no response,
       // no error). The model store carries each model's provider; forward it.
       resolvedProvider ??= modelState.models.find((m) => m.id === resolvedModelId)?.provider;
+      const settingsState = useSettingsStore.getState();
+
+      // Re-check managed search at send time so a persisted toggle cannot
+      // survive a model/deployment change and become a cosmetic request. Local
+      // runtimes keep their native tool path and do not consult Cloud flags.
+      const selectedModelMetadata = getModelMetadataById(resolvedModelId);
+      const webSearchEnabled =
+        requestedWebSearch &&
+        (!runtime.supportsManagedWebSearch ||
+          isWebSearchAvailable({
+            provider: resolvedProvider,
+            modelSupportsNativeSearch:
+              selectedModelMetadata?.capabilities.search ?? resolvedProvider === 'managed_cloud',
+            modelSupportsTools:
+              selectedModelMetadata?.capabilities.tools ??
+              modelState.models.find((model) => model.id === resolvedModelId)?.supportsTools,
+            genericBackendConfigured: settingsState.genericWebSearchDeploymentEnabled,
+          }));
 
       // Code execution: forward the persisted composer preference ONLY when
       // it is currently honest — the selected model's catalog capability,
@@ -899,7 +918,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // it at all (TauriRuntime doesn't). Recomputed here (not trusted from
       // the toggle's rendered `checked` state) so a stale persisted "on" from
       // a previously-capable model never silently reaches an unsupported one.
-      const settingsState = useSettingsStore.getState();
       const modelCapabilities = getModelMetadataById(resolvedModelId)?.capabilities;
       const codeExecution =
         Boolean(runtime.supportsCodeExecution) &&

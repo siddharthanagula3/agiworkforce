@@ -36,6 +36,25 @@ describe('MeResponseSchema', () => {
     expect(MeResponseSchema.safeParse(withNewFlag).success).toBe(true);
   });
 
+  it('accepts the generic web-search deployment capability as a boolean', () => {
+    const withSearchBackend = {
+      ...golden,
+      feature_flags: { ...golden.feature_flags, generic_web_search: true },
+    };
+    const result = MeResponseSchema.safeParse(withSearchBackend);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.feature_flags.generic_web_search).toBe(true);
+    }
+
+    expect(
+      MeResponseSchema.safeParse({
+        ...withSearchBackend,
+        feature_flags: { ...withSearchBackend.feature_flags, generic_web_search: 'yes' },
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects a payload missing plan.tier', () => {
     const { tier: _tier, ...planWithoutTier } = golden.plan;
     const mutated = { ...golden, plan: planWithoutTier };

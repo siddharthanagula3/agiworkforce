@@ -48,6 +48,8 @@ export interface AttachmentMenuProps {
   /** Whether Web search is currently toggled on */
   webSearchEnabled: boolean;
   onWebSearchToggle: () => void;
+  /** Whether the selected model and active runtime can execute Web search now. */
+  webSearchAvailable?: boolean;
   /** Whether Research mode is currently toggled on */
   researchEnabled: boolean;
   onResearchToggle: () => void;
@@ -171,6 +173,7 @@ export function AttachmentMenu({
   onAddFromGitHub,
   webSearchEnabled,
   onWebSearchToggle,
+  webSearchAvailable = true,
   researchEnabled,
   onResearchToggle,
   supportsResearch = false,
@@ -374,6 +377,12 @@ export function AttachmentMenu({
             icon={<Globe size={15} />}
             label="Web search"
             checked={webSearchEnabled}
+            disabled={!webSearchAvailable}
+            title={
+              !webSearchAvailable
+                ? "Web search isn't available for this model or Cloud deployment"
+                : undefined
+            }
             onClick={onWebSearchToggle}
           />
           {/* Omitted entirely when the host has no code-execution transport

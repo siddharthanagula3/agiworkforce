@@ -15,6 +15,7 @@
   "dependencies": {
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
+    "@agiworkforce/search": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/ui": "workspace:*",

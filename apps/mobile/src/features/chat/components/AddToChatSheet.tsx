@@ -20,6 +20,7 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { getModelMetadataById } from '@agiworkforce/types';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -67,14 +68,19 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
   const selectedModel = useModelStore((s) => s.selectedModel);
-  // The server silently strips the web_search tool for models whose provider
-  // adapter can't wire it up yet (e.g. OpenAI models via the chat-completions
-  // endpoint, which rejects the Responses-API-only web_search_preview tool
-  // type) — showing the toggle there promises a working search that quietly
-  // no-ops. Gate on the catalog's own capability flag so the toggle only
-  // appears for a model that can actually honor it.
+  const selectedModelMetadata = getModelMetadataById(selectedModel);
+  const genericWebSearchAvailable = useTierStore((s) => s.genericWebSearchAvailable);
+  // Local keeps its existing intrinsic model gate. Cloud additionally admits
+  // tools-capable models through the real deployment-backed generic fallback.
   const selectedModelSupportsSearch =
-    getModelMetadataById(selectedModel)?.capabilities?.search ?? false;
+    appMode === 'cloud'
+      ? isWebSearchAvailable({
+          provider: selectedModelMetadata?.provider,
+          modelSupportsNativeSearch: selectedModelMetadata?.capabilities.search,
+          modelSupportsTools: selectedModelMetadata?.capabilities.tools,
+          genericBackendConfigured: genericWebSearchAvailable,
+        })
+      : (selectedModelMetadata?.capabilities.search ?? false);
   // Code execution: same "don't promise a no-op" reasoning as web search,
   // plus two extra checks since running code is higher-risk than searching —
   // the toggle only appears in Cloud mode, for a model whose catalog entry
@@ -83,7 +89,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   // cached in useTierStore — defaults false until the first refresh, so a
   // fresh install never shows the toggle before the real capability is known).
   const selectedModelSupportsCodeExecution =
-    getModelMetadataById(selectedModel)?.capabilities?.codeExecution ?? false;
+    selectedModelMetadata?.capabilities?.codeExecution ?? false;
   const codeExecutionDeploymentAvailable = useTierStore((s) => s.codeExecutionAvailable);
   const showCodeExecutionToggle =
     FEATURES.codeExecution &&

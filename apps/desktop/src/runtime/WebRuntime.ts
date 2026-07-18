@@ -116,6 +116,9 @@ export class WebRuntime implements ChatRuntime {
   /** The managed cloud wire forwards the exact `research` request field. */
   readonly supportsResearch = true;
 
+  /** Managed search uses the Cloud route's native-or-generic capability gate. */
+  readonly supportsManagedWebSearch = true;
+
   private emit(event: StreamEvent): void {
     for (const cb of this._streamCallbacks) {
       cb(event);

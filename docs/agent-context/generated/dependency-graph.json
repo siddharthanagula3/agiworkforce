@@ -266,6 +266,10 @@
       },
       {
         "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/search"
+      },
+      {
+        "from": "@agiworkforce/mobile",
         "to": "@agiworkforce/skills"
       },
       {
@@ -595,6 +599,10 @@
       {
         "from": "@agiworkforce/unified-chat",
         "to": "@agiworkforce/routing"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/search"
       },
       {
         "from": "@agiworkforce/unified-chat",

@@ -5,6 +5,7 @@ import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
 import { getSelectableModels } from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 
 // ─── Module mocks ──────────────────────────────────────────────────────────────
@@ -120,14 +121,17 @@ vi.mock('../../hooks/useApiPromptCompletion', () => ({
 
 describe('ChatComposerNew', () => {
   let originalModelId: string;
+  let originalFeatureFlags: ReturnType<typeof useBillingStore.getState>['featureFlags'];
 
   beforeEach(() => {
     vi.clearAllMocks();
     originalModelId = useModelStore.getState().selectedModelId;
+    originalFeatureFlags = useBillingStore.getState().featureFlags;
   });
 
   afterEach(() => {
     useModelStore.getState().setSelectedModelId(originalModelId);
+    useBillingStore.setState({ featureFlags: originalFeatureFlags });
     vi.unstubAllGlobals();
   });
 
@@ -382,6 +386,36 @@ describe('ChatComposerNew', () => {
 
     expect(screen.getAllByText('Web search').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /toggle research mode/i })).not.toBeInTheDocument();
+  });
+
+  it('shows Web search for a tools-capable model through the configured generic backend', () => {
+    const genericSearchModel = getSelectableModels().find(
+      (model) =>
+        model.capabilities.tools === true && providerSupportsWebSearch(model.provider) === false,
+    );
+    expect(genericSearchModel, 'registry must keep a generic-search test model').toBeDefined();
+    useModelStore.getState().setSelectedModelId(genericSearchModel!.id);
+    useBillingStore.setState({ featureFlags: { generic_web_search: true } });
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+
+    expect(screen.getByRole('button', { name: /web search/i })).toBeInTheDocument();
+  });
+
+  it('hides generic Web search when the deployment backend is unavailable', () => {
+    const genericSearchModel = getSelectableModels().find(
+      (model) =>
+        model.capabilities.tools === true && providerSupportsWebSearch(model.provider) === false,
+    );
+    expect(genericSearchModel, 'registry must keep a generic-search test model').toBeDefined();
+    useModelStore.getState().setSelectedModelId(genericSearchModel!.id);
+    useBillingStore.setState({ featureFlags: { generic_web_search: false } });
+
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+
+    expect(screen.getByRole('button', { name: /web search/i })).toBeDisabled();
   });
 
   it('does not show incognito when no active conversation can be made temporary', () => {
