@@ -45,8 +45,8 @@ export const FEATURES = {
    *  PUBLIC ALPHA (open by default): any signed-in user reaches Managed Cloud chat —
    *  no invite, no waitlist. The Clerk session token is bridged into the cloud stream
    *  path (services/authSession.ts → services/streaming.ts). The server enforces the
-   *  free Hobby tier (3-prompt cap) for signed-in free users and honors the
-   *  `AGI_MANAGED_COMPUTE_PRIVATE_BETA` kill-switch for incident rollback. */
+   *  unpublished, dynamic internal usage ceiling for signed-in free users and
+   *  honors the `AGI_MANAGED_COMPUTE_PRIVATE_BETA` kill-switch for incident rollback. */
   cloudChat: true,
 
   /**
