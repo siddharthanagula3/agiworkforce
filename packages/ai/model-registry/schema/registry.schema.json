@@ -470,9 +470,11 @@
     "autoSlot": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["modelKey"],
+      "required": ["modelKey", "label", "description"],
       "properties": {
-        "modelKey": { "$ref": "#/definitions/nonEmptyString" }
+        "modelKey": { "$ref": "#/definitions/nonEmptyString" },
+        "label": { "$ref": "#/definitions/nonEmptyString" },
+        "description": { "$ref": "#/definitions/nonEmptyString" }
       }
     }
   }
