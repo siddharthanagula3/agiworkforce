@@ -58,6 +58,19 @@ effects during step retries. This is founder-gated production data-plane work;
 no agent should deploy this slice or run production-mutating QA until the
 founder confirms 0061, 0062, and 0063 were applied in order.
 
+2026-07-17 Mobile ExecuTorch packaging warning
+(`MOBILE-EXECUTORCH-IOS26-ARCHIVE-01`, Medium, Open): a fresh Expo 55 / React
+Native 0.83.10 simulator build succeeds and installs, but
+`react-native-executorch` 0.8.4's phonemis static objects were built for the
+iOS 26 simulator while the app deployment target is iOS 17. The upstream
+compatibility matrix says both 0.8.x and 0.9.x support Expo 55 / React Native
+0.83 and iOS 17; the current upstream release is 0.9.2. Upgrade only as a
+dedicated local-model catalog/runtime migration because
+`packages/platform/local-llm` intentionally mirrors 0.8.4 model URLs and
+constants. Do not claim the W10 physical-device or release-build gate until a
+current release build is proven on a real iOS device and this warning is either
+eliminated upstream or accepted with reproducible device evidence.
+
 2026-07-17 Cloud agent durability gap (`CLOUD-AGENT-DURABILITY-01`, Critical,
 Remediated in code; production activation is gated by migrations 0061-0063): Web,
 Desktop Cloud, and Mobile Cloud all reach the real managed tool loop through

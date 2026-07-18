@@ -63,7 +63,7 @@
       "@wdio/native-utils": "2.5.0"
     },
     "patchedDependencies": {
-      "expo@55.0.24": "patches/expo@55.0.24.patch"
+      "expo@55.0.28": "patches/expo@55.0.28.patch"
     }
   },
   "scripts": {

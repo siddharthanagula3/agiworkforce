@@ -18,8 +18,13 @@ const getLocalLlm = () => localLlmModule;
 
 const loadLocalLlmModule = () => {
   const moduleRef: typeof import('@agiworkforce/local-llm') = (() => {
-    jest.resetModules();
-    (global as { nativeModuleProxy?: Record<string, unknown> }).nativeModuleProxy = {
+    // jest-expo loads React Native during setup, before this suite can replace
+    // the runtime's private nativeModuleProxy global. Patch the public
+    // NativeModules test boundary instead so this remains compatible with the
+    // React Native version bundled by the installed Expo SDK.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { NativeModules } = require('react-native') as typeof import('react-native');
+    Object.assign(NativeModules, {
       AGIFoundationModels: mockIosModule,
       AGIAICore: mockAndroidModule,
       PlatformConstants: {
@@ -42,7 +47,7 @@ const loadLocalLlmModule = () => {
           scriptURL: null,
         }),
       },
-    };
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('@agiworkforce/local-llm');

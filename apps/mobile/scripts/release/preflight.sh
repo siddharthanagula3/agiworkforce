@@ -33,6 +33,7 @@ require_cmd eas
 require_cmd git
 require_cmd jq
 require_cmd node
+require_cmd pnpm
 
 EAS_VERSION="$(eas --version 2>/dev/null | head -n1 || true)"
 log "eas-cli: ${EAS_VERSION}"
@@ -55,6 +56,13 @@ log_ok "EAS account: ${EAS_USER}"
 require_file "${MOBILE_DIR}/eas.json"
 require_file "${MOBILE_DIR}/app.config.js"
 log_ok "eas.json + app.config.js present"
+
+log "checking Expo SDK dependency compatibility..."
+if pnpm --dir "${MOBILE_DIR}" run check:expo-deps; then
+  log_ok "Expo SDK dependencies are compatible"
+else
+  die "Expo SDK dependency drift detected — run 'pnpm --dir apps/mobile exec expo install --fix --pnpm', reconcile documented exceptions, and verify native builds"
+fi
 
 EAS_PROJECT_ID="$({
   cd "${MOBILE_DIR}"

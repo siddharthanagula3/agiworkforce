@@ -8,7 +8,7 @@ Criticality: high
 
 ## Purpose
 
-Expo 55 + React Native 0.83.6 + React 19 mobile app for **AGI** (iOS + Android).
+Expo 55 + React Native 0.83.10 + React 19 mobile app for **AGI** (iOS + Android).
 Target launch: **2026-08-06**. Bundle id `com.agiworkforce.app`. Apple Developer ID `D2PR62RLT4` for EAS/release signing.
 
 Authoritative specs (read these before non-trivial changes):
@@ -112,13 +112,13 @@ add provider or model-ID lists in this app.
 
 | Pkg                     | Version |
 | ----------------------- | ------- |
-| Expo SDK                | 55.0.23 |
-| React Native            | 0.83.6  |
-| React                   | 19.2.0  |
+| Expo SDK                | 55.0.28 |
+| React Native            | 0.83.10 |
+| React                   | 19.2.6  |
 | NativeWind              | 4.2.3   |
 | react-native-mmkv       | 3.2.0   |
-| react-native-reanimated | 4.3.1   |
-| Expo Router             | 55.0.14 |
+| react-native-reanimated | 4.2.1   |
+| Expo Router             | 55.0.17 |
 
 iOS min: **17.0** (AppShortcuts.xcstrings + local-LLM native runtime floor). Bundle id: `com.agiworkforce.app`.
 
@@ -134,6 +134,7 @@ pnpm --filter @agiworkforce/mobile android    # Android emulator
 pnpm --filter @agiworkforce/mobile typecheck  # tsc --noEmit
 pnpm --filter @agiworkforce/mobile lint
 pnpm --filter @agiworkforce/mobile test       # jest
+pnpm --filter @agiworkforce/mobile check:expo-deps
 
 # Release (EAS)
 pnpm --filter @agiworkforce/mobile run release:ios:beta      # see scripts/release/
