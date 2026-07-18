@@ -48,19 +48,20 @@ window. Migration 0061 plus `cloud-agent-run-service.ts` now persist the
 tenant-owned run state and every canonical activity envelope in monotonic
 sequence order; the owner-scoped run endpoint supports cursor reads and
 cancellation intent, and the loop checks cancellation before provider/tool
-side effects. Web now stores the validated run handle/cursor with the assistant
-message, follows the owner-scoped journal after an unexpected transport drop,
-and sends Stop to the real server run. Tool and Research loops journal public
-answer deltas while explicitly excluding private `<thinking>` content; overlap
-reconciliation prevents a chunk rendered immediately before disconnect from
-being duplicated during replay. Desktop Cloud and Mobile Cloud still consume
-the canonical live activity stream but do not yet follow the journal after a
-transport loss. This closes the previous "no durable event cursor" defect after
-0061 is applied, but execution itself is still request-scoped rather than a
-restart-safe durable workflow. Web/Desktop/Mobile approval registries are
-process-memory caches; the approval endpoint safely reconstructs a continuation
-from the owned conversation, but a worker restart cannot autonomously continue
-an in-flight provider/tool boundary. Before claiming ChatGPT-class
+side effects. Web and Desktop Cloud now validate and retain the run
+handle/cursor with the assistant turn, follow the owner-scoped journal after an
+unexpected transport drop, and send Stop to the real server run. Tool and
+Research loops journal public answer deltas while explicitly excluding private
+`<thinking>` content; both clients reconcile overlap so a chunk rendered
+immediately before disconnect is not duplicated during replay. Mobile Cloud
+still consumes the canonical live activity stream but does not yet follow the
+journal after a transport loss. This closes the previous "no durable event
+cursor" defect for Web and Desktop after 0061 is applied, but execution itself
+is still request-scoped rather than a restart-safe durable workflow.
+Web/Desktop/Mobile approval registries are process-memory caches; the approval
+endpoint safely reconstructs a continuation from the owned conversation, but a
+worker restart cannot autonomously continue an in-flight provider/tool
+boundary. Before claiming ChatGPT-class
 multi-hour/background agents, move each provider/tool boundary into a durable
 workflow or shared Rust worker, persist encrypted idempotent provider/tool
 checkpoints plus durable approval state, resume clients from the new journal
@@ -69,7 +70,8 @@ four-minute budget as an individual-invocation safety boundary. Verification
 for the interim boundary lives in `cloud-agent-run-service.test.ts`,
 `cloud-agent-runs.test.ts`, `managed-agent-stream.test.ts`,
 `tool-loop-policy.test.ts`, `tool-loop.e2e.test.ts`, `research-loop.test.ts`,
-and `useChatStream.test.tsx`.
+`useChatStream.test.tsx`, Desktop `CloudRuntime.test.ts`, and Desktop
+`cloudApi.test.ts`.
 
 2026-07-15 billing ownership clarification for
 `GATEWAY-METERING-IDEMPOTENCY-01`: custom Web research, MCP/E2B tool loops,

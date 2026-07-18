@@ -28,6 +28,7 @@ import {
   ManagedCloudChatHttpError,
   parseAgentEventDelta,
   parseGeneratedFilesDelta,
+  reconcileManagedCloudPublicText,
   readManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
@@ -880,11 +881,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       afterSequence,
       onEvent: (envelope) => {
         if (envelope.event.type === 'text-delta' && envelope.event.delta) {
-          if (unacknowledgedPublicText.startsWith(envelope.event.delta)) {
-            unacknowledgedPublicText = unacknowledgedPublicText.slice(envelope.event.delta.length);
-          } else {
-            fullAssistantContent += envelope.event.delta;
-            appendToMessage(assistantMessageId, envelope.event.delta);
+          const reconciled = reconcileManagedCloudPublicText(
+            unacknowledgedPublicText,
+            envelope.event.delta,
+          );
+          unacknowledgedPublicText = reconciled.pending;
+          if (reconciled.unmatchedIncoming) {
+            fullAssistantContent += reconciled.unmatchedIncoming;
+            appendToMessage(assistantMessageId, reconciled.unmatchedIncoming);
           }
         }
         if (envelope.event.type === 'stop') {
@@ -979,13 +983,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           // but the message renderer prefers this canonical state when present.
           const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
           if (agentEnvelope) {
-            if (
-              agentEnvelope.event.type === 'text-delta' &&
-              unacknowledgedPublicText.startsWith(agentEnvelope.event.delta)
-            ) {
-              unacknowledgedPublicText = unacknowledgedPublicText.slice(
-                agentEnvelope.event.delta.length,
-              );
+            if (agentEnvelope.event.type === 'text-delta') {
+              unacknowledgedPublicText = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                agentEnvelope.event.delta,
+              ).pending;
             }
             currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, agentEnvelope);
             patchMessageMeta({ agentActivity: currentAgentActivity });
