@@ -6,6 +6,24 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-18 Website voice output gap (`WEB-VOICE-OUTPUT-01`, Partially
+remediated): Website chat already had real voice-to-text input through its
+canonical composer store. Completed assistant responses now add a manual
+Read aloud / Stop action backed by the existing browser-native `useTTS` hook.
+One controller lives at the message-list owner instead of one per bubble;
+switching responses cancels the prior utterance, stale completion events cannot
+clear the new one, Markdown is reduced to readable prose, fenced code is not
+spoken, and browsers without Speech Synthesis do not show a dead control. This
+does not send response text or audio to another provider and does not change
+Local/BYOK/Managed routing. Remaining Website release gap: this is not
+hands-free or full-duplex voice. Continuous turn-taking, barge-in, a live voice
+session/waveform, selectable voices and output devices, and an explicit
+server/provider TTS option are still absent. Desktop's separate native voice
+and trust-boundary gaps remain tracked under
+`DESKTOP-VOICE-CONVERSATIONS-UNWIRED-01`; downstream surfaces must follow the
+founder's release order and reuse an appropriate shared contract rather than
+copying this Web-only controller.
+
 2026-07-18 Website Skills/Connectors/Plugins directory gap
 (`WEB-UNIFIED-DIRECTORY-01`, Partially remediated): the shared
 `@agiworkforce/ui` Settings directory is now the single authenticated browse
