@@ -9,11 +9,8 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate } from '../lib/auth-gate';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
-import { buildApprovalCheckpointRequest } from '../lib/approval-checkpoint-request';
-import { runToolLoop, loadMcpToolDefs } from '../lib/tool-loop';
-import { buildManagedAgentStream } from '../lib/managed-agent-stream';
-import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
-import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import { loadMcpToolDefs } from '../lib/tool-loop';
+import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -22,15 +19,13 @@ import {
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
   claimCloudAgentApprovalCheckpoint,
-  completeCloudAgentApprovalCheckpoint,
   releaseCloudAgentApprovalCheckpoint,
-  saveCloudAgentApprovalCheckpoint,
-  isCloudAgentRunCancellationRequested,
   CloudAgentApprovalCheckpointConflictError,
   CloudAgentApprovalCheckpointNotFoundError,
   CloudAgentApprovalDecisionError,
   type ClaimedCloudAgentApprovalCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
+import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
 
 /**
  * Resume a suspended managed agent from tenant-owned server state.
@@ -140,6 +135,7 @@ async function handleToolApproval(request: NextRequest) {
         toolCallId: approval.tool_call_id,
         decision: approval.decision,
       })),
+      leaseSeconds: 86_400,
     });
   } catch (error) {
     const response = checkpointError(error);
@@ -159,7 +155,7 @@ async function handleToolApproval(request: NextRequest) {
   // Restore internal-only signed thinking blocks after public request parsing.
   processed.llmRequest.messages = claim.checkpoint.messages;
 
-  const { mcpTools, connectorExecutor } = await (async () => {
+  const mcpTools = await (async () => {
     try {
       const [operatorTools, connectorTools] = await Promise.all([
         loadMcpToolDefs(),
@@ -167,11 +163,7 @@ async function handleToolApproval(request: NextRequest) {
           customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier),
         }),
       ]);
-      return {
-        mcpTools: [...operatorTools, ...connectorTools],
-        connectorExecutor:
-          connectorTools.length > 0 ? makeUserConnectorExecutor(userId) : undefined,
-      };
+      return [...operatorTools, ...connectorTools];
     } catch (error) {
       // No provider or tool side effect has started yet, so this exact lease
       // is safe to return to pending. Without the release, a transient MCP or
@@ -235,59 +227,60 @@ async function handleToolApproval(request: NextRequest) {
     }
   }
 
-  const toolLoopUsage = createObservedProviderUsage();
-  let approvalCheckpointSaved = false;
-  const toolLoopGen = runToolLoop(processed, {
-    mcpTools,
-    approvalMode: 'manual',
-    userId,
-    connectorExecutor,
-    resume: { approvals: claim.approvals },
-    usage: toolLoopUsage,
-    eventSessionId: claim.checkpoint.sessionId,
-    eventTurnId: claim.checkpoint.turnId,
-    initialEventSequence: claim.checkpoint.nextEventSequence,
-    isCancellationRequested: () =>
-      isCloudAgentRunCancellationRequested(db, { userId, runId: claim.checkpoint.runId }),
-    onApprovalCheckpoint: async (nextCheckpoint) => {
-      await saveCloudAgentApprovalCheckpoint(db, {
-        userId,
-        runId: claim.checkpoint.runId,
-        sessionId: nextCheckpoint.sessionId,
-        turnId: nextCheckpoint.turnId,
-        nextEventSequence: nextCheckpoint.nextEventSequence,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
-        messages: nextCheckpoint.messages,
-        pendingToolCalls: nextCheckpoint.pendingToolCalls,
-        events: nextCheckpoint.events,
-      });
-      approvalCheckpointSaved = true;
-    },
-  });
-
-  const agentStream = buildManagedAgentStream({
-    generator: toolLoopGen,
-    processed,
-    usage: toolLoopUsage,
-    completionReason: 'tool_resume_completed',
-    cancellationReason: 'client_cancelled_tool_resume',
-    runJournal: { db, userId, runId: claim.checkpoint.runId },
-    onTerminal: async (outcome) => {
-      await completeCloudAgentApprovalCheckpoint(db, {
-        userId,
+  let workflow;
+  try {
+    workflow = await startCloudAgentWorkflowExecution({
+      db,
+      runId: claim.checkpoint.runId,
+      userId,
+      processed,
+      mcpTools,
+      approvalMode: 'manual',
+      continuation: {
+        eventSessionId: claim.checkpoint.sessionId,
+        eventTurnId: claim.checkpoint.turnId,
+        initialEventSequence: claim.checkpoint.nextEventSequence,
+        initialCompletedSteps: claim.checkpoint.completedSteps,
+        invocationContinuation: false,
+        resume: { approvals: claim.approvals },
+      },
+      predecessorApproval: {
         checkpointId: claim.checkpoint.id,
         leaseToken: claim.leaseToken,
-        outcome: outcome === 'completed' ? 'resolved' : 'failed',
-      });
-    },
-    preserveAwaitingInputOnCancel: () => approvalCheckpointSaved,
-  });
+      },
+    });
+  } catch (error) {
+    if (processed.managedUsage) {
+      await finalizeManagedUsageRequest({
+        ...processed.managedUsage,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: { reason: 'workflow_start_failed' },
+      }).catch(() => undefined);
+    }
+    await releaseClaim(db, userId, claim);
+    logger.error(
+      { error, userId, requestId: processed.requestId, runId: claim.checkpoint.runId },
+      'Durable approval continuation could not be started',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message: 'Durable agent continuation is temporarily unavailable.',
+          type: 'server_error',
+          code: 'agent_workflow_unavailable',
+        },
+      },
+      { status: 503, headers: getSecurityHeaders() },
+    );
+  }
 
   const streamHeaders: Record<string, string> = {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     Connection: 'keep-alive',
     'X-AGI-Tool-Loop': 'resume',
+    'X-AGI-Workflow-Run-Id': workflow.workflowRunId,
     'X-AGI-Agent-Run-Id': claim.checkpoint.runId,
     'X-AGI-Agent-Run-URL': `/api/llm/v1/chat/completions/runs/${encodeURIComponent(
       claim.checkpoint.runId,
@@ -299,7 +292,7 @@ async function handleToolApproval(request: NextRequest) {
     streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
   }
 
-  return new NextResponse(agentStream, { headers: streamHeaders });
+  return new NextResponse(workflow.readable, { headers: streamHeaders });
 }
 
 export const POST = withErrorHandler(handleToolApproval);

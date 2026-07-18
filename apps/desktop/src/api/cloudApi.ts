@@ -12,6 +12,7 @@ import { API_BASE_URL } from './config';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import {
   createManagedCloudAgentRunClient,
+  parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunHandle,
@@ -519,6 +520,11 @@ async function consumeCloudSseResponse(
   const reader = res.body.getReader();
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
+  const canonicalCursor: {
+    sessionId?: string;
+    turnId?: string;
+    sequence: number;
+  } = { sequence: -1 };
 
   try {
     while (true) {
@@ -527,7 +533,7 @@ async function consumeCloudSseResponse(
       if (done) {
         // Flush any remaining buffered line
         if (buffer.trim().length > 0) {
-          parseAndDispatchLine(buffer.trim(), onChunk, onError, onEvent);
+          parseAndDispatchLine(buffer.trim(), onChunk, onError, onEvent, canonicalCursor);
         }
         onDone();
         return;
@@ -555,7 +561,7 @@ async function consumeCloudSseResponse(
         }
 
         if (trimmed.startsWith('data: ')) {
-          parseAndDispatchLine(trimmed, onChunk, onError, onEvent);
+          parseAndDispatchLine(trimmed, onChunk, onError, onEvent, canonicalCursor);
         }
       }
     }
@@ -581,6 +587,7 @@ function parseAndDispatchLine(
   onChunk: (text: string) => void,
   onError: (err: Error) => void,
   onEvent?: (payload: Record<string, unknown>) => void,
+  canonicalCursor: { sessionId?: string; turnId?: string; sequence: number } = { sequence: -1 },
 ): void {
   const jsonStr = line.startsWith('data: ') ? line.slice('data: '.length) : line;
 
@@ -596,6 +603,28 @@ function parseAndDispatchLine(
     }
 
     const obj = parsed as Record<string, unknown>;
+    const choices = obj['choices'];
+    const firstDelta =
+      Array.isArray(choices) && choices[0] && typeof choices[0] === 'object'
+        ? (choices[0] as Record<string, unknown>)['delta']
+        : undefined;
+    const envelope =
+      firstDelta && typeof firstDelta === 'object'
+        ? parseAgentEventDelta((firstDelta as Record<string, unknown>)['x_agent_event'])
+        : null;
+    if (
+      envelope &&
+      canonicalCursor.sessionId === envelope.sessionId &&
+      canonicalCursor.turnId === envelope.turnId &&
+      envelope.sequence <= canonicalCursor.sequence
+    ) {
+      return;
+    }
+    if (envelope) {
+      canonicalCursor.sessionId = envelope.sessionId;
+      canonicalCursor.turnId = envelope.turnId;
+      canonicalCursor.sequence = envelope.sequence;
+    }
     onEvent?.(obj);
 
     if (typeof obj['error'] === 'string') {
@@ -609,7 +638,6 @@ function parseAndDispatchLine(
       return;
     }
 
-    const choices = obj['choices'];
     if (Array.isArray(choices) && choices.length > 0) {
       const delta = (choices[0] as Record<string, unknown>)['delta'];
       if (delta && typeof delta === 'object') {

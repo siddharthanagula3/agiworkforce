@@ -189,6 +189,50 @@ describe('cloudApi', () => {
     expect(onRunHandle).toHaveBeenCalledWith({ runId, runPath });
   });
 
+  it('dispatches a retried canonical event and its text projection exactly once', async () => {
+    const envelope = {
+      schemaVersion: 3,
+      sessionId: 'session-desktop-1',
+      turnId: 'turn-desktop-1',
+      sequence: 4,
+      emittedAtMs: 1_000,
+      event: { type: 'text-delta', delta: 'Durable answer.' },
+    };
+    const payload = JSON.stringify({
+      choices: [{ delta: { content: 'Durable answer.', x_agent_event: envelope } }],
+    });
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(`data: ${payload}\n\ndata: ${payload}\n\n`));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(stream, { status: 200 })));
+
+    const chunks: string[] = [];
+    const onEvent = vi.fn();
+    await sendCloudMessage(
+      'conv_retry',
+      'Continue',
+      'gpt-5.6-sol',
+      (chunk) => chunks.push(chunk),
+      vi.fn(),
+      vi.fn(),
+      undefined,
+      onEvent,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000099',
+    );
+
+    expect(chunks).toEqual(['Durable answer.']);
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
   it('includes research only when the managed runtime explicitly requests it', async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {

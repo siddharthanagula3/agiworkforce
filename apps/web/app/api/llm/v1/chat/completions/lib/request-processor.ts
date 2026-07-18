@@ -167,6 +167,17 @@ export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
   chatRequest.code_execution = true;
 }
 
+/**
+ * Keep ordinary request recovery responsive while giving durable AGI Work
+ * workflows enough time to span many bounded invocations without the billing
+ * recovery job classifying an active run as abandoned.
+ */
+export function resolveManagedUsageLeaseSeconds(
+  workMode: ChatCompletionRequest['work_mode'],
+): number {
+  return workMode === 'agiwork' ? 86_400 : 900;
+}
+
 export type ProcessedRequest = {
   requestId: string;
   /** Durable paid-request lifecycle; absent only for the free-trial path. */
@@ -1463,6 +1474,7 @@ export async function processRequest(
         provider,
         model: chatRequest.model,
         estimatedCostCents,
+        leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest.work_mode),
       });
       estimatedCostCents = managedUsage.estimatedCostCents;
     } catch (error) {

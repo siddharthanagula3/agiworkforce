@@ -75,6 +75,7 @@ interface CloudAgentApprovalCheckpointRow extends Record<string, unknown> {
   session_id: string;
   turn_id: string;
   next_event_sequence: number | string;
+  completed_steps: number | string;
   request: unknown;
   messages: unknown;
   pending_tool_calls: unknown;
@@ -98,6 +99,7 @@ export interface CloudAgentApprovalCheckpoint {
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
+  completedSteps: number;
   request: Record<string, unknown>;
   messages: CloudAgentCheckpointMessage[];
   pendingToolCalls: CloudAgentPendingToolCall[];
@@ -188,6 +190,7 @@ function mapApprovalCheckpoint(row: CloudAgentApprovalCheckpointRow): CloudAgent
     sessionId: z.string().min(1).parse(row.session_id),
     turnId: z.string().min(1).parse(row.turn_id),
     nextEventSequence: z.coerce.number().int().nonnegative().parse(row.next_event_sequence),
+    completedSteps: z.coerce.number().int().nonnegative().parse(row.completed_steps),
     request,
     messages: z.array(CheckpointMessageSchema).parse(row.messages),
     pendingToolCalls: z.array(PendingToolCallSchema).min(1).max(32).parse(row.pending_tool_calls),
@@ -405,6 +408,7 @@ export async function saveCloudAgentApprovalCheckpoint(
     sessionId: string;
     turnId: string;
     nextEventSequence: number;
+    completedSteps: number;
     request: Record<string, unknown>;
     messages: unknown[];
     pendingToolCalls: unknown[];
@@ -419,6 +423,7 @@ export async function saveCloudAgentApprovalCheckpoint(
     .max(32)
     .parse(input.pendingToolCalls);
   const nextEventSequence = z.number().int().nonnegative().parse(input.nextEventSequence);
+  const completedSteps = z.number().int().nonnegative().parse(input.completedSteps);
   const events = z.array(AgentEventEnvelopeSchema).min(3).max(34).parse(input.events);
   const hasContinuousEventCursor = events.every(
     (event, index) =>
@@ -487,8 +492,8 @@ export async function saveCloudAgentApprovalCheckpoint(
     const checkpointRows = await tx.query<CloudAgentApprovalCheckpointRow>(
       `insert into public.cloud_agent_approval_checkpoints (
          run_id, user_id, version, session_id, turn_id, next_event_sequence,
-         request, messages, pending_tool_calls, state
-       ) values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, 'pending')
+         completed_steps, request, messages, pending_tool_calls, state
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, 'pending')
        returning *`,
       [
         input.runId,
@@ -497,6 +502,7 @@ export async function saveCloudAgentApprovalCheckpoint(
         input.sessionId,
         input.turnId,
         nextEventSequence,
+        completedSteps,
         request,
         messages,
         pendingToolCalls,
@@ -550,7 +556,7 @@ export async function claimCloudAgentApprovalCheckpoint(
     .min(1)
     .max(32)
     .parse(input.approvals);
-  const leaseSeconds = Math.min(3_600, Math.max(60, Math.trunc(input.leaseSeconds ?? 900)));
+  const leaseSeconds = Math.min(86_400, Math.max(60, Math.trunc(input.leaseSeconds ?? 900)));
 
   return db.transaction(async (tx) => {
     const rows = await tx.query<CloudAgentApprovalCheckpointRow>(

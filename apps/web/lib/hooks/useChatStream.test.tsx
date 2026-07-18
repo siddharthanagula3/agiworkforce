@@ -115,6 +115,52 @@ describe('useChatStream', () => {
   });
 
   describe('canonical x_agent_event activity', () => {
+    it('renders a retried canonical text event exactly once', async () => {
+      const textEnvelope = {
+        schemaVersion: 3,
+        sessionId: TEMP_CONVERSATION.id,
+        turnId: 'turn-retried-text',
+        sequence: 0,
+        emittedAtMs: 1_000,
+        event: { type: 'text-delta', delta: 'Verified once.' },
+      } as const;
+      const retriedText = {
+        choices: [{ delta: { content: 'Verified once.', x_agent_event: textEnvelope } }],
+      };
+      mockSseStream([
+        retriedText,
+        retriedText,
+        {
+          choices: [
+            {
+              delta: {
+                x_agent_event: {
+                  ...textEnvelope,
+                  sequence: 1,
+                  emittedAtMs: 1_100,
+                  event: { type: 'stop', reason: 'end-turn' },
+                },
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('retry safely', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistant = useChatStore
+        .getState()
+        .messages.find((message) => message.role === 'assistant');
+      expect(assistant?.content).toBe('Verified once.');
+      expect(assistant?.metadata?.agentActivity?.lastSequence).toBe(1);
+    });
+
     it('validates, reduces, and keeps canonical activity on the assistant message', async () => {
       const base = {
         schemaVersion: 3,
