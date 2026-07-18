@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 
 /**
@@ -117,6 +118,8 @@ export interface MessageMetadata {
    * `tools` remains only as a compatibility fallback while old emitters drain.
    */
   agentActivity?: AgentActivityState;
+  /** Durable server run + replay cursor for reconnecting this Cloud turn. */
+  cloudAgentRun?: ManagedCloudAgentRunReference;
   /** Deep Research run state (activity header + persistence). */
   research?: MessageResearchState;
   /** Code execution result from server-managed code_execution_20260120 tool */

@@ -29,6 +29,46 @@ const TEMP_CONVERSATION = {
   isTemporary: true,
 };
 
+const MANAGED_RUN_ID = '11111111-1111-4111-8111-111111111111';
+const MANAGED_RUN_PATH = `/api/llm/v1/chat/completions/runs/${MANAGED_RUN_ID}`;
+
+function managedRunHeaders(): Headers {
+  return new Headers({
+    'X-AGI-Agent-Run-Id': MANAGED_RUN_ID,
+    'X-AGI-Agent-Run-URL': MANAGED_RUN_PATH,
+  });
+}
+
+function managedRunSnapshot(
+  state: 'running' | 'ready_for_review' | 'completed' | 'cancelled',
+  events: unknown[],
+  lastEventSequence: number,
+) {
+  return {
+    run: {
+      id: MANAGED_RUN_ID,
+      userId: 'user-1',
+      requestId: 'request-1',
+      conversationId: TEMP_CONVERSATION.id,
+      originSurface: 'web',
+      workMode: 'agiwork',
+      state,
+      provider: 'openai',
+      model: 'model-1',
+      lastEventSequence,
+      cancellationRequestedAt: state === 'cancelled' ? '2026-07-17T20:00:00.000Z' : null,
+      completedAt:
+        state === 'ready_for_review' || state === 'completed' || state === 'cancelled'
+          ? '2026-07-17T20:00:00.000Z'
+          : null,
+      createdAt: '2026-07-17T19:00:00.000Z',
+      updatedAt: '2026-07-17T20:00:00.000Z',
+    },
+    events,
+    nextAfterSequence: lastEventSequence,
+  };
+}
+
 function mockLlmErrorResponse(body: unknown, status = 503) {
   vi.mocked(fetch).mockResolvedValueOnce(
     new Response(JSON.stringify(body), {
@@ -297,6 +337,218 @@ describe('useChatStream', () => {
           stopReason: 'end-turn',
         },
       );
+    });
+  });
+
+  describe('durable Managed Cloud runs', () => {
+    it('keeps the validated run handle and replay cursor on the assistant message', async () => {
+      const base = {
+        schemaVersion: 3,
+        sessionId: TEMP_CONVERSATION.id,
+        turnId: 'turn-run-reference',
+      };
+      const body =
+        `data: ${JSON.stringify({
+          choices: [
+            {
+              delta: {
+                content: 'Done.',
+                x_agent_event: {
+                  ...base,
+                  sequence: 0,
+                  emittedAtMs: 1_000,
+                  event: { type: 'stop', reason: 'end-turn' },
+                },
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        })}\n\n` + 'data: [DONE]\n\n';
+      const encoder = new TextEncoder();
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(body));
+              controller.close();
+            },
+          }),
+          { status: 200, headers: managedRunHeaders() },
+        ),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('finish this', {
+          conversationId: TEMP_CONVERSATION.id,
+          workMode: 'agiwork',
+        });
+      });
+
+      const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistant?.metadata?.cloudAgentRun).toEqual({
+        runId: MANAGED_RUN_ID,
+        runPath: MANAGED_RUN_PATH,
+        lastSequence: 0,
+      });
+    });
+
+    it('replays only missing journal events when the initial SSE connection drops', async () => {
+      const base = {
+        schemaVersion: 3,
+        sessionId: TEMP_CONVERSATION.id,
+        turnId: 'turn-reconnect',
+      };
+      const event = (sequence: number, agentEvent: Record<string, unknown>) => ({
+        ...base,
+        sequence,
+        emittedAtMs: 1_000 + sequence,
+        event: agentEvent,
+      });
+      const encoder = new TextEncoder();
+      let streamPulls = 0;
+
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === '/api/llm/v1/chat/completions') {
+          return new Response(
+            new ReadableStream({
+              pull(controller) {
+                if (streamPulls === 0) {
+                  streamPulls += 1;
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({
+                        choices: [
+                          {
+                            delta: {
+                              content: 'Partial ',
+                              x_agent_event: event(0, {
+                                type: 'lifecycle',
+                                phase: 'started',
+                              }),
+                            },
+                          },
+                        ],
+                      })}\n\n`,
+                    ),
+                  );
+                  return;
+                }
+                controller.error(new TypeError('network connection lost'));
+              },
+            }),
+            { status: 200, headers: managedRunHeaders() },
+          );
+        }
+        if (url === `${MANAGED_RUN_PATH}?after=0&limit=100`) {
+          expect(init?.headers).toEqual({ Authorization: 'Bearer session-token' });
+          return new Response(
+            JSON.stringify(
+              managedRunSnapshot(
+                'ready_for_review',
+                [
+                  event(1, { type: 'text-delta', delta: 'Partial ' }),
+                  event(2, { type: 'text-delta', delta: 'recovered answer' }),
+                  event(3, {
+                    type: 'task-state-changed',
+                    taskId: 'turn-reconnect',
+                    state: 'ready_for_review',
+                    previousState: 'running',
+                    summary: 'Ready for review.',
+                  }),
+                  event(4, { type: 'stop', reason: 'end-turn' }),
+                ],
+                4,
+              ),
+            ),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('keep working', {
+          conversationId: TEMP_CONVERSATION.id,
+          workMode: 'agiwork',
+        });
+      });
+
+      const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistant?.content).toBe('Partial recovered answer');
+      expect(assistant?.error).not.toBe(true);
+      expect(assistant?.metadata?.cloudAgentRun).toEqual({
+        runId: MANAGED_RUN_ID,
+        runPath: MANAGED_RUN_PATH,
+        lastSequence: 4,
+        state: 'ready_for_review',
+        cancellationRequestedAt: null,
+      });
+      expect(assistant?.metadata?.agentActivity).toMatchObject({
+        lastSequence: 4,
+        status: 'completed',
+      });
+    });
+
+    it('sends Stop to the active server run instead of cancelling only the browser stream', async () => {
+      const encoder = new TextEncoder();
+      let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+      const cancellationCalls: Array<{ url: string; init?: RequestInit }> = [];
+
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === '/api/llm/v1/chat/completions') {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              streamController = controller;
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ choices: [{ delta: { content: 'Working' } }] })}\n\n`,
+                ),
+              );
+              init?.signal?.addEventListener(
+                'abort',
+                () => controller.error(new DOMException('Stopped', 'AbortError')),
+                { once: true },
+              );
+            },
+          });
+          return new Response(stream, { status: 200, headers: managedRunHeaders() });
+        }
+        if (url === MANAGED_RUN_PATH && init?.method === 'POST') {
+          cancellationCalls.push({ url, init });
+          return new Response(
+            JSON.stringify({ run: managedRunSnapshot('cancelled', [], -1).run }),
+            { status: 202, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      let send: Promise<void> | undefined;
+      act(() => {
+        send = result.current.sendMessage('do a long task', {
+          conversationId: TEMP_CONVERSATION.id,
+          workMode: 'agiwork',
+        });
+      });
+      await vi.waitFor(() => {
+        const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+        expect(assistant?.metadata?.cloudAgentRun?.runId).toBe(MANAGED_RUN_ID);
+      });
+
+      act(() => result.current.stopGeneration());
+      await send;
+      await vi.waitFor(() => expect(cancellationCalls).toHaveLength(1));
+      const headers = cancellationCalls[0]?.init?.headers as Record<string, string>;
+      expect(headers).toEqual({
+        Authorization: 'Bearer session-token',
+        'x-csrf-token': 'csrf-token',
+      });
+      expect(streamController).toBeDefined();
     });
   });
 

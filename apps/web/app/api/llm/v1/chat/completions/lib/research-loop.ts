@@ -52,7 +52,10 @@ import {
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import type { ProcessedRequest } from './request-processor';
-import { createAgentEventStreamEmitter } from './agent-event-stream';
+import {
+  createAgentEventStreamEmitter,
+  createPublicTextDeltaProjector,
+} from './agent-event-stream';
 
 // ─── Bounds ───────────────────────────────────────────────────────────────────
 
@@ -282,6 +285,7 @@ async function* collectTurn(
   stream: ReadableStream,
   sources: SourceAggregator,
   forwardContent: boolean,
+  emitPublicText?: (delta: string) => string,
 ): AsyncGenerator<string, TurnResult> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -292,6 +296,7 @@ async function* collectTurn(
   let hadToolCalls = false;
   let promptTokens = 0;
   let completionTokens = 0;
+  const publicTextProjector = forwardContent ? createPublicTextDeltaProjector() : null;
   // Accumulate streamed tool_call fragments by index (OpenAI streaming shape:
   // name arrives first, arguments as partial-JSON fragments). Mirrors
   // tool-loop.ts's collectProviderStream.
@@ -325,7 +330,11 @@ async function* collectTurn(
         const content = delta?.['content'];
         if (typeof content === 'string' && content.length > 0) {
           text += content;
-          if (forwardContent) yield raw.trim() + '\n\n';
+          if (forwardContent) {
+            yield raw.trim() + '\n\n';
+            const publicTextDelta = publicTextProjector?.push(content) ?? '';
+            if (publicTextDelta && emitPublicText) yield emitPublicText(publicTextDelta);
+          }
         }
 
         // Tool status pass-through (e.g. provider server_tool_use searching events).
@@ -393,6 +402,9 @@ async function* collectTurn(
   } finally {
     reader.releaseLock();
   }
+
+  const publicTextTail = publicTextProjector?.flush() ?? '';
+  if (publicTextTail && emitPublicText) yield emitPublicText(publicTextTail);
 
   const toolCalls: ResearchToolCall[] = [];
   for (const [, tc] of toolCallAccum) {
@@ -589,7 +601,9 @@ export async function* runResearchLoop(
       responseModel,
       stepSink,
     );
-    const gen = collectTurn(stream, sources, forwardContent);
+    const gen = collectTurn(stream, sources, forwardContent, (delta) =>
+      eventStream.emit({ type: 'text-delta', delta }),
+    );
     try {
       while (true) {
         const next = await gen.next();

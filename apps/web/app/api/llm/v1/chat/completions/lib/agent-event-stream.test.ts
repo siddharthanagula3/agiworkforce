@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
-import { createAgentEventStreamEmitter, toAgentEventJson } from './agent-event-stream';
+import {
+  createAgentEventStreamEmitter,
+  createPublicTextDeltaProjector,
+  toAgentEventJson,
+} from './agent-event-stream';
 
 function parseSseLine(line: string): Record<string, unknown> {
   expect(line.startsWith('data: ')).toBe(true);
@@ -76,5 +80,26 @@ describe('toAgentEventJson', () => {
       nested: [1, null, true],
     });
     expect(toAgentEventJson(undefined)).toBeNull();
+  });
+});
+
+describe('createPublicTextDeltaProjector', () => {
+  it('projects only public answer text while suppressing private thinking across chunk boundaries', () => {
+    const projector = createPublicTextDeltaProjector();
+
+    expect(projector.push('Visible before <think')).toBe('Visible before ');
+    expect(projector.push('ing>private reasoning')).toBe('');
+    expect(projector.push('</thinking>Visible after')).toBe('Visible after');
+    expect(projector.flush()).toBe('');
+  });
+
+  it('flushes short public answers without exposing an unterminated thinking block', () => {
+    const publicProjector = createPublicTextDeltaProjector();
+    expect(publicProjector.push('Short')).toBe('Short');
+    expect(publicProjector.flush()).toBe('');
+
+    const privateProjector = createPublicTextDeltaProjector();
+    expect(privateProjector.push('<thinking>secret')).toBe('');
+    expect(privateProjector.flush()).toBe('');
   });
 });
