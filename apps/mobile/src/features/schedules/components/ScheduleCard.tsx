@@ -87,6 +87,18 @@ function formatRecurrence(schedule: Schedule): string {
     }
     case 'custom':
       return schedule.cronExpression ? `Cron: ${schedule.cronExpression}` : `Custom at ${time}`;
+    case 'interval': {
+      const minutes = Math.max(1, Math.round((schedule.intervalMs ?? 60_000) / 60_000));
+      if (minutes % 1_440 === 0) {
+        const days = minutes / 1_440;
+        return `Every ${days} ${days === 1 ? 'day' : 'days'}`;
+      }
+      if (minutes % 60 === 0) {
+        const hours = minutes / 60;
+        return `Every ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+      }
+      return `Every ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+    }
     default:
       return time;
   }

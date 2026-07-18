@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { ScheduleForm, useScheduleStore, type Schedule } from '@/src/features/schedules';
+import { ScheduleForm, useScheduleStore, type CreateScheduleInput } from '@/src/features/schedules';
 import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
@@ -24,7 +24,7 @@ export default function CreateScheduleScreen() {
   const isEditing = Boolean(existingSchedule);
 
   const handleSubmit = useCallback(
-    async (data: Partial<Schedule>) => {
+    async (data: Partial<CreateScheduleInput>) => {
       try {
         if (isEditing && existingSchedule) {
           await updateSchedule(existingSchedule.id, data);
