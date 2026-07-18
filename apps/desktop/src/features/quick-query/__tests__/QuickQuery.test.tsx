@@ -30,14 +30,14 @@ describe('QuickQuery', () => {
     });
   });
 
-  it('shows only economy Auto for Basic users', async () => {
+  it('shows only the Economy Auto profile for Basic users', async () => {
     renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /auto \(economy\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^economy$/i }));
 
-    expect(screen.getAllByText('Auto (Economy)').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Auto Balanced')).not.toBeInTheDocument();
-    expect(screen.queryByText('Auto (Best Model)')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Economy').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Balanced')).not.toBeInTheDocument();
+    expect(screen.queryByText('Best')).not.toBeInTheDocument();
   });
 
   it('submits with the best allowed auto mode when nothing is selected', async () => {
@@ -54,7 +54,7 @@ describe('QuickQuery', () => {
     });
   });
 
-  it('shows balanced auto mode for pro users', async () => {
+  it('shows the Balanced Auto profile for Pro users', async () => {
     useAccountStore.setState({
       plan: 'pro',
       account: {
@@ -65,10 +65,10 @@ describe('QuickQuery', () => {
 
     renderQuickQuery({ open: true, onClose: vi.fn(), onSubmit: vi.fn() });
 
-    fireEvent.click(screen.getByRole('button', { name: /auto balanced/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^balanced$/i }));
 
-    expect(screen.getAllByText('Auto (Economy)').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Auto Balanced').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Auto (Best Model)')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Economy').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Balanced').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Best')).not.toBeInTheDocument();
   });
 });

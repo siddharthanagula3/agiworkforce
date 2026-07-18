@@ -151,17 +151,25 @@ test('publishes the current Claude roster with exact API IDs, limits, and prompt
 test('selects current-generation OpenAI and Anthropic models without deleting still-served compatibility records', () => {
   assert.equal(compatibility.providers.openai.defaultModel, 'gpt-5.6-sol');
   assert.equal(compatibility.providers.anthropic.defaultModel, 'claude-sonnet-5');
-  assert.deepEqual(
-    compatibility.modelPresets.openai.map(({ value }) => value),
-    Object.keys(currentOpenAI),
-  );
-  assert.deepEqual(
-    compatibility.modelPresets.anthropic.map(({ value }) => value),
-    Object.keys(currentAnthropic),
-  );
+  const selectableRoster = new Set(Object.values(compatibility.tierAllowedModels).flat());
+  for (const modelKey of Object.keys(currentOpenAI)) {
+    assert.equal(selectableRoster.has(modelKey), true, `${modelKey} must remain selectable`);
+  }
+  for (const modelKey of Object.keys(currentAnthropic)) {
+    assert.equal(selectableRoster.has(modelKey), true, `${modelKey} must remain selectable`);
+  }
+  const basicRoster = new Set(compatibility.tierAllowedModels.economy);
+  assert.equal(basicRoster.has('gpt-5.4-nano'), true);
+  assert.equal(basicRoster.has('gpt-5.4-mini'), false);
+  assert.equal(basicRoster.has('claude-haiku-4.5'), false);
+  assert.equal(compatibility.tierAllowedModels.pro_additions.includes('claude-haiku-4.5'), true);
+  assert.equal(selectableRoster.has('gpt-5.4-mini'), false);
 
   const openAIRoutes = Object.values(compatibility.providers.openai.taskRouting);
-  assert.equal(openAIRoutes.every((modelKey) => Object.hasOwn(currentOpenAI, modelKey)), true);
+  assert.equal(
+    openAIRoutes.every((modelKey) => Object.hasOwn(currentOpenAI, modelKey)),
+    true,
+  );
   const anthropicRoutes = Object.values(compatibility.providers.anthropic.taskRouting);
   assert.equal(
     anthropicRoutes.every((modelKey) => Object.hasOwn(currentAnthropic, modelKey)),

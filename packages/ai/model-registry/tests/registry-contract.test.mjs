@@ -197,6 +197,7 @@ test('emits separated registry records and cross-language artifacts', () => {
 
 test('keeps Auto routing profiles out of the compatibility model identity map', () => {
   const catalog = JSON.parse(fs.readFileSync(COMPATIBILITY_CATALOG, 'utf8'));
+  const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
   const autoProfileIds = ['auto', 'auto-economy', 'auto-balanced', 'auto-premium'];
 
   for (const profileId of autoProfileIds) {
@@ -207,10 +208,17 @@ test('keeps Auto routing profiles out of the compatibility model identity map', 
     );
   }
 
+  assert.equal(
+    Object.hasOwn(catalog, 'modelPresets'),
+    false,
+    'compatibility output must not carry a second hand-maintained picker roster',
+  );
   assert.deepEqual(
-    catalog.modelPresets.managed_cloud.map((preset) => preset.value),
+    Object.entries(registry.policies.auto.aliases)
+      .filter(([, profile]) => profile.selectable)
+      .map(([profileId]) => profileId),
     ['auto-economy', 'auto-balanced', 'auto-premium'],
-    'managed-cloud picker profiles remain available independently of model metadata',
+    'managed-cloud picker profiles come from routing policy independently of model metadata',
   );
 });
 

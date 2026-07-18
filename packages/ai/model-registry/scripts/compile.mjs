@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global AbortSignal, fetch */
 /**
  * compile.mjs — single-source-of-truth compiler for the model registry.
  *
@@ -14,7 +15,7 @@
  *     (costOverride / contextOverride / capabilitiesOverride / benchmarkOverride
  *     / speedOverride / releasedOverride). Plus the top-level sections
  *     (version, lastUpdated, verificationLog, providers, tierAllowedModels,
- *     modelPresets, providersInOrder) verbatim.
+ *     providersInOrder) verbatim.
  *
  *   - `catalog/models.synced.json` — a committed snapshot of UPSTREAM-derived fields
  *     (contextWindow, inputCost, outputCost, cached_input, capabilities,
@@ -43,6 +44,7 @@
  */
 
 import { strict as assert } from 'node:assert';
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -81,7 +83,6 @@ const RUST_ROUTING_REGISTRY_JSON = path.join(RUST_ROUTING_GENERATED_DIR, 'model_
 const RUST_ROUTING_REGISTRY_MODULE = path.join(RUST_ROUTING_GENERATED_DIR, 'model_registry.rs');
 
 const MODELS_DEV_URL = 'https://models.dev/api.json';
-const AA_URL = 'https://artificialanalysis.ai/api/v2/data/llms/models';
 
 // Fields whose source of truth is an upstream snapshot. Everything else on a
 // model is curation-owned. Order here is also the canonical emit order for
@@ -157,7 +158,6 @@ const TOP_LEVEL_ORDER = [
   'providers',
   'models',
   'tierAllowedModels',
-  'modelPresets',
   'providersInOrder',
 ];
 
@@ -324,7 +324,6 @@ async function extract() {
     providers: current.providers,
     models: curationModels,
     tierAllowedModels: current.tierAllowedModels,
-    modelPresets: current.modelPresets,
     providersInOrder: current.providersInOrder,
   };
   const synced = { source: 'models.dev', models: syncedModels };

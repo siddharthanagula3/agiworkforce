@@ -25,7 +25,7 @@ import {
 import { ScrollArea } from '@/components/ui/ScrollArea';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useBillingUsageStore } from '../../stores/billingUsage';
-import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
+import { PROVIDER_LABELS, PROVIDERS_IN_ORDER, getProviderModelOptions } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
 import { usePrompt } from '@/components/ui/PromptDialog';
 import { toast } from 'sonner';
@@ -80,7 +80,7 @@ export const CostDashboard = memo(function CostDashboard() {
     if (!filters.provider) {
       return [];
     }
-    return MODEL_PRESETS[filters.provider as Provider] ?? [];
+    return getProviderModelOptions(filters.provider as Provider);
   }, [filters.provider]);
 
   const handleBudgetUpdate = async () => {
