@@ -385,7 +385,9 @@ function DirectoryBrowse({
     return map;
   }, [adapter?.connectedConnectors]);
   const skills = adapter?.skills ?? [];
-  const plugins = adapter?.plugins ?? [];
+  const plugins = adapter?.pluginCatalog ?? adapter?.plugins ?? [];
+  const skillsLoading = adapter?.skillsLoading ?? false;
+  const pluginsLoading = adapter?.pluginsLoading ?? false;
 
   // The directory is shared across the Skills / Connectors / Plugins Browse
   // buttons — all three tabs always render; an empty tab shows an honest
@@ -436,7 +438,7 @@ function DirectoryBrowse({
       <div>
         <h2 className="text-base font-semibold text-foreground">Browse directory</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Explore connectors and skills available in this environment.
+          Explore skills, connectors, and plugins available in this environment.
         </p>
       </div>
 
@@ -578,7 +580,12 @@ function DirectoryBrowse({
         ))}
 
       {tab === 'skills' &&
-        (visibleSkills.length === 0 ? (
+        (skillsLoading ? (
+          <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading skills…
+          </p>
+        ) : visibleSkills.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {skills.length === 0 ? 'No skills loaded in this environment.' : 'No skills match.'}
           </p>
@@ -604,10 +611,15 @@ function DirectoryBrowse({
         ))}
 
       {tab === 'plugins' &&
-        (visiblePlugins.length === 0 ? (
+        (pluginsLoading ? (
+          <p className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading plugins…
+          </p>
+        ) : visiblePlugins.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             {plugins.length === 0
-              ? 'No plugins installed. Plugins are available via the AGI CLI.'
+              ? 'No plugins available in this environment.'
               : 'No plugins match.'}
           </p>
         ) : (
@@ -634,12 +646,21 @@ function DirectoryBrowse({
                         : 'bg-muted text-muted-foreground',
                     )}
                   >
-                    {plugin.enabled ? 'Enabled' : 'Disabled'}
+                    {plugin.enabled ? 'Enabled' : (plugin.statusLabel ?? 'Disabled')}
                   </span>
                 </div>
                 <p className="text-xs leading-relaxed text-muted-foreground line-clamp-2">
                   {plugin.description || 'No description.'}
                 </p>
+                {plugin.detailsHref && (
+                  <a
+                    href={plugin.detailsHref}
+                    aria-label={`View ${plugin.name} details`}
+                    className="w-fit text-xs font-medium text-foreground underline-offset-4 hover:underline"
+                  >
+                    View details
+                  </a>
+                )}
               </div>
             ))}
           </div>

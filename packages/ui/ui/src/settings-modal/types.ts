@@ -79,6 +79,10 @@ export interface SettingsPlugin {
   skillCount?: number;
   /** ISO timestamp of the plugin's last update. Optional — real data only. */
   updatedAt?: string;
+  /** Honest catalogue status when an entry is discoverable but not installed. */
+  statusLabel?: string;
+  /** Optional surface-owned details route. Does not imply installability. */
+  detailsHref?: string;
 }
 
 // ─── Custom connector input ───────────────────────────────────────────────────
@@ -120,6 +124,8 @@ export interface SettingsDataAdapter {
 
   plugins?: SettingsPlugin[];
   pluginsLoading?: boolean;
+  /** Discoverable plugins, kept separate from the installed `plugins` list. */
+  pluginCatalog?: SettingsPlugin[];
   /**
    * Plugin "Add" capabilities. Each item in the Plugins pane's Add dropdown
    * renders ONLY when its callback is supplied (surfaces without a real

@@ -40,9 +40,13 @@ vi.mock('../sections/NotificationsSection', () => ({ NotificationsSection: () =>
 function stubFetch({
   connectors = [] as Array<{ connectorId: string; connectedAt?: string }>,
   installations = [] as Array<{ installation_id: number; created_at?: string }>,
+  skills = [] as Array<{ name: string; description: string; source: string }>,
 } = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
+    if (url.includes('/api/skills')) {
+      return { ok: true, json: async () => ({ skills }) } as Response;
+    }
     if (url.includes('/api/github/installations')) {
       return { ok: true, json: async () => ({ installations }) } as Response;
     }
@@ -126,5 +130,32 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
       ),
     );
     await waitFor(() => expect(screen.queryByPlaceholderText('My connector')).toBeNull());
+  });
+
+  it('loads every real catalogue when the shared directory opens from Connectors', async () => {
+    stubFetch({
+      skills: [
+        {
+          name: 'release-notes',
+          description: 'Draft release notes from verified changes.',
+          source: 'builtin',
+        },
+      ],
+    });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    await screen.findByRole('table');
+    const { fireEvent } = await import('@testing-library/react');
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+
+    const tablist = screen.getByRole('tablist', { name: 'Directory sections' });
+    fireEvent.click(within(tablist).getByRole('tab', { name: 'Skills' }));
+    expect(await screen.findByText('/release-notes')).toBeTruthy();
+
+    fireEvent.click(within(tablist).getByRole('tab', { name: 'Plugins' }));
+    expect(screen.getByText('GitHub Automation')).toBeTruthy();
+    expect(screen.getAllByText('Catalogue preview').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
   });
 });

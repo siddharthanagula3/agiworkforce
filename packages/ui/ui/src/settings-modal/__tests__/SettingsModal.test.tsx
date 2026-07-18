@@ -78,6 +78,18 @@ const adapter: SettingsDataAdapter = {
     { id: 'docx', name: 'docx', description: 'Word documents', source: 'bundled', tab: 'prompts' },
   ],
   plugins: [],
+  pluginCatalog: [
+    {
+      id: 'github-automation',
+      name: 'GitHub Automation',
+      description: 'Pull request and issue workflows.',
+      enabled: false,
+      author: 'AGI',
+      skillCount: 3,
+      statusLabel: 'Catalogue preview',
+      detailsHref: '/plugins/github-automation',
+    },
+  ],
 };
 
 function renderModal(
@@ -245,11 +257,27 @@ describe('Connectors pane (table)', () => {
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Skills' }));
     expect(screen.getByText('/humanizer')).toBeTruthy();
 
-    // Plugins tab shows the honest empty state (no plugins on this surface).
+    // Plugins tab reuses the discoverable catalogue without pretending those
+    // entries are installed or installable on this surface.
     fireEvent.click(within(tablist).getByRole('tab', { name: 'Plugins' }));
+    expect(screen.getByText('GitHub Automation')).toBeTruthy();
+    expect(screen.getByText('Catalogue preview')).toBeTruthy();
     expect(
-      screen.getByText('No plugins installed. Plugins are available via the AGI CLI.'),
-    ).toBeTruthy();
+      screen.getByRole('link', { name: 'View GitHub Automation details' }).getAttribute('href'),
+    ).toBe('/plugins/github-automation');
+    expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
+  });
+
+  it('shows honest loading states for directory catalogues', () => {
+    renderModal({}, { skills: [], skillsLoading: true, pluginCatalog: [], pluginsLoading: true });
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
+
+    const tablist = screen.getByRole('tablist', { name: 'Directory sections' });
+    fireEvent.click(within(tablist).getByRole('tab', { name: 'Skills' }));
+    expect(screen.getByText('Loading skills…')).toBeTruthy();
+    fireEvent.click(within(tablist).getByRole('tab', { name: 'Plugins' }));
+    expect(screen.getByText('Loading plugins…')).toBeTruthy();
   });
 
   it('Add custom connector renders the BETA form and surfaces an honest error on submit', async () => {
