@@ -7,6 +7,13 @@ import {
 } from '@/lib/services/managed-usage-accounting-service';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
 import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+import {
+  appendCloudAgentEvent,
+  transitionCloudAgentRun,
+} from '@/lib/services/cloud-agent-run-service';
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import type { ProcessedRequest } from './request-processor';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
@@ -41,12 +48,38 @@ function containsReportedFailure(value: Uint8Array): boolean {
   return false;
 }
 
+function extractAgentEventEnvelopes(value: Uint8Array): AgentEventEnvelope[] {
+  const envelopes: AgentEventEnvelope[] = [];
+  const text = new TextDecoder().decode(value);
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim();
+    if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+    try {
+      const payload = JSON.parse(line.slice(6)) as {
+        choices?: Array<{ delta?: { x_agent_event?: unknown } }>;
+      };
+      for (const choice of payload.choices ?? []) {
+        const envelope = parseAgentEventDelta(choice.delta?.x_agent_event);
+        if (envelope) envelopes.push(envelope);
+      }
+    } catch {
+      // Other OpenAI-compatible/custom events are not canonical activity.
+    }
+  }
+  return envelopes;
+}
+
 export interface ManagedAgentStreamInput {
   generator: AsyncGenerator<Uint8Array, unknown>;
   processed: ProcessedRequest;
   usage: ObservedProviderUsage;
   completionReason: string;
   cancellationReason: string;
+  runJournal?: {
+    db: DatabaseAdapter;
+    userId: string;
+    runId: string;
+  };
 }
 
 /**
@@ -61,6 +94,17 @@ export function buildManagedAgentStream(
   const encoder = new TextEncoder();
   let settled = false;
   let reportedFailure = false;
+  let lastTaskState: AgentTaskState | undefined;
+
+  const transitionJournal = async (state: AgentTaskState) => {
+    if (!input.runJournal || lastTaskState === state) return;
+    await transitionCloudAgentRun(input.runJournal.db, {
+      userId: input.runJournal.userId,
+      runId: input.runJournal.runId,
+      state,
+    });
+    lastTaskState = state;
+  };
 
   const settle = async (reason: string, cancelled: boolean) => {
     if (settled) return;
@@ -91,6 +135,18 @@ export function buildManagedAgentStream(
         while (true) {
           const next = await input.generator.next();
           if (next.done) {
+            if (input.runJournal) {
+              if (reportedFailure) {
+                await transitionJournal('failed');
+              } else if (
+                lastTaskState === undefined ||
+                lastTaskState === 'queued' ||
+                lastTaskState === 'running' ||
+                lastTaskState === 'paused'
+              ) {
+                await transitionJournal('ready_for_review');
+              }
+            }
             await settle(
               reportedFailure
                 ? `${input.completionReason}_reported_failure`
@@ -111,6 +167,16 @@ export function buildManagedAgentStream(
           }
           if (isTerminalEvent(next.value)) continue;
           if (containsReportedFailure(next.value)) reportedFailure = true;
+          if (input.runJournal) {
+            for (const envelope of extractAgentEventEnvelopes(next.value)) {
+              const run = await appendCloudAgentEvent(input.runJournal.db, {
+                userId: input.runJournal.userId,
+                runId: input.runJournal.runId,
+                envelope,
+              });
+              lastTaskState = run.state;
+            }
+          }
           controller.enqueue(next.value);
           return;
         }
@@ -128,6 +194,14 @@ export function buildManagedAgentStream(
             'Managed agent failure settlement could not be persisted',
           );
         }
+        if (input.runJournal) {
+          await transitionJournal('failed').catch((journalError) => {
+            logger.error(
+              { journalError, requestId: input.processed.requestId },
+              'Managed agent failure state could not be persisted',
+            );
+          });
+        }
         controller.error(error);
       }
     },
@@ -135,7 +209,11 @@ export function buildManagedAgentStream(
       try {
         await input.generator.return(undefined);
       } finally {
-        await settle(input.cancellationReason, true);
+        try {
+          await settle(input.cancellationReason, true);
+        } finally {
+          if (input.runJournal) await transitionJournal('cancelled');
+        }
       }
     },
   });

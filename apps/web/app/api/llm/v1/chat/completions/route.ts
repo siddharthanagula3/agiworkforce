@@ -27,6 +27,16 @@ import {
   markManagedUsageProviderStarted,
 } from '@/lib/services/managed-usage-request-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
+import {
+  createCloudAgentRun,
+  isCloudAgentRunCancellationRequested,
+  type CloudAgentOriginSurface,
+  type CloudAgentRun,
+  type CloudAgentWorkMode,
+} from '@/lib/services/cloud-agent-run-service';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 /** Current Vercel Hobby maximum; durable AGI Work will span workflow steps. */
 export const maxDuration = 300;
@@ -115,6 +125,54 @@ async function refundFailedReservation(
   }
 }
 
+function resolveAgentOriginSurface(request: NextRequest): CloudAgentOriginSurface {
+  const surface = resolveCloudChatSurface(request);
+  return surface === 'unknown' ? 'api' : surface;
+}
+
+async function beginCloudAgentRun(
+  request: NextRequest,
+  userId: string,
+  processed: ProcessedRequest,
+  workMode: CloudAgentWorkMode,
+): Promise<{ run: CloudAgentRun; db: DatabaseAdapter } | NextResponse> {
+  try {
+    const db = processed.managedUsage?.db ?? (await getUserScopedDb(request)).db;
+    const run = await createCloudAgentRun(db, {
+      userId,
+      requestId: processed.requestId,
+      ...(processed.conversationId ? { conversationId: processed.conversationId } : {}),
+      originSurface: resolveAgentOriginSurface(request),
+      workMode,
+      provider: processed.provider,
+      model: processed.chatRequest.model,
+    });
+    return { run, db };
+  } catch (error) {
+    logger.error(
+      { error, userId, requestId: processed.requestId },
+      'Cloud agent run could not be durably created',
+    );
+    await refundFailedReservation(userId, processed, 'request_failure');
+    return NextResponse.json(
+      {
+        error: {
+          message: 'Managed agent execution is temporarily unavailable.',
+          type: 'server_error',
+          code: 'agent_run_unavailable',
+        },
+      },
+      { status: 503, headers: getSecurityHeaders() },
+    );
+  }
+}
+
+function addAgentRunHeaders(headers: Record<string, string>, run: CloudAgentRun): void {
+  headers['X-AGI-Agent-Run-Id'] = run.id;
+  headers['X-AGI-Agent-Run-URL'] =
+    `/api/llm/v1/chat/completions/runs/${encodeURIComponent(run.id)}`;
+}
+
 async function handleChatCompletions(request: NextRequest) {
   // 1. Auth + rate-limit + CSRF + subscription gate
   const authResult = await runAuthGate(request);
@@ -191,14 +249,30 @@ async function handleChatCompletions(request: NextRequest) {
       !processed.freeTrial &&
       processed.provider.toLowerCase() !== 'anthropic'
     ) {
+      const startedRun = await beginCloudAgentRun(request, userId, processed, 'research');
+      if (startedRun instanceof NextResponse) return startedRun;
+      const { run, db: runDb } = startedRun;
       const researchUsage = createObservedProviderUsage();
-      const researchGen = runResearchLoop(processed, { userId, token }, { usage: researchUsage });
+      const researchGen = runResearchLoop(
+        processed,
+        { userId, token },
+        {
+          usage: researchUsage,
+          isCancellationRequested: () =>
+            isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
+        },
+      );
       const researchStream = buildManagedAgentStream({
         generator: researchGen,
         processed,
         usage: researchUsage,
         completionReason: 'research_loop_completed',
         cancellationReason: 'client_cancelled_research_loop',
+        runJournal: {
+          db: runDb,
+          userId,
+          runId: run.id,
+        },
       });
 
       const researchHeaders: Record<string, string> = {
@@ -209,6 +283,7 @@ async function handleChatCompletions(request: NextRequest) {
         ...getCorsHeaders(request),
         ...getSecurityHeaders(),
       };
+      addAgentRunHeaders(researchHeaders, run);
       if (processed.quotaWarningHeader) {
         researchHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }
@@ -236,6 +311,14 @@ async function handleChatCompletions(request: NextRequest) {
     const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
 
     if (loopInputs.shouldRun) {
+      const startedRun = await beginCloudAgentRun(
+        request,
+        userId,
+        processed,
+        processed.chatRequest.work_mode === 'agiwork' ? 'agiwork' : 'chat',
+      );
+      if (startedRun instanceof NextResponse) return startedRun;
+      const { run, db: runDb } = startedRun;
       // Approval mode:
       //   - Built-in platform tools only: 'auto' — E2B tools run in an isolated sandbox,
       //     url_fetch is read-only + SSRF-guarded, and web_search uses the configured
@@ -257,6 +340,8 @@ async function handleChatCompletions(request: NextRequest) {
         userId,
         connectorExecutor,
         usage: toolLoopUsage,
+        isCancellationRequested: () =>
+          isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
       });
 
       const agentStream = buildManagedAgentStream({
@@ -265,6 +350,7 @@ async function handleChatCompletions(request: NextRequest) {
         usage: toolLoopUsage,
         completionReason: 'tool_loop_completed',
         cancellationReason: 'client_cancelled_tool_loop',
+        runJournal: { db: runDb, userId, runId: run.id },
       });
 
       const streamHeaders: Record<string, string> = {
@@ -275,6 +361,7 @@ async function handleChatCompletions(request: NextRequest) {
         ...getCorsHeaders(request),
         ...getSecurityHeaders(),
       };
+      addAgentRunHeaders(streamHeaders, run);
       if (processed.quotaWarningHeader) {
         streamHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
       }

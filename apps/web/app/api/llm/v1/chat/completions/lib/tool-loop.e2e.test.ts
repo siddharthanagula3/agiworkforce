@@ -365,6 +365,29 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(activity[5]?.event).toEqual({ type: 'stop', reason: 'error' });
   });
 
+  it('honors durable cancellation before provider or tool side effects', async () => {
+    const isCancellationRequested = vi.fn().mockResolvedValue(true);
+
+    const output = await drain(
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        isCancellationRequested,
+      }),
+    );
+
+    expect(isCancellationRequested).toHaveBeenCalledOnce();
+    expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
+    expect(mockGetE2BExecutor).not.toHaveBeenCalled();
+    expect(output).toContain('data: [DONE]');
+    expect(agentEvents(output).map((entry) => entry.event)).toEqual([
+      expect.objectContaining({ type: 'task-state-changed', state: 'queued' }),
+      expect.objectContaining({ type: 'task-state-changed', state: 'running' }),
+      { type: 'lifecycle', phase: 'started' },
+      expect.objectContaining({ type: 'task-state-changed', state: 'cancelled' }),
+      { type: 'stop', reason: 'cancelled' },
+    ]);
+  });
+
   it('pauses the sandbox even when the loop exits via the manual-approval `return` path', async () => {
     const step1 = sseStreamFrom([
       chunk({

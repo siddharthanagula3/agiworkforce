@@ -156,6 +156,13 @@ function lastSearchResults(run: CollectedRun): Array<Record<string, unknown>> | 
   return last?.['content'] as Array<Record<string, unknown>> | undefined;
 }
 
+function canonicalAgentEvents(run: CollectedRun): Array<Record<string, unknown>> {
+  return run.events
+    .map((entry) => delta(entry)['x_agent_event'])
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .map((envelope) => envelope['event'] as Record<string, unknown>);
+}
+
 const BILLING = { userId: 'user-1', token: 'tok' };
 
 beforeEach(() => {
@@ -219,6 +226,22 @@ describe('researchStatusEvent', () => {
 // ─── Loop behavior ────────────────────────────────────────────────────────────
 
 describe('runResearchLoop', () => {
+  it('honors durable cancellation before starting a provider side effect', async () => {
+    const isCancellationRequested = vi.fn().mockResolvedValue(true);
+
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, { isCancellationRequested }),
+    );
+
+    expect(isCancellationRequested).toHaveBeenCalledOnce();
+    expect(streamRequestMock).not.toHaveBeenCalled();
+    expect(canonicalAgentEvents(run)).toEqual([
+      expect.objectContaining({ type: 'task-state-changed', state: 'cancelled' }),
+      { type: 'stop', reason: 'cancelled' },
+    ]);
+    expect(run.doneCount).toBe(1);
+  });
+
   it('runs gather -> synthesis, suppresses notes, forwards the report, and emits cumulative deduped sources', async () => {
     streamRequestMock
       .mockResolvedValueOnce(
