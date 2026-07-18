@@ -171,6 +171,51 @@ describe('MessageBubble', () => {
       expect(activityTrigger.textContent).toContain('Searching official sources');
       expect(screen.queryByRole('button', { name: /toggle tool timeline/i })).toBeNull();
     });
+
+    it('reads a completed assistant response aloud through the list-owned controller', () => {
+      const onReadAloud = vi.fn();
+      const msg = assistantMsg();
+
+      render(<MessageBubble message={msg} isReadAloudSupported onReadAloud={onReadAloud} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Read message aloud' }));
+      expect(onReadAloud).toHaveBeenCalledWith(msg.id, msg.content);
+    });
+
+    it('shows an honest stop action only for the response currently being read', () => {
+      const onReadAloud = vi.fn();
+      const msg = assistantMsg();
+
+      render(
+        <MessageBubble
+          message={msg}
+          isReadAloudSupported
+          isReadingAloud
+          onReadAloud={onReadAloud}
+        />,
+      );
+
+      const stopButton = screen.getByRole('button', { name: 'Stop reading message' });
+      expect(stopButton).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.click(stopButton);
+      expect(onReadAloud).toHaveBeenCalledWith(msg.id, msg.content);
+    });
+
+    it('does not offer read aloud to user messages or unsupported browsers', () => {
+      const onReadAloud = vi.fn();
+      const { rerender } = render(
+        <MessageBubble
+          message={makeMessage({ role: 'user' })}
+          isReadAloudSupported
+          onReadAloud={onReadAloud}
+        />,
+      );
+
+      expect(screen.queryByRole('button', { name: 'Read message aloud' })).toBeNull();
+
+      rerender(<MessageBubble message={assistantMsg()} onReadAloud={onReadAloud} />);
+      expect(screen.queryByRole('button', { name: 'Read message aloud' })).toBeNull();
+    });
   });
 
   describe('streaming state', () => {

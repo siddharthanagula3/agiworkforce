@@ -35,6 +35,8 @@ import {
   File,
   ImageOff,
   ZoomIn,
+  Volume2,
+  Square,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -238,6 +240,12 @@ interface MessageBubbleProps {
   onPin?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onBranch?: (messageId: string) => void;
+  /** Browser-native speech control owned by the parent message list. */
+  onReadAloud?: (messageId: string, content: string) => void;
+  /** True only for the single response currently being spoken. */
+  isReadingAloud?: boolean;
+  /** Keeps an unavailable browser capability out of the action row. */
+  isReadAloudSupported?: boolean;
   hasBranches?: boolean;
   /** Re-generates an image result in-place (edit/aspect-ratio change). */
   onRegenerateImage?: (opts: {
@@ -261,6 +269,9 @@ const MessageBubbleComponent = function MessageBubble({
   onDelete,
   // onPin and onBranch kept in interface for future wiring; not rendered until callbacks are connected
   onReact,
+  onReadAloud,
+  isReadingAloud = false,
+  isReadAloudSupported = false,
   hasBranches,
   animationIndex = 0,
   onRegenerateImage,
@@ -1205,6 +1216,30 @@ const MessageBubbleComponent = function MessageBubble({
                   <TooltipContent>Copy</TooltipContent>
                 </Tooltip>
 
+                {!isUser && isReadAloudSupported && onReadAloud && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => onReadAloud(message.id, message.content)}
+                        aria-label={isReadingAloud ? 'Stop reading message' : 'Read message aloud'}
+                        aria-pressed={isReadingAloud}
+                      >
+                        {isReadingAloud ? (
+                          <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+                        ) : (
+                          <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isReadingAloud ? 'Stop reading' : 'Read aloud'}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
                 {!isUser && onReact && (
                   <>
                     <Tooltip>
@@ -1416,8 +1451,11 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onPin !== next.onPin) return false;
   if (prev.onReact !== next.onReact) return false;
   if (prev.onBranch !== next.onBranch) return false;
+  if (prev.onReadAloud !== next.onReadAloud) return false;
 
   // Check flags
+  if (prev.isReadingAloud !== next.isReadingAloud) return false;
+  if (prev.isReadAloudSupported !== next.isReadAloudSupported) return false;
   if (prev.hasBranches !== next.hasBranches) return false;
   if (prev.animationIndex !== next.animationIndex) return false;
 
