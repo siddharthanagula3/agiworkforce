@@ -39,6 +39,15 @@ This is founder-gated production data-plane work; no agent should deploy this
 slice or run production-mutating QA until the founder confirms 0061 was
 applied.
 
+2026-07-17 Cloud agent approval-checkpoint deploy gate: migration
+`apps/web/db/neon/0062_cloud_agent_approval_checkpoints.sql` must be applied to
+production Neon after 0061 and before deploying the dependent approval-resume
+routes. It creates the tenant-owned, row-level-secured checkpoint that stores
+the signed continuation request, assistant-message projection, pending tool
+calls, and canonical approval-boundary events. This is founder-gated
+production data-plane work; no agent should deploy this slice or run
+production-mutating QA until the founder confirms 0062 was applied.
+
 2026-07-17 Cloud agent durability gap (`CLOUD-AGENT-DURABILITY-01`, Critical,
 Partially remediated in code; workflow checkpointing remains open): Web,
 Desktop Cloud, and Mobile Cloud all reach the real managed tool loop through
@@ -64,25 +73,40 @@ explicitly excluding private `<thinking>` content; all four clients reconcile
 overlap so a chunk rendered immediately before disconnect is not duplicated
 during replay. This closes the previous "no durable event cursor" defect for
 Web, Desktop, Mobile, and Chrome after 0061 is applied. Web, Desktop, and
-Mobile app-relaunch rehydration of an unfinished turn is not wired, and
-execution itself is still request-scoped rather than a restart-safe durable
-workflow.
-Web/Desktop/Mobile approval registries are process-memory caches; the approval
-endpoint safely reconstructs a continuation from the owned conversation, but a
-worker restart cannot autonomously continue an in-flight provider/tool
-boundary. Before claiming ChatGPT-class
-multi-hour/background agents, move each provider/tool boundary into a durable
-workflow or shared Rust worker, persist encrypted idempotent provider/tool
-checkpoints plus durable approval state, resume clients from the new journal
-cursor, and settle billing exactly once across retries. Keep the current
-four-minute budget as an individual-invocation safety boundary. Verification
-for the interim boundary lives in `cloud-agent-run-service.test.ts`,
-`cloud-agent-runs.test.ts`, `managed-agent-stream.test.ts`,
-`tool-loop-policy.test.ts`, `tool-loop.e2e.test.ts`, `research-loop.test.ts`,
-`useChatStream.test.tsx`, Desktop `CloudRuntime.test.ts`, Desktop
-`cloudApi.test.ts`, Mobile `streaming-completions-fallback.test.ts`, and Mobile
-`chatStore.test.ts`, plus Chrome `free-trial-quota.test.ts`,
-`managed-run-control.test.ts`, and `side-panel-chat-state.test.ts`.
+Mobile now also persist the run reference plus a versioned approval projection
+with the assistant message, restore an approval boundary after app relaunch,
+and resume it using only the run ID and the exact decision set. Migration 0062
+stores the signed continuation, pending calls, assistant projection, and
+contiguous canonical approval-boundary envelopes before any approval is made
+visible. The owner-scoped approval route claims that checkpoint under a lease,
+rejects stale, partial, or extra decisions, restores signed thinking
+server-side, and releases the lease on pre-execution discovery failures.
+Message sync is compare-and-swap, so a partial assistant projection can be
+completed without overwriting a newer local edit. This removes the former
+process-memory approval-registry and approval-relaunch defects after 0062 is
+applied.
+
+Execution itself remains request-scoped rather than a restart-safe durable
+workflow. In particular, an expired `resuming` checkpoint lease is not
+automatically reclaimed because doing so without an execution-step journal
+could duplicate provider calls or tool side effects. A worker crash after a
+side effect but before checkpoint completion therefore still requires manual
+recovery; non-approval in-flight turns also do not have a general app-relaunch
+execution checkpoint. Before claiming ChatGPT-class multi-hour/background
+agents, move each provider/tool boundary into a durable workflow or shared Rust
+worker, persist idempotent execution-step records and side-effect receipts,
+reclaim leases only from a proven step boundary, resume clients from the run
+journal cursor, and settle billing exactly once across retries. Keep the
+current four-minute budget as an individual-invocation safety boundary.
+Verification for the interim boundary lives in
+`cloud-agent-run-service.test.ts`, `managed-agent-stream.test.ts`,
+`tool-loop.resume.test.ts`, `approve/route.test.ts`,
+`useChatStream.approval.test.tsx`, unified-chat
+`useChat.durableApproval.test.tsx`, Desktop `CloudRuntime.test.ts`, Desktop
+`cloudApi.test.ts`, Desktop `cloudToolApproval.test.ts`, Mobile
+`streaming-completions-fallback.test.ts`, Mobile
+`cloud-sync-engine.test.ts`, and Mobile approval/timeline suites, plus the
+previous run-journal and Chrome verification suites.
 
 2026-07-17 VS Code agent-activity gap (`VSCODE-AGENT-ACTIVITY-01`, Partially
 remediated): the Rust developer-session protocol is now version 5 and the real

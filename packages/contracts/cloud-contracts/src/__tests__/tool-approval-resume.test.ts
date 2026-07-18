@@ -5,10 +5,68 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  CloudToolApprovalProjectionSchema,
+  readPersistedCloudToolApproval,
   ToolApprovalDecisionSchema,
   ToolApprovalResumeRequestSchema,
   ToolApprovalResumeErrorResponseSchema,
 } from '../tool-approval-resume';
+
+describe('CloudToolApprovalProjectionSchema', () => {
+  const projection = {
+    schemaVersion: 1,
+    runId: '0190a000-0000-7000-8000-000000000001',
+    calls: [{ toolCallId: 'call_1', name: 'shell', input: '{"command":"pwd"}' }],
+  };
+
+  it('accepts a bounded display-only approval projection', () => {
+    expect(CloudToolApprovalProjectionSchema.safeParse(projection).success).toBe(true);
+  });
+
+  it('rejects an empty projection so stale empty cards cannot masquerade as pending input', () => {
+    expect(CloudToolApprovalProjectionSchema.safeParse({ ...projection, calls: [] }).success).toBe(
+      false,
+    );
+  });
+
+  it('reads a projection only when its validated durable run reference matches', () => {
+    expect(
+      readPersistedCloudToolApproval({
+        cloudAgentRun: {
+          runId: projection.runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${projection.runId}`,
+          lastSequence: 4,
+          state: 'awaiting_input',
+        },
+        cloudApproval: projection,
+      }),
+    ).toEqual({
+      runReference: {
+        runId: projection.runId,
+        runPath: `/api/llm/v1/chat/completions/runs/${projection.runId}`,
+        lastSequence: 4,
+        state: 'awaiting_input',
+      },
+      projection,
+    });
+  });
+
+  it('rejects a projection copied from a different run', () => {
+    expect(
+      readPersistedCloudToolApproval({
+        cloudAgentRun: {
+          runId: projection.runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${projection.runId}`,
+          lastSequence: 4,
+        },
+        cloudApproval: {
+          ...projection,
+          runId: '0190a000-0000-7000-8000-000000000002',
+        },
+      }),
+    ).toBeNull();
+  });
+});
 
 describe('ToolApprovalDecisionSchema', () => {
   it('accepts an approved decision', () => {
@@ -27,23 +85,27 @@ describe('ToolApprovalDecisionSchema', () => {
 
 describe('ToolApprovalResumeRequestSchema', () => {
   const body = {
+    run_id: '0190a000-0000-7000-8000-000000000001',
     tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
-    messages: [
-      { role: 'user', content: 'do the thing' },
-      {
-        role: 'assistant',
-        tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'x', arguments: '{}' } }],
-      },
-    ],
   };
 
-  it('accepts the resume body shape (resumeBodySchema, route.ts:57-67)', () => {
+  it('accepts a server-owned run reference plus per-tool decisions', () => {
     expect(ToolApprovalResumeRequestSchema.safeParse(body).success).toBe(true);
   });
 
-  it('accepts a body without messages (messages is optional)', () => {
-    const { messages: _omitted, ...rest } = body;
-    expect(ToolApprovalResumeRequestSchema.safeParse(rest).success).toBe(true);
+  it('rejects the former client-replayed transcript contract', () => {
+    expect(
+      ToolApprovalResumeRequestSchema.safeParse({
+        tool_approvals: body.tool_approvals,
+        messages: [{ role: 'assistant', tool_calls: [{ id: 'call_1' }] }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects a malformed run id', () => {
+    expect(ToolApprovalResumeRequestSchema.safeParse({ ...body, run_id: 'run-1' }).success).toBe(
+      false,
+    );
   });
 
   it('rejects an empty tool_approvals array (min(1), route.ts:58)', () => {
@@ -62,8 +124,13 @@ describe('ToolApprovalResumeRequestSchema', () => {
     ).toBe(false);
   });
 
-  it('tolerates extra passthrough fields on tool_calls entries (route.ts:63)', () => {
-    expect(ToolApprovalResumeRequestSchema.safeParse(body).success).toBe(true);
+  it('strips unrelated chat fields instead of accepting a client execution checkpoint', () => {
+    const parsed = ToolApprovalResumeRequestSchema.parse({
+      ...body,
+      model: 'untrusted-model',
+      messages: [{ role: 'assistant', tool_calls: [{ id: 'call_1' }] }],
+    });
+    expect(parsed).toEqual(body);
   });
 });
 

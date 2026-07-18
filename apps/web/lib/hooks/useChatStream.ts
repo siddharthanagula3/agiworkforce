@@ -29,7 +29,9 @@ import {
   parseAgentEventDelta,
   parseGeneratedFilesDelta,
   reconcileManagedCloudPublicText,
+  readPersistedCloudToolApproval,
   readManagedCloudAgentRunHandle,
+  CloudToolApprovalProjectionSchema,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
   type ManagedCloudSaveMessageOptions,
@@ -101,9 +103,8 @@ interface UseChatStreamReturn {
   /**
    * Resolve one pending tool-approval card (see the manual-approval flow). Records
    * the per-tool_call decision; once EVERY pending tool call in the suspended turn
-   * is decided, POSTs the resume request (thread + suspended assistant tool_call
-   * turn + tool_approvals) to /api/llm/v1/chat/completions/approve and streams the
-   * continuation into the same assistant message.
+   * is decided, POSTs only the durable run id + decisions to the approval
+   * endpoint and streams the continuation into the same assistant message.
    */
   resolveToolApproval: (
     assistantMessageId: string,
@@ -301,13 +302,13 @@ interface PendingApprovalCall {
 }
 
 /**
- * Context captured for a suspended turn so the resume request can be rebuilt
- * statelessly (the server keeps no loop state). Keyed by assistantMessageId in a
- * MODULE-level registry so any component (e.g. a per-message MessageBubble) can
- * resolve the approval, not only the hook instance that sent the message.
+ * Client projection of a server-owned approval checkpoint. The browser keeps
+ * only the durable run identity, visible tool calls, and local decisions; the
+ * authoritative transcript and executable arguments never round-trip through
+ * the client. Keyed by assistantMessageId so any message card can resolve it.
  */
 interface PendingTurn {
-  priorMessages: ApiMessage[];
+  runId: string;
   model: string;
   conversationId: string;
   isTemporaryConversation: boolean;
@@ -324,19 +325,108 @@ export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
 }
 
-/**
- * Whether a suspended turn is actually resolvable right now. `pendingTurns`
- * is process-memory-only (module state, reset on every page load), while an
- * `awaiting_approval` tool card is durably persisted on the message. A page
- * reload -- or loading a conversation whose last turn suspended in a PRIOR
- * session -- leaves the store showing `awaiting_approval` with no matching
- * registry entry: the Approve/Reject buttons would render live-wired but
- * silently no-op, since `resolveToolApproval` bails out on a missing turn
- * (see its `if (!turn || turn.resolving) return;` guard). Callers must check
- * this before wiring the buttons and render an expired state instead.
- */
+/** Whether a persisted approval card can be reconstructed from its run handle. */
 export function isApprovalTurnLive(assistantMessageId: string): boolean {
-  return pendingTurns.has(assistantMessageId);
+  return pendingTurns.has(assistantMessageId) || restorePendingTurn(assistantMessageId) !== null;
+}
+
+function restorePendingTurn(assistantMessageId: string): PendingTurn | null {
+  const store = useChatStore.getState();
+  const message = store.messages.find((candidate) => candidate.id === assistantMessageId);
+  const conversationId = store.activeConversationId;
+  const persisted = readPersistedCloudToolApproval(message?.metadata);
+  if (message && conversationId && persisted) {
+    const turn: PendingTurn = {
+      runId: persisted.runReference.runId,
+      model: message.model ?? message.metadata?.model ?? 'auto',
+      conversationId,
+      isTemporaryConversation:
+        store.conversations.find((conversation) => conversation.id === conversationId)
+          ?.isTemporary ?? false,
+      calls: persisted.projection.calls.map((call) => ({
+        toolCallId: call.toolCallId,
+        name: call.name,
+        args: parseApprovalInput(call.input),
+      })),
+      decisions: new Map(
+        persisted.projection.calls.flatMap((call) =>
+          call.approvalDecision ? [[call.toolCallId, call.approvalDecision] as const] : [],
+        ),
+      ),
+      resolving: false,
+    };
+    pendingTurns.set(assistantMessageId, turn);
+    return turn;
+  }
+
+  const runId = message?.metadata?.cloudAgentRun?.runId;
+  const approvalTools = (message?.metadata?.tools ?? []).filter(
+    (tool) => tool.requiresApproval === true && typeof tool.toolCallId === 'string',
+  );
+  if (!message || !runId || !conversationId || approvalTools.length === 0) return null;
+
+  const turn: PendingTurn = {
+    runId,
+    model: message.model ?? message.metadata?.model ?? 'auto',
+    conversationId,
+    isTemporaryConversation:
+      store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary ??
+      false,
+    calls: approvalTools.map((tool) => ({
+      toolCallId: tool.toolCallId!,
+      name: tool.name,
+      args: tool.parameters ?? tool.rawArgs ?? {},
+    })),
+    decisions: new Map(
+      approvalTools.flatMap((tool) =>
+        typeof tool.approved === 'boolean'
+          ? [[tool.toolCallId!, tool.approved ? 'approved' : 'rejected'] as const]
+          : [],
+      ),
+    ),
+    resolving: false,
+  };
+  pendingTurns.set(assistantMessageId, turn);
+  return turn;
+}
+
+function parseApprovalInput(input: string | undefined): Record<string, unknown> {
+  if (!input) return {};
+  try {
+    const parsed: unknown = JSON.parse(input);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : { value: parsed };
+  } catch {
+    return { value: input };
+  }
+}
+
+function stringifyApprovalInput(input: Record<string, unknown> | undefined): string | undefined {
+  if (!input || Object.keys(input).length === 0) return undefined;
+  try {
+    const serialized = JSON.stringify(input);
+    return serialized.length <= 100_000 ? serialized : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function projectPendingTurn(turn: PendingTurn) {
+  return CloudToolApprovalProjectionSchema.parse({
+    schemaVersion: 1,
+    runId: turn.runId,
+    calls: turn.calls.map((call) => {
+      const input = stringifyApprovalInput(call.args);
+      const approvalDecision = turn.decisions.get(call.toolCallId);
+      return {
+        toolCallId: call.toolCallId,
+        name: call.name,
+        ...(input ? { input } : {}),
+        ...(approvalDecision ? { approvalDecision } : {}),
+      };
+    }),
+  });
 }
 
 /**
@@ -390,6 +480,7 @@ interface StreamOutcome {
   /** True when the turn suspended on a tool-approval request (no final answer yet). */
   suspended: boolean;
   pendingCalls: PendingApprovalCall[];
+  runHandle: ManagedCloudAgentRunHandle | null;
 }
 
 interface ConsumeStreamContext {
@@ -678,6 +769,32 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (currentCloudAgentRun) {
       metadata.cloudAgentRun = { ...currentCloudAgentRun };
+      const approvalCalls = toolTimeline
+        .filter(
+          (tool) =>
+            tool.requiresApproval === true &&
+            typeof tool.toolCallId === 'string' &&
+            tool.toolCallId.length > 0,
+        )
+        .map((tool) => {
+          const input = stringifyApprovalInput(tool.parameters ?? tool.rawArgs);
+          return {
+            toolCallId: tool.toolCallId as string,
+            name: tool.name,
+            ...(input ? { input } : {}),
+            ...(typeof tool.approved === 'boolean'
+              ? { approvalDecision: tool.approved ? ('approved' as const) : ('rejected' as const) }
+              : {}),
+          };
+        });
+      metadata.cloudApproval =
+        approvalCalls.length > 0
+          ? CloudToolApprovalProjectionSchema.parse({
+              schemaVersion: 1,
+              runId: currentCloudAgentRun.runId,
+              calls: approvalCalls,
+            })
+          : null;
     }
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
@@ -735,8 +852,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   const persistAssistant = (fullContent: string) => {
-    if (isTemporaryConversation) return;
     const metadata = buildAssistantMetadata();
+    if (metadata) {
+      // Temporary chats skip the database write but still need the exact same
+      // terminal in-memory state, including clearing a resolved approval.
+      updateMessage(assistantMessageId, { metadata });
+    }
+    if (isTemporaryConversation) return;
     // A tool-only turn (connector call, generated file, code execution) can
     // finish with no visible closing text — fullContent is then ''. Bailing
     // out unconditionally here used to drop the tool timeline and generated
@@ -753,6 +875,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.codeExecutionResult ||
         metadata.research ||
         metadata.cloudAgentRun ||
+        metadata.cloudApproval ||
         metadata.thinkingContent ||
         (metadata.thinkingSegments?.length ?? 0) > 0 ||
         // A provider failure on the very first token (zero content streamed)
@@ -930,7 +1053,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls };
+    return { suspended, pendingCalls, runHandle };
   };
 
   try {
@@ -970,7 +1093,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           persistAssistant(fullAssistantContent);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
-          return { suspended, pendingCalls };
+          return { suspended, pendingCalls, runHandle };
         }
 
         try {
@@ -1316,7 +1439,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls };
+    return { suspended, pendingCalls, runHandle };
   } catch (error) {
     // Browsers reject an aborted fetch read with a DOMException named
     // 'AbortError' -- DOMException is NOT instanceof Error, so a plain
@@ -1398,7 +1521,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         useChatStore.getState().setError(errorMessage);
         stopStreaming(conversationId);
         setLoading(false, conversationId);
-        return { suspended, pendingCalls };
+        return { suspended, pendingCalls, runHandle };
       }
     }
     throw terminalError;
@@ -1641,8 +1764,11 @@ export function useChatStream(): UseChatStreamReturn {
 
         // Register the suspended turn so its approval cards can drive a resume.
         if (outcome.suspended && outcome.pendingCalls.length > 0) {
+          if (!outcome.runHandle) {
+            throw new Error('The managed agent did not return a durable run handle.');
+          }
           pendingTurns.set(assistantMessageId, {
-            priorMessages: apiMessages,
+            runId: outcome.runHandle.runId,
             model,
             conversationId,
             isTemporaryConversation,
@@ -1944,44 +2070,83 @@ export function useResolveToolApproval(
         updateToolEntry,
       } = store;
 
-      const turn = pendingTurns.get(assistantMessageId);
+      const turn = pendingTurns.get(assistantMessageId) ?? restorePendingTurn(assistantMessageId);
       if (!turn || turn.resolving) return;
       if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
 
       turn.decisions.set(toolCallId, decision);
 
-      // Reflect the decision on the card immediately: approved → running (the
-      // continuation's status/result events land on it), rejected → failed.
-      if (decision === 'approved') {
-        updateToolEntry(assistantMessageId, toolCallId, {
-          status: 'running',
-          requiresApproval: false,
-        });
-      } else {
-        updateToolEntry(assistantMessageId, toolCallId, {
-          status: 'failed',
-          requiresApproval: false,
-          error: 'You denied this tool.',
-          result: 'The user denied permission to run this tool.',
-        });
+      // Persist the selection while the batch remains awaiting input. Keeping
+      // requiresApproval=true makes a partially decided batch reconstructable
+      // after reload; execution state changes only once every call is decided.
+      updateToolEntry(assistantMessageId, toolCallId, {
+        approved: decision === 'approved',
+        requiresApproval: true,
+      });
+
+      const selectedMessage = useChatStore
+        .getState()
+        .messages.find((message) => message.id === assistantMessageId);
+      const selectedMetadata: MessageMetadata = {
+        ...selectedMessage?.metadata,
+        cloudApproval: projectPendingTurn(turn),
+      };
+      updateMessage(assistantMessageId, { metadata: selectedMetadata });
+
+      const getAuthToken: AuthTokenProvider = async () => {
+        const token = await getToken();
+        if (!token) throw new Error('Not authenticated');
+        return token;
+      };
+      if (!turn.isTemporaryConversation && selectedMessage) {
+        await saveMessageToDb(
+          turn.conversationId,
+          {
+            id: assistantMessageId,
+            role: selectedMessage.role,
+            content: selectedMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            model: selectedMessage.model ?? turn.model,
+            metadata: selectedMetadata,
+          },
+          getAuthToken,
+        ).catch((error) => notifyPersistenceFailure('assistant', error));
       }
 
       // Wait until EVERY pending call in the turn is decided before resuming.
       if (turn.decisions.size < turn.calls.length) return;
       turn.resolving = true;
 
+      for (const call of turn.calls) {
+        const callDecision = turn.decisions.get(call.toolCallId) ?? 'rejected';
+        updateToolEntry(assistantMessageId, call.toolCallId, {
+          approved: callDecision === 'approved',
+          status: callDecision === 'approved' ? 'running' : 'failed',
+          requiresApproval: false,
+          ...(callDecision === 'rejected'
+            ? {
+                error: 'You denied this tool.',
+                result: 'The user denied permission to run this tool.',
+              }
+            : {}),
+        });
+      }
+
       // Provider so the terminal persist after a long resume continuation uses a
       // fresh token (see AuthTokenProvider), not one captured here.
-      const getAuthToken: AuthTokenProvider = async () => {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        return token;
-      };
       let authToken: string;
       try {
         authToken = await getAuthToken();
       } catch {
         turn.resolving = false;
+        for (const call of turn.calls) {
+          updateToolEntry(assistantMessageId, call.toolCallId, {
+            approved: turn.decisions.get(call.toolCallId) === 'approved',
+            status: 'awaiting_approval',
+            requiresApproval: true,
+            error: undefined,
+            result: undefined,
+          });
+        }
         setError('Not authenticated');
         return;
       }
@@ -1991,19 +2156,8 @@ export function useResolveToolApproval(
       }
       abortRef.current = new AbortController();
 
-      // Reconstruct the suspended assistant tool_call turn (standard OpenAI
-      // continue-after-tool shape) and the per-tool approval decisions.
       const assistantContent =
         useChatStore.getState().messages.find((m) => m.id === assistantMessageId)?.content ?? '';
-      const assistantToolCallMessage: ApiMessage = {
-        role: 'assistant',
-        content: assistantContent,
-        tool_calls: turn.calls.map((c) => ({
-          id: c.toolCallId,
-          type: 'function',
-          function: { name: c.name, arguments: JSON.stringify(c.args) },
-        })),
-      };
       const toolApprovals = turn.calls.map((c) => ({
         tool_call_id: c.toolCallId,
         decision: turn.decisions.get(c.toolCallId) ?? 'rejected',
@@ -2032,12 +2186,8 @@ export function useResolveToolApproval(
           method: 'POST',
           headers,
           body: JSON.stringify({
-            model: turn.model,
-            messages: [...turn.priorMessages, assistantToolCallMessage],
-            conversation_id: turn.conversationId,
-            stream: true,
+            run_id: turn.runId,
             tool_approvals: toolApprovals,
-            use_prompt_cache: true,
           }),
           signal: abortRef.current?.signal,
         });
@@ -2063,33 +2213,11 @@ export function useResolveToolApproval(
         });
 
         if (outcome.suspended && outcome.pendingCalls.length > 0) {
-          // The continuation suspended again (a further tool needs approval):
-          // register a fresh turn carrying the now-longer thread (assistant
-          // tool_call turn + this batch's tool results). The just-finished
-          // resume already streamed each approved call's REAL result onto
-          // this message's tool timeline (see the x_tool_result handling
-          // above) -- read it from there instead of a placeholder, so the
-          // model sees the genuine file contents / command output / search
-          // results it needs to reason about the NEXT tool call.
-          const currentTools =
-            useChatStore.getState().messages.find((m) => m.id === assistantMessageId)?.metadata
-              ?.tools ?? [];
+          if (!outcome.runHandle) {
+            throw new Error('The managed agent continuation lost its durable run handle.');
+          }
           pendingTurns.set(assistantMessageId, {
-            priorMessages: [
-              ...turn.priorMessages,
-              assistantToolCallMessage,
-              ...turn.calls.map(
-                (c): ApiMessage => ({
-                  role: 'tool',
-                  content:
-                    turn.decisions.get(c.toolCallId) === 'approved'
-                      ? (currentTools.find((t) => t.toolCallId === c.toolCallId)?.result ??
-                        '(executed)')
-                      : 'The user denied permission to run this tool.',
-                  tool_call_id: c.toolCallId,
-                }),
-              ),
-            ],
+            runId: outcome.runHandle.runId,
             model: turn.model,
             conversationId: turn.conversationId,
             isTemporaryConversation: turn.isTemporaryConversation,
@@ -2106,6 +2234,28 @@ export function useResolveToolApproval(
           pendingTurns.delete(assistantMessageId);
         }
       } catch (error) {
+        // A rejected resume never consumed the durable checkpoint: the server
+        // released its lease, so keep the local decisions and return the cards
+        // to a retryable awaiting state. Network/stream failures are handled by
+        // the durable-run replay path (or terminal failure handling) instead.
+        if (error instanceof ChatApiError) {
+          turn.resolving = false;
+          for (const call of turn.calls) {
+            const callDecision = turn.decisions.get(call.toolCallId);
+            updateToolEntry(assistantMessageId, call.toolCallId, {
+              approved: callDecision === undefined ? undefined : callDecision === 'approved',
+              status: 'awaiting_approval',
+              requiresApproval: true,
+              error: undefined,
+              result: undefined,
+            });
+          }
+          updateMessage(assistantMessageId, { isStreaming: false });
+          setError(getVisibleErrorMessage(error));
+          stopStreaming(turn.conversationId);
+          setLoading(false, turn.conversationId);
+          return;
+        }
         pendingTurns.delete(assistantMessageId);
         handleStreamError(error, {
           assistantMessageId,

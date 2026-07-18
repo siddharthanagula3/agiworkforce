@@ -32,6 +32,8 @@ export interface CloudMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   model?: string;
+  provider?: string;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -444,18 +446,16 @@ export async function sendCloudMessage(
 // ============================================================================
 
 /**
- * Resumes a turn the server suspended on `x_tool_approval_request`. Sends the
- * full replayed thread (`priorMessages` + the reconstructed assistant
- * `tool_calls` turn) plus the per-call `tool_approvals` decisions, per the
- * shared `ToolApprovalResumeRequestSchema` contract
- * (`@agiworkforce/cloud-contracts`, `tool-approval-resume.ts`). On
+ * Resumes a turn the server suspended on `x_tool_approval_request`. Sends only
+ * the tenant-owned run id plus the per-call decisions. The server restores the
+ * exact private transcript, tool arguments, policy, and event cursor from its
+ * approval checkpoint. On
  * success the response is the SAME `text/event-stream` shape as
  * `sendCloudMessage` — streamed through the identical callbacks so the
  * continuation appends onto the same assistant message.
  */
 export async function sendCloudApprovalResume(
-  model: string,
-  messages: Array<Record<string, unknown>>,
+  runId: string,
   toolApprovals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>,
   onChunk: (text: string) => void,
   onDone: () => void,
@@ -482,7 +482,7 @@ export async function sendCloudApprovalResume(
     res = await guardedFetch(`${CLOUD_API_BASE_URL}/api/llm/v1/chat/completions/approve`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ model, messages, stream: true, tool_approvals: toolApprovals }),
+      body: JSON.stringify({ run_id: runId, tool_approvals: toolApprovals }),
       signal,
       credentials: 'include',
     });

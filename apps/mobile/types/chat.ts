@@ -64,6 +64,8 @@ export interface ToolCall {
    * result) or once `resolveToolApproval` records a local decision.
    */
   requiresApproval?: boolean;
+  /** Persisted local choice while a multi-call approval waits for every decision. */
+  approvalDecision?: 'approved' | 'rejected';
   /**
    * The server's `tool_call_id` for a call requiring approval — the id the
    * resume request (`POST /api/llm/v1/chat/completions/approve`) references in
@@ -109,6 +111,8 @@ export interface StatusStep {
  * shape and the render layer depends on `fileName` and direct `url` access.
  */
 export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
+  /** Last managed-cloud message revision observed by the delta-sync client. */
+  serverVersion?: string;
   /** Mobile-specific file attachments (overrides canonical ChatAttachment[]) */
   attachments?: MessageAttachment[];
   /** Inline artifacts (code, research, email, etc.) */

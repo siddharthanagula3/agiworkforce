@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { applyMessageDeltas, toMessagePushItem, isSyncableMessageRole } from '../messages';
+import {
+  applyMessageDeltas,
+  toMessagePushItem,
+  isSyncableMessageRole,
+  messageSyncContentMatches,
+} from '../messages';
 import type { MessageWireDelta } from '@agiworkforce/cloud-contracts';
 import { createInMemoryMessagePort } from './test-ports';
 
@@ -76,6 +81,19 @@ describe('applyMessageDeltas', () => {
     expect(msg && 'model' in msg).toBe(false);
     expect(msg && 'provider' in msg).toBe(false);
   });
+
+  it('applies server revision and metadata needed for cross-device approval recovery', () => {
+    const port = createInMemoryMessagePort();
+    const metadata = {
+      cloudApproval: {
+        schemaVersion: 1,
+        runId: '018f6f2a-0000-7000-8000-000000000099',
+        calls: [{ toolCallId: 'call-1', name: 'shell' }],
+      },
+    };
+    applyMessageDeltas(port, [delta({ metadata, server_version: '44' })]);
+    expect(port.getMessages('c1')[0]).toMatchObject({ metadata, serverVersion: '44' });
+  });
 });
 
 describe('isSyncableMessageRole', () => {
@@ -99,6 +117,8 @@ describe('toMessagePushItem', () => {
       content: 'hello',
       model: 'gpt-5.4',
       provider: 'openai',
+      metadata: { cloudApproval: null },
+      serverVersion: '43',
       createdAt: T,
     });
     expect(item).toEqual({
@@ -108,6 +128,8 @@ describe('toMessagePushItem', () => {
       content: 'hello',
       model: 'gpt-5.4',
       provider: 'openai',
+      metadata: { cloudApproval: null },
+      baseVersion: '43',
     });
     expect(item).not.toHaveProperty('createdAt');
   });
@@ -116,5 +138,39 @@ describe('toMessagePushItem', () => {
     const item = toMessagePushItem('c1', { id: 'm1', role: 'user', content: 'hi' });
     expect(item.model).toBeNull();
     expect(item.provider).toBeNull();
+    expect(item.baseVersion).toBe('0');
+  });
+});
+
+describe('messageSyncContentMatches', () => {
+  it('treats metadata objects with different key order as the same snapshot', () => {
+    const sent = {
+      id: 'm1',
+      role: 'assistant',
+      content: 'waiting',
+      metadata: { cloudApproval: { schemaVersion: 1, calls: [{ name: 'shell', id: 'c1' }] } },
+    };
+    const latest = {
+      ...sent,
+      metadata: { cloudApproval: { calls: [{ id: 'c1', name: 'shell' }], schemaVersion: 1 } },
+    };
+
+    expect(messageSyncContentMatches(sent, latest)).toBe(true);
+  });
+
+  it('detects a nested metadata value change', () => {
+    const sent = {
+      id: 'm1',
+      role: 'assistant',
+      content: 'waiting',
+      metadata: { cloudApproval: { schemaVersion: 1 } },
+    };
+
+    expect(
+      messageSyncContentMatches(sent, {
+        ...sent,
+        metadata: { cloudApproval: { schemaVersion: 2 } },
+      }),
+    ).toBe(false);
   });
 });

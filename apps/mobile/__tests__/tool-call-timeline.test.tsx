@@ -42,6 +42,8 @@ jest.mock('../src/ui/theme', () => ({
     textSecondary: '#ccc',
     textMuted: '#888',
     agentActive: '#1e90ff',
+    agentWarning: '#f90',
+    warningSurface: '#332200',
   }),
 }));
 
@@ -126,5 +128,29 @@ describe('ToolCallTimeline', () => {
 
     fireEvent.press(getByText(/web search|searched/i));
     expect(queryByText('View full output')).toBeNull();
+  });
+
+  it('shows a persisted partial approval decision while waiting on other calls', () => {
+    const onResolveApproval = jest.fn();
+    const tools = [
+      makeTool({
+        id: 'id:call_1',
+        name: 'mcp__github__create_comment',
+        toolCallId: 'call_1',
+        requiresApproval: true,
+        approvalDecision: 'approved',
+        status: 'running',
+      }),
+    ];
+    const { getByText } = render(
+      <ToolCallTimeline
+        toolCalls={tools}
+        summary="Used 1 tool"
+        onResolveApproval={onResolveApproval}
+      />,
+    );
+
+    expect(getByText('Decision saved: allow')).toBeTruthy();
+    expect(getByText('Allowed')).toBeTruthy();
   });
 });

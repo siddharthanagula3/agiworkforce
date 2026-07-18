@@ -45,6 +45,7 @@
 
 import type {
   ChatRuntime,
+  CloudApprovalTurnProjection,
   SendMessageOptions,
   StreamCallback,
   StreamEvent,
@@ -56,6 +57,8 @@ import {
   type CloudAgentRunSnapshotPage,
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
+  CloudToolApprovalProjectionSchema,
+  type CloudToolApprovalProjection,
   type ManagedCloudConversation,
   type ManagedCloudMessage,
 } from '@agiworkforce/cloud-contracts';
@@ -71,7 +74,7 @@ import { getDesktopCloudChatPersistenceClient } from '../lib/cloudChatPersistenc
 import { getProviderDefaultModel, normalizeModelId } from '../constants/llm';
 import { getDefaultModelFor } from '@agiworkforce/types';
 import { createCloudStreamDeltaSink } from './cloudStreamDeltas';
-import { CloudToolApprovalRegistry } from './cloudToolApproval';
+import { CloudToolApprovalRegistry, mapPersistedCloudApprovalToolCalls } from './cloudToolApproval';
 import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
 
 const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
@@ -115,6 +118,7 @@ function mapConversation(cloud: ManagedCloudConversation): Conversation {
 
 /** The persistence client passes messages through un-normalized (surface-specific). */
 function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessage {
+  const approvalToolCalls = mapPersistedCloudApprovalToolCalls(raw.metadata);
   return {
     id: raw.id,
     conversationId,
@@ -124,7 +128,37 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
     model: raw.model,
     ...(raw.provider ? { provider: raw.provider } : {}),
     ...(raw.metadata ? { metadata: raw.metadata } : {}),
+    ...(approvalToolCalls ? { toolCalls: approvalToolCalls } : {}),
   };
+}
+
+function stringifyApprovalArgs(args: Record<string, unknown>): string | undefined {
+  if (Object.keys(args).length === 0) return undefined;
+  try {
+    const serialized = JSON.stringify(args);
+    return serialized.length <= 100_000 ? serialized : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function toPersistedApprovalProjection(
+  projection: CloudApprovalTurnProjection | undefined,
+): CloudToolApprovalProjection | undefined {
+  if (!projection) return undefined;
+  return CloudToolApprovalProjectionSchema.parse({
+    schemaVersion: 1,
+    runId: projection.runId,
+    calls: projection.calls.map((call) => {
+      const input = stringifyApprovalArgs(call.args);
+      return {
+        toolCallId: call.toolCallId,
+        name: call.name,
+        ...(input ? { input } : {}),
+        ...(call.decision ? { approvalDecision: call.decision } : {}),
+      };
+    }),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -162,11 +196,13 @@ export class CloudRuntime implements ChatRuntime {
     model: string,
     agentActivity?: AgentActivityState,
     cloudAgentRun?: ManagedCloudAgentRunReference,
+    cloudApproval?: CloudToolApprovalProjection | null,
   ): void {
-    if (!content && !agentActivity && !cloudAgentRun) return;
+    if (!content && !agentActivity && !cloudAgentRun && cloudApproval === undefined) return;
     const metadata = {
       ...(agentActivity ? { agentActivity } : {}),
       ...(cloudAgentRun ? { cloudAgentRun } : {}),
+      ...(cloudApproval !== undefined ? { cloudApproval } : {}),
     };
     void getDesktopCloudChatPersistenceClient()
       .saveMessage(conversationId, {
@@ -351,14 +387,6 @@ export class CloudRuntime implements ChatRuntime {
       canonicalPublicTextAwaitingChunk: '',
     };
     this._activeTurns.set(conversationId, activeTurn);
-    // The exact thread sent to the server — reused verbatim as `priorMessages`
-    // if this turn suspends on a tool-approval request (see cloudApi.ts's
-    // `sendCloudMessage`, which builds the identical fallback).
-    const priorMessages: Array<Record<string, unknown>> =
-      options?.messageHistory && options.messageHistory.length > 0
-        ? options.messageHistory
-        : [{ role: 'user', content }];
-
     try {
       await sendCloudMessage(
         conversationId,
@@ -371,15 +399,29 @@ export class CloudRuntime implements ChatRuntime {
           activeTurn.settled = true;
           this._activeTurns.delete(conversationId);
           this.updateRunReference(activeTurn);
-          this._approvals.recordTurnOutcome(conversationId, model, priorMessages, sink);
+          this._approvals.recordTurnOutcome(
+            conversationId,
+            activeTurn.runReference,
+            model,
+            sink,
+            assistantMessageId,
+          );
+          const approvalProjection = toPersistedApprovalProjection(
+            this._approvals.getTurnProjection(conversationId),
+          );
           if (sink.isSuspended()) {
-            // The server suspended this turn on a tool-approval request and
-            // closed the stream with no final answer — do NOT persist yet
-            // (there is nothing final to save). The eventual resume
-            // continuation persists the completed turn once every pending
-            // call is decided (see resolveToolApproval). Persisting here
-            // would save a partial, tool-less message and then persist a
-            // SECOND time after resume.
+            // Persist the durable run reference at the approval boundary so a
+            // fresh app instance can restore the small client projection. The
+            // server checkpoint remains authoritative for transcript/policy.
+            this.persistAssistantTurn(
+              conversationId,
+              assistantMessageId,
+              sink.getAccumulatedContent(),
+              model,
+              sink.getAgentActivity(),
+              activeTurn.runReference,
+              approvalProjection,
+            );
           } else {
             // Persist the completed assistant turn (mirrors
             // useChatStream.ts's saveMessageToDb call for the completed
@@ -394,6 +436,7 @@ export class CloudRuntime implements ChatRuntime {
               model,
               sink.getAgentActivity(),
               activeTurn.runReference,
+              activeTurn.runReference ? null : undefined,
             );
           }
           const finishReason = sink.getFinishReason();
@@ -478,6 +521,9 @@ export class CloudRuntime implements ChatRuntime {
                 lastSequence: sink.getAgentActivity()?.lastSequence ?? -1,
               }
             : undefined;
+          if (handle) {
+            this.emit({ type: 'agent_run', runId: handle.runId, runPath: handle.runPath });
+          }
         },
       );
       if (activeTurn.replayPromise) await activeTurn.replayPromise;
@@ -531,16 +577,32 @@ export class CloudRuntime implements ChatRuntime {
         (err) => this.emit({ type: 'error', error: err.message }),
         controller.signal,
       );
-      // Persist only once the turn is actually finished (not suspended again
-      // on a further approval request) — same persistence-trap rule as
-      // sendMessage's onDone above.
-      if (outcome && !outcome.suspended) {
+      if (!outcome) {
+        const projection = this._approvals.getTurnProjection(conversationId);
+        if (projection?.assistantMessageId) {
+          this.persistAssistantTurn(
+            conversationId,
+            projection.assistantMessageId,
+            projection.assistantContent,
+            projection.model,
+            projection.agentActivity,
+            projection.runReference,
+            toPersistedApprovalProjection(projection),
+          );
+        }
+      } else if (outcome.assistantMessageId) {
+        // Update the SAME assistant message after a partial decision, a
+        // repeated approval suspension, or the terminal continuation.
         this.persistAssistantTurn(
           conversationId,
-          uuidv7(),
+          outcome.assistantMessageId,
           outcome.content,
           outcome.model,
           outcome.agentActivity,
+          outcome.runReference,
+          outcome.pendingProjection
+            ? toPersistedApprovalProjection(outcome.pendingProjection)
+            : null,
         );
       }
     } finally {
@@ -548,8 +610,8 @@ export class CloudRuntime implements ChatRuntime {
     }
   }
 
-  hasLiveApprovalTurn(conversationId: string): boolean {
-    return this._approvals.hasLiveTurn(conversationId);
+  hasLiveApprovalTurn(conversationId: string, projection?: CloudApprovalTurnProjection): boolean {
+    return this._approvals.hasLiveTurn(conversationId, projection);
   }
 
   // -------------------------------------------------------------------------

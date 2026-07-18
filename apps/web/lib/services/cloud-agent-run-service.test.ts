@@ -6,9 +6,13 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   appendCloudAgentEvent,
+  claimCloudAgentApprovalCheckpoint,
+  completeCloudAgentApprovalCheckpoint,
   createCloudAgentRun,
   getCloudAgentRun,
   requestCloudAgentRunCancellation,
+  releaseCloudAgentApprovalCheckpoint,
+  saveCloudAgentApprovalCheckpoint,
   transitionCloudAgentRun,
 } from './cloud-agent-run-service';
 
@@ -56,6 +60,79 @@ const envelope: AgentEventEnvelope = {
     previousState: 'running',
     summary: 'Ready',
   },
+};
+
+const APPROVAL_EVENTS: AgentEventEnvelope[] = [
+  {
+    ...envelope,
+    sequence: 3,
+    event: {
+      type: 'approval-requested',
+      approvalId: 'call-1',
+      toolCallId: 'call-1',
+      name: 'mcp__github__read_file',
+      category: 'connector',
+      summary: 'Allow this connector action?',
+      input: {},
+    },
+  },
+  {
+    ...envelope,
+    sequence: 4,
+    event: {
+      type: 'task-state-changed',
+      taskId: RUN_ROW.request_id,
+      state: 'awaiting_input',
+      previousState: 'running',
+      summary: 'The agent needs approval before it can continue.',
+    },
+  },
+  {
+    ...envelope,
+    sequence: 5,
+    event: {
+      type: 'lifecycle',
+      phase: 'paused',
+    },
+  },
+];
+
+const CHECKPOINT_ROW = {
+  id: '0190a000-0000-7000-8000-000000000002',
+  run_id: RUN_ROW.id,
+  user_id: 'user-1',
+  version: 1,
+  session_id: RUN_ROW.conversation_id,
+  turn_id: RUN_ROW.request_id,
+  next_event_sequence: 6,
+  request: { model: 'claude-test', stream: true },
+  messages: [
+    { role: 'user', content: 'inspect the repository' },
+    {
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        {
+          id: 'call-1',
+          type: 'function',
+          function: { name: 'mcp__github__read_file', arguments: '{}' },
+        },
+      ],
+    },
+  ],
+  pending_tool_calls: [
+    {
+      id: 'call-1',
+      qualifiedName: 'mcp__github__read_file',
+      args: {},
+    },
+  ],
+  state: 'pending',
+  lease_token: null,
+  lease_expires_at: null,
+  resolved_at: null,
+  created_at: '2026-07-17T20:00:01.000Z',
+  updated_at: '2026-07-17T20:00:01.000Z',
 };
 
 describe('cloud agent run service', () => {
@@ -219,5 +296,203 @@ describe('cloud agent run service', () => {
       'user-1',
       'failed',
     ]);
+  });
+
+  it('versions and stores a server-owned approval checkpoint under the run lock', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([{ id: RUN_ROW.id }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ next_version: 1 }])
+      .mockResolvedValueOnce([CHECKPOINT_ROW])
+      .mockResolvedValueOnce([{ sequence: 3 }])
+      .mockResolvedValueOnce([{ ...RUN_ROW, last_event_sequence: 3 }])
+      .mockResolvedValueOnce([{ sequence: 4 }])
+      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 4 }])
+      .mockResolvedValueOnce([{ sequence: 5 }])
+      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input', last_event_sequence: 5 }])
+      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input' }]);
+
+    const checkpoint = await saveCloudAgentApprovalCheckpoint(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      sessionId: RUN_ROW.conversation_id!,
+      turnId: RUN_ROW.request_id,
+      nextEventSequence: 6,
+      request: CHECKPOINT_ROW.request,
+      messages: CHECKPOINT_ROW.messages,
+      pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,
+      events: APPROVAL_EVENTS,
+    });
+
+    expect(checkpoint.id).toBe(CHECKPOINT_ROW.id);
+    expect(checkpoint.pendingToolCalls).toEqual(CHECKPOINT_ROW.pending_tool_calls);
+    expect(db.transaction).toHaveBeenCalledOnce();
+    expect(db.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/cloud_agent_runs[\s\S]*for update/i),
+      [RUN_ROW.id, 'user-1'],
+    );
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(
+        /state = 'resolved'[\s\S]*lease_expires_at = null[\s\S]*state = 'resuming'/i,
+      ),
+      [RUN_ROW.id, 'user-1'],
+    );
+    expect(db.query).toHaveBeenNthCalledWith(
+      11,
+      expect.stringMatching(/state = 'awaiting_input'/i),
+      [RUN_ROW.id, 'user-1'],
+    );
+    expect(db.query).toHaveBeenNthCalledWith(
+      5,
+      expect.stringMatching(/insert into public\.cloud_agent_events/i),
+      [
+        RUN_ROW.id,
+        'user-1',
+        APPROVAL_EVENTS[0]!.sequence,
+        APPROVAL_EVENTS[0]!.emittedAtMs,
+        APPROVAL_EVENTS[0]!.event.type,
+        APPROVAL_EVENTS[0],
+      ],
+    );
+  });
+
+  it('rejects an incomplete approval boundary before opening a transaction', async () => {
+    await expect(
+      saveCloudAgentApprovalCheckpoint(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        sessionId: RUN_ROW.conversation_id!,
+        turnId: RUN_ROW.request_id,
+        nextEventSequence: 6,
+        request: CHECKPOINT_ROW.request,
+        messages: CHECKPOINT_ROW.messages,
+        pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,
+        events: [APPROVAL_EVENTS[0]!, APPROVAL_EVENTS[1]!, { ...APPROVAL_EVENTS[1]!, sequence: 5 }],
+      }),
+    ).rejects.toThrow(/complete approval boundary/i);
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects unvalidated private thinking blocks before opening a transaction', async () => {
+    await expect(
+      saveCloudAgentApprovalCheckpoint(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        sessionId: RUN_ROW.conversation_id!,
+        turnId: RUN_ROW.request_id,
+        nextEventSequence: 6,
+        request: CHECKPOINT_ROW.request,
+        messages: [
+          {
+            role: 'assistant',
+            content: '',
+            __canonicalThinking: [{ type: 'redacted_thinking', data: 'not-signed-thinking' }],
+          },
+        ],
+        pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,
+        events: APPROVAL_EVENTS,
+      }),
+    ).rejects.toThrow();
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('claims the latest pending checkpoint only when every decision matches a pending call', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([CHECKPOINT_ROW])
+      .mockResolvedValueOnce([
+        {
+          ...CHECKPOINT_ROW,
+          state: 'resuming',
+          lease_token: '0190a000-0000-7000-8000-000000000003',
+          lease_expires_at: '2026-07-17T20:15:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'running' }]);
+
+    const claimed = await claimCloudAgentApprovalCheckpoint(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      approvals: [{ toolCallId: 'call-1', decision: 'approved' }],
+    });
+
+    expect(claimed.checkpoint.state).toBe('resuming');
+    expect(claimed.approvals).toEqual([{ toolCallId: 'call-1', decision: 'approved' }]);
+    expect(claimed.leaseToken).toBe('0190a000-0000-7000-8000-000000000003');
+    expect(db.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/state = 'pending'[\s\S]*for update/i),
+      [RUN_ROW.id, 'user-1'],
+    );
+  });
+
+  it('rejects a forged approval before claiming the checkpoint', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([CHECKPOINT_ROW]);
+
+    await expect(
+      claimCloudAgentApprovalCheckpoint(db, {
+        userId: 'user-1',
+        runId: RUN_ROW.id,
+        approvals: [{ toolCallId: 'call-forged', decision: 'approved' }],
+      }),
+    ).rejects.toMatchObject({ name: 'CloudAgentApprovalDecisionError' });
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves only the checkpoint lease that completed', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([{ ...CHECKPOINT_ROW, state: 'resolved' }]);
+
+    const checkpoint = await completeCloudAgentApprovalCheckpoint(db, {
+      userId: 'user-1',
+      checkpointId: CHECKPOINT_ROW.id,
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+    });
+
+    expect(checkpoint.state).toBe('resolved');
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /lease_token = \$4[\s\S]*state in \('resuming', 'resolved', 'failed'\)/i,
+      ),
+      [CHECKPOINT_ROW.id, 'user-1', 'resolved', '0190a000-0000-7000-8000-000000000003'],
+    );
+  });
+
+  it('keeps a predecessor resolved when the continuation already reached another checkpoint', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([{ ...CHECKPOINT_ROW, state: 'resolved' }]);
+
+    const checkpoint = await completeCloudAgentApprovalCheckpoint(db, {
+      userId: 'user-1',
+      checkpointId: CHECKPOINT_ROW.id,
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+      outcome: 'failed',
+    });
+
+    expect(checkpoint.state).toBe('resolved');
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringMatching(/case when state = 'resuming' then \$3 else state end/i),
+      expect.any(Array),
+    );
+  });
+
+  it('releases an unused lease so a pre-execution failure can be retried', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([{ ...CHECKPOINT_ROW, state: 'pending' }])
+      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'awaiting_input' }]);
+
+    const checkpoint = await releaseCloudAgentApprovalCheckpoint(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      checkpointId: CHECKPOINT_ROW.id,
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+    });
+
+    expect(checkpoint.state).toBe('pending');
+    expect(db.transaction).toHaveBeenCalledOnce();
+    expect(db.query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/state = 'pending'[\s\S]*lease_token = null[\s\S]*state = 'resuming'/i),
+      [CHECKPOINT_ROW.id, 'user-1', '0190a000-0000-7000-8000-000000000003'],
+    );
   });
 });

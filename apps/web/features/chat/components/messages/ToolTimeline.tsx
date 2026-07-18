@@ -321,9 +321,10 @@ interface ToolTimelineProps {
   onReject?: (toolCallId: string) => void;
   /**
    * True when this message's suspended turn is no longer in the live
-   * approval registry (e.g. reloaded since it suspended) -- awaiting_approval
-   * cards render an expired notice instead of live buttons, which would
-   * otherwise silently no-op. See MessageBubble's `isApprovalTurnLive` check.
+   * approval registry and cannot be rebuilt from its persisted run reference.
+   * Awaiting-approval cards render an expired notice instead of live buttons,
+   * which would otherwise silently no-op. See MessageBubble's
+   * `isApprovalTurnLive` check.
    */
   expired?: boolean;
   /** Resend affordance shown on an expired approval card. */

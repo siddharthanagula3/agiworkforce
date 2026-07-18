@@ -80,6 +80,10 @@ export interface ManagedAgentStreamInput {
     userId: string;
     runId: string;
   };
+  /** Durable owner notification, completed before the terminal event is exposed. */
+  onTerminal?: (outcome: 'completed' | 'failed' | 'cancelled') => Promise<void>;
+  /** A persisted approval boundary survives a client disconnect. */
+  preserveAwaitingInputOnCancel?: () => boolean;
 }
 
 /**
@@ -95,6 +99,13 @@ export function buildManagedAgentStream(
   let settled = false;
   let reportedFailure = false;
   let lastTaskState: AgentTaskState | undefined;
+  let terminalReported = false;
+
+  const reportTerminal = async (outcome: 'completed' | 'failed' | 'cancelled') => {
+    if (terminalReported) return;
+    await input.onTerminal?.(outcome);
+    terminalReported = true;
+  };
 
   const transitionJournal = async (state: AgentTaskState) => {
     if (!input.runJournal || lastTaskState === state) return;
@@ -161,6 +172,7 @@ export function buildManagedAgentStream(
                 );
               });
             }
+            await reportTerminal(reportedFailure ? 'failed' : 'completed');
             controller.enqueue(encoder.encode(TERMINAL_EVENT));
             controller.close();
             return;
@@ -202,6 +214,12 @@ export function buildManagedAgentStream(
             );
           });
         }
+        await reportTerminal('failed').catch((terminalError) => {
+          logger.error(
+            { terminalError, requestId: input.processed.requestId },
+            'Managed agent terminal owner could not record failure',
+          );
+        });
         controller.error(error);
       }
     },
@@ -212,7 +230,12 @@ export function buildManagedAgentStream(
         try {
           await settle(input.cancellationReason, true);
         } finally {
-          if (input.runJournal) await transitionJournal('cancelled');
+          if (input.runJournal) {
+            await transitionJournal(
+              input.preserveAwaitingInputOnCancel?.() ? 'awaiting_input' : 'cancelled',
+            );
+          }
+          await reportTerminal('cancelled');
         }
       }
     },

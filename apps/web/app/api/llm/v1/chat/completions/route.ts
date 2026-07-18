@@ -14,6 +14,7 @@ import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
 import { loadUserConnectorToolDefs, makeUserConnectorExecutor } from '@/lib/user-connector-tools';
 import { runResearchLoop } from './lib/research-loop';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
+import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
 import { classifyToolLoopInputs } from './lib/tool-loop-routing';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import { startProviderStream } from './lib/adapter-factory';
@@ -30,6 +31,7 @@ import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
   createCloudAgentRun,
   isCloudAgentRunCancellationRequested,
+  saveCloudAgentApprovalCheckpoint,
 } from '@/lib/services/cloud-agent-run-service';
 import type {
   CloudAgentOriginSurface,
@@ -336,6 +338,7 @@ async function handleChatCompletions(request: NextRequest) {
       const connectorExecutor =
         connectorTools.length > 0 ? makeUserConnectorExecutor(userId) : undefined;
       const toolLoopUsage = createObservedProviderUsage();
+      let approvalCheckpointSaved = false;
       const toolLoopGen = runToolLoop(processed, {
         mcpTools,
         approvalMode: loopInputs.approvalMode,
@@ -344,6 +347,20 @@ async function handleChatCompletions(request: NextRequest) {
         usage: toolLoopUsage,
         isCancellationRequested: () =>
           isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
+        onApprovalCheckpoint: async (checkpoint) => {
+          await saveCloudAgentApprovalCheckpoint(runDb, {
+            userId,
+            runId: run.id,
+            sessionId: checkpoint.sessionId,
+            turnId: checkpoint.turnId,
+            nextEventSequence: checkpoint.nextEventSequence,
+            request: buildApprovalCheckpointRequest(processed.chatRequest),
+            messages: checkpoint.messages,
+            pendingToolCalls: checkpoint.pendingToolCalls,
+            events: checkpoint.events,
+          });
+          approvalCheckpointSaved = true;
+        },
       });
 
       const agentStream = buildManagedAgentStream({
@@ -353,6 +370,7 @@ async function handleChatCompletions(request: NextRequest) {
         completionReason: 'tool_loop_completed',
         cancellationReason: 'client_cancelled_tool_loop',
         runJournal: { db: runDb, userId, runId: run.id },
+        preserveAwaitingInputOnCancel: () => approvalCheckpointSaved,
       });
 
       const streamHeaders: Record<string, string> = {

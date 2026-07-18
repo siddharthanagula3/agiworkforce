@@ -71,6 +71,8 @@ const PushMessageSchemaMirror = z.object({
   content: z.string().max(1_000_000),
   model: z.string().max(200).nullable().optional(),
   provider: z.string().max(200).nullable().optional(),
+  metadata: z.record(z.string(), z.unknown()).nullable(),
+  baseVersion: z.string(),
 });
 
 describe('fixtures: push-body.json', () => {

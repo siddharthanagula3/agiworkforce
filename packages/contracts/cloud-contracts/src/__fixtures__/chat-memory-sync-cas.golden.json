@@ -18,7 +18,9 @@
         "role": "user",
         "content": "Ship it",
         "model": null,
-        "provider": null
+        "provider": null,
+        "metadata": null,
+        "baseVersion": "0"
       }
     ],
     "artifacts": []

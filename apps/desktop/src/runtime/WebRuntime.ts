@@ -13,6 +13,7 @@
 
 import type {
   ChatRuntime,
+  CloudApprovalTurnProjection,
   GeneratedFileEntry,
   SendMessageOptions,
   StreamCallback,
@@ -36,7 +37,7 @@ import { getDefaultModelFor } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
 import { createCloudStreamDeltaSink } from './cloudStreamDeltas';
-import { CloudToolApprovalRegistry } from './cloudToolApproval';
+import { CloudToolApprovalRegistry, mapPersistedCloudApprovalToolCalls } from './cloudToolApproval';
 
 // ---------------------------------------------------------------------------
 // Mapping helpers — cloud API uses snake_case, ChatRuntime uses camelCase
@@ -56,6 +57,7 @@ function mapConversation(cloud: CloudConversation): Conversation {
 }
 
 function mapMessage(cloud: CloudMessage): ChatMessage {
+  const approvalToolCalls = mapPersistedCloudApprovalToolCalls(cloud.metadata);
   return {
     id: cloud.id,
     conversationId: cloud.conversation_id,
@@ -63,6 +65,9 @@ function mapMessage(cloud: CloudMessage): ChatMessage {
     content: cloud.content,
     createdAt: cloud.created_at,
     model: cloud.model,
+    ...(cloud.provider ? { provider: cloud.provider } : {}),
+    ...(cloud.metadata ? { metadata: cloud.metadata } : {}),
+    ...(approvalToolCalls ? { toolCalls: approvalToolCalls } : {}),
   };
 }
 
@@ -139,13 +144,7 @@ export class WebRuntime implements ChatRuntime {
     }
 
     const sink = createCloudStreamDeltaSink((event) => this.emit(event), CLOUD_API_BASE_URL);
-    // The exact thread sent to the server — reused verbatim as `priorMessages`
-    // if this turn suspends on a tool-approval request (see cloudApi.ts's
-    // `sendCloudMessage`, which builds the identical fallback).
-    const priorMessages: Array<Record<string, unknown>> =
-      options?.messageHistory && options.messageHistory.length > 0
-        ? options.messageHistory
-        : [{ role: 'user', content }];
+    let runId: string | undefined;
 
     try {
       await sendCloudMessage(
@@ -155,7 +154,7 @@ export class WebRuntime implements ChatRuntime {
         sink.onChunk,
         // onDone
         () => {
-          this._approvals.recordTurnOutcome(conversationId, model, priorMessages, sink);
+          this._approvals.recordTurnOutcome(conversationId, runId, model, sink);
           const finishReason = sink.getFinishReason();
           const streamError = sink.getStreamError();
           this.emit({
@@ -185,6 +184,12 @@ export class WebRuntime implements ChatRuntime {
               ...(options.workMode ? { workMode: options.workMode } : {}),
             }
           : undefined,
+        (handle) => {
+          runId = handle?.runId;
+          if (handle) {
+            this.emit({ type: 'agent_run', runId: handle.runId, runPath: handle.runPath });
+          }
+        },
       );
     } catch (err) {
       // Only emit error if it wasn't an intentional abort
@@ -223,8 +228,8 @@ export class WebRuntime implements ChatRuntime {
     }
   }
 
-  hasLiveApprovalTurn(conversationId: string): boolean {
-    return this._approvals.hasLiveTurn(conversationId);
+  hasLiveApprovalTurn(conversationId: string, projection?: CloudApprovalTurnProjection): boolean {
+    return this._approvals.hasLiveTurn(conversationId, projection);
   }
 
   // -------------------------------------------------------------------------
