@@ -206,11 +206,13 @@ describe('model catalog helpers', () => {
     expect(getProvidersWithImplementedHarnessFeature('webSearchInjection').sort()).toEqual([
       'anthropic',
       'google',
+      'openai',
     ]);
     expect(getProvidersWithImplementedHarnessFeature('webSearch').sort()).toEqual([
       'anthropic',
       'google',
       'managed_cloud',
+      'openai',
       'perplexity',
     ]);
     expect(getProvidersWithImplementedHarnessFeature('not-a-feature')).toEqual([]);
