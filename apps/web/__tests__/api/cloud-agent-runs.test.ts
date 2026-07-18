@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CloudAgentRunSnapshotPageSchema } from '@agiworkforce/cloud-contracts';
 import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
@@ -67,7 +68,9 @@ describe('/api/llm/v1/chat/completions/runs/[runId]', () => {
       afterSequence: 1,
       limit: 50,
     });
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json();
+    expect(() => CloudAgentRunSnapshotPageSchema.parse(body)).not.toThrow();
+    expect(body).toMatchObject({
       run: { id: run.id, state: 'running' },
       events: [event],
       nextAfterSequence: 2,
