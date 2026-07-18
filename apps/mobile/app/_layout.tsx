@@ -31,7 +31,11 @@ import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
-import { CLERK_PUBLISHABLE_KEY, setClerkTokenGetter } from '@/src/integrations/clerk';
+import {
+  CLERK_NATIVE_AUTH_OPTIONS,
+  CLERK_PUBLISHABLE_KEY,
+  setClerkTokenGetter,
+} from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
@@ -87,7 +91,7 @@ LogBox.ignoreLogs([
  * <ClerkProvider>.
  */
 function ClerkTokenBridge() {
-  const { getToken, userId, isSignedIn, isLoaded } = useAuth();
+  const { getToken, userId, isSignedIn, isLoaded } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
   const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
