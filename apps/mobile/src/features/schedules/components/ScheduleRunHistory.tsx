@@ -64,17 +64,35 @@ function RunRow({ run }: RunRowProps) {
   const isSuccess = run.status === 'success';
   const isFailed = run.status === 'failed';
   const isRunning = run.status === 'running';
-  const isPending = run.status === 'pending';
+  const isTimeout = run.status === 'timeout';
+  const isCancelled = run.status === 'cancelled';
+  const isTerminalFailure = isFailed || isTimeout || isCancelled;
 
-  const StatusIcon = isSuccess ? CheckCircle2 : isFailed ? XCircle : isRunning ? Loader : Clock;
+  const StatusIcon = isSuccess
+    ? CheckCircle2
+    : isTerminalFailure
+      ? XCircle
+      : isRunning
+        ? Loader
+        : Clock;
 
   const iconColor = isSuccess
     ? colors.agentSuccess
-    : isFailed
+    : isTerminalFailure
       ? colors.agentError
       : isRunning
         ? colors.teal
         : colors.textMuted;
+
+  const statusLabel = isSuccess
+    ? 'Success'
+    : isFailed
+      ? 'Failed'
+      : isTimeout
+        ? 'Timed out'
+        : isCancelled
+          ? 'Cancelled'
+          : 'Running';
 
   const duration = formatDuration(run.startedAt, run.completedAt);
   const timeLabel = formatRunTime(run.startedAt);
@@ -89,12 +107,12 @@ function RunRow({ run }: RunRowProps) {
             style={{
               color: isSuccess
                 ? colors.agentSuccess
-                : isFailed
+                : isTerminalFailure
                   ? colors.agentError
                   : colors.textSecondary,
             }}
           >
-            {isSuccess ? 'Success' : isFailed ? 'Failed' : isRunning ? 'Running' : 'Pending'}
+            {statusLabel}
           </Text>
           {duration ? <Text className="text-[11px] text-white/30">{duration}</Text> : null}
         </View>

@@ -14,7 +14,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-export type RecurrenceType = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom';
+export type RecurrenceType = 'once' | 'daily' | 'weekly' | 'monthly' | 'custom' | 'interval';
 
 export interface Schedule {
   id: string;
@@ -24,6 +24,7 @@ export interface Schedule {
   recurrence: RecurrenceType;
   cronExpression?: string;
   scheduledAt: string | null;
+  intervalMs?: number;
   daysOfWeek?: number[];
   dayOfMonth?: number;
   timeOfDay: string;
@@ -39,7 +40,7 @@ export interface Schedule {
 export interface ScheduleRun {
   id: string;
   scheduleId: string;
-  status: 'success' | 'failed' | 'running' | 'pending';
+  status: 'success' | 'failed' | 'running' | 'timeout' | 'cancelled';
   startedAt: string;
   completedAt: string | null;
   result: string | null;
@@ -64,7 +65,7 @@ interface ScheduleState {
 
   fetchSchedules: () => Promise<void>;
   createSchedule: (data: CreateScheduleInput) => Promise<void>;
-  updateSchedule: (id: string, data: Partial<Schedule>) => Promise<void>;
+  updateSchedule: (id: string, data: Partial<CreateScheduleInput>) => Promise<void>;
   deleteSchedule: (id: string) => Promise<void>;
   toggleSchedule: (id: string) => Promise<void>;
   fetchRuns: (scheduleId: string) => Promise<void>;
