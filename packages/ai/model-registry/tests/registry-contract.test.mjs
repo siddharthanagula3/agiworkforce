@@ -145,6 +145,18 @@ test('emits separated registry records and cross-language artifacts', () => {
   );
   assert.equal(registry.policies.auto.slots.image_generation.modelKey, 'gemini-3.1-flash-image');
   assert.equal(registry.policies.auto.slots.flagship_coding.modelKey, 'claude-opus-4.8');
+  for (const [slotId, slot] of Object.entries(registry.policies.auto.slots)) {
+    assert.ok(slot.label?.trim(), `${slotId} must expose a generated presentation label`);
+    assert.ok(
+      slot.description?.trim(),
+      `${slotId} must expose a generated model-agnostic description`,
+    );
+    assert.doesNotMatch(
+      slot.description,
+      new RegExp(slot.modelKey.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'iu'),
+      `${slotId} presentation must not go stale when its model assignment changes`,
+    );
+  }
   assert.equal(registry.policies.auto.continuity.preferCurrentRouteForCache, true);
   assert.deepEqual(
     registry.runtimeProfiles['cli/byok-chat'].allowedHarnessIds,
@@ -152,7 +164,11 @@ test('emits separated registry records and cross-language artifacts', () => {
     'CLI and Desktop BYOK chat must consume one generated developer-harness admission set',
   );
   assert.equal(registry.runtimeProfiles['cli/byok-chat'].status, 'implemented');
-  assert.equal(registry.runtimeProfiles['desktop/cloud-chat'].status, 'unwired');
+  assert.equal(
+    registry.runtimeProfiles['desktop/cloud-chat'].status,
+    'implemented',
+    'Desktop Cloud uses the shared managed runtime and must expose its canonical picker rows',
+  );
   assert.equal(registry.runtimeProfiles['mobile/local-chat'].trustMode, 'on_device');
   assert.equal(
     registry.runtimeProfiles['mobile/cloud-chat'].features.imageGeneration.implementation,
