@@ -10,7 +10,7 @@ import { RecurrencePicker } from './RecurrencePicker';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import { colors } from '@/src/ui/theme';
-import type { Schedule, RecurrenceType } from '../store';
+import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -18,7 +18,7 @@ import type { Schedule, RecurrenceType } from '../store';
 
 interface ScheduleFormProps {
   initialData?: Partial<Schedule>;
-  onSubmit: (data: Partial<Schedule>) => void;
+  onSubmit: (data: Partial<CreateScheduleInput>) => void;
   onCancel: () => void;
   onDelete?: () => void;
   isLoading?: boolean;
@@ -60,6 +60,7 @@ export function ScheduleForm({
   const [timeOfDay, setTimeOfDay] = useState(initialData?.timeOfDay ?? '09:00');
   const [scheduledAt, setScheduledAt] = useState<string | null>(initialData?.scheduledAt ?? null);
   const [cronExpression, setCronExpression] = useState(initialData?.cronExpression ?? '');
+  const [intervalMs, setIntervalMs] = useState(initialData?.intervalMs ?? 60 * 60 * 1000);
   const [timezone, setTimezone] = useState(initialData?.timezone ?? getDeviceTimezone());
 
   // Validation
@@ -83,10 +84,18 @@ export function ScheduleForm({
     if (recurrence === 'custom' && !cronExpression.trim()) {
       newErrors.cronExpression = 'Cron expression is required';
     }
+    if (
+      recurrence === 'interval' &&
+      (!Number.isInteger(intervalMs) ||
+        intervalMs < 60_000 ||
+        intervalMs > 365 * 24 * 60 * 60 * 1000)
+    ) {
+      newErrors.intervalMs = 'Interval must be between 1 minute and 365 days';
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [name, prompt, recurrence, scheduledAt, daysOfWeek, cronExpression]);
+  }, [name, prompt, recurrence, scheduledAt, daysOfWeek, cronExpression, intervalMs]);
 
   // Handle recurrence picker changes
   const handleRecurrenceChange = useCallback(
@@ -98,6 +107,7 @@ export function ScheduleForm({
         timeOfDay?: string;
         scheduledAt?: string;
         cronExpression?: string;
+        intervalMs?: number;
       },
     ) => {
       setRecurrence(rec);
@@ -106,6 +116,7 @@ export function ScheduleForm({
       if (options?.timeOfDay !== undefined) setTimeOfDay(options.timeOfDay);
       if (options?.scheduledAt !== undefined) setScheduledAt(options.scheduledAt);
       if (options?.cronExpression !== undefined) setCronExpression(options.cronExpression);
+      if (options?.intervalMs !== undefined) setIntervalMs(options.intervalMs);
     },
     [],
   );
@@ -124,6 +135,7 @@ export function ScheduleForm({
       timeOfDay,
       scheduledAt: recurrence === 'once' ? scheduledAt : null,
       cronExpression: recurrence === 'custom' ? cronExpression : undefined,
+      intervalMs: recurrence === 'interval' ? intervalMs : undefined,
       timezone,
       isActive: initialData?.isActive ?? true,
     });
@@ -139,6 +151,7 @@ export function ScheduleForm({
     timeOfDay,
     scheduledAt,
     cronExpression,
+    intervalMs,
     timezone,
     initialData?.isActive,
   ]);
@@ -221,6 +234,7 @@ export function ScheduleForm({
             timeOfDay={timeOfDay}
             scheduledAt={scheduledAt}
             cronExpression={cronExpression}
+            intervalMs={intervalMs}
             onChange={handleRecurrenceChange}
           />
           {errors.daysOfWeek ? (

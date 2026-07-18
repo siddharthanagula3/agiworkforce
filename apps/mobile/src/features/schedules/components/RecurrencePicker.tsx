@@ -17,6 +17,7 @@ interface RecurrencePickerProps {
   timeOfDay: string;
   scheduledAt?: string | null;
   cronExpression?: string;
+  intervalMs?: number;
   onChange: (
     recurrence: RecurrenceType,
     options?: {
@@ -25,6 +26,7 @@ interface RecurrencePickerProps {
       timeOfDay?: string;
       scheduledAt?: string;
       cronExpression?: string;
+      intervalMs?: number;
     },
   ) => void;
 }
@@ -39,6 +41,7 @@ const RECURRENCE_OPTIONS: { key: RecurrenceType; label: string }[] = [
   { key: 'weekly', label: 'Weekly' },
   { key: 'monthly', label: 'Monthly' },
   { key: 'custom', label: 'Custom' },
+  { key: 'interval', label: 'Interval' },
 ];
 
 const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -80,13 +83,18 @@ export function RecurrencePicker({
   timeOfDay,
   scheduledAt,
   cronExpression = '',
+  intervalMs = 60 * 60 * 1000,
   onChange,
 }: RecurrencePickerProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [localCron, setLocalCron] = useState(cronExpression);
+  const [localIntervalMinutes, setLocalIntervalMinutes] = useState(
+    String(Math.max(1, Math.round(intervalMs / 60_000))),
+  );
   const [localDate, setLocalDate] = useState(scheduledAt ?? '');
   const [dateError, setDateError] = useState<string | undefined>();
   const [cronError, setCronError] = useState<string | undefined>();
+  const [intervalError, setIntervalError] = useState<string | undefined>();
 
   useEffect(() => {
     setLocalDate(scheduledAt ?? '');
@@ -97,6 +105,11 @@ export function RecurrencePicker({
     setLocalCron(cronExpression);
     setCronError(undefined);
   }, [cronExpression]);
+
+  useEffect(() => {
+    setLocalIntervalMinutes(String(Math.max(1, Math.round(intervalMs / 60_000))));
+    setIntervalError(undefined);
+  }, [intervalMs]);
 
   const timeParts = (timeOfDay || '09:00').split(':');
   const hours = timeParts[0] ?? '09';
@@ -182,6 +195,20 @@ export function RecurrencePicker({
       }
       setCronError(undefined);
       onChange('custom', { cronExpression: text });
+    },
+    [onChange],
+  );
+
+  const handleIntervalChange = useCallback(
+    (text: string) => {
+      setLocalIntervalMinutes(text);
+      const minutes = Number(text);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 525_600) {
+        setIntervalError('Enter a whole number from 1 to 525600 minutes.');
+        return;
+      }
+      setIntervalError(undefined);
+      onChange('interval', { intervalMs: minutes * 60_000 });
     },
     [onChange],
   );
@@ -308,85 +335,99 @@ export function RecurrencePicker({
         />
       )}
 
+      {/* Interval: repeat delay */}
+      {value === 'interval' && (
+        <Input
+          label="Repeat every (minutes)"
+          placeholder="60"
+          value={localIntervalMinutes}
+          onChangeText={handleIntervalChange}
+          error={intervalError}
+          keyboardType="number-pad"
+        />
+      )}
+
       {/* Time picker (HH:MM) */}
-      <View>
-        <Text className="text-sm text-white/70 mb-2">Time</Text>
-        <View className="flex-row items-center gap-3">
-          {/* Hours */}
-          <View className="flex-1">
-            <Text className="text-[10px] text-white/40 mb-1 text-center uppercase tracking-wider">
-              Hour
-            </Text>
-            <ScrollView
-              className="h-32 rounded-lg bg-surface-elevated"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 4 }}
-            >
-              {HOURS.map((h) => {
-                const selected = h === hours;
-                return (
-                  <Pressable
-                    key={h}
-                    onPress={() => handleHourChange(h)}
-                    className={`h-9 items-center justify-center rounded-md mx-1 ${
-                      selected ? 'bg-teal-500/20' : ''
-                    }`}
-                    accessibilityLabel={`${h} hours`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text
-                      className={`text-sm font-medium ${
-                        selected ? 'text-teal-400' : 'text-white/50'
+      {value !== 'interval' && (
+        <View>
+          <Text className="text-sm text-white/70 mb-2">Time</Text>
+          <View className="flex-row items-center gap-3">
+            {/* Hours */}
+            <View className="flex-1">
+              <Text className="text-[10px] text-white/40 mb-1 text-center uppercase tracking-wider">
+                Hour
+              </Text>
+              <ScrollView
+                className="h-32 rounded-lg bg-surface-elevated"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 4 }}
+              >
+                {HOURS.map((h) => {
+                  const selected = h === hours;
+                  return (
+                    <Pressable
+                      key={h}
+                      onPress={() => handleHourChange(h)}
+                      className={`h-9 items-center justify-center rounded-md mx-1 ${
+                        selected ? 'bg-teal-500/20' : ''
                       }`}
+                      accessibilityLabel={`${h} hours`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
                     >
-                      {h}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
+                      <Text
+                        className={`text-sm font-medium ${
+                          selected ? 'text-teal-400' : 'text-white/50'
+                        }`}
+                      >
+                        {h}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
-          <Text className="text-xl text-white/30 font-bold mt-4">:</Text>
+            <Text className="text-xl text-white/30 font-bold mt-4">:</Text>
 
-          {/* Minutes */}
-          <View className="flex-1">
-            <Text className="text-[10px] text-white/40 mb-1 text-center uppercase tracking-wider">
-              Minute
-            </Text>
-            <ScrollView
-              className="h-32 rounded-lg bg-surface-elevated"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingVertical: 4 }}
-            >
-              {MINUTES.map((m) => {
-                const selected = m === minutes;
-                return (
-                  <Pressable
-                    key={m}
-                    onPress={() => handleMinuteChange(m)}
-                    className={`h-9 items-center justify-center rounded-md mx-1 ${
-                      selected ? 'bg-teal-500/20' : ''
-                    }`}
-                    accessibilityLabel={`${m} minutes`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text
-                      className={`text-sm font-medium ${
-                        selected ? 'text-teal-400' : 'text-white/50'
+            {/* Minutes */}
+            <View className="flex-1">
+              <Text className="text-[10px] text-white/40 mb-1 text-center uppercase tracking-wider">
+                Minute
+              </Text>
+              <ScrollView
+                className="h-32 rounded-lg bg-surface-elevated"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingVertical: 4 }}
+              >
+                {MINUTES.map((m) => {
+                  const selected = m === minutes;
+                  return (
+                    <Pressable
+                      key={m}
+                      onPress={() => handleMinuteChange(m)}
+                      className={`h-9 items-center justify-center rounded-md mx-1 ${
+                        selected ? 'bg-teal-500/20' : ''
                       }`}
+                      accessibilityLabel={`${m} minutes`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
                     >
-                      {m}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                      <Text
+                        className={`text-sm font-medium ${
+                          selected ? 'text-teal-400' : 'text-white/50'
+                        }`}
+                      >
+                        {m}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
           </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }

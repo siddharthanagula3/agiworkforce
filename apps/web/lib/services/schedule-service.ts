@@ -1,6 +1,10 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type {
+  ManagedCloudScheduleRun,
+  ManagedCloudScheduleTask,
+} from '@agiworkforce/cloud-contracts';
 import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
@@ -18,8 +22,8 @@ const MAX_BATCH_SIZE = 100;
 const MAX_PAGE_SIZE = 100;
 const MAX_ERROR_LENGTH = 2_000;
 
-export type ScheduleRunStatus = 'running' | 'success' | 'failed' | 'timeout' | 'cancelled';
-export type ScheduleTriggerSource = 'schedule' | 'manual' | 'webhook' | 'api';
+export type ScheduleRunStatus = ManagedCloudScheduleRun['status'];
+export type ScheduleTriggerSource = ManagedCloudScheduleRun['triggerSource'];
 
 export class ScheduleNotFoundError extends Error {
   constructor(message = 'Schedule not found') {
@@ -63,48 +67,8 @@ export interface ScheduleInput {
 
 export type ScheduleUpdateInput = Partial<ScheduleInput>;
 
-export interface ScheduleTask {
-  id: string;
-  userId: string;
-  name: string;
-  description: string | null;
-  scheduleType: 'cron' | 'once' | 'interval';
-  cronExpression: string | null;
-  executeAt: string | null;
-  intervalMs: number | null;
-  timezone: string;
-  isEnabled: boolean;
-  expiresAt: string | null;
-  maxExecutions: number | null;
-  executionCount: number;
-  actionType: 'agent' | 'workflow' | 'notification' | 'command';
-  actionConfig: Record<string, unknown> | null;
-  prompt: string | null;
-  model: string | null;
-  status: 'active' | 'paused' | 'completed' | 'failed' | 'expired';
-  lastExecutedAt: string | null;
-  nextExecutionAt: string | null;
-  lastError: string | null;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ScheduleRun {
-  id: string;
-  taskId: string;
-  status: ScheduleRunStatus;
-  triggerSource: ScheduleTriggerSource;
-  scheduledFor: string | null;
-  startedAt: string;
-  completedAt: string | null;
-  durationMs: number | null;
-  result: Record<string, unknown> | null;
-  error: string | null;
-  idempotencyKey: string;
-  leaseExpiresAt: string | null;
-  attemptCount: number;
-}
+export type ScheduleTask = ManagedCloudScheduleTask;
+export type ScheduleRun = ManagedCloudScheduleRun;
 
 export interface ClaimedScheduleRun {
   runId: string;

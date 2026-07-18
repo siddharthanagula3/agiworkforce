@@ -1,67 +1,18 @@
 'use client';
 
 import { z } from 'zod';
+import {
+  MANAGED_CLOUD_SCHEDULES_PATH,
+  ManagedCloudScheduleDeleteResponseSchema,
+  ManagedCloudScheduleListResponseSchema,
+  ManagedCloudScheduleResponseSchema,
+  ManagedCloudScheduleRunListResponseSchema,
+  ManagedCloudScheduleRunResponseSchema,
+  managedCloudSchedulePath,
+  managedCloudScheduleRunsPath,
+} from '@agiworkforce/cloud-contracts';
 import { getCsrfToken as getBrowserCsrfToken } from '@/lib/client/csrf';
 import type { ScheduleMutation, ScheduleRun, ScheduleTask } from '../types';
-
-const nullableRecordSchema = z.record(z.string(), z.unknown()).nullable();
-
-const scheduleTaskSchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  name: z.string(),
-  description: z.string().nullable(),
-  scheduleType: z.enum(['cron', 'once', 'interval']),
-  cronExpression: z.string().nullable(),
-  executeAt: z.string().nullable(),
-  intervalMs: z.number().int().nullable(),
-  timezone: z.string(),
-  isEnabled: z.boolean(),
-  expiresAt: z.string().nullable(),
-  maxExecutions: z.number().int().nullable(),
-  executionCount: z.number().int(),
-  actionType: z.enum(['agent', 'workflow', 'notification', 'command']),
-  actionConfig: nullableRecordSchema,
-  prompt: z.string().nullable(),
-  model: z.string().nullable(),
-  status: z.enum(['active', 'paused', 'completed', 'failed', 'expired']),
-  lastExecutedAt: z.string().nullable(),
-  nextExecutionAt: z.string().nullable(),
-  lastError: z.string().nullable(),
-  metadata: nullableRecordSchema,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-
-const scheduleRunSchema = z.object({
-  id: z.string(),
-  taskId: z.string(),
-  status: z.enum(['running', 'success', 'failed', 'timeout', 'cancelled']),
-  triggerSource: z.enum(['schedule', 'manual', 'webhook', 'api']),
-  scheduledFor: z.string().nullable(),
-  startedAt: z.string(),
-  completedAt: z.string().nullable(),
-  durationMs: z.number().int().nullable(),
-  result: nullableRecordSchema,
-  error: z.string().nullable(),
-  idempotencyKey: z.string(),
-  leaseExpiresAt: z.string().nullable(),
-  attemptCount: z.number().int(),
-});
-
-const paginationSchema = z.object({
-  limit: z.number().int().positive(),
-  offset: z.number().int().nonnegative(),
-});
-
-const listSchedulesSchema = z.object({
-  schedules: z.array(scheduleTaskSchema),
-  pagination: paginationSchema,
-});
-const scheduleResponseSchema = z.object({ schedule: scheduleTaskSchema });
-const listRunsSchema = z.object({ runs: z.array(scheduleRunSchema), pagination: paginationSchema });
-const runResponseSchema = z.object({ run: scheduleRunSchema, replay: z.boolean() });
-const deleteResponseSchema = z.object({ success: z.literal(true) });
 
 export class ScheduleApiError extends Error {
   constructor(
@@ -117,10 +68,6 @@ export interface ScheduleApi {
     idempotencyKey: string,
     signal?: AbortSignal,
   ): Promise<{ run: ScheduleRun; replay: boolean }>;
-}
-
-function schedulePath(scheduleId: string): string {
-  return `/api/schedules/${encodeURIComponent(scheduleId)}`;
 }
 
 async function responseBody(response: Response): Promise<unknown> {
@@ -192,7 +139,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
       const body = await request(
         `/api/schedules?limit=${limit}&offset=${offset}`,
         { credentials: 'include', signal },
-        listSchedulesSchema,
+        ManagedCloudScheduleListResponseSchema,
         'Schedules returned an invalid response.',
       );
       return {
@@ -204,9 +151,9 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
 
     async getSchedule(scheduleId, signal) {
       const body = await request(
-        schedulePath(scheduleId),
+        managedCloudSchedulePath(scheduleId),
         { credentials: 'include', signal },
-        scheduleResponseSchema,
+        ManagedCloudScheduleResponseSchema,
         'Schedule refresh returned an invalid response.',
       );
       return body.schedule as ScheduleTask;
@@ -214,7 +161,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
 
     async createSchedule(payload, signal) {
       const body = await request(
-        '/api/schedules',
+        MANAGED_CLOUD_SCHEDULES_PATH,
         {
           method: 'POST',
           credentials: 'include',
@@ -222,7 +169,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
           body: JSON.stringify(payload),
           signal,
         },
-        scheduleResponseSchema,
+        ManagedCloudScheduleResponseSchema,
         'Schedule creation returned an invalid response.',
       );
       return body.schedule as ScheduleTask;
@@ -230,7 +177,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
 
     async updateSchedule(scheduleId, payload, signal) {
       const body = await request(
-        schedulePath(scheduleId),
+        managedCloudSchedulePath(scheduleId),
         {
           method: 'PUT',
           credentials: 'include',
@@ -238,7 +185,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
           body: JSON.stringify(payload),
           signal,
         },
-        scheduleResponseSchema,
+        ManagedCloudScheduleResponseSchema,
         'Schedule update returned an invalid response.',
       );
       return body.schedule as ScheduleTask;
@@ -246,7 +193,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
 
     async setScheduleEnabled(scheduleId, isActive, signal) {
       const body = await request(
-        schedulePath(scheduleId),
+        managedCloudSchedulePath(scheduleId),
         {
           method: 'PATCH',
           credentials: 'include',
@@ -254,7 +201,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
           body: JSON.stringify({ isActive }),
           signal,
         },
-        scheduleResponseSchema,
+        ManagedCloudScheduleResponseSchema,
         'Schedule status update returned an invalid response.',
       );
       return body.schedule as ScheduleTask;
@@ -262,23 +209,23 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
 
     async deleteSchedule(scheduleId, signal) {
       await request(
-        schedulePath(scheduleId),
+        managedCloudSchedulePath(scheduleId),
         {
           method: 'DELETE',
           credentials: 'include',
           headers: await mutationHeaders(false),
           signal,
         },
-        deleteResponseSchema,
+        ManagedCloudScheduleDeleteResponseSchema,
         'Schedule deletion returned an invalid response.',
       );
     },
 
     async listRuns(scheduleId, { limit, offset, signal }) {
       const body = await request(
-        `${schedulePath(scheduleId)}/runs?limit=${limit}&offset=${offset}`,
+        `${managedCloudScheduleRunsPath(scheduleId)}?limit=${limit}&offset=${offset}`,
         { credentials: 'include', signal },
-        listRunsSchema,
+        ManagedCloudScheduleRunListResponseSchema,
         'Schedule history returned an invalid response.',
       );
       return {
@@ -293,7 +240,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
         throw new ScheduleApiError('A manual run idempotency key is required.', 400);
       }
       const body = await request(
-        `${schedulePath(scheduleId)}/runs`,
+        managedCloudScheduleRunsPath(scheduleId),
         {
           method: 'POST',
           credentials: 'include',
@@ -303,7 +250,7 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
           },
           signal,
         },
-        runResponseSchema,
+        ManagedCloudScheduleRunResponseSchema,
         'Manual schedule run returned an invalid response.',
       );
       return { run: body.run as ScheduleRun, replay: body.replay };
