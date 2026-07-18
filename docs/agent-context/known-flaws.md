@@ -152,18 +152,20 @@ previous run-journal and Chrome verification suites.
 2026-07-17 VS Code agent-activity gap (`VSCODE-AGENT-ACTIVITY-01`, Partially
 remediated): the Rust developer-session protocol is now version 5 and the real
 CLI agent loop emits input-redacted, ordered canonical `turn/agent_event` tool
-execution start/end envelopes. Both VS Code chat surfaces validate those
-envelopes instead of inferring work from prose. Native `@agi` chat shows the
-engine-authored progress summary; the custom sidebar renders a collapsed
-inline disclosure with structured Request/Response, failure state, and elapsed
-time. Tool output is bounded at 16,384 Unicode characters with a visible
-truncation marker. No private chain-of-thought is sent. Remaining parity gaps:
-the local app-server does not yet emit canonical source-list, artifact,
-compaction, or user-visible progress events; its approvals and active turn are
-still process-memory state, so an editor/engine restart cannot resume an
-in-flight tool boundary. Verification lives in the protocol v5 tests, CLI
-developer-host/tool-output tests, and the VS Code runtime, participant,
-sidebar-manager, webview, and structural-snapshot suites.
+execution start/end and user-visible progress envelopes on one per-turn
+sequence. Both VS Code chat surfaces validate those envelopes instead of
+inferring work from prose. Native `@agi` chat shows engine-authored progress;
+the custom sidebar renders progress and tool work on one collapsed inline
+spine with progressively disclosed detail, structured Request/Response,
+failure state, and elapsed time. Progress text is derived from observable run
+state and never exposes private chain-of-thought. Tool output is bounded at
+16,384 Unicode characters with a visible truncation marker. Remaining parity
+gaps: the local app-server does not yet emit canonical source-list, artifact,
+or compaction events; its approvals and active turn are still process-memory
+state, so an editor/engine restart cannot resume an in-flight tool boundary.
+Verification lives in the protocol v5 tests, CLI developer-host/progress/tool-
+output tests, and the VS Code runtime, participant, sidebar-manager, webview,
+and structural-snapshot suites.
 
 2026-07-15 billing ownership clarification for
 `GATEWAY-METERING-IDEMPOTENCY-01`: custom Web research, MCP/E2B tool loops,

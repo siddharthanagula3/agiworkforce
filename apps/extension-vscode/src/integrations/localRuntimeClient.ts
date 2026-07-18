@@ -145,13 +145,24 @@ const toolExecutionEndSchema = z.object({
   isError: z.boolean(),
   elapsedMs: z.number().int().nonnegative().optional(),
 });
+const progressUpdateSchema = z.object({
+  type: z.literal('progress-update'),
+  progressId: z.string().min(1),
+  summary: z.string().min(1),
+  detail: z.string().optional(),
+  status: z.enum(['running', 'completed', 'failed']),
+});
 const agentEventEnvelopeSchema = z.object({
   schemaVersion: z.literal(AGENT_EVENT_SCHEMA_VERSION),
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
   sequence: z.number().int().nonnegative(),
   emittedAtMs: z.number().int().nonnegative(),
-  event: z.discriminatedUnion('type', [toolExecutionStartSchema, toolExecutionEndSchema]),
+  event: z.discriminatedUnion('type', [
+    toolExecutionStartSchema,
+    toolExecutionEndSchema,
+    progressUpdateSchema,
+  ]),
 });
 
 export type LocalRuntimeEvent =
@@ -174,6 +185,13 @@ export type LocalRuntimeEvent =
       sequence: number;
       emittedAtMs: number;
     } & Omit<z.infer<typeof toolExecutionEndSchema>, 'type'>)
+  | ({
+      type: 'progress_update';
+      threadId: string;
+      turnId: string;
+      sequence: number;
+      emittedAtMs: number;
+    } & Omit<z.infer<typeof progressUpdateSchema>, 'type'>)
   | ({
       type: 'mcp_status';
       status: 'loading' | 'ready' | 'unavailable';
@@ -215,17 +233,30 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
         input: event.input,
       };
     }
+    if (event.type === 'tool-execution-end') {
+      return {
+        type: 'tool_execution_end',
+        threadId,
+        turnId,
+        sequence,
+        emittedAtMs,
+        toolCallId: event.toolCallId,
+        name: event.name,
+        output: event.output,
+        isError: event.isError,
+        elapsedMs: event.elapsedMs,
+      };
+    }
     return {
-      type: 'tool_execution_end',
+      type: 'progress_update',
       threadId,
       turnId,
       sequence,
       emittedAtMs,
-      toolCallId: event.toolCallId,
-      name: event.name,
-      output: event.output,
-      isError: event.isError,
-      elapsedMs: event.elapsedMs,
+      progressId: event.progressId,
+      summary: event.summary,
+      detail: event.detail,
+      status: event.status,
     };
   }
   if (notification.method === 'turn/interrupted') {

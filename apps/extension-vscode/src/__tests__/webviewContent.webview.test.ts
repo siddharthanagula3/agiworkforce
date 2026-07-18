@@ -182,6 +182,20 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).not.toContain('responseEl.innerHTML');
   });
 
+  it('renders engine progress inline with collapsed, text-only detail', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(scriptBody).toContain("msg.type === 'progressUpdate'");
+    expect(scriptBody).toContain('function upsertProgressEl(progressId, summary, detail, status)');
+    expect(scriptBody).toContain("bar.setAttribute('aria-expanded', 'false')");
+    expect(scriptBody).toContain("existing.bodyEl.textContent = detail || ''");
+    expect(scriptBody).not.toContain('existing.bodyEl.innerHTML = detail');
+  });
+
   it('contains a working inline model picker popover contract', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');

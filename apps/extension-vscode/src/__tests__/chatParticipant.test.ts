@@ -360,10 +360,21 @@ describe('chat participant approval lifecycle', () => {
     await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
     for (const listener of listeners) {
       listener({
-        type: 'tool_execution_start',
+        type: 'progress_update',
         threadId: 'thread-1',
         turnId: 'turn-1',
         sequence: 0,
+        emittedAtMs: 1_784_335_199_900,
+        progressId: 'turn-work',
+        summary: 'Working on your request',
+        detail: 'The agent is inspecting the workspace.',
+        status: 'running',
+      });
+      listener({
+        type: 'tool_execution_start',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence: 1,
         emittedAtMs: 1_784_335_200_000,
         toolCallId: 'tool-1',
         name: 'web_search',
@@ -383,6 +394,7 @@ describe('chat participant approval lifecycle', () => {
     }
     await response;
 
+    expect(vi.mocked(stream.progress)).toHaveBeenCalledWith('Working on your request');
     expect(vi.mocked(stream.progress)).toHaveBeenCalledWith('Searching official sources');
   });
 
