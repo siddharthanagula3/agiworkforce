@@ -34,6 +34,7 @@ function makeProcessed(): ProcessedRequest {
       code_execution: true,
     },
     conversationId: '0190a000-0000-7000-8000-000000000003',
+    autoMemoryFacts: ['User prefers concise answers'],
     requestedModel: 'gpt-5.6-sol',
     provider: 'openai',
     estimatedCostCents: 12,
@@ -99,6 +100,7 @@ describe('cloud agent workflow input', () => {
 
     expect(input.processed).not.toHaveProperty('managedUsage');
     expect(input.processed).not.toHaveProperty('freeTrial');
+    expect(input.processed.autoMemoryFacts).toEqual(['User prefers concise answers']);
     expect(input.billing).toEqual({
       userId: 'user-1',
       idempotencyKey: 'agi.chat.web.request-1',

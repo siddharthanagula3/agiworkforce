@@ -37,6 +37,8 @@ export async function buildNonStreamResponse(
   // Auth token is passed for signature parity / future authenticated calls;
   // deduction is keyed on userId, so the token is not read in this builder.
   _token: string,
+  /** Optional server-owned work that runs only after durable success settlement. */
+  onSuccessfulTurn?: () => Promise<void>,
 ): Promise<NextResponse> {
   const {
     requestId,
@@ -176,6 +178,8 @@ export async function buildNonStreamResponse(
       tokens: llmResponse.totalTokens,
     });
   }
+
+  await onSuccessfulTurn?.();
 
   // BILLING FIX (0044): reconcileUsage/increment_usage was a SECOND, buggy
   // charge path that added the raw token count to credits_used_cents (a cents

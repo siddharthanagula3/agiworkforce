@@ -6,6 +6,24 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-18 Managed Cloud auto-memory parity (`CLOUD-MEMORY-AUTO-01`, Partially
+remediated): Website managed chat now loads bounded owner-scoped account
+memories as explicitly untrusted data before prompt accounting, skips that
+context for Temporary Chats, and extracts only conservative first-person facts
+from the logical Website user message. Standard streaming, non-streaming,
+research/tool-loop, and durable AGI Work paths persist at most five facts only
+after a completed, durably settled turn. Normalized dedupe and deterministic
+IDs make replayed/concurrent auto writes idempotent without a new migration;
+failures, cancellations, empty extraction, tenant mismatch, and persistence
+outages do not create memory or break chat. The shared extractor remains in
+`@agiworkforce/agent-core`. Remaining release-order gap: Mobile Cloud still
+runs its client consolidation before provider success and queues random-ID
+sync rows, so a failed Mobile turn can learn a fact and can later race the
+server-owned fact. Server auto-capture is intentionally Website-only until the
+Mobile slice removes that cloud client write; Desktop follows after Mobile.
+Local Mobile consolidation remains on-device and must not be removed or routed
+to Managed Cloud.
+
 2026-07-18 CLI/app-server and Managed Cloud model-invocable skills gap (`CLI-SKILLS-TOOL-01`,
 Remediated): the developer engine no longer places every discovered skill body
 in the base system prompt. It exposes a read-only, always-loaded `Skill` tool
