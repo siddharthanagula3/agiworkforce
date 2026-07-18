@@ -313,7 +313,7 @@ function isValidAgentId(value: unknown): value is string {
 
 // Each prefix may carry a feature gate: a push can only navigate to it when the
 // underlying feature is enabled in this build. Without the gate, a stray push
-// for a disabled feature (companion / agents are OFF in v1) would
+// for a disabled feature would
 // route the user to a screen that is gated off. Always-available prefixes use
 // `null`. (Defence-in-depth: those screens now render <FeatureUnavailable/>
 // rather than a blank, but we still avoid navigating to them.)
@@ -323,7 +323,7 @@ const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey |
   { prefix: '/(app)/settings', flag: null },
   { prefix: '/(app)/notifications', flag: 'cloudChat' },
   { prefix: '/(app)/schedules', flag: 'schedules' },
-  { prefix: '/(app)/agents', flag: 'agents' },
+  { prefix: '/(app)/agents', flag: 'cloudTasks' },
 ];
 
 function isAllowedRoute(route: string): boolean {

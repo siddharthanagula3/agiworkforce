@@ -132,6 +132,17 @@ session/turn/sequence identity and follow the owner-scoped journal after a
 transport failure. The individual invocation budget remains bounded while the
 workflow can continue across invocations, disconnects, and worker restarts.
 
+The run journal now also has a tenant-scoped, cursor-paginated collection
+endpoint. It validates state filters and opaque cursors, orders runs by the
+stable `(updated_at, id)` tuple, and never queries outside the authenticated
+user ID. Mobile's former Desktop-companion `Agents` index has been replaced by
+a real Cloud Tasks surface backed by that endpoint, with `All`, `Needs input`,
+and `Ready for review` filters, loading/error/empty/refresh/pagination states,
+conversation deep links, and an explicit Local-to-Cloud boundary. `dispatch`
+remains hidden because its current implementation is still the separate
+Desktop WebRTC companion rather than Cloud parent/child decomposition; it must
+not be presented as Cloud dispatch until that engine path exists.
+
 Production remains intentionally blocked until migrations 0061-0063 are
 applied in order. This closure covers Managed Cloud AGI Work; the separate local
 VS Code/CLI process-restart limitation remains tracked below. Verification
@@ -147,7 +158,18 @@ dispatch coverage,
 `cloudApi.test.ts`, Desktop `cloudToolApproval.test.ts`, Mobile
 `streaming-completions-fallback.test.ts`, Mobile
 `cloud-sync-engine.test.ts`, and Mobile approval/timeline suites, plus the
-previous run-journal and Chrome verification suites.
+previous run-journal and Chrome verification suites. Collection coverage lives
+in `managed-cloud-agent-runs-client.test.ts`,
+`cloud-agent-run-service.test.ts`, `cloud-tasks-screen.test.tsx`, and
+`drawer-content.test.tsx`. A 2026-07-17 iPhone 17 Pro simulator pass verified
+the signed-out boundary (Local shell -> Cloud sign-in -> deterministic dismiss
+back to Local). The Cloud Tasks row is intentionally absent while Local or
+signed out; authenticated list/filters/deep-link verification remains blocked
+until the founder applies migrations 0061-0063 and provides a sanctioned QA
+account. The same pass observed native invalid-free/duplicate-`RCTSwiftUI`
+warnings near an attempted Settings interaction, but the automation target had
+a `0x0` frame and no Settings tap was delivered, so no Settings crash is claimed
+without a reliable coordinate/human/XCTest reproduction.
 
 2026-07-17 VS Code agent-activity gap (`VSCODE-AGENT-ACTIVITY-01`, Partially
 remediated): the Rust developer-session protocol is now version 5 and the real

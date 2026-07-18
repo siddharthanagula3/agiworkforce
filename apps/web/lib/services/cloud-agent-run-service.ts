@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   AgentEventEnvelopeSchema,
+  AgentTaskStateSchema,
   CloudAgentRunSchema,
   type CloudAgentOriginSurface,
   type CloudAgentRun,
@@ -125,6 +126,16 @@ export interface ClaimedCloudAgentApprovalCheckpoint {
 export interface CloudAgentRunSnapshot {
   run: CloudAgentRun;
   events: AgentEventEnvelope[];
+}
+
+export interface CloudAgentRunCursor {
+  updatedAt: string;
+  id: string;
+}
+
+export interface CloudAgentRunList {
+  runs: CloudAgentRun[];
+  next: CloudAgentRunCursor | null;
 }
 
 export class CloudAgentRunNotFoundError extends Error {
@@ -393,6 +404,37 @@ export async function getCloudAgentRun(
   );
   const events = eventRows.map((row) => AgentEventEnvelopeSchema.parse(row.envelope));
   return { run: mapRun(runRow), events };
+}
+
+export async function listCloudAgentRuns(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    states: AgentTaskState[];
+    before?: CloudAgentRunCursor;
+    limit?: number;
+  },
+): Promise<CloudAgentRunList> {
+  const states = z.array(AgentTaskStateSchema).min(1).max(9).parse(input.states);
+  const before = input.before
+    ? z.object({ updatedAt: z.string().datetime(), id: z.string().uuid() }).parse(input.before)
+    : null;
+  const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 25)));
+  const rows = await db.query<CloudAgentRunRow>(
+    `select * from public.cloud_agent_runs
+      where user_id = $1
+        and state = any($2::text[])
+        and ($3::timestamptz is null or (updated_at, id) < ($3::timestamptz, $4::uuid))
+      order by updated_at desc, id desc
+      limit $5`,
+    [input.userId, states, before?.updatedAt ?? null, before?.id ?? null, limit + 1],
+  );
+  const pageRows = rows.slice(0, limit);
+  const lastRow = pageRows.at(-1);
+  return {
+    runs: pageRows.map(mapRun),
+    next: rows.length > limit && lastRow ? { updatedAt: lastRow.updated_at, id: lastRow.id } : null,
+  };
 }
 
 /**

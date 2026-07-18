@@ -223,6 +223,7 @@ describe('DrawerContent', () => {
 
     // Cloud mode now shows AGI Agent AND Projects (cloud projects are synced).
     expect(cloud.getByText('AGI Agent')).toBeTruthy();
+    expect(cloud.getByLabelText('Tasks. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
     // Projects nav row is now visible in cloud mode (task: unblock cloud projects).
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
@@ -239,6 +240,16 @@ describe('DrawerContent', () => {
 
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/schedules');
+  });
+
+  it('opens the durable Cloud task list from the drawer', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText } = renderDrawer();
+
+    fireEvent.press(getByLabelText('Tasks. Cloud'));
+
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/agents');
   });
 
   it('renders projects and recents', () => {
