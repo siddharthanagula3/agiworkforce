@@ -127,6 +127,7 @@ describe('SettingsModal nav (web IA)', () => {
     expect(SETTINGS_NAV_GROUPS_WEB[0]?.label).toBeUndefined();
     // Skills/Connectors/Plugins come AFTER the core settings items.
     const keys = SETTINGS_NAV_GROUPS_WEB[0]!.items.map((i) => i.key);
+    expect(keys).toContain('time-focus');
     expect(keys.slice(-3)).toEqual(['skills', 'connectors', 'plugins']);
   });
 

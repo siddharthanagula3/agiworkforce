@@ -36,6 +36,9 @@ vi.mock('../sections/UsageSection', () => ({ UsageSection: () => null }));
 vi.mock('../sections/CapabilitiesSection', () => ({ CapabilitiesSection: () => null }));
 vi.mock('../sections/MemorySection', () => ({ MemorySection: () => null }));
 vi.mock('../sections/NotificationsSection', () => ({ NotificationsSection: () => null }));
+vi.mock('../sections/TimeFocusSection', () => ({
+  TimeFocusSection: () => <div>Time and focus settings content</div>,
+}));
 
 function stubFetch({
   connectors = [] as Array<{ connectorId: string; connectedAt?: string }>,
@@ -157,5 +160,12 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(screen.getByText('GitHub Automation')).toBeTruthy();
     expect(screen.getAllByText('Catalogue preview').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /install github automation/i })).toBeNull();
+  });
+
+  it('renders the account-backed Time and focus section from the shared settings nav', () => {
+    stubFetch();
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="time-focus" />);
+
+    expect(screen.getByText('Time and focus settings content')).toBeTruthy();
   });
 });

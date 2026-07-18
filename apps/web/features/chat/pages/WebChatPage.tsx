@@ -81,6 +81,7 @@ import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/A
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { UpgradePlanDialog } from '../components/dialogs/UpgradePlanDialog';
+import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
 import { upgradeToProPlan, upgradeToMaxPlan } from '@features/billing/services/stripe-payments';
 import {
@@ -288,7 +289,7 @@ export default function WebChatPage() {
   // translation resources already exist (app/i18n/locales/*). Wire the most
   // visible strings through the existing 'chat' and 'common' namespaces.
   const { t, i18n } = useTranslation(['chat', 'common']);
-  const { getToken, isLoaded: authLoaded } = useAuth();
+  const { getToken, isLoaded: authLoaded, userId } = useAuth();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -2327,6 +2328,7 @@ export default function WebChatPage() {
           onConfirm={handleConfirmHandoff}
         />
       )}
+      <TimeFocusReminder userId={userId} onLeave={() => router.push('/')} />
     </div>
   );
 }
