@@ -11,6 +11,7 @@ export {
   classifyMemoryCategory,
   cosineSimilarity,
   decayMemoryImportance,
+  extractCandidateMemoryFacts,
   isValidEmbedding,
   memoryRelevanceScore,
   normalizeMemoryKey,
