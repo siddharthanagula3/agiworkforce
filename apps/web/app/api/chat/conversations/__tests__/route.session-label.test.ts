@@ -87,20 +87,23 @@ describe('POST /api/chat/conversations — cloud_chat session labeling', () => {
   });
 
   it('does not throw the assertion for a project-scoped conversation either', async () => {
-    mockNeonQuery.mockResolvedValueOnce([{ account_status: 'active' }]).mockResolvedValueOnce([
-      {
-        id: 'conv_label_2',
-        title: 'Project chat',
-        model: 'auto',
-        project_id: 'proj_9',
-        pinned: false,
-        starred: false,
-        archived: false,
-        is_temporary: false,
-        created_at: '2026-07-15T00:00:00.000Z',
-        updated_at: '2026-07-15T00:00:00.000Z',
-      },
-    ]);
+    mockNeonQuery
+      .mockResolvedValueOnce([{ account_status: 'active' }])
+      .mockResolvedValueOnce([{ id: 'proj_9' }])
+      .mockResolvedValueOnce([
+        {
+          id: 'conv_label_2',
+          title: 'Project chat',
+          model: 'auto',
+          project_id: 'proj_9',
+          pinned: false,
+          starred: false,
+          archived: false,
+          is_temporary: false,
+          created_at: '2026-07-15T00:00:00.000Z',
+          updated_at: '2026-07-15T00:00:00.000Z',
+        },
+      ]);
 
     const res = await POST(makePostRequest({ title: 'Project chat', projectId: 'proj_9' }));
     expect(res.status).toBe(201);
