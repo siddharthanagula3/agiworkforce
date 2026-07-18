@@ -6,6 +6,21 @@ Last updated: 2026-07-17
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-17 CLI/app-server model-invocable skills gap (`CLI-SKILLS-TOOL-01`,
+Remediated): the developer engine no longer places every discovered skill body
+in the base system prompt. It exposes a read-only, always-loaded `Skill` tool
+that lists metadata and lazy-loads one exact consented skill name; model input
+cannot supply a filesystem path. Both flat skill files and canonical
+`<name>/SKILL.md` directories are supported. `env_vars` and `tools` /
+`required_tools` frontmatter dependencies fail closed without revealing secret
+values, skill bodies are fenced as untrusted reference guidance, and the
+canonical tool catalog makes the same capability available to stdio and
+authenticated WebSocket app-server clients. The remaining cross-surface gap is
+Managed Cloud: Web/Mobile still select and inject a server-fetched skill body
+at compose time rather than letting the Cloud loop invoke the same progressive
+disclosure contract. That follow-up must reuse `packages/tools/skills` rather
+than introduce another catalog.
+
 2026-07-17 Desktop optional-feature build gate: `cargo clippy -p
 agiworkforce-desktop --all-targets --all-features -- -D warnings` does not
 compile the `remote-databases` feature. The direct `bson = 3.1` dependency is

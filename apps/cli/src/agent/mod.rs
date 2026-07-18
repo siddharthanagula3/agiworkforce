@@ -316,8 +316,7 @@ impl AgentSession {
             .unwrap_or_default();
 
         let discovered = skills::discover_skills();
-        let skill_refs: Vec<&skills::Skill> = discovered.iter().collect();
-        let skills_content = skills::format_skills_for_prompt(&skill_refs);
+        let skills_content = skills::format_skill_catalog_for_prompt(&discovered);
 
         let rules = std::env::current_dir()
             .ok()
@@ -1203,7 +1202,8 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 43);
+        assert_eq!(defs.len(), 44);
+        assert!(defs.iter().any(|definition| definition.name == "skill"));
     }
 
     #[test]
