@@ -41,12 +41,14 @@ describe('web chat search metadata helpers', () => {
       createSendReplayMetadata({
         webSearchEnabled: true,
         thinkingEnabled: false,
+        officeCreationEnabled: true,
         styleMode: 'formal',
         hasSkillInstruction: true,
       }),
     ).toEqual({
       webSearchEnabled: true,
       thinkingEnabled: false,
+      officeCreationEnabled: true,
       styleMode: 'formal',
       hasSkillInstruction: true,
     });

@@ -34,6 +34,7 @@ export interface SendReplayMetadata {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
+  officeCreationEnabled?: boolean;
   styleMode?: WebChatStyleMode;
   hasSkillInstruction?: boolean;
 }
@@ -70,6 +71,7 @@ export function createSendReplayMetadata(params: {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
+  officeCreationEnabled?: boolean;
   styleMode?: string;
   hasSkillInstruction?: boolean;
 }): SendReplayMetadata | undefined {
@@ -79,6 +81,9 @@ export function createSendReplayMetadata(params: {
   if (typeof params.thinkingEnabled === 'boolean') replay.thinkingEnabled = params.thinkingEnabled;
   if (typeof params.codeExecutionEnabled === 'boolean') {
     replay.codeExecutionEnabled = params.codeExecutionEnabled;
+  }
+  if (typeof params.officeCreationEnabled === 'boolean') {
+    replay.officeCreationEnabled = params.officeCreationEnabled;
   }
   if (isWebChatStyleMode(params.styleMode)) replay.styleMode = params.styleMode;
   if (params.hasSkillInstruction) replay.hasSkillInstruction = true;

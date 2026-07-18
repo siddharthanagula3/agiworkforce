@@ -92,6 +92,11 @@ import {
 import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import { executeManagedSkillTool } from '@/lib/services/skill-catalog-service';
 import { functionToolName } from './tool-loop-routing';
+import {
+  generateManagedOfficeFile,
+  isManagedOfficeFileTool,
+  MANAGED_OFFICE_FILE_TOOL_NAME,
+} from '@/lib/services/managed-office-file-service';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -216,6 +221,7 @@ export interface ToolLoopToolResult {
   source?: FetchedSource;
   sources?: FetchedSource[];
   pngResults?: string[];
+  generatedFiles?: GeneratedFileWire[];
 }
 
 export interface ToolLoopToolExecution {
@@ -369,6 +375,7 @@ const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
   [/\bgit_/i, 'Running git'],
   [/\bdb_query|sql_query|database/i, 'Querying database'],
   [/\bskill/i, 'Reading skill'],
+  [/\bcreate_office_file\b/i, 'Creating Office file'],
 ];
 
 /** Derive a playful status phrase for a tool name, or return undefined. */
@@ -398,6 +405,7 @@ function canonicalToolCategory(
 ): AgentEventToolCategory {
   if (isWebSearchTool(toolName)) return 'web-search';
   if (isUrlFetchTool(toolName)) return 'web-fetch';
+  if (isManagedOfficeFileTool(toolName)) return 'artifact';
   if (toolName === 'execute_code') return 'code-execution';
   if (toolName === 'write_file' || toolName === 'create_folder') return 'filesystem';
 
@@ -835,6 +843,7 @@ async function runMcpTool(
   e2bExecutor: () => Promise<E2BExecutor | null>,
   availableTools: ReadonlySet<string>,
   connectorExecutor?: ConnectorToolExecutor,
+  officeContext?: { userId?: string; model: string },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
     if (!availableTools.has(SKILL_TOOL_NAME)) {
@@ -842,6 +851,45 @@ async function runMcpTool(
     }
     const result = await executeManagedSkillTool(toolCall.args, { availableTools });
     return { content: result.content, isError: result.isError };
+  }
+
+  if (isManagedOfficeFileTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME)) {
+      return { content: `Unknown tool: ${MANAGED_OFFICE_FILE_TOOL_NAME}`, isError: true };
+    }
+    if (!officeContext?.userId) {
+      return { content: 'An authenticated file owner is required.', isError: true };
+    }
+    const generated = await generateManagedOfficeFile(toolCall.args);
+    if (!generated.ok) {
+      return { content: generated.message, isError: true };
+    }
+    const persisted = await persistGeneratedFileBytes({
+      userId: officeContext.userId,
+      data: generated.data,
+      mimeType: generated.mimeType,
+      filename: generated.filename,
+      provider: 'agi-managed-office',
+      origin: 'managed-office-tool',
+      model: officeContext.model,
+      extraMetadata: { format: toolCall.args['format'] },
+    });
+    if (!persisted.ok) {
+      return { content: 'The Office file could not be attached.', isError: true };
+    }
+    return {
+      content: JSON.stringify({
+        ok: true,
+        file: {
+          name: persisted.file.file_name,
+          uri: persisted.file.uri,
+          mime_type: persisted.file.mime_type,
+          byte_count: persisted.file.byte_count,
+        },
+      }),
+      isError: false,
+      generatedFiles: [persisted.file],
+    };
   }
 
   // Platform url_fetch: read-only page fetch, SSRF-guarded (see lib/url-fetch/).
@@ -1000,6 +1048,9 @@ function isToolOffered(
   availableTools: ReadonlySet<string>,
 ): boolean {
   if (qualifiedName === SKILL_TOOL_NAME) return availableTools.has(SKILL_TOOL_NAME);
+  if (isManagedOfficeFileTool(qualifiedName)) {
+    return availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME);
+  }
   if (isExecutionTool(qualifiedName)) return true;
   if (isUrlFetchTool(qualifiedName)) return true;
   if (isWebSearchTool(qualifiedName)) return true;
@@ -1282,11 +1333,15 @@ export async function* runToolLoop(
       source?: FetchedSource;
       sources?: FetchedSource[];
       pngResults?: string[];
+      generatedFiles?: GeneratedFileWire[];
     }[] = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
       const execute = () =>
-        runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor);
+        runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
+          userId: options.userId,
+          model: responseModel,
+        });
       return options.toolExecutor
         ? options.toolExecutor({
             operationKey: `tool:${tc.id}`,
@@ -1321,10 +1376,26 @@ export async function* runToolLoop(
     // Emit status + result events, and append tool result messages.
     let sourcesAdded = false;
     let searchSourcesAdded = false;
-    for (const { tc, content, isError, source, sources } of results) {
+    for (const { tc, content, isError, source, sources, generatedFiles } of results) {
       yield encoder.encode(
         toolStatusEvent(tc.qualifiedName, isError ? 'failed' : 'completed', responseModel),
       );
+
+      if (generatedFiles && generatedFiles.length > 0) {
+        yield encoder.encode(generatedFilesEvent(generatedFiles, responseModel));
+        for (const file of generatedFiles) {
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'artifact-produced',
+              artifactId: file.id,
+              name: file.file_name,
+              mimeType: file.mime_type,
+              uri: file.uri,
+              sizeBytes: file.byte_count,
+            }),
+          );
+        }
+      }
       yield encoder.encode(
         toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
       );

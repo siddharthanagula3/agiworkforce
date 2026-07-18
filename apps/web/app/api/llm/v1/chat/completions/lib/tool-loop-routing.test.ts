@@ -3,6 +3,7 @@ import { classifyToolLoopInputs } from './tool-loop-routing';
 import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
+import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 
 describe('classifyToolLoopInputs', () => {
   it('enters the loop for the platform web-search tool by itself', () => {
@@ -12,6 +13,7 @@ describe('classifyToolLoopInputs', () => {
       hasUrlFetchTools: false,
       hasWebSearchTools: true,
       hasSkillTools: false,
+      hasOfficeFileTools: false,
       shouldRun: true,
       approvalMode: 'auto',
     });
@@ -35,6 +37,16 @@ describe('classifyToolLoopInputs', () => {
 
     expect(result).toMatchObject({
       hasSkillTools: true,
+      shouldRun: true,
+      approvalMode: 'auto',
+    });
+  });
+
+  it('enters the loop in auto mode for managed Office file creation', () => {
+    const result = classifyToolLoopInputs([], [createManagedOfficeFileToolDefinition()]);
+
+    expect(result).toMatchObject({
+      hasOfficeFileTools: true,
       shouldRun: true,
       approvalMode: 'auto',
     });

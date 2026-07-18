@@ -592,6 +592,32 @@ describe('ChatComposerNew', () => {
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
     expect(screen.getByRole('button', { name: /web search/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /deep research/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /create office files/i })).toBeInTheDocument();
+  });
+
+  it('sends the persistent Office file-creation selection to the server', async () => {
+    const toolModel = getSelectableModels().find((model) => model.capabilities.tools === true);
+    expect(toolModel, 'the canonical registry must expose a tool-capable model').toBeDefined();
+    useModelStore.getState().setSelectedModelId(toolModel!.id);
+
+    const onSendMock = vi.fn();
+    render(<ChatComposerNew onSend={onSendMock} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByRole('button', { name: /create office files/i }));
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'Create a release plan deck');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(onSendMock).toHaveBeenLastCalledWith(
+        'Create a release plan deck',
+        undefined,
+        undefined,
+        expect.objectContaining({ officeCreationEnabled: true }),
+      ),
+    );
   });
 
   it('does not expose an inert work-project selector', () => {
