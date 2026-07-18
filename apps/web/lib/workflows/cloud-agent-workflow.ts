@@ -24,6 +24,7 @@ import {
   transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
 import { executeCloudAgentOperation } from './cloud-agent-operation-executor';
 import {
   parseCloudAgentWorkflowInput,
@@ -155,6 +156,13 @@ async function settleWorkflowInvocation(
     usage,
     reason: `cloud_agent_workflow_${outcome}`,
     cancelled: outcome === 'cancelled',
+  });
+
+  await recordManagedAutoMemoryTurn({
+    db,
+    userId: input.userId,
+    processed: input.processed as ProcessedRequest,
+    outcome: outcome === 'awaiting_input' ? 'cancelled' : outcome,
   });
 
   if (input.predecessorApproval) {

@@ -43,6 +43,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
 
 /** Current Vercel Hobby maximum; durable AGI Work will span workflow steps. */
 export const maxDuration = 300;
@@ -279,6 +280,13 @@ async function handleChatCompletions(request: NextRequest) {
           userId,
           runId: run.id,
         },
+        onTerminal: (outcome) =>
+          recordManagedAutoMemoryTurn({
+            db: runDb,
+            userId,
+            processed,
+            outcome,
+          }),
       });
 
       const researchHeaders: Record<string, string> = {
@@ -422,6 +430,13 @@ async function handleChatCompletions(request: NextRequest) {
         completionReason: 'tool_loop_completed',
         cancellationReason: 'client_cancelled_tool_loop',
         runJournal: { db: runDb, userId, runId: run.id },
+        onTerminal: (outcome) =>
+          recordManagedAutoMemoryTurn({
+            db: runDb,
+            userId,
+            processed,
+            outcome,
+          }),
         preserveAwaitingInputOnCancel: () => approvalCheckpointSaved,
       });
 
@@ -502,6 +517,13 @@ async function handleChatCompletions(request: NextRequest) {
           token,
           streamStartedAt,
           attemptAdapterProvider.wireMode,
+          () =>
+            recordManagedAutoMemoryTurn({
+              request,
+              userId,
+              processed: attemptProcessed,
+              outcome: 'completed',
+            }),
         );
       }
     }
@@ -571,7 +593,14 @@ async function handleChatCompletions(request: NextRequest) {
         );
       }
 
-      return buildNonStreamResponse(request, llmResponse, attemptProcessed, userId, token);
+      return buildNonStreamResponse(request, llmResponse, attemptProcessed, userId, token, () =>
+        recordManagedAutoMemoryTurn({
+          request,
+          userId,
+          processed: attemptProcessed,
+          outcome: 'completed',
+        }),
+      );
     }
   }
 

@@ -98,6 +98,30 @@ beforeEach(() => {
 });
 
 describe('buildNonStreamResponse golden fixture', () => {
+  it('runs the successful-turn owner after durable billing settlement', async () => {
+    const onSuccessfulTurn = vi.fn(async () => {
+      expect(CreditService.settleCreditsDurably).toHaveBeenCalledOnce();
+    });
+
+    await buildNonStreamResponse(
+      makeRequest() as any,
+      {
+        model: 'claude-opus-4-8',
+        content: 'Hello there',
+        finishReason: 'stop',
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120,
+      },
+      makeProcessed({ estimatedCostCents: 100 }),
+      'user-memory',
+      'token-memory',
+      onSuccessfulTurn,
+    );
+
+    expect(onSuccessfulTurn).toHaveBeenCalledOnce();
+  });
+
   it('persists reconciliation through the durable settlement owner', async () => {
     await buildNonStreamResponse(
       makeRequest() as any,

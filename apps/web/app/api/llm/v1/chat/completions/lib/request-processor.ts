@@ -14,6 +14,7 @@ import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import { webSearchNeedsGenericTool } from '@agiworkforce/search';
+import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
 import { supportsOpenAIReasoningEffort } from '@agiworkforce/provider-protocol';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -80,6 +81,7 @@ import {
   getManagedSkillCatalog,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
+import { resolveCloudChatSurface, type CloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z.object({
@@ -248,6 +250,8 @@ export type ProcessedRequest = {
   chatRequest: ChatCompletionRequest;
   /** Conversation this request belongs to, if the caller sent one (see conversation_id). */
   conversationId: string | undefined;
+  /** Conservative user-authored facts captured before server prompt enrichment. */
+  autoMemoryFacts?: string[];
   requestedModel: string;
   provider: string;
   estimatedCostCents: number;
@@ -464,6 +468,16 @@ export async function enrichManagedMemoryContext(params: {
   const memories = await loadManagedMemoryContext(params.db, { userId: params.userId });
   const prompt = formatManagedMemorySystemPrompt(memories);
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
+}
+
+/** Website-first capture policy; later release slices enable other Cloud clients. */
+export function prepareManagedAutoMemoryFacts(params: {
+  message: string;
+  isTemporary: boolean;
+  surface: CloudChatSurface;
+}): string[] {
+  if (params.isTemporary || params.surface !== 'web') return [];
+  return extractCandidateMemoryFacts(params.message).slice(0, 5);
 }
 
 // Exported so it can be unit-tested without importing the full processRequest stack.
@@ -1037,6 +1051,11 @@ export async function processRequest(
   }
   const lastUserMsg = lastUserIndex >= 0 ? chatRequest.messages[lastUserIndex] : undefined;
   const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
+  const autoMemoryFacts = prepareManagedAutoMemoryFacts({
+    message: lastUserText,
+    isTemporary: conversationIsTemporary,
+    surface: resolveCloudChatSurface(request),
+  });
 
   // The classifier contract expects PRIOR turns only; including the outgoing
   // user message here double-counted its tokens and could trigger long-context
@@ -1784,6 +1803,7 @@ export async function processRequest(
     managedUsage,
     chatRequest,
     conversationId: chatRequest.conversation_id,
+    autoMemoryFacts,
     requestedModel,
     provider,
     estimatedCostCents,

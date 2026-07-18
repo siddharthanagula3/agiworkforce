@@ -4,6 +4,7 @@ import {
   applyManagedMemoryContext,
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
+  persistManagedAutoMemoryFacts,
 } from '../managed-memory-context-service';
 
 describe('loadManagedMemoryContext', () => {
@@ -79,5 +80,55 @@ describe('applyManagedMemoryContext', () => {
 
     expect(request.messages).toHaveLength(2);
     expect(request.messages[0]?.content).toBe('MEMORY BLOCK\n\nExisting system prompt.');
+  });
+});
+
+describe('persistManagedAutoMemoryFacts', () => {
+  it('deduplicates, bounds, categorizes, and idempotently inserts auto facts', async () => {
+    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }, { id: 'memory-2' }]);
+    const candidates = [
+      'User prefers Rust',
+      '  user   prefers rust  ',
+      'User lives in Chicago',
+      'User works as an engineer',
+      'User likes jazz',
+      'User is from India',
+      'User loves cycling',
+    ];
+
+    const first = await persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates });
+    const second = await persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates });
+
+    expect(first).toEqual({ extracted: 7, inserted: 2 });
+    expect(second).toEqual({ extracted: 7, inserted: 2 });
+    expect(query).toHaveBeenCalledTimes(2);
+
+    const sql = query.mock.calls[0]?.[0] as string;
+    const firstBatch = JSON.parse(query.mock.calls[0]?.[1]?.[1] as string) as Array<{
+      id: string;
+      content: string;
+      category: string;
+      normalizedKey: string;
+    }>;
+    const secondBatch = JSON.parse(query.mock.calls[1]?.[1]?.[1] as string) as typeof firstBatch;
+
+    expect(sql).toMatch(/user_id = \$1[\s\S]*is_deleted = false/);
+    expect(sql).toContain('on conflict (id) do nothing');
+    expect(firstBatch).toHaveLength(5);
+    expect(firstBatch[0]).toMatchObject({
+      content: 'User prefers Rust',
+      category: 'preference',
+      normalizedKey: 'user prefers rust',
+    });
+    expect(firstBatch.map((row) => row.id)).toEqual(secondBatch.map((row) => row.id));
+  });
+
+  it('does not query the database when no facts were extracted', async () => {
+    const query = vi.fn();
+
+    await expect(
+      persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates: [] }),
+    ).resolves.toEqual({ extracted: 0, inserted: 0 });
+    expect(query).not.toHaveBeenCalled();
   });
 });
