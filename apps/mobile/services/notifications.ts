@@ -313,7 +313,7 @@ function isValidAgentId(value: unknown): value is string {
 
 // Each prefix may carry a feature gate: a push can only navigate to it when the
 // underlying feature is enabled in this build. Without the gate, a stray push
-// for a disabled feature (companion / schedules / agents are OFF in v1) would
+// for a disabled feature (companion / agents are OFF in v1) would
 // route the user to a screen that is gated off. Always-available prefixes use
 // `null`. (Defence-in-depth: those screens now render <FeatureUnavailable/>
 // rather than a blank, but we still avoid navigating to them.)

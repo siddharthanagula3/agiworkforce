@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -23,6 +24,12 @@ const sizeStyles: Record<NonNullable<ButtonProps['size']>, ViewStyle> = {
   lg: { minHeight: 52, paddingHorizontal: 24, borderRadius: 14 },
 };
 
+const baseStyle: ViewStyle = {
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexDirection: 'row',
+};
+
 export function Button({
   title,
   variant = 'primary',
@@ -30,11 +37,12 @@ export function Button({
   loading,
   disabled,
   onPress,
-  className = '',
+  className,
   ...props
 }: ButtonProps) {
   const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const [pressed, setPressed] = useState(false);
 
   const handlePress = (e: Parameters<NonNullable<PressableProps['onPress']>>[0]) => {
     if (hapticsEnabled) {
@@ -43,7 +51,17 @@ export function Button({
     onPress?.(e);
   };
 
-  const { style, ...rest } = props;
+  const { style, onPressIn, onPressOut, ...rest } = props;
+
+  const handlePressIn: NonNullable<PressableProps['onPressIn']> = (event) => {
+    setPressed(true);
+    onPressIn?.(event);
+  };
+
+  const handlePressOut: NonNullable<PressableProps['onPressOut']> = (event) => {
+    setPressed(false);
+    onPressOut?.(event);
+  };
 
   const variantStyle = (pressed: boolean): ViewStyle => {
     switch (variant) {
@@ -85,17 +103,18 @@ export function Button({
 
   return (
     <Pressable
-      className={`items-center justify-center flex-row ${className}`}
-      style={(state: PressableStateCallbackType) =>
-        StyleSheet.flatten([
-          sizeStyles[size],
-          variantStyle(state.pressed),
-          disabled || loading ? { opacity: 0.5 } : null,
-          typeof style === 'function' ? style(state) : style,
-        ])
-      }
+      className={className || undefined}
+      style={StyleSheet.flatten([
+        baseStyle,
+        sizeStyles[size],
+        variantStyle(pressed),
+        disabled || loading ? { opacity: 0.5 } : null,
+        typeof style === 'function' ? style({ pressed } as PressableStateCallbackType) : style,
+      ])}
       disabled={disabled || loading}
       onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled: disabled || loading }}
