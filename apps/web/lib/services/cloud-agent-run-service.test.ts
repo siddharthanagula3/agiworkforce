@@ -10,6 +10,7 @@ import {
   completeCloudAgentApprovalCheckpoint,
   createCloudAgentRun,
   getCloudAgentRun,
+  listCloudAgentRuns,
   requestCloudAgentRunCancellation,
   releaseCloudAgentApprovalCheckpoint,
   saveCloudAgentApprovalCheckpoint,
@@ -262,6 +263,48 @@ describe('cloud agent run service', () => {
       1,
       50,
     ]);
+  });
+
+  it('lists only tenant-owned runs in the requested states with a stable tuple cursor', async () => {
+    const olderRow = {
+      ...RUN_ROW,
+      id: '0190a000-0000-7000-8000-000000000002',
+      state: 'awaiting_input',
+      updated_at: '2026-07-17T19:59:59.000Z',
+    };
+    const overflowRow = {
+      ...RUN_ROW,
+      id: '0190a000-0000-7000-8000-000000000003',
+      state: 'ready_for_review',
+      updated_at: '2026-07-17T19:59:58.000Z',
+    };
+    vi.mocked(db.query).mockResolvedValueOnce([olderRow, overflowRow]);
+
+    const result = await listCloudAgentRuns(db, {
+      userId: 'user-1',
+      states: ['awaiting_input', 'ready_for_review'],
+      before: {
+        updatedAt: '2026-07-17T20:00:00.000Z',
+        id: '0190a000-0000-7000-8000-000000000099',
+      },
+      limit: 1,
+    });
+
+    expect(result.runs).toHaveLength(1);
+    expect(result.runs[0]?.id).toBe(olderRow.id);
+    expect(result.next).toEqual({ updatedAt: olderRow.updated_at, id: olderRow.id });
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /user_id = \$1[\s\S]*state = any\(\$2::text\[\]\)[\s\S]*\(updated_at, id\) < \(\$3::timestamptz, \$4::uuid\)/i,
+      ),
+      [
+        'user-1',
+        ['awaiting_input', 'ready_for_review'],
+        '2026-07-17T20:00:00.000Z',
+        '0190a000-0000-7000-8000-000000000099',
+        2,
+      ],
+    );
   });
 
   it('persists cancellation intent without claiming termination before executor acknowledgement', async () => {

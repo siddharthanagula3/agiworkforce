@@ -143,6 +143,44 @@ describe('managed Cloud agent-run client', () => {
     );
   });
 
+  it('lists filtered runs through the tenant-scoped collection endpoint', async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ runs: [run('awaiting_input')], nextCursor: 'next-page' }),
+    );
+    const client = createManagedCloudAgentRunClient({
+      baseUrl: 'https://agi.example',
+      getAuthToken: async () => 'token-1',
+      fetchImpl,
+    });
+
+    await expect(
+      client.listRuns({
+        states: ['running', 'awaiting_input'],
+        limit: 25,
+        cursor: 'current-page',
+      }),
+    ).resolves.toMatchObject({
+      runs: [expect.objectContaining({ state: 'awaiting_input' })],
+      nextCursor: 'next-page',
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://agi.example/api/llm/v1/chat/completions/runs?state=running&state=awaiting_input&limit=25&cursor=current-page',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer token-1' },
+        signal: undefined,
+      }),
+    );
+  });
+
+  it('rejects invalid list filters before making a request', async () => {
+    const fetchImpl = vi.fn();
+    const client = createManagedCloudAgentRunClient({ fetchImpl });
+
+    await expect(client.listRuns({ states: ['not-a-state'] as never[] })).rejects.toThrow();
+    await expect(client.listRuns({ cursor: 'x'.repeat(513) })).rejects.toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('replays every page without gaps and stops only at a terminal run state', async () => {
     const fetchImpl = vi
       .fn()

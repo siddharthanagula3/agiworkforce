@@ -47,6 +47,7 @@ type RoutePath =
   | '/(app)/artifacts'
   | '/(app)/library'
   | '/(app)/schedules'
+  | '/(app)/agents'
   | '/(app)/(tabs)/settings'
   | '/(app)/about'
   | '/(app)/profile'
@@ -54,7 +55,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'projects' | 'artifacts' | 'library' | 'schedules' | 'agi-agent';
+  key: 'projects' | 'artifacts' | 'library' | 'tasks' | 'schedules' | 'agi-agent';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -79,6 +80,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'Library',
     icon: BookImage,
     route: '/(app)/library',
+  },
+  {
+    key: 'tasks',
+    label: 'Tasks',
+    icon: Sparkles,
+    route: '/(app)/agents',
+    cloud: true,
   },
   {
     key: 'schedules',
@@ -415,6 +423,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         // Cloud mode exposes the shared cloud surfaces, including Schedules and AGI Agent.
         // Local mode keeps only on-device surfaces and hides every cloud-only item.
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
+        if (item.key === 'tasks' && !FEATURES.cloudTasks) return false;
         if (appMode === 'cloud') return true;
         return !item.cloud;
       }),
@@ -428,6 +437,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'artifacts') return p.includes('/artifacts');
       if (key === 'library') return p.includes('/library');
       if (key === 'schedules') return p.includes('/schedules');
+      if (key === 'tasks') return p.includes('/agents');
       return false;
     },
     [pathname],

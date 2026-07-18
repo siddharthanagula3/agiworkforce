@@ -3,12 +3,15 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { AgentTaskStateSchema } from './agent-events';
 import {
   CloudAgentRunCancellationResponseSchema,
+  CloudAgentRunListPageSchema,
   CloudAgentRunSnapshotPageSchema,
+  MANAGED_CLOUD_AGENT_RUNS_BASE_PATH,
   MANAGED_CLOUD_AGENT_RUN_ID_HEADER,
   MANAGED_CLOUD_AGENT_RUN_URL_HEADER,
   isCloudAgentRunFollowBoundary,
   managedCloudAgentRunPath,
   type CloudAgentRun,
+  type CloudAgentRunListPage,
   type CloudAgentRunSnapshotPage,
 } from './cloud-agent-runs';
 
@@ -66,6 +69,13 @@ export interface ManagedCloudAgentRunReadOptions {
   signal?: AbortSignal;
 }
 
+export interface ManagedCloudAgentRunListOptions {
+  states?: CloudAgentRun['state'][];
+  limit?: number;
+  cursor?: string;
+  signal?: AbortSignal;
+}
+
 export interface ManagedCloudAgentRunFollowOptions {
   afterSequence?: number;
   pageSize?: number;
@@ -83,6 +93,7 @@ export interface ManagedCloudAgentRunFollowResult {
 }
 
 export interface ManagedCloudAgentRunClient {
+  listRuns(options?: ManagedCloudAgentRunListOptions): Promise<CloudAgentRunListPage>;
   getRun(
     runId: string,
     options?: ManagedCloudAgentRunReadOptions,
@@ -273,6 +284,24 @@ export function createManagedCloudAgentRunClient(
   }
 
   const client: ManagedCloudAgentRunClient = {
+    async listRuns(options = {}) {
+      const states = z
+        .array(AgentTaskStateSchema)
+        .max(9)
+        .parse(options.states ?? []);
+      const cursor = z.string().min(1).max(512).optional().parse(options.cursor);
+      const limit = Math.min(100, Math.max(1, Math.trunc(options.limit ?? 25)));
+      const params = new URLSearchParams();
+      for (const state of states) params.append('state', state);
+      params.set('limit', String(limit));
+      if (cursor) params.set('cursor', cursor);
+      const response = await request(`${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?${params.toString()}`, {
+        headers: await readHeaders(),
+        signal: options.signal,
+      });
+      return parseContract(response, CloudAgentRunListPageSchema, 'list response');
+    },
+
     async getRun(runId, options = {}) {
       const afterSequence = Math.max(-1, Math.trunc(options.afterSequence ?? -1));
       const limit = Math.min(500, Math.max(1, Math.trunc(options.limit ?? DEFAULT_PAGE_SIZE)));
