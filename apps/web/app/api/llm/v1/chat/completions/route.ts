@@ -30,10 +30,12 @@ import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
   createCloudAgentRun,
   isCloudAgentRunCancellationRequested,
-  type CloudAgentOriginSurface,
-  type CloudAgentRun,
-  type CloudAgentWorkMode,
 } from '@/lib/services/cloud-agent-run-service';
+import type {
+  CloudAgentOriginSurface,
+  CloudAgentRun,
+  CloudAgentWorkMode,
+} from '@agiworkforce/cloud-contracts';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
