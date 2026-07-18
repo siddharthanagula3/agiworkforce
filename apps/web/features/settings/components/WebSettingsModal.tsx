@@ -25,8 +25,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { SettingsModal, SETTINGS_NAV_GROUPS_WEB } from '@agiworkforce/ui';
-import type { SettingsDataAdapter, SettingsSkill } from '@agiworkforce/ui';
+import type { SettingsDataAdapter, SettingsPlugin, SettingsSkill } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 // Section components — real wired content, NOT route stubs
@@ -113,6 +114,17 @@ const SETTINGS_CONNECTORS = CONNECTORS.filter((c) => !c.exclusive).map((c) => ({
   iconText: c.iconText,
   canConnect: false,
   statusLabel: c.phase > 1 ? 'Coming soon' : 'Not yet available on web',
+}));
+
+const SETTINGS_PLUGIN_CATALOG: SettingsPlugin[] = PLUGIN_CATALOG.map((plugin) => ({
+  id: plugin.id,
+  name: plugin.name,
+  description: plugin.description,
+  enabled: false,
+  author: plugin.author,
+  skillCount: plugin.skills.length,
+  statusLabel: 'Catalogue preview',
+  detailsHref: `/plugins/${plugin.id}`,
 }));
 
 // ---------------------------------------------------------------------------
@@ -368,7 +380,7 @@ export function WebSettingsModal({
   const [skillsLoading, setSkillsLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || activeSection !== 'skills') return;
+    if (!open || !['connectors', 'skills', 'plugins'].includes(activeSection)) return;
     if (skills.length > 0) return;
     let cancelled = false;
     setSkillsLoading(true);
@@ -445,6 +457,7 @@ export function WebSettingsModal({
     skillsLoading,
     plugins: [],
     pluginsLoading: false,
+    pluginCatalog: SETTINGS_PLUGIN_CATALOG,
   };
 
   // ── Section content map ────────────────────────────────────────────────────
