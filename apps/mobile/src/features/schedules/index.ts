@@ -9,6 +9,7 @@ export { ScheduleForm } from './components/ScheduleForm';
 export { QuickSchedule, parseNaturalLanguage } from './components/QuickSchedule';
 export { RecurrencePicker } from './components/RecurrencePicker';
 export { ScheduleRunHistory } from './components/ScheduleRunHistory';
+export { CloudSchedulesGate } from './components/CloudSchedulesGate';
 export {
   fetchSchedules,
   createSchedule,

@@ -45,6 +45,7 @@ jest.mock('lucide-react-native', () => {
   return {
     BookImage: icon,
     Boxes: icon,
+    CalendarClock: icon,
     Cloud: icon,
     FolderOpen: icon,
     HelpCircle: icon,
@@ -214,6 +215,7 @@ describe('DrawerContent', () => {
   it('shows AGI Agent only while the drawer is in Cloud mode', () => {
     const local = renderDrawer();
     expect(local.queryByText('AGI Agent')).toBeNull();
+    expect(local.queryByText('Schedules')).toBeNull();
     local.unmount();
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
@@ -221,11 +223,22 @@ describe('DrawerContent', () => {
 
     // Cloud mode now shows AGI Agent AND Projects (cloud projects are synced).
     expect(cloud.getByText('AGI Agent')).toBeTruthy();
+    expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
     // Projects nav row is now visible in cloud mode (task: unblock cloud projects).
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
     // The local project "Launch demo" should NOT appear in cloud mode
     // (cloud mode reads from cloudProjectStore, not local store).
     expect(cloud.queryByText('Launch demo')).toBeNull();
+  });
+
+  it('opens Cloud schedules from the drawer', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText } = renderDrawer();
+
+    fireEvent.press(getByLabelText('Schedules. Cloud'));
+
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/schedules');
   });
 
   it('renders projects and recents', () => {
@@ -334,9 +347,11 @@ describe('DrawerContent', () => {
   it('cancelling the consent modal keeps current mode unchanged', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useChatAppModeStore.setState({ appMode: 'local' });
-    const { getByLabelText, getByTestId, queryByTestId } = renderDrawer();
+    const localDrawer = renderDrawer();
 
     // In local mode, AGI Agent is not visible — switch to cloud mode in the store first.
+    expect(localDrawer.queryByText('AGI Agent')).toBeNull();
+    localDrawer.unmount();
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const {
       getByLabelText: getByLabelText2,

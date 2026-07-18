@@ -60,6 +60,7 @@ describe('PA-2 cloud gate — public-alpha copy', () => {
 
   it('ships open by default: cloudChat on, no local-only invite gate', () => {
     expect(FEATURES.cloudChat).toBe(true);
+    expect(FEATURES.schedules).toBe(true);
     expect(FEATURES.v1LocalOnly).toBe(false);
     // BYOK is not a Mobile v1 path — Mobile is Local + Cloud only.
     expect(FEATURES.byokKeys).toBe(false);
