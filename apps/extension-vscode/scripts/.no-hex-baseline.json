@@ -2,225 +2,201 @@
   "violations": [
     {
       "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
-      "line": 197,
-      "literal": "#F59E0B",
+      "line": 209,
+      "literal": "#5e6ad2",
       "rule": "hex-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/model-picker/modelConstants.ts",
-      "line": 201,
-      "literal": "#71717A",
+      "line": 210,
+      "literal": "#71717a",
       "rule": "hex-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
-      "line": 684,
-      "literal": "#F59E0B",
+      "line": 643,
+      "literal": "#6b7280",
       "rule": "hex-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 147,
+      "line": 186,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 147,
+      "line": 186,
       "literal": "color: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 157,
+      "line": 196,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 157,
+      "line": 196,
       "literal": "background: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 263,
+      "line": 330,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 263,
-      "literal": "background: rgba",
-      "rule": "named-color-prop"
-    },
-    {
-      "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 264,
+      "line": 445,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 337,
+      "line": 482,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 452,
+      "line": 514,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 484,
-      "literal": "rgba(",
-      "rule": "rgba-literal"
-    },
-    {
-      "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 516,
-      "literal": "rgba(",
-      "rule": "rgba-literal"
-    },
-    {
-      "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 535,
+      "line": 533,
       "literal": "#0d0d0d",
       "rule": "hex-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 535,
+      "line": 533,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 537,
+      "line": 535,
       "literal": "#e6edf3",
       "rule": "hex-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 538,
+      "line": 536,
       "literal": "#79c0ff",
       "rule": "hex-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 538,
+      "line": 536,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 538,
+      "line": 536,
       "literal": "{ background: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 550,
+      "line": 548,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 550,
+      "line": 548,
       "literal": "; background: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 552,
+      "line": 550,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 552,
+      "line": 550,
       "literal": "{ background: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 578,
+      "line": 576,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 578,
+      "line": 576,
       "literal": "background: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 579,
+      "line": 577,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 579,
+      "line": 577,
       "literal": "border-color: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 606,
+      "line": 604,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 606,
+      "line": 604,
       "literal": "background: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 607,
+      "line": 605,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 607,
+      "line": 605,
       "literal": "border-bottom-color: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 631,
+      "line": 629,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 631,
+      "line": 629,
       "literal": "background: rgba",
       "rule": "named-color-prop"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 861,
+      "line": 884,
       "literal": "rgba(",
       "rule": "rgba-literal"
     },
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
-      "line": 1081,
+      "line": 1101,
       "literal": "rgba(",
       "rule": "rgba-literal"
-    },
-    {
-      "file": "apps/extension-vscode/src/providers/chatEditorPanel.ts",
-      "line": 451,
-      "literal": "#F59E0B",
-      "rule": "hex-literal"
     }
   ]
 }

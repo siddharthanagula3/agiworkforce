@@ -164,6 +164,24 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).not.toContain("bar.setAttribute('role', 'button')");
   });
 
+  it('renders structured tool requests and responses in an inline collapsed disclosure', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(scriptBody).toContain("requestLabel.textContent = 'Request'");
+    expect(scriptBody).toContain("responseLabel.textContent = 'Response'");
+    expect(scriptBody).toContain('requestEl.textContent = formatToolPayload(input)');
+    expect(scriptBody).toContain('responseEl.textContent = formatToolPayload(msg.payload.output)');
+    expect(scriptBody).toContain(
+      "tcEnd.el.classList.add(msg.payload.isError ? 'tool-call--error' : 'tool-call--done')",
+    );
+    expect(scriptBody).not.toContain('requestEl.innerHTML');
+    expect(scriptBody).not.toContain('responseEl.innerHTML');
+  });
+
   it('contains a working inline model picker popover contract', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');

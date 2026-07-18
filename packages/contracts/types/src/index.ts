@@ -150,6 +150,13 @@ export * from './tool-display';
 // Export selected names from the package root because legacy `moduleResolution:
 // node` consumers cannot resolve package export subpaths reliably.
 export type {
+  AgentEventApprovalDecision,
+  AgentEventApprovalRiskLevel,
+  AgentEventEnvelope,
+  AgentEventSource,
+  AgentEventStopReason,
+  AgentEventToolCategory,
+  AgentTaskState,
   AppServerCapabilities,
   AppServerNotification,
   ApprovalResponseParams,

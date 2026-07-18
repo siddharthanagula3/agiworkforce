@@ -20,7 +20,8 @@ import type {
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const SHUTDOWN_GRACE_MS = 1_000;
-const MINIMUM_SUPPORTED_PROTOCOL_VERSION = 3;
+const MINIMUM_SUPPORTED_PROTOCOL_VERSION = 5;
+const AGENT_EVENT_SCHEMA_VERSION = 3;
 
 const errorSchema = z.object({
   code: z.number().int(),
@@ -114,6 +115,44 @@ const mcpStatusEventSchema = z.object({
   threadId: z.string().min(1),
   message: z.string().nullable().optional(),
 });
+const toolCategorySchema = z.enum([
+  'web-search',
+  'web-fetch',
+  'code-execution',
+  'filesystem',
+  'shell',
+  'skill',
+  'memory',
+  'connector',
+  'mcp',
+  'computer-use',
+  'artifact',
+  'other',
+]);
+const toolExecutionStartSchema = z.object({
+  type: z.literal('tool-execution-start'),
+  toolCallId: z.string().min(1),
+  name: z.string().min(1),
+  category: toolCategorySchema,
+  summary: z.string().min(1),
+  input: z.unknown(),
+});
+const toolExecutionEndSchema = z.object({
+  type: z.literal('tool-execution-end'),
+  toolCallId: z.string().min(1),
+  name: z.string().min(1),
+  output: z.unknown(),
+  isError: z.boolean(),
+  elapsedMs: z.number().int().nonnegative().optional(),
+});
+const agentEventEnvelopeSchema = z.object({
+  schemaVersion: z.literal(AGENT_EVENT_SCHEMA_VERSION),
+  sessionId: z.string().min(1),
+  turnId: z.string().min(1),
+  sequence: z.number().int().nonnegative(),
+  emittedAtMs: z.number().int().nonnegative(),
+  event: z.discriminatedUnion('type', [toolExecutionStartSchema, toolExecutionEndSchema]),
+});
 
 export type LocalRuntimeEvent =
   | ({ type: 'output_delta' } & z.infer<typeof outputDeltaEventSchema>)
@@ -121,6 +160,20 @@ export type LocalRuntimeEvent =
   | ({ type: 'turn_failed' } & z.infer<typeof turnTerminalEventSchema>)
   | ({ type: 'turn_interrupted' } & z.infer<typeof turnInterruptedEventSchema>)
   | ({ type: 'approval_requested' } & z.infer<typeof approvalRequestedEventSchema>)
+  | ({
+      type: 'tool_execution_start';
+      threadId: string;
+      turnId: string;
+      sequence: number;
+      emittedAtMs: number;
+    } & Omit<z.infer<typeof toolExecutionStartSchema>, 'type'>)
+  | ({
+      type: 'tool_execution_end';
+      threadId: string;
+      turnId: string;
+      sequence: number;
+      emittedAtMs: number;
+    } & Omit<z.infer<typeof toolExecutionEndSchema>, 'type'>)
   | ({
       type: 'mcp_status';
       status: 'loading' | 'ready' | 'unavailable';
@@ -143,6 +196,37 @@ function parseRuntimeEvent(notification: AppServerNotification): LocalRuntimeEve
   if (notification.method === 'approval/requested') {
     const parsed = approvalRequestedEventSchema.safeParse(notification.params);
     return parsed.success ? { type: 'approval_requested', ...parsed.data } : undefined;
+  }
+  if (notification.method === 'turn/agent_event') {
+    const parsed = agentEventEnvelopeSchema.safeParse(notification.params);
+    if (!parsed.success) return undefined;
+    const { sessionId: threadId, turnId, sequence, emittedAtMs, event } = parsed.data;
+    if (event.type === 'tool-execution-start') {
+      return {
+        type: 'tool_execution_start',
+        threadId,
+        turnId,
+        sequence,
+        emittedAtMs,
+        toolCallId: event.toolCallId,
+        name: event.name,
+        category: event.category,
+        summary: event.summary,
+        input: event.input,
+      };
+    }
+    return {
+      type: 'tool_execution_end',
+      threadId,
+      turnId,
+      sequence,
+      emittedAtMs,
+      toolCallId: event.toolCallId,
+      name: event.name,
+      output: event.output,
+      isError: event.isError,
+      elapsedMs: event.elapsedMs,
+    };
   }
   if (notification.method === 'turn/interrupted') {
     const parsed = turnInterruptedEventSchema.safeParse(notification.params);

@@ -240,6 +240,10 @@ export function createChatHandler(
       if (turnId !== undefined && event.turnId !== turnId) return;
       if (event.type === 'output_delta') {
         stream.markdown(event.delta);
+      } else if (event.type === 'tool_execution_start') {
+        stream.progress(event.summary);
+      } else if (event.type === 'tool_execution_end') {
+        if (event.isError) stream.progress(`${event.name.replaceAll('_', ' ')} failed`);
       } else if (event.type === 'approval_requested') {
         void (async () => {
           try {

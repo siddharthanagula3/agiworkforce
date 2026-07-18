@@ -16,6 +16,7 @@ import {
 } from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
+  type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
   type UsageMeter,
@@ -85,9 +86,26 @@ export type ExtToWebviewMessage =
       payload: { effort: DeveloperReasoningEffort; supportsEffort: boolean };
     }
   | { type: 'usageMeter'; payload: UsageMeterWebviewPayload }
-  | { type: 'toolCallStart'; payload: { toolUseId: string; name: string } }
+  | {
+      type: 'toolCallStart';
+      payload: {
+        toolUseId: string;
+        name: string;
+        category: AgentEventToolCategory;
+        summary: string;
+        input: unknown;
+      };
+    }
   | { type: 'toolCallDelta'; payload: { toolUseId: string; deltaJson: string } }
-  | { type: 'toolCallEnd'; payload: { toolUseId: string } }
+  | {
+      type: 'toolCallEnd';
+      payload: {
+        toolUseId: string;
+        output: unknown;
+        isError: boolean;
+        elapsedMs?: number;
+      };
+    }
   | {
       type: 'modelPickerData';
       payload: {
@@ -769,6 +787,31 @@ export class ChatStateManager {
     }
     if (event.type === 'output_delta') {
       this._post({ type: 'token', payload: { text: event.delta } });
+      return;
+    }
+    if (event.type === 'tool_execution_start') {
+      this._post({
+        type: 'toolCallStart',
+        payload: {
+          toolUseId: event.toolCallId,
+          name: event.name,
+          category: event.category,
+          summary: event.summary,
+          input: event.input,
+        },
+      });
+      return;
+    }
+    if (event.type === 'tool_execution_end') {
+      this._post({
+        type: 'toolCallEnd',
+        payload: {
+          toolUseId: event.toolCallId,
+          output: event.output,
+          isError: event.isError,
+          ...(event.elapsedMs === undefined ? {} : { elapsedMs: event.elapsedMs }),
+        },
+      });
       return;
     }
     if (event.type === 'approval_requested') {

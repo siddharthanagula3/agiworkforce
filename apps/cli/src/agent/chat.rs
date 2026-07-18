@@ -117,16 +117,36 @@ fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
     }
     .unwrap_or_default();
     let one_line = raw.replace('\n', " ");
-    if one_line.chars().count() > 80 {
+    if one_line.trim().is_empty() {
+        format!("Running {}", name.replace(['_', '-'], " "))
+    } else if one_line.chars().count() > 80 {
         format!("{}…", one_line.chars().take(79).collect::<String>())
     } else {
         one_line
     }
 }
 
-/// Fire a tool lifecycle event to the TUI sink, if one is installed. A no-op on
-/// non-TUI surfaces (the `eprintln!` status lines remain the channel there), so
-/// exec/REPL/app-server/a2a output is unchanged.
+/// Keep tool results useful for expandable clients without allowing an
+/// unbounded subprocess or connector response to dominate the event channel.
+const MAX_TOOL_EVENT_OUTPUT_CHARS: usize = 16_384;
+const TOOL_EVENT_TRUNCATION_MARKER: &str = "\n… output truncated";
+
+fn tool_event_output(output: &str) -> String {
+    let mut chars = output.chars();
+    let bounded = chars
+        .by_ref()
+        .take(MAX_TOOL_EVENT_OUTPUT_CHARS)
+        .collect::<String>();
+
+    if chars.next().is_some() {
+        format!("{bounded}{TOOL_EVENT_TRUNCATION_MARKER}")
+    } else {
+        bounded
+    }
+}
+
+/// Fire a tool lifecycle event to the active surface adapter, if installed.
+/// Terminal-only modes retain their existing status/output channels.
 fn emit_tool_event(sink: Option<&super::ToolEventSink>, ev: crate::tui::app_event::TuiAppEvent) {
     if let Some(sink) = sink {
         (sink.0)(ev);
@@ -2037,12 +2057,19 @@ impl TurnHost for TurnHostAdapter<'_> {
                 }
             }
             TurnEvent::ToolStarted { id, name, args, .. } => {
+                let raw_input = args.to_string();
+                let redacted_input = crate::agent_events::redact_args(&raw_input);
                 emit_tool_event(
                     self.session.on_tool_event.as_ref(),
                     crate::tui::app_event::TuiAppEvent::ToolStarted {
                         call_id: id.clone(),
                         name: name.clone(),
                         summary: tool_event_summary(name, args),
+                        input: if redacted_input == raw_input {
+                            args.clone()
+                        } else {
+                            serde_json::Value::String(redacted_input)
+                        },
                     },
                 );
                 if self.session.json_events {
@@ -2083,12 +2110,14 @@ impl TurnHost for TurnHostAdapter<'_> {
                     self.session.on_tool_event.as_ref(),
                     crate::tui::app_event::TuiAppEvent::ToolCompleted {
                         call_id: id.clone(),
+                        name: name.clone(),
                         status: if *ok {
                             crate::tui::app_event::ToolStatus::Succeeded
                         } else {
                             crate::tui::app_event::ToolStatus::Failed
                         },
-                        output: output.chars().take(200).collect::<String>(),
+                        output: tool_event_output(output),
+                        duration_ms: *duration_ms,
                     },
                 );
             }
@@ -2125,6 +2154,31 @@ impl TurnHost for TurnHostAdapter<'_> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn tool_event_output_preserves_short_results() {
+        assert_eq!(tool_event_output("complete result"), "complete result");
+    }
+
+    #[test]
+    fn tool_event_output_marks_bounded_truncation() {
+        let oversized = "x".repeat(MAX_TOOL_EVENT_OUTPUT_CHARS + 1);
+        let output = tool_event_output(&oversized);
+
+        assert_eq!(
+            output.chars().count(),
+            MAX_TOOL_EVENT_OUTPUT_CHARS + TOOL_EVENT_TRUNCATION_MARKER.chars().count()
+        );
+        assert!(output.ends_with(TOOL_EVENT_TRUNCATION_MARKER));
+    }
+
+    #[test]
+    fn tool_event_summary_falls_back_for_dynamic_tools() {
+        assert_eq!(
+            tool_event_summary("custom_connector", &serde_json::json!({})),
+            "Running custom connector"
+        );
+    }
 
     // -----------------------------------------------------------------------
     // Interactive per-turn Auto re-resolution (AUTO-ROUTER-MIGRATION-01, CLI
