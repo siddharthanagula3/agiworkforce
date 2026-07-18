@@ -74,10 +74,10 @@ export async function drainToLlmResponse(
   // mapping); OpenAI needs the standard one (legacyFinishReason's "never map
   // max_tokens" quirk is Anthropic-specific and wrong for OpenAI's own
   // finish_reason vocabulary), which is why 'openai-passthrough' -- not
-  // 'legacy-web' -- must be passed for OpenAI here too, even though
-  // response() has no other openai-passthrough-specific behavior (system_
-  // fingerprint/logprobs/role-announcement/trailing-usage-chunk are all
-  // sseChunks()-only, streaming-only concerns).
+  // 'legacy-web' -- must be passed for OpenAI here too. Native Responses
+  // search results are also aggregated in this mode for non-streaming AGI
+  // clients; system_fingerprint/logprobs/role-announcement/trailing-usage
+  // remain sseChunks()-only, streaming-only concerns.
   wireMode: 'legacy-web' | 'openai-passthrough' = 'legacy-web',
 ): Promise<AdapterLlmResponse> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });

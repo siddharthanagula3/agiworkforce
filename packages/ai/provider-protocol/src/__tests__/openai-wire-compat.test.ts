@@ -175,6 +175,52 @@ describe('OpenAIWireAssembler streaming', () => {
     )[0]?.delta.tool_calls;
     expect(calls?.[0]?.index).toBe(1);
   });
+
+  it('adds native search activity and source cards in openai-passthrough mode', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: 'gpt-5.6-sol',
+      now: NOW,
+      wireMode: 'openai-passthrough',
+    });
+
+    const started = assembler.sseChunks({
+      type: 'server-tool-use',
+      toolUseId: 'ws_1',
+      name: 'web_search',
+    });
+    const completed = assembler.sseChunks({
+      type: 'server-tool-result',
+      toolUseId: 'ws_1',
+      payload: {
+        type: 'web_search_tool_result',
+        tool_use_id: 'ws_1',
+        content: [
+          {
+            type: 'web_search_result',
+            url: 'https://developers.openai.com/api/docs/guides/tools-web-search',
+            title: 'Web search | OpenAI API',
+          },
+        ],
+      },
+    });
+
+    expect((started.at(-1) as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_tool_status: { type: 'server_tool_use', name: 'web_search', status: 'searching' },
+    });
+    expect((completed[0] as { choices: Array<{ delta: unknown }> }).choices[0]?.delta).toEqual({
+      x_search_results: {
+        type: 'web_search_tool_result',
+        tool_use_id: 'ws_1',
+        content: [
+          {
+            type: 'web_search_result',
+            url: 'https://developers.openai.com/api/docs/guides/tools-web-search',
+            title: 'Web search | OpenAI API',
+          },
+        ],
+      },
+    });
+  });
 });
 
 describe('assembleOpenAIWireResponse (non-streaming)', () => {

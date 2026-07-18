@@ -38,8 +38,9 @@ export function buildGoogleAdapter(): ProviderAdapter {
 /**
  * Builds a configured OpenAI `ProviderAdapter` for one request.
  *
- * The shared service preserves this route family's Chat Completions wire
- * contract by constructing OpenAI adapters with `useResponsesApi: false`.
+ * Catalog-known native OpenAI models use the Responses API internally; the
+ * route still returns its existing OpenAI-compatible Chat Completions wire
+ * through `OpenAIWireAssembler`.
  */
 export function buildOpenAIAdapter(): ProviderAdapter {
   return buildServerProviderAdapter('openai');

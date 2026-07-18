@@ -89,7 +89,14 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.equal(route.modelKey, key);
   assert.equal(route.harnessId, 'openai/responses');
   assert.equal(registry.harnesses['openai/responses'].features.webSearch.providerSupport, 'native');
-  assert.equal(registry.harnesses['openai/responses'].features.webSearch.implementation, 'unwired');
+  assert.equal(
+    registry.harnesses['openai/responses'].features.webSearch.implementation,
+    'implemented',
+  );
+  assert.deepEqual(registry.harnesses['openai/responses'].features.webSearchInjection, {
+    providerSupport: 'native',
+    implementation: 'implemented',
+  });
   assert.deepEqual(
     registry.harnesses['anthropic/messages'].features.webSearch,
     { providerSupport: 'native', implementation: 'implemented' },

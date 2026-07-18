@@ -66,6 +66,18 @@ export interface ResponsesFunctionTool {
   strict?: boolean;
 }
 
+/**
+ * Provider-native Responses tools such as OpenAI web search. Unlike function
+ * tools, these are executed by OpenAI and therefore intentionally retain the
+ * provider's request shape after the required `type` discriminator.
+ */
+export interface ResponsesNativeTool {
+  type: string;
+  [key: string]: unknown;
+}
+
+export type ResponsesTool = ResponsesFunctionTool | ResponsesNativeTool;
+
 export type ResponsesToolChoice = 'auto' | 'none' | 'required' | { type: 'function'; name: string };
 
 // ============================================================================
@@ -89,7 +101,7 @@ export interface ResponsesCreateParams {
   input: string | ResponsesInputItem[];
   /** System / developer prompt. Single string or block. */
   instructions?: string;
-  tools?: ResponsesFunctionTool[];
+  tools?: ResponsesTool[];
   tool_choice?: ResponsesToolChoice;
   max_output_tokens?: number;
   temperature?: number;
@@ -106,6 +118,8 @@ export interface ResponsesCreateParams {
   /** Streaming-specific options. */
   stream_options?: { include_obfuscation?: boolean };
   metadata?: Record<string, string>;
+  /** Request complete URL source metadata for native web-search calls. */
+  include?: Array<'web_search_call.action.sources'>;
 }
 
 // ============================================================================
@@ -115,6 +129,28 @@ export interface ResponsesCreateParams {
 interface BaseEvent {
   /** Sequence number — useful for ordering across reconnects. */
   sequence_number?: number;
+}
+
+export interface ResponseWebSearchSource {
+  type: 'url';
+  url: string;
+}
+
+export type ResponseWebSearchAction =
+  | {
+      type: 'search';
+      query: string;
+      queries?: string[];
+      sources?: ResponseWebSearchSource[];
+    }
+  | { type: 'open_page'; url: string }
+  | { type: 'find'; url: string; pattern: string };
+
+export interface ResponseWebSearchCallItem {
+  type: 'web_search_call';
+  id: string;
+  status?: 'in_progress' | 'searching' | 'completed' | 'failed';
+  action?: ResponseWebSearchAction;
 }
 
 export interface ResponseCreatedEvent extends BaseEvent {
@@ -133,7 +169,8 @@ export interface ResponseOutputItemAddedEvent extends BaseEvent {
   item:
     | { type: 'message'; id: string; role: string; status?: string }
     | { type: 'function_call'; id: string; call_id: string; name: string; arguments: string }
-    | { type: 'reasoning'; id: string; summary?: Array<{ type: string; text: string }> };
+    | { type: 'reasoning'; id: string; summary?: Array<{ type: string; text: string }> }
+    | ResponseWebSearchCallItem;
 }
 
 export interface ResponseOutputItemDoneEvent extends BaseEvent {
@@ -149,7 +186,34 @@ export interface ResponseOutputItemDoneEvent extends BaseEvent {
         arguments: string;
         status?: string;
       }
-    | { type: 'reasoning'; id: string; summary?: Array<{ type: string; text: string }> };
+    | { type: 'reasoning'; id: string; summary?: Array<{ type: string; text: string }> }
+    | ResponseWebSearchCallItem;
+}
+
+export interface ResponseOutputTextAnnotationAddedEvent extends BaseEvent {
+  type: 'response.output_text.annotation.added';
+  item_id: string;
+  output_index: number;
+  content_index: number;
+  annotation_index: number;
+  annotation:
+    | {
+        type: 'url_citation';
+        url: string;
+        title: string;
+        start_index: number;
+        end_index: number;
+      }
+    | { type: string; [key: string]: unknown };
+}
+
+export interface ResponseWebSearchCallLifecycleEvent extends BaseEvent {
+  type:
+    | 'response.web_search_call.in_progress'
+    | 'response.web_search_call.searching'
+    | 'response.web_search_call.completed';
+  item_id: string;
+  output_index: number;
 }
 
 export interface ResponseTextDeltaEvent extends BaseEvent {
@@ -246,6 +310,8 @@ export type ResponsesStreamEvent =
   | ResponseOutputItemDoneEvent
   | ResponseTextDeltaEvent
   | ResponseTextDoneEvent
+  | ResponseOutputTextAnnotationAddedEvent
+  | ResponseWebSearchCallLifecycleEvent
   | ResponseFunctionCallArgumentsDeltaEvent
   | ResponseFunctionCallArgumentsDoneEvent
   | ResponseReasoningSummaryTextDeltaEvent
