@@ -274,6 +274,7 @@ mod tests {
             allow_implicit: true,
             category: Some("review".to_string()),
             required_env_vars: vec![],
+            required_tools: vec![],
         };
 
         let command = registry_command_from_skill(&skill, CommandSource::Project);
@@ -348,6 +349,7 @@ mod tests {
             allow_implicit: true,
             category: None,
             required_env_vars: vec![],
+            required_tools: vec![],
         }];
 
         let registry = registry_from_builtins_and_skills(&skills);
@@ -394,6 +396,7 @@ mod tests {
             allow_implicit: true,
             category: None,
             required_env_vars: vec![],
+            required_tools: vec![],
         }];
         let prompts = vec![
             agiworkforce_protocol::custom_prompts::CustomPrompt {

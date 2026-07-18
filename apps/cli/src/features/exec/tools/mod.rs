@@ -65,9 +65,9 @@ impl ToolResult {
     // AUDIT-FIX: H-8 — marker accessor for callers; web_fetch wraps output in <web_fetch_result untrusted="true" ...>.
     #[allow(dead_code)]
     pub fn is_untrusted(&self) -> bool {
-        self.output
-            .trim_start()
-            .starts_with("<web_fetch_result untrusted=\"true\"")
+        let output = self.output.trim_start();
+        output.starts_with("<web_fetch_result untrusted=\"true\"")
+            || output.starts_with("<skill_result untrusted=\"true\"")
     }
 }
 
@@ -171,6 +171,40 @@ impl registry::Tool for GrepFilesTool {
     }
 }
 
+struct SkillTool;
+#[async_trait::async_trait]
+impl registry::Tool for SkillTool {
+    fn name(&self) -> &'static str {
+        "skill"
+    }
+    fn read_only(&self) -> bool {
+        true
+    }
+    async fn invoke(&self, args: &HashMap<String, String>, _quiet: bool) -> Result<ToolResult> {
+        let action = args.get("action").map(String::as_str).unwrap_or("");
+        let name = args.get("name").map(String::as_str);
+        let available_tools: Vec<String> =
+            crate::runtime::tool_catalog::all_builtin_tool_definitions()
+                .into_iter()
+                .chain(crate::runtime::tool_catalog::team_tool_definitions())
+                .map(|definition| definition.name)
+                .collect();
+        let skills = crate::skills::discover_skills();
+        match crate::skills::invoke_skill_tool(&skills, action, name, &available_tools) {
+            Ok(output) => Ok(ToolResult {
+                tool_name: "skill".to_string(),
+                success: true,
+                output,
+            }),
+            Err(output) => Ok(ToolResult {
+                tool_name: "skill".to_string(),
+                success: false,
+                output,
+            }),
+        }
+    }
+}
+
 /// Build the registry of read-only tools migrated to the [`registry::Tool`] trait.
 pub fn build_read_only_registry() -> registry::ToolRegistry {
     let mut reg = registry::ToolRegistry::new();
@@ -179,6 +213,7 @@ pub fn build_read_only_registry() -> registry::ToolRegistry {
     reg.register(Box::new(ListDirectoryTool));
     reg.register(Box::new(GlobTool));
     reg.register(Box::new(GrepFilesTool));
+    reg.register(Box::new(SkillTool));
     reg
 }
 
@@ -826,6 +861,31 @@ async fn execute_notebook_edit(
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn skill_results_are_marked_untrusted() {
+        let result = ToolResult {
+            tool_name: "skill".to_string(),
+            success: true,
+            output: "<skill_result untrusted=\"true\" name=\"docs\">body</skill_result>"
+                .to_string(),
+        };
+
+        assert!(result.is_untrusted());
+    }
+
+    #[tokio::test]
+    async fn skill_tool_dispatches_through_read_only_registry() {
+        let registry = build_read_only_registry();
+        let tool = registry.get("skill").expect("skill registry entry");
+        let args = HashMap::from([("action".to_string(), "list".to_string())]);
+
+        let result = tool.invoke(&args, true).await.expect("invoke skill list");
+
+        assert!(result.success);
+        assert_eq!(result.tool_name, "skill");
+        assert!(result.output.contains("\"skills\""));
+    }
 
     #[tokio::test]
     async fn local_mode_blocks_builtin_network_tools_before_dispatch() {
@@ -1611,13 +1671,14 @@ mod private_ip_classifier_tests {
     #[test]
     fn read_only_registry_registers_the_read_only_cluster() {
         let reg = super::build_read_only_registry();
-        assert_eq!(reg.len(), 5);
+        assert_eq!(reg.len(), 6);
         for name in [
             "read_file",
             "search_files",
             "list_directory",
             "glob",
             "grep_files",
+            "skill",
         ] {
             let tool = reg.get(name).unwrap_or_else(|| panic!("missing {name}"));
             assert_eq!(tool.name(), name);

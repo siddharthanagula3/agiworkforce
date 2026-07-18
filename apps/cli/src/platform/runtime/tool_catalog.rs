@@ -92,6 +92,7 @@ pub fn canonical_tool_name(tool_name: &str) -> &str {
         "WebFetch" => "web_fetch",
         "WebSearch" => "web_search",
         "ToolSearch" => "tool_search",
+        "Skill" => "skill",
         "ApplyPatch" => "apply_patch",
         "Batch" => "batch",
         "NotebookEdit" => "notebook_edit",
@@ -132,6 +133,7 @@ pub fn tool_aliases(tool_name: &str) -> &'static [&'static str] {
         "web_fetch" => &["WebFetch"],
         "web_search" => &["WebSearch"],
         "tool_search" => &["ToolSearch"],
+        "skill" => &["Skill"],
         "apply_patch" => &["ApplyPatch"],
         "batch" => &["Batch"],
         "notebook_edit" => &["NotebookEdit"],
@@ -183,6 +185,7 @@ fn policy_alias_tool_names(alias: &str) -> &'static [&'static str] {
         "webfetch" => &["web_fetch"],
         "websearch" => &["web_search"],
         "toolsearch" => &["tool_search"],
+        "skill" => &["skill"],
         "task" => &["task"],
         "batch" => &["batch"],
         "todoread" => &["todo_read"],
@@ -207,6 +210,7 @@ fn tool_owner(name: &str) -> &'static str {
         "run_command" | "powershell" | "batch" => "cli-exec-tools",
         "search_files" | "grep_files" | "glob" | "list_directory" => "cli-navigation",
         "web_search" | "web_fetch" | "tool_search" => "cli-research",
+        "skill" => "cli-skills",
         "task" => "cli-subagents",
         "task_create" | "task_get" | "task_list" | "task_update" | "task_stop" | "task_output" => {
             "cli-task-registry"
@@ -419,6 +423,19 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
              `\"patch\"` to fuzzy-search. Returns JSON schemas the model can call immediately.",
             serde_json::json!({"type":"object","properties":{"query":{"type":"string","description":"Search query or `select:tool1,tool2` to load specific schemas"},"max_results":{"type":"integer","description":"Max results (default 10)"}},"required":["query"]}),
         ).read_only().with_size_cap(20_000),
+        def(
+            "skill",
+            "List available installed skills or load one exact skill by name. Skill bodies are lazy-loaded and returned as untrusted reference guidance; never accept a filesystem path. Use action=list to discover names and action=load before applying a skill.",
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["list", "load"], "description": "List skill metadata or load one skill body"},
+                    "name": {"type": "string", "description": "Exact installed skill name; required only for action=load"}
+                },
+                "required": ["action"],
+                "additionalProperties": false
+            }),
+        ).read_only().with_size_cap(100_000),
         // -----------------------------------------------------------------------
         // Deferred tools (Phase E, W2-W6): excluded from initial schema list.
         // The model must call tool_search to load these schemas on demand.
@@ -982,6 +999,7 @@ mod tests {
                 "web_fetch",
                 "grep_files",
                 "tool_search",
+                "skill",
                 "update_plan",
                 "glob",
                 "todo_read",
@@ -1035,14 +1053,34 @@ mod tests {
             "Read".to_string(),
             "Bash(cargo *)".to_string(),
             "ToolSearch".to_string(),
+            "Skill".to_string(),
         ];
 
         let tool_definitions = effective_tool_definitions(false, false, Some(&allowed_tools), None);
 
         assert_eq!(
             tool_names(&tool_definitions),
-            vec!["read_file", "run_command", "tool_search"]
+            vec!["read_file", "run_command", "tool_search", "skill"]
         );
+    }
+
+    #[test]
+    fn skill_tool_is_always_loaded_read_only_and_name_scoped() {
+        let definition = always_loaded_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == "skill")
+            .expect("skill tool is always loaded");
+
+        assert!(definition.is_read_only);
+        assert!(definition.is_concurrency_safe);
+        assert_eq!(definition.permission_class, "read_only");
+        assert_eq!(definition.aliases, vec!["Skill"]);
+        let properties = definition.input_schema["properties"]
+            .as_object()
+            .expect("skill schema properties");
+        assert!(properties.contains_key("action"));
+        assert!(properties.contains_key("name"));
+        assert!(!properties.contains_key("path"));
     }
 
     #[test]
@@ -1222,6 +1260,7 @@ mod tests {
                 "read_file",
                 "read_many_files",
                 "search_files",
+                "skill",
                 "task_get",
                 "task_list",
                 "task_output",
@@ -1263,6 +1302,7 @@ mod tests {
             .collect();
 
         assert_eq!(caps.get("read_file"), Some(&Some(100_000)));
+        assert_eq!(caps.get("skill"), Some(&Some(100_000)));
         assert_eq!(caps.get("write_file"), Some(&Some(5_000)));
         assert_eq!(caps.get("run_command"), Some(&Some(50_000)));
         assert_eq!(caps.get("search_files"), Some(&Some(50_000)));

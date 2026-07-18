@@ -176,6 +176,27 @@ Agent definitions live in `.agiworkforce/agents/` and `~/.agiworkforce/agents/`.
 Use `/agents`, `/agents show <name>`, `/agents create <name> [--global]`, and
 `/agents validate` to manage them from either REPL or TUI mode.
 
+Skills use progressive disclosure. Put either a flat markdown file in
+`.agiworkforce/skills/` or the canonical `<skill-name>/SKILL.md` directory
+layout there (global skills use `~/.agiworkforce/skills/`). The system prompt
+receives metadata only; the model calls the read-only `Skill` tool to list or
+load one exact installed skill, making activation visible in the tool stream.
+Project skills remain consent-gated. Optional dependencies can be declared in
+frontmatter without exposing secret values:
+
+```markdown
+---
+name: release-check
+description: Verify a release before publishing it
+env_vars: [RELEASE_SIGNING_KEY]
+tools: [read_file, run_command]
+---
+```
+
+The loader refuses activation while a declared environment variable or tool is
+missing. Skill content is treated as untrusted reference guidance and cannot
+override system, privacy, approval, or tool-safety policy.
+
 ## Demo flow (90 seconds)
 
 ```
