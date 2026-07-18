@@ -86,8 +86,17 @@ import { createAgentEventStreamEmitter, toAgentEventJson } from './agent-event-s
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Maximum agentic steps (model calls) in a single request. */
-const DEFAULT_MAX_STEPS = 10;
+/** Ordinary chat stays deliberately conservative: it is still a chat turn. */
+const DEFAULT_CHAT_MAX_STEPS = 10;
+/** Paid AGI Work is the deep agent surface and must not inherit chat's cap. */
+const DEFAULT_AGI_WORK_MAX_STEPS = 100;
+/**
+ * Leave one minute of the Hobby plan's five-minute function window for file
+ * harvest, durable usage settlement, and response teardown. This remains a
+ * safety boundary after durable workflow execution lands; it is not presented
+ * as restart-safe background execution.
+ */
+const DEFAULT_AGI_WORK_MAX_DURATION_MS = 4 * 60_000;
 
 /** Tools whose names suggest read-only operations: safe to parallelize. */
 const READ_ONLY_TOOL_PREFIXES = [
@@ -148,8 +157,12 @@ export interface ResumeApproval {
 }
 
 export interface ToolLoopOptions {
-  /** Maximum number of model re-invocations. Default: 10. */
+  /** Maximum number of model re-invocations. Defaults by product work mode. */
   maxSteps?: number;
+  /** Optional wall-clock safety budget for this invocation. Defaults by work mode. */
+  maxDurationMs?: number;
+  /** Injectable monotonic-enough clock for deterministic policy tests. */
+  now?: () => number;
   /** 'auto' = execute without prompting; 'manual' = gate on user approval. */
   approvalMode?: ApprovalMode;
   /** Resolved MCP tool defs to inject (fetched once by the caller). */
@@ -175,6 +188,28 @@ export interface ToolLoopOptions {
   connectorExecutor?: ConnectorToolExecutor;
   /** Canonical usage accumulated across every provider call in this loop. */
   usage?: ObservedProviderUsage;
+}
+
+export interface ToolLoopPolicy {
+  maxSteps: number;
+  maxDurationMs: number | undefined;
+}
+
+/**
+ * Resolve execution depth from the product mode, never from a provider or
+ * client-controlled model hint. Explicit options are reserved for internal
+ * callers and deterministic tests.
+ */
+export function resolveToolLoopPolicy(
+  processed: ProcessedRequest,
+  options: Pick<ToolLoopOptions, 'maxSteps' | 'maxDurationMs'>,
+): ToolLoopPolicy {
+  const isAgiWork = processed.chatRequest.work_mode === 'agiwork';
+  return {
+    maxSteps: options.maxSteps ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_STEPS : DEFAULT_CHAT_MAX_STEPS),
+    maxDurationMs:
+      options.maxDurationMs ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_DURATION_MS : undefined),
+  };
 }
 
 /** Shape of a parsed tool_call from the provider stream. */
@@ -854,7 +889,9 @@ export async function* runToolLoop(
   processed: ProcessedRequest,
   options: ToolLoopOptions = {},
 ): AsyncGenerator<Uint8Array> {
-  const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
+  const { maxSteps, maxDurationMs } = resolveToolLoopPolicy(processed, options);
+  const now = options.now ?? Date.now;
+  const startedAt = now();
   const approvalMode = options.approvalMode ?? 'manual';
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
@@ -1341,6 +1378,23 @@ export async function* runToolLoop(
 
     let step = 0;
     while (step < maxSteps) {
+      if (maxDurationMs !== undefined && now() - startedAt >= maxDurationMs) {
+        logger.warn(
+          { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
+          '[tool-loop] invocation time budget reached without terminal stop',
+        );
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'error',
+            message:
+              "AGI Work reached this invocation's time limit. Continue in the conversation to resume from the visible results.",
+            code: 'agent_time_budget_reached',
+            retryable: true,
+          }),
+        );
+        yield* flushTerminal('error');
+        return;
+      }
       step++;
 
       // Build the request for this step.

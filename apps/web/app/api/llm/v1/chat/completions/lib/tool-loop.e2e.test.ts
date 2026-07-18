@@ -327,6 +327,44 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(mockPauseE2BSession).not.toHaveBeenCalled();
   });
 
+  it('stops AGI Work cleanly before another provider call when its time budget is exhausted', async () => {
+    const processed = makeProcessed();
+    processed.chatRequest.work_mode = 'agiwork';
+    const now = vi
+      .fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(4 * 60_000);
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto', now }));
+
+    expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
+    expect(output).toContain('agent_time_budget_reached');
+    expect(output).toContain('Continue in the conversation to resume from the visible results.');
+    expect(output).toContain('"retryable":true');
+    expect(output).toContain('data: [DONE]');
+
+    const activity = agentEvents(output);
+    expect(activity.map((entry) => entry.event.type)).toEqual([
+      'task-state-changed',
+      'task-state-changed',
+      'lifecycle',
+      'error',
+      'task-state-changed',
+      'stop',
+    ]);
+    expect(activity[3]?.event).toMatchObject({
+      type: 'error',
+      code: 'agent_time_budget_reached',
+      retryable: true,
+    });
+    expect(activity[4]?.event).toMatchObject({
+      type: 'task-state-changed',
+      previousState: 'running',
+      state: 'failed',
+    });
+    expect(activity[5]?.event).toEqual({ type: 'stop', reason: 'error' });
+  });
+
   it('pauses the sandbox even when the loop exits via the manual-approval `return` path', async () => {
     const step1 = sseStreamFrom([
       chunk({
