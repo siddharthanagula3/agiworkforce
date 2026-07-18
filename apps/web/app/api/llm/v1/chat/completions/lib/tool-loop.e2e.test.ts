@@ -177,13 +177,14 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(output).toContain('data: [DONE]');
 
     const activity = agentEvents(output);
-    expect(activity.map((entry) => entry.sequence)).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(activity.map((entry) => entry.sequence)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
     expect(activity.map((entry) => entry.event.type)).toEqual([
       'task-state-changed',
       'task-state-changed',
       'lifecycle',
       'tool-execution-start',
       'tool-execution-end',
+      'text-delta',
       'task-state-changed',
       'stop',
     ]);
@@ -222,13 +223,17 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       output: '2\n',
       isError: false,
     });
-    expect(activity[5]?.event).toMatchObject({
+    expect(activity[5]?.event).toEqual({
+      type: 'text-delta',
+      delta: 'The answer is 2.',
+    });
+    expect(activity[6]?.event).toMatchObject({
       type: 'task-state-changed',
       taskId: 'req-1',
       previousState: 'running',
       state: 'ready_for_review',
     });
-    expect(activity[6]?.event).toEqual({ type: 'stop', reason: 'end-turn' });
+    expect(activity[7]?.event).toEqual({ type: 'stop', reason: 'end-turn' });
   });
 
   it('fails closed with an explicit error when no E2B executor is available (no key configured)', async () => {

@@ -24,9 +24,13 @@ import type { CloudWorkMode, Effort } from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudChatClient,
+  createManagedCloudAgentRunClient,
   ManagedCloudChatHttpError,
   parseAgentEventDelta,
   parseGeneratedFilesDelta,
+  readManagedCloudAgentRunHandle,
+  type ManagedCloudAgentRunHandle,
+  type ManagedCloudAgentRunReference,
   type ManagedCloudSaveMessageOptions,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -398,6 +402,8 @@ interface ConsumeStreamContext {
   seedContent?: string;
   /** Seed the tool timeline (for the resume continuation, so prior cards persist). */
   seedTools?: MessageToolEntry[];
+  /** Keep the owning hook pointed at the server job while this stream is live. */
+  onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void;
 }
 
 /**
@@ -421,6 +427,8 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   } = ctx;
 
   const store = useChatStore.getState();
+  const runHandle = readManagedCloudAgentRunHandle(response);
+  ctx.onRunHandle?.(runHandle);
   const updateMessage = store.updateMessage;
   const appendToMessage = store.appendToMessage;
   const appendToThinking = store.appendToThinking;
@@ -455,6 +463,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     : undefined;
   let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
   let currentAgentActivity: AgentActivityState | undefined = seedMetadata?.agentActivity;
+  let currentCloudAgentRun: ManagedCloudAgentRunReference | undefined = runHandle
+    ? {
+        ...runHandle,
+        lastSequence: seedMetadata?.agentActivity?.lastSequence ?? -1,
+      }
+    : seedMetadata?.cloudAgentRun;
   /**
    * How this turn ended, from the OpenAI-wire `finish_reason` (last one seen —
    * server tool loops emit intermediate 'tool_calls' before the final reason).
@@ -488,6 +502,24 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       .getState()
       .messages.find((m) => m.id === assistantMessageId)?.metadata;
     updateMessage(assistantMessageId, { metadata: { ...current, ...patch } });
+  };
+
+  if (currentCloudAgentRun) {
+    patchMessageMeta({ cloudAgentRun: { ...currentCloudAgentRun } });
+  }
+
+  const publishCloudRunReference = (patch: Partial<ManagedCloudAgentRunReference> = {}): void => {
+    if (!currentCloudAgentRun) return;
+    currentCloudAgentRun = {
+      ...currentCloudAgentRun,
+      ...patch,
+      lastSequence: Math.max(
+        currentCloudAgentRun.lastSequence,
+        currentAgentActivity?.lastSequence ?? -1,
+        patch.lastSequence ?? -1,
+      ),
+    };
+    patchMessageMeta({ cloudAgentRun: { ...currentCloudAgentRun } });
   };
 
   // Local ledger of reasoning segments. Published to the store only once a turn
@@ -643,6 +675,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     if (currentAgentActivity) {
       metadata.agentActivity = currentAgentActivity;
     }
+    if (currentCloudAgentRun) {
+      metadata.cloudAgentRun = { ...currentCloudAgentRun };
+    }
     if (hasWebSearchSources(currentSearchResults)) {
       metadata.searchResults = currentSearchResults;
     }
@@ -716,6 +751,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.searchResults ||
         metadata.codeExecutionResult ||
         metadata.research ||
+        metadata.cloudAgentRun ||
         metadata.thinkingContent ||
         (metadata.thinkingSegments?.length ?? 0) > 0 ||
         // A provider failure on the very first token (zero content streamed)
@@ -754,6 +790,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let fullAssistantContent = ctx.seedContent ?? '';
   let inThinkingBlock = false;
   let contentBuffer = '';
+  let unacknowledgedPublicText = '';
 
   const HOLD_BACK = 11;
 
@@ -766,6 +803,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         const before = contentBuffer.slice(0, openIdx);
         if (before) {
           fullAssistantContent += before;
+          unacknowledgedPublicText += before;
           appendToMessage(assistantMessageId, before);
         }
         inThinkingBlock = true;
@@ -791,6 +829,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             appendThinkingText(contentBuffer);
           } else {
             fullAssistantContent += contentBuffer;
+            unacknowledgedPublicText += contentBuffer;
             appendToMessage(assistantMessageId, contentBuffer);
           }
           contentBuffer = '';
@@ -801,6 +840,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           appendThinkingText(safe);
         } else {
           fullAssistantContent += safe;
+          unacknowledgedPublicText += safe;
           appendToMessage(assistantMessageId, safe);
         }
         contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
@@ -812,6 +852,82 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   // Seed the store with any prior tool cards so the resume continuation renders
   // them alongside new events.
   if (toolTimeline.length > 0) publishToolTimeline();
+
+  /**
+   * The completion request is only one transport for a server-owned run. If
+   * that SSE connection disappears unexpectedly, follow the journal from the
+   * last canonical sequence instead of replacing real partial work with a
+   * generic network error. Text deltas in the journal are explicitly public
+   * answer text; reasoning deltas remain excluded from the transcript.
+   */
+  const replayDurableRun = async (): Promise<StreamOutcome> => {
+    if (!runHandle) throw new Error('Managed Cloud run handle is unavailable');
+
+    flushContentBuffer(true);
+    if (inThinkingBlock) {
+      closeThinkingSegment();
+      inThinkingBlock = false;
+    }
+
+    const client = createManagedCloudAgentRunClient({
+      getAuthToken,
+    });
+    const afterSequence = Math.max(
+      currentCloudAgentRun?.lastSequence ?? -1,
+      currentAgentActivity?.lastSequence ?? -1,
+    );
+    const followed = await client.followRun(runHandle.runId, {
+      afterSequence,
+      onEvent: (envelope) => {
+        if (envelope.event.type === 'text-delta' && envelope.event.delta) {
+          if (unacknowledgedPublicText.startsWith(envelope.event.delta)) {
+            unacknowledgedPublicText = unacknowledgedPublicText.slice(envelope.event.delta.length);
+          } else {
+            fullAssistantContent += envelope.event.delta;
+            appendToMessage(assistantMessageId, envelope.event.delta);
+          }
+        }
+        if (envelope.event.type === 'stop') {
+          finishReason =
+            envelope.event.reason === 'max-tokens'
+              ? 'length'
+              : envelope.event.reason === 'cancelled'
+                ? 'stopped'
+                : envelope.event.reason === 'error'
+                  ? 'error'
+                  : 'stop';
+        }
+        currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, envelope);
+        patchMessageMeta({ agentActivity: currentAgentActivity });
+        publishCloudRunReference({ lastSequence: envelope.sequence });
+      },
+      onSnapshot: (snapshot) => {
+        publishCloudRunReference({
+          lastSequence: snapshot.nextAfterSequence,
+          state: snapshot.run.state,
+          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+        });
+      },
+    });
+
+    publishCloudRunReference({
+      lastSequence: followed.lastSequence,
+      state: followed.run.state,
+      cancellationRequestedAt: followed.run.cancellationRequestedAt,
+    });
+    if (followed.run.state === 'failed') {
+      finishRunningTools('failed', 'The managed agent run failed.');
+    } else if (followed.run.state !== 'awaiting_input' && followed.run.state !== 'paused') {
+      finishRunningTools();
+    }
+    setSearching(assistantMessageId, false);
+    setExecutingCode(assistantMessageId, false);
+    if (finishReason) patchMessageMeta({ finishReason });
+    persistAssistant(fullAssistantContent);
+    stopStreaming(conversationId);
+    setLoading(false, conversationId);
+    return { suspended, pendingCalls };
+  };
 
   try {
     while (true) {
@@ -863,8 +979,17 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           // but the message renderer prefers this canonical state when present.
           const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
           if (agentEnvelope) {
+            if (
+              agentEnvelope.event.type === 'text-delta' &&
+              unacknowledgedPublicText.startsWith(agentEnvelope.event.delta)
+            ) {
+              unacknowledgedPublicText = unacknowledgedPublicText.slice(
+                agentEnvelope.event.delta.length,
+              );
+            }
             currentAgentActivity = applyAgentActivityEvent(currentAgentActivity, agentEnvelope);
             patchMessageMeta({ agentActivity: currentAgentActivity });
+            publishCloudRunReference({ lastSequence: agentEnvelope.sequence });
           }
 
           let chunk: string | null = null;
@@ -1198,13 +1323,22 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       typeof error === 'object' &&
       error !== null &&
       (error as { name?: unknown }).name === 'AbortError';
+    let terminalError = error;
+
+    if (!isAbort && runHandle) {
+      try {
+        return await replayDurableRun();
+      } catch (replayError) {
+        terminalError = replayError;
+      }
+    }
 
     if (currentAgentActivity) {
       const completedAtMs = Date.now();
       currentAgentActivity = finishAgentActivityLocally(currentAgentActivity, {
         status: isAbort ? 'cancelled' : 'failed',
         completedAtMs,
-        ...(!isAbort ? { error: getVisibleErrorMessage(error) } : {}),
+        ...(!isAbort ? { error: getVisibleErrorMessage(terminalError) } : {}),
       });
       patchMessageMeta({ agentActivity: currentAgentActivity });
     }
@@ -1246,7 +1380,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       // keep the partial content, append an honest error note, record the
       // failure on the research state, persist, and tear down here (rethrowing
       // would let handleStreamError overwrite the partial with a bare error).
-      const errorMessage = getVisibleErrorMessage(error);
+      const errorMessage = getVisibleErrorMessage(terminalError);
       currentResearch = { ...currentResearch!, phase: 'error', error: errorMessage };
       setResearchState(assistantMessageId, { ...currentResearch });
       finishRunningTools('failed', errorMessage);
@@ -1265,7 +1399,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         return { suspended, pendingCalls };
       }
     }
-    throw error;
+    throw terminalError;
   }
 }
 
@@ -1275,6 +1409,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 export function useChatStream(): UseChatStreamReturn {
   const { getToken } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRunRef = useRef<(ManagedCloudAgentRunHandle & { assistantMessageId: string }) | null>(
+    null,
+  );
 
   const addMessage = useChatStore((state) => state.addMessage);
   const updateMessage = useChatStore((state) => state.updateMessage);
@@ -1495,6 +1632,9 @@ export function useChatStream(): UseChatStreamReturn {
           isTemporaryConversation,
           getAuthToken,
           seedTools: skillSeed,
+          onRunHandle: (handle) => {
+            activeRunRef.current = handle ? { ...handle, assistantMessageId } : null;
+          },
         });
 
         // Register the suspended turn so its approval cards can drive a resume.
@@ -1526,6 +1666,10 @@ export function useChatStream(): UseChatStreamReturn {
           setLoading,
           updateMessage,
         });
+      } finally {
+        if (activeRunRef.current?.assistantMessageId === assistantMessageId) {
+          activeRunRef.current = null;
+        }
       }
     },
     [
@@ -1658,6 +1802,9 @@ export function useChatStream(): UseChatStreamReturn {
           getAuthToken,
           seedContent,
           seedTools,
+          onRunHandle: (handle) => {
+            activeRunRef.current = handle ? { ...handle, assistantMessageId } : null;
+          },
         });
       } catch (error) {
         const isAbort =
@@ -1718,19 +1865,34 @@ export function useChatStream(): UseChatStreamReturn {
         }
         stopStreaming(conversationId);
         setLoading(false, conversationId);
+      } finally {
+        if (activeRunRef.current?.assistantMessageId === assistantMessageId) {
+          activeRunRef.current = null;
+        }
       }
     },
     [selectedModel, updateMessage, startStreaming, stopStreaming, setLoading, setError, getToken],
   );
 
   const stopGeneration = useCallback(() => {
+    const activeRun = activeRunRef.current;
+    activeRunRef.current = null;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    if (activeRun) {
+      const client = createManagedCloudAgentRunClient({
+        getAuthToken: getToken,
+        decorateMutationHeaders: addCsrfHeaders,
+      });
+      void client.cancelRun(activeRun.runId).catch(() => {
+        toast.error('Could not stop the Cloud task. Check its activity before retrying.');
+      });
+    }
     stopStreaming();
     setLoading(false);
-  }, [stopStreaming, setLoading]);
+  }, [getToken, stopStreaming, setLoading]);
 
   return {
     sendMessage,
