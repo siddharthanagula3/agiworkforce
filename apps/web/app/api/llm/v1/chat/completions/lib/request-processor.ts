@@ -82,6 +82,10 @@ import {
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
 import { resolveCloudChatSurface, type CloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  createManagedOfficeFileToolDefinition,
+  MANAGED_OFFICE_FILE_TOOL_NAME,
+} from '@/lib/services/managed-office-file-service';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z.object({
@@ -153,6 +157,9 @@ export const ChatCompletionRequestSchema = z.object({
   web_fetch: z.boolean().optional(),
   research: z.boolean().optional(),
   code_execution: z.boolean().optional(),
+  // Logical client selection only. The server owns the Office schemas,
+  // generation runtime, storage target, and emitted file descriptors.
+  office_creation: z.boolean().optional(),
   // Product mode, not a provider hint. `agiwork` is paid managed-cloud work
   // that exposes AGI's server-owned search/fetch/sandbox tools below.
   work_mode: z.enum(CLOUD_WORK_MODES).optional(),
@@ -220,6 +227,15 @@ export function applyManagedSkillSelection(
     createSkillToolDefinition(),
   ];
   return { ok: true };
+}
+
+/** Add the canonical server-owned Office creator without trusting client schemas. */
+export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): void {
+  if (!request.office_creation) return;
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => tool.function.name !== MANAGED_OFFICE_FILE_TOOL_NAME),
+    createManagedOfficeFileToolDefinition(),
+  ];
 }
 
 /** Make the AGI Work composer mode operational at the server trust boundary. */
@@ -1304,6 +1320,43 @@ export async function processRequest(
         ),
       };
     }
+  }
+
+  if (chatRequest.office_creation) {
+    if (!chatRequest.stream) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: 'Office file creation requires a streaming chat request.',
+              type: 'invalid_request_error',
+              code: 'office_creation_stream_required',
+              param: 'stream',
+            },
+          },
+          { status: 422 },
+        ),
+      };
+    }
+    if (resolvedModelCaps?.tools === false) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message:
+                'The selected model cannot create Office files. Choose a tool-capable model.',
+              type: 'invalid_request_error',
+              code: 'office_creation_model_unsupported',
+              param: 'model',
+            },
+          },
+          { status: 422 },
+        ),
+      };
+    }
+    applyManagedOfficeFileCreation(chatRequest);
   }
 
   const originalModel = chatRequest.model;

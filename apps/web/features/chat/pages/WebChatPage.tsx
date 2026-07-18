@@ -126,6 +126,7 @@ type SendMeta = {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
+  officeCreationEnabled?: boolean;
   /** Deep Research mode: server injects research system prompt and forces web search. */
   researchEnabled?: boolean;
   /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
@@ -838,6 +839,7 @@ export default function WebChatPage() {
           webFetch: options.meta?.webSearchEnabled,
           thinkingEnabled: options.meta?.thinkingEnabled,
           codeExecution: options.meta?.codeExecutionEnabled,
+          officeCreation: options.meta?.officeCreationEnabled,
           workMode: options.meta?.workMode,
           research: options.meta?.researchEnabled,
           styleMode: options.meta?.styleMode,

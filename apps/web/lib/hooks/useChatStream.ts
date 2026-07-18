@@ -67,6 +67,7 @@ interface SendMessageOptions {
   webSearch?: boolean;
   webFetch?: boolean;
   codeExecution?: boolean;
+  officeCreation?: boolean;
   thinkingEnabled?: boolean;
   thinkingEffort?: Effort;
   /** Output style hint. When set and not 'normal', a system message is prepended. */
@@ -1593,6 +1594,7 @@ export function useChatStream(): UseChatStreamReturn {
         webSearchEnabled: options.webSearch,
         thinkingEnabled: options.thinkingEnabled,
         codeExecutionEnabled: options.codeExecution,
+        officeCreationEnabled: options.officeCreation,
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillName),
       });
@@ -1716,6 +1718,7 @@ export function useChatStream(): UseChatStreamReturn {
             web_fetch: options.webFetch || undefined,
             research: options.research || undefined,
             code_execution: options.codeExecution || undefined,
+            office_creation: options.officeCreation || undefined,
             skill_name: options.skillName,
             work_mode: options.workMode,
             thinking_mode: thinkingEnabled || undefined,

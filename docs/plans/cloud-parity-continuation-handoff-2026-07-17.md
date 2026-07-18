@@ -283,16 +283,20 @@ and cost estimation, but do not let host paths or bodies enter the browser contr
 ## Work immediately after the Skill slice
 
 Continue one production slice at a time; do not begin all of these in parallel.
+The founder's release order is locked as Website, Mobile, Desktop application,
+Chrome extension, VS Code extension, then CLI. Finish release-critical gaps on
+the current surface before moving to the next one.
 
 1. Verify the Managed Cloud Skill tool across Web, Desktop Cloud, and Mobile Cloud with inline
    collapsed activity.
 2. Complete the remaining Phase 3 engine depth: typed agent definitions/coordinator, MCP transport
    breadth, per-call hook permission pipeline, code-mode orchestration, streaming executor, missing
    tools, git/PR tooling, LSP breadth, and content-addressed checkpoint/rewind.
-3. Complete Cloud product gaps in Phase 5: real Office/PPTX creation, unified installable
-   Skills/Connectors/Plugins directory, two-way voice, Reflect/recap/focus reminders, and Desktop
-   thinking/effort control. Server-side project document extraction and Website auto-memory are
-   implemented in code; honor their recorded deployment and downstream-surface follow-ups.
+3. Complete Cloud product gaps in Phase 5: unified installable Skills/Connectors/Plugins directory,
+   two-way voice, Reflect/recap/focus reminders, and Desktop thinking/effort control. Website
+   Managed Cloud DOCX/PPTX creation, server-side project document extraction, and Website
+   auto-memory are implemented in code; honor their recorded deployment and downstream-surface
+   follow-ups.
 4. Complete enterprise/reliability: managed settings/MDM hierarchy, settings migrations, SSO/SCIM/
    RBAC depth, wired retry generator, proxy/mTLS/custom CA, first-party observability/kill switches,
    durable cost persistence, and prompt-cache regression sentinels.

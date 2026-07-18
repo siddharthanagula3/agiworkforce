@@ -6,6 +6,24 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-18 Managed Cloud Office creation gap (`CLOUD-OFFICE-CREATE-01`,
+Partially remediated): Website managed chat now offers one server-owned
+`create_office_file` tool for editable DOCX and PPTX output. The browser sends
+only a logical enablement flag; the server validates bounded structured tool
+arguments, generates the bytes, and reuses the existing tenant-owned generated
+file persistence, file-card, and canonical activity paths. A real tool call is
+required before running/completed/error activity or an artifact event appears.
+Free chat remains eligible when the selected model supports tools; this does
+not grant separate Cowork/developer entitlements. Generated DOCX files use an
+explicit business-document page/style/numbering preset, and generated PPTX
+files use editable 16:9 text, semantic title order, and optional speaker notes.
+The production dependency is MIT-licensed and recorded in
+`THIRD_PARTY_LICENSES.md`. Remaining release-order gaps: Website does not yet
+edit existing Office files or create XLSX workbooks, and Mobile, Desktop,
+Chrome, VS Code, and CLI do not yet expose this selection. Those surfaces must
+reuse the managed server behavior in the founder's order instead of adding
+client generators or another storage pipeline.
+
 2026-07-18 Managed Cloud auto-memory parity (`CLOUD-MEMORY-AUTO-01`, Partially
 remediated): Website managed chat now loads bounded owner-scoped account
 memories as explicitly untrusted data before prompt accounting, skips that

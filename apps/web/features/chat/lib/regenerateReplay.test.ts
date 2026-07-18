@@ -8,6 +8,7 @@ describe('regenerate replay decisions', () => {
         sendReplay: {
           webSearchEnabled: true,
           thinkingEnabled: false,
+          officeCreationEnabled: true,
           styleMode: 'concise',
         },
       },
@@ -18,6 +19,7 @@ describe('regenerate replay decisions', () => {
       replay: {
         webSearchEnabled: true,
         thinkingEnabled: false,
+        officeCreationEnabled: true,
         styleMode: 'concise',
       },
     });
@@ -25,6 +27,7 @@ describe('regenerate replay decisions', () => {
       webSearch: true,
       thinkingEnabled: false,
       codeExecution: undefined,
+      officeCreation: true,
       styleMode: 'concise',
     });
   });

@@ -27,7 +27,7 @@ function completedStream(): Response {
   return new Response(body, { status: 200, headers: new Headers() });
 }
 
-describe('useChatStream managed skill selection', () => {
+describe('useChatStream managed server selections', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
     useChatStore.setState({
@@ -79,5 +79,29 @@ describe('useChatStream managed skill selection', () => {
       .messages.find((message) => message.role === 'assistant');
     expect(assistant?.metadata?.tools).toBeUndefined();
     expect(assistant?.metadata?.agentActivity).toBeUndefined();
+  });
+
+  it('sends only the logical Office creation flag', async () => {
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('Create a release plan deck', {
+        conversationId: CONVERSATION_ID,
+        officeCreation: true,
+      });
+    });
+
+    const completionCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).includes('/api/llm/v1/chat/completions'));
+    const request = JSON.parse(String(completionCall?.[1]?.body)) as {
+      office_creation?: boolean;
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(request.office_creation).toBe(true);
+    expect(request.messages).toEqual([
+      expect.objectContaining({ role: 'user', content: 'Create a release plan deck' }),
+    ]);
+    expect(JSON.stringify(request)).not.toContain('PK');
   });
 });

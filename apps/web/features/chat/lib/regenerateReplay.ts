@@ -48,12 +48,14 @@ export function replayToSendOptions(replay: SendReplayMetadata | undefined): {
   webSearch?: boolean;
   thinkingEnabled?: boolean;
   codeExecution?: boolean;
+  officeCreation?: boolean;
   styleMode?: string;
 } {
   return {
     webSearch: replay?.webSearchEnabled,
     thinkingEnabled: replay?.thinkingEnabled,
     codeExecution: replay?.codeExecutionEnabled,
+    officeCreation: replay?.officeCreationEnabled,
     styleMode: replay?.styleMode,
   };
 }
