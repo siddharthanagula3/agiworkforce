@@ -463,7 +463,6 @@ export interface ModelsCatalog {
   providers: Record<string, ProviderConfig>;
   models: Record<string, ModelMetadata>;
   tierAllowedModels: TierAllowedModels;
-  modelPresets: Record<string, Array<{ value: string; label: string }>>;
   providersInOrder: string[];
 }
 

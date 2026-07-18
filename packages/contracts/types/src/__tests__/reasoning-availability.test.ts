@@ -85,9 +85,6 @@ describe('availability axis + display/selectable split', () => {
       for (const id of Object.values(cfg.taskRouting ?? {})) if (id) routable.add(id as string);
       if (cfg.defaultModel) routable.add(cfg.defaultModel);
     }
-    for (const entries of Object.values(modelsCatalog.modelPresets)) {
-      for (const e of entries) routable.add(e.value);
-    }
     for (const slot of Object.values(SLOT_REGISTRY)) routable.add(slot.modelId);
 
     for (const id of nonLive) {
