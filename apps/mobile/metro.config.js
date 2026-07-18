@@ -25,9 +25,18 @@ config.resolver.nodeModulesPaths = [
 const nativeWindConfig = withNativeWind(config, { input: './global.css' });
 const nativeWindResolveRequest = nativeWindConfig.resolver.resolveRequest;
 const nobleHashesRoot = path.dirname(require.resolve('@noble/hashes'));
+const reactNativeWebrtcRoot = path.dirname(
+  require.resolve('react-native-webrtc/package.json', { paths: [projectRoot] }),
+);
+const webRtcEventTargetShim = require.resolve('event-target-shim', {
+  paths: [reactNativeWebrtcRoot],
+});
 
 const packageExportRemaps = new Map([
-  ['event-target-shim/index', require.resolve('event-target-shim')],
+  // react-native-webrtc imports this legacy subpath, which is not exported by
+  // event-target-shim v6. Resolve from WebRTC's own dependency scope so a
+  // different workspace version cannot be selected from the monorepo root.
+  ['event-target-shim/index', webRtcEventTargetShim],
   ['@noble/hashes/crypto', path.join(nobleHashesRoot, 'crypto.js')],
   ['@noble/hashes/crypto.js', path.join(nobleHashesRoot, 'crypto.js')],
 ]);
