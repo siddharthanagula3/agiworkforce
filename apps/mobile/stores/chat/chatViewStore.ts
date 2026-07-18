@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import type { CloudWorkMode } from '@agiworkforce/types';
 
 /** Chat mode — determines how the AI processes the conversation. */
 export type ChatMode = 'chat' | 'research' | 'create';
@@ -33,12 +34,14 @@ interface ViewState {
   searchResults: ConversationSearchResult[];
   isSearching: boolean;
   chatMode: ChatMode;
+  workMode: CloudWorkMode;
   chatStyle: ChatStyle;
   toolAccess: ToolAccess;
   features: ChatFeatures;
 
   searchConversations: (query: string) => void;
   setChatMode: (mode: ChatMode) => void;
+  setWorkMode: (mode: CloudWorkMode) => void;
   setChatStyle: (style: ChatStyle) => void;
   setToolAccess: (access: ToolAccess) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
@@ -172,6 +175,7 @@ export const useChatViewStore = create<ViewState>()(
       searchResults: [],
       isSearching: false,
       chatMode: 'chat',
+      workMode: 'chat',
       chatStyle: 'normal',
       toolAccess: 'auto',
       features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
@@ -200,6 +204,7 @@ export const useChatViewStore = create<ViewState>()(
       },
 
       setChatMode: (mode) => set({ chatMode: mode }),
+      setWorkMode: (mode) => set({ workMode: mode }),
       setChatStyle: (style) => set({ chatStyle: style }),
       setToolAccess: (access) => set({ toolAccess: access }),
       setFeature: (feature, enabled) =>
@@ -212,6 +217,7 @@ export const useChatViewStore = create<ViewState>()(
       skipHydration: true,
       partialize: (state) => ({
         chatMode: state.chatMode,
+        workMode: state.workMode,
         chatStyle: state.chatStyle,
         toolAccess: state.toolAccess,
         features: state.features,

@@ -9,6 +9,7 @@ import { guardedFetch } from '../lib/egressGuard';
 import { isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { API_BASE_URL } from './config';
+import type { CloudWorkMode } from '@agiworkforce/types';
 
 // Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS.
 // Exported so runtimes can resolve relative wire uris (e.g. the
@@ -351,7 +352,7 @@ export async function sendCloudMessage(
   thinkingEnabled?: boolean,
   codeExecution?: boolean,
   idempotencyKey?: string,
-  requestOptions?: { research?: boolean },
+  requestOptions?: { research?: boolean; workMode?: CloudWorkMode },
 ): Promise<void> {
   let headers: Record<string, string>;
 
@@ -381,6 +382,7 @@ export async function sendCloudMessage(
     ...(thinkingEnabled ? { thinking_mode: true } : {}),
     ...(codeExecution ? { code_execution: true } : {}),
     ...(requestOptions?.research ? { research: true } : {}),
+    ...(requestOptions?.workMode ? { work_mode: requestOptions.workMode } : {}),
   };
 
   let res: Response;

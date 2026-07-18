@@ -8,6 +8,7 @@ import {
   applyAgentTaskGoalStepCompleted,
   applyAgentTaskGoalStepStarted,
   applyAgentTaskGoalSubmitted,
+  applyAgentTaskStateChanged,
   useAgentTaskStore,
 } from '@/stores/agentTaskStore';
 
@@ -54,6 +55,11 @@ describe('ProgressIndicator', () => {
         total_steps: 5,
         estimated_duration_ms: 10000,
       });
+      applyAgentTaskStateChanged({
+        taskId: 'goal-1',
+        state: 'running',
+        previousState: 'queued',
+      });
     });
 
     expect(screen.getByText('Executing goal')).toBeInTheDocument();
@@ -71,6 +77,11 @@ describe('ProgressIndicator', () => {
         goal_id: 'goal-1',
         total_steps: 4,
         estimated_duration_ms: 8000,
+      });
+      applyAgentTaskStateChanged({
+        taskId: 'goal-1',
+        state: 'running',
+        previousState: 'queued',
       });
       applyAgentTaskGoalProgress({
         goal_id: 'goal-1',
@@ -95,6 +106,11 @@ describe('ProgressIndicator', () => {
         goal_id: 'goal-1',
         total_steps: 2,
         completed_steps: 2,
+      });
+      applyAgentTaskStateChanged({
+        taskId: 'goal-1',
+        state: 'ready_for_review',
+        previousState: 'running',
       });
     });
 
@@ -250,6 +266,11 @@ describe('ProgressIndicator', () => {
         total_steps: 1,
         completed_steps: 1,
       });
+      applyAgentTaskStateChanged({
+        taskId: 'goal-1',
+        state: 'ready_for_review',
+        previousState: 'running',
+      });
     });
 
     fireEvent.click(screen.getByText('Dismiss'));
@@ -268,6 +289,11 @@ describe('ProgressIndicator', () => {
         goal_id: 'goal-1',
         total_steps: 1,
         completed_steps: 1,
+      });
+      applyAgentTaskStateChanged({
+        taskId: 'goal-1',
+        state: 'ready_for_review',
+        previousState: 'running',
       });
     });
 

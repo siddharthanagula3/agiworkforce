@@ -1132,7 +1132,7 @@ describe('useChatStream', () => {
     await act(async () => {
       await result.current.sendMessage('research and build this', {
         conversationId: TEMP_CONVERSATION.id,
-        agentMode: 'agiwork',
+        workMode: 'agiwork',
       });
     });
 
@@ -1140,6 +1140,7 @@ describe('useChatStream', () => {
       .mocked(fetch)
       .mock.calls.find(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
     const body = JSON.parse(String(llmCall?.[1]?.body)) as Record<string, unknown>;
-    expect(body['agent_mode']).toBe('agiwork');
+    expect(body['work_mode']).toBe('agiwork');
+    expect(body['agent_mode']).toBeUndefined();
   });
 });

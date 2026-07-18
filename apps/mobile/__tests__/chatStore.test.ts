@@ -110,6 +110,7 @@ import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useTierStore } from '../src/features/billing/store';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import {
@@ -169,7 +170,8 @@ function resetStore() {
     chatMode: 'chat',
     chatStyle: 'normal',
     toolAccess: 'auto',
-    features: { webSearch: true, imageGen: true, health: false },
+    workMode: 'chat',
+    features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
   });
   useChatCloudMessageStore.setState({ conversations: [], messages: {} });
 }
@@ -271,7 +273,9 @@ describe('chatStore — streaming state', () => {
     it('sends web_search:true to the remote stream when the web-search feature is enabled', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useChatStore.setState({ features: { webSearch: true, imageGen: true, health: false } });
+      useChatStore.setState({
+        features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+      });
 
       mockStreamChat.mockImplementation(
         (body, callbacks) =>
@@ -295,7 +299,9 @@ describe('chatStore — streaming state', () => {
     it('omits web_search when the web-search feature is disabled', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useChatStore.setState({ features: { webSearch: false, imageGen: true, health: false } });
+      useChatStore.setState({
+        features: { webSearch: false, imageGen: true, health: false, codeExecution: false },
+      });
 
       mockStreamChat.mockImplementation(
         (body, callbacks) =>
@@ -314,6 +320,56 @@ describe('chatStore — streaming state', () => {
       });
 
       expect(capturedBody?.web_search).toBeUndefined();
+    });
+
+    it('sends work_mode:agiwork only for the explicit Cloud work mode', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useTierStore.setState({ tier: 'max' });
+      useChatStore.setState({ workMode: 'agiwork' });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'built' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'research and build this', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.work_mode).toBe('agiwork');
+    });
+
+    it('does not send a persisted AGI Work mode after the account returns to Free', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useTierStore.setState({ tier: 'free' });
+      useChatStore.setState({ workMode: 'agiwork' });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'chat only' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'continue', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.work_mode).toBeUndefined();
     });
 
     it('uses per-send task options over persisted chat mode', async () => {
@@ -1014,9 +1070,9 @@ describe('chatStore — streaming state', () => {
 
       await waitFor(() => {
         expect(mockApiDelete).toHaveBeenCalledTimes(2);
-        expect(
-          useChatCloudMessageStore.getState().messages[CONV_ID]?.at(-1)?.content,
-        ).toBe('new answer');
+        expect(useChatCloudMessageStore.getState().messages[CONV_ID]?.at(-1)?.content).toBe(
+          'new answer',
+        );
       });
       expect(useChatMessageStore.getState().messages[CONV_ID]).toBeUndefined();
     });
