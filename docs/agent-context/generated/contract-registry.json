@@ -39,6 +39,7 @@
     "signaling",
     "suite-contracts",
     "tauri",
+    "time-focus",
     "tool-display",
     "tool-events",
     "user",

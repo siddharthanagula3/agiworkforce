@@ -17,6 +17,7 @@ import {
   Code2,
   Globe,
   Lock,
+  Clock3,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,6 +54,7 @@ export type SettingsNavKey =
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer — see apps/desktop settings-ia contract test).
   | 'security'
+  | 'time-focus'
   | 'skills';
 
 export interface SettingsNavEntry {
@@ -227,6 +229,7 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'capabilities', label: 'Capabilities', icon: Zap },
       { key: 'security', label: 'Security', icon: Lock },
       { key: 'notifications', label: 'Notifications', icon: Bell },
+      { key: 'time-focus', label: 'Time and focus', icon: Clock3 },
       { key: 'skills', label: 'Skills', icon: BookOpen },
       { key: 'connectors', label: 'Connectors', icon: Plug },
       { key: 'plugins', label: 'Plugins', icon: Puzzle },
