@@ -87,6 +87,15 @@ export type ExtToWebviewMessage =
     }
   | { type: 'usageMeter'; payload: UsageMeterWebviewPayload }
   | {
+      type: 'progressUpdate';
+      payload: {
+        progressId: string;
+        summary: string;
+        detail?: string;
+        status: 'running' | 'completed' | 'failed';
+      };
+    }
+  | {
       type: 'toolCallStart';
       payload: {
         toolUseId: string;
@@ -787,6 +796,18 @@ export class ChatStateManager {
     }
     if (event.type === 'output_delta') {
       this._post({ type: 'token', payload: { text: event.delta } });
+      return;
+    }
+    if (event.type === 'progress_update') {
+      this._post({
+        type: 'progressUpdate',
+        payload: {
+          progressId: event.progressId,
+          summary: event.summary,
+          ...(event.detail === undefined ? {} : { detail: event.detail }),
+          status: event.status,
+        },
+      });
       return;
     }
     if (event.type === 'tool_execution_start') {

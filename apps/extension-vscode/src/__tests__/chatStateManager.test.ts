@@ -461,6 +461,47 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('forwards engine-authored progress to the inline timeline', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect the workspace' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.emit({
+      type: 'progress_update',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_784_335_200_000,
+      progressId: 'turn-work',
+      summary: 'Working on your request',
+      detail: 'The agent is inspecting the workspace and planning the next safe action.',
+      status: 'running',
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+
+    await send;
+    expect(harness.posted).toContainEqual({
+      type: 'progressUpdate',
+      payload: {
+        progressId: 'turn-work',
+        summary: 'Working on your request',
+        detail: 'The agent is inspecting the workspace and planning the next safe action.',
+        status: 'running',
+      },
+    });
+  });
+
   it('settles the UI turn when the local app-server disconnects', async () => {
     const harness = makeHarness();
     let settled = false;

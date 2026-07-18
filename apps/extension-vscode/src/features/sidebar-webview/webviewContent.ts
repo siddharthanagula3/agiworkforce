@@ -826,6 +826,20 @@ export function getWebviewContent(
       word-break: break-word;
     }
 
+    .progress-event .tool-call__label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .progress-event .tool-call__body {
+      font-family: var(--vscode-font-family);
+      white-space: normal;
+      word-break: normal;
+      line-height: 1.5;
+    }
+
     .tool-call-done {
       display: flex;
       align-items: center;
@@ -1711,6 +1725,16 @@ export function getWebviewContent(
         accumulatedContent = '';
       }
 
+      else if (msg.type === 'progressUpdate') {
+        removeTyping();
+        upsertProgressEl(
+          msg.payload.progressId,
+          msg.payload.summary,
+          msg.payload.detail,
+          msg.payload.status
+        );
+      }
+
       else if (msg.type === 'toolCallStart') {
         removeTyping();
         createToolCallEl(
@@ -1944,6 +1968,7 @@ export function getWebviewContent(
     // ── Inline tool-call rendering (design-spec §4) ───────────────────────────
     var toolCallStack = null; // active .tool-call-stack container
     var toolCallMap = {}; // toolUseId → inline disclosure state
+    var progressMap = {}; // progressId → inline disclosure state
 
     var TOOL_ICONS = {
       bash: '$(terminal)', shell: '$(terminal)', run_command: '$(terminal)',
@@ -2080,6 +2105,76 @@ export function getWebviewContent(
       return toolCallMap[toolUseId];
     }
 
+    function upsertProgressEl(progressId, summary, detail, status) {
+      var existing = progressMap[progressId];
+      if (!existing) {
+        var stack = ensureToolCallStack();
+        var wrapper = document.createElement('div');
+        wrapper.className = 'tool-call progress-event';
+        wrapper.dataset.id = progressId;
+
+        var bar = document.createElement('button');
+        bar.type = 'button';
+        bar.className = 'tool-call__bar';
+        bar.setAttribute('aria-expanded', 'false');
+
+        var iconEl = document.createElement('span');
+        iconEl.className = 'tool-call__icon codicon';
+        iconEl.setAttribute('aria-hidden', 'true');
+
+        var labelEl = document.createElement('span');
+        labelEl.className = 'tool-call__label';
+
+        var chevron = document.createElement('span');
+        chevron.className = 'tool-call__chevron';
+        chevron.textContent = '▶';
+
+        var bodyEl = document.createElement('div');
+        bodyEl.className = 'tool-call__body progress-event__body';
+
+        bar.appendChild(iconEl);
+        bar.appendChild(labelEl);
+        bar.appendChild(chevron);
+        wrapper.appendChild(bar);
+        wrapper.appendChild(bodyEl);
+
+        bar.addEventListener('click', function() {
+          if (!bodyEl.textContent) return;
+          var isOpen = wrapper.classList.contains('tool-call--open');
+          wrapper.classList.toggle('tool-call--open', !isOpen);
+          bar.setAttribute('aria-expanded', String(!isOpen));
+        });
+
+        stack.appendChild(wrapper);
+        existing = progressMap[progressId] = {
+          el: wrapper,
+          barEl: bar,
+          iconEl: iconEl,
+          labelEl: labelEl,
+          chevronEl: chevron,
+          bodyEl: bodyEl
+        };
+      }
+
+      existing.labelEl.textContent = summary;
+      existing.bodyEl.textContent = detail || '';
+      existing.chevronEl.style.display = detail ? '' : 'none';
+      existing.el.classList.remove('tool-call--pending', 'tool-call--done', 'tool-call--error');
+      existing.iconEl.className = 'tool-call__icon codicon';
+      if (status === 'running') {
+        existing.el.classList.add('tool-call--pending');
+        existing.iconEl.classList.add('codicon-loading');
+      } else if (status === 'failed') {
+        existing.el.classList.add('tool-call--error');
+        existing.iconEl.classList.add('codicon-error');
+      } else {
+        existing.el.classList.add('tool-call--done');
+        existing.iconEl.classList.add('codicon-check');
+      }
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return existing;
+    }
+
     function finalizeToolCallStack() {
       if (!toolCallStack) return;
       var doneEl = document.createElement('div');
@@ -2088,6 +2183,7 @@ export function getWebviewContent(
       toolCallStack.appendChild(doneEl);
       toolCallStack = null;
       toolCallMap = {};
+      progressMap = {};
     }
 
     // ── Empty-state prompt chips (design-spec §8) ────────────────────────────

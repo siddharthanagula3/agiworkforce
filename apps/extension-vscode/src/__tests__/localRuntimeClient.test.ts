@@ -222,7 +222,7 @@ describe('LocalRuntimeClient', () => {
     client.dispose();
   });
 
-  it('exposes canonical tool execution events and ignores malformed envelopes', async () => {
+  it('exposes canonical progress and tool execution events and ignores malformed envelopes', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
       cliPath: 'agi',
@@ -230,10 +230,13 @@ describe('LocalRuntimeClient', () => {
       clientVersion: '0.3.0',
       spawn: runtime.spawn,
     });
-    const events: Array<{ type: string; toolCallId?: string }> = [];
+    const events: Array<{ type: string; id?: string }> = [];
     client.onEvent((event) => {
       if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
-        events.push({ type: event.type, toolCallId: event.toolCallId });
+        events.push({ type: event.type, id: event.toolCallId });
+      }
+      if (event.type === 'progress_update') {
+        events.push({ type: event.type, id: event.progressId });
       }
     });
     await client.initialize();
@@ -287,6 +290,25 @@ describe('LocalRuntimeClient', () => {
           turnId: 'turn-1',
           sequence: 2,
           emittedAtMs: 1_784_335_200_200,
+          event: {
+            type: 'progress-update',
+            progressId: 'turn-work',
+            summary: 'Preparing the response',
+            detail: 'The agent is reviewing completed tool results.',
+            status: 'running',
+          },
+        },
+      })}\n`,
+    );
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/agent_event',
+        params: {
+          schemaVersion: 3,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          sequence: 3,
+          emittedAtMs: 1_784_335_200_300,
           event: { type: 'tool-execution-start', toolCallId: 42 },
         },
       })}\n`,
@@ -294,8 +316,9 @@ describe('LocalRuntimeClient', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(events).toEqual([
-      { type: 'tool_execution_start', toolCallId: 'tool-1' },
-      { type: 'tool_execution_end', toolCallId: 'tool-1' },
+      { type: 'tool_execution_start', id: 'tool-1' },
+      { type: 'tool_execution_end', id: 'tool-1' },
+      { type: 'progress_update', id: 'turn-work' },
     ]);
     client.dispose();
   });
