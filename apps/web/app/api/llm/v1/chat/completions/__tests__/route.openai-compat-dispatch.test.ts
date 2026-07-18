@@ -22,6 +22,9 @@ import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/error-handler', () => ({
+  withErrorHandler: <T extends (...args: never[]) => unknown>(handler: T) => handler,
+}));
 vi.mock('@/lib/model-tiers', () => ({
   canAccessModel: () => true,
 }));
@@ -164,8 +167,34 @@ const rlsMocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
 }));
 
+const workflowRouteMocks = vi.hoisted(() => ({
+  start: vi.fn(),
+  createRun: vi.fn(),
+  loadMcpTools: vi.fn(),
+  loadConnectorTools: vi.fn(),
+}));
+
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: rlsMocks.getUserScopedDb,
+}));
+
+vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
+  startCloudAgentWorkflowExecution: workflowRouteMocks.start,
+}));
+
+vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  createCloudAgentRun: workflowRouteMocks.createRun,
+}));
+
+vi.mock('@/lib/user-connector-tools', () => ({
+  loadUserConnectorToolDefs: workflowRouteMocks.loadConnectorTools,
+  makeUserConnectorExecutor: vi.fn(),
+}));
+
+vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop')>()),
+  loadMcpToolDefs: workflowRouteMocks.loadMcpTools,
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
@@ -230,6 +259,24 @@ function makeRequest(model: string, conversationId?: string): NextRequest {
       messages: [{ role: 'user', content: 'hi' }],
       stream: false,
       ...(conversationId ? { conversation_id: conversationId } : {}),
+    }),
+  });
+}
+
+function makeAgiWorkRequest(model: string): NextRequest {
+  return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer test-token',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'test-durable-agi-work-request',
+      'X-AGI-Client-Surface': 'web',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: 'complete this durable task' }],
+      stream: true,
+      work_mode: 'agiwork',
     }),
   });
 }
@@ -337,5 +384,68 @@ describe('Managed Web conversation ownership', () => {
     );
     expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
     expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+  });
+});
+
+describe('Managed Web durable AGI Work dispatch', () => {
+  it('starts a durable workflow even when the request has no configured tools', async () => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
+    mockCheckAvailable.mockResolvedValue(true);
+    mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
+    mockGetBalance.mockResolvedValue({
+      account_id: 'acct-1',
+      credits_remaining_cents: 10000,
+      credits_allocated_cents: 20000,
+    });
+    managedUsageMocks.reserve.mockImplementation(async (input) => ({
+      db: input.db,
+      userId: input.userId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      leaseToken: 'lease-test',
+      estimatedCostCents: input.estimatedCostCents,
+    }));
+    mockGetProviderFromModel.mockReturnValue('mistral');
+    workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
+    workflowRouteMocks.loadConnectorTools.mockResolvedValue([]);
+    workflowRouteMocks.createRun.mockResolvedValue({
+      id: 'run-durable-1',
+      userId: 'user-1',
+      requestId: 'request-durable-1',
+      state: 'queued',
+      originSurface: 'web',
+      workMode: 'agiwork',
+      provider: 'mistral',
+      model: 'mistral-large-3',
+      createdAt: '2026-07-18T00:00:00.000Z',
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+    workflowRouteMocks.start.mockResolvedValue({
+      workflowRunId: 'workflow-durable-1',
+      readable: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      }),
+    });
+
+    const response = await POST(makeAgiWorkRequest('mistral-large-3'));
+
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get('X-AGI-Tool-Loop')).toBe('workflow');
+    expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-durable-1');
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('workflow-durable-1');
+    await expect(response.text()).resolves.toBe('data: [DONE]\n\n');
+    expect(workflowRouteMocks.start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: 'run-durable-1',
+        userId: 'user-1',
+        mcpTools: [],
+      }),
+    );
   });
 });

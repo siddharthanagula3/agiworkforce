@@ -216,6 +216,7 @@ describe('runToolLoop — manual approval suspend', () => {
       sessionId: 'req-1',
       turnId: 'req-1',
       nextEventSequence: 6,
+      completedSteps: 1,
       events: expect.arrayContaining([
         expect.objectContaining({
           sequence: 3,

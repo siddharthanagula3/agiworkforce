@@ -32,6 +32,7 @@ import {
   createCloudAgentRun,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
+  transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import type {
   CloudAgentOriginSurface,
@@ -41,6 +42,7 @@ import type {
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
 
 /** Current Vercel Hobby maximum; durable AGI Work will span workflow steps. */
 export const maxDuration = 300;
@@ -52,12 +54,12 @@ export const maxDuration = 300;
  * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
  * Service modules: auth-gate | request-processor | stream-transform | response-builder
  *
- * Agentic extension: when remote MCP tools are configured through the validated
- * WEB_MCP_SERVERS_JSON contract, streaming requests enter the
- * tool-loop driver (tool-loop.ts) which executes tools and re-invokes the
- * model under the bounded policy for the selected work mode. The approval_mode
- * query parameter controls gating: ?approval_mode=auto skips the per-tool prompt;
- * the default 'manual' suspends and emits x_tool_approval_request events.
+ * Agentic extension: every AGI Work stream enters the durable Workflow-backed
+ * tool-loop driver, including turns that begin without an explicit tool. Normal
+ * chat enters the request-scoped loop only when MCP/platform tools are present.
+ * The approval_mode query parameter controls gating: ?approval_mode=auto skips
+ * the per-tool prompt; the default 'manual' persists a signed checkpoint before
+ * emitting x_tool_approval_request events.
  *
  * Provider dispatch, for the standard (non-agentic) paths below (restructure
  * Wave 2, task #34): Anthropic, Google, OpenAI, and the 9 openai-compat
@@ -314,7 +316,7 @@ async function handleChatCompletions(request: NextRequest) {
     const mcpTools = [...operatorTools, ...connectorTools];
     const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
 
-    if (loopInputs.shouldRun) {
+    if (loopInputs.shouldRun || processed.chatRequest.work_mode === 'agiwork') {
       const startedRun = await beginCloudAgentRun(
         request,
         userId,
@@ -323,6 +325,55 @@ async function handleChatCompletions(request: NextRequest) {
       );
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
+
+      if (processed.chatRequest.work_mode === 'agiwork') {
+        try {
+          const workflow = await startCloudAgentWorkflowExecution({
+            db: runDb,
+            runId: run.id,
+            userId,
+            processed,
+            mcpTools,
+            approvalMode: loopInputs.approvalMode,
+          });
+          const workflowHeaders: Record<string, string> = {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+            'X-AGI-Tool-Loop': 'workflow',
+            'X-AGI-Workflow-Run-Id': workflow.workflowRunId,
+            ...getCorsHeaders(request),
+            ...getSecurityHeaders(),
+          };
+          addAgentRunHeaders(workflowHeaders, run);
+          if (processed.quotaWarningHeader) {
+            workflowHeaders['X-Quota-Warning'] = processed.quotaWarningHeader;
+          }
+          return new NextResponse(workflow.readable, { headers: workflowHeaders });
+        } catch (error) {
+          logger.error(
+            { error, userId, requestId: processed.requestId, runId: run.id },
+            'Durable Cloud agent workflow could not be started',
+          );
+          await transitionCloudAgentRun(runDb, {
+            userId,
+            runId: run.id,
+            state: 'failed',
+          }).catch(() => undefined);
+          await refundFailedReservation(userId, processed, 'request_failure');
+          return NextResponse.json(
+            {
+              error: {
+                message: 'Durable agent execution is temporarily unavailable.',
+                type: 'server_error',
+                code: 'agent_workflow_unavailable',
+              },
+            },
+            { status: 503, headers: getSecurityHeaders() },
+          );
+        }
+      }
+
       // Approval mode:
       //   - Built-in platform tools only: 'auto' — E2B tools run in an isolated sandbox,
       //     url_fetch is read-only + SSRF-guarded, and web_search uses the configured
@@ -354,6 +405,7 @@ async function handleChatCompletions(request: NextRequest) {
             sessionId: checkpoint.sessionId,
             turnId: checkpoint.turnId,
             nextEventSequence: checkpoint.nextEventSequence,
+            completedSteps: checkpoint.completedSteps,
             request: buildApprovalCheckpointRequest(processed.chatRequest),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,

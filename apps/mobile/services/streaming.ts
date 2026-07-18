@@ -534,6 +534,7 @@ export async function streamChat(
     timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
   };
   let currentRunReference: ManagedCloudAgentRunReference | undefined;
+  let lastCanonicalEvent: { sessionId: string; turnId: string; sequence: number } | undefined;
   const timedCallbacks: StreamCallbacks = {
     ...callbacks,
     onActivity: rearmStallWatchdog,
@@ -543,6 +544,21 @@ export async function streamChat(
     },
     onDelta: (delta) => {
       rearmStallWatchdog();
+      if (
+        delta.x_agent_event &&
+        lastCanonicalEvent?.sessionId === delta.x_agent_event.sessionId &&
+        lastCanonicalEvent.turnId === delta.x_agent_event.turnId &&
+        delta.x_agent_event.sequence <= lastCanonicalEvent.sequence
+      ) {
+        return;
+      }
+      if (delta.x_agent_event) {
+        lastCanonicalEvent = {
+          sessionId: delta.x_agent_event.sessionId,
+          turnId: delta.x_agent_event.turnId,
+          sequence: delta.x_agent_event.sequence,
+        };
+      }
       if (delta.x_agent_event && currentRunReference) {
         currentRunReference = {
           ...currentRunReference,

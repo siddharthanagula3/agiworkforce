@@ -35,6 +35,11 @@ vi.mock('@/lib/user-connector-tools', () => ({
   makeUserConnectorExecutor: vi.fn(),
 }));
 
+const workflowMocks = vi.hoisted(() => ({ start: vi.fn() }));
+vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
+  startCloudAgentWorkflowExecution: workflowMocks.start,
+}));
+
 const db = { query: vi.fn(), transaction: vi.fn() };
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db })),
@@ -119,6 +124,7 @@ const claimedCheckpoint = {
     sessionId: CONVERSATION_ID,
     turnId: 'original-turn-1',
     nextEventSequence: 6,
+    completedSteps: 1,
     request: {
       model: 'claude-test',
       stream: true,
@@ -175,6 +181,7 @@ function processedRequest() {
       model: 'claude-test',
       messages: suspendedMessages.map(({ __canonicalThinking: _private, ...message }) => message),
       stream: true,
+      work_mode: 'agiwork',
       thinking_mode: true,
       thinking: { type: 'enabled' },
     },
@@ -188,7 +195,14 @@ function processedRequest() {
       effort: 'high',
     },
     quotaWarningHeader: null,
-    managedUsage: undefined,
+    managedUsage: {
+      db,
+      userId: 'user-1',
+      idempotencyKey: 'agi.chat.web.tool-resume.resume-1',
+      requestHash: 'request-hash',
+      leaseToken: LEASE_TOKEN,
+      estimatedCostCents: 4,
+    },
   };
 }
 
@@ -203,6 +217,15 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
     });
     checkpointMocks.claim.mockResolvedValue(claimedCheckpoint);
     mockProcessRequest.mockResolvedValue(processedRequest());
+    workflowMocks.start.mockResolvedValue({
+      workflowRunId: 'wrun_resume_1',
+      readable: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+          controller.close();
+        },
+      }),
+    });
     mockRunToolLoop.mockReturnValue(
       (async function* () {
         yield new TextEncoder().encode('data: [DONE]\n\n');
@@ -225,7 +248,7 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
 
     expect(response.status).toBe(400);
     expect(mockProcessRequest).not.toHaveBeenCalled();
-    expect(mockRunToolLoop).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
   });
 
   it('does not disclose a run that has no tenant-owned pending checkpoint', async () => {
@@ -253,25 +276,32 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
     expect(syntheticBody).not.toHaveProperty('tool_approvals');
     expect(JSON.stringify(syntheticBody)).not.toContain('__canonicalThinking');
 
-    expect(mockRunToolLoop).toHaveBeenCalledWith(
+    expect(checkpointMocks.claim).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ leaseSeconds: 86_400 }),
+    );
+    expect(workflowMocks.start).toHaveBeenCalledWith(
       expect.objectContaining({
-        llmRequest: expect.objectContaining({ messages: suspendedMessages }),
-      }),
-      expect.objectContaining({
-        resume: { approvals: [{ toolCallId: 'call_1', decision: 'approved' }] },
-        eventSessionId: CONVERSATION_ID,
-        eventTurnId: 'original-turn-1',
-        initialEventSequence: 6,
-        onApprovalCheckpoint: expect.any(Function),
+        db,
+        runId: RUN_ID,
+        userId: 'user-1',
+        processed: expect.objectContaining({
+          llmRequest: expect.objectContaining({ messages: suspendedMessages }),
+        }),
+        continuation: {
+          eventSessionId: CONVERSATION_ID,
+          eventTurnId: 'original-turn-1',
+          initialEventSequence: 6,
+          initialCompletedSteps: 1,
+          invocationContinuation: false,
+          resume: { approvals: [{ toolCallId: 'call_1', decision: 'approved' }] },
+        },
+        predecessorApproval: { checkpointId: CHECKPOINT_ID, leaseToken: LEASE_TOKEN },
       }),
     );
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe(RUN_ID);
-    expect(checkpointMocks.complete).toHaveBeenCalledWith(db, {
-      userId: 'user-1',
-      checkpointId: CHECKPOINT_ID,
-      leaseToken: LEASE_TOKEN,
-      outcome: 'resolved',
-    });
+    expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_resume_1');
+    expect(checkpointMocks.complete).not.toHaveBeenCalled();
   });
 
   it('releases the checkpoint lease when current request validation cannot proceed', async () => {
@@ -318,14 +348,38 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
       actualCostCents: 0,
       usage: { reason: 'tool_discovery_failed' },
     });
-    expect(mockRunToolLoop).not.toHaveBeenCalled();
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('releases billing and the checkpoint lease when the durable workflow cannot start', async () => {
+    const managedUsage = processedRequest().managedUsage;
+    workflowMocks.start.mockRejectedValueOnce(new Error('workflow service unavailable'));
+
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'agent_workflow_unavailable' },
+    });
+    expect(managedUsageMocks.finalizeRequest).toHaveBeenCalledWith({
+      ...managedUsage,
+      outcome: 'failed',
+      actualCostCents: 0,
+      usage: { reason: 'workflow_start_failed' },
+    });
+    expect(checkpointMocks.release).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      checkpointId: CHECKPOINT_ID,
+      leaseToken: LEASE_TOKEN,
+    });
   });
 
   it('retains extended thinking and its signed checkpoint continuity internally', async () => {
     const response = await POST(makeRequest(resumeBody()));
     await response.text();
 
-    const passedProcessed = mockRunToolLoop.mock.calls[0]![0] as ReturnType<
+    const passedProcessed = workflowMocks.start.mock.calls[0]![0].processed as ReturnType<
       typeof processedRequest
     >;
     expect(passedProcessed.llmRequest.thinking_mode).toBe(true);

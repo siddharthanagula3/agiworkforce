@@ -105,6 +105,7 @@ const CHECKPOINT_ROW = {
   session_id: RUN_ROW.conversation_id,
   turn_id: RUN_ROW.request_id,
   next_event_sequence: 6,
+  completed_steps: 1,
   request: { model: 'claude-test', stream: true },
   messages: [
     { role: 'user', content: 'inspect the repository' },
@@ -318,6 +319,7 @@ describe('cloud agent run service', () => {
       sessionId: RUN_ROW.conversation_id!,
       turnId: RUN_ROW.request_id,
       nextEventSequence: 6,
+      completedSteps: 1,
       request: CHECKPOINT_ROW.request,
       messages: CHECKPOINT_ROW.messages,
       pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,
@@ -366,6 +368,7 @@ describe('cloud agent run service', () => {
         sessionId: RUN_ROW.conversation_id!,
         turnId: RUN_ROW.request_id,
         nextEventSequence: 6,
+        completedSteps: 1,
         request: CHECKPOINT_ROW.request,
         messages: CHECKPOINT_ROW.messages,
         pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,
@@ -383,6 +386,7 @@ describe('cloud agent run service', () => {
         sessionId: RUN_ROW.conversation_id!,
         turnId: RUN_ROW.request_id,
         nextEventSequence: 6,
+        completedSteps: 1,
         request: CHECKPOINT_ROW.request,
         messages: [
           {
@@ -424,6 +428,33 @@ describe('cloud agent run service', () => {
       1,
       expect.stringMatching(/state = 'pending'[\s\S]*for update/i),
       [RUN_ROW.id, 'user-1'],
+    );
+  });
+
+  it('supports a one-day approval continuation lease for durable workflows', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([CHECKPOINT_ROW])
+      .mockResolvedValueOnce([
+        {
+          ...CHECKPOINT_ROW,
+          state: 'resuming',
+          lease_token: '0190a000-0000-7000-8000-000000000003',
+          lease_expires_at: '2026-07-18T20:00:00.000Z',
+        },
+      ])
+      .mockResolvedValueOnce([{ ...RUN_ROW, state: 'running' }]);
+
+    await claimCloudAgentApprovalCheckpoint(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      approvals: [{ toolCallId: 'call-1', decision: 'approved' }],
+      leaseSeconds: 86_400,
+    });
+
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringMatching(/make_interval\(secs => \$4\)/i),
+      [CHECKPOINT_ROW.id, 'user-1', expect.any(String), 86_400],
     );
   });
 

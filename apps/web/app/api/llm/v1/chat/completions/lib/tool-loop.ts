@@ -51,6 +51,7 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
+import type { ThinkingBlock } from '@agiworkforce/types';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -79,7 +80,10 @@ import {
   webSearchResultsToFetchedSources,
 } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
-import type { ObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import {
+  createObservedProviderUsage,
+  type ObservedProviderUsage,
+} from '@/lib/services/managed-usage-accounting-service';
 import {
   createAgentEventStreamEmitter,
   createPublicTextDeltaProjector,
@@ -159,6 +163,8 @@ export interface ToolLoopApprovalCheckpoint {
   sessionId: string;
   turnId: string;
   nextEventSequence: number;
+  /** Provider steps completed across every bounded invocation of this run. */
+  completedSteps: number;
   /** Canonical approval events committed atomically with the checkpoint. */
   events: AgentEventEnvelope[];
   messages: ProcessedRequest['llmRequest']['messages'];
@@ -168,6 +174,54 @@ export interface ToolLoopApprovalCheckpoint {
     args: Record<string, unknown>;
   }>;
 }
+
+/** State carried from one bounded Workflow invocation into the next. */
+export interface ToolLoopInvocationCheckpoint {
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  completedSteps: number;
+  messages: ProcessedRequest['llmRequest']['messages'];
+}
+
+export interface ToolLoopProviderStepResult {
+  lines: Array<{ line: string; publicTextDelta?: string }>;
+  finishReason: string | null;
+  pendingToolCalls: PendingToolCall[];
+  textContent: string;
+  publicTextTail: string;
+  thinkingBlocks: ThinkingBlock[];
+  canonicalText: string;
+  usage: ObservedProviderUsage;
+}
+
+export interface ToolLoopProviderExecution {
+  operationKey: string;
+  step: number;
+  request: ProcessedRequest['llmRequest'];
+  execute: () => Promise<ToolLoopProviderStepResult>;
+}
+
+export type ToolLoopProviderExecutor = (
+  input: ToolLoopProviderExecution,
+) => Promise<ToolLoopProviderStepResult>;
+
+export interface ToolLoopToolResult {
+  content: string;
+  isError: boolean;
+  source?: FetchedSource;
+  sources?: FetchedSource[];
+  pngResults?: string[];
+}
+
+export interface ToolLoopToolExecution {
+  operationKey: string;
+  retrySafety: CloudAgentToolRetrySafety;
+  toolCall: PendingToolCall;
+  execute: () => Promise<ToolLoopToolResult>;
+}
+
+export type ToolLoopToolExecutor = (input: ToolLoopToolExecution) => Promise<ToolLoopToolResult>;
 
 export interface ToolLoopOptions {
   /** Maximum number of model re-invocations. Defaults by product work mode. */
@@ -198,6 +252,18 @@ export interface ToolLoopOptions {
    * persistence fails, no actionable approval UI is sent to the client.
    */
   onApprovalCheckpoint?: (checkpoint: ToolLoopApprovalCheckpoint) => Promise<void>;
+  /** Persist state and return without `[DONE]` when this function invocation expires. */
+  onInvocationCheckpoint?: (checkpoint: ToolLoopInvocationCheckpoint) => Promise<void>;
+  /** Number of provider steps completed by preceding durable invocations. */
+  initialCompletedSteps?: number;
+  /** Suppress duplicate lifecycle events on an invocation continuation. */
+  invocationContinuation?: boolean;
+  /** Wrap provider calls with a durable replay receipt. */
+  providerExecutor?: ToolLoopProviderExecutor;
+  /** Wrap tool calls with a durable replay receipt. */
+  toolExecutor?: ToolLoopToolExecutor;
+  /** Let durable-runtime lease/fatal errors escape instead of becoming chat output. */
+  shouldPropagateExecutionError?: (error: unknown) => boolean;
   /**
    * Authenticated user id — required for the generated-file harvest (files the
    * model writes in the E2B sandbox are persisted to the user's media library
@@ -239,10 +305,34 @@ export function resolveToolLoopPolicy(
 }
 
 /** Shape of a parsed tool_call from the provider stream. */
-interface PendingToolCall {
+export interface PendingToolCall {
   id: string;
   qualifiedName: string;
   args: Record<string, unknown>;
+}
+
+export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
+
+/**
+ * Only the platform URL fetch is declared replay-safe. Search is paid, and MCP,
+ * connector, and sandbox tools can mutate despite a read-looking name.
+ */
+export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySafety {
+  return isUrlFetchTool(toolName) ? 'safe' : 'unsafe';
+}
+
+function mergeObservedUsage(
+  target: ObservedProviderUsage | undefined,
+  source: ObservedProviderUsage,
+): void {
+  if (!target) return;
+  target.providerCalls += source.providerCalls;
+  target.inputTokens += source.inputTokens;
+  target.outputTokens += source.outputTokens;
+  target.cacheReadTokens += source.cacheReadTokens;
+  target.cacheWriteTokens += source.cacheWriteTokens;
+  target.cacheWrite1hTokens += source.cacheWrite1hTokens;
+  target.reasoningTokens += source.reasoningTokens;
 }
 
 /** One SSE line ready to be flushed to the client. */
@@ -740,16 +830,7 @@ async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
   connectorExecutor?: ConnectorToolExecutor,
-): Promise<{
-  content: string;
-  isError: boolean;
-  source?: FetchedSource;
-  /** Plural sibling of `source` — web_search returns many results per call
-   * (vs url_fetch's one page per call). Never both set on the same result. */
-  sources?: FetchedSource[];
-  /** Base64 PNG rich results from an E2B runCode (charts) — persisted by the loop. */
-  pngResults?: string[];
-}> {
+): Promise<ToolLoopToolResult> {
   // Platform url_fetch: read-only page fetch, SSRF-guarded (see lib/url-fetch/).
   // Executes on the auto path like E2B tools — no manual approval gate needed
   // because it cannot mutate anything and every failure mode returns a
@@ -943,7 +1024,11 @@ export async function* runToolLoop(
     initialSequence: options.initialEventSequence,
   });
   const taskId = turnId;
-  let taskState: AgentTaskState | undefined = options.resume ? 'awaiting_input' : undefined;
+  let taskState: AgentTaskState | undefined = options.resume
+    ? 'awaiting_input'
+    : options.invocationContinuation
+      ? 'running'
+      : undefined;
 
   function taskStateEvent(state: AgentTaskState, summary: string): SseLine {
     const previousState = taskState;
@@ -1176,10 +1261,22 @@ export async function* runToolLoop(
       pngResults?: string[];
     }[] = [];
 
+    const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
+      const execute = () => runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
+      return options.toolExecutor
+        ? options.toolExecutor({
+            operationKey: `tool:${tc.id}`,
+            retrySafety: resolveToolRetrySafety(tc.qualifiedName),
+            toolCall: tc,
+            execute,
+          })
+        : execute();
+    };
+
     // Execute read-only tools concurrently.
     const parallelResults = await Promise.all(
       readOnly.map(async (tc) => {
-        const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
+        const result = await executeTool(tc);
         return { tc, ...result };
       }),
     );
@@ -1187,7 +1284,7 @@ export async function* runToolLoop(
 
     // Execute mutating tools serially.
     for (const tc of mutating) {
-      const result = await runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
+      const result = await executeTool(tc);
       results.push({ tc, ...result });
     }
 
@@ -1270,21 +1367,23 @@ export async function* runToolLoop(
     }
   }
 
-  if (!options.resume) {
-    yield encoder.encode(taskStateEvent('queued', 'Task accepted by the agent engine.'));
+  if (!options.invocationContinuation) {
+    if (!options.resume) {
+      yield encoder.encode(taskStateEvent('queued', 'Task accepted by the agent engine.'));
+    }
+    yield encoder.encode(
+      taskStateEvent(
+        'running',
+        options.resume ? 'Agent resumed after user input.' : 'Agent started working.',
+      ),
+    );
+    yield encoder.encode(
+      eventStream.emit({
+        type: 'lifecycle',
+        phase: options.resume ? 'resumed' : 'started',
+      }),
+    );
   }
-  yield encoder.encode(
-    taskStateEvent(
-      'running',
-      options.resume ? 'Agent resumed after user input.' : 'Agent started working.',
-    ),
-  );
-  yield encoder.encode(
-    eventStream.emit({
-      type: 'lifecycle',
-      phase: options.resume ? 'resumed' : 'started',
-    }),
-  );
 
   try {
     if (await options.isCancellationRequested?.()) {
@@ -1425,7 +1524,7 @@ export async function* runToolLoop(
       // thread (assistant tool_calls + every tool result) and continues.
     }
 
-    let step = 0;
+    let step = Math.max(0, Math.trunc(options.initialCompletedSteps ?? 0));
     while (step < maxSteps) {
       if (await options.isCancellationRequested?.()) {
         yield* flushTerminal('cancelled');
@@ -1436,6 +1535,19 @@ export async function* runToolLoop(
           { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
           '[tool-loop] invocation time budget reached without terminal stop',
         );
+        if (options.onInvocationCheckpoint) {
+          for (const line of await harvestGeneratedFilesEvents()) {
+            yield encoder.encode(line);
+          }
+          await options.onInvocationCheckpoint({
+            sessionId,
+            turnId,
+            nextEventSequence: eventStream.nextSequence(),
+            completedSteps: step,
+            messages: messages.map((message) => ({ ...message })),
+          });
+          return;
+        }
         yield encoder.encode(
           eventStream.emit({
             type: 'error',
@@ -1459,25 +1571,41 @@ export async function* runToolLoop(
       // collectProviderStream reads have already stripped/flattened. Fresh per
       // step (like the assembler that fills it). Fixes known-flaw
       // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
-      const stepSink: ToolLoopStepSink = {
-        thinkingBlocks: [],
-        text: '',
-        usage: options.usage,
-      };
-
-      // Call the provider through the shared, table-driven adapter dispatch
-      // (restructure Wave 2, task #34's tool-loop slice, see
-      // tool-loop-anthropic.ts's buildToolLoopStream / ADAPTER_PROVIDERS).
-      let providerStream: ReadableStream;
+      let providerStep: ToolLoopProviderStepResult;
       try {
-        providerStream = await buildToolLoopStream(
-          processed.provider,
-          processed,
-          stepRequest,
-          responseModel,
-          stepSink,
-        );
+        const executeProviderStep = async (): Promise<ToolLoopProviderStepResult> => {
+          const stepUsage = createObservedProviderUsage();
+          const stepSink: ToolLoopStepSink = {
+            thinkingBlocks: [],
+            text: '',
+            usage: stepUsage,
+          };
+          const providerStream = await buildToolLoopStream(
+            processed.provider,
+            processed,
+            stepRequest,
+            responseModel,
+            stepSink,
+          );
+          const collected = await collectProviderStream(providerStream);
+          return {
+            ...collected,
+            thinkingBlocks: stepSink.thinkingBlocks,
+            canonicalText: stepSink.text,
+            usage: stepUsage,
+          };
+        };
+        providerStep = options.providerExecutor
+          ? await options.providerExecutor({
+              operationKey: `provider:${step}`,
+              step,
+              request: stepRequest,
+              execute: executeProviderStep,
+            })
+          : await executeProviderStep();
+        mergeObservedUsage(options.usage, providerStep.usage);
       } catch (err) {
+        if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);
         const classified = classifyError(err);
         logger.error(
@@ -1532,9 +1660,7 @@ export async function* runToolLoop(
         return;
       }
 
-      // Collect and pass through the provider stream.
-      const { lines, finishReason, pendingToolCalls, textContent, publicTextTail } =
-        await collectProviderStream(providerStream);
+      const { lines, finishReason, pendingToolCalls, textContent, publicTextTail } = providerStep;
 
       // Forward all collected lines to the client.
       for (const entry of lines) {
@@ -1578,10 +1704,10 @@ export async function* runToolLoop(
       // Strictly gated on signed blocks being present: every other case (non-
       // Anthropic providers, thinking-disabled Anthropic, or thinking without
       // tool_use) sees the identical `content: textContent` push as before.
-      const signedThinking = stepSink.thinkingBlocks.filter((block) => block.signature);
+      const signedThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
       const assistantMessage: (typeof messages)[number] = {
         role: 'assistant',
-        content: signedThinking.length > 0 ? stepSink.text : textContent,
+        content: signedThinking.length > 0 ? providerStep.canonicalText : textContent,
         tool_calls: assistantToolCalls as unknown[],
       };
       if (signedThinking.length > 0) {
@@ -1633,6 +1759,7 @@ export async function* runToolLoop(
           sessionId,
           turnId,
           nextEventSequence: eventStream.nextSequence(),
+          completedSteps: step,
           events: approvalEvents,
           messages: messages.map((message) => ({ ...message })),
           pendingToolCalls: pendingToolCalls.map((call) => ({

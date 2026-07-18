@@ -18,11 +18,11 @@ import type { ProcessedRequest } from './request-processor';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
-function isTerminalEvent(value: Uint8Array): boolean {
+export function isManagedAgentTerminalEvent(value: Uint8Array): boolean {
   return new TextDecoder().decode(value).trim() === 'data: [DONE]';
 }
 
-function containsReportedFailure(value: Uint8Array): boolean {
+export function containsManagedAgentReportedFailure(value: Uint8Array): boolean {
   const text = new TextDecoder().decode(value);
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim();
@@ -48,7 +48,7 @@ function containsReportedFailure(value: Uint8Array): boolean {
   return false;
 }
 
-function extractAgentEventEnvelopes(value: Uint8Array): AgentEventEnvelope[] {
+export function extractManagedAgentEventEnvelopes(value: Uint8Array): AgentEventEnvelope[] {
   const envelopes: AgentEventEnvelope[] = [];
   const text = new TextDecoder().decode(value);
   for (const rawLine of text.split('\n')) {
@@ -177,10 +177,10 @@ export function buildManagedAgentStream(
             controller.close();
             return;
           }
-          if (isTerminalEvent(next.value)) continue;
-          if (containsReportedFailure(next.value)) reportedFailure = true;
+          if (isManagedAgentTerminalEvent(next.value)) continue;
+          if (containsManagedAgentReportedFailure(next.value)) reportedFailure = true;
           if (input.runJournal) {
-            for (const envelope of extractAgentEventEnvelopes(next.value)) {
+            for (const envelope of extractManagedAgentEventEnvelopes(next.value)) {
               const run = await appendCloudAgentEvent(input.runJournal.db, {
                 userId: input.runJournal.userId,
                 runId: input.runJournal.runId,
