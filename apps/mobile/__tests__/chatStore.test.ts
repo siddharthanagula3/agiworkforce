@@ -51,6 +51,8 @@ jest.mock('../services/api', () => {
 
 jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
+  streamToolApprovalResume: jest.fn(),
+  cancelMobileCloudAgentRun: jest.fn(),
 }));
 
 jest.mock('../services/remoteChatGate', () => {
@@ -105,7 +107,7 @@ import { useChatStore } from '../stores/chatStore';
 import { api } from '../services/api';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
-import { streamChat } from '../services/streaming';
+import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
@@ -121,6 +123,9 @@ import {
 import type { StreamCallbacks } from '../services/streaming';
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
+const mockCancelMobileCloudAgentRun = cancelMobileCloudAgentRun as jest.MockedFunction<
+  typeof cancelMobileCloudAgentRun
+>;
 const mockApiDelete = api.delete as jest.MockedFunction<typeof api.delete>;
 const mockRemoteDisabledReason = getRemoteChatDisabledReason as jest.MockedFunction<
   typeof getRemoteChatDisabledReason
@@ -463,6 +468,63 @@ describe('chatStore — streaming state', () => {
       const assistantMsg = msgs.find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('Hello world');
       expect(assistantMsg?.isStreaming).toBe(false);
+    });
+
+    it('reconciles durable replay text without duplicating content and persists the run cursor', async () => {
+      seedCloudConversation();
+      const runId = '0190a000-0000-7000-8000-000000000099';
+      const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
+      const envelope = (sequence: number, delta: string) => ({
+        schemaVersion: 3 as const,
+        sessionId: 'session-mobile-durable',
+        turnId: 'turn-mobile-durable',
+        sequence,
+        emittedAtMs: 1_000 + sequence,
+        event: { type: 'text-delta' as const, delta },
+      });
+
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            callbacks.onRunReference?.({ runId, runPath, lastSequence: -1 });
+            callbacks.onDelta({ content: 'Already visible' });
+            callbacks.onDelta({
+              content: 'Already visible',
+              durableReplay: true,
+              x_agent_event: envelope(0, 'Already visible'),
+            });
+            callbacks.onDelta({
+              content: ' recovered',
+              durableReplay: true,
+              x_agent_event: envelope(1, ' recovered'),
+            });
+            callbacks.onRunReference?.({
+              runId,
+              runPath,
+              lastSequence: 1,
+              state: 'completed',
+              cancellationRequestedAt: null,
+            });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'continue safely', CLOUD_MODEL);
+      });
+
+      const assistant = getState().messages[CONV_ID]?.find(
+        (message) => message.role === 'assistant',
+      );
+      expect(assistant?.content).toBe('Already visible recovered');
+      expect(assistant?.metadata?.cloudAgentRun).toEqual({
+        runId,
+        runPath,
+        lastSequence: 1,
+        state: 'completed',
+        cancellationRequestedAt: null,
+      });
     });
 
     it('clears streamingContent and streamingReasoning after onDone', async () => {
@@ -1391,6 +1453,44 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('stopStreaming', () => {
+    it('cancels the active managed Cloud run on the server', async () => {
+      seedCloudConversation();
+      useChatStore.setState({ currentConversationId: CONV_ID });
+      const runId = '0190a000-0000-7000-8000-000000000099';
+      const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>(() => {
+            callbacks.onRunReference?.({ runId, runPath, lastSequence: -1 });
+          }),
+      );
+      mockCancelMobileCloudAgentRun.mockResolvedValue({
+        id: runId,
+        userId: 'user-mobile-1',
+        requestId: 'request-mobile-1',
+        conversationId: CONV_ID,
+        originSurface: 'mobile',
+        workMode: 'chat',
+        state: 'cancelled',
+        provider: 'openai',
+        model: CLOUD_MODEL,
+        lastEventSequence: -1,
+        cancellationRequestedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      void getState().sendMessage(CONV_ID, 'start a long task', CLOUD_MODEL);
+      await waitFor(() => expect(mockStreamChat).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        getState().stopStreaming();
+      });
+
+      await waitFor(() => expect(mockCancelMobileCloudAgentRun).toHaveBeenCalledWith(runId));
+    });
+
     it('sets isStreaming=false when stopStreaming is called', async () => {
       // streamChat never resolves — we stop it manually
       mockStreamChat.mockImplementation(() => new Promise<void>(() => {}));
