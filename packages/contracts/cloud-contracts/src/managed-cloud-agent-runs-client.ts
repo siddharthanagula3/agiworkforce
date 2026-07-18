@@ -81,6 +81,27 @@ const DEFAULT_RETRY_DELAY_MS = 500;
 const DEFAULT_MAX_TRANSIENT_ERRORS = 5;
 const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
+/**
+ * Reconcile public answer text rendered by a live stream with the same text
+ * replayed from the durable canonical journal. The two transports can split
+ * text at different chunk boundaries, so equality-only deduplication is not
+ * sufficient. The caller retains `pending` and renders only
+ * `unmatchedIncoming`.
+ */
+export function reconcileManagedCloudPublicText(
+  pending: string,
+  incoming: string,
+): { pending: string; unmatchedIncoming: string } {
+  if (!pending) return { pending: '', unmatchedIncoming: incoming };
+  if (pending.startsWith(incoming)) {
+    return { pending: pending.slice(incoming.length), unmatchedIncoming: '' };
+  }
+  if (incoming.startsWith(pending)) {
+    return { pending: '', unmatchedIncoming: incoming.slice(pending.length) };
+  }
+  return { pending, unmatchedIncoming: incoming };
+}
+
 export class ManagedCloudAgentRunHttpError extends Error {
   constructor(
     message: string,

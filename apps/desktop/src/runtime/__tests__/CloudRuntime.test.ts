@@ -8,7 +8,36 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
+import type {
+  CloudAgentRun,
+  ManagedCloudAgentRunFollowOptions,
+  ManagedCloudAgentRunFollowResult,
+} from '@agiworkforce/cloud-contracts';
 import { CloudRuntime } from '../CloudRuntime';
+
+type TestFollowOptions = ManagedCloudAgentRunFollowOptions & {
+  onEvent: NonNullable<ManagedCloudAgentRunFollowOptions['onEvent']>;
+  onSnapshot: NonNullable<ManagedCloudAgentRunFollowOptions['onSnapshot']>;
+};
+
+function managedRun(state: CloudAgentRun['state'], lastEventSequence: number): CloudAgentRun {
+  return {
+    id: MANAGED_RUN_ID,
+    userId: 'user-desktop',
+    requestId: 'request-desktop',
+    conversationId: 'conv-desktop',
+    originSurface: 'desktop',
+    workMode: 'agiwork',
+    state,
+    provider: 'anthropic',
+    model: 'claude-sonnet-5',
+    lastEventSequence,
+    cancellationRequestedAt: null,
+    completedAt: state === 'completed' ? '2026-07-17T20:00:00.000Z' : null,
+    createdAt: '2026-07-17T19:59:00.000Z',
+    updatedAt: '2026-07-17T20:00:00.000Z',
+  };
+}
 
 const saveMessage = vi.fn();
 const createConversation = vi.fn();
@@ -29,10 +58,16 @@ vi.mock('../../lib/cloudChatPersistence', () => ({
 }));
 
 const sendCloudMessage = vi.fn();
+const followRun = vi.fn();
+const cancelRun = vi.fn();
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
+  createDesktopCloudAgentRunClient: () => ({ followRun, cancelRun }),
 }));
+
+const MANAGED_RUN_ID = '019c3330-02b7-7000-8000-000000000001';
+const MANAGED_RUN_PATH = `/api/llm/v1/chat/completions/runs/${MANAGED_RUN_ID}`;
 
 function collectEvents(runtime: CloudRuntime): StreamEvent[] {
   const events: StreamEvent[] = [];
@@ -290,6 +325,159 @@ describe('CloudRuntime', () => {
         }),
       );
     });
+
+    it('follows the durable run journal after an unexpected stream disconnect', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+
+      sendCloudMessage.mockImplementation(
+        async (
+          _conversationId: string,
+          _content: string,
+          _model: string,
+          onChunk: (text: string) => void,
+          _onDone: () => void,
+          onError: (err: Error) => void,
+          _signal: AbortSignal,
+          onEvent: (payload: Record<string, unknown>) => void,
+          _webSearch: boolean | undefined,
+          _messageHistory: unknown,
+          _thinkingEnabled: boolean | undefined,
+          _codeExecution: boolean | undefined,
+          _idempotencyKey: string,
+          _requestOptions: unknown,
+          onRunHandle: (handle: { runId: string; runPath: string } | null) => void,
+        ) => {
+          onRunHandle({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+          onChunk('Partial answer');
+          onEvent({
+            choices: [
+              {
+                delta: {
+                  x_agent_event: {
+                    schemaVersion: 3,
+                    sessionId: 'session-reconnect',
+                    turnId: 'turn-reconnect',
+                    sequence: 0,
+                    emittedAtMs: 1_000,
+                    event: { type: 'lifecycle', phase: 'started' },
+                  },
+                },
+              },
+            ],
+          });
+          onError(new Error('connection reset'));
+        },
+      );
+
+      followRun.mockImplementation(
+        async (
+          _runId: string,
+          options: TestFollowOptions,
+        ): Promise<ManagedCloudAgentRunFollowResult> => {
+          options.onEvent({
+            schemaVersion: 3,
+            sessionId: 'session-reconnect',
+            turnId: 'turn-reconnect',
+            sequence: 1,
+            emittedAtMs: 2_000,
+            event: { type: 'text-delta', delta: ' recovered' },
+          });
+          options.onEvent({
+            schemaVersion: 3,
+            sessionId: 'session-reconnect',
+            turnId: 'turn-reconnect',
+            sequence: 2,
+            emittedAtMs: 3_000,
+            event: { type: 'stop', reason: 'end-turn' },
+          });
+          const run = managedRun('completed', 2);
+          options.onSnapshot({ run, events: [], nextAfterSequence: 2 });
+          return { run, lastSequence: 2 };
+        },
+      );
+
+      await runtime.sendMessage('conv_reconnect', 'Do the work');
+
+      expect(followRun).toHaveBeenCalledWith(
+        MANAGED_RUN_ID,
+        expect.objectContaining({ afterSequence: 0 }),
+      );
+      expect(
+        events.filter((event) => event.type === 'content').map((event) => event.content),
+      ).toEqual(['Partial answer', ' recovered']);
+      expect(events.some((event) => event.type === 'error')).toBe(false);
+      expect(events.some((event) => event.type === 'done')).toBe(true);
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledTimes(2));
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_reconnect',
+        expect.objectContaining({
+          role: 'assistant',
+          content: 'Partial answer recovered',
+          metadata: expect.objectContaining({
+            cloudAgentRun: {
+              runId: MANAGED_RUN_ID,
+              runPath: MANAGED_RUN_PATH,
+              lastSequence: 2,
+              state: 'completed',
+              cancellationRequestedAt: null,
+            },
+          }),
+        }),
+      );
+    });
+
+    it('does not duplicate public text already rendered before reconnect', async () => {
+      const runtime = new CloudRuntime();
+      const events = collectEvents(runtime);
+
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        const onChunk = args[3] as (text: string) => void;
+        const onError = args[5] as (err: Error) => void;
+        const onRunHandle = args[14] as (handle: { runId: string; runPath: string }) => void;
+        onRunHandle({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+        onChunk('Already visible');
+        onError(new Error('connection reset'));
+      });
+      followRun.mockImplementation(
+        async (
+          _runId: string,
+          options: TestFollowOptions,
+        ): Promise<ManagedCloudAgentRunFollowResult> => {
+          options.onEvent({
+            schemaVersion: 3,
+            sessionId: 'session-overlap',
+            turnId: 'turn-overlap',
+            sequence: 0,
+            emittedAtMs: 1_000,
+            event: { type: 'text-delta', delta: 'Already visible' },
+          });
+          options.onEvent({
+            schemaVersion: 3,
+            sessionId: 'session-overlap',
+            turnId: 'turn-overlap',
+            sequence: 1,
+            emittedAtMs: 2_000,
+            event: { type: 'text-delta', delta: ' once' },
+          });
+          const run = managedRun('completed', 1);
+          return { run, lastSequence: 1 };
+        },
+      );
+
+      await runtime.sendMessage('conv_overlap', 'Continue');
+
+      expect(
+        events.filter((event) => event.type === 'content').map((event) => event.content),
+      ).toEqual(['Already visible', ' once']);
+      await vi.waitFor(() => expect(saveMessage).toHaveBeenCalledTimes(2));
+      expect(saveMessage).toHaveBeenNthCalledWith(
+        2,
+        'conv_overlap',
+        expect.objectContaining({ content: 'Already visible once' }),
+      );
+    });
   });
 
   describe('stopGeneration', () => {
@@ -374,6 +562,24 @@ describe('CloudRuntime', () => {
           },
         }),
       );
+    });
+
+    it('requests cancellation of the server-owned run when the user stops', async () => {
+      const runtime = new CloudRuntime();
+
+      sendCloudMessage.mockImplementation(async (...args: unknown[]) => {
+        const onRunHandle = args[14] as (handle: { runId: string; runPath: string }) => void;
+        onRunHandle({ runId: MANAGED_RUN_ID, runPath: MANAGED_RUN_PATH });
+        await new Promise(() => {});
+      });
+      cancelRun.mockResolvedValue({ id: MANAGED_RUN_ID, state: 'cancelled' });
+
+      void runtime.sendMessage('conv_server_cancel', 'Start a long task');
+      await vi.waitFor(() => expect(sendCloudMessage).toHaveBeenCalledOnce());
+
+      runtime.stopGeneration('conv_server_cancel');
+
+      await vi.waitFor(() => expect(cancelRun).toHaveBeenCalledWith(MANAGED_RUN_ID));
     });
   });
 
