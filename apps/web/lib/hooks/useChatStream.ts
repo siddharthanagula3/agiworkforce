@@ -71,9 +71,7 @@ interface SendMessageOptions {
   thinkingEffort?: Effort;
   /** Output style hint. When set and not 'normal', a system message is prepended. */
   styleMode?: string;
-  /** Skill body injected as a system message at the start of the request. */
-  skillBody?: string;
-  /** Display name of the active skill, used to emit a timeline step. */
+  /** Exact server-catalog skill name. The browser never loads or sends its body. */
   skillName?: string;
   /** Deep Research mode: forces web_search and injects a research system prompt. */
   research?: boolean;
@@ -1596,7 +1594,7 @@ export function useChatStream(): UseChatStreamReturn {
         thinkingEnabled: options.thinkingEnabled,
         codeExecutionEnabled: options.codeExecution,
         styleMode: options.styleMode,
-        hasSkillInstruction: Boolean(options.skillBody),
+        hasSkillInstruction: Boolean(options.skillName),
       });
       // Provider (not a captured string): every save fetches a fresh token at
       // call time so a long stream cannot outlive it. See AuthTokenProvider.
@@ -1668,10 +1666,6 @@ export function useChatStream(): UseChatStreamReturn {
             })),
         ];
 
-        if (options.skillBody) {
-          apiMessages.unshift({ role: 'system', content: options.skillBody });
-        }
-
         if (options.styleMode && options.styleMode !== 'normal') {
           const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
           if (styleInstruction) {
@@ -1722,6 +1716,7 @@ export function useChatStream(): UseChatStreamReturn {
             web_fetch: options.webFetch || undefined,
             research: options.research || undefined,
             code_execution: options.codeExecution || undefined,
+            skill_name: options.skillName,
             work_mode: options.workMode,
             thinking_mode: thinkingEnabled || undefined,
             effort: thinkingEnabled ? thinkingEffort : undefined,
@@ -1742,19 +1737,6 @@ export function useChatStream(): UseChatStreamReturn {
           });
         }
 
-        // Skill load surfaces as a completed timeline step (seeded, so it renders
-        // regardless of stream contents). Injected invisibly into the API call
-        // above via the system message; here it becomes a visible timeline entry.
-        const skillSeed: MessageToolEntry[] | undefined = options.skillBody
-          ? [
-              {
-                id: `${assistantMessageId}-skill`,
-                name: options.skillName ? `Read skill: ${options.skillName}` : 'Read skill',
-                status: 'completed',
-              },
-            ]
-          : undefined;
-
         const outcome = await consumeAssistantStream({
           response,
           assistantMessageId,
@@ -1762,7 +1744,6 @@ export function useChatStream(): UseChatStreamReturn {
           conversationId,
           isTemporaryConversation,
           getAuthToken,
-          seedTools: skillSeed,
           onRunHandle: (handle) => {
             activeRunRef.current = handle ? { ...handle, assistantMessageId } : null;
           },

@@ -11,14 +11,17 @@ import { CapabilityProvider } from '@agiworkforce/unified-chat';
 // ─── Module mocks ──────────────────────────────────────────────────────────────
 
 const chatComposerMocks = vi.hoisted(() => ({
-  skills: [
-    {
-      id: 'backend-engineer',
-      name: 'Backend Engineer',
-      description: 'Backend implementation support',
-      category: 'Engineering',
-    },
-  ],
+  skillResult: {
+    skills: [
+      {
+        name: 'backend-engineer',
+        description: 'Backend implementation support',
+        source: 'bundled',
+      },
+    ],
+    loading: false,
+    error: null as string | null,
+  },
   openSettings: vi.fn(),
   routerPush: vi.fn(),
 }));
@@ -40,12 +43,10 @@ vi.mock('@features/settings/components/SettingsModalProvider', () => ({
   }),
 }));
 
-vi.mock('@features/chat/services/chat-ai-service', () => ({
-  ChatAIService: {
-    getAvailableSkillsSync: () => chatComposerMocks.skills,
-    getAvailableSkills: () => Promise.resolve(chatComposerMocks.skills),
-    stopGeneration: vi.fn(),
-  },
+vi.mock('@features/chat/hooks/use-skills-list', () => ({
+  useSkillsList: () => ({
+    ...chatComposerMocks.skillResult,
+  }),
 }));
 
 vi.mock('./GhostTextOverlay', () => ({
@@ -125,6 +126,15 @@ describe('ChatComposerNew', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    chatComposerMocks.skillResult.skills = [
+      {
+        name: 'backend-engineer',
+        description: 'Backend implementation support',
+        source: 'bundled',
+      },
+    ];
+    chatComposerMocks.skillResult.loading = false;
+    chatComposerMocks.skillResult.error = null;
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
   });
@@ -260,25 +270,50 @@ describe('ChatComposerNew', () => {
     });
   });
 
-  it('clears selected skill when its instruction body cannot load', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(new Response(JSON.stringify({ error: 'missing' }), { status: 404 })),
-    );
-    render(<ChatComposerNew onSend={vi.fn()} />);
+  it('sends the exact selected skill name without downloading its body', async () => {
+    const onSend = vi.fn();
+    vi.stubGlobal('fetch', vi.fn());
+    render(<ChatComposerNew onSend={onSend} />);
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, '@back');
-    fireEvent.click(await screen.findByText('Backend Engineer'));
+    fireEvent.click(await screen.findByText('backend-engineer'));
+    await userEvent.type(textarea, 'review this route');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Could not load Backend Engineer skill instructions. Select the skill again.',
+      expect(onSend).toHaveBeenCalledWith(
+        expect.stringContaining('review this route'),
+        undefined,
+        'backend-engineer',
+        expect.objectContaining({
+          skillName: 'backend-engineer',
+        }),
       );
     });
-    expect(screen.queryByText('/Backend Engineer')).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^\/api\/skills\//)]),
+    );
+    const meta = onSend.mock.calls[0]?.[3] as Record<string, unknown>;
+    expect(meta).not.toHaveProperty('skillBody');
+  });
+
+  it('shows honest loading, error, and empty states for the managed skill catalog', async () => {
+    chatComposerMocks.skillResult.skills = [];
+    chatComposerMocks.skillResult.loading = true;
+    const { rerender } = render(<ChatComposerNew onSend={vi.fn()} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, '@design');
+    expect(screen.getByText('Loading skills…')).toBeInTheDocument();
+
+    chatComposerMocks.skillResult.loading = false;
+    chatComposerMocks.skillResult.error = 'HTTP 503';
+    rerender(<ChatComposerNew onSend={vi.fn()} />);
+    expect(screen.getByText('Skills are temporarily unavailable.')).toBeInTheDocument();
+
+    chatComposerMocks.skillResult.error = null;
+    rerender(<ChatComposerNew onSend={vi.fn()} />);
+    expect(screen.getByText('No matching skills.')).toBeInTheDocument();
   });
 
   it('opens + menu and shows Add photos option', async () => {
@@ -321,7 +356,7 @@ describe('ChatComposerNew', () => {
 
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     await userEvent.type(textarea, '@back');
-    expect(await screen.findByText('Backend Engineer')).toBeInTheDocument();
+    expect(await screen.findByText('backend-engineer')).toBeInTheDocument();
     expect(screen.queryByText(/free web chat accepts plain text/i)).not.toBeInTheDocument();
   });
 
@@ -395,7 +430,14 @@ describe('ChatComposerNew', () => {
     );
     expect(genericSearchModel, 'registry must keep a generic-search test model').toBeDefined();
     useModelStore.getState().setSelectedModelId(genericSearchModel!.id);
-    useBillingStore.setState({ featureFlags: { generic_web_search: true } });
+    useBillingStore.setState({
+      featureFlags: {
+        beta_features: originalFeatureFlags?.beta_features ?? false,
+        advanced_model_access: originalFeatureFlags?.advanced_model_access ?? false,
+        ...originalFeatureFlags,
+        generic_web_search: true,
+      },
+    });
 
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
@@ -410,7 +452,14 @@ describe('ChatComposerNew', () => {
     );
     expect(genericSearchModel, 'registry must keep a generic-search test model').toBeDefined();
     useModelStore.getState().setSelectedModelId(genericSearchModel!.id);
-    useBillingStore.setState({ featureFlags: { generic_web_search: false } });
+    useBillingStore.setState({
+      featureFlags: {
+        beta_features: originalFeatureFlags?.beta_features ?? false,
+        advanced_model_access: originalFeatureFlags?.advanced_model_access ?? false,
+        ...originalFeatureFlags,
+        generic_web_search: false,
+      },
+    });
 
     render(<ChatComposerNew onSend={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));

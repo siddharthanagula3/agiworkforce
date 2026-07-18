@@ -382,7 +382,7 @@ export async function sendCloudMessage(
   thinkingEnabled?: boolean,
   codeExecution?: boolean,
   idempotencyKey?: string,
-  requestOptions?: { research?: boolean; workMode?: CloudWorkMode },
+  requestOptions?: { research?: boolean; workMode?: CloudWorkMode; skillName?: string },
   onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void,
 ): Promise<void> {
   let headers: Record<string, string>;
@@ -414,6 +414,7 @@ export async function sendCloudMessage(
     ...(codeExecution ? { code_execution: true } : {}),
     ...(requestOptions?.research ? { research: true } : {}),
     ...(requestOptions?.workMode ? { work_mode: requestOptions.workMode } : {}),
+    ...(requestOptions?.skillName ? { skill_name: requestOptions.skillName } : {}),
   };
 
   let res: Response;

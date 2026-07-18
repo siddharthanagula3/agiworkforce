@@ -46,12 +46,14 @@ function extractMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
     const r = requires as Record<string, unknown>;
     const bins = asStringArray(r['bins']);
     const anyBins = asStringArray(r['anyBins']);
+    const tools = asStringArray(r['tools']);
     const env = asStringArray(r['env']);
     const config = asStringArray(r['config']);
-    if (bins || anyBins || env || config) {
+    if (bins || anyBins || tools || env || config) {
       meta.requires = {};
       if (bins) meta.requires.bins = bins;
       if (anyBins) meta.requires.anyBins = anyBins;
+      if (tools) meta.requires.tools = tools;
       if (env) meta.requires.env = env;
       if (config) meta.requires.config = config;
     }
@@ -83,7 +85,7 @@ async function loadSkillFile(
     throw err;
   }
   const name = asString(data['name']) ?? fallbackName;
-  const description = asString(data['description']) ?? `Skill ${name} loaded from ${filePath}`;
+  const description = asString(data['description']) ?? `Skill ${name}`;
   return {
     name,
     description,

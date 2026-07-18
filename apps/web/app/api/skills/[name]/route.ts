@@ -12,8 +12,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
-
-import { lookupSkillBody } from '../route';
+import { findManagedSkillByName } from '@/lib/services/skill-catalog-service';
 
 export const runtime = 'nodejs';
 
@@ -25,11 +24,11 @@ async function handleGetBody(request: NextRequest, context: { params: Promise<{ 
   if (!name || name.length > 200) {
     throw createError.validation('skill name is required (1–200 chars)');
   }
-  const body = await lookupSkillBody(name);
-  if (body === null) {
+  const skill = await findManagedSkillByName(name);
+  if (skill === null) {
     throw createError.notFound(`Skill "${name}" not found`);
   }
-  return NextResponse.json({ body });
+  return NextResponse.json({ body: skill.body });
 }
 
 export const GET = withErrorHandler(handleGetBody);

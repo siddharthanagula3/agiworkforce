@@ -1,44 +1,83 @@
-import { describe, it, expect } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useChatStore } from '@shared/stores/web-chat-store';
+import { useChatStream } from './useChatStream';
 
-/**
- * Unit test for the skill timeline step name derivation logic.
- * Mirrors the inline logic in useChatStream.ts where the synthetic
- * "Read skill: <name>" timeline entry is created when skillBody is set.
- */
-function buildSkillStepName(skillName: string | undefined): string {
-  return skillName ? `Read skill: ${skillName}` : 'Read skill';
+const authMocks = vi.hoisted(() => ({
+  getToken: vi.fn(),
+}));
+
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({ getToken: authMocks.getToken }),
+}));
+
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
+}));
+
+const CONVERSATION_ID = 'conv-skill';
+
+function completedStream(): Response {
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: new Headers() });
 }
 
-describe('skill timeline step name', () => {
-  it('uses the skill name when provided', () => {
-    expect(buildSkillStepName('code-review')).toBe('Read skill: code-review');
+describe('useChatStream managed skill selection', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    useChatStore.setState({
+      activeConversationId: CONVERSATION_ID,
+      conversations: [
+        {
+          id: CONVERSATION_ID,
+          title: 'Skill chat',
+          createdAt: '2026-07-18T00:00:00.000Z',
+          updatedAt: '2026-07-18T00:00:00.000Z',
+          isTemporary: true,
+        },
+      ],
+    });
+    authMocks.getToken.mockResolvedValue('session-token');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(completedStream()));
   });
 
-  it('falls back to generic label when skill name is undefined', () => {
-    expect(buildSkillStepName(undefined)).toBe('Read skill');
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it('includes the full skill name including spaces', () => {
-    expect(buildSkillStepName('Deep Research')).toBe('Read skill: Deep Research');
-  });
+  it('sends only the selected skill name and does not fabricate completed activity', async () => {
+    const { result } = renderHook(() => useChatStream());
 
-  it('does not emit a step when skillBody is absent', () => {
-    // The actual guard is `if (options.skillBody)` — when absent, no step fires.
-    // This documents the contract: step is contingent on skillBody being truthy.
-    const skillBody: string | undefined = undefined;
-    const stepsEmitted: string[] = [];
-    if (skillBody) {
-      stepsEmitted.push(buildSkillStepName('test'));
-    }
-    expect(stepsEmitted).toHaveLength(0);
-  });
+    await act(async () => {
+      await result.current.sendMessage('Review this layout', {
+        conversationId: CONVERSATION_ID,
+        skillName: 'frontend-design',
+      });
+    });
 
-  it('emits a step when skillBody is present', () => {
-    const skillBody = 'You are a code review expert...';
-    const stepsEmitted: string[] = [];
-    if (skillBody) {
-      stepsEmitted.push(buildSkillStepName('code-review'));
-    }
-    expect(stepsEmitted).toEqual(['Read skill: code-review']);
+    const completionCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => String(url).includes('/api/llm/v1/chat/completions'));
+    expect(completionCall).toBeDefined();
+    const request = JSON.parse(String(completionCall?.[1]?.body)) as {
+      skill_name?: string;
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(request.skill_name).toBe('frontend-design');
+    expect(request.messages).toEqual([
+      expect.objectContaining({ role: 'user', content: 'Review this layout' }),
+    ]);
+
+    const assistant = useChatStore
+      .getState()
+      .messages.find((message) => message.role === 'assistant');
+    expect(assistant?.metadata?.tools).toBeUndefined();
+    expect(assistant?.metadata?.agentActivity).toBeUndefined();
   });
 });

@@ -30,3 +30,18 @@ export { loadSkillsFromDir, loadSkillsFromLayers } from './loader';
 export { mergeSkills } from './merge';
 export { formatSkillsForPrompt } from './format';
 export type { FormatSkillsOptions } from './format';
+export {
+  createSkillToolDefinition,
+  executeSkillTool,
+  formatSkillsForToolPrompt,
+  isSkillAvailable,
+  DEFAULT_SKILL_TOOL_MAX_OUTPUT_BYTES,
+  SKILL_TOOL_NAME,
+} from './tool';
+export type {
+  FormatSkillsForToolPromptOptions,
+  SkillToolDefinition,
+  SkillToolResult,
+  SkillToolResultCode,
+  SkillToolRuntimeContext,
+} from './tool';
