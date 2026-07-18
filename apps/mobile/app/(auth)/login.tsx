@@ -26,34 +26,40 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+      <View
+        testID="cloud-sign-in-header"
+        style={{
+          height: 64,
+          alignItems: 'flex-end',
+          justifyContent: 'center',
+          paddingHorizontal: 16,
+        }}
+      >
+        <Pressable
+          testID="cloud-sign-in-dismiss"
+          accessibilityRole="button"
+          accessibilityLabel="Close Cloud sign in"
+          accessibilityHint="Returns to Local Mode"
+          hitSlop={8}
+          onPress={() => router.replace('/(app)')}
+          style={({ pressed }) => ({
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surfaceElevated,
+            opacity: pressed ? 0.72 : 1,
+          })}
+        >
+          <X size={22} color={colors.textPrimary} strokeWidth={2} />
+        </Pressable>
+      </View>
       <View style={{ flex: 1 }} testID="cloud-sign-in-screen">
         <AuthView mode="signInOrUp" isDismissible={false} />
       </View>
-      <Pressable
-        testID="cloud-sign-in-dismiss"
-        accessibilityRole="button"
-        accessibilityLabel="Close Cloud sign in"
-        accessibilityHint="Returns to Local Mode"
-        hitSlop={8}
-        onPress={() => router.replace('/(app)')}
-        style={{
-          position: 'absolute',
-          top: 8,
-          right: 12,
-          zIndex: 10,
-          elevation: 10,
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surfaceElevated,
-        }}
-      >
-        <X size={20} color={colors.textPrimary} strokeWidth={2} />
-      </Pressable>
     </SafeAreaView>
   );
 }
