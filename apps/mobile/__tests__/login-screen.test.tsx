@@ -6,7 +6,7 @@ const mockReplace = jest.fn();
 const mockUseAuth = jest.fn(() => ({ isLoaded: true, isSignedIn: mockIsSignedIn }));
 
 // Capture the props Clerk's AuthView is rendered with so we can assert the
-// sign-in mode without pretending that native dismissal events are reliable.
+// app owns dismissal outside the native SwiftUI/Compose touch surface.
 let lastAuthViewProps: { mode?: string; isDismissible?: boolean; onDismiss?: () => void } = {};
 let mockIsSignedIn = false;
 
@@ -72,9 +72,10 @@ describe('LoginScreen', () => {
     expect(mockUseAuth).toHaveBeenCalledWith({ treatPendingAsSignedOut: false });
   });
 
-  it('uses an app-owned close control that reliably returns to Local Mode', () => {
+  it('uses a non-overlapping app header to return reliably to Local Mode', () => {
     const { getByTestId } = render(<LoginScreen />);
 
+    expect(getByTestId('cloud-sign-in-header')).toBeTruthy();
     expect(lastAuthViewProps.isDismissible).toBe(false);
     expect(lastAuthViewProps.onDismiss).toBeUndefined();
     fireEvent.press(getByTestId('cloud-sign-in-dismiss'));
