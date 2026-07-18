@@ -184,6 +184,8 @@ export interface SendMessageOptions {
   research?: boolean;
   /** Cloud product execution mode; independent from permission `agentMode`. */
   workMode?: CloudWorkMode;
+  /** Exact Managed Cloud catalog name; clients never resolve or send the skill body. */
+  skillName?: string;
   codeExecution?: boolean;
   signal?: AbortSignal;
   systemPrompt?: string;

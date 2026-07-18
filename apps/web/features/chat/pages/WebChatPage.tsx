@@ -130,9 +130,7 @@ type SendMeta = {
   researchEnabled?: boolean;
   /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
   styleMode?: string;
-  /** Skill body to inject as a system message in the LLM request. */
-  skillBody?: string;
-  /** Display name of the active skill, forwarded for timeline step labeling. */
+  /** Exact server-catalog skill name. */
   skillName?: string;
 };
 
@@ -843,7 +841,6 @@ export default function WebChatPage() {
           workMode: options.meta?.workMode,
           research: options.meta?.researchEnabled,
           styleMode: options.meta?.styleMode,
-          skillBody: options.meta?.skillBody,
           skillName: options.meta?.skillName,
         });
       } finally {
@@ -1108,7 +1105,7 @@ export default function WebChatPage() {
 
   const handleSend = useCallback(
     (content: string, attachments?: File[], skillId?: string, meta?: SendMeta): false | void => {
-      void skillId; // skill identity resolved; body is carried in meta.skillBody
+      const resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
 
       // Natural-language image requests use the existing media harness even
       // when the user has not manually toggled Image mode. This interception
@@ -1148,7 +1145,7 @@ export default function WebChatPage() {
           conversationTitle: conversation?.title ?? 'Local conversation',
           content,
           attachments,
-          meta,
+          meta: resolvedMeta,
           candidates,
         });
         setSelectedHandoffContextIds(candidates.map((candidate) => candidate.id));
@@ -1162,7 +1159,7 @@ export default function WebChatPage() {
         return false;
       }
 
-      void sendContent(content, { attachments, meta });
+      void sendContent(content, { attachments, meta: resolvedMeta });
     },
     [
       displayedConversation,

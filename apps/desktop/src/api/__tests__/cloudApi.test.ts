@@ -233,7 +233,7 @@ describe('cloudApi', () => {
     expect(onEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('includes research only when the managed runtime explicitly requests it', async () => {
+  it('includes managed runtime options without resolving skill content on Desktop', async () => {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
@@ -257,12 +257,16 @@ describe('cloudApi', () => {
       undefined,
       undefined,
       'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000002',
-      { research: true, workMode: 'agiwork' },
+      { research: true, workMode: 'agiwork', skillName: 'frontend-design' },
     );
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(JSON.parse(request.body as string)).toEqual(
-      expect.objectContaining({ research: true, work_mode: 'agiwork' }),
+      expect.objectContaining({
+        research: true,
+        work_mode: 'agiwork',
+        skill_name: 'frontend-design',
+      }),
     );
   });
 

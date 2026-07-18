@@ -2,11 +2,11 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
-2026-07-17 CLI/app-server model-invocable skills gap (`CLI-SKILLS-TOOL-01`,
+2026-07-18 CLI/app-server and Managed Cloud model-invocable skills gap (`CLI-SKILLS-TOOL-01`,
 Remediated): the developer engine no longer places every discovered skill body
 in the base system prompt. It exposes a read-only, always-loaded `Skill` tool
 that lists metadata and lazy-loads one exact consented skill name; model input
@@ -15,11 +15,20 @@ cannot supply a filesystem path. Both flat skill files and canonical
 `required_tools` frontmatter dependencies fail closed without revealing secret
 values, skill bodies are fenced as untrusted reference guidance, and the
 canonical tool catalog makes the same capability available to stdio and
-authenticated WebSocket app-server clients. The remaining cross-surface gap is
-Managed Cloud: Web/Mobile still select and inject a server-fetched skill body
-at compose time rather than letting the Cloud loop invoke the same progressive
-disclosure contract. That follow-up must reuse `packages/tools/skills` rather
-than introduce another catalog.
+authenticated WebSocket app-server clients. Managed Cloud now reuses
+`packages/tools/skills` for a path-free `skill` function definition, exact
+list/load execution, dependency gates, bounded output, and untrusted-body
+fencing. Web selection sends only `skill_name`; the server validates it against
+the deployment catalog, accounts for server-added prompt/tool material, and
+the real Cloud loop emits canonical running/completed/error activity only when
+the model calls the tool. The browser body fetch, hidden system injection,
+fabricated completed timeline entry, duplicate hard-coded composer roster, and
+duplicate slash-menu catalog request were removed. Desktop Cloud and Mobile
+Cloud request runtimes forward the same optional exact name without importing
+or copying loader mechanics; neither surface should claim a selectable Skill
+UI until its host actually supplies that name. This is remediated in code, not
+production-deployed; the deployment must expose a non-empty authorized
+`SKILLS_LAYERS` catalog for selection to be available.
 
 2026-07-17 Desktop optional-feature build gate: `cargo clippy -p
 agiworkforce-desktop --all-targets --all-features -- -D warnings` does not

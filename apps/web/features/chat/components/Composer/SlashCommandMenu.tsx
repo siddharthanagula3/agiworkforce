@@ -1,13 +1,6 @@
 'use client';
 
-import React, {
-  useState,
-  useCallback,
-  useImperativeHandle,
-  forwardRef,
-  useMemo,
-  useEffect,
-} from 'react';
+import React, { useState, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
 import {
   Globe,
   Brain,
@@ -58,14 +51,9 @@ const SLASH_ICONS: Record<SlashCommandIconName, React.ElementType> = {
   Sparkles,
 };
 
-/** Shape returned by GET /api/skills (metadata only, no body). */
 interface SkillMeta {
   name: string;
   description: string;
-}
-
-interface SkillsListResponse {
-  skills: SkillMeta[];
 }
 
 export interface SlashCommandMenuHandle {
@@ -77,47 +65,33 @@ interface SlashCommandMenuProps {
   query: string;
   onSelect: (command: string) => void;
   onClose: () => void;
+  /** Shared catalog metadata already loaded by the composer. */
+  skills: readonly SkillMeta[];
   /**
-   * Called when the user selects a skill command. Receives the skill name so
-   * the composer can fetch the body and inject it as the initial message text.
+   * Called when the user selects a skill command. Receives the exact catalog
+   * name; the server resolves the body only if the model calls skill.load.
    */
   onSkillSelect?: (skillName: string) => void;
 }
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
-  function SlashCommandMenu({ query, onSelect, onClose, onSkillSelect }, ref) {
+  function SlashCommandMenu({ query, onSelect, onClose, onSkillSelect, skills }, ref) {
     const customCommands = useSettingsStore((s) => s.customCommands);
-
-    // Fetch skill metadata from /api/skills on mount; empty array until loaded.
-    const [skillCommands, setSkillCommands] = useState<SlashCommand[]>([]);
-    useEffect(() => {
-      let cancelled = false;
-      void (async () => {
-        try {
-          const res = await fetch('/api/skills');
-          if (!res.ok) return;
-          const json = (await res.json()) as SkillsListResponse;
-          if (cancelled) return;
-          const commands: SlashCommand[] = json.skills
-            .map(
-              (s): SlashCommand => ({
-                id: `skill:${s.name}`,
-                label: `/${s.name}`,
-                description: s.description,
-                icon: Sparkles,
-                isSkill: true,
-              }),
-            )
-            .sort((a, b) => a.label.localeCompare(b.label));
-          setSkillCommands(commands);
-        } catch {
-          // Silently ignore network errors; built-ins remain available.
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, []);
+    const skillCommands = useMemo(
+      () =>
+        skills
+          .map(
+            (skill): SlashCommand => ({
+              id: `skill:${skill.name}`,
+              label: `/${skill.name}`,
+              description: skill.description,
+              icon: Sparkles,
+              isSkill: true,
+            }),
+          )
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      [skills],
+    );
 
     const platform = usePlatform();
 

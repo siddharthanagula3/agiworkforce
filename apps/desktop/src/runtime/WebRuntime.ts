@@ -181,10 +181,11 @@ export class WebRuntime implements ChatRuntime {
           purpose: 'send',
           operationId: uuidv7(),
         }),
-        options?.research || options?.workMode
+        options?.research || options?.workMode || options?.skillName
           ? {
               ...(options.research ? { research: true } : {}),
               ...(options.workMode ? { workMode: options.workMode } : {}),
+              ...(options.skillName ? { skillName: options.skillName } : {}),
             }
           : undefined,
         (handle) => {

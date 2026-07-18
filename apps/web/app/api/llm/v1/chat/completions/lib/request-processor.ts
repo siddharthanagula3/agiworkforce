@@ -65,6 +65,15 @@ import {
   formatProjectSystemPrompt,
   loadProjectContext,
 } from '@/lib/services/project-context-service';
+import {
+  createSkillToolDefinition,
+  formatSkillsForToolPrompt,
+  type Skill,
+} from '@agiworkforce/skills';
+import {
+  getManagedSkillCatalog,
+  SkillCatalogUnavailableError,
+} from '@/lib/services/skill-catalog-service';
 
 // OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z.object({
@@ -153,9 +162,57 @@ export const ChatCompletionRequestSchema = z.object({
   // The processor verifies it against web_conversations.user_id before billing, provider,
   // tool, or E2B work. A conversation id is never an authorization token.
   conversation_id: z.string().uuid().optional(),
+  // Composer activation sends only a catalog identity. Host locations and
+  // instruction content are never accepted on the browser contract.
+  skill_name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine(
+      (name) =>
+        !name.includes('/') &&
+        !name.includes('\\') &&
+        Array.from(name).every((character) => {
+          const codePoint = character.codePointAt(0) ?? 0;
+          return codePoint > 31 && codePoint !== 127;
+        }),
+      'skill_name must be a catalog name',
+    )
+    .optional(),
 });
 
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
+
+export type ManagedSkillSelectionResult =
+  | { ok: true }
+  | { ok: false; code: 'skill_not_found'; message: string };
+
+/**
+ * Add only path-free Skill metadata and the canonical server-owned definition.
+ * The selected body remains withheld until the model makes a real load call.
+ */
+export function applyManagedSkillSelection(
+  request: ChatCompletionRequest,
+  catalog: readonly Skill[],
+): ManagedSkillSelectionResult {
+  if (!request.skill_name) return { ok: true };
+  if (!catalog.some((skill) => skill.name === request.skill_name)) {
+    return {
+      ok: false,
+      code: 'skill_not_found',
+      message: 'The selected skill is not available.',
+    };
+  }
+
+  const prompt = formatSkillsForToolPrompt(catalog, { selectedSkillName: request.skill_name });
+  request.messages.unshift({ role: 'system', content: prompt });
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => tool.function.name !== 'skill'),
+    createSkillToolDefinition(),
+  ];
+  return { ok: true };
+}
 
 /** Make the AGI Work composer mode operational at the server trust boundary. */
 export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
@@ -372,6 +429,17 @@ export function extractTextContent(
     .filter((part) => part.type === 'text' && part.text)
     .map((part) => part.text!)
     .join('\n');
+}
+
+/**
+ * Collect every prompt-bearing string used for quota and reserve estimates.
+ * Server-owned function definitions consume provider input tokens just like
+ * messages, so omitting them would undercount tool-enabled requests.
+ */
+export function collectManagedPromptMaterials(request: ChatCompletionRequest): string[] {
+  const materials = request.messages.map((message) => extractTextContent(message.content));
+  if (request.tools?.length) materials.push(JSON.stringify(request.tools));
+  return materials;
 }
 
 // Exported so it can be unit-tested without importing the full processRequest stack.
@@ -1103,6 +1171,63 @@ export async function processRequest(
     };
   }
 
+  if (chatRequest.skill_name) {
+    let managedSkillCatalog: Skill[];
+    try {
+      managedSkillCatalog = await getManagedSkillCatalog();
+    } catch (error) {
+      if (error instanceof SkillCatalogUnavailableError) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: {
+                message: error.message,
+                type: 'server_error',
+                code: 'skill_catalog_unavailable',
+              },
+            },
+            { status: 503 },
+          ),
+        };
+      }
+      throw error;
+    }
+    if (resolvedModelCaps?.tools === false) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: 'The selected model cannot load skills. Choose a tool-capable model.',
+              type: 'invalid_request_error',
+              code: 'skill_model_unsupported',
+              param: 'model',
+            },
+          },
+          { status: 422 },
+        ),
+      };
+    }
+    const selection = applyManagedSkillSelection(chatRequest, managedSkillCatalog);
+    if (!selection.ok) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: selection.message,
+              type: 'invalid_request_error',
+              code: selection.code,
+              param: 'skill_name',
+            },
+          },
+          { status: 422 },
+        ),
+      };
+    }
+  }
+
   const originalModel = chatRequest.model;
   let usedFallback = false;
   let fallbackReason: string | undefined;
@@ -1114,9 +1239,10 @@ export async function processRequest(
   const isFlagshipRequest =
     resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
 
-  const quotaEstimateTokens = chatRequest.messages.reduce((sum, msg) => {
-    return sum + estimateTokens(extractTextContent(msg.content));
-  }, 0);
+  const quotaEstimateTokens = collectManagedPromptMaterials(chatRequest).reduce(
+    (sum, material) => sum + estimateTokens(material),
+    0,
+  );
 
   let quotaFeature: QuotaFeature = 'chat';
   if (resolvedSlot === 'image_generation') {
@@ -1269,12 +1395,14 @@ export async function processRequest(
   }
 
   // Token + cost estimation
-  const rawEstimatedPromptTokens = chatRequest.messages.reduce((sum, msg) => {
-    const textContent = extractTextContent(msg.content);
-    const baseTokens = Math.ceil(textContent.length / 3.5);
-    const overheadTokens = 4;
-    return sum + baseTokens + overheadTokens;
-  }, 0);
+  const rawEstimatedPromptTokens = collectManagedPromptMaterials(chatRequest).reduce(
+    (sum, material) => {
+      const baseTokens = Math.ceil(material.length / 3.5);
+      const overheadTokens = 4;
+      return sum + baseTokens + overheadTokens;
+    },
+    0,
+  );
   // Clamp the prompt-token estimate to a realistic ceiling. No real prompt exceeds the
   // largest model context window (~1M tokens), so a larger figure is a malformed/runaway
   // estimate — and because this estimate drives the credit RESERVE, an inflated value

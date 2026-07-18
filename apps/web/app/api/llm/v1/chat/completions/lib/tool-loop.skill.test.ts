@@ -1,0 +1,273 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
+import {
+  createSkillToolDefinition,
+  formatSkillsForToolPrompt,
+  type Skill,
+} from '@agiworkforce/skills';
+
+const provider = vi.hoisted(() => ({ stream: vi.fn() }));
+vi.mock('./tool-loop-anthropic', () => ({ buildToolLoopStream: provider.stream }));
+
+vi.mock('@/lib/e2b/runtime', () => ({
+  getE2BExecutor: vi.fn().mockResolvedValue(null),
+  pauseE2BSession: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/server/generated-file-persist', () => ({
+  persistGeneratedFileBytes: vi.fn(),
+}));
+
+import { resetManagedSkillCatalogCacheForTests } from '@/lib/services/skill-catalog-service';
+import { resolveToolRetrySafety, runToolLoop } from './tool-loop';
+import type { ProcessedRequest } from './request-processor';
+
+function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const payload = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(payload));
+      controller.close();
+    },
+  });
+}
+
+function toolCallStream(name: string): ReadableStream<Uint8Array> {
+  return sseStream([
+    {
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_skill_1',
+                type: 'function',
+                function: {
+                  name: 'skill',
+                  arguments: JSON.stringify({ action: 'load', name }),
+                },
+              },
+            ],
+          },
+          index: 0,
+        },
+      ],
+      model: 'test-model',
+    },
+    { choices: [{ delta: {}, finish_reason: 'tool_calls', index: 0 }], model: 'test-model' },
+  ]);
+}
+
+function finalAnswerStream(text: string): ReadableStream<Uint8Array> {
+  return sseStream([
+    { choices: [{ delta: { content: text }, index: 0 }], model: 'test-model' },
+    { choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'test-model' },
+  ]);
+}
+
+function makeSkill(root: string): Skill {
+  return {
+    name: 'design-review',
+    description: 'Review UI for release polish.',
+    body: 'Inspect the rendered interface and cite concrete defects.',
+    filePath: join(root, 'design-review', 'SKILL.md'),
+    source: 'personal',
+    metadata: {},
+    frontmatter: {},
+  };
+}
+
+function makeProcessed(root: string, offerSkill = true): ProcessedRequest {
+  const skill = makeSkill(root);
+  return {
+    requestId: 'req-skill',
+    chatRequest: {
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'Review this UI.' }],
+      ...(offerSkill ? { skill_name: 'design-review' } : {}),
+      stream: true,
+    },
+    conversationId: undefined,
+    requestedModel: 'test-model',
+    provider: 'openai',
+    estimatedCostCents: 0,
+    estimatedPromptTokens: 0,
+    maxTokens: 256,
+    usedFallback: false,
+    fallbackReason: undefined,
+    originalModel: 'test-model',
+    resolvedTaskType: 'general',
+    classifierConfidence: 1,
+    resolvedSlot: null,
+    quotaFeature: 'chat',
+    quotaWarningHeader: null,
+    isFlagshipRequest: false,
+    indicResult: undefined as never,
+    llmRequest: {
+      model: 'test-model',
+      messages: offerSkill
+        ? [
+            {
+              role: 'system',
+              content: formatSkillsForToolPrompt([skill], { selectedSkillName: skill.name }),
+            },
+            { role: 'user', content: 'Review this UI.' },
+          ]
+        : [{ role: 'user', content: 'Review this UI.' }],
+      max_tokens: 256,
+      stream: true,
+      tools: offerSkill ? [createSkillToolDefinition()] : undefined,
+    },
+  } as ProcessedRequest;
+}
+
+async function collect(generator: AsyncGenerator<Uint8Array>): Promise<string> {
+  const decoder = new TextDecoder();
+  let output = '';
+  for await (const chunk of generator) output += decoder.decode(chunk);
+  return output;
+}
+
+function activityEvents(output: string) {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: {'))
+    .flatMap((line) => {
+      const payload = JSON.parse(line.slice('data: '.length)) as {
+        choices?: Array<{ delta?: { x_agent_event?: unknown } }>;
+      };
+      const event = parseAgentEventDelta(payload.choices?.[0]?.delta?.x_agent_event);
+      return event ? [event.event] : [];
+    });
+}
+
+describe('managed Cloud Skill tool loop', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    provider.stream.mockReset();
+    root = await mkdtemp(join(tmpdir(), 'cloud-skill-loop-'));
+    const directory = join(root, 'design-review');
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, 'SKILL.md'),
+      [
+        '---',
+        'name: design-review',
+        'description: Review UI for release polish.',
+        '---',
+        '',
+        'Inspect the rendered interface and cite concrete defects.',
+      ].join('\n'),
+      'utf-8',
+    );
+    process.env['SKILLS_LAYERS'] = JSON.stringify([{ rootDir: root, source: 'personal' }]);
+    resetManagedSkillCatalogCacheForTests();
+  });
+
+  afterEach(async () => {
+    delete process.env['SKILLS_LAYERS'];
+    resetManagedSkillCatalogCacheForTests();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('loads the real body only after a model call and emits genuine running/completed activity', async () => {
+    const providerRequests: ProcessedRequest['llmRequest'][] = [];
+    provider.stream
+      .mockImplementationOnce((...args: unknown[]) => {
+        providerRequests.push(
+          JSON.parse(JSON.stringify(args[2])) as ProcessedRequest['llmRequest'],
+        );
+        return Promise.resolve(toolCallStream('design-review'));
+      })
+      .mockImplementationOnce((...args: unknown[]) => {
+        providerRequests.push(
+          JSON.parse(JSON.stringify(args[2])) as ProcessedRequest['llmRequest'],
+        );
+        return Promise.resolve(finalAnswerStream('I used the selected review guidance.'));
+      });
+
+    const output = await collect(runToolLoop(makeProcessed(root), { approvalMode: 'auto' }));
+
+    expect(provider.stream).toHaveBeenCalledTimes(2);
+    const firstRequest = providerRequests[0];
+    expect(JSON.stringify(firstRequest)).not.toContain('Inspect the rendered interface');
+    expect(JSON.stringify(firstRequest)).not.toContain(root);
+
+    const secondRequest = providerRequests[1]!;
+    const toolResult = secondRequest.messages.find((message) => message.role === 'tool');
+    expect(toolResult).toMatchObject({ role: 'tool', tool_call_id: 'call_skill_1' });
+    expect(toolResult?.content).toContain('<skill_result untrusted="true"');
+    expect(toolResult?.content).toContain('Inspect the rendered interface');
+    expect(toolResult?.content).not.toContain(root);
+
+    expect(output).toContain('"name":"skill"');
+    expect(output).toContain('"status_phrase":"Reading skill"');
+    expect(output).toContain('"status":"completed"');
+    expect(output).toContain('I used the selected review guidance.');
+
+    expect(activityEvents(output)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'tool-execution-start',
+          name: 'skill',
+          category: 'skill',
+          summary: 'Reading skill',
+        }),
+        expect.objectContaining({
+          type: 'tool-execution-end',
+          name: 'skill',
+          isError: false,
+        }),
+      ]),
+    );
+    expect(resolveToolRetrySafety('skill')).toBe('safe');
+  });
+
+  it('does not fabricate reading activity when the model never calls the tool', async () => {
+    provider.stream.mockResolvedValueOnce(finalAnswerStream('No skill was needed.'));
+
+    const output = await collect(runToolLoop(makeProcessed(root), { approvalMode: 'auto' }));
+
+    expect(output).not.toContain('Reading skill');
+    expect(output).not.toContain('"name":"skill"');
+    expect(output).toContain('No skill was needed.');
+  });
+
+  it('returns a structured failed tool result for a missing exact name', async () => {
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('missing-skill'))
+      .mockResolvedValueOnce(finalAnswerStream('That skill is unavailable.'));
+
+    const output = await collect(runToolLoop(makeProcessed(root), { approvalMode: 'auto' }));
+
+    expect(output).toContain('"status":"failed"');
+    expect(output).toContain('Unknown skill: missing-skill');
+    expect(activityEvents(output)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'tool-execution-end',
+          name: 'skill',
+          isError: true,
+        }),
+      ]),
+    );
+  });
+
+  it('refuses a hallucinated skill call when the server did not offer the tool', async () => {
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('design-review'))
+      .mockResolvedValueOnce(finalAnswerStream('The tool was unavailable.'));
+
+    const output = await collect(runToolLoop(makeProcessed(root, false), { approvalMode: 'auto' }));
+
+    expect(output).toContain('Unknown tool: skill');
+    expect(output).toContain('"status":"failed"');
+    expect(output).not.toContain('Inspect the rendered interface');
+  });
+});

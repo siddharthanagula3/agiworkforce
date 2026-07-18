@@ -11,6 +11,7 @@ describe('classifyToolLoopInputs', () => {
       hasExecutionTools: false,
       hasUrlFetchTools: false,
       hasWebSearchTools: true,
+      hasSkillTools: false,
       shouldRun: true,
       approvalMode: 'auto',
     });
@@ -24,6 +25,19 @@ describe('classifyToolLoopInputs', () => {
     expect(result.hasUrlFetchTools).toBe(true);
     expect(result.shouldRun).toBe(true);
     expect(result.approvalMode).toBe('auto');
+  });
+
+  it('enters the loop in auto mode for the read-only server Skill tool', () => {
+    const result = classifyToolLoopInputs(
+      [],
+      [{ type: 'function', function: { name: 'skill', parameters: {} } }],
+    );
+
+    expect(result).toMatchObject({
+      hasSkillTools: true,
+      shouldRun: true,
+      approvalMode: 'auto',
+    });
   });
 
   it('keeps MCP calls manual even when safe platform tools are also present', () => {

@@ -511,10 +511,11 @@ export class CloudRuntime implements ChatRuntime {
           purpose: 'send',
           operationId: userMessageId,
         }),
-        options?.research || options?.workMode
+        options?.research || options?.workMode || options?.skillName
           ? {
               ...(options.research ? { research: true } : {}),
               ...(options.workMode ? { workMode: options.workMode } : {}),
+              ...(options.skillName ? { skillName: options.skillName } : {}),
             }
           : undefined,
         (handle: ManagedCloudAgentRunHandle | null) => {

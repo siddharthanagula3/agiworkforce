@@ -92,6 +92,8 @@ export interface SendMessageOptions {
   mode?: ChatMode;
   style?: ChatStyle;
   taskInstruction?: string;
+  /** Exact Managed Cloud catalog name; ignored by the Local execution path. */
+  skillName?: string;
   /**
    * Fired the moment the user message is accepted (committed to the
    * transcript, all pre-flight gates passed). The composer clears its draft on
@@ -1463,6 +1465,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ...(webSearchEnabled ? { web_search: true } : {}),
           ...(codeExecutionEnabled ? { code_execution: true } : {}),
           ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
+          ...(options?.skillName ? { skill_name: options.skillName } : {}),
         },
         {
           onRunReference: (reference) => {
