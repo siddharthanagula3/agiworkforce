@@ -39,6 +39,9 @@ vi.mock('../sections/NotificationsSection', () => ({ NotificationsSection: () =>
 vi.mock('../sections/TimeFocusSection', () => ({
   TimeFocusSection: () => <div>Time and focus settings content</div>,
 }));
+vi.mock('../sections/ReflectSection', () => ({
+  ReflectSection: () => <div>Reflect settings content</div>,
+}));
 
 function stubFetch({
   connectors = [] as Array<{ connectorId: string; connectedAt?: string }>,
@@ -167,5 +170,12 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="time-focus" />);
 
     expect(screen.getByText('Time and focus settings content')).toBeTruthy();
+  });
+
+  it('renders the account-backed Reflect section from the shared settings nav', () => {
+    stubFetch();
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="reflect" />);
+
+    expect(screen.getByText('Reflect settings content')).toBeTruthy();
   });
 });

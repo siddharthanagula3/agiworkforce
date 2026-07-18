@@ -6,6 +6,24 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-18 Website Reflect gap (`WEB-REFLECT-01`, Partially remediated):
+Website Settings now exposes an on-demand Reflect recap for 30-, 90-, 180-,
+and 365-day ranges. The owner-scoped server service requires the account's
+Memory and Generate from past chats capabilities, excludes Temporary Chats and
+Managed Cloud AGI Work runs, bounds raw-history reads to the 1,000 most recent
+eligible conversations, and returns only aggregate activity, broad topic
+labels, and four non-scoring observations. It reuses the production
+conversation classifier instead of copying keyword rules, never sends chat
+content to another model, does not consume model quota, and does not persist a
+second recap artifact. The exact conversation total remains distinct from
+sampled activity/topic/behavior patterns. Remaining release-order gaps: no
+persisted or shareable recap artifact, user feedback loop, cross-device active
+time aggregation, or Desktop presentation exists; accounts over the bounded
+sample receive sampled day/hour statistics; and a future health-data
+integration must be explicitly excluded before Reflect may read it. Continue
+Mobile and Desktop work in the founder's order and reuse the managed-cloud
+contract and server service instead of adding client-side history analysis.
+
 2026-07-18 Website time-and-focus gap (`WEB-TIME-FOCUS-01`, Partially
 remediated): Website Settings now persists one validated `time-focus` account
 namespace with an optional visible-use break interval and timezone-aware quiet
@@ -20,10 +38,11 @@ second overnight-range algorithm. Remaining release-order gaps: the elapsed
 break counter is browser-local rather than aggregated across devices; Mobile's
 existing quiet-hours UI is still device-local notification suppression and
 does not yet consume the account namespace, selected weekdays, or timezone;
-Desktop does not consume these settings; and Reflect/monthly recap plus
-cross-surface activity aggregation do not exist. Complete those surfaces in
-the founder's Website, Mobile, Desktop order without adding another schedule
-evaluator or turning reminders into a hard gate.
+Desktop does not consume these settings; and cross-surface active-time
+aggregation does not exist. Website Reflect is tracked separately under
+`WEB-REFLECT-01`. Complete those surfaces in the founder's Website, Mobile,
+Desktop order without adding another schedule evaluator or turning reminders
+into a hard gate.
 
 2026-07-18 Website voice output gap (`WEB-VOICE-OUTPUT-01`, Partially
 remediated): Website chat already had real voice-to-text input through its

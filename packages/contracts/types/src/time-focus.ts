@@ -170,6 +170,14 @@ export function getDateKeyInTimeZone(date: Date, timezone: string): string | nul
   return getZonedDateParts(date, timezone)?.dateKey ?? null;
 }
 
+export function getDateHourInTimeZone(
+  date: Date,
+  timezone: string,
+): { dateKey: string; hour: number } | null {
+  const parts = getZonedDateParts(date, timezone);
+  return parts ? { dateKey: parts.dateKey, hour: Math.floor(parts.minuteOfDay / 60) } : null;
+}
+
 export function defaultTimeFocusPreferences(timezone = 'UTC'): TimeFocusPreferences {
   const safeTimezone = isValidIanaTimeZone(timezone) ? timezone : 'UTC';
   return {
