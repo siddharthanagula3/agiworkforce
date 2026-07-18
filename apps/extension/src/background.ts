@@ -77,6 +77,10 @@ import {
 } from './features/cloud-bridge/managedChatHandler';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
+import {
+  cancelChromeManagedRun,
+  resumeChromeManagedRun,
+} from './features/cloud-bridge/managedRunControl';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -117,9 +121,26 @@ interface ActiveChatStream {
   controller: AbortController;
   cancelRequested: boolean;
   cancelNotified: boolean;
+  cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
 }
 
 const activeChatStreams = new Map<string, ActiveChatStream>();
+
+function broadcastManagedChatChunk(
+  clientInstanceId: string,
+  id: string,
+  input: Omit<import('./types').ChatChunkMessage, 'type' | 'clientInstanceId' | 'id'>,
+): void {
+  const chunk: import('./types').ChatChunkMessage = {
+    type: 'CHAT_CHUNK',
+    clientInstanceId,
+    id,
+    ...input,
+  };
+  chrome.runtime.sendMessage(chunk).catch(() => {
+    // The extension view may have closed while the server-owned run continues.
+  });
+}
 
 // Pending requests waiting for responses
 const pendingRequests = new Map<
@@ -1266,6 +1287,17 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'RESUME_CHAT_RUN': {
+      const resumeMsg = message as import('./types').ResumeChatRunMessage;
+      try {
+        createChromeManagedStreamKey(resumeMsg.clientInstanceId, resumeMsg.id);
+      } catch {
+        return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
+      }
+      void handleResumeChatRun(resumeMsg);
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'CANCEL_STREAM': {
       const cancelMsg = message as import('./types').CancelStreamMessage;
       let streamKey: string;
@@ -1275,23 +1307,32 @@ async function handleMessageAsync(
         return { success: false, error: 'Invalid chat stream identifier' } as ExtensionResponse;
       }
       const active = activeChatStreams.get(streamKey);
-      if (!active) {
+      const cloudRun = active?.cloudRun ?? cancelMsg.cloudRun;
+      if (!active && !cloudRun) {
         return { success: false, error: 'No active stream for id' } as ExtensionResponse;
       }
-      active.cancelRequested = true;
-      if (!active.cancelNotified) {
-        active.cancelNotified = true;
-        const chunk: import('./types').ChatChunkMessage = {
-          type: 'CHAT_CHUNK',
-          clientInstanceId: cancelMsg.clientInstanceId,
-          id: cancelMsg.id,
+      if (active) {
+        active.cancelRequested = true;
+        active.controller.abort();
+      }
+      if (!active?.cancelNotified) {
+        if (active) active.cancelNotified = true;
+        broadcastManagedChatChunk(cancelMsg.clientInstanceId, cancelMsg.id, {
           text: '',
           done: true,
           error: 'Cancelled.',
-        };
-        chrome.runtime.sendMessage(chunk).catch(() => {});
+          ...(cloudRun ? { cloudRun } : {}),
+        });
       }
-      active.controller.abort();
+      if (cloudRun) {
+        const cancellation = await cancelChromeManagedRun(cloudRun);
+        if (cancellation.status === 'error') {
+          logger.warn('Managed Cloud run cancellation failed', {
+            runId: cloudRun.runId,
+            error: cancellation.message,
+          });
+        }
+      }
       return { success: true } as ExtensionResponse;
     }
 
@@ -2706,18 +2747,17 @@ async function handleChatMessage(
     done: boolean,
     error?: string,
     routing?: import('./types').ChatChunkMessage['routing'],
+    activity?: Pick<
+      import('./types').ChatChunkMessage,
+      'agentEvent' | 'durableReplay' | 'cloudRun'
+    >,
   ): void => {
-    const chunk: import('./types').ChatChunkMessage = {
-      type: 'CHAT_CHUNK',
-      clientInstanceId,
-      id,
+    broadcastManagedChatChunk(clientInstanceId, id, {
       text,
       done,
       error,
       routing,
-    };
-    chrome.runtime.sendMessage(chunk).catch(() => {
-      // The side panel may have closed while the Managed Cloud turn was active.
+      ...activity,
     });
   };
 
@@ -2763,7 +2803,17 @@ async function handleChatMessage(
         previousTaskType: message.previousTaskType,
         signal: activeStream.controller.signal,
       },
-      createChromeManagedChatDependencies((text) => broadcastChunk(text, false)),
+      createChromeManagedChatDependencies((text) => broadcastChunk(text, false), {
+        onAgentEvent: (chunk) =>
+          broadcastChunk('', false, undefined, undefined, {
+            agentEvent: chunk.envelope,
+            ...(chunk.durableReplay ? { durableReplay: true } : {}),
+          }),
+        onRunReference: (cloudRun) => {
+          activeStream.cloudRun = { ...cloudRun };
+          broadcastChunk('', false, undefined, undefined, { cloudRun });
+        },
+      }),
     );
 
     if (result.status === 'success') {
@@ -2799,6 +2849,81 @@ async function handleChatMessage(
     return result;
   } finally {
     // A stale completion must never delete a newer stream that reused the id.
+    if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
+  }
+}
+
+async function handleResumeChatRun(message: import('./types').ResumeChatRunMessage): Promise<void> {
+  const { clientInstanceId, id } = message;
+  let streamKey: string;
+  try {
+    streamKey = createChromeManagedStreamKey(clientInstanceId, id);
+  } catch {
+    return;
+  }
+  if (activeChatStreams.has(streamKey)) {
+    broadcastManagedChatChunk(clientInstanceId, id, {
+      text: '',
+      done: true,
+      error: 'This AGI Cloud run is already active.',
+    });
+    return;
+  }
+
+  const activeStream: ActiveChatStream = {
+    clientInstanceId,
+    controller: new AbortController(),
+    cancelRequested: false,
+    cancelNotified: false,
+    cloudRun: { ...message.cloudRun },
+  };
+  activeChatStreams.set(streamKey, activeStream);
+
+  try {
+    const result = await resumeChromeManagedRun(
+      {
+        run: message.cloudRun,
+        alreadyVisibleText: message.alreadyVisibleText,
+        signal: activeStream.controller.signal,
+      },
+      {
+        onText: (text) => broadcastManagedChatChunk(clientInstanceId, id, { text, done: false }),
+        onAgentEvent: (agentEvent) =>
+          broadcastManagedChatChunk(clientInstanceId, id, {
+            text: '',
+            done: false,
+            agentEvent,
+            durableReplay: true,
+          }),
+        onRunReference: (cloudRun) => {
+          activeStream.cloudRun = { ...cloudRun };
+          broadcastManagedChatChunk(clientInstanceId, id, {
+            text: '',
+            done: false,
+            cloudRun,
+          });
+        },
+      },
+    );
+
+    if (result.status === 'success') {
+      broadcastManagedChatChunk(clientInstanceId, id, {
+        text: '',
+        done: true,
+        ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
+      });
+      return;
+    }
+    if (!activeStream.cancelNotified) {
+      activeStream.cancelNotified = true;
+      broadcastManagedChatChunk(clientInstanceId, id, {
+        text: '',
+        done: true,
+        error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
+        ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
+      });
+    }
+  } finally {
     if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
   }
 }

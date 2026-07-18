@@ -38,6 +38,11 @@ export const Globe = svg(
 /** CircleCheck — done/success terminator */
 export const CircleCheck = svg('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>');
 
+/** CircleX — failed/cancelled terminator */
+export const CircleX = svg(
+  '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+);
+
 /** Loader2 — pending/running spinner (rotate via CSS) */
 export const Loader2 = svg('<path d="M21 12a9 9 0 1 1-6.219-8.56"/>');
 

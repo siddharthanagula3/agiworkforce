@@ -75,6 +75,7 @@ describe('executeChromeManagedChat', () => {
     expect(options.model).toBeTruthy();
     expect(options.model).not.toMatch(/^auto/);
     expect(options.extendedThinking).toBe(true);
+    expect(options.workMode).toBe('agiwork');
     expect(deps.onText).toHaveBeenCalledWith('hello');
   });
 

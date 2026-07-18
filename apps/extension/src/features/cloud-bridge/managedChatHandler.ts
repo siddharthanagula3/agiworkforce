@@ -84,6 +84,8 @@ export interface ChromeManagedChatDependencies {
   getModelAccess: typeof getManagedModelAccess;
   streamChat: typeof streamFreeChat;
   onText: (text: string) => void | Promise<void>;
+  onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
+  onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
 }
 
 const DEFAULT_DEPENDENCIES: Omit<ChromeManagedChatDependencies, 'onText'> = {
@@ -298,11 +300,20 @@ export async function executeChromeManagedChat(
   const streamOptions: ManagedChatStreamOptions = {
     model: routing.modelKey,
     extendedThinking: request.extendedThinking,
+    workMode: 'agiwork',
     signal: request.signal,
   };
   for await (const chunk of dependencies.streamChat(messages, token, streamOptions)) {
     if (chunk.type === 'text') {
       await dependencies.onText(chunk.text);
+      continue;
+    }
+    if (chunk.type === 'agent-event') {
+      await dependencies.onAgentEvent?.(chunk);
+      continue;
+    }
+    if (chunk.type === 'run') {
+      await dependencies.onRunReference?.(chunk.run);
       continue;
     }
     if (chunk.type === 'error') {
@@ -326,6 +337,7 @@ export async function executeChromeManagedChat(
 
 export function createChromeManagedChatDependencies(
   onText: ChromeManagedChatDependencies['onText'],
+  callbacks: Pick<ChromeManagedChatDependencies, 'onAgentEvent' | 'onRunReference'> = {},
 ): ChromeManagedChatDependencies {
-  return { ...DEFAULT_DEPENDENCIES, onText };
+  return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };
 }

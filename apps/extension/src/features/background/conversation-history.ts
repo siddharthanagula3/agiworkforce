@@ -1,4 +1,10 @@
+import {
+  AgentEventEnvelopeSchema,
+  ManagedCloudAgentRunReferenceSchema,
+  type ManagedCloudAgentRunReference,
+} from '@agiworkforce/cloud-contracts';
 import type { RoutingTaskType } from '@agiworkforce/types';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
 const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
@@ -7,11 +13,14 @@ const LEGACY_ACTIVE_MESSAGES_KEY = 'agi_side_panel_messages';
 const MAX_CONVERSATIONS = 100;
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const CONVERSATION_STORE_LOCK = 'agi-browser-conversation-store-v2';
+const MAX_STORED_AGENT_EVENTS = 1_000;
 
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  agentEvents?: AgentEventEnvelope[];
+  cloudAgentRun?: ManagedCloudAgentRunReference;
 }
 
 export interface ConversationEntry {
@@ -56,15 +65,38 @@ const ROUTING_TASK_TYPES: ReadonlySet<RoutingTaskType> = new Set([
 
 let mutationQueue: Promise<void> = Promise.resolve();
 
-function isHistoryMessage(value: unknown): value is HistoryMessage {
-  if (!value || typeof value !== 'object') return false;
+function normalizeHistoryMessage(value: unknown): HistoryMessage | undefined {
+  if (!value || typeof value !== 'object') return undefined;
   const message = value as Record<string, unknown>;
-  return (
-    (message['role'] === 'user' || message['role'] === 'assistant') &&
-    typeof message['content'] === 'string' &&
-    typeof message['timestamp'] === 'number' &&
-    Number.isFinite(message['timestamp'])
-  );
+  if (
+    (message['role'] !== 'user' && message['role'] !== 'assistant') ||
+    typeof message['content'] !== 'string' ||
+    typeof message['timestamp'] !== 'number' ||
+    !Number.isFinite(message['timestamp'])
+  ) {
+    return undefined;
+  }
+
+  const normalized: HistoryMessage = {
+    role: message['role'],
+    content: message['content'],
+    timestamp: message['timestamp'],
+  };
+  if (
+    message['role'] === 'assistant' &&
+    Array.isArray(message['agentEvents']) &&
+    message['agentEvents'].length <= MAX_STORED_AGENT_EVENTS
+  ) {
+    const events = message['agentEvents'].map((event) => AgentEventEnvelopeSchema.safeParse(event));
+    if (events.every((event) => event.success)) {
+      normalized.agentEvents = events.map((event) => event.data);
+    }
+  }
+  if (message['role'] === 'assistant') {
+    const run = ManagedCloudAgentRunReferenceSchema.safeParse(message['cloudAgentRun']);
+    if (run.success) normalized.cloudAgentRun = run.data;
+  }
+  return normalized;
 }
 
 function containsControlCharacter(value: string): boolean {
@@ -120,16 +152,17 @@ function normalizeConversationEntry(value: unknown): ConversationEntry | undefin
     typeof entry['id'] !== 'string' ||
     typeof entry['title'] !== 'string' ||
     !Array.isArray(entry['messages']) ||
-    !entry['messages'].every(isHistoryMessage) ||
     typeof entry['savedAt'] !== 'number' ||
     !Number.isFinite(entry['savedAt'])
   ) {
     return undefined;
   }
+  const messages = normalizeMessages(entry['messages']);
+  if (messages.length !== entry['messages'].length) return undefined;
   return {
     id: entry['id'],
     title: entry['title'],
-    messages: entry['messages'],
+    messages,
     savedAt: entry['savedAt'],
     routing: normalizeRoutingState(entry['routing']),
   };
@@ -143,7 +176,10 @@ function normalizeConversationEntries(value: unknown): ConversationEntry[] {
 }
 
 function normalizeMessages(value: unknown): HistoryMessage[] {
-  return Array.isArray(value) ? value.filter(isHistoryMessage) : [];
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(normalizeHistoryMessage)
+    .filter((message): message is HistoryMessage => message !== undefined);
 }
 
 function pruneExpired(entries: ConversationEntry[]): ConversationEntry[] {
@@ -167,10 +203,11 @@ function createConversation(
   routing: ConversationRoutingState = { selectedModel: 'auto' },
   id = createBrowserConversationId(),
 ): ConversationEntry {
+  const normalizedMessages = normalizeMessages(messages);
   return {
     id,
-    title: deriveTitle(messages),
-    messages,
+    title: deriveTitle(normalizedMessages),
+    messages: normalizedMessages,
     savedAt: Date.now(),
     routing: normalizeRoutingState(routing),
   };
@@ -350,16 +387,17 @@ export async function upsertConversation(
   if (messages.length === 0) return undefined;
 
   return mutateStore(async (store) => {
+    const normalizedMessages = normalizeMessages(messages);
     const existing = store.conversations.find((entry) => entry.id === conversationId);
     const entry: ConversationEntry = existing
       ? {
           ...existing,
-          title: deriveTitle(messages),
-          messages,
+          title: deriveTitle(normalizedMessages),
+          messages: normalizedMessages,
           savedAt: Date.now(),
           routing: normalizeRoutingState(routing),
         }
-      : createConversation(messages, routing, conversationId);
+      : createConversation(normalizedMessages, routing, conversationId);
     store.activeConversationId = conversationId;
     store.conversations = [
       entry,
@@ -377,18 +415,19 @@ export async function saveActiveConversation(
 ): Promise<ConversationEntry | undefined> {
   if (messages.length === 0) return undefined;
   return mutateStore(async (store) => {
+    const normalizedMessages = normalizeMessages(messages);
     const existing = store.activeConversationId
       ? store.conversations.find((entry) => entry.id === store.activeConversationId)
       : undefined;
     const entry: ConversationEntry = existing
       ? {
           ...existing,
-          title: deriveTitle(messages),
-          messages,
+          title: deriveTitle(normalizedMessages),
+          messages: normalizedMessages,
           savedAt: Date.now(),
           routing: normalizeRoutingState(routing),
         }
-      : createConversation(messages, routing);
+      : createConversation(normalizedMessages, routing);
     store.activeConversationId = entry.id;
     store.conversations = [
       entry,

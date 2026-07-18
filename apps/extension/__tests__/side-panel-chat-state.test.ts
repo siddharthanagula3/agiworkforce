@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyCanonicalAgentEvent,
   applyStreamFailure,
+  projectCanonicalAgentActivity,
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
@@ -18,6 +20,91 @@ function message(index: number, role: 'user' | 'assistant' = 'user'): SidePanelC
 }
 
 describe('side-panel chat state', () => {
+  it('projects canonical activity while excluding private reasoning from the visible log', () => {
+    const messages = [message(1)];
+    const base = {
+      schemaVersion: 3,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      emittedAtMs: 1_000,
+    } as const;
+
+    applyCanonicalAgentEvent(messages, 'stream-1', {
+      ...base,
+      sequence: 0,
+      event: {
+        type: 'progress-update',
+        progressId: 'research',
+        summary: 'Searching official sources',
+        status: 'running',
+      },
+    });
+    applyCanonicalAgentEvent(messages, 'stream-1', {
+      ...base,
+      sequence: 1,
+      event: { type: 'reasoning-delta', delta: 'private provider scratchpad' },
+    });
+
+    const assistant = messages.find((entry) => entry.id === 'stream-1');
+    expect(assistant?.agentActivity).toMatchObject({
+      lastSequence: 1,
+      status: 'running',
+      entries: [expect.objectContaining({ summary: 'Searching official sources' })],
+    });
+    expect(JSON.stringify(assistant?.agentActivity)).not.toContain('private provider scratchpad');
+    expect(JSON.stringify(assistant?.agentEvents)).not.toContain('private provider scratchpad');
+    expect(assistant?.agentEvents).toHaveLength(1);
+  });
+
+  it('deduplicates replayed tool events by their canonical sequence', () => {
+    const messages: SidePanelChatMessage[] = [
+      { ...message(1, 'assistant'), id: 'stream-1', content: '' },
+    ];
+    const envelope = {
+      schemaVersion: 3,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'tool-execution-start',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Searching official sources',
+        input: { query: 'official release notes' },
+      },
+    } as const;
+
+    applyCanonicalAgentEvent(messages, 'stream-1', envelope);
+    applyCanonicalAgentEvent(messages, 'stream-1', envelope);
+
+    expect(messages[0]?.agentActivity?.entries).toHaveLength(1);
+    expect(messages[0]?.agentEvents).toHaveLength(1);
+  });
+
+  it('rebuilds the same safe inline activity from persisted canonical display events', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const envelope = {
+      schemaVersion: 3,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 4,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'artifact-produced',
+        artifactId: 'artifact-1',
+        name: 'report.pdf',
+        mimeType: 'application/pdf',
+        uri: '/api/files/report.pdf',
+      },
+    } as const;
+
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-1', envelope);
+
+    expect(projectCanonicalAgentActivity(assistant.agentEvents)).toEqual(assistant.agentActivity);
+  });
+
   it('creates a visible prompt for attachment-only turns', () => {
     expect(resolveComposerPrompt('', 1)).toBe('Please analyze the attached image.');
     expect(resolveComposerPrompt('   ', 2)).toBe('Please analyze the attached images.');
