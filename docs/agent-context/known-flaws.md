@@ -54,13 +54,19 @@ unexpected transport drop, and send Stop to the real server run. Mobile now
 uses the same shared typed run client: pre-handle network failures retain the
 idempotent request retry, while post-handle socket/stall failures follow the
 exact persisted cursor instead of re-posting tool work; Stop cancels the
-server-owned run. Tool and Research loops journal public answer deltas while
-explicitly excluding private `<thinking>` content; all three clients reconcile
+server-owned run. The Chrome side panel now sends AGI Work requests, renders
+the same validated canonical activity envelopes inline, retains only
+display-safe activity plus the run cursor in browser-local history, resumes an
+unfinished run from the owner-scoped journal after a port disconnect or side
+panel relaunch, and routes Stop to server cancellation. Tool and Research
+loops journal public answer deltas while
+explicitly excluding private `<thinking>` content; all four clients reconcile
 overlap so a chunk rendered immediately before disconnect is not duplicated
 during replay. This closes the previous "no durable event cursor" defect for
-Web, Desktop, and Mobile after 0061 is applied, but app-relaunch rehydration of
-an unfinished turn is not wired and execution itself is still request-scoped
-rather than a restart-safe durable workflow.
+Web, Desktop, Mobile, and Chrome after 0061 is applied. Web, Desktop, and
+Mobile app-relaunch rehydration of an unfinished turn is not wired, and
+execution itself is still request-scoped rather than a restart-safe durable
+workflow.
 Web/Desktop/Mobile approval registries are process-memory caches; the approval
 endpoint safely reconstructs a continuation from the owned conversation, but a
 worker restart cannot autonomously continue an in-flight provider/tool
@@ -75,7 +81,8 @@ for the interim boundary lives in `cloud-agent-run-service.test.ts`,
 `tool-loop-policy.test.ts`, `tool-loop.e2e.test.ts`, `research-loop.test.ts`,
 `useChatStream.test.tsx`, Desktop `CloudRuntime.test.ts`, Desktop
 `cloudApi.test.ts`, Mobile `streaming-completions-fallback.test.ts`, and Mobile
-`chatStore.test.ts`.
+`chatStore.test.ts`, plus Chrome `free-trial-quota.test.ts`,
+`managed-run-control.test.ts`, and `side-panel-chat-state.test.ts`.
 
 2026-07-15 billing ownership clarification for
 `GATEWAY-METERING-IDEMPOTENCY-01`: custom Web research, MCP/E2B tool loops,

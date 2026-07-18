@@ -100,6 +100,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  RESUME_CHAT_RUN: { senderClass: 'extension-page-only', allowsCrossTab: true },
   APPROVE_CONTEXT_HANDOFF: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_CONTEXT_HANDOFF: { senderClass: 'extension-page-only', allowsCrossTab: true },
   // ── Computer-use loop start — side panel / popup only. ─────────────────

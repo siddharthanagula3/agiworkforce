@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   activateConversation,
   createBrowserConversationId,
@@ -62,6 +63,23 @@ const HISTORY_KEY = 'agi_conversation_history';
 const ACTIVE_MESSAGES_KEY = 'agi_side_panel_messages';
 const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
 const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
+const RUN_ID = '11111111-1111-4111-8111-111111111111';
+
+function agentEvent(sequence = 0): AgentEventEnvelope {
+  return {
+    schemaVersion: 3,
+    sessionId: 'chrome-session',
+    turnId: 'chrome-turn',
+    sequence,
+    emittedAtMs: 1_000 + sequence,
+    event: {
+      type: 'progress-update',
+      progressId: 'research',
+      summary: 'Searching current sources',
+      status: 'running',
+    },
+  };
+}
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -199,6 +217,64 @@ describe('conversation-history', () => {
     expect(first?.id).toBe(second?.id);
     expect(await listConversations()).toHaveLength(1);
     expect((await getActiveConversation())?.messages).toHaveLength(4);
+  });
+
+  it('persists validated canonical activity and the durable run cursor with an assistant turn', async () => {
+    const messages: HistoryMessage[] = [
+      { role: 'user', content: 'Research this', timestamp: 1 },
+      {
+        role: 'assistant',
+        content: 'Working result',
+        timestamp: 2,
+        agentEvents: [agentEvent()],
+        cloudAgentRun: {
+          runId: RUN_ID,
+          runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+          lastSequence: 0,
+          state: 'running',
+        },
+      },
+    ];
+
+    const saved = await saveActiveConversation(messages);
+    expect(saved?.messages[1]).toMatchObject({
+      agentEvents: [expect.objectContaining({ sequence: 0 })],
+      cloudAgentRun: expect.objectContaining({ runId: RUN_ID, lastSequence: 0 }),
+    });
+    expect((await getActiveConversation())?.messages[1]).toMatchObject(saved?.messages[1] ?? {});
+  });
+
+  it('drops malformed stored activity and foreign run paths without discarding answer text', async () => {
+    _store[BROWSER_STORE_KEY] = {
+      version: 2,
+      activeConversationId: 'unsafe-activity',
+      conversations: [
+        {
+          id: 'unsafe-activity',
+          title: 'Keep answer',
+          messages: [
+            {
+              role: 'assistant',
+              content: 'Safe public answer',
+              timestamp: 2,
+              agentEvents: [{ ...agentEvent(), sequence: -1 }],
+              cloudAgentRun: {
+                runId: RUN_ID,
+                runPath: 'https://attacker.example/run',
+                lastSequence: 0,
+              },
+            },
+          ],
+          savedAt: Date.now(),
+          routing: { selectedModel: 'auto' },
+        },
+      ],
+    };
+
+    const message = (await getActiveConversation())?.messages[0];
+    expect(message?.content).toBe('Safe public answer');
+    expect(message?.agentEvents).toBeUndefined();
+    expect(message?.cloudAgentRun).toBeUndefined();
   });
 
   it('writes to the explicit conversation owner even when another panel changes the active chat', async () => {

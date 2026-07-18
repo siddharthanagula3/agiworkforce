@@ -1,4 +1,6 @@
 import type { RoutingTaskType } from '@agiworkforce/types';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
@@ -30,6 +32,7 @@ export type NativeMessageType =
   | 'QUEUE_MESSAGE'
   | 'CHAT_MESSAGE'
   | 'CANCEL_STREAM'
+  | 'RESUME_CHAT_RUN'
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_IN_DESKTOP'
   | 'GET_COOKIES'
@@ -506,6 +509,15 @@ export interface CancelStreamMessage extends BaseMessage {
   type: 'CANCEL_STREAM';
   clientInstanceId: string;
   id: string;
+  cloudRun?: ManagedCloudAgentRunReference;
+}
+
+export interface ResumeChatRunMessage extends BaseMessage {
+  type: 'RESUME_CHAT_RUN';
+  clientInstanceId: string;
+  id: string;
+  cloudRun: ManagedCloudAgentRunReference;
+  alreadyVisibleText: string;
 }
 
 // Chat chunk — sent from background to side panel as streaming response arrives
@@ -516,6 +528,9 @@ export interface ChatChunkMessage {
   text: string;
   done: boolean;
   error?: string;
+  agentEvent?: AgentEventEnvelope;
+  durableReplay?: true;
+  cloudRun?: ManagedCloudAgentRunReference;
   routing?: {
     modelKey: string;
     taskType: RoutingTaskType;
@@ -1028,6 +1043,7 @@ export type ExtensionMessage =
   | QueueMessageMessage
   | ChatMessageMessage
   | CancelStreamMessage
+  | ResumeChatRunMessage
   | OpenSidePanelMessage
   | OpenInDesktopMessage
   | GetCookiesMessage

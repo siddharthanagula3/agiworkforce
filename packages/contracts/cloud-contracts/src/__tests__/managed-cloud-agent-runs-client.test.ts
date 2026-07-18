@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ManagedCloudAgentRunAbortError,
   ManagedCloudAgentRunContractError,
+  ManagedCloudAgentRunReferenceSchema,
   createManagedCloudAgentRunClient,
   reconcileManagedCloudPublicText,
   readManagedCloudAgentRunHandle,
@@ -53,6 +54,26 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 describe('managed Cloud agent-run client', () => {
+  it('validates only canonical serializable run references', () => {
+    expect(
+      ManagedCloudAgentRunReferenceSchema.parse({
+        runId: RUN_ID,
+        runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+        lastSequence: 7,
+        state: 'running',
+        cancellationRequestedAt: null,
+      }),
+    ).toMatchObject({ runId: RUN_ID, lastSequence: 7, state: 'running' });
+
+    expect(() =>
+      ManagedCloudAgentRunReferenceSchema.parse({
+        runId: RUN_ID,
+        runPath: 'https://attacker.example/run',
+        lastSequence: 7,
+      }),
+    ).toThrow();
+  });
+
   it('reconciles exact and partially overlapping public text across reconnect', () => {
     expect(reconcileManagedCloudPublicText('Already visible', 'Already visible')).toEqual({
       pending: '',

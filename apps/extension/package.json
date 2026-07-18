@@ -36,6 +36,7 @@
   "dependencies": {
     "@clerk/chrome-extension": "^3.1.52",
     "@agiworkforce/browser-tool": "workspace:*",
+    "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
