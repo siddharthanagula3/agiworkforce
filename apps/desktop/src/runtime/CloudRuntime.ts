@@ -50,10 +50,23 @@ import type {
   StreamEvent,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
-import type { ManagedCloudConversation, ManagedCloudMessage } from '@agiworkforce/cloud-contracts';
+import {
+  parseAgentEventDelta,
+  reconcileManagedCloudPublicText,
+  type CloudAgentRunSnapshotPage,
+  type ManagedCloudAgentRunHandle,
+  type ManagedCloudAgentRunReference,
+  type ManagedCloudConversation,
+  type ManagedCloudMessage,
+} from '@agiworkforce/cloud-contracts';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
-import { sendCloudMessage, CLOUD_API_BASE_URL } from '../api/cloudApi';
+import {
+  createDesktopCloudAgentRunClient,
+  sendCloudMessage,
+  CLOUD_API_BASE_URL,
+} from '../api/cloudApi';
 import { getDesktopCloudChatPersistenceClient } from '../lib/cloudChatPersistence';
 import { getProviderDefaultModel, normalizeModelId } from '../constants/llm';
 import { getDefaultModelFor } from '@agiworkforce/types';
@@ -62,6 +75,27 @@ import { CloudToolApprovalRegistry } from './cloudToolApproval';
 import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
 
 const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
+
+interface ActiveCloudTurn {
+  assistantMessageId: string;
+  model: string;
+  sink: ReturnType<typeof createCloudStreamDeltaSink>;
+  settled: boolean;
+  runReference?: ManagedCloudAgentRunReference;
+  replayPromise?: Promise<void>;
+  /** Public chunks rendered before their matching canonical event arrived. */
+  unacknowledgedPublicText: string;
+  /** Canonical public text received before its matching SSE content chunk. */
+  canonicalPublicTextAwaitingChunk: string;
+}
+
+function stopReasonToFinishReason(reason: AgentEventEnvelope['event']): string | undefined {
+  if (reason.type !== 'stop') return undefined;
+  if (reason.reason === 'max-tokens') return 'length';
+  if (reason.reason === 'cancelled') return 'stopped';
+  if (reason.reason === 'error') return 'error';
+  return 'stop';
+}
 
 // ---------------------------------------------------------------------------
 // Mapping helpers — the DCL-1/DCL-2 client's normalized DTOs -> ChatRuntime DTOs
@@ -100,15 +134,7 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
 export class CloudRuntime implements ChatRuntime {
   private readonly _streamCallbacks = new Set<StreamCallback>();
   private readonly _abortControllers = new Map<string, AbortController>();
-  private readonly _activeTurns = new Map<
-    string,
-    {
-      assistantMessageId: string;
-      model: string;
-      sink: ReturnType<typeof createCloudStreamDeltaSink>;
-      settled: boolean;
-    }
-  >();
+  private readonly _activeTurns = new Map<string, ActiveCloudTurn>();
   private readonly _approvals = new CloudToolApprovalRegistry();
 
   /** The cloud SSE wire forwards `code_execution` — see `SendMessageOptions.codeExecution`. */
@@ -135,15 +161,20 @@ export class CloudRuntime implements ChatRuntime {
     content: string,
     model: string,
     agentActivity?: AgentActivityState,
+    cloudAgentRun?: ManagedCloudAgentRunReference,
   ): void {
-    if (!content && !agentActivity) return;
+    if (!content && !agentActivity && !cloudAgentRun) return;
+    const metadata = {
+      ...(agentActivity ? { agentActivity } : {}),
+      ...(cloudAgentRun ? { cloudAgentRun } : {}),
+    };
     void getDesktopCloudChatPersistenceClient()
       .saveMessage(conversationId, {
         id: assistantMessageId,
         role: 'assistant',
         content: content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
         model,
-        ...(agentActivity ? { metadata: { agentActivity } } : {}),
+        ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
       })
       .catch((err: unknown) => {
         this.emit({
@@ -153,6 +184,125 @@ export class CloudRuntime implements ChatRuntime {
           }`,
         });
       });
+  }
+
+  private updateRunReference(
+    turn: ActiveCloudTurn,
+    patch: Partial<ManagedCloudAgentRunReference> = {},
+  ): void {
+    if (!turn.runReference) return;
+    turn.runReference = {
+      ...turn.runReference,
+      ...patch,
+      lastSequence: Math.max(
+        turn.runReference.lastSequence,
+        turn.sink.getAgentActivity()?.lastSequence ?? -1,
+        patch.lastSequence ?? -1,
+      ),
+    };
+  }
+
+  private onLiveChunk(turn: ActiveCloudTurn, text: string): void {
+    const before = turn.sink.getAccumulatedContent();
+    turn.sink.onChunk(text);
+    const after = turn.sink.getAccumulatedContent();
+    const publicDelta = after.slice(before.length);
+    if (!publicDelta) return;
+
+    const reconciled = reconcileManagedCloudPublicText(
+      turn.canonicalPublicTextAwaitingChunk,
+      publicDelta,
+    );
+    turn.canonicalPublicTextAwaitingChunk = reconciled.pending;
+    turn.unacknowledgedPublicText += reconciled.unmatchedIncoming;
+  }
+
+  private onLiveEvent(turn: ActiveCloudTurn, payload: Record<string, unknown>): void {
+    const choices = Array.isArray(payload['choices']) ? payload['choices'] : [];
+    const delta =
+      choices[0] && typeof choices[0] === 'object'
+        ? ((choices[0] as Record<string, unknown>)['delta'] as Record<string, unknown> | undefined)
+        : undefined;
+    const envelope = parseAgentEventDelta(delta?.['x_agent_event']);
+    if (envelope?.event.type === 'text-delta' && envelope.event.delta) {
+      const reconciled = reconcileManagedCloudPublicText(
+        turn.unacknowledgedPublicText,
+        envelope.event.delta,
+      );
+      turn.unacknowledgedPublicText = reconciled.pending;
+      turn.canonicalPublicTextAwaitingChunk += reconciled.unmatchedIncoming;
+    }
+
+    turn.sink.onEvent(payload);
+    if (envelope) this.updateRunReference(turn, { lastSequence: envelope.sequence });
+  }
+
+  private async replayDurableRun(conversationId: string, turn: ActiveCloudTurn): Promise<void> {
+    const runReference = turn.runReference;
+    if (!runReference) throw new Error('Managed Cloud run handle is unavailable');
+
+    // If the canonical text event arrived immediately before the transport
+    // failed but its ordinary SSE content projection did not, render it now.
+    if (turn.canonicalPublicTextAwaitingChunk) {
+      turn.sink.onChunk(turn.canonicalPublicTextAwaitingChunk);
+      turn.canonicalPublicTextAwaitingChunk = '';
+    }
+
+    let replayFinishReason: string | undefined;
+    const client = createDesktopCloudAgentRunClient();
+    const followed = await client.followRun(runReference.runId, {
+      afterSequence: Math.max(
+        runReference.lastSequence,
+        turn.sink.getAgentActivity()?.lastSequence ?? -1,
+      ),
+      signal: this._abortControllers.get(conversationId)?.signal,
+      onEvent: (envelope) => {
+        if (envelope.event.type === 'text-delta' && envelope.event.delta) {
+          const reconciled = reconcileManagedCloudPublicText(
+            turn.unacknowledgedPublicText,
+            envelope.event.delta,
+          );
+          turn.unacknowledgedPublicText = reconciled.pending;
+          if (reconciled.unmatchedIncoming) {
+            turn.sink.onChunk(reconciled.unmatchedIncoming);
+          }
+        }
+        replayFinishReason = stopReasonToFinishReason(envelope.event) ?? replayFinishReason;
+        turn.sink.onEvent({ choices: [{ delta: { x_agent_event: envelope } }] });
+        this.updateRunReference(turn, { lastSequence: envelope.sequence });
+      },
+      onSnapshot: (snapshot: CloudAgentRunSnapshotPage) => {
+        this.updateRunReference(turn, {
+          lastSequence: snapshot.nextAfterSequence,
+          state: snapshot.run.state,
+          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+        });
+      },
+    });
+
+    this.updateRunReference(turn, {
+      lastSequence: followed.lastSequence,
+      state: followed.run.state,
+      cancellationRequestedAt: followed.run.cancellationRequestedAt,
+    });
+    if (!replayFinishReason && followed.run.state === 'failed') replayFinishReason = 'error';
+    if (!replayFinishReason && followed.run.state === 'cancelled') replayFinishReason = 'stopped';
+
+    if (turn.settled) return;
+    turn.settled = true;
+    this._activeTurns.delete(conversationId);
+    this.persistAssistantTurn(
+      conversationId,
+      turn.assistantMessageId,
+      turn.sink.getAccumulatedContent(),
+      turn.model,
+      turn.sink.getAgentActivity(),
+      turn.runReference,
+    );
+    this.emit({
+      type: 'done',
+      ...(replayFinishReason ? { finishReason: replayFinishReason } : {}),
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -192,7 +342,14 @@ export class CloudRuntime implements ChatRuntime {
 
     const sink = createCloudStreamDeltaSink((event) => this.emit(event), CLOUD_API_BASE_URL);
     const assistantMessageId = uuidv7();
-    const activeTurn = { assistantMessageId, model, sink, settled: false };
+    const activeTurn: ActiveCloudTurn = {
+      assistantMessageId,
+      model,
+      sink,
+      settled: false,
+      unacknowledgedPublicText: '',
+      canonicalPublicTextAwaitingChunk: '',
+    };
     this._activeTurns.set(conversationId, activeTurn);
     // The exact thread sent to the server — reused verbatim as `priorMessages`
     // if this turn suspends on a tool-approval request (see cloudApi.ts's
@@ -207,12 +364,13 @@ export class CloudRuntime implements ChatRuntime {
         conversationId,
         content,
         model,
-        sink.onChunk,
+        (text) => this.onLiveChunk(activeTurn, text),
         // onDone
         () => {
-          if (activeTurn.settled) return;
+          if (activeTurn.settled || activeTurn.replayPromise) return;
           activeTurn.settled = true;
           this._activeTurns.delete(conversationId);
+          this.updateRunReference(activeTurn);
           this._approvals.recordTurnOutcome(conversationId, model, priorMessages, sink);
           if (sink.isSuspended()) {
             // The server suspended this turn on a tool-approval request and
@@ -235,6 +393,7 @@ export class CloudRuntime implements ChatRuntime {
               sink.getAccumulatedContent(),
               model,
               sink.getAgentActivity(),
+              activeTurn.runReference,
             );
           }
           const finishReason = sink.getFinishReason();
@@ -248,6 +407,34 @@ export class CloudRuntime implements ChatRuntime {
         // onError
         (err: Error) => {
           if (activeTurn.settled) return;
+          if (!controller.signal.aborted && activeTurn.runReference) {
+            activeTurn.replayPromise ??= this.replayDurableRun(conversationId, activeTurn).catch(
+              (replayError: unknown) => {
+                if (activeTurn.settled) return;
+                activeTurn.settled = true;
+                this._activeTurns.delete(conversationId);
+                const message =
+                  replayError instanceof Error ? replayError.message : String(replayError);
+                const activity = sink.getAgentActivity();
+                this.persistAssistantTurn(
+                  conversationId,
+                  assistantMessageId,
+                  sink.getAccumulatedContent(),
+                  model,
+                  activity
+                    ? finishAgentActivityLocally(activity, {
+                        status: 'failed',
+                        completedAtMs: Date.now(),
+                        error: message,
+                      })
+                    : undefined,
+                  activeTurn.runReference,
+                );
+                this.emit({ type: 'error', error: message });
+              },
+            );
+            return;
+          }
           activeTurn.settled = true;
           this._activeTurns.delete(conversationId);
           const activity = sink.getAgentActivity();
@@ -263,11 +450,12 @@ export class CloudRuntime implements ChatRuntime {
                   error: err.message,
                 })
               : undefined,
+            activeTurn.runReference,
           );
           this.emit({ type: 'error', error: err.message });
         },
         controller.signal,
-        sink.onEvent,
+        (payload) => this.onLiveEvent(activeTurn, payload),
         options?.webSearch,
         options?.messageHistory,
         options?.thinkingEnabled,
@@ -283,7 +471,16 @@ export class CloudRuntime implements ChatRuntime {
               ...(options.workMode ? { workMode: options.workMode } : {}),
             }
           : undefined,
+        (handle: ManagedCloudAgentRunHandle | null) => {
+          activeTurn.runReference = handle
+            ? {
+                ...handle,
+                lastSequence: sink.getAgentActivity()?.lastSequence ?? -1,
+              }
+            : undefined;
+        },
       );
+      if (activeTurn.replayPromise) await activeTurn.replayPromise;
     } catch (err) {
       if (!controller.signal.aborted) {
         const message = err instanceof Error ? err.message : String(err);
@@ -303,6 +500,7 @@ export class CloudRuntime implements ChatRuntime {
                   error: message,
                 })
               : undefined,
+            activeTurn.runReference,
           );
           this.emit({ type: 'error', error: message });
         }
@@ -368,6 +566,18 @@ export class CloudRuntime implements ChatRuntime {
     if (activeTurn && !activeTurn.settled) {
       activeTurn.settled = true;
       this._activeTurns.delete(conversationId);
+      if (activeTurn.runReference) {
+        void createDesktopCloudAgentRunClient()
+          .cancelRun(activeTurn.runReference.runId)
+          .catch((err: unknown) => {
+            this.emit({
+              type: 'error',
+              error: `Could not stop the Cloud task: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            });
+          });
+      }
       const activity = activeTurn.sink.getAgentActivity();
       this.persistAssistantTurn(
         conversationId,
@@ -380,6 +590,7 @@ export class CloudRuntime implements ChatRuntime {
               completedAtMs: Date.now(),
             })
           : undefined,
+        activeTurn.runReference,
       );
     }
   }

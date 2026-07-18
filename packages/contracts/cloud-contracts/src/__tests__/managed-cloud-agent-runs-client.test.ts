@@ -3,6 +3,7 @@ import {
   ManagedCloudAgentRunAbortError,
   ManagedCloudAgentRunContractError,
   createManagedCloudAgentRunClient,
+  reconcileManagedCloudPublicText,
   readManagedCloudAgentRunHandle,
 } from '../managed-cloud-agent-runs-client';
 
@@ -52,6 +53,25 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 describe('managed Cloud agent-run client', () => {
+  it('reconciles exact and partially overlapping public text across reconnect', () => {
+    expect(reconcileManagedCloudPublicText('Already visible', 'Already visible')).toEqual({
+      pending: '',
+      unmatchedIncoming: '',
+    });
+    expect(reconcileManagedCloudPublicText('Hello ', 'Hello world')).toEqual({
+      pending: '',
+      unmatchedIncoming: 'world',
+    });
+    expect(reconcileManagedCloudPublicText('Hello world', 'Hello ')).toEqual({
+      pending: 'world',
+      unmatchedIncoming: '',
+    });
+    expect(reconcileManagedCloudPublicText('different', 'new text')).toEqual({
+      pending: 'different',
+      unmatchedIncoming: 'new text',
+    });
+  });
+
   it('reads a validated same-origin run handle from completion response headers', () => {
     const response = new Response(null, {
       headers: {

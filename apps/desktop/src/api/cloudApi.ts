@@ -10,6 +10,12 @@ import { isTauri } from '../lib/runtimeEnvironment';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { API_BASE_URL } from './config';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import {
+  createManagedCloudAgentRunClient,
+  readManagedCloudAgentRunHandle,
+  type ManagedCloudAgentRunClient,
+  type ManagedCloudAgentRunHandle,
+} from '@agiworkforce/cloud-contracts';
 
 // Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS.
 // Exported so runtimes can resolve relative wire uris (e.g. the
@@ -119,6 +125,27 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 
   return headers;
+}
+
+/**
+ * Authenticated, trust-boundary-aware client for the durable managed-run
+ * journal. All Desktop Cloud follow/cancel traffic uses the same guarded
+ * egress path and Clerk/CSRF headers as the completion request itself.
+ */
+export function createDesktopCloudAgentRunClient(): ManagedCloudAgentRunClient {
+  return createManagedCloudAgentRunClient({
+    baseUrl: CLOUD_API_BASE_URL,
+    getAuthToken: async () => cloudAccountAuth.getSession()?.access_token ?? null,
+    decorateMutationHeaders: async (headers) => ({
+      ...(await getAuthHeaders()),
+      ...headers,
+    }),
+    fetchImpl: (input, init) =>
+      guardedFetch(input, {
+        ...init,
+        credentials: 'include',
+      }),
+  });
 }
 
 // ============================================================================
@@ -353,6 +380,7 @@ export async function sendCloudMessage(
   codeExecution?: boolean,
   idempotencyKey?: string,
   requestOptions?: { research?: boolean; workMode?: CloudWorkMode },
+  onRunHandle?: (handle: ManagedCloudAgentRunHandle | null) => void,
 ): Promise<void> {
   let headers: Record<string, string>;
 
@@ -397,6 +425,13 @@ export async function sendCloudMessage(
     });
   } catch (err) {
     // Network error or abort
+    onError(err instanceof Error ? err : new Error(String(err)));
+    return;
+  }
+
+  try {
+    onRunHandle?.(readManagedCloudAgentRunHandle(res));
+  } catch (err) {
     onError(err instanceof Error ? err : new Error(String(err)));
     return;
   }

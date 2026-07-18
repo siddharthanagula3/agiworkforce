@@ -108,6 +108,8 @@ describe('cloudApi', () => {
   });
 
   it('posts message payloads and streams SSE chunks', async () => {
+    const runId = '019c3330-02b7-7000-8000-000000000001';
+    const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -134,6 +136,8 @@ describe('cloudApi', () => {
         status: 200,
         headers: {
           'Content-Type': 'text/event-stream',
+          'X-AGI-Agent-Run-Id': runId,
+          'X-AGI-Agent-Run-URL': runPath,
         },
       }),
     );
@@ -143,6 +147,7 @@ describe('cloudApi', () => {
     const onDone = vi.fn();
     const onError = vi.fn();
     const onEvent = vi.fn();
+    const onRunHandle = vi.fn();
 
     await sendCloudMessage(
       'conv_1',
@@ -158,6 +163,8 @@ describe('cloudApi', () => {
       undefined,
       undefined,
       'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000001',
+      undefined,
+      onRunHandle,
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -178,6 +185,7 @@ describe('cloudApi', () => {
     expect(onEvent).toHaveBeenCalled();
     expect(onDone).toHaveBeenCalledOnce();
     expect(onError).not.toHaveBeenCalled();
+    expect(onRunHandle).toHaveBeenCalledWith({ runId, runPath });
   });
 
   it('includes research only when the managed runtime explicitly requests it', async () => {
