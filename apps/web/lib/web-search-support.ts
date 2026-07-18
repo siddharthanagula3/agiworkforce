@@ -9,8 +9,8 @@
  * `features/chat/components/Composer/ChatComposerNew.tsx`) keep working
  * unchanged — no consumer needs to move.
  *
- * See the canonical file for the full design rationale (why openai has no
- * native injection path on this route, the WP4 generic-tool fallback, etc).
+ * See the canonical file for the full design rationale (native harness
+ * execution facts, the WP4 generic-tool fallback, and composer gating).
  */
 
 export {

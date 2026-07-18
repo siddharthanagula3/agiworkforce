@@ -401,6 +401,11 @@ export interface OpenAIWireAssemblerOptions {
    *     real OpenAI's own finish_reason vocabulary -- NOT `legacyWebFinish
    *     Reason`'s Anthropic-specific "never map max_tokens" quirk, which has
    *     nothing to do with OpenAI's wire.
+   *   - native Responses server-tool activity is exposed through the same
+   *     additive `x_tool_status`/`x_search_results` extensions already
+   *     consumed by AGI's Web, Desktop, and Mobile clients. Ordinary OpenAI
+   *     text/tool streams remain byte-identical because these keys are only
+   *     emitted when canonical server-tool chunks actually exist.
    */
   wireMode?: 'default' | 'legacy-web' | 'openai-passthrough';
 }
@@ -464,7 +469,7 @@ export class OpenAIWireAssembler {
    *  (i.e. did the last chunk seen start or continue one)? Used to decide
    *  when to emit the inline `<thinking>`/`</thinking>` tag pair. */
   private insideThinking = false;
-  /** `wireMode: 'legacy-web'`-only aggregation for `response()`. */
+  /** Rich web-route aggregation for legacy-web and OpenAI Responses search. */
   private readonly citations: unknown[] = [];
   private readonly searchResults: unknown[] = [];
 
@@ -697,11 +702,10 @@ export class OpenAIWireAssembler {
         // (x_tool_status is a streaming-only concept, see sseChunks()).
         return;
       case 'server-tool-result':
-        // Only 'legacy-web' aggregates, and only web_search results -- the
-        // legacy non-streaming response never surfaced code-execution
-        // results (see module docstring / OpenAIWireAssemblerOptions).
+        // The web route's rich modes aggregate web-search results so both
+        // streaming and non-streaming AGI clients can render source cards.
         if (
-          this.wireMode === 'legacy-web' &&
+          (this.wireMode === 'legacy-web' || this.wireMode === 'openai-passthrough') &&
           typeof chunk.payload === 'object' &&
           chunk.payload !== null &&
           (chunk.payload as { type?: unknown }).type === 'web_search_tool_result'
@@ -829,6 +833,7 @@ export class OpenAIWireAssembler {
     const out: Record<string, unknown>[] = [];
     const legacyWeb = this.wireMode === 'legacy-web';
     const openaiPassthrough = this.wireMode === 'openai-passthrough';
+    const richWebSearch = legacyWeb || openaiPassthrough;
 
     // Deterministic role-announcement opening chunk: real OpenAI always
     // sends `delta:{role:"assistant",content:""}` as the FIRST chunk of
@@ -866,7 +871,7 @@ export class OpenAIWireAssembler {
 
     switch (chunk.type) {
       case 'server-tool-use': {
-        if (!legacyWeb) break;
+        if (!richWebSearch) break;
         const status =
           chunk.name === 'code_execution'
             ? 'executing'
@@ -884,7 +889,7 @@ export class OpenAIWireAssembler {
         break;
       }
       case 'server-tool-result': {
-        if (!legacyWeb) break;
+        if (!richWebSearch) break;
         const payload = chunk.payload as { type?: unknown } | null;
         if (payload?.type === 'code_execution_tool_result') {
           out.push(this.chunkEnvelope({ x_code_result: chunk.payload }, null));
@@ -1087,6 +1092,7 @@ export class OpenAIWireAssembler {
 
     const usage = this.usageOrNull();
     const legacyWeb = this.wireMode === 'legacy-web';
+    const richWebSearch = legacyWeb || this.wireMode === 'openai-passthrough';
     const finishReason = legacyWeb
       ? (this.legacyFinishReason ?? (this.toolCalls.length > 0 ? 'tool_calls' : 'stop'))
       : (this.finishReason ?? (this.toolCalls.length > 0 ? 'tool_calls' : 'stop'));
@@ -1106,7 +1112,9 @@ export class OpenAIWireAssembler {
       // Matches apps/web/lib/llm-providers/anthropic.ts's non-streaming
       // shape: only present, and only non-empty, in 'legacy-web' mode.
       ...(legacyWeb && this.citations.length > 0 ? { citations: this.citations } : {}),
-      ...(legacyWeb && this.searchResults.length > 0 ? { search_results: this.searchResults } : {}),
+      ...(richWebSearch && this.searchResults.length > 0
+        ? { search_results: this.searchResults }
+        : {}),
     };
   }
 }

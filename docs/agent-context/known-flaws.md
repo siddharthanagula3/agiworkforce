@@ -178,6 +178,18 @@ Those implementations now belong to `@agiworkforce/trust-boundaries`,
 Desktop, and Mobile import the owners directly; Services is a re-export-only
 downstream compatibility facade pending M8 removal proof.
 
+2026-07-17 WP4 OpenAI-search correction for
+`MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01`: the historical statement that current
+OpenAI models could not exercise `CollapsibleSources`/`WebSearchResultCard` is
+no longer current. Managed Cloud now routes catalog-known OpenAI models through
+Responses, injects stable native `web_search`, requests complete source
+metadata, and translates activity/citations/results into the canonical stream
+consumed by Web, Desktop, and Mobile. GPT-5.4 Nano, GPT-5.4 Mini, GPT-5.5, and
+the GPT-5.6 family now publish `capabilities.search: true`. Provider, wire,
+registry, route, and all three client source-card suites pass; live
+post-deployment source-card QA remains a manual production check rather than a
+code-path blocker.
+
 2026-07-15 UI control corrections: `UI-WEBSEARCH-TOGGLE-01` is fixed because
 `ChatInput` now reads and writes `chatStore.webSearchEnabled`, the same state
 the send path consumes; the locked default is off and store regression tests

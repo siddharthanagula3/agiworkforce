@@ -186,9 +186,5 @@ export function buildServerProviderAdapter(
   if (providerId === 'anthropic' && options.anthropicCache) {
     return createProviderAdapter('anthropic', { ...baseConfig, ...options.anthropicCache });
   }
-  if (providerId === 'openai') {
-    return createProviderAdapter('openai', { ...baseConfig, useResponsesApi: false });
-  }
-
   return createProviderAdapter(adapterId, baseConfig);
 }

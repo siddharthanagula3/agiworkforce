@@ -4,6 +4,12 @@
   "verificationLog": [
     {
       "date": "2026-07-17",
+      "verifiedBy": "official-openai-responses-web-search-docs-and-regression-contract",
+      "status": "PASS",
+      "notes": "Wired OpenAI Responses native web search end-to-end for current catalog models. The managed Web route no longer forces Chat Completions, injects the stable {type:web_search} tool, requests web_search_call.action.sources, translates search lifecycle/citation/source events into the canonical stream, and exposes additive source-card events to Web, Desktop, and Mobile. capabilities.search is now true for gpt-5.5, the GPT-5.6 family, GPT-5.4 Mini, and GPT-5.4 Nano because the application execution path is covered by focused provider, wire, registry, and route tests. Official sources retrieved 2026-07-17: developers.openai.com/api/docs/guides/tools-web-search and developers.openai.com/api/docs/guides/your-data."
+    },
+    {
+      "date": "2026-07-17",
       "verifiedBy": "founder-tier-policy-and-official-openai-nano-docs",
       "status": "CORRECTION",
       "notes": "Applied the founder-confirmed cloud subscription roster: Basic includes GPT-5.4 Nano and excludes GPT-5.4 Mini and Claude Haiku 4.5; Haiku remains Pro+. Max+ intentionally inherits the Max model roster and differs through budget and product limits, not additional model names. GPT-5.4 Nano identity, context, modalities, endpoints, and pricing were rechecked against the official OpenAI model page and OpenRouter catalog on 2026-07-17. This changes admission only; runtime profiles and harness status still fail closed independently."
@@ -682,7 +688,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": false,
         "codeExecution": true,
         "caching": true
@@ -782,7 +788,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": false,
         "codeExecution": false,
         "caching": true
@@ -884,7 +890,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": false,
         "codeExecution": false,
         "caching": true
@@ -986,7 +992,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": false,
         "codeExecution": false,
         "caching": true
@@ -2677,7 +2683,7 @@
         "agentic": true,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": false,
         "codeExecution": true,
         "caching": true
@@ -2729,7 +2735,7 @@
         "agentic": false,
         "imageGen": false,
         "videoGen": false,
-        "search": false,
+        "search": true,
         "research": false,
         "codeExecution": false,
         "caching": true

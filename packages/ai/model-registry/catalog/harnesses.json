@@ -28,7 +28,11 @@
       "features": {
         "webSearch": {
           "providerSupport": "native",
-          "implementation": "unwired"
+          "implementation": "implemented"
+        },
+        "webSearchInjection": {
+          "providerSupport": "native",
+          "implementation": "implemented"
         },
         "toolDiscovery": {
           "providerSupport": "native",

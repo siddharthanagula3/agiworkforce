@@ -3,12 +3,9 @@
  *
  * Closes the search parity gap (WP4) for providers with no working native
  * web-search server tool wired into this platform today: xai, deepseek, qwen,
- * moonshot, zhipu, mistral, groq, nvidia_nim, open_router, and OpenAI's
- * chat-completions models (`web_search_preview` is a Responses-API-only tool
- * type; this route calls `/chat/completions` for every OpenAI model — see
- * `appendWebSearchTool` and `adapter-factory.ts`'s `useResponsesApi:false` in
- * request-processor.ts). Anthropic and Google keep their native
- * provider-managed search tools (higher quality, no extra hop, no cost here);
+ * moonshot, zhipu, mistral, groq, nvidia_nim, and open_router. OpenAI,
+ * Anthropic, and Google keep their native provider-managed search tools
+ * (higher quality, no extra hop, no platform search-key dependency);
  * Perplexity Sonar models search natively by default and never need this tool.
  * Everyone else gets this function tool, executed by the tool loop in
  * tool-loop.ts, exactly the way `url_fetch` (lib/url-fetch/url-fetch-tool.ts)
