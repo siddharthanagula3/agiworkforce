@@ -165,6 +165,7 @@ export function agentEventToStreamChunk(event: AgentEvent): StreamChunk | null {
     case 'approval-resolved':
     case 'artifact-produced':
     case 'context-compacted':
+    case 'task-state-changed':
       return null;
   }
 }

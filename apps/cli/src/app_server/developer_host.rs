@@ -1,10 +1,14 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
+use agiworkforce_protocol::agent_events::{
+    AgentEvent, AgentEventToolCategory, AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
+};
 use agiworkforce_protocol::developer_session::{
-    task_state_notification, AppServerCapabilities, AppServerClientInfo, AppServerNotification,
-    ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort,
-    DeveloperRoutingTaskType, DeveloperSessionSource, ThreadForkParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams, ThreadStatus,
-    ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    agent_event_notification, task_state_notification, AppServerCapabilities, AppServerClientInfo,
+    AppServerNotification, ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage,
+    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionSource, ThreadForkParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
+    ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams,
+    TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -17,7 +21,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::{broadcast, oneshot, Mutex};
 use uuid::Uuid;
 
-use crate::agent::{AgentSession, ToolApprovalSink};
+use crate::agent::{AgentSession, ToolApprovalSink, ToolEventSink};
 use crate::config::CliConfig;
 use crate::context;
 use crate::models::{self, ContentBlock};
@@ -1055,6 +1059,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let task_partial = partial.clone();
         let task_thread_id = thread_id.clone();
         let task_turn_id = turn_id.clone();
+        let task_event_sequence = Arc::new(StdMutex::new(0_u64));
         let handle = tokio::spawn(async move {
             if start_receiver.await.is_err() {
                 return;
@@ -1085,6 +1090,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     task_pending.clone(),
                     task_notifications.clone(),
                 )));
+                agent.on_tool_event = Some(ToolEventSink(tool_event_callback(
+                    task_thread_id.clone(),
+                    task_turn_id.clone(),
+                    task_event_sequence.clone(),
+                    task_notifications.clone(),
+                )));
 
                 let delta_notifications = task_notifications.clone();
                 let delta_thread = task_thread_id.clone();
@@ -1113,6 +1124,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     )
                     .await;
                 agent.on_tool_approval = None;
+                agent.on_tool_event = None;
 
                 match result {
                     Ok(turn) => {
@@ -1418,6 +1430,123 @@ fn approval_callback(
     })
 }
 
+fn tool_event_callback(
+    thread_id: String,
+    turn_id: String,
+    sequence: Arc<StdMutex<u64>>,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> {
+    Arc::new(move |event| {
+        let Some(event) = map_tool_event(event) else {
+            return;
+        };
+        let mut next_sequence = sequence
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Ok(notification) =
+            agent_event_notification(thread_id.clone(), turn_id.clone(), *next_sequence, event)
+        {
+            let _ = notifications.send(notification);
+            *next_sequence = next_sequence.saturating_add(1);
+        }
+    })
+}
+
+fn map_tool_event(event: crate::tui::app_event::TuiAppEvent) -> Option<AgentEvent> {
+    use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+
+    match event {
+        TuiAppEvent::ToolStarted {
+            call_id,
+            name,
+            summary,
+            input,
+        } => Some(AgentEvent::ToolExecutionStart(
+            AgentEventToolExecutionStart {
+                tool_call_id: call_id,
+                category: classify_tool_category(&name),
+                name,
+                summary,
+                input,
+            },
+        )),
+        TuiAppEvent::ToolCompleted {
+            call_id,
+            name,
+            status,
+            output,
+            duration_ms,
+        } => {
+            let is_error = matches!(status, ToolStatus::Failed | ToolStatus::Cancelled);
+            let output = serde_json::from_str(&output)
+                .unwrap_or_else(|_| serde_json::json!({ "text": output }));
+            Some(AgentEvent::ToolExecutionEnd(AgentEventToolExecutionEnd {
+                tool_call_id: call_id,
+                name,
+                output,
+                is_error,
+                elapsed_ms: Some(duration_ms),
+            }))
+        }
+        _ => None,
+    }
+}
+
+fn classify_tool_category(name: &str) -> AgentEventToolCategory {
+    let normalized = name.to_ascii_lowercase().replace(['-', ' '], "_");
+    if normalized.contains("web_search") || normalized == "search_web" {
+        AgentEventToolCategory::WebSearch
+    } else if normalized.contains("web_fetch")
+        || normalized.contains("fetch_url")
+        || normalized == "fetch"
+    {
+        AgentEventToolCategory::WebFetch
+    } else if normalized.contains("computer")
+        || normalized.contains("browser")
+        || normalized.contains("screenshot")
+    {
+        AgentEventToolCategory::ComputerUse
+    } else if normalized.contains("code_execution")
+        || normalized == "python"
+        || normalized == "javascript"
+    {
+        AgentEventToolCategory::CodeExecution
+    } else if normalized.contains("shell")
+        || normalized.contains("command")
+        || normalized == "bash"
+        || normalized == "exec"
+    {
+        AgentEventToolCategory::Shell
+    } else if normalized.contains("skill") {
+        AgentEventToolCategory::Skill
+    } else if normalized.contains("memory") {
+        AgentEventToolCategory::Memory
+    } else if normalized.contains("artifact") || normalized.contains("present_file") {
+        AgentEventToolCategory::Artifact
+    } else if normalized.contains("connector") {
+        AgentEventToolCategory::Connector
+    } else if normalized.contains("mcp") {
+        AgentEventToolCategory::Mcp
+    } else if [
+        "read",
+        "write",
+        "edit",
+        "patch",
+        "file",
+        "directory",
+        "list_dir",
+        "glob",
+        "grep",
+    ]
+    .iter()
+    .any(|fragment| normalized.contains(fragment))
+    {
+        AgentEventToolCategory::Filesystem
+    } else {
+        AgentEventToolCategory::Other
+    }
+}
+
 fn content_block_from_data_url(image_url: &str) -> Result<ContentBlock, DeveloperSessionHostError> {
     let (header, data) = image_url.split_once(',').ok_or_else(|| {
         DeveloperSessionHostError::invalid_request("Image input must be a base64 data URL")
@@ -1606,6 +1735,77 @@ mod tests {
 
         apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Medium));
         assert_eq!(agent.thinking_budget_tokens, None);
+    }
+
+    #[test]
+    fn tool_events_map_to_canonical_execution_activity() {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+        use agiworkforce_protocol::agent_events::AgentEvent;
+
+        let started = map_tool_event(TuiAppEvent::ToolStarted {
+            call_id: "tool-1".to_string(),
+            name: "web_search".to_string(),
+            summary: "Searching official sources".to_string(),
+            input: serde_json::json!({ "query": "AGI Workforce" }),
+        })
+        .expect("mapped start event");
+        let AgentEvent::ToolExecutionStart(started) = started else {
+            panic!("expected canonical tool-execution-start");
+        };
+        assert_eq!(started.category, AgentEventToolCategory::WebSearch);
+        assert_eq!(started.input["query"], "AGI Workforce");
+
+        let completed = map_tool_event(TuiAppEvent::ToolCompleted {
+            call_id: "tool-1".to_string(),
+            name: "web_search".to_string(),
+            status: ToolStatus::Failed,
+            output: "provider timed out".to_string(),
+            duration_ms: 125,
+        })
+        .expect("mapped end event");
+        let AgentEvent::ToolExecutionEnd(completed) = completed else {
+            panic!("expected canonical tool-execution-end");
+        };
+        assert!(completed.is_error);
+        assert_eq!(completed.elapsed_ms, Some(125));
+        assert_eq!(completed.output["text"], "provider timed out");
+    }
+
+    #[tokio::test]
+    async fn tool_event_callback_preserves_turn_order_in_canonical_envelopes() {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+
+        let (notifications, mut receiver) = broadcast::channel(4);
+        let callback = tool_event_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            Arc::new(StdMutex::new(0)),
+            notifications,
+        );
+
+        callback(TuiAppEvent::ToolStarted {
+            call_id: "tool-1".to_string(),
+            name: "read_file".to_string(),
+            summary: "Reading AGENTS.md".to_string(),
+            input: serde_json::json!({ "path": "AGENTS.md" }),
+        });
+        callback(TuiAppEvent::ToolCompleted {
+            call_id: "tool-1".to_string(),
+            name: "read_file".to_string(),
+            status: ToolStatus::Succeeded,
+            output: "instructions".to_string(),
+            duration_ms: 8,
+        });
+
+        let started = receiver.recv().await.expect("start notification");
+        let completed = receiver.recv().await.expect("end notification");
+        assert_eq!(started.method, "turn/agent_event");
+        assert_eq!(started.params["sessionId"], "thread-1");
+        assert_eq!(started.params["turnId"], "turn-1");
+        assert_eq!(started.params["sequence"], 0);
+        assert_eq!(started.params["event"]["type"], "tool-execution-start");
+        assert_eq!(completed.params["sequence"], 1);
+        assert_eq!(completed.params["event"]["type"], "tool-execution-end");
     }
 
     #[test]

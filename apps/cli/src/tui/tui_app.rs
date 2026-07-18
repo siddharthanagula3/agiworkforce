@@ -385,9 +385,7 @@ impl TuiApp {
             active_overlay: None,
             overlay_scroll: 0,
             tool_cells: Vec::new(),
-            mcp_elicitation_handler: Arc::new(
-                crate::mcp::tui_handler::TuiElicitationHandler::new(),
-            ),
+            mcp_elicitation_handler: Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new()),
         }
     }
 
@@ -759,12 +757,7 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
     if app.agent_picker.visible {
         super::widgets::agent_picker::render(frame, chunks[1], &app.agent_picker);
     } else if app.model_picker.visible {
-        super::widgets::model_picker::render(
-            frame,
-            chunks[1],
-            &app.model_picker,
-            &app.model_name,
-        );
+        super::widgets::model_picker::render(frame, chunks[1], &app.model_picker, &app.model_name);
     }
 
     // Modal overlay drawn last so it sits on top of everything.
@@ -3208,8 +3201,7 @@ pub async fn run(
     // up to OAUTH_INTERACTIVE_TIMEOUT at launch when a repo `.mcp.json` declares
     // an HTTP-OAuth server. Mirrors the REPL's P0-1 fix; until the manager is
     // ready, turns simply run without MCP tools.
-    let mcp_elicitation_handler =
-        Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new());
+    let mcp_elicitation_handler = Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new());
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
         let privacy_mode = session.privacy_mode;
@@ -3667,6 +3659,7 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
             call_id,
             name,
             summary,
+            ..
         } => {
             cells.push(ToolCell {
                 call_id,
@@ -3680,6 +3673,7 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
             call_id,
             status,
             output,
+            ..
         } => {
             if let Some(cell) = cells.iter_mut().find(|c| c.call_id == call_id) {
                 cell.state = match status {
@@ -4301,6 +4295,7 @@ mod tests {
                 call_id: "1".into(),
                 name: "read_file".into(),
                 summary: "a.rs".into(),
+                input: serde_json::json!({ "path": "a.rs" }),
             },
         );
         apply_tool_event(
@@ -4309,6 +4304,7 @@ mod tests {
                 call_id: "2".into(),
                 name: "run_command".into(),
                 summary: "ls".into(),
+                input: serde_json::json!({ "command": "ls" }),
             },
         );
         assert_eq!(cells.len(), 2);
@@ -4319,16 +4315,20 @@ mod tests {
             &mut cells,
             TuiAppEvent::ToolCompleted {
                 call_id: "1".into(),
+                name: "read_file".into(),
                 status: ToolStatus::Succeeded,
                 output: "ok".into(),
+                duration_ms: 10,
             },
         );
         apply_tool_event(
             &mut cells,
             TuiAppEvent::ToolCompleted {
                 call_id: "2".into(),
+                name: "run_command".into(),
                 status: ToolStatus::Failed,
                 output: "boom".into(),
+                duration_ms: 20,
             },
         );
         let c1 = cells.iter().find(|c| c.call_id == "1").expect("cell 1");
@@ -4343,8 +4343,10 @@ mod tests {
             &mut cells,
             TuiAppEvent::ToolCompleted {
                 call_id: "ghost".into(),
+                name: "read_file".into(),
                 status: ToolStatus::Succeeded,
                 output: String::new(),
+                duration_ms: 0,
             },
         );
         assert_eq!(cells.len(), 2);

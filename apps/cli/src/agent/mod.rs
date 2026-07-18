@@ -69,10 +69,10 @@ impl std::fmt::Debug for ToolApprovalSink {
     }
 }
 
-/// TUI-only sink for streaming tool lifecycle events into the transcript.
-/// Like [`ToolApprovalSink`], it is `None` on every non-TUI surface (exec,
-/// REPL, app-server, a2a), so their behavior — including the existing
-/// `eprintln!` tool status lines — is unchanged.
+/// Surface adapter for streaming tool lifecycle events out of the shared agent
+/// loop. The TUI turns these into transcript cells; the developer app-server
+/// maps the same events into canonical `AgentEventEnvelope` notifications.
+/// Non-interactive surfaces leave the sink unset.
 #[derive(Clone)]
 pub struct ToolEventSink(
     pub std::sync::Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync>,
