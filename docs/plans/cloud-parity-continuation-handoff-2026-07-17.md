@@ -86,6 +86,10 @@ Key commits: `86c626d8b`, `456dd6771`, `a6866db11`, `f0eba4781`.
   read-only subset and carries approval decisions over the same session contract.
 - Shared Rust and TypeScript context/memory engines were introduced and the main CLI/Desktop/Mobile
   consumers were migrated toward them.
+- Website Managed Cloud chat now loads bounded account memories at the server trust boundary and
+  auto-persists conservative user-authored facts only after a successful settled turn. Temporary
+  Chats, failures, and cancellations do not read or write account memory. Mobile and Desktop
+  auto-capture remain separate release-order follow-ups; do not restore a browser-side prompt copy.
 - Context compaction, summary extraction, and usage-aware accounting were wired into live engine
   paths.
 - A canonical task-state contract now includes the states needed by the GUI, replacing divergent
@@ -285,9 +289,10 @@ Continue one production slice at a time; do not begin all of these in parallel.
 2. Complete the remaining Phase 3 engine depth: typed agent definitions/coordinator, MCP transport
    breadth, per-call hook permission pipeline, code-mode orchestration, streaming executor, missing
    tools, git/PR tooling, LSP breadth, and content-addressed checkpoint/rewind.
-3. Complete Cloud product gaps in Phase 5: server-side document extraction and real Office/PPTX
-   creation, Web auto-memory, unified installable Skills/Connectors/Plugins directory, two-way voice,
-   Reflect/recap/focus reminders, and Desktop thinking/effort control.
+3. Complete Cloud product gaps in Phase 5: real Office/PPTX creation, unified installable
+   Skills/Connectors/Plugins directory, two-way voice, Reflect/recap/focus reminders, and Desktop
+   thinking/effort control. Server-side project document extraction and Website auto-memory are
+   implemented in code; honor their recorded deployment and downstream-surface follow-ups.
 4. Complete enterprise/reliability: managed settings/MDM hierarchy, settings migrations, SSO/SCIM/
    RBAC depth, wired retry generator, proxy/mTLS/custom CA, first-party observability/kill switches,
    durable cost persistence, and prompt-cache regression sentinels.
@@ -327,8 +332,9 @@ without explicit authority in the active chat.
 
 ## Known open technical risks
 
-- Managed Cloud Skill activation is still hidden body injection plus a fake timeline event until the
-  active slice lands.
+- Mobile Cloud still auto-consolidates memory client-side before provider success. Replace only the
+  Cloud branch with the server-owned completed-turn behavior during the Mobile release slice; keep
+  Local memory on-device. Desktop auto-capture follows Mobile per founder priority.
 - Desktop all-features strict lint is blocked by the documented optional remote-database dependency
   incompatibilities and an async test holding a standard mutex across awaits. Default supported
   builds remain separately green; do not call all-features support green.

@@ -114,6 +114,42 @@ beforeEach(() => {
 });
 
 describe('buildAdapterStreamResponse · wire bytes', () => {
+  it('runs the successful-turn owner only after a clean provider stream', async () => {
+    const onSuccessfulTurn = vi.fn(async () => undefined);
+    const response = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf([
+        { type: 'text-delta', delta: 'Hello' },
+        { type: 'usage', inputTokens: 10, outputTokens: 5 },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+      makeProcessed(),
+      'user-memory',
+      'token-memory',
+      1_700_000_000_000,
+      'legacy-web',
+      onSuccessfulTurn,
+    );
+    await readAllText(response as any);
+
+    expect(onSuccessfulTurn).toHaveBeenCalledOnce();
+
+    const failedOwner = vi.fn(async () => undefined);
+    const failedResponse = await buildAdapterStreamResponse(
+      makeRequest() as any,
+      chunksOf([{ type: 'error', code: '503', message: 'upstream failed', retryable: true }]),
+      makeProcessed(),
+      'user-memory',
+      'token-memory',
+      1_700_000_000_000,
+      'legacy-web',
+      failedOwner,
+    );
+    await readAllText(failedResponse as any);
+
+    expect(failedOwner).not.toHaveBeenCalled();
+  });
+
   it('emits legacy-web-shaped SSE chunks and a terminal [DONE], byte for byte', async () => {
     const chunks: StreamChunk[] = [
       { type: 'text-delta', delta: 'Hello' },

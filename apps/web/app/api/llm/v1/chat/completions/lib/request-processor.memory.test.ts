@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatCompletionRequest } from './request-processor';
-import { collectManagedPromptMaterials, enrichManagedMemoryContext } from './request-processor';
+import {
+  collectManagedPromptMaterials,
+  enrichManagedMemoryContext,
+  prepareManagedAutoMemoryFacts,
+} from './request-processor';
 
 function makeRequest(): ChatCompletionRequest {
   return {
@@ -47,5 +51,32 @@ describe('enrichManagedMemoryContext', () => {
 
     expect(query).not.toHaveBeenCalled();
     expect(chatRequest.messages).toEqual([{ role: 'user', content: 'Plan my day.' }]);
+  });
+});
+
+describe('prepareManagedAutoMemoryFacts', () => {
+  it('extracts conservative facts only for normal Website turns', () => {
+    expect(
+      prepareManagedAutoMemoryFacts({
+        message: 'My name is Ada. I prefer morning meetings.',
+        isTemporary: false,
+        surface: 'web',
+      }),
+    ).toEqual(["User's name is Ada", 'User prefers morning meetings']);
+
+    expect(
+      prepareManagedAutoMemoryFacts({
+        message: 'My name is Ada.',
+        isTemporary: true,
+        surface: 'web',
+      }),
+    ).toEqual([]);
+    expect(
+      prepareManagedAutoMemoryFacts({
+        message: 'My name is Ada.',
+        isTemporary: false,
+        surface: 'mobile',
+      }),
+    ).toEqual([]);
   });
 });

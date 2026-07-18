@@ -687,6 +687,8 @@ export async function buildAdapterStreamResponse(
   // call sites pass the provider's own wireMode explicitly (route.ts reads
   // it off ADAPTER_PROVIDERS).
   wireMode: 'legacy-web' | 'openai-passthrough' = 'legacy-web',
+  /** Optional server-owned work that runs only after a durably settled clean stream. */
+  onSuccessfulTurn?: () => Promise<void>,
 ): Promise<NextResponse> {
   const {
     requestId,
@@ -893,6 +895,10 @@ export async function buildAdapterStreamResponse(
           'CRITICAL: Credit reconciliation failed after streaming completed - may require manual adjustment',
         );
         if (processed.managedUsage) throw reconciliationError;
+      }
+
+      if (assembler.lastError === null) {
+        await onSuccessfulTurn?.();
       }
 
       // A successful terminal sentinel is emitted only after the financial
