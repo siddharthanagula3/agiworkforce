@@ -4,6 +4,7 @@ import {
   classifyMemoryCategory,
   cosineSimilarity,
   decayMemoryImportance,
+  extractCandidateMemoryFacts,
   memoryRelevanceScore,
   normalizeMemoryKey,
 } from '../memory';
@@ -47,5 +48,13 @@ describe('shared memory engine', () => {
     expect(memoryRelevanceScore({ ...base, lexicalWeight: 0.8 })).toBeGreaterThan(
       memoryRelevanceScore({ ...base, lexicalWeight: 0.2 }),
     );
+  });
+
+  it('extracts conservative self-disclosures and ignores questions', () => {
+    expect(extractCandidateMemoryFacts('My name is Sid. I prefer dark mode.')).toEqual([
+      "User's name is Sid",
+      'User prefers dark mode',
+    ]);
+    expect(extractCandidateMemoryFacts('Should I prefer dark mode?')).toEqual([]);
   });
 });

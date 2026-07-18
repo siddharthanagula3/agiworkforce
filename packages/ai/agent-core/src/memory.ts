@@ -18,6 +18,92 @@ export interface MemoryRelevanceInput {
   daysSinceAccess: number;
 }
 
+/** Max characters of a captured self-disclosure clause kept as a fact. */
+const MAX_EXTRACTED_CLAUSE_CHARS = 120;
+const MIN_EXTRACTED_CLAUSE_CHARS = 2;
+
+interface MemoryExtractionPattern {
+  re: RegExp;
+  format: (value: string) => string;
+}
+
+const MEMORY_EXTRACTION_PATTERNS: readonly MemoryExtractionPattern[] = [
+  { re: /\bmy name is\s+(.+)/i, format: (value) => `User's name is ${value}` },
+  { re: /\bi am a\s+(.+)/i, format: (value) => `User is a ${value}` },
+  { re: /\bi'm a\s+(.+)/i, format: (value) => `User is a ${value}` },
+  { re: /\bi am an\s+(.+)/i, format: (value) => `User is an ${value}` },
+  { re: /\bi'm an\s+(.+)/i, format: (value) => `User is an ${value}` },
+  { re: /\bi work as\s+(.+)/i, format: (value) => `User works as ${value}` },
+  { re: /\bi work at\s+(.+)/i, format: (value) => `User works at ${value}` },
+  { re: /\bi work in\s+(.+)/i, format: (value) => `User works in ${value}` },
+  { re: /\bi live in\s+(.+)/i, format: (value) => `User lives in ${value}` },
+  { re: /\bi'm from\s+(.+)/i, format: (value) => `User is from ${value}` },
+  { re: /\bi am from\s+(.+)/i, format: (value) => `User is from ${value}` },
+  { re: /\bi prefer\s+(.+)/i, format: (value) => `User prefers ${value}` },
+  { re: /\bi really like\s+(.+)/i, format: (value) => `User likes ${value}` },
+  { re: /\bi like\s+(.+)/i, format: (value) => `User likes ${value}` },
+  { re: /\bi love\s+(.+)/i, format: (value) => `User loves ${value}` },
+  { re: /\bi hate\s+(.+)/i, format: (value) => `User dislikes ${value}` },
+  { re: /\bi don't like\s+(.+)/i, format: (value) => `User dislikes ${value}` },
+  { re: /\bremember that\s+(.+)/i, format: capitalizeMemoryClause },
+  { re: /\bremember:\s+(.+)/i, format: capitalizeMemoryClause },
+  { re: /\bnote that\s+(.+)/i, format: capitalizeMemoryClause },
+  { re: /\bfor future reference[,:]?\s+(.+)/i, format: capitalizeMemoryClause },
+];
+
+function capitalizeMemoryClause(value: string): string {
+  return value.length > 0 ? value[0]!.toUpperCase() + value.slice(1) : value;
+}
+
+function cleanMemoryClause(value: string): string {
+  return value
+    .trim()
+    .replace(/[.!?,;:\s]+$/u, '')
+    .trim();
+}
+
+function splitMemorySentences(value: string): string[] {
+  return value
+    .split(/(?<=[.!?\n])\s+/u)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Conservatively extract durable first-person self-disclosures from one user
+ * message. Precision wins over recall: questions, long clauses, and messages
+ * without an explicit supported pattern produce no facts.
+ */
+export function extractCandidateMemoryFacts(message: string): string[] {
+  if (!message || typeof message !== 'string') return [];
+
+  const facts: string[] = [];
+  const seen = new Set<string>();
+  for (const sentence of splitMemorySentences(message)) {
+    if (sentence.trimEnd().endsWith('?')) continue;
+
+    for (const pattern of MEMORY_EXTRACTION_PATTERNS) {
+      const match = pattern.re.exec(sentence);
+      if (!match) continue;
+      const clause = cleanMemoryClause(match[1] ?? '');
+      if (
+        clause.length < MIN_EXTRACTED_CLAUSE_CHARS ||
+        clause.length > MAX_EXTRACTED_CLAUSE_CHARS
+      ) {
+        break;
+      }
+      const fact = pattern.format(clause).trim();
+      const key = fact.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        facts.push(fact);
+      }
+      break;
+    }
+  }
+  return facts;
+}
+
 const DEFAULT_DECAY = {
   enabled: true,
   decayRate: 0.1,
