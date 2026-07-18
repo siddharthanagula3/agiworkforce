@@ -3,6 +3,7 @@ import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
+const mockUseAuth = jest.fn(() => ({ isLoaded: true, isSignedIn: mockIsSignedIn }));
 
 // Capture the props Clerk's AuthView is rendered with so we can assert the
 // sign-in mode without pretending that native dismissal events are reliable.
@@ -22,7 +23,7 @@ jest.mock('@/lib/v1FeatureFlags', () => ({
 }));
 
 jest.mock('@clerk/expo', () => ({
-  useAuth: () => ({ isLoaded: true, isSignedIn: mockIsSignedIn }),
+  useAuth: (options?: { treatPendingAsSignedOut?: boolean }) => mockUseAuth(options),
 }));
 
 // AuthView is a native SwiftUI/Compose component; in Jest it has no testable
@@ -68,6 +69,7 @@ describe('LoginScreen', () => {
     // Cloud sign-in is the native AuthView, not a web/credential form.
     expect(getByText('AuthView:signInOrUp')).toBeTruthy();
     expect(lastAuthViewProps.mode).toBe('signInOrUp');
+    expect(mockUseAuth).toHaveBeenCalledWith({ treatPendingAsSignedOut: false });
   });
 
   it('uses an app-owned close control that reliably returns to Local Mode', () => {

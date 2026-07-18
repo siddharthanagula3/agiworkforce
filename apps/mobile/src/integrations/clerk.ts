@@ -11,6 +11,17 @@ import { getClerkInstance } from '@clerk/expo';
 
 export const CLERK_PUBLISHABLE_KEY = 'pk_test_aGFuZHktamF3ZmlzaC03My5jbGVyay5hY2NvdW50cy5kZXYk';
 
+/**
+ * Clerk's native Expo components can create a pending session while an
+ * additional verification step is in progress. Auth-state consumers must not
+ * collapse that state into "signed out", or the app can revoke Cloud access
+ * and redirect in the middle of sign-in. Keep this shared so every mobile
+ * auth boundary follows Clerk's native-components contract.
+ */
+export const CLERK_NATIVE_AUTH_OPTIONS = {
+  treatPendingAsSignedOut: false,
+} as const;
+
 // ---------------------------------------------------------------------------
 // Token bridge
 //
