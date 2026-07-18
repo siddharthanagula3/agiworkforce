@@ -30,6 +30,22 @@ transactional limits for five free Projects and one custom remote MCP. This is
 founder-gated production data-plane work; no agent should deploy this slice or
 run production-mutating QA until the founder confirms 0060 was applied.
 
+2026-07-17 Cloud agent durability gap (`CLOUD-AGENT-DURABILITY-01`, Critical,
+Open): Web, Desktop Cloud, and Mobile Cloud all reach the real managed tool loop
+through `apps/web/app/api/llm/v1/chat/completions`. AGI Work now has a bounded
+100-step/four-minute invocation policy inside the route's five-minute function
+window, but the loop is still request-scoped rather than a restart-safe durable
+workflow. Web/Desktop/Mobile approval registries are process-memory caches; the
+approval endpoint safely reconstructs a continuation from the owned
+conversation, but a worker restart cannot autonomously continue an in-flight
+turn, and the stream has no durable event cursor. Before claiming ChatGPT-class
+multi-hour/background agents, move each provider/tool boundary into a durable
+workflow or shared Rust worker, persist an encrypted idempotent execution
+journal plus approval/cancellation state, resume streams from a cursor, and
+settle billing exactly once across retries. Keep the current four-minute budget
+as an individual-invocation safety boundary. Verification for the interim
+boundary lives in `tool-loop-policy.test.ts` and `tool-loop.e2e.test.ts`.
+
 2026-07-15 billing ownership clarification for
 `GATEWAY-METERING-IDEMPOTENCY-01`: custom Web research, MCP/E2B tool loops,
 and tool-approval resumes now aggregate canonical usage for every provider
