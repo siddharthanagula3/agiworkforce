@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  applyAgentMode,
+  applyWorkMode,
   appendWebSearchTool,
   isFreeTierBlockedAddOn,
   shouldOfferGenericWebSearchTool,
@@ -10,19 +10,19 @@ import {
   providerInjectsWebSearchTool,
 } from '@/lib/web-search-support';
 
-describe('applyAgentMode', () => {
+describe('applyWorkMode', () => {
   it('turns AGI Work into a real tool-using managed-cloud request', () => {
     const request = {
       model: 'test-model',
       messages: [{ role: 'user' as const, content: 'Research this and build a report.' }],
       stream: false,
-      agent_mode: 'agiwork' as const,
+      work_mode: 'agiwork' as const,
     };
 
-    applyAgentMode(request);
+    applyWorkMode(request);
 
     expect(request).toMatchObject({
-      agent_mode: 'agiwork',
+      work_mode: 'agiwork',
       web_search: true,
       web_fetch: true,
       code_execution: true,
@@ -35,16 +35,16 @@ describe('applyAgentMode', () => {
       model: 'test-model',
       messages: [{ role: 'user' as const, content: 'Hello' }],
       stream: false,
-      agent_mode: 'chat' as const,
+      work_mode: 'chat' as const,
     };
 
-    applyAgentMode(request);
+    applyWorkMode(request);
 
     expect(request).toEqual({
       model: 'test-model',
       messages: [{ role: 'user', content: 'Hello' }],
       stream: false,
-      agent_mode: 'chat',
+      work_mode: 'chat',
     });
   });
 });
@@ -191,7 +191,7 @@ describe('isFreeTierBlockedAddOn', () => {
   });
 
   it('keeps the developer-level AGI Work agent on paid plans', () => {
-    expect(isFreeTierBlockedAddOn({ agent_mode: 'agiwork' })).toBe(true);
-    expect(isFreeTierBlockedAddOn({ agent_mode: 'chat' })).toBe(false);
+    expect(isFreeTierBlockedAddOn({ work_mode: 'agiwork' })).toBe(true);
+    expect(isFreeTierBlockedAddOn({ work_mode: 'chat' })).toBe(false);
   });
 });

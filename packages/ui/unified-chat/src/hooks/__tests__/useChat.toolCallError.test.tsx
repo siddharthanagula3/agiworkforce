@@ -549,6 +549,39 @@ describe('useChat — registry-backed Auto routing', () => {
     );
   });
 
+  it('forwards the Cloud work mode independently from permission mode', async () => {
+    seedCloudConversation();
+    const sendMessage = vi.fn(async () => {});
+    const runtime: ChatRuntime = {
+      sendMessage,
+      stopGeneration: vi.fn(),
+      createConversation: vi.fn(async () => 'conv-cloud'),
+      deleteConversation: vi.fn(async () => {}),
+      renameConversation: vi.fn(async () => {}),
+      getPlatform: () => 'web',
+    };
+    const { result } = renderHook(() => useChat(runtime, { surfaceId: 'web-work-mode' }));
+
+    act(() =>
+      result.current.sendMessage(
+        'Build and verify this',
+        'auto',
+        undefined,
+        undefined,
+        false,
+        undefined,
+        'agiwork',
+      ),
+    );
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    expect(sendMessage).toHaveBeenCalledWith(
+      'conv-cloud',
+      'Build and verify this',
+      expect.objectContaining({ agentMode: 'auto', workMode: 'agiwork' }),
+    );
+  });
+
   it('does not forward a stale Research request through an unsupported runtime', async () => {
     seedCloudConversation();
     const sendMessage = vi.fn(async () => {});

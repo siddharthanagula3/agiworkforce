@@ -6,6 +6,7 @@ import type {
   WebSearchResult,
 } from './types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { CloudWorkMode } from '@agiworkforce/types';
 
 /**
  * ChatRuntime abstracts the transport layer between the chat UI and the backend.
@@ -154,6 +155,8 @@ export interface SendMessageOptions {
   webSearch?: boolean;
   /** Request the managed Deep Research workflow (capability-gated by the runtime). */
   research?: boolean;
+  /** Cloud product execution mode; independent from permission `agentMode`. */
+  workMode?: CloudWorkMode;
   codeExecution?: boolean;
   signal?: AbortSignal;
   systemPrompt?: string;
@@ -189,6 +192,7 @@ export interface SendMessageParams {
    *  chat_send_message request so the toggles stop being inert facade. */
   thinkingEnabled?: boolean;
   webSearch?: boolean;
+  workMode?: CloudWorkMode;
   systemPrompt?: string;
   agentMode?: string;
   effort?: string;

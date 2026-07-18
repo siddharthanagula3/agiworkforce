@@ -277,7 +277,12 @@ export class CloudRuntime implements ChatRuntime {
           purpose: 'send',
           operationId: userMessageId,
         }),
-        options?.research ? { research: true } : undefined,
+        options?.research || options?.workMode
+          ? {
+              ...(options.research ? { research: true } : {}),
+              ...(options.workMode ? { workMode: options.workMode } : {}),
+            }
+          : undefined,
       );
     } catch (err) {
       if (!controller.signal.aborted) {

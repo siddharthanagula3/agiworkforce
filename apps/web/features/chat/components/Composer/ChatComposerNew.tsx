@@ -40,13 +40,13 @@ import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useRouter } from 'next/navigation';
-import { EFFORT_LABEL, getModels } from '@agiworkforce/types';
+import { EFFORT_LABEL, getModels, type CloudWorkMode } from '@agiworkforce/types';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 
 /** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
-export type ComposerWorkMode = 'chat' | 'agiwork';
+export type ComposerWorkMode = CloudWorkMode;
 
 interface ChatComposerProps {
   onSend: (

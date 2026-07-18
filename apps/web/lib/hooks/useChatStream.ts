@@ -20,7 +20,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import type { Effort } from '@agiworkforce/types';
+import type { CloudWorkMode, Effort } from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudChatClient,
@@ -71,7 +71,7 @@ interface SendMessageOptions {
   /** Deep Research mode: forces web_search and injects a research system prompt. */
   research?: boolean;
   /** Validated product mode; AGI Work exposes the paid server-owned tool harness. */
-  agentMode?: 'chat' | 'agiwork';
+  workMode?: CloudWorkMode;
 }
 
 const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
@@ -1454,7 +1454,7 @@ export function useChatStream(): UseChatStreamReturn {
             web_fetch: options.webFetch || undefined,
             research: options.research || undefined,
             code_execution: options.codeExecution || undefined,
-            agent_mode: options.agentMode,
+            work_mode: options.workMode,
             thinking_mode: thinkingEnabled || undefined,
             effort: thinkingEnabled ? thinkingEffort : undefined,
             use_prompt_cache: true,

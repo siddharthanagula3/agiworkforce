@@ -81,4 +81,24 @@ describe('WebChatRuntime memory injection', () => {
       expect.objectContaining({ research: true }),
     );
   });
+
+  it('keeps permission mode separate from the managed Cloud work mode', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      json: async () => ({}),
+    })) as unknown as typeof fetch;
+    vi.stubGlobal('fetch', fetchMock);
+
+    const runtime = new WebChatRuntime();
+    await runtime.sendMessage('conv-1', 'build this', {
+      messageHistory: [],
+      agentMode: 'auto',
+      workMode: 'agiwork',
+    });
+
+    expect(bodyOf(fetchMock as unknown as ReturnType<typeof vi.fn>)).toEqual(
+      expect.objectContaining({ work_mode: 'agiwork' }),
+    );
+    expect(bodyOf(fetchMock as unknown as ReturnType<typeof vi.fn>)['agent_mode']).toBeUndefined();
+  });
 });

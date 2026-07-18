@@ -204,10 +204,12 @@ describe('cloudApi', () => {
       undefined,
       undefined,
       'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000002',
-      { research: true },
+      { research: true, workMode: 'agiwork' },
     );
 
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    expect(JSON.parse(request.body as string)).toEqual(expect.objectContaining({ research: true }));
+    expect(JSON.parse(request.body as string)).toEqual(
+      expect.objectContaining({ research: true, work_mode: 'agiwork' }),
+    );
   });
 });

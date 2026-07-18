@@ -10,6 +10,7 @@ import {
   applyAgentTaskGoalStepCompleted,
   applyAgentTaskGoalStepStarted,
   applyAgentTaskGoalSubmitted,
+  applyAgentTaskStateChanged,
 } from '../agentTaskStore';
 
 describe('agentTaskStore goal event reducers', () => {
@@ -26,6 +27,11 @@ describe('agentTaskStore goal event reducers', () => {
     applyAgentTaskGoalSubmitted({
       goal_id: 'goal-1',
       description: 'Write release notes',
+    });
+    applyAgentTaskStateChanged({
+      taskId: 'goal-1',
+      state: 'running',
+      previousState: 'queued',
     });
     applyAgentTaskGoalPlanCreated({
       goal_id: 'goal-1',
@@ -67,7 +73,7 @@ describe('agentTaskStore goal event reducers', () => {
     expect(liveStep?.completedAt).toBeInstanceOf(Date);
   });
 
-  it('marks a task completed and closes any running live steps', () => {
+  it('accepts the engine review state and closes any running live steps', () => {
     applyAgentTaskGoalSubmitted({
       goal_id: 'goal-2',
       description: 'Ship patch',
@@ -84,12 +90,17 @@ describe('agentTaskStore goal event reducers', () => {
       total_steps: 2,
       completed_steps: 2,
     });
+    applyAgentTaskStateChanged({
+      taskId: 'goal-2',
+      state: 'ready_for_review',
+      previousState: 'running',
+    });
 
     const state = useAgentTaskStore.getState();
     const task = state.tasks.find((entry) => entry.id === 'goal-2');
     const liveStep = state.liveStepsByTask['goal-2']?.[0];
 
-    expect(task?.status).toBe('completed');
+    expect(task?.status).toBe('ready_for_review');
     expect(task?.completedAt).toBeDefined();
     expect(task?.iterations).toBe(2);
     expect(state.liveProgressByTask['goal-2']).toEqual({ step: 2, total: 2 });
@@ -111,6 +122,12 @@ describe('agentTaskStore goal event reducers', () => {
     applyAgentTaskGoalError({
       goal_id: 'goal-3',
       error: 'Migration failed',
+    });
+    applyAgentTaskStateChanged({
+      taskId: 'goal-3',
+      state: 'failed',
+      previousState: 'running',
+      summary: 'Migration failed',
     });
 
     const state = useAgentTaskStore.getState();
@@ -136,20 +153,31 @@ describe('agentTaskStore goal event reducers', () => {
     expect(useAgentTaskStore.getState().tasks).toEqual([
       expect.objectContaining({
         id: 'goal-parallel',
-        status: 'running',
+        status: 'queued',
         executionMode: 'parallel',
       }),
     ]);
+
+    applyAgentTaskStateChanged({
+      taskId: 'goal-parallel',
+      state: 'running',
+      previousState: 'queued',
+    });
 
     applyAgentTaskGoalExecutionCompleted({
       goal_id: 'goal-parallel',
       success: true,
     });
+    applyAgentTaskStateChanged({
+      taskId: 'goal-parallel',
+      state: 'ready_for_review',
+      previousState: 'running',
+    });
 
     expect(useAgentTaskStore.getState().tasks).toEqual([
       expect.objectContaining({
         id: 'goal-parallel',
-        status: 'completed',
+        status: 'ready_for_review',
         completedAt: expect.any(String),
       }),
     ]);
