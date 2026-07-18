@@ -1,11 +1,14 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { AgentEventEnvelopeSchema } from '@agiworkforce/cloud-contracts';
+import {
+  AgentEventEnvelopeSchema,
+  CloudAgentRunSchema,
+  type CloudAgentOriginSurface,
+  type CloudAgentRun,
+  type CloudAgentWorkMode,
+} from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
-
-export type CloudAgentOriginSurface = 'web' | 'desktop' | 'mobile' | 'chrome' | 'vscode' | 'api';
-export type CloudAgentWorkMode = 'chat' | 'agiwork' | 'research';
 
 const TERMINAL_STATES = new Set<AgentTaskState>([
   'ready_for_review',
@@ -38,23 +41,6 @@ interface CloudAgentEventRow extends Record<string, unknown> {
   emitted_at: string;
 }
 
-export interface CloudAgentRun {
-  id: string;
-  userId: string;
-  requestId: string;
-  conversationId: string | null;
-  originSurface: CloudAgentOriginSurface;
-  workMode: CloudAgentWorkMode;
-  state: AgentTaskState;
-  provider: string;
-  model: string;
-  lastEventSequence: number;
-  cancellationRequestedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface CloudAgentRunSnapshot {
   run: CloudAgentRun;
   events: AgentEventEnvelope[];
@@ -67,51 +53,15 @@ export class CloudAgentRunNotFoundError extends Error {
   }
 }
 
-function asOriginSurface(value: string): CloudAgentOriginSurface {
-  if (
-    value === 'web' ||
-    value === 'desktop' ||
-    value === 'mobile' ||
-    value === 'chrome' ||
-    value === 'vscode' ||
-    value === 'api'
-  ) {
-    return value;
-  }
-  throw new Error(`Invalid Cloud agent origin surface: ${value}`);
-}
-
-function asWorkMode(value: string): CloudAgentWorkMode {
-  if (value === 'chat' || value === 'agiwork' || value === 'research') return value;
-  throw new Error(`Invalid Cloud agent work mode: ${value}`);
-}
-
-function asTaskState(value: string): AgentTaskState {
-  if (
-    value === 'queued' ||
-    value === 'running' ||
-    value === 'awaiting_input' ||
-    value === 'ready_for_review' ||
-    value === 'completed' ||
-    value === 'failed' ||
-    value === 'cancelled' ||
-    value === 'paused' ||
-    value === 'archived'
-  ) {
-    return value;
-  }
-  throw new Error(`Invalid Cloud agent task state: ${value}`);
-}
-
 function mapRun(row: CloudAgentRunRow): CloudAgentRun {
-  return {
+  return CloudAgentRunSchema.parse({
     id: row.id,
     userId: row.user_id,
     requestId: row.request_id,
     conversationId: row.conversation_id,
-    originSurface: asOriginSurface(row.origin_surface),
-    workMode: asWorkMode(row.work_mode),
-    state: asTaskState(row.state),
+    originSurface: row.origin_surface,
+    workMode: row.work_mode,
+    state: row.state,
     provider: row.provider,
     model: row.model,
     lastEventSequence: Number(row.last_event_sequence),
@@ -119,7 +69,7 @@ function mapRun(row: CloudAgentRunRow): CloudAgentRun {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
+  });
 }
 
 function requireRun(rows: CloudAgentRunRow[]): CloudAgentRun {

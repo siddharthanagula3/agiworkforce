@@ -52,10 +52,12 @@
   "cloudContractsModules": [
     "agent-events",
     "capability-handshake",
+    "cloud-agent-runs",
     "connectors",
     "conversations",
     "generated-files",
     "library",
+    "managed-cloud-agent-runs-client",
     "managed-cloud-chat-client",
     "managed-cloud-projects-client",
     "managed-cloud-settings-client",
