@@ -188,6 +188,8 @@ export interface ToolLoopOptions {
   connectorExecutor?: ConnectorToolExecutor;
   /** Canonical usage accumulated across every provider call in this loop. */
   usage?: ObservedProviderUsage;
+  /** Durable cancellation check evaluated before provider and tool side effects. */
+  isCancellationRequested?: () => Promise<boolean>;
 }
 
 export interface ToolLoopPolicy {
@@ -1246,6 +1248,11 @@ export async function* runToolLoop(
   );
 
   try {
+    if (await options.isCancellationRequested?.()) {
+      yield* flushTerminal('cancelled');
+      return;
+    }
+
     // ── Manual-approval resume preamble (stateless) ─────────────────────────
     // When resuming, the suspended assistant tool_call turn is the last
     // assistant message in `messages` (replayed by the client). We execute ONLY
@@ -1370,6 +1377,10 @@ export async function* runToolLoop(
       }
 
       if (toRun.length > 0) {
+        if (await options.isCancellationRequested?.()) {
+          yield* flushTerminal('cancelled');
+          return;
+        }
         yield* runAndStreamToolCalls(toRun);
       }
       // Fall through into the loop: the next provider call sees the completed
@@ -1378,6 +1389,10 @@ export async function* runToolLoop(
 
     let step = 0;
     while (step < maxSteps) {
+      if (await options.isCancellationRequested?.()) {
+        yield* flushTerminal('cancelled');
+        return;
+      }
       if (maxDurationMs !== undefined && now() - startedAt >= maxDurationMs) {
         logger.warn(
           { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
@@ -1486,6 +1501,11 @@ export async function* runToolLoop(
       // Forward all collected lines to the client.
       for (const line of lines) {
         yield encoder.encode(line);
+      }
+
+      if (await options.isCancellationRequested?.()) {
+        yield* flushTerminal('cancelled');
+        return;
       }
 
       // If no tool calls, the model is done: harvest any sandbox-generated

@@ -12,6 +12,13 @@ const delivered = vi.fn(async (_input: unknown) => {
 const recordFreeTrialTokens = vi.fn(async (_input: unknown) => {
   events.push('free-recorded');
 });
+const appendCloudAgentEvent = vi.fn(async (_db: unknown, input: { envelope: unknown }) => {
+  events.push('event-persisted');
+  return { state: (input.envelope as { event: { state?: string } }).event.state ?? 'running' };
+});
+const transitionCloudAgentRun = vi.fn(async (_db: unknown, input: { state: string }) => ({
+  state: input.state,
+}));
 
 vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/managed-usage-accounting-service')>()),
@@ -24,6 +31,13 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 
 vi.mock('@/lib/services/free-trial-service', () => ({
   recordFreeTrialTokens: (input: unknown) => recordFreeTrialTokens(input),
+}));
+
+vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  appendCloudAgentEvent: (db: unknown, input: unknown) =>
+    appendCloudAgentEvent(db, input as { envelope: unknown }),
+  transitionCloudAgentRun: (db: unknown, input: unknown) =>
+    transitionCloudAgentRun(db, input as { state: string }),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -60,6 +74,35 @@ async function* failedGenerator(): AsyncGenerator<Uint8Array> {
   const encoder = new TextEncoder();
   yield encoder.encode(
     'data: {"choices":[{"delta":{"x_stream_error":{"message":"upstream failed"}}}]}\n\n',
+  );
+  yield encoder.encode('data: [DONE]\n\n');
+}
+
+async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
+  const encoder = new TextEncoder();
+  yield encoder.encode(
+    `data: ${JSON.stringify({
+      choices: [
+        {
+          delta: {
+            x_agent_event: {
+              schemaVersion: 3,
+              sessionId: 'conversation-1',
+              turnId: 'turn-1',
+              sequence: 0,
+              emittedAtMs: 1_752_780_000_000,
+              event: {
+                type: 'task-state-changed',
+                taskId: 'turn-1',
+                state: 'awaiting_input',
+                summary: 'Approval required',
+              },
+            },
+          },
+          index: 0,
+        },
+      ],
+    })}\n\n`,
   );
   yield encoder.encode('data: [DONE]\n\n');
 }
@@ -169,5 +212,59 @@ describe('managed agent stream', () => {
       tokens: 120,
     });
     expect(events).toEqual(['free-recorded', 'terminal-visible']);
+  });
+
+  it('persists canonical activity before making it visible and preserves an awaiting-input terminal', async () => {
+    events.length = 0;
+    appendCloudAgentEvent.mockClear();
+    transitionCloudAgentRun.mockClear();
+
+    const stream = buildManagedAgentStream({
+      generator: canonicalEventGenerator(),
+      processed,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+      runJournal: {
+        db: processed.managedUsage!.db,
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+      },
+    });
+
+    const output = await readAll(stream);
+
+    expect(output).toContain('x_agent_event');
+    expect(events[0]).toBe('event-persisted');
+    expect(appendCloudAgentEvent).toHaveBeenCalledOnce();
+    expect(transitionCloudAgentRun).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ state: 'ready_for_review' }),
+    );
+  });
+
+  it('marks a journaled run cancelled when its client stream disconnects', async () => {
+    transitionCloudAgentRun.mockClear();
+    const stream = buildManagedAgentStream({
+      generator: completedGenerator(),
+      processed,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+      runJournal: {
+        db: processed.managedUsage!.db,
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+      },
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    expect(transitionCloudAgentRun).toHaveBeenCalledWith(processed.managedUsage!.db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      state: 'cancelled',
+    });
   });
 });

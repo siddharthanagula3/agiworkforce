@@ -52,6 +52,7 @@ import {
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import type { ProcessedRequest } from './request-processor';
+import { createAgentEventStreamEmitter } from './agent-event-stream';
 
 // ─── Bounds ───────────────────────────────────────────────────────────────────
 
@@ -101,6 +102,8 @@ export interface ResearchLoopOptions {
   now?: () => number;
   /** Canonical usage accumulated across every provider call in this run. */
   usage?: ObservedProviderUsage;
+  /** Durable cancellation check evaluated before provider and fetch side effects. */
+  isCancellationRequested?: () => Promise<boolean>;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -487,6 +490,13 @@ export async function* runResearchLoop(
   const responseModel = processed.requestedModel;
   const now = options.now ?? Date.now;
   const startedAt = now();
+  const turnId = processed.requestId || crypto.randomUUID();
+  const eventStream = createAgentEventStreamEmitter({
+    sessionId: processed.conversationId ?? turnId,
+    turnId,
+    responseModel,
+    now,
+  });
 
   const maxIterations =
     options.maxIterations ??
@@ -504,6 +514,23 @@ export async function* runResearchLoop(
   let totalFetches = 0;
   let iteration = 0;
   const observedUsage = options.usage ?? createObservedProviderUsage();
+  let cancellationEmitted = false;
+
+  async function* flushCancellationIfRequested(): AsyncGenerator<Uint8Array, boolean> {
+    if (cancellationEmitted || !(await options.isCancellationRequested?.())) return false;
+    cancellationEmitted = true;
+    yield encoder.encode(
+      eventStream.emit({
+        type: 'task-state-changed',
+        taskId: turnId,
+        state: 'cancelled',
+        summary: 'Research was cancelled.',
+      }),
+    );
+    yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'cancelled' }));
+    yield encoder.encode(sseDone());
+    return true;
+  }
 
   // Strip client-custom function tools EXCEPT the platform url_fetch tool:
   // research turns use provider-native web search plus loop-executed url_fetch
@@ -606,7 +633,7 @@ export async function* runResearchLoop(
     assistantText: string,
     turnMessages: ProcessedRequest['llmRequest']['messages'],
     roundFetchCount: { count: number },
-  ): AsyncGenerator<Uint8Array> {
+  ): AsyncGenerator<Uint8Array, boolean> {
     turnMessages.push({
       role: 'assistant',
       content: assistantText,
@@ -618,6 +645,7 @@ export async function* runResearchLoop(
     });
 
     for (const call of calls) {
+      if (yield* flushCancellationIfRequested()) return true;
       let content: string;
       let isError: boolean;
 
@@ -656,9 +684,11 @@ export async function* runResearchLoop(
 
       turnMessages.push({ role: 'tool', content, tool_call_id: call.id });
     }
+    return false;
   }
 
   try {
+    if (yield* flushCancellationIfRequested()) return;
     yield status('planning', 'Planning research');
 
     let cutShortReason: string | null = null;
@@ -675,6 +705,7 @@ export async function* runResearchLoop(
       let turn: TurnResult;
       let roundSearchEvents = 0;
       try {
+        if (yield* flushCancellationIfRequested()) return;
         // Directives ride as 'user' turns: several providers (e.g. Google)
         // only honor the FIRST system message and silently drop the rest, so
         // a trailing system directive would never reach the model.
@@ -686,6 +717,7 @@ export async function* runResearchLoop(
           },
         ];
         turn = yield* runTurn(turnMessages, false);
+        if (yield* flushCancellationIfRequested()) return;
         roundSearchEvents += turn.searchEvents;
 
         // url_fetch resolution passes: when the turn ended on tool_calls,
@@ -701,10 +733,13 @@ export async function* runResearchLoop(
           fetchPasses < MAX_FETCH_PASSES_PER_ROUND
         ) {
           fetchPasses += 1;
-          yield* runFetchCalls(turn.toolCalls, turn.text, turnMessages, roundFetchCount);
+          if (yield* runFetchCalls(turn.toolCalls, turn.text, turnMessages, roundFetchCount))
+            return;
           const cumulativeAfterFetch = sources.toSearchResultsEvent(responseModel);
           if (cumulativeAfterFetch) yield encoder.encode(cumulativeAfterFetch);
+          if (yield* flushCancellationIfRequested()) return;
           turn = yield* runTurn(turnMessages, false);
+          if (yield* flushCancellationIfRequested()) return;
           roundSearchEvents += turn.searchEvents;
         }
       } catch (err) {
@@ -767,10 +802,12 @@ export async function* runResearchLoop(
     iteration = Math.min(iteration + 1, maxIterations);
     yield status('synthesizing', 'Writing report');
     try {
+      if (yield* flushCancellationIfRequested()) return;
       const synthesis = yield* runTurn(
         [...messages, { role: 'user', content: synthesisDirective(sources, cutShortReason) }],
         true,
       );
+      if (yield* flushCancellationIfRequested()) return;
       // Empty-synthesis guarantee: a run must NEVER end as a silent empty
       // message (an empty body also skips client persistence, so the whole
       // run would vanish on reload). If the model produced no report text,
