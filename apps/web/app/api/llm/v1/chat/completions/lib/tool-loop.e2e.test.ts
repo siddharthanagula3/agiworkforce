@@ -38,7 +38,7 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: (...args: unknown[]) => mockPersistGeneratedFileBytes(...args),
 }));
 
-import { runToolLoop } from './tool-loop';
+import { runToolLoop, type ToolLoopProviderExecutor } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import type { E2BExecutor } from '@/lib/e2b/types';
 
@@ -368,6 +368,103 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       state: 'failed',
     });
     expect(activity[5]?.event).toEqual({ type: 'stop', reason: 'error' });
+  });
+
+  it('checkpoints AGI Work at the invocation budget without failing or closing the workflow stream', async () => {
+    const processed = makeProcessed();
+    processed.chatRequest.work_mode = 'agiwork';
+    const now = vi
+      .fn()
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(4 * 60_000);
+    const onInvocationCheckpoint = vi.fn().mockResolvedValue(undefined);
+
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        now,
+        onInvocationCheckpoint,
+      }),
+    );
+
+    expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
+    expect(onInvocationCheckpoint).toHaveBeenCalledWith({
+      sessionId: 'req-1',
+      turnId: 'req-1',
+      nextEventSequence: 3,
+      completedSteps: 0,
+      messages: [{ role: 'user', content: 'run print(1+1)' }],
+    });
+    expect(output).not.toContain('agent_time_budget_reached');
+    expect(output).not.toContain('data: [DONE]');
+    expect(agentEvents(output).map((entry) => entry.event.type)).toEqual([
+      'task-state-changed',
+      'task-state-changed',
+      'lifecycle',
+    ]);
+  });
+
+  it('delegates provider and tool operations through replay-aware executors', async () => {
+    const step1 = sseStreamFrom([
+      chunk({
+        tool_calls: [{ index: 0, id: 'call_1', function: { name: 'execute_code', arguments: '' } }],
+      }),
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            function: { arguments: JSON.stringify({ language: 'python', code: 'print(1+1)' }) },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    const step2 = sseStreamFrom([chunk({ content: 'Cached answer.' }), chunk({}, 'stop')]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+
+    const providerExecutor = vi.fn<ToolLoopProviderExecutor>(async (input) => input.execute());
+    const toolExecutor = vi.fn().mockResolvedValue({
+      content: '2\n',
+      isError: false,
+    });
+
+    const output = await drain(
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        providerExecutor,
+        toolExecutor,
+      }),
+    );
+
+    expect(providerExecutor).toHaveBeenCalledTimes(2);
+    expect(providerExecutor.mock.calls.map((call) => call[0].operationKey)).toEqual([
+      'provider:1',
+      'provider:2',
+    ]);
+    expect(toolExecutor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationKey: 'tool:call_1',
+        retrySafety: 'unsafe',
+        toolCall: expect.objectContaining({ id: 'call_1', qualifiedName: 'execute_code' }),
+      }),
+    );
+    expect(mockGetE2BExecutor).not.toHaveBeenCalled();
+    expect(output).toContain('Cached answer.');
+  });
+
+  it('propagates workflow control errors instead of converting them into a terminal chat error', async () => {
+    const controlError = new Error('durable provider receipt is still leased');
+    const providerExecutor = vi.fn().mockRejectedValue(controlError);
+
+    await expect(
+      drain(
+        runToolLoop(makeProcessed(), {
+          approvalMode: 'auto',
+          providerExecutor,
+          shouldPropagateExecutionError: (error) => error === controlError,
+        }),
+      ),
+    ).rejects.toBe(controlError);
   });
 
   it('honors durable cancellation before provider or tool side effects', async () => {

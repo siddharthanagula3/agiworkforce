@@ -3,6 +3,7 @@ import {
   applyWorkMode,
   appendWebSearchTool,
   isFreeTierBlockedAddOn,
+  resolveManagedUsageLeaseSeconds,
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
 import {
@@ -46,6 +47,14 @@ describe('applyWorkMode', () => {
       stream: false,
       work_mode: 'chat',
     });
+  });
+});
+
+describe('resolveManagedUsageLeaseSeconds', () => {
+  it('keeps ordinary chat leases short and protects long AGI Work workflows from recovery', () => {
+    expect(resolveManagedUsageLeaseSeconds(undefined)).toBe(900);
+    expect(resolveManagedUsageLeaseSeconds('chat')).toBe(900);
+    expect(resolveManagedUsageLeaseSeconds('agiwork')).toBe(86_400);
   });
 });
 

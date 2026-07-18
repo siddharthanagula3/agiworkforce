@@ -48,12 +48,22 @@ calls, and canonical approval-boundary events. This is founder-gated
 production data-plane work; no agent should deploy this slice or run
 production-mutating QA until the founder confirms 0062 was applied.
 
+2026-07-17 Cloud agent durable-execution deploy gate: migration
+`apps/web/db/neon/0063_cloud_agent_execution_operations.sql` must be applied to
+production Neon after 0062 and before deploying the durable AGI Work workflow.
+It binds a Vercel Workflow run to each tenant-owned Cloud agent run, carries the
+completed-step cursor across approval boundaries, and creates the RLS-isolated
+provider/tool operation receipts that prevent duplicate paid or mutating side
+effects during step retries. This is founder-gated production data-plane work;
+no agent should deploy this slice or run production-mutating QA until the
+founder confirms 0061, 0062, and 0063 were applied in order.
+
 2026-07-17 Cloud agent durability gap (`CLOUD-AGENT-DURABILITY-01`, Critical,
-Partially remediated in code; workflow checkpointing remains open): Web,
+Remediated in code; production activation is gated by migrations 0061-0063): Web,
 Desktop Cloud, and Mobile Cloud all reach the real managed tool loop through
 `apps/web/app/api/llm/v1/chat/completions`. AGI Work has a bounded
-100-step/four-minute invocation policy inside the route's five-minute function
-window. Migration 0061 plus `cloud-agent-run-service.ts` now persist the
+100-step/210-second policy for each durable workflow invocation. Migration 0061
+plus `cloud-agent-run-service.ts` now persist the
 tenant-owned run state and every canonical activity envelope in monotonic
 sequence order; the owner-scoped run endpoint supports cursor reads and
 cancellation intent, and the loop checks cancellation before provider/tool
@@ -86,21 +96,32 @@ completed without overwriting a newer local edit. This removes the former
 process-memory approval-registry and approval-relaunch defects after 0062 is
 applied.
 
-Execution itself remains request-scoped rather than a restart-safe durable
-workflow. In particular, an expired `resuming` checkpoint lease is not
-automatically reclaimed because doing so without an execution-step journal
-could duplicate provider calls or tool side effects. A worker crash after a
-side effect but before checkpoint completion therefore still requires manual
-recovery; non-approval in-flight turns also do not have a general app-relaunch
-execution checkpoint. Before claiming ChatGPT-class multi-hour/background
-agents, move each provider/tool boundary into a durable workflow or shared Rust
-worker, persist idempotent execution-step records and side-effect receipts,
-reclaim leases only from a proven step boundary, resume clients from the run
-journal cursor, and settle billing exactly once across retries. Keep the
-current four-minute budget as an individual-invocation safety boundary.
-Verification for the interim boundary lives in
-`cloud-agent-run-service.test.ts`, `managed-agent-stream.test.ts`,
-`tool-loop.resume.test.ts`, `approve/route.test.ts`,
+AGI Work execution is no longer tied to one request in code. `workflow` owns a
+replayable stream and breaks the run into bounded 210-second invocations;
+provider and tool boundaries claim stable operation keys in the 0063 receipt
+journal. Completed operations replay their validated result, expired safe
+operations can be leased again, and expired unsafe operations fail closed as
+`outcome_unknown` instead of silently repeating an external side effect.
+Provider-token usage is rebuilt from completed receipts and settled through the
+existing managed-usage idempotency key, so workflow retries and deployments do
+not create a second charge. Approval continuation starts a new durable workflow
+from the signed server checkpoint and atomically replaces the run's workflow
+handle; a failed workflow start releases both the usage reservation and the
+approval lease. Web, Desktop, and Mobile suppress replay overlap by canonical
+session/turn/sequence identity and follow the owner-scoped journal after a
+transport failure. The individual invocation budget remains bounded while the
+workflow can continue across invocations, disconnects, and worker restarts.
+
+Production remains intentionally blocked until migrations 0061-0063 are
+applied in order. This closure covers Managed Cloud AGI Work; the separate local
+VS Code/CLI process-restart limitation remains tracked below. Verification
+lives in `cloud-agent-run-service.test.ts`,
+`cloud-agent-execution-service.test.ts`,
+`cloud-agent-operation-executor.test.ts`,
+`cloud-agent-workflow-{input,stream}.test.ts`,
+`start-cloud-agent-workflow.test.ts`, `managed-agent-stream.test.ts`,
+`tool-loop.resume.test.ts`, `approve/route.test.ts`, route-level AGI Work
+dispatch coverage,
 `useChatStream.approval.test.tsx`, unified-chat
 `useChat.durableApproval.test.tsx`, Desktop `CloudRuntime.test.ts`, Desktop
 `cloudApi.test.ts`, Desktop `cloudToolApproval.test.ts`, Mobile

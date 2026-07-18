@@ -1105,7 +1105,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           // Legacy x_tool_* parsing below remains during the emitter migration,
           // but the message renderer prefers this canonical state when present.
           const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
-          if (agentEnvelope) {
+          const duplicateAgentEnvelope = Boolean(
+            agentEnvelope &&
+            currentAgentActivity?.sessionId === agentEnvelope.sessionId &&
+            currentAgentActivity.turnId === agentEnvelope.turnId &&
+            agentEnvelope.sequence <= currentAgentActivity.lastSequence,
+          );
+          if (agentEnvelope && !duplicateAgentEnvelope) {
             if (agentEnvelope.event.type === 'text-delta') {
               unacknowledgedPublicText = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
@@ -1118,7 +1124,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           }
 
           let chunk: string | null = null;
-          if (parsed.choices?.[0]?.delta?.content != null) {
+          if (!duplicateAgentEnvelope && parsed.choices?.[0]?.delta?.content != null) {
             chunk = parsed.choices[0].delta.content;
           } else if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
             chunk = parsed.delta.text;

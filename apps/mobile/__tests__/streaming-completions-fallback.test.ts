@@ -256,6 +256,50 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
   });
 
+  it('forwards a retried canonical text event exactly once', async () => {
+    const { streamChat } = await loadStreamingService();
+    const envelope = {
+      schemaVersion: 3,
+      sessionId: 'session-mobile-retry',
+      turnId: 'turn-mobile-retry',
+      sequence: 7,
+      emittedAtMs: 1_000,
+      event: { type: 'text-delta', delta: 'Durable mobile answer.' },
+    } as const;
+    const payload = JSON.stringify({
+      choices: [{ delta: { content: 'Durable mobile answer.', x_agent_event: envelope } }],
+    });
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({
+        'X-AGI-Agent-Run-Id': '0190a000-0000-7000-8000-000000000101',
+        'X-AGI-Agent-Run-URL':
+          '/api/llm/v1/chat/completions/runs/0190a000-0000-7000-8000-000000000101',
+      }),
+      body: null,
+      text: async () => `data: ${payload}\n\ndata: ${payload}\n\ndata: [DONE]\n\n`,
+    } as unknown as Response);
+
+    const onDelta = jest.fn();
+    await streamChat(
+      {
+        model: 'gpt-5.6-sol',
+        messages: [],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000102',
+        workMode: 'agiwork',
+      },
+      { onDelta, onDone: jest.fn(), onError: jest.fn() },
+    );
+
+    expect(onDelta).toHaveBeenCalledTimes(1);
+    expect(onDelta).toHaveBeenCalledWith({
+      content: 'Durable mobile answer.',
+      x_agent_event: envelope,
+    });
+  });
+
   it('drops an invalid canonical agent event instead of persisting untrusted activity', async () => {
     const { streamChat } = await loadStreamingService();
     const activitySse = [
