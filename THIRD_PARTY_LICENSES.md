@@ -84,6 +84,15 @@ SOFTWARE.
 - **Adoption**: Vendored the runnable scanner package (`src/skillspector/**`, 57 modules + YARA rules) plus `pyproject.toml`. Upstream `LICENSE` and `THIRD_PARTY_NOTICES.md` are preserved verbatim at `tools/skill-vetting/LICENSE` and `tools/skill-vetting/THIRD_PARTY_NOTICES.md`.
 - **Local changes**: trimmed upstream `tests/`, `docs/`, `Dockerfile`, `extensions/`, `uv.lock` (kept only the two sample fixtures under `samples/`); added our `README.md` and `verify.sh`; rewrote `model_registry.yaml` to AGI catalog model IDs sourced from `packages/contracts/types/src/models.json`. No upstream source files were modified.
 
+## PptxGenJS
+
+- **Upstream**: [gitbrent/PptxGenJS](https://github.com/gitbrent/PptxGenJS)
+- **License**: MIT
+- **Copyright**: Copyright (c) 2015-2022 Brent Ely
+- **Used by**: `apps/web/lib/services/managed-office-file-service.ts`
+- **Adoption**: Runtime dependency only; no upstream source was copied or adapted into this repository. The package generates editable Managed Cloud `.pptx` files on the server.
+- **Notice**: The complete MIT license is distributed in the installed `pptxgenjs` package.
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:

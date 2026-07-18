@@ -3,6 +3,7 @@ import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import { isWebSearchTool } from '@/lib/web-search/web-search-tool';
 import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
+import { isManagedOfficeFileTool } from '@/lib/services/managed-office-file-service';
 
 export type ToolLoopApprovalMode = 'auto' | 'manual';
 
@@ -12,6 +13,7 @@ export interface ToolLoopInputClassification {
   hasUrlFetchTools: boolean;
   hasWebSearchTools: boolean;
   hasSkillTools: boolean;
+  hasOfficeFileTools: boolean;
   shouldRun: boolean;
   approvalMode: ToolLoopApprovalMode;
 }
@@ -39,6 +41,7 @@ export function classifyToolLoopInputs(
   const hasUrlFetchTools = names.some(isUrlFetchTool);
   const hasWebSearchTools = names.some(isWebSearchTool);
   const hasSkillTools = names.includes(SKILL_TOOL_NAME);
+  const hasOfficeFileTools = names.some(isManagedOfficeFileTool);
 
   return {
     hasMcpTools,
@@ -46,8 +49,14 @@ export function classifyToolLoopInputs(
     hasUrlFetchTools,
     hasWebSearchTools,
     hasSkillTools,
+    hasOfficeFileTools,
     shouldRun:
-      hasMcpTools || hasExecutionTools || hasUrlFetchTools || hasWebSearchTools || hasSkillTools,
+      hasMcpTools ||
+      hasExecutionTools ||
+      hasUrlFetchTools ||
+      hasWebSearchTools ||
+      hasSkillTools ||
+      hasOfficeFileTools,
     // MCP tools may cross an external or mutating boundary and remain
     // approval-gated. The built-in search/fetch/sandbox tools execute inside
     // their existing read-only or isolated safety boundaries.

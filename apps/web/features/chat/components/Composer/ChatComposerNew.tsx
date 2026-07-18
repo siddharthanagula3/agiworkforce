@@ -16,6 +16,7 @@ import {
   EyeOff,
   ImagePlus,
   Image as ImageIcon,
+  FileText,
   Terminal,
   Folder,
   FolderOpen,
@@ -61,6 +62,7 @@ interface ChatComposerProps {
       webSearchEnabled?: boolean;
       thinkingEnabled?: boolean;
       codeExecutionEnabled?: boolean;
+      officeCreationEnabled?: boolean;
       /** Deep Research mode: server injects research system prompt and forces web search. */
       researchEnabled?: boolean;
       /** Output style hint forwarded to the LLM system prompt. undefined = 'normal'. */
@@ -331,6 +333,7 @@ const ChatComposerNewComponent = ({
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [codeExecutionEnabled, setCodeExecutionEnabled] = useState(false);
+  const [officeCreationEnabled, setOfficeCreationEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
 
@@ -396,6 +399,7 @@ const ChatComposerNewComponent = ({
   const modelSupportsCodeExecution =
     (selectedModelCaps?.codeExecution ?? false) &&
     (providerHasNativeCodeExecution || deploymentCodeExecution);
+  const modelSupportsOfficeCreation = selectedModelCaps?.tools ?? false;
 
   // If the user switches to a model that can't search, clear the web-search
   // toggle so it never stays "on" for an unsupported model.
@@ -412,6 +416,10 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (codeExecutionEnabled && !modelSupportsCodeExecution) setCodeExecutionEnabled(false);
   }, [codeExecutionEnabled, modelSupportsCodeExecution]);
+
+  useEffect(() => {
+    if (officeCreationEnabled && !modelSupportsOfficeCreation) setOfficeCreationEnabled(false);
+  }, [officeCreationEnabled, modelSupportsOfficeCreation]);
 
   // Incognito / temporary chat
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -659,6 +667,10 @@ const ChatComposerNewComponent = ({
     setCodeExecutionEnabled((prev) => !prev);
   }, []);
 
+  const handleOfficeCreationToggle = useCallback(() => {
+    setOfficeCreationEnabled((prev) => !prev);
+  }, []);
+
   const closeMenu = useCallback(() => {
     setShowOverflowMenu(false);
     setShowStyleSubmenu(false);
@@ -845,6 +857,7 @@ const ChatComposerNewComponent = ({
         webSearchEnabled,
         thinkingEnabled,
         codeExecutionEnabled,
+        officeCreationEnabled,
         researchEnabled,
         styleMode: styleMode !== 'normal' ? styleMode : undefined,
         skillName: selectedSkill?.name ?? undefined,
@@ -878,6 +891,7 @@ const ChatComposerNewComponent = ({
     styleMode,
     thinkingEnabled,
     codeExecutionEnabled,
+    officeCreationEnabled,
     onSend,
     clearComposerState,
   ]);
@@ -946,6 +960,7 @@ const ChatComposerNewComponent = ({
     webSearchEnabled ||
     researchEnabled ||
     codeExecutionEnabled ||
+    officeCreationEnabled ||
     styleMode !== 'normal';
 
   return (
@@ -1457,7 +1472,25 @@ const ChatComposerNewComponent = ({
                         disabled={isLoading || disabled || !modelSupportsCodeExecution}
                       />
 
-                      {/* 8c. Extended thinking — enables thinking effort. Cycling the
+                      {/* 8c. Managed Office creation — server-owned DOCX/PPTX bytes,
+                        persisted through the same generated-file pipeline as sandbox output. */}
+                      <MenuToggleRow
+                        icon={FileText}
+                        label="Create Office files"
+                        checked={officeCreationEnabled}
+                        onToggle={() => {
+                          handleOfficeCreationToggle();
+                          closeMenu();
+                        }}
+                        disabled={isLoading || disabled || !modelSupportsOfficeCreation}
+                        title={
+                          !modelSupportsOfficeCreation
+                            ? "Office file creation isn't available for this model."
+                            : undefined
+                        }
+                      />
+
+                      {/* 8d. Extended thinking — enables thinking effort. Cycling the
                         effort level lives in the model picker; here it's a simple
                         on affordance so the control is not lost from the input row. */}
                       <MenuToggleRow
@@ -1475,7 +1508,7 @@ const ChatComposerNewComponent = ({
                         disabled={isLoading || disabled || !modelSupportsThinkingCap}
                       />
 
-                      {/* 8d. Incognito / temporary chat toggle */}
+                      {/* 8e. Incognito / temporary chat toggle */}
                       {activeConversationId && (
                         <MenuToggleRow
                           icon={EyeOff}
