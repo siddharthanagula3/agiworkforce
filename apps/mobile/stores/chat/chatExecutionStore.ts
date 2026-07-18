@@ -69,6 +69,7 @@ import {
 } from '@/src/features/chat/utils/sessionLabeling';
 import type { ChatMessage, MessageAttachment, ConversationSummary, ToolCall } from '@/types/chat';
 import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import type { GeneratedFile, GeneratedFileKind } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
@@ -1363,7 +1364,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // (AddToChatSheet toggle, gated by FEATURES.webSearch), ask the server to
       // inject its built-in web_search tool. The server streams results back as
       // x_search_results deltas, which the tool-call accumulator already renders.
-      const webSearchEnabled = FEATURES.webSearch && useChatViewStore.getState().features.webSearch;
+      const executionModelMetadata = getModelMetadataById(executionModel);
+      const webSearchEnabled =
+        FEATURES.webSearch &&
+        useChatViewStore.getState().features.webSearch &&
+        isWebSearchAvailable({
+          provider: executionModelMetadata?.provider,
+          modelSupportsNativeSearch: executionModelMetadata?.capabilities.search,
+          modelSupportsTools: executionModelMetadata?.capabilities.tools,
+          genericBackendConfigured: useTierStore.getState().genericWebSearchAvailable,
+        });
 
       // Per-turn code execution: mirrors webSearchEnabled above, with two extra
       // honesty checks so the toggle is never cosmetic — re-verified here (not
@@ -1374,7 +1384,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // (`/api/me` feature_flags.code_execution, cached in useTierStore).
       const codeExecutionEnabled =
         FEATURES.codeExecution &&
-        getModelMetadataById(executionModel)?.capabilities?.codeExecution === true &&
+        executionModelMetadata?.capabilities?.codeExecution === true &&
         useTierStore.getState().codeExecutionAvailable &&
         useChatViewStore.getState().features.codeExecution;
       const requestedWorkMode = useChatViewStore.getState().workMode;

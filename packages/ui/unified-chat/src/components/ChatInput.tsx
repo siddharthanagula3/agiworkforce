@@ -22,6 +22,7 @@ import { AgentControl } from './AgentControl';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import type { WritingStyle } from '../lib/writingStyle';
 import {
   ALLOWED_ATTACHMENT_ACCEPT,
@@ -125,6 +126,8 @@ export interface ChatInputProps {
   supportsCodeExecution?: boolean;
   /** Whether the active runtime can transport managed Research requests. */
   supportsResearch?: boolean;
+  /** Whether this runtime sends Web search through Managed Cloud. */
+  supportsManagedWebSearch?: boolean;
 }
 
 export function ChatInput({
@@ -146,6 +149,7 @@ export function ChatInput({
   projectId,
   supportsCodeExecution = false,
   supportsResearch = false,
+  supportsManagedWebSearch = false,
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isStreaming = useChatStore((s) => s.isStreaming);
@@ -272,6 +276,24 @@ export function ChatInput({
   // concrete IDs are non-empty, so cloud auto-routing stays enabled; only '' means
   // there is nothing to send to. Block send so a message can't silently no-op.
   const noModelSelected = selectedModelId.trim() === '';
+
+  const genericWebSearchDeploymentEnabled = useSettingsStore(
+    (s) => s.genericWebSearchDeploymentEnabled,
+  );
+  const selectedModelMetadata = getModelMetadataById(selectedModelId);
+  const webSearchAvailable =
+    !supportsManagedWebSearch ||
+    isWebSearchAvailable({
+      provider: modelProviderId,
+      modelSupportsNativeSearch:
+        selectedModelMetadata?.capabilities.search ?? modelProviderId === 'managed_cloud',
+      modelSupportsTools: selectedModelMetadata?.capabilities.tools ?? selectedModel?.supportsTools,
+      genericBackendConfigured: genericWebSearchDeploymentEnabled,
+    });
+
+  useEffect(() => {
+    if (webSearchEnabled && !webSearchAvailable) setWebSearchEnabled(false);
+  }, [setWebSearchEnabled, webSearchAvailable, webSearchEnabled]);
 
   // A mode/runtime switch must not leave a hidden Research selection armed.
   // The send path also gates on `supportsResearch`, but clearing here prevents
@@ -656,6 +678,7 @@ export function ChatInput({
                   currentFolderLabel={currentFolderLabel}
                   webSearchEnabled={webSearchEnabled}
                   onWebSearchToggle={() => setWebSearchEnabled(!webSearchEnabled)}
+                  webSearchAvailable={webSearchAvailable}
                   researchEnabled={researchEnabled}
                   onResearchToggle={() => setResearchEnabled((v) => !v)}
                   supportsResearch={supportsResearch}

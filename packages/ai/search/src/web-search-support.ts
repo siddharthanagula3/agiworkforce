@@ -50,14 +50,44 @@ export function providerSupportsWebSearch(provider: string | undefined | null): 
  * Server-side gating (request-processor.ts) offers the generic tool when
  * this is true AND a search backend is configured
  * (`webSearchBackendConfigured()` in web-search-tool.ts) AND the resolved
- * model is tools-capable AND the offer⊆run streaming/non-free-trial
- * constraint holds (mirrors url_fetch/E2B). Composer UIs should treat a
- * model as search-capable when EITHER `providerSupportsWebSearch` is true OR
- * (`webSearchNeedsGenericTool` is true AND the deployment has a search
- * backend configured) — never on the raw catalog `capabilities.search` flag
- * alone.
+ * model is tools-capable AND the request enters the streaming tool loop.
+ * Composer UIs must use `isWebSearchAvailable` below so model capability and
+ * real deployment readiness stay aligned with the server gate.
  */
 export function webSearchNeedsGenericTool(provider: string | undefined | null): boolean {
   if (!provider) return false;
   return !WEB_SEARCH_CAPABLE_PROVIDERS.has(provider.toLowerCase());
+}
+
+export interface WebSearchAvailabilityInput {
+  provider: string | undefined | null;
+  /** Model/catalog support for the provider's own hosted search path. */
+  modelSupportsNativeSearch: boolean | undefined;
+  /** Function/tool calling support required by AGI's generic search tool. */
+  modelSupportsTools: boolean | undefined;
+  /** Whether this deployment has the generic search backend configured. */
+  genericBackendConfigured: boolean;
+}
+
+/**
+ * Cross-surface truth for whether the Web search composer control can produce
+ * results for the selected Cloud model right now.
+ *
+ * Provider-native search requires the model's intrinsic `search` capability.
+ * The AGI-managed fallback intentionally does not: it is an ordinary function
+ * tool executed by the platform, so it requires tool calling plus the real
+ * deployment backend. This mirrors `shouldOfferGenericWebSearchTool` in the
+ * web route without leaking server environment details into clients.
+ */
+export function isWebSearchAvailable({
+  provider,
+  modelSupportsNativeSearch,
+  modelSupportsTools,
+  genericBackendConfigured,
+}: WebSearchAvailabilityInput): boolean {
+  if (!provider) return false;
+  if (providerSupportsWebSearch(provider)) return modelSupportsNativeSearch === true;
+  return (
+    webSearchNeedsGenericTool(provider) && modelSupportsTools === true && genericBackendConfigured
+  );
 }

@@ -3,10 +3,68 @@ import { getProvidersWithImplementedHarnessFeature } from '@agiworkforce/types';
 import {
   providerSupportsWebSearch,
   providerInjectsWebSearchTool,
+  isWebSearchAvailable,
   webSearchNeedsGenericTool,
   WEB_SEARCH_INJECTION_PROVIDERS,
   WEB_SEARCH_CAPABLE_PROVIDERS,
 } from '../web-search-support';
+
+describe('isWebSearchAvailable (cross-surface composer gate)', () => {
+  it('allows a model with native search when its provider path is implemented', () => {
+    expect(
+      isWebSearchAvailable({
+        provider: 'anthropic',
+        modelSupportsNativeSearch: true,
+        modelSupportsTools: true,
+        genericBackendConfigured: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('allows a tools-capable model through the configured generic fallback', () => {
+    expect(
+      isWebSearchAvailable({
+        provider: 'xai',
+        modelSupportsNativeSearch: false,
+        modelSupportsTools: true,
+        genericBackendConfigured: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not advertise a generic fallback without a configured backend', () => {
+    expect(
+      isWebSearchAvailable({
+        provider: 'qwen',
+        modelSupportsNativeSearch: false,
+        modelSupportsTools: true,
+        genericBackendConfigured: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not offer the generic function tool to a model without tools', () => {
+    expect(
+      isWebSearchAvailable({
+        provider: 'moonshot',
+        modelSupportsNativeSearch: false,
+        modelSupportsTools: false,
+        genericBackendConfigured: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('is null-safe and never infers a provider', () => {
+    expect(
+      isWebSearchAvailable({
+        provider: null,
+        modelSupportsNativeSearch: true,
+        modelSupportsTools: true,
+        genericBackendConfigured: true,
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('providerSupportsWebSearch (composer toggle native gate)', () => {
   it('is true for the providers whose native injection provably survives to the wire', () => {

@@ -666,6 +666,7 @@ export function ChatInterface({
                 projectId={null}
                 supportsCodeExecution={runtime?.supportsCodeExecution ?? false}
                 supportsResearch={runtime?.supportsResearch ?? false}
+                supportsManagedWebSearch={runtime?.supportsManagedWebSearch ?? false}
               />
               {/* Sample-prompt mode chips below the composer (claude.ai parity —
                   ref: claude_reference/015). This is a composer-area element shown

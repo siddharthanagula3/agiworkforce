@@ -42,6 +42,12 @@ export const MeFeatureFlagsSchema = z
      * cosmetic. Optional for rollout compatibility.
      */
     code_execution: z.boolean().optional(),
+    /**
+     * Deployment capability (not entitlement): AGI's generic function-tool
+     * web-search backend is configured. Native provider search does not depend
+     * on this flag. Optional for rollout compatibility.
+     */
+    generic_web_search: z.boolean().optional(),
   })
   // Forward-compat: the server may add flags before clients know about them.
   .catchall(z.unknown());

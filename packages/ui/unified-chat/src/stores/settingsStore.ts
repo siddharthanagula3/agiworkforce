@@ -29,6 +29,8 @@ interface SettingsState {
    * code-execution tool doesn't need this — see `isCodeExecutionAvailable`.
    */
   codeExecutionDeploymentEnabled: boolean;
+  /** Cloud deployment capability for AGI's generic web-search function tool. */
+  genericWebSearchDeploymentEnabled: boolean;
   memorySearchChats: boolean;
   memoryGenerateFromHistory: boolean;
   toolAccessMode: 'lazy' | 'eager';
@@ -45,6 +47,7 @@ interface SettingsState {
   toggleInlineViz: () => void;
   toggleCodeExecution: () => void;
   setCodeExecutionDeploymentEnabled: (enabled: boolean) => void;
+  setGenericWebSearchDeploymentEnabled: (enabled: boolean) => void;
   setToolAccessMode: (mode: 'lazy' | 'eager') => void;
   setAutoApproveMode: (mode: 'ask' | 'smart' | 'full') => void;
   toggleNotifyCompletions: () => void;
@@ -76,6 +79,7 @@ export const useSettingsStore = create<SettingsState>()(
       // doc comment. Hosts overwrite this at runtime; the persisted default
       // is the safe "unavailable" state.
       codeExecutionDeploymentEnabled: false,
+      genericWebSearchDeploymentEnabled: false,
       memorySearchChats: true,
       memoryGenerateFromHistory: true,
       toolAccessMode: 'lazy' as const,
@@ -95,6 +99,8 @@ export const useSettingsStore = create<SettingsState>()(
       toggleCodeExecution: () => set((s) => ({ codeExecutionEnabled: !s.codeExecutionEnabled })),
       setCodeExecutionDeploymentEnabled: (enabled) =>
         set({ codeExecutionDeploymentEnabled: enabled }),
+      setGenericWebSearchDeploymentEnabled: (enabled) =>
+        set({ genericWebSearchDeploymentEnabled: enabled }),
       setToolAccessMode: (mode) => set({ toolAccessMode: mode }),
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
       toggleNotifyCompletions: () => set((s) => ({ notifyCompletions: !s.notifyCompletions })),

@@ -115,6 +115,14 @@ export interface ChatRuntime {
   supportsResearch?: boolean;
 
   /**
+   * True when Web search is executed by the managed Cloud route and therefore
+   * must be gated on the deployment-backed generic-search capability plus the
+   * selected model. Local/Tauri runtimes omit this so their native tool path is
+   * preserved without consulting Cloud state.
+   */
+  supportsManagedWebSearch?: boolean;
+
+  /**
    * Resolve one pending tool-approval request from an `x_tool_approval_request`
    * suspension (see the `tool_approval_request` StreamEvent). Only the cloud
    * SSE runtimes implement this. They submit only the server-owned run id and

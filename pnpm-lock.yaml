@@ -697,6 +697,9 @@ importers:
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../packages/ai/routing
+      '@agiworkforce/search':
+        specifier: workspace:*
+        version: link:../../packages/ai/search
       '@agiworkforce/skills':
         specifier: workspace:*
         version: link:../../packages/tools/skills
@@ -2111,6 +2114,9 @@ importers:
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../ai/routing
+      '@agiworkforce/search':
+        specifier: workspace:*
+        version: link:../../ai/search
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../contracts/types
