@@ -15,11 +15,13 @@ import type { SubscriptionTier } from './planModels';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,
   evaluateModelEnvironment,
+  getAutoRoutingProfiles as getCatalogAutoRoutingProfiles,
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
   getManagedCloudProviderIds as getCatalogManagedCloudProviderIds,
   getManualOverrideModels as getCatalogManualOverrideModels,
   getModelMetadataById,
   getModelVariantPartner as getCatalogModelVariantPartner,
+  getPickerModels as getCatalogPickerModels,
   getProviderDefaultModel as getCatalogProviderDefaultModel,
   getTaskModelForProvider as getCatalogTaskModelForProvider,
   getTierPolicy as getCatalogTierPolicy,
@@ -130,10 +132,58 @@ const CANONICAL_MODEL_METADATA: Record<string, ModelMetadata> = config.models as
 
 export const PROVIDER_LABELS: Record<Provider, string> = providerLabels as Record<Provider, string>;
 
-export const MODEL_PRESETS: Record<
-  Provider,
-  Array<{ value: string; label: string }>
-> = config.modelPresets as unknown as Record<Provider, Array<{ value: string; label: string }>>;
+export interface ModelOption {
+  value: string;
+  label: string;
+}
+
+export interface GroupedModelOption extends ModelOption {
+  provider: Provider | string;
+}
+
+const CHAT_MODEL_TYPES = ['chat', 'code', 'reasoning', 'multimodal', 'search'] as const;
+
+const MANAGED_AUTO_MODEL_OPTIONS: ModelOption[] = getCatalogAutoRoutingProfiles().map(
+  (profile) => ({
+    value: profile.id,
+    label: profile.label,
+  }),
+);
+
+const CURRENT_PICKER_MODEL_OPTIONS: GroupedModelOption[] = getCatalogPickerModels({
+  modelTypes: [...CHAT_MODEL_TYPES],
+}).map((model) => ({
+  value: model.id,
+  label: model.name,
+  provider: model.provider,
+}));
+
+/** Selectable Managed Cloud Auto profiles projected from routing policy. */
+export function getManagedAutoModelOptions(): ModelOption[] {
+  return MANAGED_AUTO_MODEL_OPTIONS.map((option) => ({ ...option }));
+}
+
+/** Current selectable models for one provider, sourced from the canonical tier roster. */
+export function getProviderModelOptions(provider: Provider): ModelOption[] {
+  if (provider === 'managed_cloud') {
+    return getManagedAutoModelOptions();
+  }
+
+  return CURRENT_PICKER_MODEL_OPTIONS.filter((option) => option.provider === provider).map(
+    ({ value, label }) => ({ value, label }),
+  );
+}
+
+/** Current Auto profiles and provider models for grouped Desktop controls. */
+export function getCurrentModelOptions(): GroupedModelOption[] {
+  return [
+    ...MANAGED_AUTO_MODEL_OPTIONS.map((option) => ({
+      ...option,
+      provider: 'managed_cloud' as const,
+    })),
+    ...CURRENT_PICKER_MODEL_OPTIONS.map((option) => ({ ...option })),
+  ];
+}
 
 export const THINKING_MODEL_VARIANTS: Record<string, string> = {};
 

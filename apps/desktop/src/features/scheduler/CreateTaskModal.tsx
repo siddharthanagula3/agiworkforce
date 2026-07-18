@@ -6,7 +6,7 @@ import {
   type TaskSchedule,
   useSchedulerStore,
 } from '../../stores/schedulerStore';
-import { MODEL_PRESETS } from '../../constants/llm';
+import { getCurrentModelOptions } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 import { TaskScheduleInput } from './TaskScheduleInput';
 
@@ -16,15 +16,12 @@ interface CreateTaskModalProps {
   onClose: () => void;
 }
 
-type Provider = keyof typeof MODEL_PRESETS;
-
-const ALL_MODEL_OPTIONS: Array<{ value: string; label: string; group: string }> = (
-  Object.entries(MODEL_PRESETS) as Array<[Provider, Array<{ value: string; label: string }>]>
-)
-  .filter(([, presets]) => presets.length > 0)
-  .flatMap(([provider, presets]) =>
-    presets.map((p) => ({ value: p.value, label: p.label, group: provider })),
-  );
+const ALL_MODEL_OPTIONS: Array<{ value: string; label: string; group: string }> =
+  getCurrentModelOptions().map(({ value, label, provider }) => ({
+    value,
+    label,
+    group: provider,
+  }));
 
 const DEFAULT_SCHEDULE: TaskSchedule = {
   type: 'recurring',

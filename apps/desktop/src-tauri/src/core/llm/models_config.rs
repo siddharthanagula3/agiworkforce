@@ -42,7 +42,6 @@ pub struct ModelsConfig {
     pub last_updated: String,
     pub providers: HashMap<String, ProviderConfig>,
     pub models: HashMap<String, ModelEntry>,
-    pub model_presets: HashMap<String, Vec<PresetOption>>,
     pub providers_in_order: Vec<String>,
 }
 
@@ -152,13 +151,6 @@ pub struct ModelCapabilities {
     pub search: bool,
     pub research: bool,
     pub code_execution: bool,
-}
-
-/// Preset option for the QuickModelSelector UI.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PresetOption {
-    pub value: String,
-    pub label: String,
 }
 
 // ---------------------------------------------------------------------------

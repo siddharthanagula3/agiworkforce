@@ -27,10 +27,10 @@ import { useAccountStore } from '../../stores/auth';
 import { type ConversationSearchResult, useChatStore } from '../../stores/chat/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import {
-  MODEL_PRESETS,
   PROVIDER_LABELS,
   getAllowedAutoModesForTier,
   getBestAutoModeForTier,
+  getManagedAutoModelOptions,
 } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
 import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButton';
@@ -288,15 +288,12 @@ export function QuickQuery({
   const modelOptions = (() => {
     const options: Array<{ value: string; label: string; provider: Provider }> = [];
 
-    // Managed cloud presets first (Auto modes)
-    const managed = MODEL_PRESETS['managed_cloud'];
-    if (managed) {
-      for (const m of managed) {
-        if (m.value.startsWith('auto') && !allowedAutoModes.includes(m.value)) {
-          continue;
-        }
-        options.push({ value: m.value, label: m.label, provider: 'managed_cloud' });
+    // Managed Cloud Auto profiles first.
+    for (const model of getManagedAutoModelOptions()) {
+      if (!allowedAutoModes.includes(model.value)) {
+        continue;
       }
+      options.push({ ...model, provider: 'managed_cloud' });
     }
 
     return options;

@@ -53,7 +53,7 @@ The compiler emits a schema-validated normalized registry for TypeScript and Rus
 
 ## Change Contract
 
-Add or update model facts in `catalog/models.curation.json`. Use overrides only when official/provider evidence supersedes the synchronized snapshot. Change `catalog/harnesses.json` only when a provider route or verified implementation status changes. Change `catalog/routing-policies.json` only when Auto requirements or slot assignments change. A normal model release must touch no more than these three inputs. Run `generate`, inspect every generated diff, and run schema, catalog, availability, TypeScript, and Rust checks. Never hand-edit generated output.
+For a normal release on an existing provider, hand-edit only `catalog/models.curation.json`: add the model record and place its key in the intended tier. `catalog/models.synced.json` is refreshed by automation and is never hand-edited. Change `catalog/harnesses.json` only for a new provider API path or verified implementation status; change `catalog/routing-policies.json` only when Auto requirements or slot assignments change. Run `generate`, inspect every generated diff, and run schema, catalog, availability, TypeScript, and Rust checks. Never hand-edit generated output.
 
 ## Security, Privacy, And Trust Boundaries
 
