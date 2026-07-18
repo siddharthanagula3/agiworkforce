@@ -102,6 +102,13 @@ provider and tool boundaries claim stable operation keys in the 0063 receipt
 journal. Completed operations replay their validated result, expired safe
 operations can be leased again, and expired unsafe operations fail closed as
 `outcome_unknown` instead of silently repeating an external side effect.
+Each AGI Work provider step now also emits one durable, display-safe progress
+phase before execution and resolves that same phase after the model chooses
+tools, prepares the response, or fails. These summaries are derived only from
+observable loop state, never provider scratchpads or private chain-of-thought;
+the existing shared Web/Desktop renderer and Mobile renderer keep the run
+collapsed inline and progressively disclose phases, tool request/result data,
+sources, artifacts, approvals, and compaction entries on demand.
 Provider-token usage is rebuilt from completed receipts and settled through the
 existing managed-usage idempotency key, so workflow retries and deployments do
 not create a second charge. Approval continuation starts a new durable workflow

@@ -1023,6 +1023,7 @@ export async function* runToolLoop(
     responseModel,
     initialSequence: options.initialEventSequence,
   });
+  const showWorkPhases = processed.chatRequest?.work_mode === 'agiwork';
   const taskId = turnId;
   let taskState: AgentTaskState | undefined = options.resume
     ? 'awaiting_input'
@@ -1571,6 +1572,17 @@ export async function* runToolLoop(
       // collectProviderStream reads have already stripped/flattened. Fresh per
       // step (like the assembler that fills it). Fixes known-flaw
       // TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
+      const progressId = `provider-step:${step}`;
+      if (showWorkPhases) {
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'progress-update',
+            progressId,
+            summary: step === 1 ? 'Planning the work' : 'Reviewing results and choosing next steps',
+            status: 'running',
+          }),
+        );
+      }
       let providerStep: ToolLoopProviderStepResult;
       try {
         const executeProviderStep = async (): Promise<ToolLoopProviderStepResult> => {
@@ -1612,6 +1624,16 @@ export async function* runToolLoop(
           { provider: processed.provider, step, error: msg },
           '[tool-loop] provider call failed',
         );
+        if (showWorkPhases) {
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'progress-update',
+              progressId,
+              summary: 'Could not complete this step',
+              status: 'failed',
+            }),
+          );
+        }
         yield encoder.encode(
           sseData({
             choices: [{ delta: { content: `\n\nError: ${msg}` }, index: 0 }],
@@ -1661,6 +1683,19 @@ export async function* runToolLoop(
       }
 
       const { lines, finishReason, pendingToolCalls, textContent, publicTextTail } = providerStep;
+      if (showWorkPhases) {
+        const hasNextActions = finishReason === 'tool_calls' && pendingToolCalls.length > 0;
+        yield encoder.encode(
+          eventStream.emit({
+            type: 'progress-update',
+            progressId,
+            summary: hasNextActions
+              ? `Selected ${pendingToolCalls.length} next action${pendingToolCalls.length === 1 ? '' : 's'}`
+              : 'Prepared the response',
+            status: 'completed',
+          }),
+        );
+      }
 
       // Forward all collected lines to the client.
       for (const entry of lines) {

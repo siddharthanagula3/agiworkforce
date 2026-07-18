@@ -332,6 +332,113 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     expect(mockPauseE2BSession).not.toHaveBeenCalled();
   });
 
+  it('streams durable, display-safe work phases for AGI Work without exposing reasoning', async () => {
+    const step1 = sseStreamFrom([chunk({ content: 'Final answer.' }), chunk({}, 'stop')]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1);
+
+    const processed = makeProcessed('conv-work');
+    processed.chatRequest.work_mode = 'agiwork';
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    const progress = agentEvents(output)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'progress-update');
+
+    expect(progress).toEqual([
+      {
+        type: 'progress-update',
+        progressId: 'provider-step:1',
+        summary: 'Planning the work',
+        status: 'running',
+      },
+      {
+        type: 'progress-update',
+        progressId: 'provider-step:1',
+        summary: 'Prepared the response',
+        status: 'completed',
+      },
+    ]);
+    expect(JSON.stringify(progress)).not.toContain('run print(1+1)');
+    expect(output).toContain('Final answer.');
+  });
+
+  it('adds a separate safe work phase after tool results in a multi-step AGI Work run', async () => {
+    const toolStep = sseStreamFrom([
+      chunk({
+        tool_calls: [{ index: 0, id: 'call_1', function: { name: 'execute_code', arguments: '' } }],
+      }),
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            function: { arguments: JSON.stringify({ language: 'python', code: '2+2' }) },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    const answerStep = sseStreamFrom([chunk({ content: 'Four.' }), chunk({}, 'stop')]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(toolStep).mockResolvedValueOnce(answerStep);
+
+    const processed = makeProcessed('conv-work');
+    processed.chatRequest.work_mode = 'agiwork';
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        toolExecutor: vi.fn().mockResolvedValue({ content: '4', isError: false }),
+      }),
+    );
+
+    expect(
+      agentEvents(output)
+        .map((entry) => entry.event)
+        .filter((event) => event.type === 'progress-update'),
+    ).toEqual([
+      {
+        type: 'progress-update',
+        progressId: 'provider-step:1',
+        summary: 'Planning the work',
+        status: 'running',
+      },
+      {
+        type: 'progress-update',
+        progressId: 'provider-step:1',
+        summary: 'Selected 1 next action',
+        status: 'completed',
+      },
+      {
+        type: 'progress-update',
+        progressId: 'provider-step:2',
+        summary: 'Reviewing results and choosing next steps',
+        status: 'running',
+      },
+      {
+        type: 'progress-update',
+        progressId: 'provider-step:2',
+        summary: 'Prepared the response',
+        status: 'completed',
+      },
+    ]);
+  });
+
+  it('closes the visible AGI Work phase when a provider step fails', async () => {
+    mockBuildToolLoopStream.mockRejectedValueOnce(new Error('provider unavailable'));
+    const processed = makeProcessed('conv-work');
+    processed.chatRequest.work_mode = 'agiwork';
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    const progress = agentEvents(output)
+      .map((entry) => entry.event)
+      .filter((event) => event.type === 'progress-update');
+
+    expect(progress.at(-1)).toEqual({
+      type: 'progress-update',
+      progressId: 'provider-step:1',
+      summary: 'Could not complete this step',
+      status: 'failed',
+    });
+  });
+
   it('stops AGI Work cleanly before another provider call when its time budget is exhausted', async () => {
     const processed = makeProcessed();
     processed.chatRequest.work_mode = 'agiwork';
