@@ -311,12 +311,15 @@ actions.
 1. Apply `apps/web/db/neon/0060_free_tier_token_budget.sql` to production Neon.
 2. Apply `0061_cloud_agent_runs.sql`, then `0062_cloud_agent_approval_checkpoints.sql`, then
    `0063_cloud_agent_execution_operations.sql` in that exact order.
-3. Provide/verify production Stripe keys and webhook configuration.
-4. Decide whether to move Vercel Hobby to Pro for non-daily schedules and production operational
+3. Apply `0064_project_knowledge_extraction.sql` before deploying the Website project-source
+   extraction path. Existing project files are not backfilled; re-upload is required until a
+   separate bounded backfill is authorized.
+4. Provide/verify production Stripe keys and webhook configuration.
+5. Decide whether to move Vercel Hobby to Pro for non-daily schedules and production operational
    needs.
-5. Provide signing certificates and live Clerk production configuration for DCL-4.
-6. Perform physical-device Mobile QA and any production-data-mutating QA.
-7. Authorize sanctioned max-tier star/archive PATCH-then-revert QA only after the relevant migration
+6. Provide signing certificates and live Clerk production configuration for DCL-4.
+7. Perform physical-device Mobile QA and any production-data-mutating QA.
+8. Authorize sanctioned max-tier star/archive PATCH-then-revert QA only after the relevant migration
    and deploy.
 
 No agent should print a secret, apply these migrations, deploy production, or mutate production data
@@ -332,7 +335,7 @@ without explicit authority in the active chat.
 - Mobile uses `react-native-executorch` 0.8.4 and emits an iOS deployment-target packaging warning.
   Upgrade only as a dedicated local-model migration; physical-device evidence is still missing.
 - Production Cloud durability and free-tier behavior are inactive until migrations 0060–0063 are
-  applied in order.
+  applied in order; project-source extraction is inactive until 0064 is applied before its code.
 - Chrome/VS Code UI polish and several product-parity features remain incomplete even though their
   core activity/run contracts are materially deeper.
 - The repository still has a large dead-code/knip backlog; do not mix that cleanup with behavior

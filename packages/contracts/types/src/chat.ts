@@ -150,14 +150,16 @@ export const ALLOWED_ATTACHMENT_MIME_PREFIXES: readonly string[] = [
  * an empty string (rare on macOS Drag from Finder). Mirrors the existing
  * `<input accept>` list.
  */
-export const ALLOWED_ATTACHMENT_EXTENSIONS: readonly string[] = [
+export const IMAGE_ATTACHMENT_EXTENSIONS: readonly string[] = [
   'png',
   'jpg',
   'jpeg',
   'gif',
   'webp',
   'heic',
-  'pdf',
+];
+
+export const TEXT_ATTACHMENT_EXTENSIONS: readonly string[] = [
   'txt',
   'md',
   'csv',
@@ -173,6 +175,12 @@ export const ALLOWED_ATTACHMENT_EXTENSIONS: readonly string[] = [
   'java',
   'html',
   'css',
+];
+
+export const ALLOWED_ATTACHMENT_EXTENSIONS: readonly string[] = [
+  ...IMAGE_ATTACHMENT_EXTENSIONS,
+  'pdf',
+  ...TEXT_ATTACHMENT_EXTENSIONS,
 ];
 
 /**
@@ -195,6 +203,20 @@ export type AttachmentValidation =
 function fileExtension(name: string): string {
   const dot = name.lastIndexOf('.');
   return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
+
+/**
+ * True when an accepted attachment is safe to decode as UTF-8 text. MIME wins
+ * for known binary/text types; the shared extension roster is the fallback
+ * when Finder or a browser reports an empty/generic MIME type.
+ */
+export function isTextAttachmentMeta(name: string, mimeType: string): boolean {
+  const mime = (mimeType ?? '').split(';', 1)[0]!.trim().toLowerCase();
+  if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml') {
+    return true;
+  }
+  if (mime.startsWith('image/') || mime === 'application/pdf') return false;
+  return TEXT_ATTACHMENT_EXTENSIONS.includes(fileExtension(name));
 }
 
 /**

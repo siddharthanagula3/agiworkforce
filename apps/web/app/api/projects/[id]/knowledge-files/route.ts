@@ -19,6 +19,10 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
+  extractProjectKnowledgeFile,
+  ProjectKnowledgeExtractionError,
+} from '@/lib/server/project-knowledge-extraction';
+import {
   SYNCED_APP_SURFACES,
   DEVELOPER_SESSION_SURFACES,
   validateAttachmentMeta,
@@ -126,9 +130,9 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   if (
     !body.checksumSha256 ||
     typeof body.checksumSha256 !== 'string' ||
-    body.checksumSha256.trim().length === 0
+    !/^[a-f0-9]{64}$/i.test(body.checksumSha256.trim())
   ) {
-    throw createError.validation('checksumSha256 is required');
+    throw createError.validation('checksumSha256 must be a SHA-256 hex digest');
   }
   if (!body.sourceSurface || !(ALL_SURFACES as readonly string[]).includes(body.sourceSurface)) {
     throw createError.validation(`sourceSurface must be one of: ${ALL_SURFACES.join(', ')}`);
@@ -151,12 +155,31 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.notFound('Project not found');
   }
 
+  let extractedText: string | null;
+  try {
+    const extraction = await extractProjectKnowledgeFile({
+      projectId,
+      storageUri: body.storageUri.trim(),
+      fileName: body.fileName.trim(),
+      mimeType: body.mimeType.trim(),
+      byteCount: body.byteCount,
+      checksumSha256: body.checksumSha256.trim(),
+    });
+    extractedText = extraction.extractedText;
+  } catch (error) {
+    if (error instanceof ProjectKnowledgeExtractionError) {
+      throw createError.validation(error.message);
+    }
+    logger.error({ error, projectId }, 'Failed to extract project knowledge file');
+    throw createError.internal('Failed to process the uploaded file');
+  }
+
   let data: Record<string, unknown>;
   try {
     const [inserted] = await db.query<Record<string, unknown>>(
       `insert into project_knowledge_files
-         (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $10::text is null then null else now() end)
        returning *`,
       [
         projectId,
@@ -168,6 +191,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         body.sourceSurface,
         userId,
         body.storageUri.trim(),
+        extractedText,
       ],
     );
     if (!inserted) throw new Error('No row returned');
