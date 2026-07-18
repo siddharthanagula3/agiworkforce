@@ -80,7 +80,7 @@ const currentAnthropic = {
   },
 };
 
-test('publishes the GA GPT-5.6 API family without conflating account rollout with harness support', () => {
+test('publishes the GA GPT-5.6 API family with its implemented Responses search harness', () => {
   for (const [modelKey, expected] of Object.entries(currentOpenAI)) {
     assert.equal(registry.models[modelKey].identity.providerModelId, modelKey);
     assert.equal(registry.models[modelKey].lifecycle.availability, 'live');
@@ -101,11 +101,11 @@ test('publishes the GA GPT-5.6 API family without conflating account rollout wit
 
   assert.equal(
     registry.harnesses['openai/responses'].features.webSearch.implementation,
-    'unwired',
-    'provider support must not be misreported as an implemented AGI harness feature',
+    'implemented',
+    'native search must stay unavailable until the AGI harness is implemented',
   );
   for (const modelKey of Object.keys(currentOpenAI)) {
-    assert.equal(compatibility.models[modelKey].capabilities.search, false);
+    assert.equal(compatibility.models[modelKey].capabilities.search, true);
   }
 });
 

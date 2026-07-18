@@ -29,7 +29,7 @@ type InternalMessage = ProcessedRequest['llmRequest']['messages'][number];
 /** A client-defined function tool (`ToolDefinitionSchema` wire shape). Every
  *  entry in `ChatCompletionRequestSchema.tools` matches this shape exactly.
  *  Server-injected native tools (Anthropic `web_search_20260209`, Google
- *  `{google_search:{}}`, OpenAI `{type:'web_search_preview'}`, Anthropic
+ *  `{google_search:{}}`, OpenAI Responses `{type:'web_search'}`, Anthropic
  *  `code_execution_*`) never have a `.function` key, so this check cleanly
  *  partitions request-processor.ts's merged `tools` array without needing to
  *  know every native tool shape by name. E2B execution tools also match here

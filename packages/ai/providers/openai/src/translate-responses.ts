@@ -42,6 +42,8 @@ import type {
   ResponsesInputItem,
   ResponsesInputMessage,
   ResponsesReasoningConfig,
+  ResponsesNativeTool,
+  ResponsesTool,
   ResponsesToolChoice,
 } from './responses-types';
 
@@ -168,6 +170,17 @@ function translateTool(tool: ToolDef, strict: boolean): ResponsesFunctionTool {
   };
 }
 
+function translateNativeTool(tool: unknown): ResponsesNativeTool {
+  if (!tool || typeof tool !== 'object' || Array.isArray(tool)) {
+    throw new TypeError('OpenAI Responses native tools must be objects');
+  }
+  const type = (tool as Record<string, unknown>)['type'];
+  if (typeof type !== 'string' || type.trim().length === 0) {
+    throw new TypeError('OpenAI Responses native tools require a non-empty type');
+  }
+  return { ...(tool as Record<string, unknown>), type };
+}
+
 function translateToolChoice(choice: ToolChoice | undefined): ResponsesToolChoice | undefined {
   if (choice === undefined) return undefined;
   if (choice === 'auto') return 'auto';
@@ -215,7 +228,13 @@ export function translateChatRequestToResponses(
   const instructions = extractInstructions(req.messages, req.system);
 
   const strict = compat.supportsStrictMode && (req.tools?.some((t) => t.strict) ?? false);
-  const tools = req.tools?.map((t) => translateTool(t, strict));
+  const tools: ResponsesTool[] = [
+    ...(req.tools?.map((t) => translateTool(t, strict)) ?? []),
+    ...(req.rawVendorTools?.map(translateNativeTool) ?? []),
+  ];
+  const usesNativeWebSearch = tools.some(
+    (tool) => tool.type === 'web_search' || tool.type === 'web_search_2025_08_26',
+  );
   const toolChoice = translateToolChoice(req.toolChoice);
 
   // An explicit `req.effort` bypasses the budgetTokens-derived heuristic, same rationale
@@ -249,7 +268,8 @@ export function translateChatRequestToResponses(
     input: inputItems,
     stream: true,
     ...(instructions ? { instructions } : {}),
-    ...(tools && tools.length > 0 ? { tools } : {}),
+    ...(tools.length > 0 ? { tools } : {}),
+    ...(usesNativeWebSearch ? { include: ['web_search_call.action.sources'] as const } : {}),
     ...(toolChoice !== undefined ? { tool_choice: toolChoice } : {}),
     ...(req.maxOutputTokens !== undefined ? { max_output_tokens: req.maxOutputTokens } : {}),
     ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),

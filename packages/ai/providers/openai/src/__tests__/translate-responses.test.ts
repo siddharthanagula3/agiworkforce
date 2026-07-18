@@ -39,6 +39,19 @@ describe('translateChatRequestToResponses', () => {
     expect(params.store).toBe(true);
   });
 
+  it('passes the native web_search tool to Responses and requests complete source metadata', () => {
+    const params = translateChatRequestToResponses(
+      {
+        ...request,
+        rawVendorTools: [{ type: 'web_search' }],
+      },
+      { compat },
+    );
+
+    expect(params.tools).toEqual([{ type: 'web_search' }]);
+    expect(params.include).toEqual(['web_search_call.action.sources']);
+  });
+
   it('maps high thinking budgets to OpenAI xhigh on supported Responses models', () => {
     const params = translateChatRequestToResponses(
       {

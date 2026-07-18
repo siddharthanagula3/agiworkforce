@@ -6,12 +6,14 @@
  *   response.created                           → (ignored — observation only)
  *   response.in_progress                       → (ignored)
  *   response.output_item.added (function_call) → tool-use-start
+ *   response.output_item.added (web_search_call) → server-tool-use
  *   response.output_text.delta                 → text-delta
  *   response.function_call_arguments.delta     → tool-use-delta
  *   response.reasoning_summary_text.delta      → thinking-delta
  *   response.reasoning_text.delta              → thinking-delta
  *   response.refusal.delta                     → text-delta (visible refusal)
  *   response.output_item.done (function_call)  → tool-use-end
+ *   response.output_text.annotation.added      → citation-delta
  *   response.completed                         → usage + stop(end_turn)
  *   response.incomplete                        → stop(max_tokens)
  *   response.failed / response.error           → error + stop(error)
@@ -19,13 +21,31 @@
 
 import type { StreamChunk } from '@agiworkforce/types';
 
-import type { ResponsesStreamEvent } from './responses-types';
+import type {
+  ResponseWebSearchAction,
+  ResponseWebSearchCallItem,
+  ResponsesStreamEvent,
+} from './responses-types';
 
 interface OpenItem {
-  type: 'message' | 'function_call' | 'reasoning';
+  type: 'message' | 'function_call' | 'reasoning' | 'web_search_call';
   /** For function_call only — the call_id we expose to consumers. */
   callId?: string;
   emittedStart?: boolean;
+}
+
+interface WebSearchState {
+  id: string;
+  status?: ResponseWebSearchCallItem['status'];
+  sources: Set<string>;
+}
+
+function actionSources(action: ResponseWebSearchAction | undefined): string[] {
+  if (!action) return [];
+  if (action.type === 'search') {
+    return (action.sources ?? []).map((source) => source.url).filter(Boolean);
+  }
+  return action.url ? [action.url] : [];
 }
 
 function mapIncompleteReason(
@@ -50,7 +70,46 @@ export async function* translateOpenAIResponsesStream(
   events: AsyncIterable<ResponsesStreamEvent>,
 ): AsyncIterable<StreamChunk> {
   const items = new Map<number, OpenItem>();
+  const webSearches = new Map<number, WebSearchState>();
+  const citationTitles = new Map<string, string>();
   let stopEmitted = false;
+  let searchResultEmitted = false;
+
+  function updateWebSearch(outputIndex: number, item: ResponseWebSearchCallItem): WebSearchState {
+    const state = webSearches.get(outputIndex) ?? { id: item.id, sources: new Set<string>() };
+    state.id = item.id;
+    state.status = item.status;
+    for (const url of actionSources(item.action)) state.sources.add(url);
+    webSearches.set(outputIndex, state);
+    return state;
+  }
+
+  function buildWebSearchResult():
+    | Extract<StreamChunk, { type: 'server-tool-result' }>
+    | undefined {
+    if (searchResultEmitted || webSearches.size === 0) return undefined;
+    searchResultEmitted = true;
+    const states = [...webSearches.values()];
+    const first = states[0];
+    if (!first) return undefined;
+    const urls = [...new Set(states.flatMap((state) => [...state.sources]))];
+    return {
+      type: 'server-tool-result',
+      toolUseId: first.id,
+      payload: {
+        type: 'web_search_tool_result',
+        tool_use_id: first.id,
+        content: urls.map((url) => ({
+          type: 'web_search_result',
+          url,
+          title: citationTitles.get(url) ?? url,
+        })),
+      },
+      ...(urls.length === 0 && states.every((state) => state.status === 'failed')
+        ? { isError: true }
+        : {}),
+    };
+  }
 
   for await (const event of events) {
     switch (event.type) {
@@ -78,6 +137,10 @@ export async function* translateOpenAIResponsesStream(
           items.set(idx, { type: 'message' });
         } else if (ev.item.type === 'reasoning') {
           items.set(idx, { type: 'reasoning' });
+        } else if (ev.item.type === 'web_search_call') {
+          items.set(idx, { type: 'web_search_call', callId: ev.item.id, emittedStart: true });
+          updateWebSearch(idx, ev.item);
+          yield { type: 'server-tool-use', toolUseId: ev.item.id, name: 'web_search' };
         }
         break;
       }
@@ -113,17 +176,54 @@ export async function* translateOpenAIResponsesStream(
         if (ev.delta) yield { type: 'thinking-delta', delta: ev.delta };
         break;
       }
+      case 'response.output_text.annotation.added': {
+        const ev = event as Extract<
+          ResponsesStreamEvent,
+          { type: 'response.output_text.annotation.added' }
+        >;
+        const annotation = ev.annotation as Record<string, unknown>;
+        if (
+          annotation['type'] === 'url_citation' &&
+          typeof annotation['url'] === 'string' &&
+          typeof annotation['title'] === 'string' &&
+          typeof annotation['start_index'] === 'number' &&
+          typeof annotation['end_index'] === 'number'
+        ) {
+          const citation = {
+            type: 'url_citation' as const,
+            url: annotation['url'],
+            title: annotation['title'],
+            start_index: annotation['start_index'],
+            end_index: annotation['end_index'],
+          };
+          citationTitles.set(citation.url, citation.title);
+          yield {
+            type: 'citation-delta',
+            blockIndex: ev.output_index,
+            payload: citation,
+          };
+        }
+        break;
+      }
       case 'response.output_item.done': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_item.done' }>;
         const state = items.get(ev.output_index);
         if (state?.type === 'function_call' && state.callId && state.emittedStart) {
           yield { type: 'tool-use-end', toolUseId: state.callId };
         }
+        if (ev.item.type === 'web_search_call') {
+          if (!state?.emittedStart) {
+            yield { type: 'server-tool-use', toolUseId: ev.item.id, name: 'web_search' };
+          }
+          updateWebSearch(ev.output_index, ev.item);
+        }
         items.delete(ev.output_index);
         break;
       }
       case 'response.completed': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.completed' }>;
+        const searchResult = buildWebSearchResult();
+        if (searchResult) yield searchResult;
         const usage = ev.response.usage;
         if (usage) {
           const usageChunk: StreamChunk = {
@@ -146,6 +246,8 @@ export async function* translateOpenAIResponsesStream(
       }
       case 'response.incomplete': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.incomplete' }>;
+        const searchResult = buildWebSearchResult();
+        if (searchResult) yield searchResult;
         yield {
           type: 'stop',
           reason: mapIncompleteReason(ev.response.incomplete_details?.reason),
@@ -155,6 +257,8 @@ export async function* translateOpenAIResponsesStream(
       }
       case 'response.failed': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.failed' }>;
+        const searchResult = buildWebSearchResult();
+        if (searchResult) yield searchResult;
         yield {
           type: 'error',
           message: ev.response.error?.message ?? 'Response failed',
@@ -166,6 +270,8 @@ export async function* translateOpenAIResponsesStream(
       }
       case 'response.error': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.error' }>;
+        const searchResult = buildWebSearchResult();
+        if (searchResult) yield searchResult;
         yield {
           type: 'error',
           message: ev.message ?? 'Response error',
@@ -180,6 +286,8 @@ export async function* translateOpenAIResponsesStream(
   }
 
   if (!stopEmitted) {
+    const searchResult = buildWebSearchResult();
+    if (searchResult) yield searchResult;
     yield { type: 'stop', reason: 'end_turn' };
   }
 }

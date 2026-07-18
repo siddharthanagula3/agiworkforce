@@ -418,16 +418,14 @@ export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
  *     against platform.claude.com — the current dynamic-filtering tool version;
  *     `allowed_callers:['direct']` is required to call it without code execution).
  *   - google:    `{ google_search: {} }`.
+ *   - openai:    stable Responses `{ type: 'web_search' }`, with complete
+ *     source metadata requested by the provider adapter.
  * `caps.search ?? true` keeps unknown/missing catalog entries permissive (a missing
  * entry never silently drops the tool for a provider that does support it).
  *
- * openai deliberately has NO branch (removed 2026-07-11, WP4): `web_search_preview`
- * is a Responses-API-only tool type, and this route hardcodes `useResponsesApi:false`
- * (adapter-factory.ts, deliberate) — so injecting it just adds a dead tool that
- * `packages/ai/providers/openai/src/translate.ts`'s `OPENAI_RESPONSES_ONLY_TOOL_TYPES`
- * strips before the wire for zero benefit. OpenAI (and every other no-native-path
- * provider) searches via the generic `web_search` function tool instead — see
- * `webSearchNeedsGenericTool` below and `lib/web-search/web-search-tool.ts`.
+ * OpenAI uses the Responses API for catalog-known native OpenAI models. The
+ * provider adapter passes this server tool through verbatim and translates
+ * its activity/citations into AGI's canonical stream.
  */
 export function appendWebSearchTool(
   providerLower: string,
@@ -444,6 +442,9 @@ export function appendWebSearchTool(
   if (providerLower === 'google') {
     return [...(tools ?? []), { google_search: {} }];
   }
+  if (providerLower === 'openai') {
+    return [...(tools ?? []), { type: 'web_search' }];
+  }
   return tools;
 }
 
@@ -453,8 +454,8 @@ export function appendWebSearchTool(
  * testable without invoking the rest of `processRequest`).
  *
  * True when: the provider has no working native search path on this route
- * (`webSearchNeedsGenericTool` — openai plus every provider `appendWebSearchTool`
- * never had a branch for), the resolved model is tools-capable (unknown models
+ * (`webSearchNeedsGenericTool` reports that fallback requirement), the
+ * resolved model is tools-capable (unknown models
  * default to allowed), the request is streaming (offer ⊆ run — only that path
  * enters the tool loop in route.ts, mirrors url_fetch/E2B below), and
  * a search backend is actually configured (`backendConfigured` —
@@ -1507,9 +1508,9 @@ export async function processRequest(
     resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps);
 
     // WP4 generic fallback: platform-executed `web_search` function tool for every
-    // provider with no working native search path on this route (openai included —
-    // see appendWebSearchTool's doc comment — plus xai/deepseek/qwen/moonshot/zhipu/
-    // mistral/groq/nvidia_nim/open_router, which never had a native branch at all).
+    // provider with no working native search path on this route (xai/deepseek/
+    // qwen/moonshot/zhipu/mistral/groq/nvidia_nim/open_router, which never had
+    // a native branch at all).
     // Executed by the agentic tool loop exactly like url_fetch below.
     if (
       shouldOfferGenericWebSearchTool({

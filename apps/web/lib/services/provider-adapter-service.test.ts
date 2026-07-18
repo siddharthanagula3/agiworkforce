@@ -62,7 +62,7 @@ describe('buildServerProviderAdapter', () => {
     });
   });
 
-  it('preserves the OpenAI Chat Completions adapter contract', () => {
+  it('leaves native OpenAI models on the adapter default Responses path', () => {
     getOptionalEnv.mockImplementation((key) =>
       key === 'OPENAI_API_KEY' ? 'managed-openai-key' : undefined,
     );
@@ -72,7 +72,6 @@ describe('buildServerProviderAdapter', () => {
     expect(createProviderAdapter).toHaveBeenCalledOnce();
     expect(createProviderAdapter).toHaveBeenCalledWith('openai', {
       apiKey: 'managed-openai-key',
-      useResponsesApi: false,
     });
   });
 });

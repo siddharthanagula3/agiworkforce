@@ -88,17 +88,17 @@ describe('appendWebSearchTool', () => {
     expect(appendWebSearchTool('google', undefined, caps)).toEqual([{ google_search: {} }]);
   });
 
-  it.each(['xai', 'qwen', 'moonshot', 'deepseek', 'perplexity', 'openai'])(
+  it('injects the stable OpenAI Responses web_search tool', () => {
+    expect(appendWebSearchTool('openai', undefined, caps)).toEqual([{ type: 'web_search' }]);
+  });
+
+  it.each(['xai', 'qwen', 'moonshot', 'deepseek', 'perplexity'])(
     'does NOT inject a tool for %s (no native path on this route — WP4 generic tool covers it)',
     (provider) => {
-      // Returns the existing tool list unchanged. openai joined this list 2026-07-11
-      // (WP4): web_search_preview is Responses-API-only and this route is
-      // useResponsesApi:false, so injecting it here was a dead tool that
-      // translate.ts silently stripped before the wire for zero benefit — removed
-      // rather than left as harmless-looking dead code. xai/qwen/moonshot/deepseek
+      // Returns the existing tool list unchanged. xai/qwen/moonshot/deepseek
       // are gated OUT of the composer toggle client-side (providerSupportsWebSearch)
       // so this no-op is never reached with an enabled native-path toggle; all of
-      // them (openai included) are covered by the generic fallback instead.
+      // them are covered by the generic fallback instead.
       const existing = [{ type: 'function', function: { name: 'x' } }];
       expect(appendWebSearchTool(provider, existing, caps)).toEqual(existing);
     },
@@ -120,12 +120,12 @@ describe('appendWebSearchTool', () => {
   });
 
   it('injection branches match the shared WEB_SEARCH_INJECTION_PROVIDERS source of truth', () => {
-    for (const provider of ['anthropic', 'google']) {
+    for (const provider of ['anthropic', 'google', 'openai']) {
       expect(WEB_SEARCH_INJECTION_PROVIDERS.has(provider)).toBe(true);
       expect(providerInjectsWebSearchTool(provider)).toBe(true);
       expect(appendWebSearchTool(provider, undefined, caps)).toHaveLength(1);
     }
-    for (const provider of ['xai', 'qwen', 'moonshot', 'openai']) {
+    for (const provider of ['xai', 'qwen', 'moonshot']) {
       expect(providerInjectsWebSearchTool(provider)).toBe(false);
       expect(appendWebSearchTool(provider, undefined, caps)).toBeUndefined();
     }
@@ -147,8 +147,8 @@ describe('shouldOfferGenericWebSearchTool', () => {
     backendConfigured: true,
   };
 
-  it('is true for openai with every other condition satisfied', () => {
-    expect(shouldOfferGenericWebSearchTool(baseArgs)).toBe(true);
+  it('is false for openai because its native Responses path covers search', () => {
+    expect(shouldOfferGenericWebSearchTool(baseArgs)).toBe(false);
   });
 
   it.each(['xai', 'deepseek', 'qwen', 'moonshot', 'zhipu', 'mistral', 'groq'])(
@@ -158,7 +158,7 @@ describe('shouldOfferGenericWebSearchTool', () => {
     },
   );
 
-  it.each(['anthropic', 'google', 'perplexity', 'managed_cloud'])(
+  it.each(['anthropic', 'google', 'openai', 'perplexity', 'managed_cloud'])(
     'is false for %s — native/resolved path already covers it, no fallback needed',
     (providerLower) => {
       expect(shouldOfferGenericWebSearchTool({ ...baseArgs, providerLower })).toBe(false);
@@ -175,7 +175,9 @@ describe('shouldOfferGenericWebSearchTool', () => {
   });
 
   it('is true on a free-tier request when the backend is configured', () => {
-    expect(shouldOfferGenericWebSearchTool({ ...baseArgs, freeTrial: true })).toBe(true);
+    expect(
+      shouldOfferGenericWebSearchTool({ ...baseArgs, providerLower: 'xai', freeTrial: true }),
+    ).toBe(true);
   });
 
   it('is false when no search backend is configured — never offer a tool the server cannot execute', () => {
