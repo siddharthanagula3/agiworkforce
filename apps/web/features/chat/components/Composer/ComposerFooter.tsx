@@ -155,7 +155,7 @@ function defaultStoreEffort(r: ModelReasoning): Effort {
 
 function isModelSelectableForTier(model: AIModel, tier: string): boolean {
   // Free users may select any of the cost-efficient tool-capable trial models
-  // (so they can experience the tool-calling UI); the 3-prompt cap covers the set.
+  // while the server privately enforces the unpublished dynamic usage ceiling.
   if (FREE_TRIAL_MODELS.includes(model.id)) return true;
   if (model.providerKey === 'managed_cloud') {
     return getAllowedAutoModesForTier(tier).includes(model.id);
