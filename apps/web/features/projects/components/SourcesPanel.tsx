@@ -11,39 +11,16 @@
  *   - AddSourcesModal: opened by the "Add sources" button.
  *   - File list: reuses the same rendering logic as KnowledgeFilesPanel.
  *
- * Upload logic (presigned R2 upload + /api/projects/[id]/knowledge-files)
- * lives here directly, extracted from KnowledgeFilesPanel so SourcesPanel
- * fully owns the sources-tab state without prop-drilling through
- * KnowledgeFilesPanel.
+ * Upload mechanics are shared with KnowledgeFilesPanel through the canonical
+ * project-knowledge upload service; this component owns only presentation.
  */
 
 import { useEffect, useRef, useState, useMemo } from 'react';
-import type { ProjectKnowledgeFile } from '@agiworkforce/types';
+import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { HardDrive, MessageSquare, Upload } from 'lucide-react';
-import { getCsrfToken } from '@/lib/client/csrf';
 import { FilePreviewModal } from './FilePreviewModal';
 import { AddSourcesModal } from './AddSourcesModal';
-
-// ---------------------------------------------------------------------------
-// Constants — keep in sync with KnowledgeFilesPanel
-// ---------------------------------------------------------------------------
-
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MiB
-
-const ALLOWED_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'application/json',
-  'application/xml',
-  'text/html',
-]);
+import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -57,14 +34,6 @@ type UploadState =
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Compute SHA-256 hex digest of an ArrayBuffer. */
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 /** Return a file-type icon character based on MIME type. */
 function fileIcon(mimeType: string): string {
@@ -123,103 +92,16 @@ export function SourcesPanel({ projectId }: Props) {
   // ---------------------------------------------------------------------------
 
   async function handleUpload(file: File) {
-    if (file.size > MAX_FILE_BYTES) {
-      setUploadState({
-        status: 'error',
-        message: `File too large. Maximum size is ${MAX_FILE_BYTES / 1024 / 1024} MiB.`,
-      });
-      return;
-    }
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      setUploadState({
-        status: 'error',
-        message: `File type "${file.type}" is not supported.`,
-      });
-      return;
-    }
-
     setUploadState({ status: 'uploading', fileName: file.name, progress: 0 });
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const checksumSha256 = await sha256Hex(arrayBuffer);
-
-      const csrfToken = await getCsrfToken();
-
-      const presignRes = await fetch('/api/uploads/presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-        body: JSON.stringify({
-          kind: 'knowledge-file',
-          fileName: file.name,
-          mimeType: file.type || 'application/octet-stream',
-          byteCount: file.size,
-          projectId,
-        }),
+      const registeredFile = await uploadProjectKnowledgeFile({
+        projectId,
+        file,
+        onProgress: (progress) =>
+          setUploadState({ status: 'uploading', fileName: file.name, progress }),
       });
-
-      if (!presignRes.ok) {
-        const err = (await presignRes.json().catch(() => ({}))) as { message?: string };
-        throw new Error(err.message ?? `Failed to get upload URL (HTTP ${presignRes.status})`);
-      }
-
-      const presign = (await presignRes.json()) as {
-        uploadUrl: string;
-        uploadHeaders?: Record<string, string>;
-        publicUrl: string;
-      };
-
-      const putRes = await fetch(presign.uploadUrl, {
-        method: 'PUT',
-        headers: presign.uploadHeaders ?? {
-          'Content-Type': file.type || 'application/octet-stream',
-        },
-        body: file,
-      });
-
-      if (!putRes.ok) {
-        throw new Error(`Upload failed (HTTP ${putRes.status})`);
-      }
-
-      setUploadState({ status: 'uploading', fileName: file.name, progress: 80 });
-
-      const storageUri = presign.publicUrl;
-
-      const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-csrf-token': csrfToken,
-          },
-          body: JSON.stringify({
-            fileName: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            byteCount: file.size,
-            checksumSha256,
-            sourceSurface: 'web',
-            storageUri,
-          }),
-        },
-      );
-
-      const json = (await response.json()) as {
-        file?: ProjectKnowledgeFile;
-        error?: string;
-        message?: string;
-      };
-
-      if (!response.ok) {
-        if (json.error === 'knowledge_files_unavailable') {
-          throw new Error('Knowledge files require Cloud Managed (not yet available).');
-        }
-        throw new Error(json.message ?? `Server error ${response.status}`);
-      }
-
-      if (json.file) {
-        setFiles((prev) => [json.file!, ...prev]);
-      }
+      setFiles((previous) => [registeredFile, ...previous]);
       setUploadState({ status: 'idle' });
     } catch (err) {
       setUploadState({
@@ -599,7 +481,7 @@ export function SourcesPanel({ projectId }: Props) {
       <input
         ref={fileInputRef}
         type="file"
-        accept={Array.from(ALLOWED_MIME_TYPES).join(',')}
+        accept={ALLOWED_ATTACHMENT_ACCEPT}
         style={{ display: 'none' }}
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -616,7 +498,7 @@ export function SourcesPanel({ projectId }: Props) {
         onUploadFile={(file) => void handleUpload(file)}
         onUploadText={(text, title) => void handleUploadText(text, title)}
         isUploading={isUploading}
-        accept={Array.from(ALLOWED_MIME_TYPES).join(',')}
+        accept={ALLOWED_ATTACHMENT_ACCEPT}
       />
 
       {/* File preview modal */}

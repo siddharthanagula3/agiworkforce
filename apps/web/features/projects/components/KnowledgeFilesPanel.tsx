@@ -1,13 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  ALLOWED_ATTACHMENT_ACCEPT,
-  validateAttachmentFile,
-  type ProjectKnowledgeFile,
-} from '@agiworkforce/types';
-import { getCsrfToken } from '@/lib/client/csrf';
+import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { FilePreviewModal } from './FilePreviewModal';
+import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
 
 interface Props {
   projectId: string;
@@ -19,14 +15,6 @@ type UploadState =
   | { status: 'idle' }
   | { status: 'uploading'; fileName: string; progress: number }
   | { status: 'error'; message: string };
-
-/** Compute SHA-256 hex digest of an ArrayBuffer. */
-async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
 
 /** Return a file-type icon character based on MIME type. */
 function fileIcon(mimeType: string): string {
@@ -66,99 +54,16 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   }, [projectId]);
 
   async function handleUpload(file: File) {
-    // Client-side validation (mirrors the server's shared attachment contract)
-    const validation = validateAttachmentFile(file);
-    if (!validation.ok) {
-      setUploadState({ status: 'error', message: validation.message });
-      return;
-    }
-
     setUploadState({ status: 'uploading', fileName: file.name, progress: 0 });
 
     try {
-      // 1. Read file into ArrayBuffer for checksum
-      const arrayBuffer = await file.arrayBuffer();
-      const checksumSha256 = await sha256Hex(arrayBuffer);
-
-      // 2. Ask the server for a presigned R2 upload URL, then PUT bytes
-      // directly to R2 (never import a storage SDK from this client component).
-      const csrfToken = await getCsrfToken();
-
-      const presignRes = await fetch('/api/uploads/presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-        body: JSON.stringify({
-          kind: 'knowledge-file',
-          fileName: file.name,
-          mimeType: file.type || 'application/octet-stream',
-          byteCount: file.size,
-          projectId,
-        }),
+      const registeredFile = await uploadProjectKnowledgeFile({
+        projectId,
+        file,
+        onProgress: (progress) =>
+          setUploadState({ status: 'uploading', fileName: file.name, progress }),
       });
-
-      if (!presignRes.ok) {
-        const err = (await presignRes.json().catch(() => ({}))) as { message?: string };
-        throw new Error(err.message ?? `Failed to get upload URL (HTTP ${presignRes.status})`);
-      }
-
-      const presign = (await presignRes.json()) as {
-        uploadUrl: string;
-        uploadHeaders?: Record<string, string>;
-        publicUrl: string;
-      };
-
-      const putRes = await fetch(presign.uploadUrl, {
-        method: 'PUT',
-        headers: presign.uploadHeaders ?? {
-          'Content-Type': file.type || 'application/octet-stream',
-        },
-        body: file,
-      });
-
-      if (!putRes.ok) {
-        throw new Error(`Upload failed (HTTP ${putRes.status})`);
-      }
-
-      setUploadState({ status: 'uploading', fileName: file.name, progress: 80 });
-
-      const storageUri = presign.publicUrl;
-
-      // 3. Register the file via the API
-      const response = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-csrf-token': csrfToken,
-          },
-          body: JSON.stringify({
-            fileName: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            byteCount: file.size,
-            checksumSha256,
-            sourceSurface: 'web',
-            storageUri,
-          }),
-        },
-      );
-
-      const json = (await response.json()) as {
-        file?: ProjectKnowledgeFile;
-        error?: string;
-        message?: string;
-      };
-
-      if (!response.ok) {
-        if (json.error === 'knowledge_files_unavailable') {
-          throw new Error('Knowledge files require Cloud Managed (not yet available).');
-        }
-        throw new Error(json.message ?? `Server error ${response.status}`);
-      }
-
-      if (json.file) {
-        setFiles((prev) => [json.file!, ...prev]);
-      }
+      setFiles((previous) => [registeredFile, ...previous]);
       setUploadState({ status: 'idle' });
     } catch (err) {
       setUploadState({
