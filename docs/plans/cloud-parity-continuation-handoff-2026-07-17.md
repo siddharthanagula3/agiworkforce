@@ -300,9 +300,12 @@ the current surface before moving to the next one.
    input with manual browser-native read-aloud output; hands-free turn-taking, barge-in, and a live
    duplex voice session remain open. Website Time and focus settings now persist to the account and
    drive real, dismissible quiet-hours and visible-tab break reminders; cross-device activity,
-   Mobile/Desktop consumption, and Reflect/monthly recap remain open. Website Managed Cloud
-   DOCX/PPTX creation, server-side project document extraction, and Website auto-memory are
-   implemented in code; honor their recorded deployment and downstream-surface follow-ups.
+   and Mobile/Desktop consumption remain open. Website Reflect now provides an on-demand,
+   memory-gated, server-derived recap without sending history to another model; persisted/shareable
+   recaps, cross-device active-time aggregation, and Desktop presentation remain open. Website
+   Managed Cloud DOCX/PPTX creation, server-side project document extraction, and Website
+   auto-memory are implemented in code; honor their recorded deployment and downstream-surface
+   follow-ups.
 4. Complete enterprise/reliability: managed settings/MDM hierarchy, settings migrations, SSO/SCIM/
    RBAC depth, wired retry generator, proxy/mTLS/custom CA, first-party observability/kill switches,
    durable cost persistence, and prompt-cache regression sentinels.

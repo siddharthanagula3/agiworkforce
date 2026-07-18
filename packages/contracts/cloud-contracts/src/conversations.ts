@@ -4,6 +4,22 @@ export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
 export const MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE = 50;
 export const MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE = 100;
+export const MANAGED_CLOUD_REFLECT_PATH = '/api/reflect';
+
+export const ManagedCloudConversationTopicSchema = z.enum([
+  'coding',
+  'research',
+  'writing',
+  'brainstorm',
+  'analysis',
+  'debug',
+  'creative',
+  'general',
+]);
+export type ManagedCloudConversationTopic = z.infer<typeof ManagedCloudConversationTopicSchema>;
+
+export const ManagedCloudReflectRangeSchema = z.enum(['30d', '90d', '180d', '365d']);
+export type ManagedCloudReflectRange = z.infer<typeof ManagedCloudReflectRangeSchema>;
 
 export const ManagedCloudConversationWireSchema = z.object({
   id: z.string().min(1),
@@ -118,6 +134,64 @@ export const ManagedCloudDeleteConversationResponseSchema = z.object({
   success: z.literal(true),
 });
 export const ManagedCloudDeleteMessageResponseSchema = ManagedCloudDeleteConversationResponseSchema;
+
+const ManagedCloudReflectDateKeySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const ManagedCloudReflectRecapSchema = z.object({
+  range: ManagedCloudReflectRangeSchema,
+  generatedAt: z.string().datetime(),
+  period: z.object({
+    start: z.string().datetime(),
+    end: z.string().datetime(),
+    label: z.string().min(1).max(80),
+  }),
+  summary: z.object({
+    headline: z.string().min(1).max(160),
+    body: z.string().min(1).max(500),
+  }),
+  stats: z.object({
+    totalConversations: z.number().int().nonnegative(),
+    activeDays: z.number().int().nonnegative(),
+    mostActiveDay: ManagedCloudReflectDateKeySchema.nullable(),
+    peakHour: z.number().int().min(0).max(23).nullable(),
+  }),
+  dailyActivity: z
+    .array(
+      z.object({
+        date: ManagedCloudReflectDateKeySchema,
+        conversationCount: z.number().int().positive(),
+      }),
+    )
+    .max(366),
+  topics: z
+    .array(
+      z.object({
+        id: ManagedCloudConversationTopicSchema,
+        label: z.string().min(1).max(80),
+        description: z.string().min(1).max(240),
+        conversationCount: z.number().int().positive(),
+        percentage: z.number().min(0).max(100),
+      }),
+    )
+    .max(ManagedCloudConversationTopicSchema.options.length),
+  insights: z
+    .array(
+      z.object({
+        dimension: z.enum(['delegation', 'description', 'discernment', 'diligence']),
+        title: z.string().min(1).max(120),
+        observation: z.string().min(1).max(300),
+        nextStep: z.string().min(1).max(300),
+        href: z
+          .string()
+          .regex(/^\/(?!\/)/, 'Expected a same-origin path')
+          .optional(),
+      }),
+    )
+    .max(4),
+  sampled: z.boolean(),
+  sampledConversationCount: z.number().int().nonnegative(),
+});
+export type ManagedCloudReflectRecap = z.infer<typeof ManagedCloudReflectRecapSchema>;
 
 export interface ManagedCloudConversation {
   id: string;
