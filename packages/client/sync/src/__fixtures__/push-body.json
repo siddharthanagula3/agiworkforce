@@ -1,5 +1,5 @@
 {
-  "description": "Golden clock-free push-item mappings. Mutable conversations carry a server base revision; append-only messages carry no client timestamp.",
+  "description": "Golden clock-free push-item mappings. Mutable conversations and streaming message projections carry a server base revision.",
   "conversationCases": [
     {
       "name": "full_record_maps_camelCase",
@@ -71,7 +71,9 @@
         "role": "assistant",
         "content": "Here is the plan",
         "model": "gpt-5.4",
-        "provider": "openai"
+        "provider": "openai",
+        "metadata": { "cloudApproval": null },
+        "serverVersion": "12"
       },
       "expectedWireItem": {
         "id": "018f6f2a-0000-7000-8000-000000000010",
@@ -79,7 +81,9 @@
         "role": "assistant",
         "content": "Here is the plan",
         "model": "gpt-5.4",
-        "provider": "openai"
+        "provider": "openai",
+        "metadata": { "cloudApproval": null },
+        "baseVersion": "12"
       }
     },
     {
@@ -96,7 +100,9 @@
         "role": "user",
         "content": "hi there",
         "model": null,
-        "provider": null
+        "provider": null,
+        "metadata": null,
+        "baseVersion": "0"
       }
     }
   ]

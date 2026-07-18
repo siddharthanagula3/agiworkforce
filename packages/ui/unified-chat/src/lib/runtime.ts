@@ -5,7 +5,29 @@ import type {
   GeneratedFileEntry,
   WebSearchResult,
 } from './types';
-import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
+import type { AgentActivityState } from '@agiworkforce/client-runtime';
+
+export interface CloudApprovalTurnProjection {
+  assistantMessageId: string;
+  runId: string;
+  runReference?: {
+    runId: string;
+    runPath: string;
+    lastSequence: number;
+    state?: AgentTaskState;
+    cancellationRequestedAt?: string | null;
+  };
+  model: string;
+  assistantContent: string;
+  calls: Array<{
+    toolCallId: string;
+    name: string;
+    args: Record<string, unknown>;
+    decision?: 'approved' | 'rejected';
+  }>;
+  agentActivity?: AgentActivityState;
+}
 import type { CloudWorkMode } from '@agiworkforce/types';
 
 /**
@@ -95,9 +117,10 @@ export interface ChatRuntime {
   /**
    * Resolve one pending tool-approval request from an `x_tool_approval_request`
    * suspension (see the `tool_approval_request` StreamEvent). Only the cloud
-   * SSE runtimes implement this — they alone can rebuild the stateless resume
-   * request (`POST /api/llm/v1/chat/completions/approve`) from the thread they
-   * already streamed. Records the decision; once EVERY pending call in the
+   * SSE runtimes implement this. They submit only the server-owned run id and
+   * decisions to `POST /api/llm/v1/chat/completions/approve`; private model
+   * messages and tool arguments stay inside the tenant-owned checkpoint.
+   * Records the decision; once EVERY pending call in the
    * suspended turn has a decision, the runtime dispatches the resume request
    * and streams the continuation back through the same `onStream` callbacks
    * (appending to the same assistant message). No-op (never called) on
@@ -112,16 +135,12 @@ export interface ChatRuntime {
 
   /**
    * Whether `conversationId` has a suspended turn actually resolvable right
-   * now via `resolveToolApproval`. The approval registry backing that method
-   * is process-memory-only (a Map on the runtime instance) and doesn't
-   * survive a reload/restart, even though an `awaiting_approval` tool card
-   * is durably persisted on the message. Hosts must check this before
-   * rendering live Approve/Reject buttons on a persisted awaiting_approval
-   * card -- otherwise the buttons render wired but silently no-op. Optional:
-   * a runtime without `resolveToolApproval` has nothing to check liveness
-   * against either.
+   * now. `projection` is derived from the persisted assistant message and lets
+   * a fresh runtime hydrate its small client registry after reload/restart.
+   * The server remains authoritative for checkpoint ownership, arguments,
+   * policy, and exact pending-call membership.
    */
-  hasLiveApprovalTurn?(conversationId: string): boolean;
+  hasLiveApprovalTurn?(conversationId: string, projection?: CloudApprovalTurnProjection): boolean;
 
   /**
    * Persist an edit to an artifact's content (backs `ArtifactPanel`'s
@@ -264,6 +283,7 @@ export interface TauriAttachmentPayload {
 export type StreamEvent =
   | { type: 'content'; content: string }
   | { type: 'thinking'; content: string }
+  | { type: 'agent_run'; runId: string; runPath: string }
   | {
       /**
        * Runtime-validated canonical Cloud activity envelope. Consumers project

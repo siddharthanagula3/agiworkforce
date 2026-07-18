@@ -65,6 +65,22 @@ describe('createAgentEventStreamEmitter', () => {
 
     expect(sequences).toEqual([0, 1, 2]);
   });
+
+  it('continues from a durable sequence cursor and exposes the next cursor', () => {
+    const emitter = createAgentEventStreamEmitter({
+      sessionId: 'conversation-1',
+      turnId: 'request-1',
+      responseModel: 'gpt-test',
+      initialSequence: 8,
+      now: () => 100,
+    });
+
+    const payload = parseSseLine(emitter.emit({ type: 'lifecycle', phase: 'resumed' }));
+    const choice = (payload['choices'] as Array<{ delta: { x_agent_event: unknown } }>)[0];
+
+    expect(parseAgentEventDelta(choice?.delta.x_agent_event)?.sequence).toBe(8);
+    expect(emitter.nextSequence()).toBe(9);
+  });
 });
 
 describe('toAgentEventJson', () => {

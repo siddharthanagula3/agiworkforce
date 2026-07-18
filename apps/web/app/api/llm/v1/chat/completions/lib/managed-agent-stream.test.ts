@@ -267,4 +267,66 @@ describe('managed agent stream', () => {
       state: 'cancelled',
     });
   });
+
+  it('reports the durable terminal outcome after settlement and before the terminal event', async () => {
+    events.length = 0;
+    const onTerminal = vi.fn(async (outcome: string) => {
+      events.push(`checkpoint-${outcome}`);
+    });
+    const stream = buildManagedAgentStream({
+      generator: completedGenerator(),
+      processed,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_resume_completed',
+      cancellationReason: 'client_cancelled_tool_resume',
+      onTerminal,
+    });
+
+    await readAll(stream);
+
+    expect(onTerminal).toHaveBeenCalledWith('completed');
+    expect(events).toEqual(['settled', 'delivered', 'checkpoint-completed', 'terminal-visible']);
+  });
+
+  it('reports cancellation to the durable checkpoint owner', async () => {
+    const onTerminal = vi.fn(async () => undefined);
+    const stream = buildManagedAgentStream({
+      generator: completedGenerator(),
+      processed,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_resume_completed',
+      cancellationReason: 'client_cancelled_tool_resume',
+      onTerminal,
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    expect(onTerminal).toHaveBeenCalledWith('cancelled');
+  });
+
+  it('preserves awaiting-input when disconnect follows a durable approval checkpoint', async () => {
+    transitionCloudAgentRun.mockClear();
+    const stream = buildManagedAgentStream({
+      generator: canonicalEventGenerator(),
+      processed,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_resume_completed',
+      cancellationReason: 'client_cancelled_tool_resume',
+      runJournal: {
+        db: processed.managedUsage!.db,
+        userId: 'user-1',
+        runId: '0190a000-0000-7000-8000-000000000001',
+      },
+      preserveAwaitingInputOnCancel: () => true,
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    expect(transitionCloudAgentRun).not.toHaveBeenCalledWith(
+      processed.managedUsage!.db,
+      expect.objectContaining({ state: 'cancelled' }),
+    );
+  });
 });

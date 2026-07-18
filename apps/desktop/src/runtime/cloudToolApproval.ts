@@ -9,18 +9,25 @@
  * through, and doesn't need one — `ChatRuntime` is already the long-lived
  * owner of per-conversation stream state, see `_abortControllers`).
  *
- * The server keeps no loop state, so a suspended turn is resumed statelessly:
- * `POST /api/llm/v1/chat/completions/approve` replays the full prior thread
- * plus the reconstructed assistant `tool_calls` turn and the per-call
- * `tool_approvals` decisions (`ToolApprovalResumeRequestSchema`,
- * `@agiworkforce/cloud-contracts` (`tool-approval-resume.ts`).
+ * The server owns the private transcript and exact pending-call checkpoint.
+ * This registry persists only the durable run reference and UI projection;
+ * resume submits the run id plus decisions and can be rehydrated after an app
+ * restart from the persisted assistant message.
  */
-import type { StreamEvent } from '@agiworkforce/unified-chat';
+import type {
+  CloudApprovalTurnProjection,
+  StreamEvent,
+  ToolCall,
+} from '@agiworkforce/unified-chat';
+import {
+  readPersistedCloudToolApproval,
+  type ManagedCloudAgentRunReference,
+} from '@agiworkforce/cloud-contracts';
 import { sendCloudApprovalResume } from '../api/cloudApi';
 import { createCloudStreamDeltaSink, type CloudStreamDeltaSink } from './cloudStreamDeltas';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
-import { finishAgentActivityLocally, type AgentActivityState } from '@agiworkforce/client-runtime';
+import type { AgentActivityState } from '@agiworkforce/client-runtime';
 
 interface PendingApprovalCall {
   toolCallId: string;
@@ -29,9 +36,10 @@ interface PendingApprovalCall {
 }
 
 interface PendingApprovalTurn {
+  runId: string;
+  runReference?: ManagedCloudAgentRunReference;
+  assistantMessageId?: string;
   model: string;
-  /** The thread BEFORE the suspended assistant turn (the request's messageHistory, or a single-user-turn fallback). */
-  priorMessages: Array<Record<string, unknown>>;
   calls: PendingApprovalCall[];
   decisions: Map<string, 'approved' | 'rejected'>;
   /** Assistant text streamed before suspension — seeds the reconstructed tool_calls turn. */
@@ -48,7 +56,53 @@ export interface ResolveApprovalOutcome {
   /** Full assistant text across the original turn + every resume so far. Only meaningful when `!suspended`. */
   content: string;
   model: string;
+  runId: string;
+  assistantMessageId?: string;
+  runReference?: ManagedCloudAgentRunReference;
+  pendingProjection?: CloudApprovalTurnProjection;
   agentActivity?: AgentActivityState;
+}
+
+function parseApprovalArgs(input: string | undefined): Record<string, unknown> {
+  if (!input) return {};
+  try {
+    const parsed: unknown = JSON.parse(input);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : { value: parsed };
+  } catch {
+    return { value: input };
+  }
+}
+
+/** Rebuild shared Desktop approval cards from validated cloud metadata. */
+export function mapPersistedCloudApprovalToolCalls(metadata: unknown): ToolCall[] | undefined {
+  const persisted = readPersistedCloudToolApproval(metadata);
+  if (!persisted) return undefined;
+  return persisted.projection.calls.map((call) => ({
+    id: call.toolCallId,
+    name: call.name,
+    args: parseApprovalArgs(call.input),
+    status: 'awaiting_approval',
+    requiresApproval: true,
+    ...(call.approvalDecision ? { approvalDecision: call.approvalDecision } : {}),
+  }));
+}
+
+function toProjection(turn: PendingApprovalTurn): CloudApprovalTurnProjection | undefined {
+  if (!turn.assistantMessageId) return undefined;
+  return {
+    assistantMessageId: turn.assistantMessageId,
+    runId: turn.runId,
+    ...(turn.runReference ? { runReference: turn.runReference } : {}),
+    model: turn.model,
+    assistantContent: turn.assistantContent,
+    calls: turn.calls.map((call) => {
+      const decision = turn.decisions.get(call.toolCallId);
+      return { ...call, ...(decision ? { decision } : {}) };
+    }),
+    ...(turn.agentActivity ? { agentActivity: turn.agentActivity } : {}),
+  };
 }
 
 /**
@@ -66,14 +120,27 @@ export class CloudToolApprovalRegistry {
   private readonly turns = new Map<string, PendingApprovalTurn>();
 
   /**
-   * Whether `conversationId` has a suspended turn `resolve()` can actually
-   * act on right now. This registry is a per-`ChatRuntime`-instance Map, so
-   * it resets on every app restart even though a persisted `awaiting_approval`
-   * tool card survives -- callers must check this before wiring live
-   * Approve/Reject buttons on a persisted card (see `hasLiveApprovalTurn` on
-   * `ChatRuntime`).
+   * Hydrates a fresh runtime from the durable UI projection when necessary.
+   * The server validates the run ownership and canonical pending call set.
    */
-  hasLiveTurn(conversationId: string): boolean {
+  hasLiveTurn(conversationId: string, projection?: CloudApprovalTurnProjection): boolean {
+    if (!this.turns.has(conversationId) && projection?.runId && projection.calls.length > 0) {
+      this.turns.set(conversationId, {
+        runId: projection.runId,
+        ...(projection.runReference ? { runReference: projection.runReference } : {}),
+        assistantMessageId: projection.assistantMessageId,
+        model: projection.model,
+        calls: projection.calls.map(({ toolCallId, name, args }) => ({ toolCallId, name, args })),
+        decisions: new Map(
+          projection.calls.flatMap((call) =>
+            call.decision ? [[call.toolCallId, call.decision] as const] : [],
+          ),
+        ),
+        assistantContent: projection.assistantContent,
+        resolving: false,
+        ...(projection.agentActivity ? { agentActivity: projection.agentActivity } : {}),
+      });
+    }
     return this.turns.has(conversationId);
   }
 
@@ -84,24 +151,34 @@ export class CloudToolApprovalRegistry {
    */
   recordTurnOutcome(
     conversationId: string,
+    run: string | ManagedCloudAgentRunReference | undefined,
     model: string,
-    priorMessages: Array<Record<string, unknown>>,
     sink: SinkOutcome,
+    assistantMessageId?: string,
   ): void {
+    const runId = typeof run === 'string' ? run : run?.runId;
     const calls = sink.getPendingApprovalCalls();
-    if (sink.isSuspended() && calls.length > 0) {
+    if (sink.isSuspended() && calls.length > 0 && runId) {
       this.turns.set(conversationId, {
+        runId,
+        ...(typeof run === 'object' ? { runReference: run } : {}),
+        ...(assistantMessageId ? { assistantMessageId } : {}),
         model,
-        priorMessages,
         calls,
         decisions: new Map(),
         assistantContent: sink.getAccumulatedContent(),
         resolving: false,
-        agentActivity: sink.getAgentActivity(),
+        ...(sink.getAgentActivity() ? { agentActivity: sink.getAgentActivity() } : {}),
       });
     } else {
       this.turns.delete(conversationId);
     }
+  }
+
+  /** Snapshot used to persist partial decisions before the resume dispatches. */
+  getTurnProjection(conversationId: string): CloudApprovalTurnProjection | undefined {
+    const turn = this.turns.get(conversationId);
+    return turn ? toProjection(turn) : undefined;
   }
 
   /**
@@ -133,15 +210,6 @@ export class CloudToolApprovalRegistry {
     if (turn.decisions.size < turn.calls.length) return null;
     turn.resolving = true;
 
-    const assistantToolCallMessage: Record<string, unknown> = {
-      role: 'assistant',
-      content: turn.assistantContent,
-      tool_calls: turn.calls.map((c) => ({
-        id: c.toolCallId,
-        type: 'function',
-        function: { name: c.name, arguments: JSON.stringify(c.args) },
-      })),
-    };
     const toolApprovals = turn.calls.map((c) => ({
       tool_call_id: c.toolCallId,
       decision: turn.decisions.get(c.toolCallId) ?? ('rejected' as const),
@@ -149,45 +217,44 @@ export class CloudToolApprovalRegistry {
 
     const sink = createCloudStreamDeltaSink(emit, apiBaseUrl, turn.agentActivity);
 
-    return new Promise<ResolveApprovalOutcome>((resolvePromise) => {
+    return new Promise<ResolveApprovalOutcome>((resolvePromise, rejectPromise) => {
       void sendCloudApprovalResume(
-        turn.model,
-        [...turn.priorMessages, assistantToolCallMessage],
+        turn.runId,
         toolApprovals,
         sink.onChunk,
         () => {
           const fullContent = turn.assistantContent + sink.getAccumulatedContent();
+          const nextActivity = sink.getAgentActivity();
+          const nextRunReference = turn.runReference
+            ? {
+                ...turn.runReference,
+                lastSequence: Math.max(
+                  turn.runReference.lastSequence,
+                  nextActivity?.lastSequence ?? -1,
+                ),
+                state: sink.isSuspended()
+                  ? ('awaiting_input' as const)
+                  : sink.getStreamError()
+                    ? ('failed' as const)
+                    : ('completed' as const),
+              }
+            : undefined;
+          let pendingProjection: CloudApprovalTurnProjection | undefined;
           if (sink.isSuspended()) {
-            // Suspended again on a further tool: register a fresh turn
-            // carrying the now-longer thread (this turn's assistant
-            // tool_call message + a synthetic tool result per decided call).
-            this.turns.set(conversationId, {
+            // The server advanced the same run to a new approval checkpoint.
+            const nextTurn: PendingApprovalTurn = {
+              runId: turn.runId,
+              ...(nextRunReference ? { runReference: nextRunReference } : {}),
+              ...(turn.assistantMessageId ? { assistantMessageId: turn.assistantMessageId } : {}),
               model: turn.model,
-              priorMessages: [
-                ...turn.priorMessages,
-                assistantToolCallMessage,
-                ...turn.calls.map((c) => ({
-                  role: 'tool',
-                  // The real result this tool call actually produced (from
-                  // its x_tool_result delta), not a placeholder -- the model
-                  // needs the genuine file contents / command output / search
-                  // results to reason correctly about the NEXT tool call.
-                  // Falls back to the placeholder only if a result somehow
-                  // never arrived (e.g. the server didn't emit x_tool_result
-                  // for this call), so the thread never carries `undefined`.
-                  content:
-                    turn.decisions.get(c.toolCallId) === 'approved'
-                      ? (sink.getToolResult(c.toolCallId)?.content ?? '(executed)')
-                      : 'The user denied permission to run this tool.',
-                  tool_call_id: c.toolCallId,
-                })),
-              ],
               calls: sink.getPendingApprovalCalls(),
               decisions: new Map(),
               assistantContent: fullContent,
               resolving: false,
-              agentActivity: sink.getAgentActivity(),
-            });
+              ...(nextActivity ? { agentActivity: nextActivity } : {}),
+            };
+            this.turns.set(conversationId, nextTurn);
+            pendingProjection = toProjection(nextTurn);
           } else {
             this.turns.delete(conversationId);
           }
@@ -199,27 +266,17 @@ export class CloudToolApprovalRegistry {
             suspended: sink.isSuspended(),
             content: fullContent,
             model: turn.model,
-            ...(sink.getAgentActivity() ? { agentActivity: sink.getAgentActivity() } : {}),
+            runId: turn.runId,
+            ...(turn.assistantMessageId ? { assistantMessageId: turn.assistantMessageId } : {}),
+            ...(nextRunReference ? { runReference: nextRunReference } : {}),
+            ...(pendingProjection ? { pendingProjection } : {}),
+            ...(nextActivity ? { agentActivity: nextActivity } : {}),
           });
         },
         (err) => {
-          this.turns.delete(conversationId);
+          turn.resolving = false;
           onError(err);
-          const activity = sink.getAgentActivity();
-          resolvePromise({
-            suspended: false,
-            content: turn.assistantContent + sink.getAccumulatedContent(),
-            model: turn.model,
-            ...(activity
-              ? {
-                  agentActivity: finishAgentActivityLocally(activity, {
-                    status: 'failed',
-                    completedAtMs: Date.now(),
-                    error: err.message,
-                  }),
-                }
-              : {}),
-          });
+          rejectPromise(err);
         },
         signal,
         sink.onEvent,

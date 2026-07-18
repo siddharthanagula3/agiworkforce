@@ -4,6 +4,7 @@ import {
   createCloudConversation,
   getCloudConversation,
   listCloudConversations,
+  sendCloudApprovalResume,
   sendCloudMessage,
 } from '../cloudApi';
 
@@ -219,5 +220,33 @@ describe('cloudApi', () => {
     expect(JSON.parse(request.body as string)).toEqual(
       expect.objectContaining({ research: true, work_mode: 'agiwork' }),
     );
+  });
+
+  it('resumes a server-owned approval checkpoint without replaying model messages', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(stream, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await sendCloudApprovalResume(
+      '0190a000-0000-7000-8000-000000000099',
+      [{ tool_call_id: 'call_1', decision: 'approved' }],
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      undefined,
+      undefined,
+      'agi.chat.desktop.tool-resume.0190a000-0000-7000-8000-000000000098',
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(request.body as string)).toEqual({
+      run_id: '0190a000-0000-7000-8000-000000000099',
+      tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
+    });
   });
 });

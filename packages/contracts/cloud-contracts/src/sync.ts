@@ -150,7 +150,9 @@ export const MessageSyncPushItemSchema = z.object({
   outputTokens: z.number().int().nonnegative().optional(),
   costCents: z.number().nonnegative().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  /** Messages are append-only, so identity is the concurrency primitive. */
+  /** Last server revision observed by this client; `0` creates. */
+  baseVersion: ServerVersionSchema,
+  /** Tombstone intent only. The server owns the deletion timestamp. */
   isDeleted: z.boolean().optional(),
 });
 export type MessageSyncPushItem = z.infer<typeof MessageSyncPushItemSchema>;

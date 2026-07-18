@@ -170,6 +170,43 @@ describe('ChatSyncPushResponseSchema', () => {
         ],
       }).success,
     ).toBe(false);
+
+    expect(
+      ChatSyncPushRequestSchema.safeParse({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: messageDelta.id,
+            conversationId: conversationDelta.id,
+            role: 'assistant',
+            content: 'updated stream content',
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      ChatSyncPushRequestSchema.parse({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: messageDelta.id,
+            conversationId: conversationDelta.id,
+            role: 'assistant',
+            content: 'updated stream content',
+            metadata: { cloudApproval: null },
+            baseVersion: '43',
+          },
+        ],
+      }).messages[0],
+    ).toEqual({
+      id: messageDelta.id,
+      conversationId: conversationDelta.id,
+      role: 'assistant',
+      content: 'updated stream content',
+      metadata: { cloudApproval: null },
+      baseVersion: '43',
+    });
   });
 
   it('accepts an ack with per-entity applied rows', () => {

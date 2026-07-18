@@ -32,10 +32,9 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 /**
- * One chat-completions wire message. `tool_calls`/`tool_call_id` are only
- * present on the reconstructed assistant tool-call turn and tool-result rows
- * a tool-approval resume request replays (see `streamToolApprovalResume`) —
- * every normal user/assistant/system turn omits them.
+ * One chat-completions wire message. Normal user/assistant/system turns use
+ * this shape. Durable approval resumes never accept client-replayed messages;
+ * the server restores the trusted checkpoint identified by `run_id`.
  */
 export interface ChatWireMessage {
   role: string;
@@ -257,23 +256,29 @@ export async function cancelMobileCloudAgentRun(runId: string) {
   return createMobileCloudAgentRunClient().cancelRun(runId);
 }
 
+interface InitialStreamRequest {
+  model: string;
+  messages: ChatWireMessage[];
+  stream: true;
+  operationId: string;
+  thinking?: boolean;
+  effort?: Effort;
+  /** When true, the server injects its built-in web_search tool for this turn. */
+  web_search?: boolean;
+  /** When true, the server injects its built-in E2B code-execution tool for this turn. */
+  code_execution?: boolean;
+  /** Paid Cloud product mode; independent from approval/permission policy. */
+  work_mode?: CloudWorkMode;
+}
+
+interface ApprovalResumeRequest {
+  run_id: string;
+  operationId: string;
+  tool_approvals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
+}
+
 async function attemptStream(
-  body: {
-    model: string;
-    messages: ChatWireMessage[];
-    stream: true;
-    operationId: string;
-    thinking?: boolean;
-    effort?: Effort;
-    /** When true, the server injects its built-in web_search tool for this turn. */
-    web_search?: boolean;
-    /** When true, the server injects its built-in E2B code-execution tool for this turn. */
-    code_execution?: boolean;
-    /** Paid Cloud product mode; independent from approval/permission policy. */
-    work_mode?: CloudWorkMode;
-    /** Present only on a tool-approval resume request — see `streamToolApprovalResume`. */
-    tool_approvals?: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
-  },
+  body: InitialStreamRequest | ApprovalResumeRequest,
   callbacks: StreamCallbacks,
   signal: AbortSignal,
   path: string = COMPLETIONS_PATH,
@@ -285,11 +290,17 @@ async function attemptStream(
   // `thinking` fails Zod validation with HTTP 400 ("expected object, received
   // boolean"), which is the exact bug that made EVERY cloud chat reply silently
   // fail. Remap the boolean to thinking_mode; never send a bare boolean as thinking.
-  const { thinking, operationId, ...restBody } = body;
-  const payload = {
-    ...restBody,
-    ...(typeof thinking === 'boolean' ? { thinking_mode: thinking } : {}),
-  };
+  const { operationId, ...requestBody } = body;
+  const payload =
+    'thinking' in requestBody
+      ? (() => {
+          const { thinking, ...restBody } = requestBody;
+          return {
+            ...restBody,
+            ...(typeof thinking === 'boolean' ? { thinking_mode: thinking } : {}),
+          };
+        })()
+      : requestBody;
 
   const response = await guardedFetch(
     `${API_URL}${path}`,
@@ -484,20 +495,7 @@ function isNetworkError(err: unknown): boolean {
  * The caller can track reconnect attempts via the optional onReconnecting callback.
  */
 export async function streamChat(
-  body: {
-    model: string;
-    messages: ChatWireMessage[];
-    stream: true;
-    operationId: string;
-    thinking?: boolean;
-    effort?: Effort;
-    /** When true, the server injects its built-in web_search tool for this turn. */
-    web_search?: boolean;
-    /** When true, the server injects its built-in E2B code-execution tool for this turn. */
-    code_execution?: boolean;
-    /** Paid Cloud product mode; independent from approval/permission policy. */
-    work_mode?: CloudWorkMode;
-  },
+  body: InitialStreamRequest,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -748,10 +746,9 @@ export async function streamChat(
 }
 
 /**
- * Resume a suspended tool-approval turn: `POST /api/llm/v1/chat/completions/approve`
- * with the full replayed thread (ending in the reconstructed assistant
- * tool_call turn) plus `tool_approvals`, and stream the continuation into the
- * SAME assistant message.
+ * Resume a suspended tool-approval turn by stable server-owned `run_id` plus
+ * the user's decisions. The trusted transcript, tool arguments, policy and
+ * event cursor are restored from the durable server checkpoint.
  *
  * DELIBERATELY SINGLE-ATTEMPT — unlike `streamChat`, this does NOT retry on a
  * network drop. The `/approve` endpoint EXECUTES the approved tool calls
@@ -761,13 +758,7 @@ export async function streamChat(
  * can explicitly retry (a fresh decision, not an automatic replay).
  */
 export async function streamToolApprovalResume(
-  body: {
-    model: string;
-    messages: ChatWireMessage[];
-    stream: true;
-    operationId: string;
-    tool_approvals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
-  },
+  body: ApprovalResumeRequest,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -775,7 +766,9 @@ export async function streamToolApprovalResume(
     assertRemoteChatAllowed(undefined, {
       cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
     });
-    ensureLlmGateOpen(resolveProviderFromModel(body.model));
+    // Provider/model policy is revalidated against the server-owned checkpoint
+    // before any tool executes. Mobile deliberately cannot supply or override
+    // that model on an approval resume.
   } catch (err) {
     callbacks.onError(err instanceof Error ? err : new Error(String(err)));
     return;

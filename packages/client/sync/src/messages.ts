@@ -42,6 +42,8 @@ export interface SyncMessageRecord {
   model?: string;
   provider?: string;
   createdAt?: string;
+  metadata?: Record<string, unknown> | null;
+  serverVersion?: string;
 }
 
 /**
@@ -93,6 +95,8 @@ export function applyMessageDeltas(
         ...(d.model ? { model: d.model } : {}),
         ...(d.provider ? { provider: d.provider } : {}),
         createdAt: d.created_at,
+        metadata: d.metadata,
+        serverVersion: d.server_version,
       });
     }
     const ordered = Array.from(merged.values()).sort((a, b) => {
@@ -112,6 +116,8 @@ export interface MessagePushItem {
   content: string;
   model: string | null;
   provider: string | null;
+  metadata: Record<string, unknown> | null;
+  baseVersion: string;
 }
 
 /**
@@ -131,5 +137,36 @@ export function toMessagePushItem(
     content: record.content,
     model: record.model ?? null,
     provider: record.provider ?? null,
+    metadata: record.metadata ?? null,
+    baseVersion: record.serverVersion ?? '0',
   };
+}
+
+function stableJsonStringify(value: unknown): string | undefined {
+  return JSON.stringify(value, (_key, nested) => {
+    if (nested === null || typeof nested !== 'object' || Array.isArray(nested)) {
+      return nested;
+    }
+    return Object.keys(nested as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((ordered, key) => {
+        ordered[key] = (nested as Record<string, unknown>)[key];
+        return ordered;
+      }, {});
+  });
+}
+
+/** Exact snapshot equality used to preserve edits made during an in-flight CAS push. */
+export function messageSyncContentMatches(
+  sent: SyncMessageRecord,
+  latest: SyncMessageRecord,
+): boolean {
+  return (
+    sent.id === latest.id &&
+    sent.role === latest.role &&
+    sent.content === latest.content &&
+    (sent.model ?? null) === (latest.model ?? null) &&
+    (sent.provider ?? null) === (latest.provider ?? null) &&
+    stableJsonStringify(sent.metadata ?? null) === stableJsonStringify(latest.metadata ?? null)
+  );
 }

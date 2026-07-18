@@ -1,13 +1,10 @@
-/**
- * Security boundary for the tool-approval RESUME endpoint: an approval that does
- * not reference a tool_call actually pending in the replayed assistant turn is
- * rejected with a 400 BEFORE any credit reservation, tool load, or stream — it
- * executes nothing. A valid approval passes the boundary and reaches
- * processRequest. (The execution semantics themselves are covered by
- * lib/tool-loop.resume.test.ts.)
- */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+
+const RUN_ID = '0190a000-0000-7000-8000-000000000001';
+const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
+const LEASE_TOKEN = '0190a000-0000-7000-8000-000000000003';
+const CONVERSATION_ID = '0190a000-0000-7000-8000-000000000004';
 
 const mockRunAuthGate = vi.fn();
 vi.mock('../lib/auth-gate', () => ({
@@ -24,18 +21,52 @@ vi.mock('../lib/request-processor', () => ({
 }));
 
 const mockRunToolLoop = vi.fn();
+const toolMocks = vi.hoisted(() => ({
+  loadOperatorTools: vi.fn(async () => []),
+  loadConnectorTools: vi.fn(async () => []),
+}));
 vi.mock('../lib/tool-loop', () => ({
   runToolLoop: (...args: unknown[]) => mockRunToolLoop(...args),
-  loadMcpToolDefs: vi.fn(async () => []),
+  loadMcpToolDefs: toolMocks.loadOperatorTools,
 }));
 
 vi.mock('@/lib/user-connector-tools', () => ({
-  loadUserConnectorToolDefs: vi.fn(async () => []),
+  loadUserConnectorToolDefs: toolMocks.loadConnectorTools,
   makeUserConnectorExecutor: vi.fn(),
+}));
+
+const db = { query: vi.fn(), transaction: vi.fn() };
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({ db })),
+}));
+
+const checkpointMocks = vi.hoisted(() => ({
+  claim: vi.fn(),
+  save: vi.fn(async () => undefined),
+  complete: vi.fn(async () => undefined),
+  release: vi.fn(async () => undefined),
+  isCancelled: vi.fn(async () => false),
+}));
+
+vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
+  claimCloudAgentApprovalCheckpoint: checkpointMocks.claim,
+  saveCloudAgentApprovalCheckpoint: checkpointMocks.save,
+  completeCloudAgentApprovalCheckpoint: checkpointMocks.complete,
+  releaseCloudAgentApprovalCheckpoint: checkpointMocks.release,
+  isCloudAgentRunCancellationRequested: checkpointMocks.isCancelled,
+  appendCloudAgentEvent: vi.fn(async () => ({ state: 'running' })),
+  transitionCloudAgentRun: vi.fn(async () => ({ state: 'running' })),
 }));
 
 const managedUsageMocks = vi.hoisted(() => ({
   providerStarted: vi.fn(async () => undefined),
+  finalizeRequest: vi.fn(async () => ({
+    requestStatus: 'released',
+    operationResult: 'finalized',
+    settlementStatus: 'succeeded',
+    actualCostCents: 0,
+  })),
   finalizeObserved: vi.fn(async () => ({
     requestStatus: 'completed',
     operationResult: 'finalized',
@@ -49,26 +80,21 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
   markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
   markManagedUsageClientDelivered: managedUsageMocks.delivered,
+  finalizeManagedUsageRequest: managedUsageMocks.finalizeRequest,
 }));
 
 vi.mock('@/lib/services/managed-usage-accounting-service', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/lib/services/managed-usage-accounting-service')
-  >()),
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-accounting-service')>()),
   finalizeObservedManagedUsage: managedUsageMocks.finalizeObserved,
 }));
 
+import {
+  CloudAgentApprovalDecisionError,
+  CloudAgentApprovalCheckpointNotFoundError,
+} from '@/lib/services/cloud-agent-run-service';
 import { POST } from './route';
 
-function makeRequest(body: unknown): NextRequest {
-  return new NextRequest('http://localhost/api/llm/v1/chat/completions/approve', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
-const suspendedThread = [
+const suspendedMessages = [
   { role: 'user', content: 'summarize PR 7' },
   {
     role: 'assistant',
@@ -80,167 +106,234 @@ const suspendedThread = [
         function: { name: 'mcp__github__get_pull_request_diff', arguments: '{}' },
       },
     ],
+    __canonicalThinking: [{ type: 'thinking', thinking: 'private', signature: 'signed' }],
   },
 ];
 
-describe('POST /api/llm/v1/chat/completions/approve — security boundary', () => {
+const claimedCheckpoint = {
+  checkpoint: {
+    id: CHECKPOINT_ID,
+    runId: RUN_ID,
+    userId: 'user-1',
+    version: 1,
+    sessionId: CONVERSATION_ID,
+    turnId: 'original-turn-1',
+    nextEventSequence: 6,
+    request: {
+      model: 'claude-test',
+      stream: true,
+      conversation_id: CONVERSATION_ID,
+      work_mode: 'agiwork',
+    },
+    messages: suspendedMessages,
+    pendingToolCalls: [
+      {
+        id: 'call_1',
+        qualifiedName: 'mcp__github__get_pull_request_diff',
+        args: {},
+      },
+    ],
+    state: 'resuming',
+    leaseToken: LEASE_TOKEN,
+    leaseExpiresAt: '2026-07-18T00:15:00.000Z',
+    resolvedAt: null,
+    createdAt: '2026-07-18T00:00:00.000Z',
+    updatedAt: '2026-07-18T00:00:00.000Z',
+  },
+  approvals: [{ toolCallId: 'call_1', decision: 'approved' as const }],
+  leaseToken: LEASE_TOKEN,
+};
+
+function makeRequest(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/llm/v1/chat/completions/approve', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'agi.chat.web.tool-resume.resume-1',
+      'X-AGI-Origin-Surface': 'web',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function resumeBody(toolCallId = 'call_1') {
+  return {
+    run_id: RUN_ID,
+    tool_approvals: [{ tool_call_id: toolCallId, decision: 'approved' }],
+  };
+}
+
+function processedRequest() {
+  return {
+    ok: true,
+    requestId: 'resume-request-1',
+    conversationId: CONVERSATION_ID,
+    provider: 'anthropic',
+    requestedModel: 'claude-test',
+    subscriptionTier: 'pro',
+    chatRequest: {
+      model: 'claude-test',
+      messages: suspendedMessages.map(({ __canonicalThinking: _private, ...message }) => message),
+      stream: true,
+      thinking_mode: true,
+      thinking: { type: 'enabled' },
+    },
+    llmRequest: {
+      model: 'claude-test',
+      messages: suspendedMessages.map(({ __canonicalThinking: _private, ...message }) => message),
+      max_tokens: 4096,
+      stream: true,
+      thinking_mode: true,
+      thinking: { type: 'enabled', budget_tokens: 1024 },
+      effort: 'high',
+    },
+    quotaWarningHeader: null,
+    managedUsage: undefined,
+  };
+}
+
+describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint boundary', () => {
   beforeEach(() => {
-    mockRunAuthGate.mockReset();
-    mockProcessRequest.mockReset();
-    mockRunToolLoop.mockReset();
-    managedUsageMocks.providerStarted.mockClear();
-    managedUsageMocks.finalizeObserved.mockClear();
-    managedUsageMocks.delivered.mockClear();
+    vi.clearAllMocks();
     mockRunAuthGate.mockResolvedValue({
       ok: true,
       userId: 'user-1',
       token: 'tok',
       subscription: { plan_tier: 'pro' },
     });
+    checkpointMocks.claim.mockResolvedValue(claimedCheckpoint);
+    mockProcessRequest.mockResolvedValue(processedRequest());
+    mockRunToolLoop.mockReturnValue(
+      (async function* () {
+        yield new TextEncoder().encode('data: [DONE]\n\n');
+      })(),
+    );
   });
 
-  it('rejects an approval whose tool_call_id is not pending (executes nothing)', async () => {
-    const res = await POST(
-      makeRequest({
-        model: 'gpt-test',
-        messages: suspendedThread,
-        tool_approvals: [{ tool_call_id: 'call_FORGED', decision: 'approved' }],
-      }),
-    );
+  it('rejects a malformed body before claiming a checkpoint', async () => {
+    const response = await POST(makeRequest({ tool_approvals: [] }));
 
-    expect(res.status).toBe(400);
-    // Never reached processing or the tool loop.
+    expect(response.status).toBe(400);
+    expect(checkpointMocks.claim).not.toHaveBeenCalled();
+    expect(mockProcessRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects a forged decision from the server-owned pending-call set', async () => {
+    checkpointMocks.claim.mockRejectedValue(new CloudAgentApprovalDecisionError());
+
+    const response = await POST(makeRequest(resumeBody('call_forged')));
+
+    expect(response.status).toBe(400);
     expect(mockProcessRequest).not.toHaveBeenCalled();
     expect(mockRunToolLoop).not.toHaveBeenCalled();
   });
 
-  it('rejects when the thread has no suspended assistant tool_call turn', async () => {
-    const res = await POST(
-      makeRequest({
-        model: 'gpt-test',
-        messages: [{ role: 'user', content: 'hi' }],
-        tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
-      }),
-    );
+  it('does not disclose a run that has no tenant-owned pending checkpoint', async () => {
+    checkpointMocks.claim.mockRejectedValue(new CloudAgentApprovalCheckpointNotFoundError());
 
-    expect(res.status).toBe(400);
+    const response = await POST(makeRequest(resumeBody()));
+
+    expect(response.status).toBe(404);
     expect(mockProcessRequest).not.toHaveBeenCalled();
   });
 
-  it('rejects a malformed body (missing tool_approvals)', async () => {
-    const res = await POST(makeRequest({ model: 'gpt-test', messages: suspendedThread }));
-    expect(res.status).toBe(400);
-    expect(mockProcessRequest).not.toHaveBeenCalled();
-  });
+  it('rebuilds request validation from trusted state and restores the durable event cursor', async () => {
+    const response = await POST(makeRequest(resumeBody()));
+    await response.text();
 
-  it('forces extended thinking OFF on the resume continuation', async () => {
-    // processRequest returns a processed carrying thinking on; the route must
-    // strip it before driving the loop so an Anthropic tool_use continuation
-    // does not require the (server-only) signed thinking block.
-    const processed = {
-      ok: true,
-      quotaWarningHeader: null,
-      chatRequest: { thinking_mode: true, thinking: { type: 'enabled' } },
-      llmRequest: {
-        thinking_mode: true,
-        thinking: { type: 'enabled', budget_tokens: 1024 },
-        effort: 'high',
-      },
-    };
-    mockProcessRequest.mockResolvedValue(processed);
-    mockRunToolLoop.mockReturnValue(
-      (async function* () {
-        // no chunks — the route just needs an async generator to drain.
-      })(),
-    );
+    const syntheticRequest = mockProcessRequest.mock.calls[0]![0] as NextRequest;
+    const syntheticBody = (await syntheticRequest.json()) as Record<string, unknown>;
+    expect(syntheticBody).toMatchObject({
+      model: 'claude-test',
+      stream: true,
+      conversation_id: CONVERSATION_ID,
+      work_mode: 'agiwork',
+    });
+    expect(syntheticBody).not.toHaveProperty('run_id');
+    expect(syntheticBody).not.toHaveProperty('tool_approvals');
+    expect(JSON.stringify(syntheticBody)).not.toContain('__canonicalThinking');
 
-    await POST(
-      makeRequest({
-        model: 'gpt-test',
-        messages: suspendedThread,
-        tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
+    expect(mockRunToolLoop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmRequest: expect.objectContaining({ messages: suspendedMessages }),
+      }),
+      expect.objectContaining({
+        resume: { approvals: [{ toolCallId: 'call_1', decision: 'approved' }] },
+        eventSessionId: CONVERSATION_ID,
+        eventTurnId: 'original-turn-1',
+        initialEventSequence: 6,
+        onApprovalCheckpoint: expect.any(Function),
       }),
     );
-
-    expect(mockRunToolLoop).toHaveBeenCalledTimes(1);
-    const passedProcessed = mockRunToolLoop.mock.calls[0]![0] as typeof processed;
-    expect(passedProcessed.llmRequest.thinking_mode).toBeUndefined();
-    expect(passedProcessed.llmRequest.thinking).toBeUndefined();
-    expect(passedProcessed.llmRequest.effort).toBeUndefined();
-    expect(passedProcessed.chatRequest.thinking_mode).toBeUndefined();
+    expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe(RUN_ID);
+    expect(checkpointMocks.complete).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      checkpointId: CHECKPOINT_ID,
+      leaseToken: LEASE_TOKEN,
+      outcome: 'resolved',
+    });
   });
 
-  it('passes the boundary and reaches processRequest for a valid pending approval', async () => {
-    // processRequest short-circuits with a failure response so we only assert the
-    // security boundary was cleared (it was called).
+  it('releases the checkpoint lease when current request validation cannot proceed', async () => {
     mockProcessRequest.mockResolvedValue({
       ok: false,
-      response: NextResponse.json({ error: 'stop-here' }, { status: 402 }),
+      response: NextResponse.json({ error: 'quota changed' }, { status: 402 }),
     });
 
-    const res = await POST(
-      makeRequest({
-        model: 'gpt-test',
-        messages: suspendedThread,
-        tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
-      }),
-    );
+    const response = await POST(makeRequest(resumeBody()));
 
-    expect(mockProcessRequest).toHaveBeenCalledTimes(1);
-    expect(res.status).toBe(402);
+    expect(response.status).toBe(402);
+    expect(checkpointMocks.release).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      checkpointId: CHECKPOINT_ID,
+      leaseToken: LEASE_TOKEN,
+    });
   });
 
-  it('settles observed resume usage before exposing the terminal event', async () => {
+  it('releases the checkpoint lease when tool discovery fails before execution', async () => {
     const managedUsage = {
-      db: {},
+      db,
       userId: 'user-1',
       idempotencyKey: 'agi.chat.web.tool-resume.resume-1',
-      requestHash: 'hash-1',
-      leaseToken: 'lease-1',
-      estimatedCostCents: 5,
+      requestHash: 'request-hash',
+      leaseToken: LEASE_TOKEN,
+      estimatedCostCents: 4,
     };
-    mockProcessRequest.mockResolvedValue({
-      ok: true,
-      requestId: 'request-1',
-      provider: 'anthropic',
-      requestedModel: 'claude-test',
-      chatRequest: { model: 'claude-test' },
-      llmRequest: {},
-      quotaWarningHeader: null,
-      managedUsage,
-    });
-    mockRunToolLoop.mockImplementation((_processed, options) => {
-      Object.assign(options.usage, {
-        providerCalls: 1,
-        inputTokens: 120,
-        outputTokens: 30,
-      });
-      return (async function* () {
-        yield new TextEncoder().encode('data: [DONE]\n\n');
-      })();
-    });
+    mockProcessRequest.mockResolvedValue({ ...processedRequest(), managedUsage });
+    toolMocks.loadOperatorTools.mockRejectedValueOnce(new Error('tool registry unavailable'));
 
-    const res = await POST(
-      makeRequest({
-        model: 'claude-test',
-        messages: suspendedThread,
-        tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
-      }),
-    );
-    const body = await res.text();
+    const response = await POST(makeRequest(resumeBody()));
 
-    expect(body.match(/data: \[DONE\]/g)).toHaveLength(1);
-    expect(managedUsageMocks.finalizeObserved).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reservation: managedUsage,
-        reason: 'tool_resume_completed',
-        usage: expect.objectContaining({
-          providerCalls: 1,
-          inputTokens: 120,
-          outputTokens: 30,
-        }),
-      }),
-    );
-    expect(managedUsageMocks.delivered).toHaveBeenCalledWith(managedUsage);
+    expect(response.status).toBe(500);
+    expect(checkpointMocks.release).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      checkpointId: CHECKPOINT_ID,
+      leaseToken: LEASE_TOKEN,
+    });
+    expect(managedUsageMocks.finalizeRequest).toHaveBeenCalledWith({
+      ...managedUsage,
+      outcome: 'failed',
+      actualCostCents: 0,
+      usage: { reason: 'tool_discovery_failed' },
+    });
+    expect(mockRunToolLoop).not.toHaveBeenCalled();
+  });
+
+  it('retains extended thinking and its signed checkpoint continuity internally', async () => {
+    const response = await POST(makeRequest(resumeBody()));
+    await response.text();
+
+    const passedProcessed = mockRunToolLoop.mock.calls[0]![0] as ReturnType<
+      typeof processedRequest
+    >;
+    expect(passedProcessed.llmRequest.thinking_mode).toBe(true);
+    expect(passedProcessed.llmRequest.thinking).toEqual({
+      type: 'enabled',
+      budget_tokens: 1024,
+    });
+    expect(passedProcessed.llmRequest.effort).toBe('high');
+    expect(passedProcessed.llmRequest.messages).toEqual(suspendedMessages);
   });
 });

@@ -125,6 +125,7 @@ struct PushMessage {
     model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     provider: Option<String>,
+    base_version: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     is_deleted: Option<bool>,
 }
@@ -523,7 +524,7 @@ fn gather_push_conversations(conn: &Connection, user_id: &str) -> SqlResult<Vec<
 fn gather_push_messages(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushMessage>> {
     let mut stmt = conn.prepare(
         "SELECT m.cloud_id, m.conversation_cloud_id, m.role, m.content, \
-                m.model, m.provider, m.deleted_at_utc \
+                m.model, m.provider, m.server_version, m.deleted_at_utc \
          FROM messages m \
          JOIN conversations c ON c.id = m.conversation_id \
          WHERE m.needs_push = 1 \
@@ -540,7 +541,8 @@ fn gather_push_messages(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushM
         let content: String = row.get(3)?;
         let model: Option<String> = row.get(4)?;
         let provider: Option<String> = row.get(5)?;
-        let deleted_at_utc: Option<String> = row.get(6)?;
+        let server_version: Option<String> = row.get(6)?;
+        let deleted_at_utc: Option<String> = row.get(7)?;
         Ok(PushMessage {
             id: cloud_id,
             conversation_id: conv_cloud_id,
@@ -548,6 +550,7 @@ fn gather_push_messages(conn: &Connection, user_id: &str) -> SqlResult<Vec<PushM
             content,
             model,
             provider,
+            base_version: server_version.unwrap_or_else(|| "0".to_string()),
             is_deleted: deleted_at_utc.is_some().then_some(true),
         })
     })?;
@@ -603,9 +606,9 @@ fn message_sync_content_matches(conn: &Connection, sent: &PushMessage) -> bool {
     .unwrap_or(false)
 }
 
-/// Store every acknowledged revision, but clear only the exact message snapshot
-/// sent. Messages are append-only; the only supported in-flight mutation is a
-/// tombstone, which must remain dirty if it was created while the request ran.
+/// Store every acknowledged revision, but clear only the exact mutable message
+/// snapshot sent. A streamed content update or tombstone created while the
+/// request ran must remain dirty and retry against the acknowledged revision.
 fn ack_clear_messages(conn: &Connection, acked: &[AckedRow], sent: &[PushMessage]) {
     for row in acked {
         let unchanged = sent
@@ -1453,8 +1456,8 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
         // FK-map: resolve cloud conversation_id → local INTEGER id.
         let local_conv_id: Option<i64> = conn
             .query_row(
-                "SELECT id FROM conversations WHERE cloud_id = ?1",
-                params![d.conversation_id],
+                "SELECT id FROM conversations WHERE cloud_id = ?1 AND user_id = ?2",
+                params![d.conversation_id, user_id],
                 |row| row.get(0),
             )
             .ok();
@@ -1472,19 +1475,19 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
         };
 
         // Dedup: find existing local message row.
-        let existing_id: Option<i64> = conn
+        let existing: Option<(i64, i64)> = conn
             .query_row(
-                "SELECT id FROM messages WHERE cloud_id = ?1",
-                params![d.id],
-                |row| row.get(0),
+                "SELECT id, needs_push FROM messages WHERE cloud_id = ?1 AND user_id = ?2",
+                params![d.id, user_id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .ok();
 
         if let Some(deleted_at) = &d.deleted_at {
             // Tombstone: soft-delete only.
-            if let Some(local_id) = existing_id {
+            if let Some((local_id, _)) = existing {
                 let _ = conn.execute(
-                    "UPDATE messages SET deleted_at_utc = ?1, server_version = ?2 \
+                    "UPDATE messages SET deleted_at_utc = ?1, server_version = ?2, needs_push = 0 \
                      WHERE id = ?3",
                     params![deleted_at, d.server_version, local_id],
                 );
@@ -1498,12 +1501,41 @@ fn apply_message_deltas(conn: &Connection, user_id: &str, deltas: &[MessageDelta
                 );
                 applied += 1;
             }
-        } else if existing_id.is_some() {
-            // Append-only: messages are immutable once saved. Only server_version updates.
-            let _ = conn.execute(
-                "UPDATE messages SET server_version = ?1 WHERE cloud_id = ?2",
-                params![d.server_version, d.id],
-            );
+        } else if let Some((local_id, needs_push)) = existing {
+            if let Some(role) = d.role.as_deref() {
+                if !matches!(role, "user" | "assistant" | "system") {
+                    continue;
+                }
+            }
+
+            if needs_push != 0 {
+                // Preserve an edit made after the outgoing snapshot. Advancing the
+                // base version lets the next push compare that edit against the
+                // newest server row instead of manufacturing a stale conflict.
+                let _ = conn.execute(
+                    "UPDATE messages SET server_version = ?1 WHERE id = ?2",
+                    params![d.server_version, local_id],
+                );
+            } else {
+                // Cloud messages are mutable stream snapshots. Apply the server
+                // winner so a partial assistant response can become its completed
+                // content (and carry the latest model/provider) on every device.
+                let _ = conn.execute(
+                    "UPDATE messages \
+                     SET role = COALESCE(?1, role), content = COALESCE(?2, content), \
+                         model = ?3, provider = ?4, deleted_at_utc = NULL, \
+                         server_version = ?5, needs_push = 0 \
+                     WHERE id = ?6",
+                    params![
+                        d.role.as_deref(),
+                        d.content.as_deref(),
+                        d.model.as_deref(),
+                        d.provider.as_deref(),
+                        d.server_version,
+                        local_id
+                    ],
+                );
+            }
             applied += 1;
         } else {
             // New message from another device.
@@ -3269,6 +3301,77 @@ mod tests {
         );
     }
 
+    #[test]
+    fn pull_message_replaces_a_clean_partial_stream_snapshot() {
+        let conn = fresh_db();
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "5", None)]);
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "6", None)]);
+
+        let completed: MessageDelta = serde_json::from_value(serde_json::json!({
+            "id": "m1",
+            "conversation_id": "cc1",
+            "role": "assistant",
+            "content": "completed assistant response",
+            "model": "managed-model",
+            "provider": "managed-cloud",
+            "created_at": "2026-06-20T00:00:00Z",
+            "deleted_at": null,
+            "server_version": "9"
+        }))
+        .unwrap();
+        apply_message_deltas(&conn, "u1", &[completed]);
+
+        let actual: (String, String, Option<String>, Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT role, content, model, provider, server_version FROM messages WHERE cloud_id='m1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(actual.0, "assistant");
+        assert_eq!(actual.1, "completed assistant response");
+        assert_eq!(actual.2.as_deref(), Some("managed-model"));
+        assert_eq!(actual.3.as_deref(), Some("managed-cloud"));
+        assert_eq!(actual.4.as_deref(), Some("9"));
+    }
+
+    #[test]
+    fn pull_message_preserves_a_newer_unsent_local_edit() {
+        let conn = fresh_db();
+        apply_conversation_deltas(&conn, "u1", &[conv_delta("cc1", "5", None)]);
+        apply_message_deltas(&conn, "u1", &[msg_delta("m1", "cc1", "6", None)]);
+        conn.execute(
+            "UPDATE messages SET content='newer local edit', needs_push=1 WHERE cloud_id='m1'",
+            [],
+        )
+        .unwrap();
+
+        let stale_pull: MessageDelta = serde_json::from_value(serde_json::json!({
+            "id": "m1",
+            "conversation_id": "cc1",
+            "role": "assistant",
+            "content": "older server snapshot",
+            "model": "server-model",
+            "provider": "managed-cloud",
+            "created_at": "2026-06-20T00:00:00Z",
+            "deleted_at": null,
+            "server_version": "8"
+        }))
+        .unwrap();
+        apply_message_deltas(&conn, "u1", &[stale_pull]);
+
+        let actual: (String, i64, Option<String>) = conn
+            .query_row(
+                "SELECT content, needs_push, server_version FROM messages WHERE cloud_id='m1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(actual.0, "newer local edit");
+        assert_eq!(actual.1, 1);
+        assert_eq!(actual.2.as_deref(), Some("8"));
+    }
+
     /// A conversation tombstone drops any orphan messages and artifacts buffered
     /// under it, so a deleted parent cannot strand either durable journal.
     #[test]
@@ -3398,6 +3501,7 @@ mod tests {
                 content: "hi".into(),
                 model: None,
                 provider: None,
+                base_version: "0".into(),
                 is_deleted: None,
             }],
             artifacts: vec![],
@@ -3427,6 +3531,7 @@ mod tests {
             "conversation_id must serialize as conversationId"
         );
         assert!(msg.get("createdAt").is_none());
+        assert_eq!(msg["baseVersion"], "0");
         assert!(
             msg.get("conversation_id").is_none(),
             "must not emit snake_case conversation_id"
@@ -5149,7 +5254,8 @@ mod fixture_tests {
 
     fn load_pull_apply_fixtures() -> FxFile {
         // Canonical source: packages/client/sync/src/__fixtures__/pull-apply.json
-        let raw = include_str!("../../../../../packages/client/sync/src/__fixtures__/pull-apply.json");
+        let raw =
+            include_str!("../../../../../packages/client/sync/src/__fixtures__/pull-apply.json");
         serde_json::from_str(raw).expect("pull-apply.json must parse into FxFile")
     }
 
@@ -5452,7 +5558,9 @@ mod fixture_tests {
     #[test]
     fn replay_cursor_compare_fixtures() {
         // Canonical source: packages/client/sync/src/__fixtures__/cursor-compare.json
-        let raw = include_str!("../../../../../packages/client/sync/src/__fixtures__/cursor-compare.json");
+        let raw = include_str!(
+            "../../../../../packages/client/sync/src/__fixtures__/cursor-compare.json"
+        );
         let fixtures: FxCursorFile =
             serde_json::from_str(raw).expect("cursor-compare.json must parse");
 

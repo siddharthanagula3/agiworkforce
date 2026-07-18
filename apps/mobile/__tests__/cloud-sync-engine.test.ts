@@ -11,6 +11,7 @@
  *   - Pagination follows `hasMore`; a failed round trip surfaces as `error` status.
  */
 import type { ChatMessage, ConversationSummary } from '../types/chat';
+import type { MessagePushItem } from '@agiworkforce/sync';
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
@@ -93,7 +94,12 @@ function convDelta(id: string, serverVersion: string, deletedAt: string | null =
   };
 }
 
-function msgDelta(id: string, conversationId: string, serverVersion: string) {
+function msgDelta(
+  id: string,
+  conversationId: string,
+  serverVersion: string,
+  extra: Record<string, unknown> = {},
+) {
   return {
     id,
     conversation_id: conversationId,
@@ -109,6 +115,7 @@ function msgDelta(id: string, conversationId: string, serverVersion: string) {
     updated_at: T,
     deleted_at: null,
     server_version: serverVersion,
+    ...extra,
   };
 }
 
@@ -204,6 +211,61 @@ describe('syncNow — pull', () => {
     expect(sync.status).toBe('idle');
     expect(sync.lastSyncAt).not.toBeNull();
     expect(mockGet).toHaveBeenCalledWith('/api/chat/sync?since=0');
+  });
+
+  it('hydrates a pending approval projection from synced metadata after a cold device pull', async () => {
+    const runId = '018f6f2a-0000-7000-8000-000000000099';
+    mockGet.mockResolvedValueOnce({
+      conversations: [convDelta('c1', '5')],
+      messages: [
+        msgDelta('m1', 'c1', '6', {
+          role: 'assistant',
+          metadata: {
+            cloudAgentRun: {
+              runId,
+              runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+              lastSequence: 3,
+            },
+            cloudApproval: {
+              schemaVersion: 1,
+              runId,
+              calls: [
+                {
+                  toolCallId: 'call-1',
+                  name: 'shell',
+                  input: '{"command":"pwd"}',
+                  approvalDecision: 'approved',
+                },
+                { toolCallId: 'call-2', name: 'write_file', input: '{"path":"a.txt"}' },
+              ],
+            },
+          },
+        }),
+      ],
+      artifacts: [],
+      cursor: '6',
+      hasMore: false,
+    } as never);
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+      serverVersion: '6',
+      metadata: { cloudAgentRun: { runId } },
+      toolCalls: [
+        expect.objectContaining({
+          toolCallId: 'call-1',
+          name: 'shell',
+          requiresApproval: true,
+          approvalDecision: 'approved',
+        }),
+        expect.objectContaining({
+          toolCallId: 'call-2',
+          name: 'write_file',
+          requiresApproval: true,
+        }),
+      ],
+    });
   });
 
   it('removes a conversation when a deleted_at tombstone is pulled', async () => {
@@ -315,11 +377,197 @@ describe('syncNow — push', () => {
       conversationId: 'c1',
       role: 'user',
       content: 'hi there',
+      baseVersion: '0',
     });
 
     const sync = useCloudSyncStateStore.getState();
     expect(sync.dirtyConversationIds).toEqual([]);
     expect(sync.dirtyMessages).toEqual([]);
+  });
+
+  it('pushes a versioned approval projection and stores the acknowledged revision', async () => {
+    const runId = '018f6f2a-0000-7000-8000-000000000099';
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm1',
+      role: 'assistant',
+      content: 'Waiting for approval',
+      serverVersion: '7',
+      metadata: {
+        cloudAgentRun: {
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: 3,
+        },
+      },
+      toolCalls: [
+        {
+          id: 'call-1',
+          toolCallId: 'call-1',
+          name: 'shell',
+          input: '{"command":"pwd"}',
+          status: 'running',
+          requiresApproval: true,
+        },
+      ],
+    });
+    markMessageForSync('c1', 'm1');
+    mockPost.mockImplementationOnce(async (_path, body: unknown) => {
+      const pushBody = body as { messages: MessagePushItem[] };
+      return {
+        protocolVersion: 2,
+        applied: {
+          conversations: [],
+          messages: [{ id: pushBody.messages[0].id, server_version: '8' }],
+          artifacts: [],
+        },
+        conflicts: { conversations: [], messages: [], artifacts: [] },
+        cursor: '8',
+      } as never;
+    });
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { messages: MessagePushItem[] }];
+    expect(body.messages[0]).toMatchObject({
+      baseVersion: '7',
+      metadata: {
+        cloudAgentRun: { runId },
+        cloudApproval: {
+          schemaVersion: 1,
+          runId,
+          calls: [expect.objectContaining({ toolCallId: 'call-1', name: 'shell' })],
+        },
+      },
+    });
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]?.serverVersion).toBe('8');
+  });
+
+  it('pushes an explicit approval clear after a run resumes', async () => {
+    const runId = '018f6f2a-0000-7000-8000-000000000099';
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm1',
+      role: 'assistant',
+      content: 'Finished',
+      serverVersion: '8',
+      metadata: {
+        cloudAgentRun: {
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: 8,
+        },
+      },
+      toolCalls: [
+        {
+          id: 'call-1',
+          toolCallId: 'call-1',
+          name: 'shell',
+          status: 'completed',
+          requiresApproval: false,
+        },
+      ],
+    });
+    markMessageForSync('c1', 'm1');
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { messages: MessagePushItem[] }];
+    expect(body.messages[0].metadata).toMatchObject({
+      cloudAgentRun: { runId },
+      cloudApproval: null,
+    });
+  });
+
+  it('preserves a message edit made while its CAS push is in flight', async () => {
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm1',
+      role: 'assistant',
+      content: 'sent',
+      serverVersion: '7',
+      metadata: { phase: 'sent' },
+    });
+    markMessageForSync('c1', 'm1');
+    mockPost.mockImplementationOnce(async () => {
+      const current = useChatCloudMessageStore.getState().messages.c1 ?? [];
+      useChatCloudMessageStore.getState().setCloudMessages(
+        'c1',
+        current.map((message) =>
+          message.id === 'm1'
+            ? { ...message, content: 'edited later', metadata: { phase: 'later' } }
+            : message,
+        ),
+      );
+      return {
+        protocolVersion: 2,
+        applied: {
+          conversations: [],
+          messages: [{ id: 'm1', server_version: '8' }],
+          artifacts: [],
+        },
+        conflicts: { conversations: [], messages: [], artifacts: [] },
+        cursor: '8',
+      } as never;
+    });
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+      content: 'edited later',
+      metadata: { phase: 'later' },
+      serverVersion: '8',
+    });
+    expect(useCloudSyncStateStore.getState().dirtyMessages).toContainEqual({
+      conversationId: 'c1',
+      messageId: 'm1',
+    });
+  });
+
+  it('adopts the deterministic server winner for a stale message CAS conflict', async () => {
+    seedConversation('c1', { messageCount: 1 });
+    seedMessage('c1', {
+      id: 'm1',
+      role: 'assistant',
+      content: 'stale local',
+      serverVersion: '7',
+      metadata: { phase: 'local' },
+    });
+    markMessageForSync('c1', 'm1');
+    mockPost.mockImplementationOnce(
+      async () =>
+        ({
+          protocolVersion: 2,
+          applied: { conversations: [], messages: [], artifacts: [] },
+          conflicts: {
+            conversations: [],
+            messages: [
+              {
+                id: 'm1',
+                current: msgDelta('m1', 'c1', '8', {
+                  role: 'assistant',
+                  content: 'server winner',
+                  metadata: { phase: 'server' },
+                }),
+              },
+            ],
+            artifacts: [],
+          },
+          cursor: '8',
+        }) as never,
+    );
+
+    await syncNow();
+
+    expect(useChatCloudMessageStore.getState().messages.c1?.[0]).toMatchObject({
+      content: 'server winner',
+      metadata: { phase: 'server' },
+      serverVersion: '8',
+    });
+    expect(useCloudSyncStateStore.getState().dirtyMessages).not.toContainEqual({
+      conversationId: 'c1',
+      messageId: 'm1',
+    });
   });
 
   it('preserves an edit made while a conversation push is in flight', async () => {

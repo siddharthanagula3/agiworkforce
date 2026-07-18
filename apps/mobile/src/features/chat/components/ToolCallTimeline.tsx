@@ -217,7 +217,7 @@ function ToolCallTimelineRow({
             {approvalExpired ? (
               <>
                 <Text style={{ fontSize: 12.5, color: colors.textSecondary }}>
-                  This approval request expired — the app was restarted before it could be resolved.{' '}
+                  This approval request expired or is no longer active.{' '}
                   {onResendApproval
                     ? 'Send a new message to try again.'
                     : 'Send a new message to continue.'}
@@ -244,7 +244,9 @@ function ToolCallTimelineRow({
             ) : (
               <>
                 <Text style={{ fontSize: 12.5, color: colors.textPrimary }}>
-                  {nameText} wants to run. Review the request before allowing it to proceed.
+                  {tool.approvalDecision
+                    ? `Decision saved: ${tool.approvalDecision === 'approved' ? 'allow' : 'deny'}`
+                    : `${nameText} wants to run. Review the request before allowing it to proceed.`}
                 </Text>
                 {tool.input ? (
                   <Text
@@ -268,7 +270,7 @@ function ToolCallTimelineRow({
                     }}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: colors.textSecondary }}>
-                      Deny
+                      {tool.approvalDecision === 'rejected' ? 'Denied' : 'Deny'}
                     </Text>
                   </Pressable>
                   <Pressable
@@ -284,7 +286,7 @@ function ToolCallTimelineRow({
                     }}
                   >
                     <Text style={{ fontSize: 13, fontWeight: '600', color: colors.surfaceBase }}>
-                      Allow
+                      {tool.approvalDecision === 'approved' ? 'Allowed' : 'Allow'}
                     </Text>
                   </Pressable>
                 </View>

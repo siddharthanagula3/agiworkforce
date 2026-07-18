@@ -7,13 +7,14 @@ import {
   type AgentActivityState,
   type MessageQueue,
 } from '@agiworkforce/client-runtime';
+import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import {
   classifyTaskLocally,
   resolveAutoRoute,
   type RoutingTrustMode,
 } from '@agiworkforce/routing';
 import type { ChatHostBridge } from '../lib/hostBridge';
-import type { ChatRuntime } from '../lib/runtime';
+import type { ChatRuntime, CloudApprovalTurnProjection } from '../lib/runtime';
 import type { ChatMessage } from '../lib/types';
 import { syncPackageStoreFromHost } from './useHostBridgeSync';
 import { useChatStore, getSystemPromptForMode } from '../stores/chatStore';
@@ -31,6 +32,22 @@ import { isModelAdmittedForExecutionMode } from '../lib/modelAdmission';
 import { isChatModelSelectable } from '../lib/modelInfo';
 import { useTierStore } from '../stores/tierStore';
 import { getWritingStyleInstruction, type WritingStyle } from '../lib/writingStyle';
+
+const AGENT_TASK_STATES = new Set<AgentTaskState>([
+  'queued',
+  'running',
+  'awaiting_input',
+  'ready_for_review',
+  'completed',
+  'failed',
+  'cancelled',
+  'paused',
+  'archived',
+]);
+
+function isAgentTaskState(value: unknown): value is AgentTaskState {
+  return typeof value === 'string' && AGENT_TASK_STATES.has(value as AgentTaskState);
+}
 
 function getRoutingContext(
   platform: ReturnType<NonNullable<ChatRuntime['getPlatform']>> | undefined,
@@ -80,6 +97,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   externalAddMessageRef.current = options?.externalAddMessage;
   const hostBridgeRef = useRef(options?.hostBridge ?? null);
   hostBridgeRef.current = options?.hostBridge ?? null;
+  const cloudAgentRunRef = useRef<{ runId: string; runPath: string } | null>(null);
 
   // Resolve the send-pipeline queue once per hook instance. Default to the
   // per-surface singleton; storage falls back to localStorage when available.
@@ -132,6 +150,14 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       if (convId) {
         pkgStore.addMessage(convId, {
           ...msg,
+          ...(msg.role === 'assistant' && cloudAgentRunRef.current
+            ? {
+                metadata: {
+                  ...msg.metadata,
+                  cloudAgentRun: { ...cloudAgentRunRef.current },
+                },
+              }
+            : {}),
           id: msgId,
           role: msg.role,
           content: msg.content,
@@ -177,6 +203,23 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       if (!convId) return;
 
       switch (event.type) {
+        case 'agent_run': {
+          cloudAgentRunRef.current = { runId: event.runId, runPath: event.runPath };
+          if (assistantMessageIdRef.current) {
+            const message = store.messagesByConversation[convId]?.find(
+              (candidate) => candidate.id === assistantMessageIdRef.current,
+            );
+            if (message) {
+              store.updateMessage(convId, message.id, {
+                metadata: {
+                  ...message.metadata,
+                  cloudAgentRun: { runId: event.runId, runPath: event.runPath },
+                },
+              });
+            }
+          }
+          break;
+        }
         case 'content': {
           // Create or append to assistant message
           if (!assistantMessageIdRef.current) {
@@ -870,6 +913,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
 
       // Reset assistant message ref for new response
       assistantMessageIdRef.current = null;
+      cloudAgentRunRef.current = null;
 
       // Build full conversation history for multi-turn context
       const allMessages = store.messagesByConversation[convId] ?? [];
@@ -1001,6 +1045,14 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       // clear the continuable marker while streaming (re-recorded honestly at
       // stream end — re-offered if truncated again).
       assistantMessageIdRef.current = assistantMessageId;
+      const persistedRun = message.metadata?.['cloudAgentRun'];
+      cloudAgentRunRef.current =
+        persistedRun && typeof persistedRun === 'object'
+          ? {
+              runId: String((persistedRun as Record<string, unknown>)['runId'] ?? ''),
+              runPath: String((persistedRun as Record<string, unknown>)['runPath'] ?? ''),
+            }
+          : null;
       store.updateMessage(convId, assistantMessageId, {
         isStreaming: true,
         metadata: { ...message.metadata, finishReason: undefined },
@@ -1026,12 +1078,10 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   );
 
   /**
-   * Resolve one pending tool-approval card (see the 'tool_approval_request'
-   * StreamEvent handling above). Gives immediate optimistic feedback
-   * (approved → running, rejected → failed — mirrors
-   * `useChatStream.ts`'s `useResolveToolApproval`) then delegates the actual
-   * resume round-trip to `runtime.resolveToolApproval`, which is a no-op
-   * until EVERY pending call in the suspended turn has a decision. Hosts
+   * Resolve one pending tool-approval card. Partial decisions remain visibly
+   * awaiting approval and are persisted on the card. Once every call has a
+   * decision, the runtime sends the durable run id plus decision set and the
+   * continuation extends the same assistant message. Hosts
    * must gate the approve/reject UI on `runtime?.resolveToolApproval` being
    * present — never call this against a runtime that lacks it (no fake
    * availability).
@@ -1050,34 +1100,69 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
 
       const msgs = store.messagesByConversation[convId];
       const msg = msgs?.find((m) => m.id === assistantMessageId);
+      let allDecided = false;
       if (msg) {
-        const updatedCalls = (msg.toolCalls ?? []).map((tc) =>
-          tc.id === toolCallId
-            ? decision === 'approved'
-              ? { ...tc, status: 'running' as const, requiresApproval: false }
-              : {
-                  ...tc,
-                  status: 'failed' as const,
-                  requiresApproval: false,
-                  error: 'You denied this tool.',
-                  result: 'The user denied permission to run this tool.',
-                }
-            : tc,
+        const withDecision = (msg.toolCalls ?? []).map((tc) =>
+          tc.id === toolCallId ? { ...tc, approvalDecision: decision } : tc,
         );
+        const approvalCalls = withDecision.filter((tc) => tc.requiresApproval);
+        allDecided =
+          approvalCalls.length > 0 && approvalCalls.every((tc) => Boolean(tc.approvalDecision));
+        const updatedCalls = withDecision.map((tc) => {
+          if (!allDecided || !tc.requiresApproval) return tc;
+          return tc.approvalDecision === 'approved'
+            ? { ...tc, status: 'running' as const, requiresApproval: false }
+            : {
+                ...tc,
+                status: 'failed' as const,
+                requiresApproval: false,
+                error: 'You denied this tool.',
+                result: 'The user denied permission to run this tool.',
+              };
+        });
         store.updateMessage(convId, assistantMessageId, { toolCalls: updatedCalls });
       }
 
-      // Re-point the ref at this message (it may have been cleared since
-      // suspension) so the resume's content/tool_call/tool_result/done
-      // events append onto the SAME bubble, and re-flip isStreaming so the
-      // composer reflects the in-flight resume.
-      assistantMessageIdRef.current = assistantMessageId;
-      store.startStreaming();
+      if (allDecided) {
+        // Re-point the ref at this message so continuation events append onto
+        // the same bubble. A partial decision does not start a fake stream.
+        assistantMessageIdRef.current = assistantMessageId;
+        const persistedRun = msg?.metadata?.['cloudAgentRun'];
+        cloudAgentRunRef.current =
+          persistedRun && typeof persistedRun === 'object'
+            ? {
+                runId: String((persistedRun as Record<string, unknown>)['runId'] ?? ''),
+                runPath: String((persistedRun as Record<string, unknown>)['runPath'] ?? ''),
+              }
+            : null;
+        store.startStreaming();
+      }
 
       void runtime
         .resolveToolApproval(convId, toolCallId, decision)
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
+          const failedStore = useChatStore.getState();
+          const failedMessage = failedStore.messagesByConversation[convId]?.find(
+            (candidate) => candidate.id === assistantMessageId,
+          );
+          if (failedMessage) {
+            failedStore.updateMessage(convId, assistantMessageId, {
+              isStreaming: false,
+              toolCalls: (failedMessage.toolCalls ?? []).map((call) =>
+                call.approvalDecision
+                  ? {
+                      ...call,
+                      status: 'awaiting_approval' as const,
+                      requiresApproval: true,
+                      error: undefined,
+                      result: undefined,
+                    }
+                  : call,
+              ),
+            });
+            assistantMessageIdRef.current = assistantMessageId;
+          }
           toast.error(message || 'Failed to resolve tool approval');
         })
         .finally(() => {
@@ -1090,13 +1175,62 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   );
 
   const isStreaming = useChatStore((s) => s.isStreaming);
-  // The approval registry backing resolveToolApproval is process-memory-only
-  // (see ChatRuntime.hasLiveApprovalTurn's doc comment) -- hosts must gate
-  // live Approve/Reject buttons on this instead of just resolveToolApproval's
-  // presence, or a persisted awaiting_approval card left over from a prior
-  // app session renders wired buttons that silently no-op.
+  const activeApprovalMessages = useChatStore((state) =>
+    activeConversationId ? state.messagesByConversation[activeConversationId] : undefined,
+  );
+  const approvalProjection = ((): CloudApprovalTurnProjection | undefined => {
+    const messages = activeApprovalMessages ?? [];
+    const message = [...messages]
+      .reverse()
+      .find(
+        (candidate) =>
+          candidate.role === 'assistant' &&
+          candidate.toolCalls?.some((call) => call.requiresApproval),
+      );
+    if (!message) return undefined;
+    const rawRun = message.metadata?.['cloudAgentRun'];
+    if (!rawRun || typeof rawRun !== 'object') return undefined;
+    const runId = (rawRun as Record<string, unknown>)['runId'];
+    if (typeof runId !== 'string' || !runId) return undefined;
+    const rawRunRecord = rawRun as Record<string, unknown>;
+    const runPath = rawRunRecord['runPath'];
+    const lastSequence = rawRunRecord['lastSequence'];
+    const calls = (message.toolCalls ?? [])
+      .filter((call) => call.requiresApproval)
+      .map((call) => ({
+        toolCallId: call.id,
+        name: call.name,
+        args: call.args,
+        ...(call.approvalDecision ? { decision: call.approvalDecision } : {}),
+      }));
+    if (calls.length === 0) return undefined;
+    return {
+      assistantMessageId: message.id,
+      runId,
+      ...(typeof runPath === 'string' && Number.isInteger(lastSequence)
+        ? {
+            runReference: {
+              runId,
+              runPath,
+              lastSequence: lastSequence as number,
+              ...(isAgentTaskState(rawRunRecord['state']) ? { state: rawRunRecord['state'] } : {}),
+              ...(typeof rawRunRecord['cancellationRequestedAt'] === 'string' ||
+              rawRunRecord['cancellationRequestedAt'] === null
+                ? { cancellationRequestedAt: rawRunRecord['cancellationRequestedAt'] }
+                : {}),
+            },
+          }
+        : {}),
+      model: message.model ?? '',
+      assistantContent: message.content,
+      calls,
+      ...(message.metadata?.['agentActivity']
+        ? { agentActivity: message.metadata['agentActivity'] as AgentActivityState }
+        : {}),
+    };
+  })();
   const isApprovalTurnLive = activeConversationId
-    ? (runtime?.hasLiveApprovalTurn?.(activeConversationId) ?? false)
+    ? (runtime?.hasLiveApprovalTurn?.(activeConversationId, approvalProjection) ?? false)
     : false;
   return {
     sendMessage,

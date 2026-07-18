@@ -10,11 +10,16 @@ export interface AgentEventStreamEmitterOptions {
   sessionId: string;
   turnId: string;
   responseModel: string;
+  /** First sequence to emit when continuing a durable run. */
+  initialSequence?: number;
   now?: () => number;
 }
 
 export interface AgentEventStreamEmitter {
   emit(event: AgentEvent): string;
+  emitWithEnvelope(event: AgentEvent): { envelope: AgentEventEnvelope; sse: string };
+  /** Cursor that must be persisted for the next continuation. */
+  nextSequence(): number;
 }
 
 export interface PublicTextDeltaProjector {
@@ -104,25 +109,36 @@ export function toAgentEventJson(value: unknown): AgentEventJson {
 export function createAgentEventStreamEmitter(
   options: AgentEventStreamEmitterOptions,
 ): AgentEventStreamEmitter {
-  let sequence = 0;
+  let sequence = Math.max(0, Math.trunc(options.initialSequence ?? 0));
   const now = options.now ?? Date.now;
+
+  const emitWithEnvelope = (event: AgentEvent): { envelope: AgentEventEnvelope; sse: string } => {
+    const envelope: AgentEventEnvelope = AgentEventEnvelopeSchema.parse({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: options.sessionId,
+      turnId: options.turnId,
+      sequence,
+      emittedAtMs: now(),
+      event,
+    });
+    sequence += 1;
+
+    return {
+      envelope,
+      sse: `data: ${JSON.stringify({
+        choices: [{ delta: { x_agent_event: envelope }, index: 0 }],
+        model: options.responseModel,
+      })}\n\n`,
+    };
+  };
 
   return {
     emit(event) {
-      const envelope: AgentEventEnvelope = AgentEventEnvelopeSchema.parse({
-        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
-        sessionId: options.sessionId,
-        turnId: options.turnId,
-        sequence,
-        emittedAtMs: now(),
-        event,
-      });
-      sequence += 1;
-
-      return `data: ${JSON.stringify({
-        choices: [{ delta: { x_agent_event: envelope }, index: 0 }],
-        model: options.responseModel,
-      })}\n\n`;
+      return emitWithEnvelope(event).sse;
+    },
+    emitWithEnvelope,
+    nextSequence() {
+      return sequence;
     },
   };
 }

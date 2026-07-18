@@ -1,14 +1,9 @@
 /**
- * chatExecutionStore cloud send — tool-approval registry liveness
- * (streaming/approval cluster Finding 1: dead tool-approval buttons after
- * reload/restart).
+ * chatExecutionStore cloud send — durable tool-approval registry liveness.
  *
- * `pendingApprovalTurns` (the module-level registry `resolveToolApproval`
- * consults) is process-memory-only and doesn't survive a cold start, even
- * though a persisted `awaiting_approval` tool call on the message does.
- * `isApprovalTurnLive` is what ToolCallTimeline checks before rendering
- * live Allow/Deny buttons instead of an expired notice. Mirrors
- * cloud-stream-finish-reason-and-error.test.ts's mock scaffolding.
+ * The server-owned run id and pending approval cards are persisted with the
+ * assistant message. A cold start must rebuild the in-memory projection from
+ * that durable state so Allow/Deny remains live without replaying the prompt.
  */
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => 'test-token'),
@@ -31,7 +26,10 @@ jest.mock('../services/api', () => {
   };
 });
 
-jest.mock('../services/streaming', () => ({ streamChat: jest.fn() }));
+jest.mock('../services/streaming', () => ({
+  streamChat: jest.fn(),
+  streamToolApprovalResume: jest.fn(),
+}));
 
 jest.mock('../services/remoteChatGate', () => {
   class MockRemoteChatDisabledError extends Error {
@@ -83,6 +81,7 @@ import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000003'; // a valid UUIDv7 conversation id
+const RUN_ID = '0190a000-0000-7000-8000-000000000013';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
 
 beforeEach(() => {
@@ -116,6 +115,11 @@ describe('isApprovalTurnLive', () => {
 
   it('is true right after a turn suspends on an approval request', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onRunReference?.({
+        runId: RUN_ID,
+        runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+        lastSequence: -1,
+      });
       callbacks.onDelta({
         x_tool_approval_request: {
           tool_call_id: 'call_1',
@@ -137,8 +141,13 @@ describe('isApprovalTurnLive', () => {
     expect(awaiting?.toolCallId).toBe('call_1');
   });
 
-  it('is false after a simulated cold start even though the persisted card still shows awaiting_approval (the exact Finding 1 scenario)', async () => {
+  it('rehydrates a live approval after a simulated cold start', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onRunReference?.({
+        runId: RUN_ID,
+        runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+        lastSequence: -1,
+      });
       callbacks.onDelta({
         x_tool_approval_request: {
           tool_call_id: 'call_1',
@@ -154,14 +163,13 @@ describe('isApprovalTurnLive', () => {
     const assistantId = lastAssistantMessage()!.id;
     expect(isApprovalTurnLive(assistantId)).toBe(true);
 
-    // Simulate a cold start: the in-memory registry resets, but the message
-    // store (standing in for a freshly-loaded conversation from the DB)
-    // still shows the tool call as requiring approval -- exactly what
-    // persistence does, since it's independent of the live registry.
+    // Simulate a cold start: the process registry resets while the persisted
+    // Cloud message keeps the run reference and approval cards.
     __resetPendingApprovalTurnsForTests();
 
     const stillAwaiting = lastAssistantMessage()?.toolCalls?.some((t) => t.requiresApproval);
-    expect(stillAwaiting).toBe(true); // persisted card still shows requiresApproval
-    expect(isApprovalTurnLive(assistantId)).toBe(false);
+    expect(stillAwaiting).toBe(true);
+    expect(lastAssistantMessage()?.metadata?.cloudAgentRun).toMatchObject({ runId: RUN_ID });
+    expect(isApprovalTurnLive(assistantId)).toBe(true);
   });
 });

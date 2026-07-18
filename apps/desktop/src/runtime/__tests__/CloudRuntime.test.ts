@@ -730,6 +730,69 @@ describe('CloudRuntime', () => {
       expect(messages[0]?.metadata).toEqual({ agentActivity });
     });
 
+    it('rehydrates pending approval cards from the validated cross-surface projection', async () => {
+      const runId = '0190a000-0000-7000-8000-000000000099';
+      const metadata = {
+        cloudAgentRun: {
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: 7,
+          state: 'awaiting_input',
+        },
+        cloudApproval: {
+          schemaVersion: 1,
+          runId,
+          calls: [
+            {
+              toolCallId: 'call_1',
+              name: 'write_file',
+              input: '{"path":"/REPORT.md"}',
+              approvalDecision: 'approved',
+            },
+          ],
+        },
+      };
+      getConversation.mockResolvedValue({
+        conversation: {
+          id: 'conv_1',
+          title: 'Chat 1',
+          projectId: null,
+          pinned: false,
+          isTemporary: false,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+        messages: [
+          {
+            id: 'm1',
+            conversationId: 'conv_1',
+            role: 'assistant',
+            content: 'Waiting.',
+            model: 'gpt-5',
+            inputTokens: 0,
+            outputTokens: 0,
+            costCents: 0,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            metadata,
+          },
+        ],
+      });
+
+      const [message] = await new CloudRuntime().getMessages('conv_1');
+
+      expect(message?.toolCalls).toEqual([
+        {
+          id: 'call_1',
+          name: 'write_file',
+          args: { path: '/REPORT.md' },
+          status: 'awaiting_approval',
+          requiresApproval: true,
+          approvalDecision: 'approved',
+        },
+      ]);
+      expect(message?.metadata).toEqual(metadata);
+    });
+
     it('loadMessages is an alias for getMessages', async () => {
       getConversation.mockResolvedValue({
         conversation: {
@@ -756,9 +819,17 @@ describe('CloudRuntime', () => {
   });
 
   describe('hasLiveApprovalTurn', () => {
-    it('delegates to the approval registry -- false on a fresh runtime instance (Finding 1: process-memory-only registry resets on restart)', () => {
+    it('hydrates a server-owned approval checkpoint on a fresh runtime instance', () => {
       const runtime = new CloudRuntime();
-      expect(runtime.hasLiveApprovalTurn('conv_1')).toBe(false);
+      expect(
+        runtime.hasLiveApprovalTurn('conv_1', {
+          assistantMessageId: 'assistant-1',
+          runId: '0190a000-0000-7000-8000-000000000099',
+          model: 'gpt-5',
+          assistantContent: '',
+          calls: [{ toolCallId: 'call_1', name: 'read_file', args: {} }],
+        }),
+      ).toBe(true);
     });
   });
 });

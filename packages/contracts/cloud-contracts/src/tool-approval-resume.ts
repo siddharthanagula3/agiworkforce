@@ -3,8 +3,9 @@
  *
  *   POST /api/llm/v1/chat/completions/approve
  *
- * Mirrors `apps/web/app/api/llm/v1/chat/completions/approve/route.ts`
- * (`resumeBodySchema` lines 52-67, `jsonError` lines 69-74).
+ * The client identifies the tenant-owned suspended run and submits decisions.
+ * The server loads the validated execution checkpoint; model, messages, tool
+ * arguments, and provider continuity state never round-trip through the client.
  *
  * This endpoint is NOT a JSON-in/JSON-out route: on success it returns the
  * SAME `text/event-stream` SSE response as the main chat-completions route
@@ -15,8 +16,12 @@
  */
 
 import { z } from 'zod';
+import {
+  ManagedCloudAgentRunReferenceSchema,
+  type ManagedCloudAgentRunReference,
+} from './managed-cloud-agent-runs-client';
 
-/** One per-tool decision in the resume body (route.ts:52-55). */
+/** One per-tool decision in the resume body. */
 export const ToolApprovalDecisionSchema = z.object({
   tool_call_id: z.string().min(1).max(128),
   decision: z.enum(['approved', 'rejected']),
@@ -24,26 +29,65 @@ export const ToolApprovalDecisionSchema = z.object({
 export type ToolApprovalDecisionWire = z.infer<typeof ToolApprovalDecisionSchema>;
 
 /**
- * The resume-specific fields the route reads off the request body
- * (`resumeBodySchema`, route.ts:57-67). `messages` is the full replayed
- * thread reused by `processRequest` for standard chat-completions
- * validation; only the shape this route itself inspects (`role`, and
- * `tool_calls[].id` for the pending-id gate, route.ts:81-100) is modeled
- * here — the rest of the OpenAI chat-completions message shape is out of
- * scope for this contract.
+ * Only the stable run reference and explicit decisions cross the trust
+ * boundary. Unknown chat fields are stripped by Zod and never become an
+ * execution source.
  */
 export const ToolApprovalResumeRequestSchema = z.object({
+  run_id: z.string().uuid(),
   tool_approvals: z.array(ToolApprovalDecisionSchema).min(1).max(32),
-  messages: z
-    .array(
-      z.object({
-        role: z.string(),
-        tool_calls: z.array(z.object({ id: z.string().optional() }).passthrough()).optional(),
-      }),
-    )
-    .optional(),
 });
 export type ToolApprovalResumeRequest = z.infer<typeof ToolApprovalResumeRequestSchema>;
+
+/**
+ * Safe, display-only projection stored in cloud message metadata so another
+ * signed-in surface can reconstruct pending approval cards. The server never
+ * uses this projection to resume execution: tool arguments and provider state
+ * are loaded exclusively from the tenant-owned approval checkpoint.
+ */
+export const CloudToolApprovalProjectionSchema = z.object({
+  schemaVersion: z.literal(1),
+  runId: z.string().uuid(),
+  calls: z
+    .array(
+      z.object({
+        toolCallId: z.string().min(1).max(128),
+        name: z.string().min(1).max(200),
+        input: z.string().max(100_000).optional(),
+        approvalDecision: z.enum(['approved', 'rejected']).optional(),
+      }),
+    )
+    .min(1)
+    .max(32),
+});
+export type CloudToolApprovalProjection = z.infer<typeof CloudToolApprovalProjectionSchema>;
+
+export interface PersistedCloudToolApproval {
+  runReference: ManagedCloudAgentRunReference;
+  projection: CloudToolApprovalProjection;
+}
+
+/**
+ * Read a pending approval from persisted message metadata. Both halves must be
+ * valid and name the same run; a display projection can never substitute for
+ * the signed-in tenant's durable run reference.
+ */
+export function readPersistedCloudToolApproval(
+  metadata: unknown,
+): PersistedCloudToolApproval | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const record = metadata as Record<string, unknown>;
+  const runReference = ManagedCloudAgentRunReferenceSchema.safeParse(record['cloudAgentRun']);
+  const projection = CloudToolApprovalProjectionSchema.safeParse(record['cloudApproval']);
+  if (
+    !runReference.success ||
+    !projection.success ||
+    runReference.data.runId !== projection.data.runId
+  ) {
+    return null;
+  }
+  return { runReference: runReference.data, projection: projection.data };
+}
 
 /**
  * The one JSON error shape the route returns (`jsonError`, route.ts:69-74) —

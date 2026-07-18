@@ -63,6 +63,9 @@ import {
   SettingsSyncPushResponseSchema,
   type ConversationWireDelta,
   type MessageWireDelta,
+  CloudToolApprovalProjectionSchema,
+  ManagedCloudAgentRunReferenceSchema,
+  readPersistedCloudToolApproval,
   CloudSafeSettingsSchema,
   type CloudSafeSettings,
 } from '@agiworkforce/cloud-contracts';
@@ -72,6 +75,7 @@ import {
   toConversationPushItem,
   conversationSyncContentMatches,
   toMessagePushItem,
+  messageSyncContentMatches,
   isSyncableMessageRole,
   mapMemoryWireDelta,
   applyMemoryDeltas,
@@ -87,6 +91,7 @@ import {
   type SyncConversationRecord,
   type MessageStorePort,
   type MessagePushItem,
+  type SyncMessageRecord,
 } from '@agiworkforce/sync';
 
 const SYNC_PATH = '/api/chat/sync';
@@ -165,6 +170,99 @@ function messageContentToString(content: unknown): string {
   return typeof content === 'string' ? content : JSON.stringify(content);
 }
 
+/**
+ * Project pending approval cards into sync metadata. This is display state
+ * only; the approval endpoint ignores it and loads executable arguments from
+ * the tenant-owned server checkpoint.
+ */
+function messageMetadataForSync(message: ChatMessage): Record<string, unknown> | null {
+  const base = message.metadata ? { ...message.metadata } : {};
+  const runReference = ManagedCloudAgentRunReferenceSchema.safeParse(base.cloudAgentRun);
+  const calls = (message.toolCalls ?? [])
+    .filter(
+      (call) =>
+        call.requiresApproval === true &&
+        typeof call.toolCallId === 'string' &&
+        call.toolCallId.length > 0,
+    )
+    .map((call) => ({
+      toolCallId: call.toolCallId as string,
+      name: call.name,
+      ...(call.input !== undefined ? { input: call.input } : {}),
+      ...(call.approvalDecision ? { approvalDecision: call.approvalDecision } : {}),
+    }));
+
+  if (runReference.success && calls.length > 0) {
+    base.cloudApproval = CloudToolApprovalProjectionSchema.parse({
+      schemaVersion: 1,
+      runId: runReference.data.runId,
+      calls,
+    });
+  } else if (runReference.success || 'cloudApproval' in base) {
+    // An explicit null clears approval cards on other devices after the run
+    // resumes or terminates. Omitting the key would leave stale cards behind.
+    base.cloudApproval = null;
+  }
+
+  return Object.keys(base).length > 0 ? base : null;
+}
+
+function hydrateApprovalToolCalls(
+  existing: ChatMessage | undefined,
+  metadata: Record<string, unknown> | null | undefined,
+): ChatMessage['toolCalls'] {
+  const rawProjection = metadata?.cloudApproval;
+  if (rawProjection === null) {
+    return existing?.toolCalls?.map((call) =>
+      call.requiresApproval
+        ? {
+            ...call,
+            requiresApproval: false,
+            status: call.approvalDecision === 'rejected' ? 'failed' : 'completed',
+          }
+        : call,
+    );
+  }
+
+  const persisted = readPersistedCloudToolApproval(metadata);
+  if (!persisted) {
+    return existing?.toolCalls;
+  }
+
+  const existingById = new Map(
+    (existing?.toolCalls ?? []).map((call) => [call.toolCallId ?? call.id, call]),
+  );
+  return persisted.projection.calls.map((call) => ({
+    ...(existingById.get(call.toolCallId) ?? {}),
+    id: call.toolCallId,
+    toolCallId: call.toolCallId,
+    name: call.name,
+    ...(call.input !== undefined ? { input: call.input } : {}),
+    status: 'running' as const,
+    requiresApproval: true,
+    ...(call.approvalDecision ? { approvalDecision: call.approvalDecision } : {}),
+  }));
+}
+
+function getMessageRecord(
+  conversationId: string,
+  messageId: string,
+): SyncMessageRecord | undefined {
+  return messagePort.getMessages(conversationId).find((message) => message.id === messageId);
+}
+
+function patchMessageServerVersion(
+  conversationId: string,
+  messageId: string,
+  serverVersion: string,
+): void {
+  const current = useChatCloudMessageStore.getState().messages[conversationId] ?? [];
+  useChatCloudMessageStore.getState().setCloudMessages(
+    conversationId,
+    current.map((message) => (message.id === messageId ? { ...message, serverVersion } : message)),
+  );
+}
+
 const messagePort: MessageStorePort = {
   getMessages: (conversationId) => {
     const msgs = useChatCloudMessageStore.getState().messages[conversationId] ?? [];
@@ -184,6 +282,8 @@ const messagePort: MessageStorePort = {
       model: (m as { model?: string }).model,
       provider: (m as { provider?: string }).provider,
       createdAt: (m as { createdAt?: string }).createdAt,
+      metadata: messageMetadataForSync(m),
+      serverVersion: m.serverVersion,
     }));
   },
   setMessages: (conversationId, records) => {
@@ -197,6 +297,7 @@ const messagePort: MessageStorePort = {
     );
     const chatMessages = records.map((record) => {
       const existing = existingById.get(record.id);
+      const toolCalls = hydrateApprovalToolCalls(existing, record.metadata);
       return {
         ...(existing ?? {}),
         id: record.id,
@@ -205,6 +306,9 @@ const messagePort: MessageStorePort = {
         ...(record.model ? { model: record.model } : {}),
         ...(record.provider ? { provider: record.provider } : {}),
         createdAt: record.createdAt,
+        metadata: record.metadata ?? undefined,
+        serverVersion: record.serverVersion,
+        ...(toolCalls ? { toolCalls } : {}),
       } as ChatMessage;
     });
     useChatCloudMessageStore.getState().setCloudMessages(conversationId, chatMessages);
@@ -275,6 +379,7 @@ async function push(): Promise<void> {
   const buildableRefs: DirtyMessageRef[] = [];
   const deadRefs: DirtyMessageRef[] = [];
   const messages: MessagePushItem[] = [];
+  const sentMessageById = new Map<string, SyncMessageRecord>();
   for (const ref of dirtyMessages) {
     const msg = (cloud.messages[ref.conversationId] ?? []).find((m) => m.id === ref.messageId);
     const role = msg?.role;
@@ -283,35 +388,44 @@ async function push(): Promise<void> {
       continue;
     }
     buildableRefs.push(ref);
-    messages.push(
-      toMessagePushItem(ref.conversationId, {
-        id: msg.id,
-        role,
-        content: messageContentToString(msg.content),
-        model: (msg as { model?: string }).model,
-        provider: (msg as { provider?: string }).provider,
-        createdAt: (msg as { createdAt?: string }).createdAt,
-      }),
-    );
+    const snapshot: SyncMessageRecord & { role: typeof role } = {
+      id: msg.id,
+      role,
+      content: messageContentToString(msg.content),
+      model: (msg as { model?: string }).model,
+      provider: (msg as { provider?: string }).provider,
+      createdAt: (msg as { createdAt?: string }).createdAt,
+      metadata: messageMetadataForSync(msg),
+      serverVersion: msg.serverVersion,
+    };
+    sentMessageById.set(msg.id, snapshot);
+    messages.push(toMessagePushItem(ref.conversationId, snapshot));
   }
 
-  let ackedMessageIds = new Set<string>();
   const resolvedConversationIds = new Set<string>();
   const resolvedMessageIds = new Set<string>();
   if (conversations.length > 0 || messages.length > 0) {
     const res = ChatSyncPushResponseSchema.parse(
-      await api.post<unknown>(
-        SYNC_PATH,
-        { protocolVersion: 2, conversations, messages },
-      ),
+      await api.post<unknown>(SYNC_PATH, { protocolVersion: 2, conversations, messages }),
     );
-    ackedMessageIds = new Set(res.applied.messages.map((m) => m.id));
     for (const applied of res.applied.conversations) {
       const sent = sentConversationById.get(applied.id);
       const latest = conversationPort.get(applied.id);
       if (latest) conversationPort.patch(applied.id, { serverVersion: applied.server_version });
       if (!latest || (sent && conversationSyncContentMatches(sent, latest))) {
         resolvedConversationIds.add(applied.id);
+      }
+    }
+    for (const applied of res.applied.messages) {
+      const ref = buildableRefs.find((candidate) => candidate.messageId === applied.id);
+      const sent = sentMessageById.get(applied.id);
+      if (!ref || !sent) continue;
+      const latest = getMessageRecord(ref.conversationId, applied.id);
+      if (latest) {
+        patchMessageServerVersion(ref.conversationId, applied.id, applied.server_version);
+      }
+      if (!latest || messageSyncContentMatches(sent, latest)) {
+        resolvedMessageIds.add(applied.id);
       }
     }
     for (const conflict of res.conflicts.conversations) {
@@ -334,26 +448,28 @@ async function push(): Promise<void> {
       }
     }
     for (const conflict of res.conflicts.messages) {
-      if (conflict.current) {
-        applyMessageDeltas([conflict.current]);
-        resolvedMessageIds.add(conflict.id);
+      const ref = buildableRefs.find((candidate) => candidate.messageId === conflict.id);
+      const sent = sentMessageById.get(conflict.id);
+      if (!conflict.current || !ref) continue;
+      const latest = getMessageRecord(ref.conversationId, conflict.id);
+      if (sent && latest && !messageSyncContentMatches(sent, latest)) {
+        patchMessageServerVersion(ref.conversationId, conflict.id, conflict.current.server_version);
+        continue;
       }
+      applyMessageDeltas([conflict.current]);
+      resolvedMessageIds.add(conflict.id);
     }
   }
 
   // Clear a conversation only after an exact-snapshot ACK or deterministic server
-  // winner. An edit made while the request was in flight keeps its dirty ref and is
-  // rebased onto the returned revision. Messages clear only after an identity ACK or
-  // conflict winner; an unacked orphan stays dirty until its parent reaches the server.
+  // winner. Edits made while either conversation or message requests are in
+  // flight keep their dirty refs and are rebased onto the returned revision.
+  // An unacked orphan stays dirty until its parent reaches the server.
   const clearedMessageRefs = [
     ...deadRefs,
-    ...buildableRefs.filter(
-      (ref) => ackedMessageIds.has(ref.messageId) || resolvedMessageIds.has(ref.messageId),
-    ),
+    ...buildableRefs.filter((ref) => resolvedMessageIds.has(ref.messageId)),
   ];
-  useCloudSyncStateStore
-    .getState()
-    .clearDirty([...resolvedConversationIds], clearedMessageRefs);
+  useCloudSyncStateStore.getState().clearDirty([...resolvedConversationIds], clearedMessageRefs);
 }
 
 // ── Memory pull ────────────────────────────────────────────────────────────────
@@ -410,15 +526,14 @@ async function pushMemory(): Promise<void> {
   const resolvedIds = new Set<string>();
   if (payload.length > 0) {
     const res = MemorySyncPushResponseSchema.parse(
-      await api.post<unknown>(
-        MEMORY_SYNC_PATH,
-        { protocolVersion: 2, memories: payload },
-      ),
+      await api.post<unknown>(MEMORY_SYNC_PATH, { protocolVersion: 2, memories: payload }),
     );
     for (const applied of res.applied) {
       ackedIds.add(applied.id);
       const sent = entryById.get(applied.id);
-      const latest = useCloudMemoryStore.getState().entries.find((entry) => entry.id === applied.id);
+      const latest = useCloudMemoryStore
+        .getState()
+        .entries.find((entry) => entry.id === applied.id);
       if (latest) {
         useCloudMemoryStore
           .getState()
@@ -430,7 +545,9 @@ async function pushMemory(): Promise<void> {
     }
     for (const conflict of res.conflicts) {
       const sent = entryById.get(conflict.id);
-      const latest = useCloudMemoryStore.getState().entries.find((entry) => entry.id === conflict.id);
+      const latest = useCloudMemoryStore
+        .getState()
+        .entries.find((entry) => entry.id === conflict.id);
       if (!conflict.current || conflict.current.is_deleted) {
         useCloudMemoryStore.getState().hardDeleteCloudMemory(conflict.id);
         resolvedIds.add(conflict.id);
