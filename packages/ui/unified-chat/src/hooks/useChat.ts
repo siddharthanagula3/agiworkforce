@@ -21,7 +21,11 @@ import { CLOUD_FALLBACK_MODELS, useModelStore } from '../stores/modelStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { getSendQueue, defaultBrowserStorage } from '../queue/sendQueue';
 import { CONTINUE_GENERATION_INSTRUCTION, isMessageContinuable } from '../lib/continue-generation';
-import { getModelMetadataById, type ChatExecutionMode } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  type ChatExecutionMode,
+  type CloudWorkMode,
+} from '@agiworkforce/types';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import { isModelAdmittedForExecutionMode } from '../lib/modelAdmission';
 import { isChatModelSelectable } from '../lib/modelInfo';
@@ -672,6 +676,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       attachments?: File[],
       researchEnabled?: boolean,
       writingStyle?: WritingStyle,
+      workMode?: CloudWorkMode,
     ) => {
       if (!runtime || isStreamingRef.current) return;
 
@@ -880,6 +885,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           ...(resolvedProvider ? { provider: resolvedProvider } : {}),
           webSearch: webSearchEnabled,
           ...(research ? { research: true } : {}),
+          ...(workMode ? { workMode } : {}),
           thinkingEnabled,
           ...(codeExecution ? { codeExecution: true } : {}),
           messageHistory,

@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
@@ -135,6 +135,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useModelStore } from '../src/features/model-picker/store';
+import { useTierStore } from '../src/features/billing/store';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -151,7 +152,8 @@ function resetStores() {
     chatMode: 'chat',
     chatStyle: 'normal',
     toolAccess: 'auto',
-    features: { webSearch: true, imageGen: true, health: false },
+    workMode: 'chat',
+    features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
   });
   useProjectStore.setState({
     projects: [],
@@ -159,6 +161,7 @@ function resetStores() {
   });
   useChatAppModeStore.setState({ appMode: 'local' });
   useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
+  useTierStore.setState({ tier: 'free', codeExecutionAvailable: false });
 }
 
 const defaultProps = {
@@ -214,6 +217,27 @@ describe('AddToChatSheet', () => {
       expect(queryByLabelText('Research mode')).toBeNull();
       expect(queryByLabelText('Create mode')).toBeNull();
       expect(queryByText('Chat (default)')).toBeNull();
+    });
+
+    it('shows a real AGI Work toggle for paid Cloud chats', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'max' });
+
+      const { getByLabelText } = renderSheet();
+      fireEvent(getByLabelText('AGI Work off'), 'valueChange', true);
+
+      expect(useChatStore.getState().workMode).toBe('agiwork');
+    });
+
+    it('keeps AGI Work paid and routes free users to Cloud access', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'free' });
+
+      const { getByLabelText } = renderSheet();
+      fireEvent.press(getByLabelText('AGI Work, Paid'));
+
+      expect(defaultProps.onOpenCloudAccess).toHaveBeenCalledTimes(1);
+      expect(useChatStore.getState().workMode).toBe('chat');
     });
   });
 

@@ -17,7 +17,7 @@ import type { Artifact, ChatMessage } from '../lib/types';
 import type { ChipType } from './QuickChips';
 import { Sidebar } from './Sidebar';
 import { EmptyState } from './EmptyState';
-import { ChatInput, type ChatInputProjectPicker } from './ChatInput';
+import { ChatInput, type ChatInputProjectPicker, type ChatWorkScope } from './ChatInput';
 import { QuickChips } from './QuickChips';
 import { Disclaimer } from './Disclaimer';
 import { MessageList } from './MessageList';
@@ -413,8 +413,17 @@ export function ChatInterface({
       attachments?: File[],
       research?: boolean,
       writingStyle?: WritingStyle,
+      workScope?: ChatWorkScope,
     ) => {
-      sendMessage(content, agentMode, effort, attachments, research, writingStyle);
+      sendMessage(
+        content,
+        agentMode,
+        effort,
+        attachments,
+        research,
+        writingStyle,
+        workScope?.workMode,
+      );
     },
     [sendMessage],
   );

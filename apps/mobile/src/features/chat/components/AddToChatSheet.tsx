@@ -16,6 +16,7 @@ import {
   EyeOff,
   Lock,
   Terminal,
+  Bot,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { getModelMetadataById } from '@agiworkforce/types';
@@ -61,7 +62,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const chatStyle = useChatStore((s) => s.chatStyle);
   const features = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
+  const workMode = useChatStore((s) => s.workMode);
+  const setWorkMode = useChatStore((s) => s.setWorkMode);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const tier = useTierStore((s) => s.tier);
   const selectedModel = useModelStore((s) => s.selectedModel);
   // The server silently strips the web_search tool for models whose provider
   // adapter can't wire it up yet (e.g. OpenAI models via the chat-completions
@@ -86,6 +90,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     appMode === 'cloud' &&
     selectedModelSupportsCodeExecution &&
     codeExecutionDeploymentAvailable;
+  // UI hint only; the API remains authoritative. Basic and every higher paid
+  // Cloud plan may request AGI Work, while Free/Local/BYOK cannot.
+  const canUseAgiWork = !['free', 'local-only', 'byok'].includes(tier);
 
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const projects = useProjectStore((s) => s.projects);
@@ -145,6 +152,14 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       setFeature('codeExecution', enabled);
     },
     [haptic, setFeature],
+  );
+
+  const handleWorkModeToggle = useCallback(
+    (enabled: boolean) => {
+      haptic();
+      setWorkMode(enabled ? 'agiwork' : 'chat');
+    },
+    [haptic, setWorkMode],
   );
 
   const handleImageGenerationToggle = useCallback(
@@ -311,6 +326,31 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               accessibilityLabel={`Temporary chat ${isTemporaryChat ? 'on' : 'off'}`}
             />
           </View>
+
+          {appMode === 'cloud' ? (
+            canUseAgiWork ? (
+              <CapabilityRow
+                icon={<Bot size={18} color={themeColors.teal} />}
+                label="AGI Work"
+                description="Search, run code, and use tools for longer tasks"
+                enabled={workMode === 'agiwork'}
+                onToggle={handleWorkModeToggle}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : (
+              <CapabilityRow
+                icon={<Bot size={18} color={themeColors.textMuted} />}
+                label="AGI Work"
+                description="Search, run code, and use tools for longer tasks"
+                enabled={false}
+                status="Paid"
+                onStatusPress={onOpenCloudAccess}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            )
+          ) : null}
         </View>
 
         {/* Divider */}

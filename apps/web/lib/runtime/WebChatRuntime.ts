@@ -146,7 +146,7 @@ export class WebChatRuntime implements ChatRuntime {
         web_search: options?.webSearch ?? undefined,
         research: options?.research ?? undefined,
         code_execution: options?.codeExecution ?? undefined,
-        agent_mode: options?.agentMode ?? undefined,
+        work_mode: options?.workMode ?? undefined,
         use_prompt_cache: true,
       }),
       signal: controller.signal,

@@ -179,7 +179,12 @@ export class WebRuntime implements ChatRuntime {
           purpose: 'send',
           operationId: uuidv7(),
         }),
-        options?.research ? { research: true } : undefined,
+        options?.research || options?.workMode
+          ? {
+              ...(options.research ? { research: true } : {}),
+              ...(options.workMode ? { workMode: options.workMode } : {}),
+            }
+          : undefined,
       );
     } catch (err) {
       // Only emit error if it wasn't an intentional abort

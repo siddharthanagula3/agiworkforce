@@ -21,6 +21,7 @@ import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
   summarizeSendPreview,
+  type CloudWorkMode,
   type ProviderMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
@@ -119,7 +120,7 @@ import {
 
 type SendMeta = {
   /** Composer work mode at send time ('chat' | 'agiwork'). */
-  workMode?: 'chat' | 'agiwork';
+  workMode?: CloudWorkMode;
   /** Project scoping the send; threads into createConversation → project_id. */
   projectId?: string | null;
   webSearchEnabled?: boolean;
@@ -839,7 +840,7 @@ export default function WebChatPage() {
           webFetch: options.meta?.webSearchEnabled,
           thinkingEnabled: options.meta?.thinkingEnabled,
           codeExecution: options.meta?.codeExecutionEnabled,
-          agentMode: options.meta?.workMode,
+          workMode: options.meta?.workMode,
           research: options.meta?.researchEnabled,
           styleMode: options.meta?.styleMode,
           skillBody: options.meta?.skillBody,

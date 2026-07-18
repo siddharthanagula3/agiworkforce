@@ -1,7 +1,12 @@
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
-import { getModelMetadataById, type Effort, type Provider } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  type CloudWorkMode,
+  type Effort,
+  type Provider,
+} from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
 // Zero-leak chokepoint: the SSE call below targets OUR managed cloud
@@ -234,6 +239,8 @@ async function attemptStream(
     web_search?: boolean;
     /** When true, the server injects its built-in E2B code-execution tool for this turn. */
     code_execution?: boolean;
+    /** Paid Cloud product mode; independent from approval/permission policy. */
+    work_mode?: CloudWorkMode;
     /** Present only on a tool-approval resume request — see `streamToolApprovalResume`. */
     tool_approvals?: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
   },
@@ -447,6 +454,8 @@ export async function streamChat(
     web_search?: boolean;
     /** When true, the server injects its built-in E2B code-execution tool for this turn. */
     code_execution?: boolean;
+    /** Paid Cloud product mode; independent from approval/permission policy. */
+    work_mode?: CloudWorkMode;
   },
   callbacks: StreamCallbacks,
   signal?: AbortSignal,

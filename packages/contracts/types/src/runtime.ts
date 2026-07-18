@@ -16,6 +16,17 @@
 // Runtime Activity
 // ============================================================================
 
+/** Product execution mode shared by Cloud chat surfaces. */
+export const CLOUD_WORK_MODES = ['chat', 'agiwork'] as const;
+
+/**
+ * `chat` is the ordinary assistant path. `agiwork` enables the paid,
+ * server-owned agent harness (search, fetch, sandbox, and tool loop).
+ * This is deliberately separate from permission `agentMode` values such as
+ * `ask`, `auto`, `plan`, and `bypass`.
+ */
+export type CloudWorkMode = (typeof CLOUD_WORK_MODES)[number];
+
 /** Type of runtime activity. */
 export type RuntimeActivityType = 'tool_call' | 'agent_action' | 'system_event' | 'mcp_request';
 

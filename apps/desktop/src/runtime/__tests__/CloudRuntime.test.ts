@@ -47,16 +47,21 @@ describe('CloudRuntime', () => {
   });
 
   describe('sendMessage', () => {
-    it('advertises Research and forwards it to the cloud API request options', async () => {
+    it('forwards Research and Cloud work mode as distinct request options', async () => {
       const runtime = new CloudRuntime();
       expect(runtime.supportsResearch).toBe(true);
       sendCloudMessage.mockResolvedValue(undefined);
 
       await runtime.sendMessage('conv_research', 'investigate', {
         research: true,
+        agentMode: 'auto',
+        workMode: 'agiwork',
       });
 
-      expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({ research: true });
+      expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({
+        research: true,
+        workMode: 'agiwork',
+      });
     });
 
     it('persists the user message before streaming, then the assistant message on done', async () => {

@@ -3,6 +3,7 @@
  * Consumer imports remain unchanged: `import { useChatStore } from '@/stores/chatStore'`
  */
 export type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
+export type { CloudWorkMode } from '@agiworkforce/types';
 export type { PaywallErrorState, SendMessageOptions } from './chat/chatExecutionStore';
 
 export { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
@@ -17,6 +18,7 @@ import type { ForkConversationOptions } from './chat/chatMessageStore';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 import type { PaywallErrorState, SendMessageOptions } from './chat/chatExecutionStore';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
+import type { CloudWorkMode } from '@agiworkforce/types';
 
 /** Combined state shape — mirrors the original useChatStore state interface. */
 export interface CombinedChatState {
@@ -44,6 +46,7 @@ export interface CombinedChatState {
   }>;
   isSearching: boolean;
   chatMode: ChatMode;
+  workMode: CloudWorkMode;
   chatStyle: ChatStyle;
   toolAccess: ToolAccess;
   features: ChatFeatures;
@@ -107,6 +110,7 @@ export interface CombinedChatState {
   setPaywallError: (paywallError: PaywallErrorState) => void;
   searchConversations: (query: string) => void;
   setChatMode: (mode: ChatMode) => void;
+  setWorkMode: (mode: CloudWorkMode) => void;
   setChatStyle: (style: ChatStyle) => void;
   setToolAccess: (access: ToolAccess) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
@@ -171,11 +175,13 @@ function buildCombinedState(
     searchResults: view.searchResults,
     isSearching: view.isSearching,
     chatMode: view.chatMode,
+    workMode: view.workMode,
     chatStyle: view.chatStyle,
     toolAccess: view.toolAccess,
     features: view.features,
     searchConversations: view.searchConversations,
     setChatMode: view.setChatMode,
+    setWorkMode: view.setWorkMode,
     setChatStyle: view.setChatStyle,
     setToolAccess: view.setToolAccess,
     setFeature: view.setFeature,
@@ -190,6 +196,7 @@ type SettableState = Partial<
     | 'messages'
     | 'currentConversationId'
     | 'chatMode'
+    | 'workMode'
     | 'chatStyle'
     | 'toolAccess'
     | 'features'
@@ -229,19 +236,21 @@ useChatStore.setState = (
 ): void => {
   const partial = typeof updater === 'function' ? updater(useChatStore.getState()) : updater;
 
-  const { chatMode, chatStyle, toolAccess, features, ...msgFields } = partial;
+  const { chatMode, workMode, chatStyle, toolAccess, features, ...msgFields } = partial;
 
   if (Object.keys(msgFields).length > 0) {
     useChatMessageStore.setState(msgFields);
   }
   if (
     chatMode !== undefined ||
+    workMode !== undefined ||
     chatStyle !== undefined ||
     toolAccess !== undefined ||
     features !== undefined
   ) {
     const viewUpdate: Partial<ReturnType<typeof useChatViewStore.getState>> = {};
     if (chatMode !== undefined) viewUpdate.chatMode = chatMode;
+    if (workMode !== undefined) viewUpdate.workMode = workMode;
     if (chatStyle !== undefined) viewUpdate.chatStyle = chatStyle;
     if (toolAccess !== undefined) viewUpdate.toolAccess = toolAccess;
     if (features !== undefined) viewUpdate.features = features;

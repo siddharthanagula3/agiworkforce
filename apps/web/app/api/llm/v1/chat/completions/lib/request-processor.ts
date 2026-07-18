@@ -30,6 +30,7 @@ import { canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
   ANTHROPIC_THINKING_BUDGET,
+  CLOUD_WORK_MODES,
   getEconomyFallbackModels,
   getModelMetadataById,
   getMinimumRequiredTier,
@@ -137,7 +138,7 @@ export const ChatCompletionRequestSchema = z.object({
   code_execution: z.boolean().optional(),
   // Product mode, not a provider hint. `agiwork` is paid managed-cloud work
   // that exposes AGI's server-owned search/fetch/sandbox tools below.
-  agent_mode: z.enum(['chat', 'agiwork']).optional(),
+  work_mode: z.enum(CLOUD_WORK_MODES).optional(),
   thinking_mode: z.boolean().optional(),
   thinking: z
     .object({
@@ -157,8 +158,8 @@ export const ChatCompletionRequestSchema = z.object({
 export type ChatCompletionRequest = z.infer<typeof ChatCompletionRequestSchema>;
 
 /** Make the AGI Work composer mode operational at the server trust boundary. */
-export function applyAgentMode(chatRequest: ChatCompletionRequest): void {
-  if (chatRequest.agent_mode !== 'agiwork') return;
+export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
+  if (chatRequest.work_mode !== 'agiwork') return;
 
   chatRequest.stream = true;
   chatRequest.web_search = true;
@@ -475,11 +476,11 @@ export function shouldOfferGenericWebSearchTool({
 export function isFreeTierBlockedAddOn(
   request: Pick<
     ChatCompletionRequest,
-    'research' | 'tools' | 'tool_choice' | 'n' | 'web_search' | 'agent_mode'
+    'research' | 'tools' | 'tool_choice' | 'n' | 'web_search' | 'work_mode'
   >,
 ): boolean {
   return (
-    request.agent_mode === 'agiwork' ||
+    request.work_mode === 'agiwork' ||
     request.research === true ||
     (request.tools?.length ?? 0) > 0 ||
     (request.tool_choice !== undefined && request.tool_choice !== 'none') ||
@@ -847,7 +848,7 @@ export async function processRequest(
     }
   }
 
-  applyAgentMode(chatRequest);
+  applyWorkMode(chatRequest);
 
   // WEB-MULTIMODAL-IMAGE-SSRF: validate every user-supplied image_url before forwarding.
   for (let mi = 0; mi < chatRequest.messages.length; mi++) {

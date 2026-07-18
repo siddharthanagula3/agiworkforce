@@ -1348,6 +1348,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         getModelMetadataById(executionModel)?.capabilities?.codeExecution === true &&
         useTierStore.getState().codeExecutionAvailable &&
         useChatViewStore.getState().features.codeExecution;
+      const requestedWorkMode = useChatViewStore.getState().workMode;
+      // The server is authoritative, but do not replay a persisted paid mode
+      // after a cached subscription downgrade. This keeps the Free UI and wire
+      // request aligned while the server still enforces the entitlement.
+      const workMode = useTierStore.getState().tier === 'free' ? 'chat' : requestedWorkMode;
 
       // Raw content accumulator for cloud streams — separate from streamingContent
       // (which must hold only display-clean text). The server intentionally emits
@@ -1413,6 +1418,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ...(thinkingEnabled && wireEffort ? { effort: wireEffort } : {}),
           ...(webSearchEnabled ? { web_search: true } : {}),
           ...(codeExecutionEnabled ? { code_execution: true } : {}),
+          ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
         },
         {
           onDelta: (delta: StreamDelta) => {

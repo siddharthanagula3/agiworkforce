@@ -28,11 +28,12 @@ import {
   PROVIDER_DISPLAY,
   getModelMetadataById,
   validateAttachmentFile,
+  type CloudWorkMode,
   type ProviderId,
 } from '@agiworkforce/types';
 
 /** Composer work mode — mirrors web ChatComposerNew's ComposerWorkMode. */
-export type ChatWorkMode = 'chat' | 'agiwork';
+export type ChatWorkMode = CloudWorkMode;
 
 /** Scope stamped into the send callback when the host feeds `projectPicker`. */
 export interface ChatWorkScope {
