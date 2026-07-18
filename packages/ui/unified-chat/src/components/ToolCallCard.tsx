@@ -59,13 +59,11 @@ export interface ToolCallCardProps {
   onCancel?: (id: string) => void;
   /**
    * True when an awaiting-approval card's suspended turn is no longer
-   * resolvable (the in-memory approval registry that resolves it is
-   * process-memory-only and doesn't survive a reload/restart, even though
-   * this card's persisted status is still `awaiting_approval`). Renders a
-   * distinct expired notice instead of live Approve/Reject buttons, which
-   * would otherwise render wired but silently no-op when clicked. Callers
-   * decide liveness (e.g. web's `isApprovalTurnLive`); this component only
-   * renders the state.
+   * resolvable from its persisted run reference (for example, an old card
+   * created before durable checkpoints existed). Renders a distinct expired
+   * notice instead of live Approve/Reject buttons, which would otherwise
+   * render wired but silently no-op when clicked. Callers decide liveness
+   * (e.g. web's `isApprovalTurnLive`); this component only renders the state.
    */
   expired?: boolean;
   /** Resend affordance shown on an expired approval card. Omit to show text guidance only (no fake availability). */
@@ -263,8 +261,7 @@ const ToolCallCardComponent = ({
           <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
             <AlertCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
             <p className="flex-1 text-xs text-muted-foreground">
-              This approval request expired — the app was reloaded or restarted before it could be
-              resolved.
+              This approval request expired or is no longer active.
               {onResend ? ' Send a new message to try again.' : ' Send a new message to continue.'}
             </p>
             {onResend && (

@@ -191,6 +191,7 @@ describe('runToolLoop — manual approval suspend', () => {
       content: 'should not run',
       isError: false,
     }));
+    const onApprovalCheckpoint = vi.fn(async () => undefined);
 
     const output = await drain(
       runToolLoop(makeFreshProcessed(), {
@@ -198,6 +199,7 @@ describe('runToolLoop — manual approval suspend', () => {
         userId: 'user-1',
         mcpTools: [githubToolDef],
         connectorExecutor,
+        onApprovalCheckpoint,
       }),
     );
 
@@ -210,6 +212,35 @@ describe('runToolLoop — manual approval suspend', () => {
     // Nothing executed.
     expect(connectorExecutor).not.toHaveBeenCalled();
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
+    expect(onApprovalCheckpoint).toHaveBeenCalledWith({
+      sessionId: 'req-1',
+      turnId: 'req-1',
+      nextEventSequence: 6,
+      events: expect.arrayContaining([
+        expect.objectContaining({
+          sequence: 3,
+          event: expect.objectContaining({ type: 'approval-requested', toolCallId: 'call_1' }),
+        }),
+        expect.objectContaining({
+          sequence: 4,
+          event: expect.objectContaining({ type: 'task-state-changed', state: 'awaiting_input' }),
+        }),
+        expect.objectContaining({
+          sequence: 5,
+          event: expect.objectContaining({ type: 'lifecycle', phase: 'paused' }),
+        }),
+      ]),
+      messages: expect.arrayContaining([
+        expect.objectContaining({ role: 'assistant', tool_calls: expect.any(Array) }),
+      ]),
+      pendingToolCalls: [
+        {
+          id: 'call_1',
+          qualifiedName: GITHUB_TOOL,
+          args: { owner: 'acme', repo: 'app', pull_number: 7 },
+        },
+      ],
+    });
 
     expect(agentEvents(output).map((entry) => entry.event)).toEqual([
       {
@@ -279,12 +310,20 @@ describe('runToolLoop — manual approval resume', () => {
         mcpTools: [githubToolDef],
         connectorExecutor,
         resume: { approvals: [{ toolCallId: 'call_1', decision: 'approved' }] },
+        eventSessionId: 'conversation-1',
+        eventTurnId: 'original-turn-1',
+        initialEventSequence: 6,
       }),
     );
 
     // The approved tool executed exactly once through the connector executor.
     expect(connectorExecutor).toHaveBeenCalledTimes(1);
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
+    expect(agentEvents(output)[0]).toMatchObject({
+      sessionId: 'conversation-1',
+      turnId: 'original-turn-1',
+      sequence: 6,
+    });
 
     // Exactly one provider call (the continuation), and its thread carried the
     // executed tool result.
@@ -314,7 +353,7 @@ describe('runToolLoop — manual approval resume', () => {
     ]);
     expect(activity[0]?.event).toEqual({
       type: 'task-state-changed',
-      taskId: 'req-1',
+      taskId: 'original-turn-1',
       previousState: 'awaiting_input',
       state: 'running',
       summary: 'Agent resumed after user input.',
@@ -331,7 +370,7 @@ describe('runToolLoop — manual approval resume', () => {
     });
     expect(activity[6]?.event).toMatchObject({
       type: 'task-state-changed',
-      taskId: 'req-1',
+      taskId: 'original-turn-1',
       previousState: 'running',
       state: 'ready_for_review',
     });

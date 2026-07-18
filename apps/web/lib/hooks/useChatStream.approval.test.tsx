@@ -2,9 +2,8 @@
  * Client wiring for the manual tool-approval → resume flow (fixes the client
  * half of MCP-APPROVAL-RESUME): an x_tool_approval_request event surfaces an
  * awaiting_approval card + registers the suspended turn; resolveToolApproval
- * dispatches the resume request to /api/llm/v1/chat/completions/approve with the
- * reconstructed assistant tool_call turn + per-tool decisions, then streams the
- * continuation into the SAME assistant message.
+ * dispatches only the durable run id + per-tool decisions to the approval
+ * endpoint, then streams the server-owned continuation into the SAME message.
  */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -34,6 +33,10 @@ const TEMP_CONVERSATION = {
 };
 
 const TOOL = 'mcp__github__get_pull_request_diff';
+const RUN_ID = '11111111-1111-4111-8111-111111111111';
+const RUN_PATH = `/api/llm/v1/chat/completions/runs/${RUN_ID}`;
+const PERSISTED_CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
+const PERSISTED_ASSISTANT_ID = '33333333-3333-4333-8333-333333333333';
 
 function mockSseStream(events: unknown[]) {
   const lines = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
@@ -46,7 +49,13 @@ function mockSseStream(events: unknown[]) {
     },
   });
   vi.mocked(fetch).mockResolvedValueOnce(
-    new Response(stream, { status: 200, headers: new Headers() }),
+    new Response(stream, {
+      status: 200,
+      headers: new Headers({
+        'X-AGI-Agent-Run-Id': RUN_ID,
+        'X-AGI-Agent-Run-URL': RUN_PATH,
+      }),
+    }),
   );
 }
 
@@ -128,23 +137,16 @@ describe('useChatStream — tool approval → resume', () => {
       .mock.calls.find((c) => String(c[0]).includes('/api/llm/v1/chat/completions/approve'));
     expect(approveCall, 'resume request should target the approve endpoint').toBeDefined();
     const body = JSON.parse((approveCall![1] as RequestInit).body as string);
+    expect(body.run_id).toBe(RUN_ID);
     expect(body.tool_approvals).toEqual([{ tool_call_id: 'call_1', decision: 'approved' }]);
-    const lastMessage = body.messages[body.messages.length - 1];
-    expect(lastMessage.role).toBe('assistant');
-    expect(lastMessage.tool_calls[0].id).toBe('call_1');
-    expect(lastMessage.tool_calls[0].function.name).toBe(TOOL);
-    // arguments is the JSON-encoded string per the OpenAI tool-call protocol.
-    expect(JSON.parse(lastMessage.tool_calls[0].function.arguments)).toEqual({
-      owner: 'acme',
-      repo: 'app',
-      pull_number: 7,
-    });
+    expect(body).not.toHaveProperty('messages');
+    expect(body).not.toHaveProperty('model');
 
     // Continuation streamed into the same assistant message.
     expect(assistantMessage()?.content).toContain('The PR renames a function.');
   });
 
-  it('replays the REAL tool result (not a placeholder) when the resume suspends again on a further tool (Finding 2)', async () => {
+  it('keeps the same server-owned run across consecutive approval boundaries', async () => {
     mockSseStream([approvalEvent]);
     const { result } = renderHook(() => useChatStream());
     await act(async () => {
@@ -188,8 +190,8 @@ describe('useChatStream — tool approval → resume', () => {
       await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
     });
 
-    // Second resume (approving call_2): capture what thread this call
-    // received -- it must carry call_1's REAL result, not '(executed)'.
+    // Second resume (approving call_2): the browser sends no transcript. The
+    // server-owned checkpoint already contains call_1's real result.
     mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
     await act(async () => {
       await result.current.resolveToolApproval(assistantId, 'call_2', 'approved');
@@ -199,13 +201,12 @@ describe('useChatStream — tool approval → resume', () => {
       .mocked(fetch)
       .mock.calls.filter((c) => String(c[0]).includes('/approve'));
     expect(approveCalls).toHaveLength(2);
+    const firstBody = JSON.parse((approveCalls[0]![1] as RequestInit).body as string);
     const secondBody = JSON.parse((approveCalls[1]![1] as RequestInit).body as string);
-    const call1ToolMessage = secondBody.messages.find(
-      (m: { role: string; tool_call_id?: string }) =>
-        m.role === 'tool' && m.tool_call_id === 'call_1',
-    );
-    expect(call1ToolMessage?.content).toBe(REAL_RESULT);
-    expect(call1ToolMessage?.content).not.toBe('(executed)');
+    expect(firstBody.run_id).toBe(RUN_ID);
+    expect(secondBody.run_id).toBe(RUN_ID);
+    expect(secondBody.tool_approvals).toEqual([{ tool_call_id: 'call_2', decision: 'approved' }]);
+    expect(secondBody).not.toHaveProperty('messages');
   });
 
   it('sends decision "rejected" and marks the card failed without executing', async () => {
@@ -225,6 +226,7 @@ describe('useChatStream — tool approval → resume', () => {
 
     const approveCall = vi.mocked(fetch).mock.calls.find((c) => String(c[0]).includes('/approve'));
     const body = JSON.parse((approveCall![1] as RequestInit).body as string);
+    expect(body.run_id).toBe(RUN_ID);
     expect(body.tool_approvals).toEqual([{ tool_call_id: 'call_1', decision: 'rejected' }]);
 
     const card = assistantMessage()?.metadata?.tools?.find((t) => t.toolCallId === 'call_1');
@@ -307,7 +309,133 @@ describe('useChatStream — tool approval → resume', () => {
       .mock.calls.filter((c) => String(c[0]).includes('/approve'));
     expect(approveCalls.length).toBe(1);
     const body = JSON.parse((approveCalls[0]![1] as RequestInit).body as string);
+    expect(body.run_id).toBe(RUN_ID);
     expect(body.tool_approvals).toHaveLength(2);
+  });
+
+  it('persists a partial multi-tool decision before reload', async () => {
+    useChatStore.setState({
+      activeConversationId: PERSISTED_CONVERSATION_ID,
+      conversations: [
+        {
+          id: PERSISTED_CONVERSATION_ID,
+          title: 'Durable approvals',
+          createdAt: '2026-07-17T12:00:00.000Z',
+          updatedAt: '2026-07-17T12:00:00.000Z',
+          isTemporary: false,
+        },
+      ],
+      messages: [
+        {
+          id: PERSISTED_ASSISTANT_ID,
+          role: 'assistant',
+          content: 'I need permission to continue.',
+          createdAt: '2026-07-17T12:00:01.000Z',
+          model: 'auto',
+          metadata: {
+            cloudAgentRun: {
+              runId: RUN_ID,
+              runPath: RUN_PATH,
+              lastSequence: 9,
+              state: 'awaiting_input',
+            },
+            cloudApproval: {
+              schemaVersion: 1,
+              runId: RUN_ID,
+              calls: [
+                { toolCallId: 'call_1', name: TOOL, input: '{"owner":"acme"}' },
+                { toolCallId: 'call_2', name: TOOL },
+              ],
+            },
+            tools: [
+              {
+                name: TOOL,
+                status: 'awaiting_approval',
+                requiresApproval: true,
+                toolCallId: 'call_1',
+              },
+              {
+                name: TOOL,
+                status: 'awaiting_approval',
+                requiresApproval: true,
+                toolCallId: 'call_2',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    __resetPendingTurnsForTests();
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.resolveToolApproval(PERSISTED_ASSISTANT_ID, 'call_1', 'approved');
+    });
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
+    expect(String(url)).toContain(`/api/chat/conversations/${PERSISTED_CONVERSATION_ID}/messages`);
+    expect(String(url)).not.toContain('/approve');
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(body.metadata.cloudApproval).toEqual({
+      schemaVersion: 1,
+      runId: RUN_ID,
+      calls: [
+        {
+          toolCallId: 'call_1',
+          name: TOOL,
+          input: '{"owner":"acme"}',
+          approvalDecision: 'approved',
+        },
+        { toolCallId: 'call_2', name: TOOL },
+      ],
+    });
+  });
+
+  it('restores partial multi-tool decisions after reload and resumes once complete', async () => {
+    mockSseStream([
+      approvalEvent,
+      {
+        choices: [
+          {
+            delta: {
+              x_tool_approval_request: { tool_call_id: 'call_2', name: TOOL, args: {} },
+            },
+          },
+        ],
+      },
+    ]);
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('two tools', { conversationId: TEMP_CONVERSATION.id });
+    });
+    const assistantId = assistantMessage()!.id;
+
+    await act(async () => {
+      await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
+    });
+    __resetPendingTurnsForTests();
+    expect(isApprovalTurnLive(assistantId)).toBe(true);
+
+    mockSseStream([{ choices: [{ delta: { content: 'done' } }] }]);
+    await act(async () => {
+      await result.current.resolveToolApproval(assistantId, 'call_2', 'rejected');
+    });
+
+    const approveCall = vi
+      .mocked(fetch)
+      .mock.calls.find((call) => String(call[0]).includes('/approve'));
+    const body = JSON.parse((approveCall![1] as RequestInit).body as string);
+    expect(body).toEqual({
+      run_id: RUN_ID,
+      tool_approvals: [
+        { tool_call_id: 'call_1', decision: 'approved' },
+        { tool_call_id: 'call_2', decision: 'rejected' },
+      ],
+    });
   });
 });
 
@@ -362,10 +490,12 @@ describe('isApprovalTurnLive', () => {
       await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
     });
 
+    expect(assistantMessage()?.metadata?.cloudApproval).toBeNull();
+    expect(assistantMessage()?.metadata?.tools?.[0]?.requiresApproval).toBe(false);
     expect(isApprovalTurnLive(assistantId)).toBe(false);
   });
 
-  it('is false after a simulated reload even though the persisted card still shows awaiting_approval (the exact Finding 1 scenario)', async () => {
+  it('remains live after reload when the persisted card has a durable run handle', async () => {
     mockSseStream([approvalEvent]);
     const { result } = renderHook(() => useChatStream());
     await act(async () => {
@@ -376,16 +506,14 @@ describe('isApprovalTurnLive', () => {
     const assistantId = assistantMessage()!.id;
     expect(isApprovalTurnLive(assistantId)).toBe(true);
 
-    // Simulate a page reload: the in-memory registry resets, but the store
-    // (standing in for a freshly-loaded conversation from the DB) still
-    // shows the tool card as awaiting_approval -- exactly what persistence
-    // does, since it's a durable field independent of the live registry.
+    // Simulate a reload: only the persisted message metadata remains.
     __resetPendingTurnsForTests();
 
     const stillAwaiting = assistantMessage()?.metadata?.tools?.find(
       (t) => t.status === 'awaiting_approval',
     );
     expect(stillAwaiting, 'persisted card still shows awaiting_approval').toBeDefined();
-    expect(isApprovalTurnLive(assistantId)).toBe(false);
+    expect(assistantMessage()?.metadata?.cloudAgentRun?.runId).toBe(RUN_ID);
+    expect(isApprovalTurnLive(assistantId)).toBe(true);
   });
 });

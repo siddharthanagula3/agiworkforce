@@ -9,7 +9,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ChatSyncPullResponseSchema, ChatSyncPushResponseSchema } from '@agiworkforce/cloud-contracts';
+import {
+  ChatSyncPullResponseSchema,
+  ChatSyncPushResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
@@ -156,7 +159,15 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
       makePost({
         protocolVersion: 2,
         conversations: [{ id: CONV_ID, title: 'Quarterly plan', baseVersion: '0' }],
-        messages: [{ id: MSG_ID, conversationId: CONV_ID, role: 'user', content: 'hello' }],
+        messages: [
+          {
+            id: MSG_ID,
+            conversationId: CONV_ID,
+            role: 'user',
+            content: 'hello',
+            baseVersion: '0',
+          },
+        ],
       }),
     );
     expect(res.status).toBe(200);
@@ -165,6 +176,40 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('46');
+  });
+
+  it('uses the server revision as the compare-and-swap guard for message updates', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: MSG_ID, server_version: '47', current: null },
+    ]);
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: MSG_ID,
+            conversationId: CONV_ID,
+            role: 'assistant',
+            content: 'final streamed content',
+            metadata: { cloudApproval: null },
+            baseVersion: '46',
+          },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    expect(sql).toContain('existing.server_version = incoming.base_version');
+    expect(sql).toContain('content = incoming.content');
+    expect(sql).toContain("item ? 'metadata' as has_metadata");
+    expect(sql).toContain(
+      'metadata = case when incoming.has_metadata then incoming.metadata else existing.metadata end',
+    );
+    expect(sql).toContain(
+      'input_tokens = case when incoming.has_input_tokens then incoming.input_tokens else existing.input_tokens end',
+    );
   });
 
   it('explicitly rejects a legacy mutable push instead of comparing client clocks', async () => {

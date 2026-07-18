@@ -21,15 +21,12 @@
  * Safety model:
  *   - DEFAULT FAIL-CLOSED: every tool call is queued as 'awaiting_approval'.
  *   - When `approvalMode` is 'auto', tools execute immediately without a user prompt.
- *   - When 'manual' (default), the loop returns a special SSE event `x_tool_approval_request`
- *     and suspends execution. The suspend is STATELESS: no server-side loop state is
- *     persisted — the assistant tool_call turn is streamed to the client and the loop
- *     returns. The client resumes by calling POST /api/llm/v1/chat/completions/approve
- *     (approve/route.ts) with the full thread INCLUDING the suspended assistant tool_call
- *     turn plus a per-tool_call_id approval decision. On resume, runToolLoop is invoked
- *     again with `options.resume`, which executes ONLY the approved+pending tool calls
- *     (re-running every guard) and appends a denial tool result for rejected/undecided
- *     ones, then continues the normal loop. See the `resume` preamble in runToolLoop.
+ *   - When 'manual' (default), the loop persists a server-owned checkpoint BEFORE it
+ *     exposes `x_tool_approval_request`, then suspends execution. The client resumes by
+ *     sending only the durable run id and per-tool_call_id decisions. On resume,
+ *     runToolLoop is invoked with the checkpoint's trusted messages and `options.resume`;
+ *     it executes ONLY approved+pending tool calls (re-running every guard) and appends a
+ *     denial result for rejected ones, then continues the normal loop.
  *   - Parallel-safe tools (read-only) are executed concurrently; mutating tools are
  *     serialized (mirrors Codex parallel.rs).
  *
@@ -49,6 +46,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import type {
+  AgentEventEnvelope,
   AgentEventStopReason,
   AgentEventToolCategory,
   AgentTaskState,
@@ -148,16 +146,27 @@ export interface ToolApprovalDecision {
 }
 
 /**
- * Resume payload for the manual-approval flow (see approve/route.ts). The
- * suspended assistant tool_call turn is carried back in the message thread
- * (`processed.llmRequest.messages`, last assistant message with tool_calls);
- * `approvals` says, per tool_call_id, whether the authenticated user approved
- * or rejected it. runToolLoop executes ONLY approved calls that match a pending
- * tool_call id (re-running every guard) and appends a denial tool result for
- * rejected/undecided ones — fail-closed.
+ * Resume decisions for the manual-approval flow. The suspended assistant
+ * tool_call turn is loaded from the server-owned checkpoint into
+ * `processed.llmRequest.messages`; this object contains decisions only.
  */
 export interface ResumeApproval {
   approvals: ToolApprovalDecision[];
+}
+
+/** Trusted loop state persisted before an approval prompt reaches a client. */
+export interface ToolLoopApprovalCheckpoint {
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  /** Canonical approval events committed atomically with the checkpoint. */
+  events: AgentEventEnvelope[];
+  messages: ProcessedRequest['llmRequest']['messages'];
+  pendingToolCalls: Array<{
+    id: string;
+    qualifiedName: string;
+    args: Record<string, unknown>;
+  }>;
 }
 
 export interface ToolLoopOptions {
@@ -178,6 +187,17 @@ export interface ToolLoopOptions {
    * `approvalMode: 'manual'`.
    */
   resume?: ResumeApproval;
+  /** Durable event identity restored when a suspended run continues. */
+  eventSessionId?: string;
+  /** Durable turn identity restored when a suspended run continues. */
+  eventTurnId?: string;
+  /** Next canonical event sequence restored from the approval checkpoint. */
+  initialEventSequence?: number;
+  /**
+   * Persists trusted execution state before approval events are yielded. If
+   * persistence fails, no actionable approval UI is sent to the client.
+   */
+  onApprovalCheckpoint?: (checkpoint: ToolLoopApprovalCheckpoint) => Promise<void>;
   /**
    * Authenticated user id — required for the generated-file harvest (files the
    * model writes in the E2B sandbox are persisted to the user's media library
@@ -914,11 +934,13 @@ export async function* runToolLoop(
   const approvalMode = options.approvalMode ?? 'manual';
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
-  const turnId = processed.requestId || crypto.randomUUID();
+  const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
+  const sessionId = options.eventSessionId ?? processed.conversationId ?? turnId;
   const eventStream = createAgentEventStreamEmitter({
-    sessionId: processed.conversationId ?? turnId,
+    sessionId,
     turnId,
     responseModel,
+    initialSequence: options.initialEventSequence,
   });
   const taskId = turnId;
   let taskState: AgentTaskState | undefined = options.resume ? 'awaiting_input' : undefined;
@@ -1270,13 +1292,12 @@ export async function* runToolLoop(
       return;
     }
 
-    // ── Manual-approval resume preamble (stateless) ─────────────────────────
-    // When resuming, the suspended assistant tool_call turn is the last
-    // assistant message in `messages` (replayed by the client). We execute ONLY
-    // the approved+pending calls and append a denial result for the rest, then
-    // fall into the normal loop which re-invokes the model with the completed
-    // thread. No provider call precedes this — the model already produced the
-    // tool_calls in the suspended turn.
+    // ── Manual-approval resume preamble ──────────────────────────────────────
+    // When resuming, the server-owned checkpoint supplies the suspended
+    // assistant tool_call turn as the last assistant message in `messages`.
+    // Execute only the exact approved calls and append a denial result for the
+    // rest, then re-invoke the model with the completed thread. No provider call
+    // precedes this — the model already produced the checkpointed tool calls.
     if (options.resume) {
       // Locate the suspended assistant tool_call turn.
       let pending: PendingToolCall[] = [];
@@ -1348,8 +1369,8 @@ export async function* runToolLoop(
       // rejection (see known-flaw MCP-APPROVAL-RESUME for the stateless-resume
       // rationale). The loop therefore needs no Anthropic-specific special case.
 
-      // Idempotency: skip any pending call that already has a tool result in the
-      // replayed thread (e.g. a client double-submit).
+      // Defense in depth: skip any pending call that already has a tool result
+      // in the server-owned checkpoint.
       const alreadyResolved = new Set(
         messages
           .filter((m) => m.role === 'tool' && typeof m.tool_call_id === 'string')
@@ -1572,27 +1593,55 @@ export async function* runToolLoop(
       // stop the stream -- the client resumes via the approve endpoint.
       // In auto mode, execute immediately.
       if (approvalMode === 'manual') {
+        const approvalChunks: Uint8Array[] = [];
+        const approvalEvents: AgentEventEnvelope[] = [];
         for (const tc of pendingToolCalls) {
-          yield encoder.encode(
-            toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
+          approvalChunks.push(
+            encoder.encode(
+              toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
+            ),
           );
           const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
-          yield encoder.encode(
-            eventStream.emit({
-              type: 'approval-requested',
-              approvalId: tc.id,
-              toolCallId: tc.id,
-              name: tc.qualifiedName,
-              category,
-              summary: canonicalApprovalSummary(tc.qualifiedName, category),
-              input: toAgentEventJson(tc.args),
-            }),
-          );
+          const emitted = eventStream.emitWithEnvelope({
+            type: 'approval-requested',
+            approvalId: tc.id,
+            toolCallId: tc.id,
+            name: tc.qualifiedName,
+            category,
+            summary: canonicalApprovalSummary(tc.qualifiedName, category),
+            input: toAgentEventJson(tc.args),
+          });
+          approvalEvents.push(emitted.envelope);
+          approvalChunks.push(encoder.encode(emitted.sse));
         }
-        yield encoder.encode(
-          taskStateEvent('awaiting_input', 'The agent needs approval before it can continue.'),
-        );
-        yield encoder.encode(eventStream.emit({ type: 'lifecycle', phase: 'paused' }));
+        const previousState = taskState;
+        taskState = 'awaiting_input';
+        const stateEmitted = eventStream.emitWithEnvelope({
+          type: 'task-state-changed',
+          taskId,
+          state: 'awaiting_input',
+          ...(previousState !== undefined ? { previousState } : {}),
+          summary: 'The agent needs approval before it can continue.',
+        });
+        approvalEvents.push(stateEmitted.envelope);
+        approvalChunks.push(encoder.encode(stateEmitted.sse));
+        const pausedEmitted = eventStream.emitWithEnvelope({ type: 'lifecycle', phase: 'paused' });
+        approvalEvents.push(pausedEmitted.envelope);
+        approvalChunks.push(encoder.encode(pausedEmitted.sse));
+
+        await options.onApprovalCheckpoint?.({
+          sessionId,
+          turnId,
+          nextEventSequence: eventStream.nextSequence(),
+          events: approvalEvents,
+          messages: messages.map((message) => ({ ...message })),
+          pendingToolCalls: pendingToolCalls.map((call) => ({
+            ...call,
+            args: { ...call.args },
+          })),
+        });
+
+        for (const chunk of approvalChunks) yield chunk;
         // Emit [DONE] so the client knows the current stream is complete
         // and the approval prompt is the terminal event for this turn.
         yield encoder.encode(sseDone());

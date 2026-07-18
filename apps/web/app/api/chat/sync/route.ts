@@ -256,12 +256,47 @@ async function handlePush(request: NextRequest) {
                    (item ->> 'conversationId')::uuid as conversation_id,
                    item ->> 'role' as role, item ->> 'content' as content,
                    item ->> 'model' as model, item ->> 'provider' as provider,
+                   item ? 'model' as has_model, item ? 'provider' as has_provider,
                    coalesce((item ->> 'inputTokens')::integer, 0) as input_tokens,
+                   item ? 'inputTokens' as has_input_tokens,
                    coalesce((item ->> 'outputTokens')::integer, 0) as output_tokens,
+                   item ? 'outputTokens' as has_output_tokens,
                    coalesce((item ->> 'costCents')::numeric, 0) as cost_cents,
+                   item ? 'costCents' as has_cost_cents,
                    coalesce(item -> 'metadata', '{}'::jsonb) as metadata,
+                   item ? 'metadata' as has_metadata,
+                   (item ->> 'baseVersion')::bigint as base_version,
                    coalesce((item ->> 'isDeleted')::boolean, false) as should_delete
               from jsonb_array_elements($2::jsonb) as source(item)
+          ), updated as (
+            update web_messages as existing
+               set content = incoming.content,
+                   model = case when incoming.has_model then incoming.model else existing.model end,
+                   provider = case when incoming.has_provider then incoming.provider else existing.provider end,
+                   input_tokens = case when incoming.has_input_tokens then incoming.input_tokens else existing.input_tokens end,
+                   output_tokens = case when incoming.has_output_tokens then incoming.output_tokens else existing.output_tokens end,
+                   cost_cents = case when incoming.has_cost_cents then incoming.cost_cents else existing.cost_cents end,
+                   metadata = case when incoming.has_metadata then incoming.metadata else existing.metadata end,
+                   updated_at = now()
+              from input as incoming, web_conversations as parent
+             where not incoming.should_delete
+               and incoming.base_version > 0
+               and existing.id = incoming.id
+               and existing.conversation_id = incoming.conversation_id
+               and existing.role = incoming.role
+               and existing.deleted_at is null
+               and existing.server_version = incoming.base_version
+               and parent.id = existing.conversation_id and parent.user_id = $1
+               and (
+                 existing.content is distinct from incoming.content
+                 or (incoming.has_model and existing.model is distinct from incoming.model)
+                 or (incoming.has_provider and existing.provider is distinct from incoming.provider)
+                 or (incoming.has_input_tokens and existing.input_tokens is distinct from incoming.input_tokens)
+                 or (incoming.has_output_tokens and existing.output_tokens is distinct from incoming.output_tokens)
+                 or (incoming.has_cost_cents and existing.cost_cents is distinct from incoming.cost_cents)
+                 or (incoming.has_metadata and coalesce(existing.metadata, '{}'::jsonb) is distinct from incoming.metadata)
+               )
+            returning existing.id, existing.server_version
           ), inserted as (
             insert into web_messages
               (id, conversation_id, role, content, model, provider, input_tokens,
@@ -271,7 +306,8 @@ async function handlePush(request: NextRequest) {
                    incoming.output_tokens, incoming.cost_cents, incoming.metadata,
                    now(), now(), case when incoming.should_delete then now() else null end
               from input as incoming
-             where exists (
+             where incoming.base_version = 0
+               and exists (
                select 1 from web_conversations parent
                 where parent.id = incoming.conversation_id and parent.user_id = $1
                   and parent.deleted_at is null
@@ -283,9 +319,11 @@ async function handlePush(request: NextRequest) {
                set deleted_at = now(), updated_at = now()
               from input as incoming, web_conversations as parent
              where incoming.should_delete
+               and incoming.base_version > 0
                and existing.id = incoming.id
                and existing.conversation_id = incoming.conversation_id
                and existing.deleted_at is null
+               and existing.server_version = incoming.base_version
                and parent.id = existing.conversation_id and parent.user_id = $1
             returning existing.id, existing.server_version
           ), idempotent as (
@@ -300,16 +338,17 @@ async function handlePush(request: NextRequest) {
                  or (
                    not incoming.should_delete and existing.deleted_at is null
                    and existing.role = incoming.role and existing.content = incoming.content
-                   and existing.model is not distinct from incoming.model
-                   and existing.provider is not distinct from incoming.provider
-                   and existing.input_tokens = incoming.input_tokens
-                   and existing.output_tokens = incoming.output_tokens
-                   and existing.cost_cents = incoming.cost_cents
-                   and coalesce(existing.metadata, '{}'::jsonb) = incoming.metadata
+                   and (not incoming.has_model or existing.model is not distinct from incoming.model)
+                   and (not incoming.has_provider or existing.provider is not distinct from incoming.provider)
+                   and (not incoming.has_input_tokens or existing.input_tokens = incoming.input_tokens)
+                   and (not incoming.has_output_tokens or existing.output_tokens = incoming.output_tokens)
+                   and (not incoming.has_cost_cents or existing.cost_cents = incoming.cost_cents)
+                   and (not incoming.has_metadata or coalesce(existing.metadata, '{}'::jsonb) = incoming.metadata)
                  )
                )
           ), applied_rows as materialized (
-            select id, server_version from inserted
+            select id, server_version from updated
+            union all select id, server_version from inserted
             union all select id, server_version from tombstoned
             union all select id, server_version from idempotent
           ), conflict_rows as (

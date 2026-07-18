@@ -11,13 +11,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { StreamEvent } from '@agiworkforce/unified-chat';
 
 const sendCloudMessage = vi.fn();
+const getCloudConversation = vi.fn();
 
 vi.mock('../../api/cloudApi', () => ({
   CLOUD_API_BASE_URL: 'https://cloud.example',
   sendCloudMessage: (...args: unknown[]) => sendCloudMessage(...args),
   listCloudConversations: vi.fn(),
   createCloudConversation: vi.fn(),
-  getCloudConversation: vi.fn(),
+  getCloudConversation: (...args: unknown[]) => getCloudConversation(...args),
   deleteCloudConversation: vi.fn(),
   updateCloudConversationTitle: vi.fn(),
 }));
@@ -374,8 +375,64 @@ describe('WebRuntime x_generated_files stream handling', () => {
 });
 
 describe('WebRuntime.hasLiveApprovalTurn', () => {
-  it('delegates to the approval registry -- false on a fresh runtime instance (Finding 1: process-memory-only registry resets on restart)', () => {
+  it('hydrates a server-owned approval checkpoint on a fresh runtime instance', () => {
     const runtime = new WebRuntime();
-    expect(runtime.hasLiveApprovalTurn('conv_1')).toBe(false);
+    expect(
+      runtime.hasLiveApprovalTurn('conv_1', {
+        assistantMessageId: 'assistant-1',
+        runId: '0190a000-0000-7000-8000-000000000099',
+        model: 'gpt-5',
+        assistantContent: '',
+        calls: [{ toolCallId: 'call_1', name: 'read_file', args: {} }],
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('WebRuntime persisted approval loading', () => {
+  it('maps validated Cloud approval metadata into inline tool cards', async () => {
+    const runId = '0190a000-0000-7000-8000-000000000099';
+    getCloudConversation.mockResolvedValue({
+      id: 'conv_1',
+      user_id: 'user_1',
+      title: 'Chat',
+      model: 'gpt-5',
+      created_at: '2026-07-17T00:00:00.000Z',
+      updated_at: '2026-07-17T00:00:00.000Z',
+      messages: [
+        {
+          id: 'message_1',
+          conversation_id: 'conv_1',
+          role: 'assistant',
+          content: 'Waiting.',
+          model: 'gpt-5',
+          created_at: '2026-07-17T00:00:00.000Z',
+          metadata: {
+            cloudAgentRun: {
+              runId,
+              runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+              lastSequence: 2,
+            },
+            cloudApproval: {
+              schemaVersion: 1,
+              runId,
+              calls: [{ toolCallId: 'call_1', name: 'shell', input: '{"command":"pwd"}' }],
+            },
+          },
+        },
+      ],
+    });
+
+    const [message] = await new WebRuntime().getMessages('conv_1');
+
+    expect(message?.toolCalls).toEqual([
+      {
+        id: 'call_1',
+        name: 'shell',
+        args: { command: 'pwd' },
+        status: 'awaiting_approval',
+        requiresApproval: true,
+      },
+    ]);
   });
 });

@@ -147,6 +147,39 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect('thinking' in sentBody).toBe(false);
   });
 
+  it('sends only the durable run id and decisions when resuming an approval', async () => {
+    const { streamToolApprovalResume } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => 'data: [DONE]\n',
+    } as unknown as Response);
+
+    const { callbacks } = makeCallbacks();
+    const runId = '0190a000-0000-7000-8000-000000000021';
+    await streamToolApprovalResume(
+      {
+        run_id: runId,
+        operationId: '0190a000-0000-7000-8000-000000000022',
+        tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
+      },
+      callbacks,
+    );
+
+    expect(guardedFetchMock.mock.calls[0][0]).toBe(
+      'https://api.agi.test/api/llm/v1/chat/completions/approve',
+    );
+    const init = guardedFetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toEqual({
+      run_id: runId,
+      tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
+    });
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      'agi.chat.mobile.tool-resume.0190a000-0000-7000-8000-000000000022',
+    );
+  });
+
   it('still streams incrementally via getReader() when body IS a readable stream', async () => {
     const { streamChat } = await loadStreamingService();
     // eslint-disable-next-line @typescript-eslint/no-require-imports

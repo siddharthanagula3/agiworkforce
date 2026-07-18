@@ -185,11 +185,9 @@ export const MessageBubble = memo(function MessageBubble({
     [onResolveToolApproval, message.id],
   );
 
-  // `pendingApprovalTurns` (the registry resolveToolApproval consults) is
-  // process-memory-only and doesn't survive a cold start, even though a
-  // persisted awaiting_approval tool call does. Without this, the Allow/Deny
-  // buttons below would render live-wired but silently no-op (Finding 1).
-  // Only meaningful when a resolver is actually wired at all.
+  // Rehydrate a server-owned approval checkpoint from the persisted Cloud
+  // message when possible. Only a missing/invalid run reference is expired;
+  // restarting the app no longer invalidates a real pending approval.
   const approvalTurnExpired = Boolean(onResolveToolApproval) && !isApprovalTurnLive(message.id);
 
   const handleImagePress = useCallback(

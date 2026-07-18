@@ -17,7 +17,10 @@ import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
-import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import type {
+  CloudToolApprovalProjection,
+  ManagedCloudAgentRunReference,
+} from '@agiworkforce/cloud-contracts';
 import type { SendReplayMetadata, WebSearchResults } from '@/features/chat/types/message-metadata';
 
 /**
@@ -120,6 +123,12 @@ export interface MessageMetadata {
   agentActivity?: AgentActivityState;
   /** Durable server run + replay cursor for reconnecting this Cloud turn. */
   cloudAgentRun?: ManagedCloudAgentRunReference;
+  /**
+   * Safe cross-surface projection of a suspended approval checkpoint. The
+   * server-owned run remains authoritative; null explicitly clears stale
+   * approval cards after the run advances.
+   */
+  cloudApproval?: CloudToolApprovalProjection | null;
   /** Deep Research run state (activity header + persistence). */
   research?: MessageResearchState;
   /** Code execution result from server-managed code_execution_20260120 tool */

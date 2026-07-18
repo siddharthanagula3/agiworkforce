@@ -127,6 +127,13 @@ export interface ToolCall {
    * mirrors `ToolCallCardProps.requiresApproval` in the shared `ToolCallCard`.
    */
   requiresApproval?: boolean;
+  /**
+   * A locally recorded decision while a multi-call approval checkpoint is
+   * still waiting for the remaining calls. Persisted with the message so a
+   * restarted client can submit the complete decision set by run id without
+   * reconstructing or replaying the private model transcript.
+   */
+  approvalDecision?: 'approved' | 'rejected';
 }
 
 export interface Attachment {

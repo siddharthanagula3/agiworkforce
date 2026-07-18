@@ -1,11 +1,8 @@
 /**
- * chatExecutionStore cloud tool-approval resume — real tool output on a
- * recursive suspend (streaming/approval cluster Finding 2: a turn suspending
- * AGAIN on a further approval request used to rebuild the prior round's tool
- * result as a hardcoded '(executed)' placeholder instead of the real
- * accumulator content that already streamed -- discarding file contents /
- * command output / search results the model needs to reason about the next
- * call). Mirrors cloud-tool-approval-expired.test.ts's mock scaffolding.
+ * chatExecutionStore cloud tool-approval resume — server-owned checkpoint.
+ *
+ * Mobile sends only the durable run id and decisions. The server restores the
+ * trusted transcript/tool results and may suspend the same run again.
  */
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => 'test-token'),
@@ -85,6 +82,7 @@ const mockStreamResume = streamToolApprovalResume as jest.MockedFunction<
 >;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000004'; // a valid UUIDv7 conversation id
+const RUN_ID = '0190a000-0000-7000-8000-000000000014';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
 
 beforeEach(() => {
@@ -111,14 +109,19 @@ function lastAssistantMessage() {
   return msgs.find((m) => m.role === 'assistant');
 }
 
-describe('resolveToolApproval — recursive resume carries the REAL tool result', () => {
-  it('replays the actual x_tool_result content (not a placeholder) when a resume suspends again on a further tool', async () => {
+describe('resolveToolApproval — durable server-owned checkpoint', () => {
+  it('resumes a recursive approval with the same run id and no transcript replay', async () => {
     const activityBase = {
       schemaVersion: 3 as const,
       sessionId: 'session-approval-1',
       turnId: 'turn-approval-1',
     };
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onRunReference?.({
+        runId: RUN_ID,
+        runPath: `/api/llm/v1/chat/completions/runs/${RUN_ID}`,
+        lastSequence: -1,
+      });
       callbacks.onDelta({
         x_agent_event: {
           ...activityBase,
@@ -231,11 +234,15 @@ describe('resolveToolApproval — recursive resume carries the REAL tool result'
       .getState()
       .resolveToolApproval(CONV_ID, assistantId, 'call_1', 'approved');
 
-    // Second resume (approving call_2): capture what thread this call
-    // received -- it must carry call_1's REAL result, not '(executed)'.
-    let capturedMessages: Array<{ role: string; tool_call_id?: string; content?: string }> = [];
-    mockStreamResume.mockImplementationOnce(async (body, callbacks: StreamCallbacks) => {
-      capturedMessages = body.messages as typeof capturedMessages;
+    expect(mockStreamResume.mock.calls[0]?.[0]).toEqual({
+      run_id: RUN_ID,
+      operationId: expect.any(String),
+      tool_approvals: [{ tool_call_id: 'call_1', decision: 'approved' }],
+    });
+    expect(mockStreamResume.mock.calls[0]?.[0]).not.toHaveProperty('model');
+    expect(mockStreamResume.mock.calls[0]?.[0]).not.toHaveProperty('messages');
+
+    mockStreamResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({
         x_agent_event: {
           ...activityBase,
@@ -282,11 +289,11 @@ describe('resolveToolApproval — recursive resume carries the REAL tool result'
       .getState()
       .resolveToolApproval(CONV_ID, assistantId, 'call_2', 'approved');
 
-    const call1ToolMessage = capturedMessages.find(
-      (m) => m.role === 'tool' && m.tool_call_id === 'call_1',
-    );
-    expect(call1ToolMessage?.content).toBe(REAL_RESULT);
-    expect(call1ToolMessage?.content).not.toBe('(executed)');
+    expect(mockStreamResume.mock.calls[1]?.[0]).toEqual({
+      run_id: RUN_ID,
+      operationId: expect.any(String),
+      tool_approvals: [{ tool_call_id: 'call_2', decision: 'approved' }],
+    });
     expect(lastAssistantMessage()?.metadata?.agentActivity).toMatchObject({
       status: 'completed',
       lastSequence: 9,
