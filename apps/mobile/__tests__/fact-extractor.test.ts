@@ -1,7 +1,9 @@
 /**
  * Unit tests for extractCandidateFacts — the keyword self-disclosure extractor.
  */
-import { extractCandidateFacts } from '../src/features/memory/services/factExtractor';
+import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
+
+const extractCandidateFacts = extractCandidateMemoryFacts;
 
 describe('extractCandidateFacts', () => {
   it('returns [] for empty / non-string input', () => {

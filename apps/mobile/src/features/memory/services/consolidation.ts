@@ -2,7 +2,7 @@
  * consolidation — the "learns day by day" persistence step.
  *
  * After a chat turn, candidate facts extracted from the user's message
- * (factExtractor) are deduped against what's already stored and the genuinely
+ * by the shared agent-core memory engine are deduped against what's already stored, and the
  * new ones are persisted with the source conversation recorded. Existing
  * bulkInsert() does NOT dedupe and drops the source conversation, so it would
  * accumulate the same disclosure every turn — this service fixes both.
@@ -13,13 +13,16 @@
  *     facts, dedupes, and inserts. Never throws (memory must never break a turn).
  */
 import * as Crypto from 'expo-crypto';
-import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
+import {
+  classifyMemoryCategory,
+  extractCandidateMemoryFacts,
+  normalizeMemoryKey,
+} from '@agiworkforce/agent-core';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { insertMemoryFact, listMemoryFacts } from '@/storage/memory';
 import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
 import { markMemoryForSync } from '@/services/cloudSyncEngine';
 import type { MemoryFact } from '@/storage/types';
-import { extractCandidateFacts } from './factExtractor';
 
 /**
  * Return the subset of `candidates` not already represented in `existing`.
@@ -69,7 +72,7 @@ export async function consolidateFactsFromTurn(params: {
   if (!enabled) return { extracted: 0, inserted: 0 };
 
   try {
-    const candidates = extractCandidateFacts(message);
+    const candidates = extractCandidateMemoryFacts(message);
     if (candidates.length === 0) return { extracted: 0, inserted: 0 };
 
     if (executionMode === 'cloud') {
