@@ -6,6 +6,23 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-18 Website Skills/Connectors/Plugins directory gap
+(`WEB-UNIFIED-DIRECTORY-01`, Partially remediated): the shared
+`@agiworkforce/ui` Settings directory is now the single authenticated browse
+view for Skills, Connectors, and Plugins. Opening it from any of the three
+sections loads the real deployment Skill catalogue, and Website plugin cards
+reuse `features/plugins/data/plugins.ts`, the same authored catalogue as the
+public SEO/detail pages. Discoverable plugins are a separate adapter collection
+from installed plugins, so catalogue previews never render as installed,
+enabled, or installable; their cards expose only an honest preview label and
+the existing details route. Connector cards continue to reuse the canonical Web
+catalogue and suppress local-only entries. Remaining release-order gap: Website
+has no tenant-owned plugin installation persistence, package verification,
+permission/connector consent transaction, uninstall/rollback path, or working
+hosted marketplace API. Do not add an Install control until that server
+boundary exists, and do not create another catalogue or directory UI to build
+it.
+
 2026-07-18 Managed Cloud Office creation gap (`CLOUD-OFFICE-CREATE-01`,
 Partially remediated): Website managed chat now offers one server-owned
 `create_office_file` tool for editable DOCX and PPTX output. The browser sends
