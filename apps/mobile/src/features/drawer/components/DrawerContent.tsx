@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'expo-router';
 import {
   BookImage,
   Boxes,
+  CalendarClock,
   Cloud,
   FolderOpen,
   HelpCircle,
@@ -45,6 +46,7 @@ type RoutePath =
   | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
   | '/(app)/library'
+  | '/(app)/schedules'
   | '/(app)/(tabs)/settings'
   | '/(app)/about'
   | '/(app)/profile'
@@ -52,7 +54,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'projects' | 'artifacts' | 'library' | 'agi-agent';
+  key: 'projects' | 'artifacts' | 'library' | 'schedules' | 'agi-agent';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -77,6 +79,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'Library',
     icon: BookImage,
     route: '/(app)/library',
+  },
+  {
+    key: 'schedules',
+    label: 'Schedules',
+    icon: CalendarClock,
+    route: '/(app)/schedules',
+    cloud: true,
   },
   {
     key: 'agi-agent',
@@ -403,11 +412,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const visiblePrimaryItems = useMemo(
     () =>
       PRIMARY_ITEMS.filter((item) => {
-        // In cloud mode: show Projects (now synced via cloudProjectStore), Artifacts,
-        // and the AGI Agent item. All three are relevant in cloud mode.
-        // In local mode: show Projects and Artifacts; hide the cloud-only AGI Agent item.
+        // Cloud mode exposes the shared cloud surfaces, including Schedules and AGI Agent.
+        // Local mode keeps only on-device surfaces and hides every cloud-only item.
+        if (item.key === 'schedules' && !FEATURES.schedules) return false;
         if (appMode === 'cloud') return true;
-        return item.key !== 'agi-agent';
+        return !item.cloud;
       }),
     [appMode],
   );
@@ -418,6 +427,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'projects') return p.includes('/projects');
       if (key === 'artifacts') return p.includes('/artifacts');
       if (key === 'library') return p.includes('/library');
+      if (key === 'schedules') return p.includes('/schedules');
       return false;
     },
     [pathname],
@@ -467,7 +477,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 active={activeKey(item.key)}
                 tag={item.cloud ? 'Cloud' : undefined}
                 onPress={() => {
-                  if (item.cloud) openAgiAgent();
+                  if (item.key === 'agi-agent') openAgiAgent();
                   else if (item.route) navigate(item.route);
                 }}
               />

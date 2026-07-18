@@ -97,8 +97,10 @@ export const FEATURES = {
   /** Desktop Dispatch / WebRTC companion channel. */
   dispatch: false,
 
-  /** Scheduled task execution. */
-  schedules: false,
+  /** Cloud scheduled task execution. The shared API contract, idempotent run
+   *  endpoint, recurrence editor, run history, and notification deep links are
+   *  wired end to end. The UI remains visible only while AGI Cloud is active. */
+  schedules: true,
 
   /** Desktop companion pairing + QR code flow. */
   companion: false,

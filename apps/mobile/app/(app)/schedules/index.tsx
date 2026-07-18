@@ -8,15 +8,26 @@ import { ArrowLeft, Plus, Calendar } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScheduleCard, QuickSchedule, useScheduleStore } from '@/src/features/schedules';
+import {
+  CloudSchedulesGate,
+  ScheduleCard,
+  QuickSchedule,
+  useScheduleStore,
+} from '@/src/features/schedules';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 
 export default function SchedulesScreen() {
   const router = useRouter();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const isCloudMode = appMode === 'cloud';
 
   const { schedules, loading, error, fetchSchedules, toggleSchedule, deleteSchedule, clearError } =
     useScheduleStore();
@@ -25,17 +36,18 @@ export default function SchedulesScreen() {
 
   // Initial fetch
   useEffect(() => {
-    fetchSchedules();
-  }, [fetchSchedules]);
+    if (FEATURES.schedules && isCloudMode) void fetchSchedules();
+  }, [fetchSchedules, isCloudMode]);
 
   const handleRefresh = useCallback(async () => {
+    if (!FEATURES.schedules || !isCloudMode) return;
     setRefreshing(true);
     try {
       await fetchSchedules();
     } finally {
       setRefreshing(false);
     }
-  }, [fetchSchedules]);
+  }, [fetchSchedules, isCloudMode]);
 
   const handleCreate = useCallback(() => {
     if (hapticsEnabled) {
@@ -48,6 +60,14 @@ export default function SchedulesScreen() {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
+
+  const handleActivateCloud = useCallback(() => {
+    if (!cloudUnlocked) {
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      return;
+    }
+    setAppMode('cloud');
+  }, [cloudUnlocked, router, setAppMode]);
 
   const handlePress = useCallback(
     (id: string) => {
@@ -83,6 +103,15 @@ export default function SchedulesScreen() {
   );
 
   if (!FEATURES.schedules) return <FeatureUnavailable feature="Scheduled tasks" />;
+  if (!isCloudMode) {
+    return (
+      <CloudSchedulesGate
+        signedIn={cloudUnlocked}
+        onBack={handleBack}
+        onContinue={handleActivateCloud}
+      />
+    );
+  }
 
   // Loading skeleton
   if (loading && schedules.length === 0) {

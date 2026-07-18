@@ -4,14 +4,24 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { ScheduleForm, useScheduleStore, type CreateScheduleInput } from '@/src/features/schedules';
+import {
+  CloudSchedulesGate,
+  ScheduleForm,
+  useScheduleStore,
+  type CreateScheduleInput,
+} from '@/src/features/schedules';
 import { colors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 
 export default function CreateScheduleScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
 
   const { schedules, loading, createSchedule, updateSchedule, deleteSchedule } = useScheduleStore();
 
@@ -40,8 +50,17 @@ export default function CreateScheduleScreen() {
   );
 
   const handleCancel = useCallback(() => {
-    router.back();
+    if (router.canGoBack()) router.back();
+    else router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
   }, [router]);
+
+  const handleActivateCloud = useCallback(() => {
+    if (!cloudUnlocked) {
+      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      return;
+    }
+    setAppMode('cloud');
+  }, [cloudUnlocked, router, setAppMode]);
 
   const handleDelete = useCallback(() => {
     if (!existingSchedule) return;
@@ -64,6 +83,15 @@ export default function CreateScheduleScreen() {
   }, [existingSchedule, deleteSchedule, router]);
 
   if (!FEATURES.schedules) return <FeatureUnavailable feature="Scheduled tasks" />;
+  if (appMode !== 'cloud') {
+    return (
+      <CloudSchedulesGate
+        signedIn={cloudUnlocked}
+        onBack={handleCancel}
+        onContinue={handleActivateCloud}
+      />
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
