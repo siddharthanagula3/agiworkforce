@@ -36,6 +36,9 @@ export * from './auth';
 // Voice types (providers, config, transcription)
 export * from './voice';
 
+// Cross-surface break reminders and quiet-hours settings
+export * from './time-focus';
+
 // Shared conversation and message contracts
 export * from './conversation';
 

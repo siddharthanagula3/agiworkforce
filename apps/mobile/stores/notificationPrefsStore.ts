@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { NotificationEventType } from '@/services/notifications';
+import { isMinuteWithinQuietHours } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,38 +68,33 @@ export function getCategoryForType(type: NotificationEventType): NotificationCat
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+/** Uses the shared clock-window evaluator so native and Web boundaries cannot drift. */
+export function shouldNotifyWithPreferences(
+  type: NotificationEventType,
+  preferences: Pick<NotificationPrefsState, 'categoryEnabled' | 'quietHours'>,
+  minuteOfDay: number,
+): boolean {
+  const category = getCategoryForType(type);
+  if (!preferences.categoryEnabled[category]) return false;
 
-/**
- * Parse "HH:MM" into total minutes since midnight.
- */
-function timeToMinutes(time: string): number {
-  if (!/^\d{2}:\d{2}$/.test(time)) return 0;
-  const [hStr, mStr] = time.split(':');
-  const h = parseInt(hStr ?? '0', 10);
-  const m = parseInt(mStr ?? '0', 10);
-  if (h < 0 || h > 23 || m < 0 || m > 59) return 0;
-  return h * 60 + m;
-}
-
-/**
- * Returns true if the current local time falls within [startTime, endTime].
- * Handles overnight ranges (e.g., 22:00 - 08:00).
- */
-function isInQuietHours(start: string, end: string): boolean {
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const startMin = timeToMinutes(start);
-  const endMin = timeToMinutes(end);
-
-  if (startMin <= endMin) {
-    // Same-day range: e.g. 08:00 – 20:00
-    return currentMinutes >= startMin && currentMinutes < endMin;
+  const isCritical =
+    type === 'agent_failed' ||
+    type === 'emergency_stop_triggered' ||
+    type === 'agent_approval_needed' ||
+    type === 'approval_pending_escalation';
+  if (
+    preferences.quietHours.enabled &&
+    !isCritical &&
+    isMinuteWithinQuietHours(
+      minuteOfDay,
+      preferences.quietHours.startTime,
+      preferences.quietHours.endTime,
+    )
+  ) {
+    return false;
   }
-  // Overnight range: e.g. 22:00 – 08:00
-  return currentMinutes >= startMin || currentMinutes < endMin;
+
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,25 +142,8 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
 
       shouldNotify: (type: NotificationEventType): boolean => {
         const state = get();
-        const category = getCategoryForType(type);
-
-        // Category must be enabled
-        if (!state.categoryEnabled[category]) return false;
-
-        // Quiet hours: suppress non-critical notifications
-        if (state.quietHours.enabled) {
-          const isCritical =
-            type === 'agent_failed' ||
-            type === 'emergency_stop_triggered' ||
-            type === 'agent_approval_needed' ||
-            type === 'approval_pending_escalation';
-
-          if (!isCritical && isInQuietHours(state.quietHours.startTime, state.quietHours.endTime)) {
-            return false;
-          }
-        }
-
-        return true;
+        const now = new Date();
+        return shouldNotifyWithPreferences(type, state, now.getHours() * 60 + now.getMinutes());
       },
     }),
     {

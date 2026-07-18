@@ -6,6 +6,25 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-18 Website time-and-focus gap (`WEB-TIME-FOCUS-01`, Partially
+remediated): Website Settings now persists one validated `time-focus` account
+namespace with an optional visible-use break interval and timezone-aware quiet
+hours. The live Website chat consumes that setting: quiet hours show a gentle,
+dismissible Continue / Come back later prompt and never lock the user out;
+break time advances only while the tab is visible, is isolated by account, and
+nudges once per selected threshold per local calendar day. Malformed settings
+and blocked browser storage fail closed without interrupting chat. The clock
+window evaluator lives in `@agiworkforce/types` and Mobile's existing
+device-notification preference store now reuses it instead of maintaining a
+second overnight-range algorithm. Remaining release-order gaps: the elapsed
+break counter is browser-local rather than aggregated across devices; Mobile's
+existing quiet-hours UI is still device-local notification suppression and
+does not yet consume the account namespace, selected weekdays, or timezone;
+Desktop does not consume these settings; and Reflect/monthly recap plus
+cross-surface activity aggregation do not exist. Complete those surfaces in
+the founder's Website, Mobile, Desktop order without adding another schedule
+evaluator or turning reminders into a hard gate.
+
 2026-07-18 Website voice output gap (`WEB-VOICE-OUTPUT-01`, Partially
 remediated): Website chat already had real voice-to-text input through its
 canonical composer store. Completed assistant responses now add a manual

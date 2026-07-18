@@ -284,19 +284,23 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-jest.mock('@agiworkforce/types', () => ({
-  createAuditEvent: jest.fn((params: Record<string, unknown>) => ({
-    eventId: 'audit-test-id',
-    userId: params.userId,
-    surface: params.surface,
-    action: params.action,
-    resource: params.resource,
-    outcome: params.outcome ?? 'success',
-    severity: params.severity ?? 'info',
-    metadata: params.metadata ?? null,
-    timestamp: new Date().toISOString(),
-  })),
-}));
+jest.mock('@agiworkforce/types', () => {
+  const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  return {
+    isMinuteWithinQuietHours: actual.isMinuteWithinQuietHours,
+    createAuditEvent: jest.fn((params: Record<string, unknown>) => ({
+      eventId: 'audit-test-id',
+      userId: params.userId,
+      surface: params.surface,
+      action: params.action,
+      resource: params.resource,
+      outcome: params.outcome ?? 'success',
+      severity: params.severity ?? 'info',
+      metadata: params.metadata ?? null,
+      timestamp: new Date().toISOString(),
+    })),
+  };
+});
 
 jest.mock('@agiworkforce/utils', () => ({
   SignalingClient: jest.fn().mockImplementation(() => ({
@@ -1544,11 +1548,7 @@ describe('getCategoryForType', () => {
 });
 
 describe('NotificationPrefsStore — shouldNotify real logic', () => {
-  /**
-   * We test the real shouldNotify implementation by constructing the state
-   * inline and calling the function directly from the source.
-   */
-  const { getCategoryForType: realGetCategory } = jest.requireActual(
+  const { shouldNotifyWithPreferences } = jest.requireActual(
     '../stores/notificationPrefsStore',
   ) as typeof import('../stores/notificationPrefsStore');
 
@@ -1573,41 +1573,8 @@ describe('NotificationPrefsStore — shouldNotify real logic', () => {
       endTime: overrides.quietEnd ?? '08:00',
     };
 
-    return (type: string): boolean => {
-      const category = realGetCategory(type as Parameters<typeof realGetCategory>[0]);
-      if (!categoryEnabled[category]) return false;
-
-      if (quietHours.enabled) {
-        const criticalTypes = [
-          'agent_failed',
-          'emergency_stop_triggered',
-          'agent_approval_needed',
-          'approval_pending_escalation',
-        ];
-        const isCritical = criticalTypes.includes(type);
-
-        if (!isCritical) {
-          // Simplified quiet hours check for same-day range
-          const now = new Date();
-          const currentMin = now.getHours() * 60 + now.getMinutes();
-          const toMin = (t: string) => {
-            const [h, m] = t.split(':').map(Number);
-            return (h ?? 0) * 60 + (m ?? 0);
-          };
-          const startMin = toMin(quietHours.startTime);
-          const endMin = toMin(quietHours.endTime);
-          let inQuiet: boolean;
-          if (startMin <= endMin) {
-            inQuiet = currentMin >= startMin && currentMin < endMin;
-          } else {
-            inQuiet = currentMin >= startMin || currentMin < endMin;
-          }
-          if (inQuiet) return false;
-        }
-      }
-
-      return true;
-    };
+    return (type: Parameters<typeof shouldNotifyWithPreferences>[0]): boolean =>
+      shouldNotifyWithPreferences(type, { categoryEnabled, quietHours }, 12 * 60);
   }
 
   it('returns true when category is enabled and quiet hours are off', () => {
