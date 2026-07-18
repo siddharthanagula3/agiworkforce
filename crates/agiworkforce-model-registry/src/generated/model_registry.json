@@ -1843,7 +1843,7 @@
       "surface": "desktop",
       "executionMode": "cloud",
       "trustMode": "managed_cloud",
-      "status": "unwired",
+      "status": "implemented",
       "features": {},
       "allowedHarnessIds": [
         "openai/responses",
@@ -3849,46 +3849,206 @@
         }
       },
       "slots": {
-        "general_fast": { "modelKey": "gemini-3.1-flash-lite" },
-        "workhorse_general": { "modelKey": "gemini-3.1-flash-lite" },
-        "general_balanced": { "modelKey": "gpt-5.6-terra" },
-        "general_premium": { "modelKey": "gemini-3.5-flash" },
-        "flagship_general": { "modelKey": "gpt-5.6-sol" },
-        "coding_fast": { "modelKey": "deepseek-v4-flash" },
-        "coding_premium": { "modelKey": "gpt-5.6-sol" },
-        "escalation_coding": { "modelKey": "glm-5.2" },
-        "coding_balanced": { "modelKey": "claude-sonnet-5" },
-        "flagship_coding": { "modelKey": "claude-opus-4.8" },
-        "reasoning_premium": { "modelKey": "deepseek-v4-flash" },
-        "reasoning_economy": { "modelKey": "deepseek-v4-flash" },
-        "reasoning_balanced": { "modelKey": "kimi-k2.6" },
-        "creative_writing": { "modelKey": "claude-sonnet-5" },
-        "creative_writing_premium": { "modelKey": "claude-opus-4.8" },
-        "creative_balanced": { "modelKey": "claude-sonnet-5" },
-        "creative_premium": { "modelKey": "claude-opus-4.8" },
-        "vision_fast": { "modelKey": "gemini-3.1-flash-lite" },
-        "vision_premium": { "modelKey": "gemini-3.5-flash" },
-        "multimodal_balanced": { "modelKey": "gemini-3.5-flash" },
-        "long_context_balanced": { "modelKey": "gemini-3.1-pro-preview" },
-        "search_fast": { "modelKey": "sonar" },
-        "search_premium": { "modelKey": "sonar-deep-research" },
-        "browser_dom": { "modelKey": "claude-sonnet-5" },
-        "computer_use": { "modelKey": "claude-sonnet-5" },
-        "computer_use_balanced": { "modelKey": "claude-sonnet-5" },
-        "computer_use_premium": { "modelKey": "claude-opus-4.8" },
-        "image_generation": { "modelKey": "gemini-3.1-flash-image" },
-        "video_generation": { "modelKey": "veo-3" },
-        "embedding_default": { "modelKey": "gemini-embedding-2" },
-        "voice_transcription": { "modelKey": "whisper-1" },
-        "voice_rewrite": { "modelKey": "gemini-3.1-flash-lite" },
-        "general_balanced_pro": { "modelKey": "gpt-5.6-terra" },
-        "coding_premium_pro": { "modelKey": "claude-sonnet-5" },
-        "reasoning_premium_pro": { "modelKey": "kimi-k2.6" },
-        "multimodal_pro": { "modelKey": "gemini-3.5-flash" },
-        "long_context_pro": { "modelKey": "gemini-3.1-pro-preview" },
-        "flagship_coding_pro_plus": { "modelKey": "claude-opus-4.8" },
-        "flagship_general_pro_plus": { "modelKey": "gpt-5.6-sol" },
-        "video_generation_pro_plus": { "modelKey": "veo-3" }
+        "general_fast": {
+          "modelKey": "gemini-3.1-flash-lite",
+          "label": "General Fast",
+          "description": "Shared general fast route. Model and provider are selected by the canonical registry."
+        },
+        "workhorse_general": {
+          "modelKey": "gemini-3.1-flash-lite",
+          "label": "Workhorse General",
+          "description": "Shared workhorse general route. Model and provider are selected by the canonical registry."
+        },
+        "general_balanced": {
+          "modelKey": "gpt-5.6-terra",
+          "label": "General Balanced",
+          "description": "Shared general balanced route. Model and provider are selected by the canonical registry."
+        },
+        "general_premium": {
+          "modelKey": "gemini-3.5-flash",
+          "label": "General Premium",
+          "description": "Shared general premium route. Model and provider are selected by the canonical registry."
+        },
+        "flagship_general": {
+          "modelKey": "gpt-5.6-sol",
+          "label": "Flagship General",
+          "description": "Shared flagship general route. Model and provider are selected by the canonical registry."
+        },
+        "coding_fast": {
+          "modelKey": "deepseek-v4-flash",
+          "label": "Coding Fast",
+          "description": "Shared coding fast route. Model and provider are selected by the canonical registry."
+        },
+        "coding_premium": {
+          "modelKey": "gpt-5.6-sol",
+          "label": "Coding Premium",
+          "description": "Shared coding premium route. Model and provider are selected by the canonical registry."
+        },
+        "escalation_coding": {
+          "modelKey": "glm-5.2",
+          "label": "Escalation Coding",
+          "description": "Shared escalation coding route. Model and provider are selected by the canonical registry."
+        },
+        "coding_balanced": {
+          "modelKey": "claude-sonnet-5",
+          "label": "Coding Balanced",
+          "description": "Shared coding balanced route. Model and provider are selected by the canonical registry."
+        },
+        "flagship_coding": {
+          "modelKey": "claude-opus-4.8",
+          "label": "Flagship Coding",
+          "description": "Shared flagship coding route. Model and provider are selected by the canonical registry."
+        },
+        "reasoning_premium": {
+          "modelKey": "deepseek-v4-flash",
+          "label": "Reasoning Premium",
+          "description": "Shared reasoning premium route. Model and provider are selected by the canonical registry."
+        },
+        "reasoning_economy": {
+          "modelKey": "deepseek-v4-flash",
+          "label": "Reasoning Economy",
+          "description": "Shared reasoning economy route. Model and provider are selected by the canonical registry."
+        },
+        "reasoning_balanced": {
+          "modelKey": "kimi-k2.6",
+          "label": "Reasoning Balanced",
+          "description": "Shared reasoning balanced route. Model and provider are selected by the canonical registry."
+        },
+        "creative_writing": {
+          "modelKey": "claude-sonnet-5",
+          "label": "Creative Writing",
+          "description": "Shared creative writing route. Model and provider are selected by the canonical registry."
+        },
+        "creative_writing_premium": {
+          "modelKey": "claude-opus-4.8",
+          "label": "Creative Writing Premium",
+          "description": "Shared creative writing premium route. Model and provider are selected by the canonical registry."
+        },
+        "creative_balanced": {
+          "modelKey": "claude-sonnet-5",
+          "label": "Creative Balanced",
+          "description": "Shared creative balanced route. Model and provider are selected by the canonical registry."
+        },
+        "creative_premium": {
+          "modelKey": "claude-opus-4.8",
+          "label": "Creative Premium",
+          "description": "Shared creative premium route. Model and provider are selected by the canonical registry."
+        },
+        "vision_fast": {
+          "modelKey": "gemini-3.1-flash-lite",
+          "label": "Vision Fast",
+          "description": "Shared vision fast route. Model and provider are selected by the canonical registry."
+        },
+        "vision_premium": {
+          "modelKey": "gemini-3.5-flash",
+          "label": "Vision Premium",
+          "description": "Shared vision premium route. Model and provider are selected by the canonical registry."
+        },
+        "multimodal_balanced": {
+          "modelKey": "gemini-3.5-flash",
+          "label": "Multimodal Balanced",
+          "description": "Shared multimodal balanced route. Model and provider are selected by the canonical registry."
+        },
+        "long_context_balanced": {
+          "modelKey": "gemini-3.1-pro-preview",
+          "label": "Long Context Balanced",
+          "description": "Shared long context balanced route. Model and provider are selected by the canonical registry."
+        },
+        "search_fast": {
+          "modelKey": "sonar",
+          "label": "Search Fast",
+          "description": "Shared search fast route. Model and provider are selected by the canonical registry."
+        },
+        "search_premium": {
+          "modelKey": "sonar-deep-research",
+          "label": "Search Premium",
+          "description": "Shared search premium route. Model and provider are selected by the canonical registry."
+        },
+        "browser_dom": {
+          "modelKey": "claude-sonnet-5",
+          "label": "Browser Dom",
+          "description": "Shared browser dom route. Model and provider are selected by the canonical registry."
+        },
+        "computer_use": {
+          "modelKey": "claude-sonnet-5",
+          "label": "Computer Use",
+          "description": "Shared computer use route. Model and provider are selected by the canonical registry."
+        },
+        "computer_use_balanced": {
+          "modelKey": "claude-sonnet-5",
+          "label": "Computer Use Balanced",
+          "description": "Shared computer use balanced route. Model and provider are selected by the canonical registry."
+        },
+        "computer_use_premium": {
+          "modelKey": "claude-opus-4.8",
+          "label": "Computer Use Premium",
+          "description": "Shared computer use premium route. Model and provider are selected by the canonical registry."
+        },
+        "image_generation": {
+          "modelKey": "gemini-3.1-flash-image",
+          "label": "Image Generation",
+          "description": "Shared image generation route. Model and provider are selected by the canonical registry."
+        },
+        "video_generation": {
+          "modelKey": "veo-3",
+          "label": "Video Generation",
+          "description": "Shared video generation route. Model and provider are selected by the canonical registry."
+        },
+        "embedding_default": {
+          "modelKey": "gemini-embedding-2",
+          "label": "Embedding Default",
+          "description": "Shared embedding default route. Model and provider are selected by the canonical registry."
+        },
+        "voice_transcription": {
+          "modelKey": "whisper-1",
+          "label": "Voice Transcription",
+          "description": "Shared voice transcription route. Model and provider are selected by the canonical registry."
+        },
+        "voice_rewrite": {
+          "modelKey": "gemini-3.1-flash-lite",
+          "label": "Voice Rewrite",
+          "description": "Shared voice rewrite route. Model and provider are selected by the canonical registry."
+        },
+        "general_balanced_pro": {
+          "modelKey": "gpt-5.6-terra",
+          "label": "General Balanced Pro",
+          "description": "Shared general balanced pro route. Model and provider are selected by the canonical registry."
+        },
+        "coding_premium_pro": {
+          "modelKey": "claude-sonnet-5",
+          "label": "Coding Premium Pro",
+          "description": "Shared coding premium pro route. Model and provider are selected by the canonical registry."
+        },
+        "reasoning_premium_pro": {
+          "modelKey": "kimi-k2.6",
+          "label": "Reasoning Premium Pro",
+          "description": "Shared reasoning premium pro route. Model and provider are selected by the canonical registry."
+        },
+        "multimodal_pro": {
+          "modelKey": "gemini-3.5-flash",
+          "label": "Multimodal Pro",
+          "description": "Shared multimodal pro route. Model and provider are selected by the canonical registry."
+        },
+        "long_context_pro": {
+          "modelKey": "gemini-3.1-pro-preview",
+          "label": "Long Context Pro",
+          "description": "Shared long context pro route. Model and provider are selected by the canonical registry."
+        },
+        "flagship_coding_pro_plus": {
+          "modelKey": "claude-opus-4.8",
+          "label": "Flagship Coding Pro Plus",
+          "description": "Shared flagship coding pro plus route. Model and provider are selected by the canonical registry."
+        },
+        "flagship_general_pro_plus": {
+          "modelKey": "gpt-5.6-sol",
+          "label": "Flagship General Pro Plus",
+          "description": "Shared flagship general pro plus route. Model and provider are selected by the canonical registry."
+        },
+        "video_generation_pro_plus": {
+          "modelKey": "veo-3",
+          "label": "Video Generation Pro Plus",
+          "description": "Shared video generation pro plus route. Model and provider are selected by the canonical registry."
+        }
       }
     },
     "legacyTiers": {

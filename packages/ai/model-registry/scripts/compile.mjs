@@ -6,7 +6,7 @@
  * The compatibility catalog (`packages/contracts/types/src/models.json`) is a GENERATED,
  * committed artifact assembled from two inputs owned by this package:
  *
- *   - `catalog/models.curation.json` — the ONLY hand-edited file. Per model it carries
+ *   - `catalog/models.curation.json` — the only hand-edited model roster file. Per model it carries
  *     identity + routing/display metadata (id, apiModelId, name, provider,
  *     modelType, qualityTier, bestFor, quality, …) and curation-owned policy
  *     fields (promo_expires_at/post_promo_prices, deprecation_date, tokenizer
@@ -15,7 +15,9 @@
  *     (costOverride / contextOverride / capabilitiesOverride / benchmarkOverride
  *     / speedOverride / releasedOverride). Plus the top-level sections
  *     (version, lastUpdated, verificationLog, providers, tierAllowedModels,
- *     providersInOrder) verbatim.
+ *     providersInOrder) verbatim. Auto slot assignments live separately in
+ *     `catalog/routing-policies.json`; normal model releases therefore touch one
+ *     authored file, or two only when Auto routing changes.
  *
  *   - `catalog/models.synced.json` — a committed snapshot of UPSTREAM-derived fields
  *     (contextWindow, inputCost, outputCost, cached_input, capabilities,
@@ -449,6 +451,32 @@ function positiveIntegerOrUndefined(value) {
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
+function formatRoutingSlotLabel(slotId) {
+  return slotId
+    .split('_')
+    .map((segment) => `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`)
+    .join(' ');
+}
+
+function normalizeAutoPolicy(autoPolicy) {
+  return {
+    ...autoPolicy,
+    slots: Object.fromEntries(
+      Object.entries(autoPolicy.slots).map(([slotId, slot]) => {
+        const label = formatRoutingSlotLabel(slotId);
+        return [
+          slotId,
+          {
+            ...slot,
+            label,
+            description: `Shared ${label.toLowerCase()} route. Model and provider are selected by the canonical registry.`,
+          },
+        ];
+      }),
+    ),
+  };
+}
+
 function validateAutoPolicy(autoPolicy, models, capabilities) {
   const aliasKeys = Object.keys(autoPolicy.aliases).sort();
   const compatibilityAliases = [...AUTO_POLICY_MODEL_IDS].sort();
@@ -643,6 +671,7 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
     ...entry,
   }));
   validateAutoPolicy(routingPolicies.auto, models, capabilities);
+  const autoPolicy = normalizeAutoPolicy(routingPolicies.auto);
   const runtimeProfiles = buildRuntimeProfiles(harnessCatalog);
 
   return {
@@ -659,7 +688,7 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
     benchmarks,
     evidence,
     policies: {
-      auto: routingPolicies.auto,
+      auto: autoPolicy,
       legacyTiers: catalog.tierAllowedModels,
     },
   };

@@ -119,8 +119,8 @@ describe('model catalog helpers', () => {
     expect(new Set(models.map((model) => model.provider)).size).toBeGreaterThan(3);
   });
 
-  it('returns no selectable rows for an unavailable runtime profile', () => {
-    expect(getPickerModelsForRuntimeProfile('desktop/cloud-chat')).toEqual([]);
+  it('returns selectable rows for Desktop Cloud and none for an unknown profile', () => {
+    expect(getPickerModelsForRuntimeProfile('desktop/cloud-chat').length).toBeGreaterThan(0);
     expect(getPickerModelsForRuntimeProfile('not-a-runtime-profile')).toEqual([]);
   });
 
@@ -135,7 +135,9 @@ describe('model catalog helpers', () => {
     expect(basicModels.map((model) => model.id)).not.toContain('claude-haiku-4.5');
     expect(proModels.map((model) => model.id)).toContain('claude-haiku-4.5');
     expect(maxPlusModels).toEqual(maxModels);
-    expect(getModelsForTierAndSurface('basic', 'desktop/cloud-chat')).toEqual([]);
+    expect(
+      getModelsForTierAndSurface('basic', 'desktop/cloud-chat').map((model) => model.id),
+    ).toEqual(basicModels.map((model) => model.id));
     expect(getModelsForTierAndSurface('basic', 'not-a-runtime-profile')).toEqual([]);
   });
 
@@ -222,9 +224,11 @@ describe('model catalog helpers', () => {
     for (const [slotId, definition] of Object.entries(SLOT_REGISTRY)) {
       const registrySlot = modelRegistry.policies.auto.slots[
         slotId as keyof typeof modelRegistry.policies.auto.slots
-      ] as { modelKey: string } | undefined;
+      ] as { modelKey: string; label: string; description: string } | undefined;
       expect(registrySlot, `${slotId} must be registry-owned`).toBeDefined();
       expect(definition.modelId).toBe(registrySlot?.modelKey);
+      expect(definition.label).toBe(registrySlot?.label);
+      expect(definition.description).toBe(registrySlot?.description);
       expect(definition.provider).toBe(
         modelRegistry.models[registrySlot!.modelKey as keyof typeof modelRegistry.models].identity
           .provider,

@@ -567,40 +567,7 @@ export function isAutoModeModelId(modelId: string | null | undefined): modelId i
 export type ProductTier = 'free' | 'pro' | 'max' | 'enterprise';
 export type ProviderSurface = 'managed_cloud' | 'byok' | 'local' | 'hidden';
 export type TierSurfaceMode = 'auto_only' | 'auto_plus_manual';
-export type RoutingSlot =
-  | 'general_fast'
-  | 'general_balanced'
-  | 'general_premium'
-  | 'coding_fast'
-  | 'coding_premium'
-  | 'reasoning_premium'
-  | 'creative_writing'
-  | 'creative_writing_premium'
-  | 'search_fast'
-  | 'search_premium'
-  | 'vision_fast'
-  | 'vision_premium'
-  | 'browser_dom'
-  | 'computer_use'
-  | 'computer_use_premium'
-  | 'image_generation'
-  | 'video_generation'
-  | 'embedding_default'
-  | 'voice_transcription'
-  | 'voice_rewrite'
-  // Auto-routing-spec §2 — Pool B Hobby slots
-  | 'workhorse_general'
-  | 'escalation_coding'
-  // Legacy Pro tier *_pro slots
-  | 'general_balanced_pro'
-  | 'coding_premium_pro'
-  | 'reasoning_premium_pro'
-  | 'multimodal_pro'
-  | 'long_context_pro'
-  // Legacy Pro+ tier flagship slots (15K-tokens/day cap)
-  | 'flagship_coding_pro_plus'
-  | 'flagship_general_pro_plus'
-  | 'video_generation_pro_plus';
+export type RoutingSlot = keyof typeof modelRegistry.policies.auto.slots;
 
 export interface RoutingSlotDefinition {
   slot: RoutingSlot;
@@ -835,306 +802,33 @@ const MANUAL_OVERRIDE_MODEL_IDS: readonly string[] = Object.entries(
 const MANUAL_OVERRIDE_MODEL_SET = new Set<string>(MANUAL_OVERRIDE_MODEL_IDS);
 
 // ============================================================================
-// SLOT_REGISTRY — Evidence-based model assignments
+// SLOT_REGISTRY — generated compatibility view
 //
-// Sources (May 2026):
-//   Coding:          SWE-bench Verified / SWE-bench Pro / Aider Polyglot
-//   Reasoning:       GPQA Diamond / HLE / Artificial Analysis Intelligence Index
-//   Computer use:    OSWorld-Verified / ScreenSpot / TAU-bench
-//   Vision:          MMMU-Pro / DocVQA / ChartQA / FACTS Grounding
-//   Creative writing: EQ-Bench Creative Writing Elo
-//   Search:          SimpleQA / FRAMES
-//   Speed:           Artificial Analysis TTFT + tok/s benchmarks
-//
-// Pricing (blended $/M = weighted avg input+output):
-//   Gemini 3.5 Flash:    $1.50/$9 → $3.50 blended
-//   Gemini 3.1 Pro:      $2/$12   → $5.33 blended
-//   Anthropic flagship:  $5/$25   → $12.00 blended
-//   Anthropic balanced:  $3/$15   → $7.50 blended
-//   Anthropic economy:   $1/$5    → $2.50 blended
-//   OpenAI flagship:     $5/$30   → $14.00 blended
-//   OpenAI economy:      $0.75/$4.50 → $1.88 blended
-//   DeepSeek V3.2:       $0.27/$0.42 → $0.32 blended
-//   Gemini 3.1 Flash-Lite: $0.25/$1.50 → $0.56 blended
+// Model assignments and presentation metadata are compiled from the shared
+// registry. A model release therefore changes only models.curation.json and,
+// when its Auto-routing role changes, routing-policies.json.
 // ============================================================================
-function getRegistrySlotAssignment(
-  slot: RoutingSlot,
-): Pick<RoutingSlotDefinition, 'modelId' | 'provider'> {
-  const registrySlot = modelRegistry.policies.auto.slots[slot];
-  const modelKey = registrySlot.modelKey as keyof typeof modelRegistry.models;
-  const model = modelRegistry.models[modelKey];
-  return {
-    modelId: modelKey,
-    provider: model.identity.provider,
-  };
-}
+type RegistryRoutingSlot = (typeof modelRegistry.policies.auto.slots)[RoutingSlot];
 
-export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
-  // -------------------------------------------------------------------------
-  // GENERAL — Gemini Flash-Lite wins on throughput (327 tok/s) + cost ($0.25/$1.50).
-  // -------------------------------------------------------------------------
-  general_fast: {
-    slot: 'general_fast',
-    label: 'General Fast',
-    description: 'Lowest-cost lane. Gemini 3.1 Flash-Lite: 327 tok/s, $0.25/$1.50, 1M context.',
-    ...getRegistrySlotAssignment('general_fast'),
-  },
-  // GPT-5.4-mini: 49/60 Intelligence Index, TTFT 3.85s, 201 tok/s — best mid-tier balance.
-  general_balanced: {
-    slot: 'general_balanced',
-    label: 'General Balanced',
-    description: 'Mid-tier balanced lane. GPT-5.4-mini: 49/60 Intelligence Index, $0.75/$4.50.',
-    ...getRegistrySlotAssignment('general_balanced'),
-  },
-  // Gemini 3.5 Flash is the current Google Flash route for fast premium chat,
-  // agentic workflows, function calling, structured output, search, and code execution.
-  general_premium: {
-    slot: 'general_premium',
-    label: 'General Premium',
-    description:
-      'Premium Google lane. Gemini 3.5 Flash: current Flash model, 1M input, 64K output, function calling, search, and code execution.',
-    ...getRegistrySlotAssignment('general_premium'),
-  },
-
-  // -------------------------------------------------------------------------
-  // CODING — DeepSeek V4 Flash for the budget lane; GPT-5.5 for frontier OpenAI coding.
-  // -------------------------------------------------------------------------
-  coding_fast: {
-    slot: 'coding_fast',
-    label: 'Coding Fast',
-    description:
-      'Budget coding lane. DeepSeek V3.2: ~70% SWE-bench Verified, $0.27/$0.42 — 10–25× cheaper than flagship.',
-    ...getRegistrySlotAssignment('coding_fast'),
-  },
-  coding_premium: {
-    slot: 'coding_premium',
-    label: 'Coding Premium',
-    description:
-      'Premium coding lane. GPT-5.5 — strongest OpenAI model for complex coding and agentic workflows.',
-    ...getRegistrySlotAssignment('coding_premium'),
-  },
-
-  // -------------------------------------------------------------------------
-  // REASONING — Gemini 3.1 Pro remains the cost-efficient premium route.
-  // For complex reasoning, benchmark evidence favors Gemini 3.1 Pro on cost-efficiency.
-  // -------------------------------------------------------------------------
-  reasoning_premium: {
-    slot: 'reasoning_premium',
-    label: 'Reasoning Premium (Hobby)',
-    description:
-      'Hobby pool reasoning lane (Pool B, plan §4). DeepSeek V4 Flash thinking: $0.14/$0.28, $0.0028 cache hit, 1M context. Pro tier uses reasoning_premium_pro (Kimi K2.6).',
-    ...getRegistrySlotAssignment('reasoning_premium'),
-  },
-
-  // -------------------------------------------------------------------------
-  // CREATIVE WRITING — Claude leads unambiguously on EQ-Bench Creative Writing Elo.
-  // Sonnet 4.6 for balanced creative writing; Opus 4.8 for premium creative work.
-  // -------------------------------------------------------------------------
-  creative_writing: {
-    slot: 'creative_writing',
-    label: 'Creative Writing',
-    description: 'Balanced creative lane. Claude Sonnet 4.6: EQ-Bench 1991 Elo, $3/$15.',
-    ...getRegistrySlotAssignment('creative_writing'),
-  },
-  creative_writing_premium: {
-    slot: 'creative_writing_premium',
-    label: 'Creative Writing Premium',
-    description:
-      'Premium creative lane. Claude Opus 4.8 — frontier creative writing and knowledge work.',
-    ...getRegistrySlotAssignment('creative_writing_premium'),
-  },
-
-  // -------------------------------------------------------------------------
-  // SEARCH — Perplexity purpose-built for grounded QA. Sonar Deep Research: 93.9% SimpleQA.
-  // -------------------------------------------------------------------------
-  search_fast: {
-    slot: 'search_fast',
-    label: 'Search Fast',
-    description:
-      'Fast grounded search. Perplexity Sonar: purpose-built retrieval, $1/$1 + search fee.',
-    ...getRegistrySlotAssignment('search_fast'),
-  },
-  search_premium: {
-    slot: 'search_premium',
-    label: 'Search Premium',
-    description:
-      'Deep research. Perplexity Sonar Deep Research: 93.9% SimpleQA, multi-source synthesis with citations.',
-    ...getRegistrySlotAssignment('search_premium'),
-  },
-
-  // -------------------------------------------------------------------------
-  // VISION — Gemini 3.5 Flash is the current Google multimodal Flash route.
-  // -------------------------------------------------------------------------
-  vision_fast: {
-    slot: 'vision_fast',
-    label: 'Vision Fast',
-    description: 'Fast multimodal lane. Gemini 3.1 Flash-Lite: 1M context, $0.25/$1.50.',
-    ...getRegistrySlotAssignment('vision_fast'),
-  },
-  vision_premium: {
-    slot: 'vision_premium',
-    label: 'Vision Premium',
-    description:
-      'Premium vision lane. Gemini 3.5 Flash: multimodal input, 1M input context, and current Google Flash tool support.',
-    ...getRegistrySlotAssignment('vision_premium'),
-  },
-
-  // -------------------------------------------------------------------------
-  // BROWSER / COMPUTER USE — Claude family remains the preferred GUI automation lane.
-  // -------------------------------------------------------------------------
-  browser_dom: {
-    slot: 'browser_dom',
-    label: 'Browser DOM',
-    description:
-      'DOM automation lane. Claude Sonnet 4.6: best tool-use accuracy in Claude family, $3/$15.',
-    ...getRegistrySlotAssignment('browser_dom'),
-  },
-  computer_use: {
-    slot: 'computer_use',
-    label: 'Computer Use',
-    description:
-      'Desktop automation lane. Claude Sonnet 4.6 balances capability, latency, and cost.',
-    ...getRegistrySlotAssignment('computer_use'),
-  },
-  computer_use_premium: {
-    slot: 'computer_use_premium',
-    label: 'Computer Use Premium',
-    description:
-      'Premium desktop automation. Claude Opus 4.8 — frontier computer-use and tool-use.',
-    ...getRegistrySlotAssignment('computer_use_premium'),
-  },
-
-  // -------------------------------------------------------------------------
-  // MEDIA GENERATION — Best-in-class dedicated models.
-  // -------------------------------------------------------------------------
-  image_generation: {
-    slot: 'image_generation',
-    label: 'Image Generation',
-    description:
-      'Image generation and editing lane. Gemini 3.1 Flash Image is the current Google image model — fast, low-cost, and supports image inputs for editing.',
-    ...getRegistrySlotAssignment('image_generation'),
-  },
-  video_generation: {
-    slot: 'video_generation',
-    label: 'Video Generation',
-    description:
-      'Video generation lane. Veo 3.1 is the current verified Google video route selected for AGI managed media.',
-    ...getRegistrySlotAssignment('video_generation'),
-  },
-  embedding_default: {
-    slot: 'embedding_default',
-    label: 'Embedding Default',
-    description:
-      'Multimodal embedding lane. The model and provider are selected by the canonical registry.',
-    ...getRegistrySlotAssignment('embedding_default'),
-  },
-
-  // -------------------------------------------------------------------------
-  // VOICE — Whisper for STT; Gemini Flash-Lite for rewrite ($0.25/$1.50 vs GPT-4o-mini $0.75/$4.50 — 3× cheaper for simple cleanup).
-  // -------------------------------------------------------------------------
-  voice_transcription: {
-    slot: 'voice_transcription',
-    label: 'Voice Transcription',
-    description: 'Speech-to-text. Whisper-1: battle-tested STT.',
-    ...getRegistrySlotAssignment('voice_transcription'),
-  },
-  voice_rewrite: {
-    slot: 'voice_rewrite',
-    label: 'Voice Rewrite',
-    description:
-      'Dictation cleanup lane. Gemini 3.1 Flash-Lite: 3× cheaper than GPT-5.4-mini for simple text rewriting, $0.25/$1.50.',
-    ...getRegistrySlotAssignment('voice_rewrite'),
-  },
-
-  // ---------------------------------------------------------------------------
-  // POOL B HOBBY SLOTS (auto-routing-spec §2 — frozen 2026-05-07).
-  // Workhorse 80% / Escalation 12% / Reasoning 8% covers the Hobby
-  // 2M-token bucket at ~$1.10 worst-case with caching. Image generation
-  // shares the `image_generation` slot above (10/mo cap on Hobby).
-  // ---------------------------------------------------------------------------
-  workhorse_general: {
-    slot: 'workhorse_general',
-    label: 'Workhorse General',
-    description:
-      'Pool B workhorse (80% of Hobby traffic). Gemini 3.1 Flash-Lite: 327 tok/s, $0.25/$1.50, 1M context, multimodal-native.',
-    ...getRegistrySlotAssignment('workhorse_general'),
-  },
-  escalation_coding: {
-    slot: 'escalation_coding',
-    label: 'Escalation Coding',
-    description:
-      'Pool B escalation lane (12% — coding + complex). GLM-5.1 is the current GLM route in the shared catalog.',
-    ...getRegistrySlotAssignment('escalation_coding'),
-  },
-
-  // ---------------------------------------------------------------------------
-  // LEGACY PRO TIER *_pro SLOTS (migrate to model-registry routing policy).
-  // Pro pool composition is defined by the slot entries below. Keep the model
-  // IDs in those entries so future upgrades change one catalog path, not prose.
-  // Hobby slots (workhorse_general / escalation_coding / reasoning_premium)
-  // remain reachable from Pro for 100% downgrade fallback paths.
-  // ---------------------------------------------------------------------------
-  general_balanced_pro: {
-    slot: 'general_balanced_pro',
-    label: 'Pro General Balanced',
-    description:
-      'Pro balanced lane. GPT-5.4-mini: $0.75/$4.50, fast TTFT, balanced quality for general chat + creative writing.',
-    ...getRegistrySlotAssignment('general_balanced_pro'),
-  },
-  coding_premium_pro: {
-    slot: 'coding_premium_pro',
-    label: 'Pro Coding Premium',
-    description:
-      'Pro coding lane. Claude Sonnet 4.6: $3/$15, top-tier Aider Polyglot + SWE-bench Verified.',
-    ...getRegistrySlotAssignment('coding_premium_pro'),
-  },
-  reasoning_premium_pro: {
-    slot: 'reasoning_premium_pro',
-    label: 'Pro Reasoning Premium',
-    description:
-      'Pro reasoning lane. Kimi K2.6: $0.95/$4.00, Round 14 V4-Pro replacement (DeepSeek V4-Pro promo expires 2026-05-31).',
-    ...getRegistrySlotAssignment('reasoning_premium_pro'),
-  },
-  multimodal_pro: {
-    slot: 'multimodal_pro',
-    label: 'Pro Multimodal',
-    description:
-      'Pro multimodal + vision lane. Gemini 3.5 Flash: current Google Flash model with 1M input, multimodal input, and tool support.',
-    ...getRegistrySlotAssignment('multimodal_pro'),
-  },
-  long_context_pro: {
-    slot: 'long_context_pro',
-    label: 'Pro Long Context',
-    description:
-      'Pro long-context lane (>50K cumulative tokens). Gemini 3.1 Pro: 1M context window, best long-doc retrieval.',
-    ...getRegistrySlotAssignment('long_context_pro'),
-  },
-  // Pro+ tier flagship slots — 15K tokens/day cap each (enforced via
-  // assertQuota daily-cap check). Above the cap, requests fall through
-  // to coding_premium_pro / general_balanced_pro respectively.
-  flagship_coding_pro_plus: {
-    slot: 'flagship_coding_pro_plus',
-    label: 'Pro+ Flagship Coding (15K/day)',
-    description:
-      'Pro+ flagship coding lane. Uses the current Anthropic flagship from the shared catalog. Daily cap 15K tokens; falls through to coding_premium_pro above cap.',
-    ...getRegistrySlotAssignment('flagship_coding_pro_plus'),
-  },
-  flagship_general_pro_plus: {
-    slot: 'flagship_general_pro_plus',
-    label: 'Pro+ Flagship General (15K/day)',
-    description:
-      'Pro+ flagship general/agentic lane. Uses the current OpenAI flagship from the shared catalog. Daily cap 15K tokens; falls through to general_balanced_pro above cap.',
-    ...getRegistrySlotAssignment('flagship_general_pro_plus'),
-  },
-  video_generation_pro_plus: {
-    slot: 'video_generation_pro_plus',
-    label: 'Pro+ Video Generation',
-    description:
-      'Pro+ video lane. Veo 3.1 is the current verified Google video route selected for AGI managed media.',
-    ...getRegistrySlotAssignment('video_generation_pro_plus'),
-  },
-};
-
+export const SLOT_REGISTRY: Readonly<Record<RoutingSlot, RoutingSlotDefinition>> = Object.freeze(
+  Object.fromEntries(
+    (
+      Object.entries(modelRegistry.policies.auto.slots) as Array<[RoutingSlot, RegistryRoutingSlot]>
+    ).map(([slot, registrySlot]) => {
+      const modelId = registrySlot.modelKey as keyof typeof modelRegistry.models;
+      return [
+        slot,
+        {
+          slot,
+          label: registrySlot.label,
+          description: registrySlot.description,
+          modelId,
+          provider: modelRegistry.models[modelId].identity.provider,
+        },
+      ];
+    }),
+  ) as Record<RoutingSlot, RoutingSlotDefinition>,
+);
 // ---------------------------------------------------------------------------
 // Compatibility product-tier entitlements and quota policy.
 //
@@ -1472,7 +1166,7 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
     if (!meta) {
       throw new Error(
         `SLOT_REGISTRY references unknown model: ${slot.modelId} (slot: ${slot.slot}). ` +
-          `Update packages/contracts/types/src/models.json or fix SLOT_REGISTRY.`,
+          `Update model-registry curation or routing policy, then regenerate.`,
       );
     }
     // Provider-match: a slot's declared provider must equal the model's actual
@@ -1599,7 +1293,7 @@ export function getRoutingSlotModel(slot: RoutingSlot): string {
 /**
  * Reverse index: modelId → first matching slot. Built once at module load so
  * `getSlotForModel` is O(1) instead of O(N) per call (Vercel rule
- * `js-set-map-lookups`). Declaration order in `SLOT_REGISTRY_INTERNAL` is
+ * `js-set-map-lookups`). Declaration order in the generated routing policy is
  * preserved by `Object.entries` on insertion-ordered objects, so when the
  * same modelId backs multiple slots (e.g. workhorse + multimodal both on
  * Flash) the FIRST declared slot wins, matching the previous linear-scan
@@ -2074,7 +1768,8 @@ export type DefaultModelKind = 'chat' | 'fast-status' | 'voice' | 'computer-use'
  * final `workhorse_general` fallback ensures every tier (including Free)
  * resolves to a real model.
  *
- * Tied to `SLOT_REGISTRY` + `TIER_POLICIES` in this file — both are the SSOT.
+ * Slot assignments come from the generated model registry; product entitlement
+ * order remains owned by `TIER_POLICIES` in this compatibility layer.
  */
 const DEFAULT_KIND_SLOT_PREFERENCE: Record<DefaultModelKind, readonly RoutingSlot[]> =
   Object.freeze({
@@ -2102,7 +1797,7 @@ const DEFAULT_KIND_SLOT_PREFERENCE: Record<DefaultModelKind, readonly RoutingSlo
  * allowed, falls back to `workhorse_general` (which every tier exposes,
  * including Free). The final `getRoutingSlotModel` call dereferences the
  * slot to a model ID via `SLOT_REGISTRY`, so the returned string always
- * reflects the catalog (`models.json`) — never a hardcoded literal.
+ * reflects the generated registry — never a hardcoded literal.
  *
  * Use this from any surface (route handler, CLI fast-status header, voice
  * pipeline, computer-use orchestrator) that needs a tier-appropriate
