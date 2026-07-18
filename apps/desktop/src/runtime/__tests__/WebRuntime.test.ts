@@ -96,7 +96,7 @@ describe('WebRuntime x_generated_files stream handling', () => {
     vi.clearAllMocks();
   });
 
-  it('forwards Research and Cloud work mode as distinct request options', async () => {
+  it('forwards Research, Cloud work mode, and a server-owned skill selection', async () => {
     const runtime = new WebRuntime();
     expect(runtime.supportsResearch).toBe(true);
     sendCloudMessage.mockResolvedValue(undefined);
@@ -105,11 +105,13 @@ describe('WebRuntime x_generated_files stream handling', () => {
       research: true,
       agentMode: 'auto',
       workMode: 'agiwork',
+      skillName: 'frontend-design',
     });
 
     expect(sendCloudMessage.mock.calls[0]?.[13]).toEqual({
       research: true,
       workMode: 'agiwork',
+      skillName: 'frontend-design',
     });
   });
 

@@ -54,7 +54,7 @@ describe('loadSkillsFromDir — directory layout', () => {
     expect(skills[0]?.name).toBe('my-skill');
   });
 
-  it('extracts metadata fields (always, primaryEnv, requires.bins)', async () => {
+  it('extracts metadata fields (always, primaryEnv, requires.bins, requires.tools)', async () => {
     await mkdir(join(root, 'gizmo'), { recursive: true });
     await writeFile(
       join(root, 'gizmo', 'SKILL.md'),
@@ -67,6 +67,8 @@ describe('loadSkillsFromDir — directory layout', () => {
         'requires:',
         '  bins:',
         '    - gizmo-cli',
+        '  tools:',
+        '    - write_file',
         '---',
         'body',
       ].join('\n'),
@@ -76,6 +78,17 @@ describe('loadSkillsFromDir — directory layout', () => {
     expect(skills[0]?.metadata.always).toBe(true);
     expect(skills[0]?.metadata.primaryEnv).toBe('GIZMO_API_KEY');
     expect(skills[0]?.metadata.requires?.bins).toEqual(['gizmo-cli']);
+    expect(skills[0]?.metadata.requires?.tools).toEqual(['write_file']);
+  });
+
+  it('uses a path-free fallback description when frontmatter omits one', async () => {
+    await writeFile(join(root, 'path-free.md'), 'Body only', 'utf-8');
+
+    const skills = await loadSkillsFromDir({ rootDir: root, source: 'personal' });
+    const loaded = skills.find((skill) => skill.name === 'path-free');
+
+    expect(loaded?.description).toBe('Skill path-free');
+    expect(loaded?.description).not.toContain(root);
   });
 });
 

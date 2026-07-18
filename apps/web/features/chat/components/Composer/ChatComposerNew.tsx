@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
 import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
@@ -34,6 +33,7 @@ import { GhostTextOverlay } from './GhostTextOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
+import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useApiPromptCompletion } from '../../hooks/useApiPromptCompletion';
 import { useChatStore } from '@shared/stores/chat-store';
 import { useModelStore } from '@shared/stores/model-store';
@@ -65,9 +65,7 @@ interface ChatComposerProps {
       researchEnabled?: boolean;
       /** Output style hint forwarded to the LLM system prompt. undefined = 'normal'. */
       styleMode?: string;
-      /** Resolved skill body injected as a system message in the LLM request. */
-      skillBody?: string;
-      /** Display name of the active skill, forwarded for timeline step labeling. */
+      /** Exact server-catalog skill name; the server resolves and loads its body. */
       skillName?: string;
     },
   ) => void | false;
@@ -92,7 +90,7 @@ interface ChatComposerProps {
   onDroppedFilesConsumed?: () => void;
   /** Fires when the input transitions between empty and non-empty (debounced 500ms on clear). */
   onTypingChange?: (isTyping: boolean) => void;
-  /** Called when the user clicks the stop button. Overrides the default ChatAIService.stopGeneration(). */
+  /** Called when the user clicks the stop button. */
   onStop?: () => void;
   /** Increment to clear composer state after a parent-owned deferred send. */
   clearSignal?: number;
@@ -283,11 +281,8 @@ const ChatComposerNewComponent = ({
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [isFocused, setIsFocused] = useState(false);
-  const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
-  const [skillBody, setSkillBody] = useState<string | null>(null);
-  const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>(() =>
-    ChatAIService.getAvailableSkillsSync(),
-  );
+  const [selectedSkill, setSelectedSkill] = useState<SkillItem | null>(null);
+  const { skills: availableSkills, loading: skillsLoading, error: skillsError } = useSkillsList();
   const [activeTags, setActiveTags] = useState<ModeTag[]>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
@@ -503,7 +498,6 @@ const ChatComposerNewComponent = ({
     setMessage('');
     clearAttachments();
     setSelectedSkill(null);
-    setSkillBody(null);
     // Web search / Deep Research / style are PERSISTENT toggles (claude.ai parity):
     // once on they stay on across sends (checkmark remains in the + menu) until the
     // user turns them off. Do NOT reset them here (the after-send clear) — that made
@@ -532,39 +526,6 @@ const ChatComposerNewComponent = ({
     lastClearSignalRef.current = clearSignal;
     clearComposerState();
   }, [clearComposerState, clearSignal]);
-
-  // Fetch skill body whenever a skill is selected (covers both slash-command and + menu paths).
-  // Body is stored in state and injected as a system message when the user sends.
-  useEffect(() => {
-    if (!selectedSkill) {
-      setSkillBody(null);
-      return;
-    }
-    let cancelled = false;
-    const skillName = selectedSkill.name;
-    void (async () => {
-      try {
-        const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}`);
-        if (!res.ok) throw new Error(`Could not load ${skillName}`);
-        const json = (await res.json()) as { body?: unknown };
-        const body = typeof json.body === 'string' && json.body.trim() ? json.body : null;
-        if (!body) throw new Error(`Could not load ${skillName}`);
-        if (!cancelled) {
-          setSkillBody(body);
-          setLocalNotice(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setSkillBody(null);
-          setSelectedSkill(null);
-          setLocalNotice(`Could not load ${skillName} skill instructions. Select the skill again.`);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedSkill]);
 
   // Handle prefillText prop · when the parent passes a new non-empty prefillText, copy it
   // into the local message and notify the parent it was consumed. This runs in an EFFECT,
@@ -640,27 +601,6 @@ const ChatComposerNewComponent = ({
     handleFileDrop(droppedFiles);
     onDroppedFilesConsumed?.();
   }, [droppedFiles, handleFileDrop, onDroppedFilesConsumed]);
-
-  // Load real skills data on mount
-  useEffect(() => {
-    ChatAIService.getAvailableSkills()
-      .then((skills) => {
-        if (skills.length > 0) {
-          setAvailableSkills([
-            {
-              id: 'auto',
-              name: 'Auto-Select',
-              description: 'Let AI choose the best skill',
-              category: 'General',
-            },
-            ...skills,
-          ]);
-        }
-      })
-      .catch(() => {
-        // Keep sync defaults on failure
-      });
-  }, []);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -836,20 +776,19 @@ const ChatComposerNewComponent = ({
     .filter(
       (skill) =>
         skill.name.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-        skill.description.toLowerCase().includes(mentionQuery.toLowerCase()) ||
-        skill.id.toLowerCase().includes(mentionQuery.toLowerCase()),
+        skill.description.toLowerCase().includes(mentionQuery.toLowerCase()),
     )
     .slice(0, 12);
 
   const handleMentionSelect = useCallback(
-    (skill: SkillInfo) => {
+    (skill: SkillItem) => {
       if (mentionStartIndex === -1) return;
       const before = message.substring(0, mentionStartIndex);
       const cursorPos = textareaRef.current?.selectionStart || message.length;
       const after = message.substring(cursorPos);
       const newMessage = `${before}@${skill.name} ${after}`;
       setMessage(newMessage);
-      setSelectedSkill(skill.id === 'auto' ? null : skill);
+      setSelectedSkill(skill);
       setShowMentions(false);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
@@ -863,19 +802,20 @@ const ChatComposerNewComponent = ({
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
 
-  const handleSkillSelect = useCallback((skillName: string) => {
-    setSelectedSkill({ id: skillName, name: skillName, description: '', category: 'Skill' });
-    setMessage('');
-    setShowSlashMenu(false);
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
+  const handleSkillSelect = useCallback(
+    (skillName: string) => {
+      const skill = availableSkills.find((candidate) => candidate.name === skillName);
+      if (!skill) return;
+      setSelectedSkill(skill);
+      setMessage('');
+      setShowSlashMenu(false);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+    [availableSkills],
+  );
 
   const handleStop = useCallback(() => {
-    if (onStop) {
-      onStop();
-    } else {
-      ChatAIService.stopGeneration();
-    }
+    onStop?.();
   }, [onStop]);
 
   const handleSubmit = useCallback(() => {
@@ -898,7 +838,7 @@ const ChatComposerNewComponent = ({
     const result = onSend(
       message,
       attachments.length > 0 ? attachments : undefined,
-      selectedSkill?.id,
+      selectedSkill?.name,
       {
         workMode: isFreeTrial ? 'chat' : workMode,
         projectId: pickerActiveProjectId,
@@ -907,7 +847,6 @@ const ChatComposerNewComponent = ({
         codeExecutionEnabled,
         researchEnabled,
         styleMode: styleMode !== 'normal' ? styleMode : undefined,
-        skillBody: skillBody ?? undefined,
         skillName: selectedSkill?.name ?? undefined,
       },
     );
@@ -918,7 +857,6 @@ const ChatComposerNewComponent = ({
     message,
     attachments,
     selectedSkill,
-    skillBody,
     isLoading,
     disabled,
     trialExhausted,
@@ -1105,12 +1043,13 @@ const ChatComposerNewComponent = ({
             query={slashQuery}
             onSelect={handleSlashSelect}
             onSkillSelect={handleSkillSelect}
+            skills={availableSkills}
             onClose={() => setShowSlashMenu(false)}
           />
         )}
 
         {/* @Mention Dropdown */}
-        {showMentions && filteredSkills.length > 0 && (
+        {showMentions && (
           <div
             ref={mentionsRef}
             className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl"
@@ -1119,34 +1058,35 @@ const ChatComposerNewComponent = ({
               <div className="mb-1.5 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 Skills
               </div>
-              {filteredSkills.map((skill) => (
-                <button
-                  key={skill.id}
-                  onClick={() => handleMentionSelect(skill)}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
-                >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    {skill.id === 'auto' ? (
-                      <Sparkles className="h-3.5 w-3.5" />
-                    ) : (
+              {skillsLoading ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">Loading skills…</p>
+              ) : skillsError ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">
+                  Skills are temporarily unavailable.
+                </p>
+              ) : filteredSkills.length === 0 ? (
+                <p className="px-3 py-2 text-xs text-muted-foreground">No matching skills.</p>
+              ) : (
+                filteredSkills.map((skill) => (
+                  <button
+                    key={skill.name}
+                    onClick={() => handleMentionSelect(skill)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                  >
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <span className="text-[10px] font-bold">
                         {skill.name.substring(0, 2).toUpperCase()}
                       </span>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{skill.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {skill.description}
                     </div>
-                  </div>
-                  {skill.category && skill.id !== 'auto' && (
-                    <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[9px] text-muted-foreground">
-                      {skill.category}
-                    </span>
-                  )}
-                </button>
-              ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{skill.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {skill.description}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </div>
         )}

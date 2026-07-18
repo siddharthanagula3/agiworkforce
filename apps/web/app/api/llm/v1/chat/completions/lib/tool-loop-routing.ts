@@ -2,6 +2,7 @@ import { isExecutionTool } from '@/lib/e2b/execution-tools';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { isUrlFetchTool } from '@/lib/url-fetch/url-fetch-tool';
 import { isWebSearchTool } from '@/lib/web-search/web-search-tool';
+import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 
 export type ToolLoopApprovalMode = 'auto' | 'manual';
 
@@ -10,11 +11,12 @@ export interface ToolLoopInputClassification {
   hasExecutionTools: boolean;
   hasUrlFetchTools: boolean;
   hasWebSearchTools: boolean;
+  hasSkillTools: boolean;
   shouldRun: boolean;
   approvalMode: ToolLoopApprovalMode;
 }
 
-function functionToolName(tool: unknown): string {
+export function functionToolName(tool: unknown): string {
   if (!tool || typeof tool !== 'object') return '';
   const candidate = tool as { function?: { name?: unknown } };
   return typeof candidate.function?.name === 'string' ? candidate.function.name : '';
@@ -36,13 +38,16 @@ export function classifyToolLoopInputs(
   const hasExecutionTools = names.some(isExecutionTool);
   const hasUrlFetchTools = names.some(isUrlFetchTool);
   const hasWebSearchTools = names.some(isWebSearchTool);
+  const hasSkillTools = names.includes(SKILL_TOOL_NAME);
 
   return {
     hasMcpTools,
     hasExecutionTools,
     hasUrlFetchTools,
     hasWebSearchTools,
-    shouldRun: hasMcpTools || hasExecutionTools || hasUrlFetchTools || hasWebSearchTools,
+    hasSkillTools,
+    shouldRun:
+      hasMcpTools || hasExecutionTools || hasUrlFetchTools || hasWebSearchTools || hasSkillTools,
     // MCP tools may cross an external or mutating boundary and remain
     // approval-gated. The built-in search/fetch/sandbox tools execute inside
     // their existing read-only or isolated safety boundaries.

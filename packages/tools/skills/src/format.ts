@@ -14,9 +14,9 @@
  * </available_skills>
  * ```
  *
- * The agent should read individual skill bodies on demand (via `read`/`exec`
- * over the `location`); we keep the system prompt small by listing only
- * names + descriptions.
+ * This legacy formatter is for trusted host-local flows that intentionally
+ * expose local locations. Model-facing Cloud flows must use
+ * `formatSkillsForToolPrompt`, which never includes locations or bodies.
  *
  * If `inlineBodies: true` is passed, full body text is included inside each
  * `<skill>` block — useful for short prompts or test fixtures, but burns

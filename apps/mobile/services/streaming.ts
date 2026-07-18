@@ -269,6 +269,8 @@ interface InitialStreamRequest {
   code_execution?: boolean;
   /** Paid Cloud product mode; independent from approval/permission policy. */
   work_mode?: CloudWorkMode;
+  /** Exact Managed Cloud catalog name. Mobile never resolves or sends the body. */
+  skill_name?: string;
 }
 
 interface ApprovalResumeRequest {

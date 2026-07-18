@@ -352,6 +352,32 @@ describe('chatStore — streaming state', () => {
       expect(capturedBody?.work_mode).toBe('agiwork');
     });
 
+    it('forwards only an exact managed skill name to the Cloud stream', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'reviewed' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'review this screen', CLOUD_MODEL, undefined, {
+          skillName: 'frontend-design',
+        });
+      });
+
+      expect(capturedBody?.skill_name).toBe('frontend-design');
+      expect(capturedBody).not.toHaveProperty('skill_body');
+    });
+
     it('does not send a persisted AGI Work mode after the account returns to Free', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();

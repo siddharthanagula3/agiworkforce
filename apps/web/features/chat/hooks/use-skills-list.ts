@@ -1,32 +1,34 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { z } from 'zod';
 
 export interface SkillItem {
   name: string;
   description: string;
-  body?: string;
   source: string;
 }
 
-interface SkillsListResponse {
-  skills: Array<Omit<SkillItem, 'body'>>;
-}
-
-interface SkillBodyResponse {
-  body: string;
-}
+const SkillsListResponseSchema = z.object({
+  skills: z.array(
+    z.object({
+      name: z.string().min(1).max(200),
+      description: z.string(),
+      source: z.string().min(1),
+    }),
+  ),
+});
 
 export interface UseSkillsListResult {
   skills: SkillItem[];
   loading: boolean;
   error: string | null;
-  loadBody: (skillName: string) => Promise<void>;
 }
 
 /**
- * Shared hook for browsing skills. Fetches metadata from /api/skills on mount
- * and lazily loads skill bodies on demand. Used by DirectoryModal and CustomizePage.
+ * Fetch path-free skill metadata for selection. Managed activation remains
+ * server-owned; explicit customization previews use the authenticated body
+ * endpoint directly.
  */
 export function useSkillsList(): UseSkillsListResult {
   const [skills, setSkills] = useState<SkillItem[]>([]);
@@ -39,9 +41,10 @@ export function useSkillsList(): UseSkillsListResult {
       try {
         const res = await fetch('/api/skills');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as SkillsListResponse;
+        const parsed = SkillsListResponseSchema.safeParse(await res.json());
+        if (!parsed.success) throw new Error('Invalid skills response');
         if (!cancelled) {
-          setSkills(json.skills);
+          setSkills(parsed.data.skills);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -54,18 +57,5 @@ export function useSkillsList(): UseSkillsListResult {
     };
   }, []);
 
-  async function loadBody(skillName: string): Promise<void> {
-    const existing = skills.find((s) => s.name === skillName);
-    if (existing?.body !== undefined) return;
-    try {
-      const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as SkillBodyResponse;
-      setSkills((prev) => prev.map((s) => (s.name === skillName ? { ...s, body: json.body } : s)));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  return { skills, loading, error, loadBody };
+  return { skills, loading, error };
 }

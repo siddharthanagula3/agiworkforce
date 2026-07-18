@@ -89,6 +89,9 @@ import {
   createPublicTextDeltaProjector,
   toAgentEventJson,
 } from './agent-event-stream';
+import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
+import { executeManagedSkillTool } from '@/lib/services/skill-catalog-service';
+import { functionToolName } from './tool-loop-routing';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -120,6 +123,7 @@ const READ_ONLY_TOOL_PREFIXES = [
 ];
 
 function isReadOnlyTool(toolName: string): boolean {
+  if (toolName === SKILL_TOOL_NAME) return true;
   const lower = toolName.toLowerCase();
   return READ_ONLY_TOOL_PREFIXES.some((p) => lower.startsWith(p) || lower.includes(p));
 }
@@ -314,11 +318,11 @@ export interface PendingToolCall {
 export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
 
 /**
- * Only the platform URL fetch is declared replay-safe. Search is paid, and MCP,
- * connector, and sandbox tools can mutate despite a read-looking name.
+ * Only local, read-only platform operations are replay-safe. Search is paid,
+ * and MCP, connector, and sandbox tools can mutate despite a read-looking name.
  */
 export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySafety {
-  return isUrlFetchTool(toolName) ? 'safe' : 'unsafe';
+  return isUrlFetchTool(toolName) || toolName === SKILL_TOOL_NAME ? 'safe' : 'unsafe';
 }
 
 function mergeObservedUsage(
@@ -364,7 +368,7 @@ const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
   [/\bgrep|ripgrep|search_codebase/i, 'Searching codebase'],
   [/\bgit_/i, 'Running git'],
   [/\bdb_query|sql_query|database/i, 'Querying database'],
-  [/\bskill/i, 'Loading skill'],
+  [/\bskill/i, 'Reading skill'],
 ];
 
 /** Derive a playful status phrase for a tool name, or return undefined. */
@@ -829,8 +833,17 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
 async function runMcpTool(
   toolCall: PendingToolCall,
   e2bExecutor: () => Promise<E2BExecutor | null>,
+  availableTools: ReadonlySet<string>,
   connectorExecutor?: ConnectorToolExecutor,
 ): Promise<ToolLoopToolResult> {
+  if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
+    if (!availableTools.has(SKILL_TOOL_NAME)) {
+      return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
+    }
+    const result = await executeManagedSkillTool(toolCall.args, { availableTools });
+    return { content: result.content, isError: result.isError };
+  }
+
   // Platform url_fetch: read-only page fetch, SSRF-guarded (see lib/url-fetch/).
   // Executes on the auto path like E2B tools — no manual approval gate needed
   // because it cannot mutate anything and every failure mode returns a
@@ -981,7 +994,12 @@ function parseAssistantToolCalls(toolCalls: unknown[]): PendingToolCall[] {
  * defense-in-depth layer ON TOP of the per-tool guards inside runMcpTool
  * (connector re-gate, SSRF, unknown-server rejection).
  */
-function isToolOffered(qualifiedName: string, mcpTools: WebMcpToolDef[]): boolean {
+function isToolOffered(
+  qualifiedName: string,
+  mcpTools: WebMcpToolDef[],
+  availableTools: ReadonlySet<string>,
+): boolean {
+  if (qualifiedName === SKILL_TOOL_NAME) return availableTools.has(SKILL_TOOL_NAME);
   if (isExecutionTool(qualifiedName)) return true;
   if (isUrlFetchTool(qualifiedName)) return true;
   if (isWebSearchTool(qualifiedName)) return true;
@@ -1046,6 +1064,10 @@ export async function* runToolLoop(
   // Inject MCP tool defs into the llmRequest.
   const mcpTools = options.mcpTools ?? [];
   const openAiTools: unknown[] = mcpTools.map(toOpenAiToolDef);
+  const availableTools = new Set([
+    ...mcpTools.map((tool) => tool.qualifiedName),
+    ...(processed.llmRequest.tools ?? []).map(functionToolName).filter(Boolean),
+  ]);
   const llmRequest = {
     ...processed.llmRequest,
     tools:
@@ -1263,7 +1285,8 @@ export async function* runToolLoop(
     }[] = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
-      const execute = () => runMcpTool(tc, resolveE2BExecutor, options.connectorExecutor);
+      const execute = () =>
+        runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor);
       return options.toolExecutor
         ? options.toolExecutor({
             operationKey: `tool:${tc.id}`,
@@ -1493,7 +1516,7 @@ export async function* runToolLoop(
             }),
           );
         }
-        if (decision === 'approved' && isToolOffered(p.qualifiedName, mcpTools)) {
+        if (decision === 'approved' && isToolOffered(p.qualifiedName, mcpTools, availableTools)) {
           toRun.push(p);
         } else if (decision === 'approved') {
           // Approved but the tool is not in the offered catalog (hallucinated /

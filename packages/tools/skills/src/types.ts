@@ -2,9 +2,9 @@
  * Skill type definitions.
  *
  * A "skill" is a reusable instruction/context block (markdown body + YAML
- * frontmatter) the agent can be told about. Skills are NOT tools — they're
- * model-readable hints that change how the agent approaches a task. The
- * agent decides whether to read/follow them based on the description.
+ * frontmatter) the agent can be told about. Skill files are not executable
+ * tools themselves. Hosts expose them through the shared read-only `skill`
+ * tool so loading is lazy, observable, bounded, and policy-controlled.
  *
  * Format mirrors OpenClaw's skill format (`extensions/<plugin>/skills/<id>/SKILL.md`):
  *
@@ -47,6 +47,8 @@ export interface SkillMetadata {
   requires?: {
     bins?: string[];
     anyBins?: string[];
+    /** Model-facing tools that must be offered by the active runtime. */
+    tools?: string[];
     env?: string[];
     config?: string[];
   };

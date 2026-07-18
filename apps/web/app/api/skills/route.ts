@@ -16,77 +16,30 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import {
-  loadSkillsFromLayers,
-  mergeSkills,
-  type Skill,
-  type SkillLayer,
-  type SkillSource,
-} from '@agiworkforce/skills';
-
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
-import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import {
+  getManagedSkillCatalog,
+  SkillCatalogUnavailableError,
+} from '@/lib/services/skill-catalog-service';
 
 export const runtime = 'nodejs';
-
-function readLayersFromEnv(): SkillLayer[] {
-  const raw = process.env['SKILLS_LAYERS'];
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.flatMap((entry) => {
-      if (
-        entry &&
-        typeof entry === 'object' &&
-        typeof (entry as { rootDir?: unknown }).rootDir === 'string' &&
-        typeof (entry as { source?: unknown }).source === 'string'
-      ) {
-        return [
-          {
-            rootDir: (entry as { rootDir: string }).rootDir,
-            source: (entry as { source: SkillSource }).source,
-          },
-        ];
-      }
-      return [];
-    });
-  } catch (err) {
-    logger.warn({ err }, 'Failed to parse SKILLS_LAYERS env');
-    return [];
-  }
-}
-
-let skillCache: { value: Skill[]; expiresAt: number } | null = null;
-const CACHE_TTL_MS = 60_000;
-
-async function getSkills(): Promise<Skill[]> {
-  const now = Date.now();
-  if (skillCache && now < skillCache.expiresAt) return skillCache.value;
-  const layers = readLayersFromEnv();
-  if (layers.length === 0) {
-    skillCache = { value: [], expiresAt: now + CACHE_TTL_MS };
-    return [];
-  }
-  try {
-    const layerResults = await loadSkillsFromLayers(layers);
-    const merged = mergeSkills(layerResults);
-    skillCache = { value: merged, expiresAt: now + CACHE_TTL_MS };
-    return merged;
-  } catch (err) {
-    logger.error({ err }, 'skills.load failed');
-    throw createError.internal('Failed to load skills');
-  }
-}
 
 async function handleListSkills(request: NextRequest) {
   const rateLimit = await withRateLimit(request, 'chat-conversation');
   if (rateLimit) return rateLimit;
   await getClerkAuthUser(request);
-  const skills = await getSkills();
+  let skills;
+  try {
+    skills = await getManagedSkillCatalog();
+  } catch (error) {
+    if (error instanceof SkillCatalogUnavailableError) {
+      throw createError.internal('Failed to load skills');
+    }
+    throw error;
+  }
   return NextResponse.json({
     skills: skills.map((s) => ({
       name: s.name,
@@ -97,10 +50,3 @@ async function handleListSkills(request: NextRequest) {
 }
 
 export const GET = withErrorHandler(handleListSkills);
-
-/** Internal helper used by the body route. Exported via module-graph. */
-export async function lookupSkillBody(name: string): Promise<string | null> {
-  const skills = await getSkills();
-  const found = skills.find((s) => s.name === name);
-  return found ? found.body : null;
-}
