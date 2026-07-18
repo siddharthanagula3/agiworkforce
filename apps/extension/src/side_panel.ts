@@ -1,4 +1,10 @@
-import { QueueFullError } from '@agiworkforce/client-runtime';
+import {
+  QueueFullError,
+  type AgentActivityEntry,
+  type AgentActivityState,
+} from '@agiworkforce/client-runtime';
+import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getExtensionTokensCss } from './tokens';
 import {
   normalizeModelId,
@@ -32,7 +38,9 @@ import {
 } from './features/background/conversation-session';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import {
+  applyCanonicalAgentEvent,
   applyStreamFailure,
+  projectCanonicalAgentActivity,
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
@@ -50,6 +58,7 @@ import {
   Search,
   Globe,
   CircleCheck,
+  CircleX,
   Loader2,
   Folder,
   Plug,
@@ -159,6 +168,9 @@ interface ChatChunk {
   text: string;
   done: boolean;
   error?: string;
+  agentEvent?: AgentEventEnvelope;
+  durableReplay?: true;
+  cloudRun?: ManagedCloudAgentRunReference;
   routing?: {
     modelKey: string;
     taskType: RoutingTaskType;
@@ -308,6 +320,7 @@ let recordingActionCount = 0;
  * next outgoing message. Cleared after send.
  */
 const pendingAttachments: string[] = [];
+const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
 
 /**
  * Hostname of the active browser tab, shown in the persistent context chip.
@@ -335,6 +348,12 @@ function saveMessages(): void {
       role: message.role,
       content: message.content,
       timestamp: message.timestamp,
+      ...(message.role === 'assistant' && message.agentEvents
+        ? { agentEvents: message.agentEvents }
+        : {}),
+      ...(message.role === 'assistant' && message.cloudAgentRun
+        ? { cloudAgentRun: message.cloudAgentRun }
+        : {}),
     }));
   upsertConversation(_ctx.conversationId, toSave, {
     selectedModel: _ctx.selectedModel,
@@ -367,13 +386,40 @@ async function loadMessages(): Promise<void> {
   _ctx.previousTaskType = active.routing.previousTaskType;
   refreshModelPickerUI();
   _ctx.messages.push(
-    ...active.messages.slice(-MAX_STORED_MESSAGES).map((message) => ({
-      id: `h-${message.timestamp}-${crypto.randomUUID().slice(0, 6)}`,
-      ...message,
-    })),
+    ...active.messages.slice(-MAX_STORED_MESSAGES).map((message) => {
+      const agentEvents = message.agentEvents?.map((event) => ({ ...event }));
+      return {
+        id: `h-${message.timestamp}-${crypto.randomUUID().slice(0, 6)}`,
+        ...message,
+        ...(agentEvents
+          ? {
+              agentEvents,
+              agentActivity: projectCanonicalAgentActivity(agentEvents),
+            }
+          : {}),
+        ...(message.cloudAgentRun ? { cloudAgentRun: { ...message.cloudAgentRun } } : {}),
+      };
+    }),
   );
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
+  const resumable = [..._ctx.messages]
+    .reverse()
+    .find(
+      (message) =>
+        message.role === 'assistant' &&
+        message.cloudAgentRun &&
+        (message.cloudAgentRun.state === undefined ||
+          message.cloudAgentRun.state === 'queued' ||
+          message.cloudAgentRun.state === 'running'),
+    );
+  if (resumable?.cloudAgentRun) {
+    resumable.streaming = true;
+    queueMicrotask(() => {
+      if (_ctx.conversationGeneration !== expectedGeneration || !resumable.cloudAgentRun) return;
+      resumeManagedCloudRun(resumable.id, resumable.cloudAgentRun, resumable.content);
+    });
+  }
 }
 
 function clearStoredMessages(): void {
@@ -875,6 +921,93 @@ function injectStyles(): void {
     .tool-call--error .tool-call__label { color: var(--agi-ext-danger); }
     .tool-call--error .tool-call__icon { color: var(--agi-ext-danger); }
     .tool-call--success .tool-call__icon { color: var(--agi-ext-success); }
+
+    /* Canonical engine activity — inline, collapsed by default, progressively expandable. */
+    .sp-agent-activity {
+      width: min(100%, 420px);
+      color: var(--agi-ext-text-muted);
+      font-size: 12px;
+    }
+    .sp-agent-activity > summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 0 4px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+      border-radius: 6px;
+    }
+    .sp-agent-activity > summary::-webkit-details-marker { display: none; }
+    .sp-agent-activity > summary:hover { background: var(--agi-ext-hover); }
+    .sp-agent-activity__chevron {
+      margin-left: auto;
+      transition: transform 160ms ease;
+    }
+    .sp-agent-activity[open] .sp-agent-activity__chevron { transform: rotate(90deg); }
+    .sp-agent-activity__timeline {
+      border-left: 1px solid var(--agi-ext-border);
+      margin: 2px 0 6px 10px;
+      padding: 2px 0 2px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .sp-agent-step {
+      min-width: 0;
+      border-radius: 6px;
+    }
+    .sp-agent-step > summary,
+    .sp-agent-step__row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 28px;
+      padding: 0 5px;
+      list-style: none;
+    }
+    .sp-agent-step > summary { cursor: pointer; }
+    .sp-agent-step > summary::-webkit-details-marker { display: none; }
+    .sp-agent-step > summary:hover { background: var(--agi-ext-hover); }
+    .sp-agent-step__icon { flex: 0 0 14px; opacity: 0.78; }
+    .sp-agent-step--running .sp-agent-step__icon { animation: sp-spin 0.8s linear infinite; }
+    .sp-agent-step--failed .sp-agent-step__icon { color: var(--agi-ext-danger); }
+    .sp-agent-step--completed .sp-agent-step__icon { color: var(--agi-ext-success); }
+    .sp-agent-step__summary {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sp-agent-step__elapsed { font-size: 10px; opacity: 0.65; }
+    .sp-agent-step__detail {
+      margin: 0 5px 6px 26px;
+      padding: 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 6px;
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text-muted);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .sp-agent-step__sources { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+    .sp-agent-source {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 3px 7px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 999px;
+      color: var(--agi-ext-text-muted);
+      text-decoration: none;
+      background: var(--agi-ext-surface);
+    }
+    .sp-agent-source:hover { color: var(--agi-ext-text); border-color: var(--agi-ext-focus); }
 
     /* ── Thinking dots ── */
     .sp-thinking {
@@ -3012,10 +3145,166 @@ function buildToolCallEl(block: ToolCallBlock): HTMLElement {
   return wrapper;
 }
 
+function formatElapsed(milliseconds: number): string {
+  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}m${remainder ? ` ${remainder}s` : ''}`;
+}
+
+function activityEntryStatus(entry: AgentActivityEntry): string {
+  if (entry.kind === 'tool' || entry.kind === 'progress') return entry.status;
+  if (entry.kind === 'error') return 'failed';
+  return 'completed';
+}
+
+function activityEntrySummary(entry: AgentActivityEntry): string {
+  if (entry.kind === 'tool' || entry.kind === 'progress') return entry.summary;
+  if (entry.kind === 'sources')
+    return entry.query ? `Sources for ${entry.query}` : 'Reviewed sources';
+  if (entry.kind === 'artifact') return `Created ${entry.name}`;
+  if (entry.kind === 'context') return entry.summary;
+  return entry.message;
+}
+
+function boundedJson(value: unknown): string {
+  if (value === undefined) return '';
+  try {
+    const formatted = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    return formatted.length > 8_000 ? `${formatted.slice(0, 8_000)}\n…` : formatted;
+  } catch {
+    return String(value).slice(0, 8_000);
+  }
+}
+
+function appendActivitySources(
+  parent: HTMLElement,
+  sources: Array<{ url: string; title?: string }>,
+): void {
+  if (sources.length === 0) return;
+  const list = el('div', { class: 'sp-agent-step__sources' });
+  for (const source of sources.slice(0, 20)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(source.url);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') continue;
+    } catch {
+      continue;
+    }
+    const link = el('a', {
+      class: 'sp-agent-source',
+      href: parsed.href,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: source.title || parsed.hostname,
+    });
+    link.appendChild(renderIcon(Globe, 11));
+    link.appendChild(document.createTextNode(source.title || parsed.hostname));
+    list.appendChild(link);
+  }
+  if (list.childElementCount > 0) parent.appendChild(list);
+}
+
+function buildAgentActivityStep(entry: AgentActivityEntry): HTMLElement {
+  const status = activityEntryStatus(entry);
+  const detailParts: string[] = [];
+  let sources: Array<{ url: string; title?: string }> = [];
+
+  if (entry.kind === 'progress' && entry.detail) detailParts.push(entry.detail);
+  if (entry.kind === 'tool') {
+    if (entry.input !== undefined) detailParts.push(`Request\n${boundedJson(entry.input)}`);
+    if (entry.output !== undefined) detailParts.push(`Result\n${boundedJson(entry.output)}`);
+    if (entry.error) detailParts.push(entry.error);
+    sources = entry.sources ?? [];
+  } else if (entry.kind === 'sources') {
+    sources = entry.sources;
+  } else if (entry.kind === 'artifact') {
+    detailParts.push(`${entry.mimeType}${entry.sizeBytes ? ` · ${entry.sizeBytes} bytes` : ''}`);
+  } else if (entry.kind === 'context') {
+    if (entry.beforeTokens !== undefined || entry.afterTokens !== undefined) {
+      detailParts.push(`${entry.beforeTokens ?? '?'} → ${entry.afterTokens ?? '?'} tokens`);
+    }
+  } else if (entry.kind === 'error') {
+    detailParts.push(entry.message);
+  }
+
+  const hasDetails = detailParts.length > 0 || sources.length > 0;
+  const step = document.createElement(hasDetails ? 'details' : 'div');
+  step.className = `sp-agent-step sp-agent-step--${status}`;
+  const row = document.createElement(hasDetails ? 'summary' : 'div');
+  if (!hasDetails) row.className = 'sp-agent-step__row';
+  const icon =
+    status === 'running' || status === 'pending'
+      ? Loader2
+      : status === 'failed' || status === 'cancelled'
+        ? CircleX
+        : entry.kind === 'tool'
+          ? toolIcon(entry.name)
+          : entry.kind === 'sources'
+            ? Globe
+            : entry.kind === 'artifact'
+              ? FileText
+              : Clock;
+  row.appendChild(renderIcon(icon, 14, 'sp-agent-step__icon'));
+  row.appendChild(el('span', { class: 'sp-agent-step__summary' }, activityEntrySummary(entry)));
+  if (entry.kind === 'tool' && entry.elapsedMs !== undefined) {
+    row.appendChild(
+      el('span', { class: 'sp-agent-step__elapsed' }, formatElapsed(entry.elapsedMs)),
+    );
+  }
+  if (hasDetails) row.appendChild(renderIcon(ChevronRight, 11));
+  step.appendChild(row);
+
+  if (hasDetails) {
+    const detail = el('div', { class: 'sp-agent-step__detail' });
+    if (detailParts.length > 0)
+      detail.appendChild(document.createTextNode(detailParts.join('\n\n')));
+    appendActivitySources(detail, sources);
+    step.appendChild(detail);
+  }
+  return step;
+}
+
+function buildAgentActivityEl(activity: AgentActivityState): HTMLElement {
+  const details = el('details', { class: 'sp-agent-activity' });
+  const summary = document.createElement('summary');
+  const terminal = ['completed', 'failed', 'cancelled'].includes(activity.status);
+  const elapsed = Math.max(
+    0,
+    (activity.completedAtMs ?? activity.updatedAtMs) - activity.startedAtMs,
+  );
+  summary.appendChild(
+    renderIcon(
+      activity.status === 'failed' || activity.status === 'cancelled'
+        ? CircleX
+        : terminal
+          ? CircleCheck
+          : Loader2,
+      14,
+    ),
+  );
+  summary.appendChild(
+    document.createTextNode(
+      `${terminal ? 'Worked' : 'Working'} for ${formatElapsed(elapsed)}${
+        activity.entries.length ? ` · ${activity.entries.length} steps` : ''
+      }`,
+    ),
+  );
+  summary.appendChild(renderIcon(ChevronRight, 12, 'sp-agent-activity__chevron'));
+  details.appendChild(summary);
+
+  const timeline = el('div', { class: 'sp-agent-activity__timeline' });
+  for (const entry of activity.entries) timeline.appendChild(buildAgentActivityStep(entry));
+  details.appendChild(timeline);
+  return details;
+}
+
 function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
   const segments = parseToolCalls(msg.content);
   const hasTools = segments.some((s) => typeof s !== 'string');
-  if (!hasTools) return buildBubble(msg);
+  const hasAgentActivity = msg.role === 'assistant' && Boolean(msg.agentActivity);
+  if (!hasTools && !hasAgentActivity) return buildBubble(msg);
 
   const wrapper = document.createElement('div');
   wrapper.className = `sp-msg sp-msg-${msg.role}`;
@@ -3031,6 +3320,8 @@ function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
       toolBlocks.push(seg);
     }
   }
+
+  if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity));
 
   if (textParts.join('').trim()) {
     const bubble = document.createElement('div');
@@ -3247,11 +3538,15 @@ function expandSlashCommand(
 }
 
 function requestStreamCancellation(streamId: string): void {
+  const cloudRun =
+    cloudRunsByStreamId.get(streamId) ??
+    _ctx.messages.find((message) => message.id === streamId)?.cloudAgentRun;
   chrome.runtime
     .sendMessage({
       type: 'CANCEL_STREAM',
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
+      ...(cloudRun ? { cloudRun } : {}),
     })
     .catch(() => {
       // The service worker may have restarted before receiving the cancellation.
@@ -3278,7 +3573,13 @@ function ensureManagedChatKeepalivePort(): chrome.runtime.Port | null {
       stopManagedChatKeepalive();
       const streamId = _ctx.currentStreamId;
       if (streamId) {
-        handleStreamError(streamId, 'The extension service restarted. Please retry.');
+        const assistant = _ctx.messages.find((message) => message.id === streamId);
+        const cloudRun = cloudRunsByStreamId.get(streamId) ?? assistant?.cloudAgentRun;
+        if (assistant && cloudRun) {
+          resumeManagedCloudRun(streamId, cloudRun, assistant.content);
+        } else {
+          handleStreamError(streamId, 'The extension service restarted before the run was saved.');
+        }
       }
     });
     return port;
@@ -3307,15 +3608,55 @@ function beginManagedStream(): string {
   _ctx.isStreaming = true;
   startManagedChatKeepalive();
   updateSendButton();
+  armManagedStreamInactivityWatchdog(streamId);
+  showThinking();
+  return streamId;
+}
+
+function armManagedStreamInactivityWatchdog(streamId: string): void {
   if (_ctx.streamTimeoutHandle) clearTimeout(_ctx.streamTimeoutHandle);
   _ctx.streamTimeoutHandle = setTimeout(() => {
     if (_ctx.isStreaming && _ctx.currentStreamId === streamId) {
       requestStreamCancellation(streamId);
-      handleStreamError(streamId, 'Response timed out. Please try again.');
+      handleStreamError(streamId, 'No AGI Cloud activity was received for 90 seconds.');
     }
   }, 90_000);
-  showThinking();
-  return streamId;
+}
+
+function resumeManagedCloudRun(
+  streamId: string,
+  cloudRun: ManagedCloudAgentRunReference,
+  alreadyVisibleText: string,
+): void {
+  if (_ctx.isStreaming && _ctx.currentStreamId && _ctx.currentStreamId !== streamId) return;
+  const assistant = _ctx.messages.find((message) => message.id === streamId);
+  if (!assistant) return;
+  assistant.streaming = true;
+  assistant.cloudAgentRun = { ...cloudRun };
+  cloudRunsByStreamId.set(streamId, { ...cloudRun });
+  _ctx.currentStreamId = streamId;
+  _ctx.isStreaming = true;
+  startManagedChatKeepalive();
+  armManagedStreamInactivityWatchdog(streamId);
+  updateSendButton();
+  renderMessages();
+  chrome.runtime.sendMessage(
+    {
+      type: 'RESUME_CHAT_RUN',
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      id: streamId,
+      cloudRun,
+      alreadyVisibleText,
+    },
+    (response: { success?: boolean; error?: string }) => {
+      if (_ctx.currentStreamId !== streamId) return;
+      if (chrome.runtime.lastError) {
+        handleStreamError(streamId, chrome.runtime.lastError.message ?? 'Resume failed.');
+      } else if (response?.success !== true) {
+        handleStreamError(streamId, response?.error ?? 'AGI Cloud run could not be resumed.');
+      }
+    },
+  );
 }
 
 function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
@@ -7455,6 +7796,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.type !== 'CHAT_CHUNK') return;
   if (chunk.clientInstanceId !== SIDE_PANEL_CLIENT_INSTANCE_ID) return;
   if (chunk.id !== _ctx.currentStreamId) return;
+  armManagedStreamInactivityWatchdog(chunk.id);
 
   if (chunk.error) {
     // Cloud free-trial sentinels: show actionable UI instead of a generic error
@@ -7478,6 +7820,25 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
+  if (chunk.cloudRun) {
+    cloudRunsByStreamId.set(chunk.id, { ...chunk.cloudRun });
+    const existing = _ctx.messages.find((message) => message.id === chunk.id);
+    if (existing) existing.cloudAgentRun = { ...chunk.cloudRun };
+  }
+
+  if (chunk.agentEvent) {
+    removeThinking();
+    const assistant = applyCanonicalAgentEvent(_ctx.messages, chunk.id, chunk.agentEvent);
+    const cloudRun = cloudRunsByStreamId.get(chunk.id);
+    if (cloudRun) assistant.cloudAgentRun = { ...cloudRun };
+    trimLiveMessages();
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+    saveMessages();
+  }
+
+  if (!chunk.text && !chunk.done) return;
+
   if (!_ctx.messages.find((m) => m.id === chunk.id)) {
     removeThinking();
     const assistantMsg: ChatMessage = {
@@ -7486,6 +7847,9 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       content: chunk.text,
       streaming: true,
       timestamp: Date.now(),
+      ...(cloudRunsByStreamId.get(chunk.id)
+        ? { cloudAgentRun: { ...cloudRunsByStreamId.get(chunk.id)! } }
+        : {}),
     };
     _ctx.messages.push(assistantMsg);
     trimLiveMessages();
@@ -7505,7 +7869,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     const existing = _ctx.messages.find((m) => m.id === chunk.id);
     if (existing) {
       existing.streaming = false;
+      const cloudRun = cloudRunsByStreamId.get(chunk.id);
+      if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
     }
+    cloudRunsByStreamId.delete(chunk.id);
     applyRoutingContinuation(chunk.routing);
     removeThinking();
     _ctx.isStreaming = false;

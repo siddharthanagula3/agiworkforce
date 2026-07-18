@@ -1,10 +1,89 @@
+import { applyAgentActivityEvent, type AgentActivityState } from '@agiworkforce/client-runtime';
+import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+
 export interface SidePanelChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   streaming?: boolean;
   error?: boolean;
+  agentActivity?: AgentActivityState;
+  /** Display-safe canonical events used to rebuild activity after a browser restart. */
+  agentEvents?: AgentEventEnvelope[];
+  cloudAgentRun?: ManagedCloudAgentRunReference;
   timestamp: number;
+}
+
+const MAX_PERSISTED_ACTIVITY_EVENTS = 1_000;
+
+function isDisplaySafeActivityEvent(envelope: AgentEventEnvelope): boolean {
+  switch (envelope.event.type) {
+    case 'lifecycle':
+    case 'progress-update':
+    case 'tool-execution-start':
+    case 'tool-execution-end':
+    case 'source-list':
+    case 'approval-requested':
+    case 'approval-resolved':
+    case 'artifact-produced':
+    case 'context-compacted':
+    case 'task-state-changed':
+    case 'error':
+    case 'stop':
+      return true;
+    case 'text-delta':
+    case 'reasoning-delta':
+    case 'tool-use-start':
+    case 'tool-use-delta':
+    case 'tool-use-end':
+    case 'server-tool-use':
+    case 'server-tool-result':
+    case 'usage':
+      return false;
+  }
+}
+
+export function projectCanonicalAgentActivity(
+  envelopes: readonly AgentEventEnvelope[] | undefined,
+): AgentActivityState | undefined {
+  let activity: AgentActivityState | undefined;
+  for (const envelope of envelopes ?? []) {
+    activity = applyAgentActivityEvent(activity, envelope);
+  }
+  return activity;
+}
+
+/**
+ * Fold one runtime-validated engine event into the assistant turn. Private
+ * reasoning and answer text are deliberately excluded by the shared reducer.
+ */
+export function applyCanonicalAgentEvent(
+  messages: SidePanelChatMessage[],
+  streamId: string,
+  envelope: AgentEventEnvelope,
+  timestamp = Date.now(),
+): SidePanelChatMessage {
+  let assistant = messages.find((message) => message.id === streamId);
+  if (!assistant) {
+    assistant = {
+      id: streamId,
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      timestamp,
+    };
+    messages.push(assistant);
+  }
+  const previous = assistant.agentActivity;
+  const next = applyAgentActivityEvent(previous, envelope);
+  assistant.agentActivity = next;
+  if (next !== previous && isDisplaySafeActivityEvent(envelope)) {
+    assistant.agentEvents = [...(assistant.agentEvents ?? []), envelope].slice(
+      -MAX_PERSISTED_ACTIVITY_EVENTS,
+    );
+  }
+  return assistant;
 }
 
 /**

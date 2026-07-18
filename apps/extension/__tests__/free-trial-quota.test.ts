@@ -83,6 +83,7 @@ vi.mock('../src/features/cloud-bridge/clerkAuth', () => clerkAuthMock);
 
 import {
   FREE_TRIAL_MODEL,
+  FREE_TRIAL_GATEWAY,
   FREE_TRIAL_ENDPOINT,
   MANAGED_MODELS_ENDPOINT,
   MANAGED_CHAT_MAX_INPUT_CHARS,
@@ -124,10 +125,15 @@ function makeSseStream(dataLines: string[]): ReadableStream<Uint8Array> {
 }
 
 /** Construct a fake Response with a body stream. */
-function makeStreamResponse(dataLines: string[], status = 200): Response {
+function makeStreamResponse(
+  dataLines: string[],
+  status = 200,
+  headers: Record<string, string> = {},
+): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers(headers),
     body: makeSseStream(dataLines),
     text: vi.fn().mockResolvedValue(''),
   } as unknown as Response;
@@ -138,6 +144,7 @@ function makeRawStreamResponse(payload: string, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: new Headers(),
     body: new ReadableStream({
       start(controller) {
         controller.enqueue(encoder.encode(payload));
@@ -816,6 +823,48 @@ describe('streamFreeChat — abort signal', () => {
     );
     expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'timeout' })]);
   });
+
+  it('treats the timeout as an inactivity watchdog for long-running agent streams', async () => {
+    const encoder = new TextEncoder();
+    const frames = [
+      JSON.stringify({ choices: [{ delta: { content: 'one ' }, finish_reason: null }] }),
+      JSON.stringify({ choices: [{ delta: { content: 'two ' }, finish_reason: null }] }),
+      JSON.stringify({ choices: [{ delta: { content: 'three' }, finish_reason: 'stop' }] }),
+    ];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          frames.forEach((frame, index) => {
+            setTimeout(
+              () => {
+                controller.enqueue(encoder.encode(`data: ${frame}\n\n`));
+                if (index === frames.length - 1) controller.close();
+              },
+              12 * (index + 1),
+            );
+          });
+        },
+      }),
+    } as Response);
+
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        workMode: 'agiwork',
+        timeoutMs: 20,
+      }),
+    );
+
+    expect(chunks).toEqual([
+      { type: 'text', text: 'one ' },
+      { type: 'text', text: 'two ' },
+      { type: 'text', text: 'three' },
+      { type: 'done' },
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -898,6 +947,148 @@ describe('streamFreeChat — model routing', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(fetchOpts.body as string) as { stream: boolean };
     expect(body.stream).toBe(true);
+  });
+
+  it('requests the paid Chrome agent loop instead of a thin chat completion', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+
+    await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        workMode: 'agiwork',
+      }),
+    );
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as { work_mode?: string };
+    expect(body.work_mode).toBe('agiwork');
+  });
+
+  it('emits the validated run handle and canonical activity event', async () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const envelope = {
+      schemaVersion: 3,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_752_000_000_123,
+      event: {
+        type: 'progress-update',
+        progressId: 'research-plan',
+        summary: 'Searching official sources',
+        status: 'running',
+      },
+    } as const;
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse(
+        [
+          JSON.stringify({
+            choices: [{ delta: { x_agent_event: envelope }, finish_reason: null }],
+          }),
+          JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+        ],
+        200,
+        {
+          'X-AGI-Agent-Run-Id': runId,
+          'X-AGI-Agent-Run-URL': `/api/llm/v1/chat/completions/runs/${runId}`,
+        },
+      ),
+    );
+
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        workMode: 'agiwork',
+      }),
+    );
+
+    expect(chunks).toContainEqual({
+      type: 'run',
+      run: {
+        runId,
+        runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+        lastSequence: -1,
+      },
+    });
+    expect(chunks).toContainEqual({ type: 'agent-event', envelope });
+  });
+
+  it('continues the exact durable run after the live response disconnects', async () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
+    fetchMock
+      .mockResolvedValueOnce(
+        makeStreamResponse(
+          [JSON.stringify({ choices: [{ delta: { content: 'Hello ' }, finish_reason: null }] })],
+          200,
+          {
+            'X-AGI-Agent-Run-Id': runId,
+            'X-AGI-Agent-Run-URL': runPath,
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            run: {
+              id: runId,
+              userId: 'user-1',
+              requestId: 'request-1',
+              conversationId: 'conversation-1',
+              originSurface: 'chrome',
+              workMode: 'agiwork',
+              state: 'completed',
+              provider: 'openai',
+              model: FREE_TRIAL_MODEL,
+              lastEventSequence: 1,
+              cancellationRequestedAt: null,
+              completedAt: '2026-07-17T20:00:00.000Z',
+              createdAt: '2026-07-17T19:00:00.000Z',
+              updatedAt: '2026-07-17T20:00:00.000Z',
+            },
+            events: [
+              {
+                schemaVersion: 3,
+                sessionId: 'conversation-1',
+                turnId: 'turn-1',
+                sequence: 0,
+                emittedAtMs: 1_752_000_000_123,
+                event: { type: 'text-delta', delta: 'Hello world' },
+              },
+              {
+                schemaVersion: 3,
+                sessionId: 'conversation-1',
+                turnId: 'turn-1',
+                sequence: 1,
+                emittedAtMs: 1_752_000_000_124,
+                event: { type: 'stop', reason: 'end-turn' },
+              },
+            ],
+            nextAfterSequence: 1,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        workMode: 'agiwork',
+      }),
+    );
+
+    expect(chunks.filter((chunk) => chunk.type === 'text')).toEqual([
+      { type: 'text', text: 'Hello ' },
+      { type: 'text', text: 'world' },
+    ]);
+    expect(chunks.filter((chunk) => chunk.type === 'agent-event')).toHaveLength(2);
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${FREE_TRIAL_GATEWAY}${runPath}?after=-1&limit=100`);
   });
 
   it('rejects a runtime-invalid role without calling the gateway', async () => {

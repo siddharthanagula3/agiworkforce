@@ -104,6 +104,15 @@ describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — content-script senders reje
     ).toBe(true);
   });
 
+  it('rejects RESUME_CHAT_RUN from a content script', () => {
+    expect(
+      isRejectedByExtensionPageOnlyGate('RESUME_CHAT_RUN', {
+        id: EXTENSION_ID,
+        tab: { id: 1 },
+      }),
+    ).toBe(true);
+  });
+
   it('rejects context-handoff approval and cancellation from a content script', () => {
     const sender: SenderShape = {
       id: EXTENSION_ID,

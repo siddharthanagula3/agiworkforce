@@ -33,6 +33,7 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
       'SAVE_SHORTCUT',
       'DELETE_SHORTCUT',
       'CANCEL_STREAM',
+      'RESUME_CHAT_RUN',
       'APPROVE_CONTEXT_HANDOFF',
       'CANCEL_CONTEXT_HANDOFF',
     ]) {

@@ -20,7 +20,15 @@
  *   - Request envelopes are bounded before crossing the privileged gateway
  */
 
+import {
+  createManagedCloudAgentRunClient,
+  parseAgentEventDelta,
+  readManagedCloudAgentRunHandle,
+  reconcileManagedCloudPublicText,
+  type ManagedCloudAgentRunReference,
+} from '@agiworkforce/cloud-contracts';
 import { getRoutingSlotModel, MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
 import { getFreshClerkToken, signOutClerk } from './clerkAuth';
 
@@ -390,6 +398,8 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
 
 export type FreeTrialChunk =
   | { type: 'text'; text: string }
+  | { type: 'agent-event'; envelope: AgentEventEnvelope; durableReplay?: true }
+  | { type: 'run'; run: ManagedCloudAgentRunReference }
   | { type: 'done' }
   | {
       type: 'error';
@@ -409,6 +419,8 @@ export interface ManagedChatStreamOptions {
   /** Concrete canonical model selected by the shared router. */
   model?: string;
   extendedThinking?: boolean;
+  /** Paid Chrome agent mode. Chat remains available for non-agent transports. */
+  workMode?: 'chat' | 'agiwork';
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -430,6 +442,7 @@ function normalizeStreamOptions(
 
 interface ParsedSseFrame {
   text?: string;
+  agentEvent?: AgentEventEnvelope;
   terminal?: boolean;
   recognized?: boolean;
   error?: Extract<FreeTrialChunk, { type: 'error' }>;
@@ -488,6 +501,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
 
   let recognized = false;
   let deltaContent: unknown;
+  let agentEvent: AgentEventEnvelope | null = null;
   let finishReason: unknown;
   const choices = event['choices'];
   if (choices !== undefined) {
@@ -506,6 +520,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
         if (!delta || typeof delta !== 'object' || Array.isArray(delta)) return protocolError();
         const deltaRecord = delta as Record<string, unknown>;
         deltaContent = deltaRecord['content'];
+        agentEvent = parseAgentEventDelta(deltaRecord['x_agent_event']);
 
         const streamError = deltaRecord['x_stream_error'];
         if (streamError !== undefined && streamError !== null) {
@@ -544,6 +559,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
           'x_tool_result',
           'x_search_results',
           'x_code_result',
+          'x_agent_event',
         ];
         recognized = knownDeltaKeys.some((key) => key in deltaRecord);
       }
@@ -588,6 +604,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
         : typeof directContent === 'string'
           ? directContent
           : undefined,
+    ...(agentEvent ? { agentEvent } : {}),
     terminal: done === true || (typeof finishReason === 'string' && finishReason.length > 0),
     recognized: true,
   };
@@ -688,11 +705,16 @@ export async function* streamFreeChat(
     Math.max(1, options.timeoutMs ?? MANAGED_CHAT_DEFAULT_TIMEOUT_MS),
     120_000,
   );
-  const timeoutHandle = setTimeout(() => {
-    if (controller.signal.aborted) return;
-    abortKind = 'timeout';
-    controller.abort();
-  }, timeoutMs);
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const armInactivityWatchdog = (): void => {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    timeoutHandle = setTimeout(() => {
+      if (controller.signal.aborted) return;
+      abortKind = 'timeout';
+      controller.abort();
+    }, timeoutMs);
+  };
+  armInactivityWatchdog();
 
   const abortError = (): Extract<FreeTrialChunk, { type: 'error' }> =>
     abortKind === 'timeout'
@@ -719,6 +741,7 @@ export async function* streamFreeChat(
           model,
           messages: cappedMessages,
           stream: true,
+          ...(options.workMode ? { work_mode: options.workMode } : {}),
           ...(options.extendedThinking ? { thinking_mode: true } : {}),
         }),
         signal: controller.signal,
@@ -785,6 +808,22 @@ export async function* streamFreeChat(
       return;
     }
 
+    let runReference: ManagedCloudAgentRunReference | undefined;
+    try {
+      const runHandle = readManagedCloudAgentRunHandle(response);
+      if (runHandle) {
+        runReference = { ...runHandle, lastSequence: -1 };
+        yield { type: 'run', run: { ...runReference } };
+      }
+    } catch (error) {
+      yield {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Invalid Managed Cloud run handle.',
+        code: 'protocol_error',
+      };
+      return;
+    }
+
     const reader = response.body?.getReader();
     if (!reader) {
       yield { type: 'error', message: 'No response body from gateway.', code: 'protocol_error' };
@@ -794,7 +833,21 @@ export async function* streamFreeChat(
     const decoder = new TextDecoder('utf-8', { fatal: true });
     const sseDecoder = new BoundedSseDecoder(MANAGED_CHAT_MAX_SSE_FRAME_CHARS);
     let sawVisibleText = false;
+    let sawAgentActivity = false;
     let streamedTextCharacters = 0;
+    let unacknowledgedPublicText = '';
+
+    const publishRunReference = (
+      patch: Partial<ManagedCloudAgentRunReference>,
+    ): FreeTrialChunk | undefined => {
+      if (!runReference) return undefined;
+      runReference = {
+        ...runReference,
+        ...patch,
+        lastSequence: Math.max(runReference.lastSequence, patch.lastSequence ?? -1),
+      };
+      return { type: 'run', run: { ...runReference } };
+    };
 
     const handleEvents = async (
       dataEvents: readonly string[],
@@ -817,10 +870,23 @@ export async function* streamFreeChat(
             return { chunks, terminal: true };
           }
           sawVisibleText = true;
+          unacknowledgedPublicText += frame.text;
           chunks.push({ type: 'text', text: frame.text });
         }
+        if (frame.agentEvent) {
+          sawAgentActivity = true;
+          if (frame.agentEvent.event.type === 'text-delta') {
+            unacknowledgedPublicText = reconcileManagedCloudPublicText(
+              unacknowledgedPublicText,
+              frame.agentEvent.event.delta,
+            ).pending;
+          }
+          chunks.push({ type: 'agent-event', envelope: frame.agentEvent });
+          const runChunk = publishRunReference({ lastSequence: frame.agentEvent.sequence });
+          if (runChunk) chunks.push(runChunk);
+        }
         if (frame.terminal) {
-          if (!sawVisibleText) {
+          if (!sawVisibleText && !sawAgentActivity) {
             chunks.push({
               type: 'error',
               message: 'AGI Cloud completed without a result this surface can render.',
@@ -843,6 +909,106 @@ export async function* streamFreeChat(
       }
     };
 
+    /** Continue the exact server-owned run instead of submitting the prompt twice. */
+    const followDurableRun = async function* (): AsyncGenerator<FreeTrialChunk> {
+      if (!runReference) return;
+      const client = createManagedCloudAgentRunClient({
+        baseUrl: FREE_TRIAL_GATEWAY,
+        getAuthToken: async () => token,
+      });
+      const replayed: FreeTrialChunk[] = [];
+      let wakeConsumer: (() => void) | undefined;
+      let followed: Awaited<ReturnType<typeof client.followRun>> | undefined;
+      let followError: unknown;
+      let settled = false;
+      const publish = (chunk: FreeTrialChunk): void => {
+        replayed.push(chunk);
+        wakeConsumer?.();
+        wakeConsumer = undefined;
+      };
+
+      void client
+        .followRun(runReference.runId, {
+          afterSequence: runReference.lastSequence,
+          signal: controller.signal,
+          onEvent: (envelope) => {
+            armInactivityWatchdog();
+            if (envelope.event.type === 'text-delta') {
+              const reconciled = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                envelope.event.delta,
+              );
+              unacknowledgedPublicText = reconciled.pending;
+              if (reconciled.unmatchedIncoming) {
+                streamedTextCharacters += reconciled.unmatchedIncoming.length;
+                if (streamedTextCharacters > MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS) {
+                  throw new ManagedChatProtocolError(
+                    'AGI Cloud returned more output than this surface can safely render.',
+                  );
+                }
+                publish({ type: 'text', text: reconciled.unmatchedIncoming });
+              }
+            }
+            publish({ type: 'agent-event', envelope, durableReplay: true });
+            const runChunk = publishRunReference({ lastSequence: envelope.sequence });
+            if (runChunk) publish(runChunk);
+          },
+          onSnapshot: (snapshot) => {
+            armInactivityWatchdog();
+            const runChunk = publishRunReference({
+              lastSequence: snapshot.nextAfterSequence,
+              state: snapshot.run.state,
+              cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+            });
+            if (runChunk) publish(runChunk);
+          },
+        })
+        .then(
+          (result) => {
+            followed = result;
+            settled = true;
+            wakeConsumer?.();
+            wakeConsumer = undefined;
+          },
+          (error: unknown) => {
+            followError = error;
+            settled = true;
+            wakeConsumer?.();
+            wakeConsumer = undefined;
+          },
+        );
+
+      while (!settled || replayed.length > 0) {
+        const next = replayed.shift();
+        if (next) {
+          yield next;
+          continue;
+        }
+        await new Promise<void>((resolve) => {
+          wakeConsumer = resolve;
+        });
+      }
+      if (followError) throw followError;
+      if (!followed) {
+        throw new ManagedChatProtocolError('AGI Cloud run follow ended without a snapshot.');
+      }
+      const finalRunChunk = publishRunReference({
+        lastSequence: followed.lastSequence,
+        state: followed.run.state,
+        cancellationRequestedAt: followed.run.cancellationRequestedAt,
+      });
+      if (finalRunChunk) yield finalRunChunk;
+      if (followed.run.state === 'failed') {
+        yield { type: 'error', message: 'AGI Cloud agent run failed.', code: 'server_error' };
+        return;
+      }
+      if (followed.run.state === 'cancelled') {
+        yield { type: 'error', message: 'Cancelled.', code: 'cancelled' };
+        return;
+      }
+      yield { type: 'done' };
+    };
+
     const emitHandled = async function* (
       dataEvents: readonly string[],
     ): AsyncGenerator<FreeTrialChunk, boolean> {
@@ -861,6 +1027,7 @@ export async function* streamFreeChat(
 
         const { done, value } = await reader.read();
         if (done) break;
+        armInactivityWatchdog();
         const events = sseDecoder.push(decodeNetworkBytes(value, true));
         const handled = await handleEvents(events);
         for (const chunk of handled.chunks) yield chunk;
@@ -892,11 +1059,15 @@ export async function* streamFreeChat(
         if (terminal) return;
       }
 
-      yield {
-        type: 'error',
-        message: 'AGI Cloud closed the stream before completion.',
-        code: 'protocol_error',
-      };
+      if (runReference) {
+        for await (const chunk of followDurableRun()) yield chunk;
+      } else {
+        yield {
+          type: 'error',
+          message: 'AGI Cloud closed the stream before completion.',
+          code: 'protocol_error',
+        };
+      }
     } catch (error) {
       if (controller.signal.aborted) {
         reader.cancel().catch(() => {});
@@ -911,6 +1082,26 @@ export async function* streamFreeChat(
         };
         return;
       }
+      if (runReference) {
+        try {
+          for await (const chunk of followDurableRun()) yield chunk;
+          return;
+        } catch (followError) {
+          if (controller.signal.aborted) {
+            yield abortError();
+            return;
+          }
+          yield {
+            type: 'error',
+            message:
+              followError instanceof Error
+                ? followError.message
+                : 'The AGI Cloud run could not be resumed.',
+            code: 'server_error',
+          };
+          return;
+        }
+      }
       yield {
         type: 'error',
         message: 'The AGI Cloud response stream failed.',
@@ -920,7 +1111,7 @@ export async function* streamFreeChat(
       reader.cancel().catch(() => {});
     }
   } finally {
-    clearTimeout(timeoutHandle);
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     options.signal?.removeEventListener('abort', abortFromCaller);
   }
 }
