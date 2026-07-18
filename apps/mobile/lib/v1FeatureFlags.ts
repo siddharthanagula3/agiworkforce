@@ -91,7 +91,10 @@ export const FEATURES = {
   /** Legacy direct-provider credential entry is not exposed on Mobile. */
   byokKeys: false,
 
-  /** Cloud agent orchestration (Agents screen, agent stores). */
+  /** Durable Managed Cloud task list backed by the tenant-owned run journal. */
+  cloudTasks: true,
+
+  /** Legacy Desktop-companion agent monitor and control screens. */
   agents: false,
 
   /** Desktop Dispatch / WebRTC companion channel. */

@@ -39,6 +39,11 @@ export const CloudAgentRunSnapshotPageSchema = z.object({
   nextAfterSequence: z.number().int().min(-1),
 });
 
+export const CloudAgentRunListPageSchema = z.object({
+  runs: z.array(CloudAgentRunSchema),
+  nextCursor: z.string().min(1).max(512).nullable(),
+});
+
 export const CloudAgentRunCancellationResponseSchema = z.object({
   run: CloudAgentRunSchema,
 });
@@ -51,6 +56,11 @@ export interface CloudAgentRunSnapshotPage {
   run: CloudAgentRun;
   events: AgentEventEnvelope[];
   nextAfterSequence: number;
+}
+
+export interface CloudAgentRunListPage {
+  runs: CloudAgentRun[];
+  nextCursor: string | null;
 }
 
 export function managedCloudAgentRunPath(runId: string): string {
