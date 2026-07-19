@@ -418,3 +418,19 @@ describe('isProcessing flag', () => {
     expect(sendFn.mock.calls.length).toBeLessThanOrEqual(2);
   });
 });
+
+describe('subscribe (live badge)', () => {
+  it('notifies subscribers on enqueue so the queued-count badge stays live', () => {
+    let ticks = 0;
+    const unsub = offlineQueue.subscribe(() => {
+      ticks += 1;
+    });
+    offlineQueue.enqueue(makeMsg({ content: 'a' }));
+    offlineQueue.enqueue(makeMsg({ content: 'b', conversationId: 'conv-2' }));
+    expect(ticks).toBeGreaterThanOrEqual(2);
+    unsub();
+    const before = ticks;
+    offlineQueue.enqueue(makeMsg({ content: 'c', conversationId: 'conv-3' }));
+    expect(ticks).toBe(before); // no longer notified after unsubscribe
+  });
+});

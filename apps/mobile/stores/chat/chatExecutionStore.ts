@@ -2726,7 +2726,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   editMessage: (conversationId, messageId, newContent) => {
     const state = get();
 
-    if (state.isStreaming) {
+    // Scope to THIS conversation — a background stream in another chat must not
+    // block editing here (mirrors retryMessage; the global isStreaming check
+    // wrongly blocked edits in an idle conversation whenever any chat streamed).
+    if (streamingConversations.has(conversationId)) {
       Alert.alert(
         'Cannot Edit',
         'Please wait for the current response to finish before editing a message.',
