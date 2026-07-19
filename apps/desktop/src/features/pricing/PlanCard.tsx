@@ -20,7 +20,12 @@ interface TierContent {
   ctaVariant: 'primary' | 'current';
 }
 
-const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
+// Partial: only the tiers actually shown as desktop plan cards need static content here
+// (PlansModal's VISIBLE_TIERS filters by isPlanSelectableOnSurface(..., 'desktop')). The
+// UIPlanTier union also carries tiers that never render a desktop card (e.g. free,
+// enterprise, team, max_15x); PlanCard null-guards a missing entry rather than requiring
+// invented copy for tiers that aren't shown.
+const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   local: {
     price: 'Free forever',
     bullets: [
@@ -99,6 +104,9 @@ export interface PlanCardProps {
 
 export function PlanCard({ tier, isCurrentPlan, onCtaClick }: PlanCardProps) {
   const content = TIER_CONTENT[tier];
+  // Tiers without desktop card content are filtered out of VISIBLE_TIERS upstream; guard
+  // anyway so an unexpected tier renders nothing instead of crashing on content.price.
+  if (!content) return null;
   const label = PLAN_LABEL[tier];
   const description = PLAN_DESCRIPTION[tier];
   const isFree = isFreePlan(tier);

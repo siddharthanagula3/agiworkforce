@@ -174,22 +174,16 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   row (transparent, borderless, hover-fill). The rail wordmark was plain "AGI" text; now
   anchored by the AgiMark brand glyph (shown collapsed + expanded), matching Claude's
   logo-anchored rail. Both in features/v3/Sidebar.tsx; typecheck clean, no new test fails.
-- OPEN UIDESK-MODEL-PICKER-OPENS-SETTINGS (HIGH — DATA-WIRING, not a new component):
-  the composer model control opens the heavy settings dialog instead of Claude's inline
-  model dropdown. CORRECTED SCOPE (verified in code, supersedes the earlier "needs a new
-  ModelPopover" read): the shared inline popover ALREADY exists — packages/ui/unified-chat
-  ModelSelector.tsx (Radix popover, tested), rendered by ChatInput inside ChatInterface,
-  and WEB uses it inline. Desktop passes ONLY onModelSelectorClick={openSettingsDialog(
-  'models-keys')} to ChatInterface and NO model data (no modelsById/models prop — grep of
-  App.tsx/DesktopShellV3 confirms), so the shared selector has no host models and falls
-  back to the click→settings behavior. TRUE FIX (ponytail): thread desktop's model list
-  (modelStore / llm_get_available_models) into ChatInterface's modelsById + selectedModelId
-  - onSelectModel props so the EXISTING shared ModelSelector renders inline; do NOT build a
-    new component. Real integration: map the Rust model shape → ModelSelector's modelsById,
-    thread through App.tsx→DesktopShellV3→ChatInterface, wire selection back to modelStore +
-    Rust. Full-render test is currently blocked by DESKTOP-PRICING-DANGLING-IMPORT (the v3
-    suite won't load); best done once that founder-gated blocker is resolved so the flow can
-    be render-tested. Not rushed untested.
+- NOT-A-BUG UIDESK-MODEL-PICKER-OPENS-SETTINGS (audit finding refuted, verified in code):
+  the desktop composer ALREADY renders the shared Claude-style inline ModelSelector popover.
+  Desktop uses the shared ChatInput (no composerSlot override — grep confirms) which renders
+  <ModelSelector> from the shared modelStore, and desktop DOES populate that store
+  (App.tsx:692 useChatModelStore.getState().setModels(chatModels)). onModelSelectorClick=
+  openSettingsDialog('models-keys') is wired to ModelSelector's SECONDARY onSettingsClick —
+  the "manage models/keys" link INSIDE the popover — not the picker trigger (Claude has a
+  manage affordance too). So clicking the model control opens the inline popover, not the
+  settings dialog. The audit conflated the manage-link with the whole picker. No change
+  needed. (Almost built/wired a duplicate — verifying the finding first avoided it.)
 - DONE UIDESK-ACCOUNT-MENU-HIJACKS-SIDEBAR (MED): the sidebar no longer unmounts
   Projects+Recents when the avatar is clicked. AccountMenu now renders as a floating
   popover anchored above the footer avatar (position:absolute, bottom:calc(100%+6px),
@@ -241,12 +235,24 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   prod crash and is NOT acceptable. The only correct fix is the client-side billing
   migration decision above. (Likely unnoticed so far only because there are ZERO current
   users and the pricing/gating path may be lazily imported.)
-- OPEN (PRE-EXISTING, discovered this pass) DESKTOP-PLANCARD-TIER-MAP-INCOMPLETE (MED):
-  apps/desktop/src/features/pricing/PlanCard.tsx:23 — the tier→content object is typed
-  Record<UIPlanTier, TierContent> but only defines local/byok/basic/pro/max, missing
-  enterprise/free/max_15x/team → a real desktop `tsc` error. Confirmed pre-existing via
-  git-stash (fails without this session's edits; PlanCard does not import constants/pricing).
-  Separate from the pricing crash above; needs the missing tier content entries.
+- DONE DESKTOP-PLANCARD-TIER-MAP-INCOMPLETE (MED, was a real tsc error): PlanCard.tsx's
+  TIER_CONTENT was Record<UIPlanTier, TierContent> but missing enterprise/free/max_15x/team
+  (the union grew, the map didn't) → desktop tsc error. Fixed WITHOUT inventing product
+  copy: TIER_CONTENT is now Partial<Record<...>> and PlanCard null-guards a missing entry
+  (returns null). Those tiers are filtered out of PlansModal's VISIBLE_TIERS anyway
+  (isPlanSelectableOnSurface(..., 'desktop')), so nothing renders blank. Desktop `tsc`
+  --noEmit is now 0 errors (was red all session). max_15x/team card copy, if ever shown on
+  desktop, is a founder/product-copy follow-up — not invented here.
+- OPEN (PRE-EXISTING, founder-gated product decision) DESKTOP-BASIC-TIER-SURFACE-CONTRADICTION
+  (MED): 1 red test — PlansModal.test "hides the mobile-only Basic tier from the desktop plan
+  list" fails because Basic IS shown on desktop. Root: the shared config
+  PLAN_SURFACE_VISIBILITY.basic = ['web','desktop','mobile'] (billing-catalog.ts:116)
+  CONTRADICTS the desktop test + PlanCard.tsx:46 comment which both assert Basic is
+  mobile-only. Confirmed pre-existing via git-stash (fails identically without this session's
+  edits; not caused by the pricing/PlanCard fixes). DECISION NEEDED (do NOT guess): is the $8
+  Basic tier available on desktop (config right → update the stale desktop test + comment) or
+  mobile-only (config wrong → drop 'desktop'/'web' from basic's surface list)? Billing/
+  product surface strategy — founder call.
 
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
