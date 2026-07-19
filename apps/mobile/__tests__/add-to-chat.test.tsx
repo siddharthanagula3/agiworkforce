@@ -258,25 +258,32 @@ describe('AddToChatSheet', () => {
       const { getByText, queryByText } = renderSheet();
 
       expect(getByText('Temporary chat')).toBeTruthy();
-      // M2: web search + image generation are enabled feature flags (FEATURES.webSearch /
-      // FEATURES.imageGen), so their rows render.
+      // Web search renders in Local for a search-capable model; image generation is
+      // Cloud-only (runs through the managed media route), so it is hidden here.
       expect(getByText('Web search')).toBeTruthy();
-      expect(getByText('Image generation')).toBeTruthy();
+      expect(queryByText('Image generation')).toBeNull();
       // Still gated off in this build.
       expect(queryByText('Computer use')).toBeNull();
       expect(queryByText('Health')).toBeNull();
       expect(queryByText('Beta')).toBeNull();
     });
 
+    it('shows the Image generation row in Cloud mode only', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      const { getByText } = renderSheet();
+      expect(getByText('Image generation')).toBeTruthy();
+    });
+
     it('hides the Web search row for a model whose catalog capability is search: false', () => {
       // deepseek-v4-flash has capabilities.search: false in the catalog — the
       // toggle must not promise a search that silently no-ops server-side.
       useModelStore.setState({ selectedModel: 'deepseek-v4-flash' });
-      const { queryByText, getByText } = renderSheet();
+      const { queryByText } = renderSheet();
 
       expect(queryByText('Web search')).toBeNull();
-      // Other tool rows are unaffected by the search-specific gate.
-      expect(getByText('Image generation')).toBeTruthy();
+      // Image generation is Cloud-only; this Local-mode render hides it regardless
+      // of the search gate.
+      expect(queryByText('Image generation')).toBeNull();
     });
 
     it('shows Web search in Cloud for a tools-capable model through the generic backend', () => {

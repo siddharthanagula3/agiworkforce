@@ -13,6 +13,7 @@ import { Plus, Link as LinkIcon, AudioLines, ArrowUp, X } from 'lucide-react-nat
 import { Text } from '@/components/ui/text';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
+import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import { SendButton } from './SendButton';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
@@ -149,7 +150,16 @@ export function ChatInput({
     attachRef,
     () => ({
       addAttachments: (items: Attachment[]) => {
-        setAttachments((prev) => [...prev, ...items]);
+        // Validate up front so an unsupported/oversized file is rejected with a
+        // specific reason instead of silently becoming an empty stub at send time.
+        const { accepted, rejected } = validateAttachments(items);
+        if (accepted.length > 0) setAttachments((prev) => [...prev, ...accepted]);
+        if (rejected.length > 0) {
+          Alert.alert(
+            rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
+            rejected.map((r) => r.reason).join('\n'),
+          );
+        }
       },
     }),
     [],

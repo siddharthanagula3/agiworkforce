@@ -262,8 +262,16 @@ export default function ChatScreen() {
             })
           : null;
       const slashImageRequest = trimmedInput.startsWith('/image');
+      // The "Image generation" toggle governs natural-language auto-routing to the
+      // media route: when the user turns it OFF, a message the classifier thinks is
+      // an image request is NOT silently routed to image generation (they can still
+      // force it with /image). Default ON preserves the prior auto-routing. This
+      // makes the toggle a real control rather than a dead one.
+      const imageGenEnabled = useChatStore.getState().features.imageGen;
       const routedImageRequest =
-        cloudDispatch?.status === 'selected' && cloudDispatch.dispatch === 'media';
+        imageGenEnabled &&
+        cloudDispatch?.status === 'selected' &&
+        cloudDispatch.dispatch === 'media';
 
       // Image output is dispatched through the canonical media route for both
       // slash commands and natural language. Local conversations never call
@@ -383,15 +391,18 @@ export default function ChatScreen() {
     stopStreaming();
   }, [stopStreaming]);
 
-  const resolveAppMode = useCallback((modelId: string): AppMode => {
-    // Use the canonical classifier, which consults the FULL managed-cloud catalog
-    // (cloudModelSourceMap). The old path used getModelById, whose map only holds
-    // local models + ONE "preview" cloud model per provider — so every non-preview
-    // cloud model (e.g. Claude Opus 4.8, GPT-5.5, Grok 4.3) fell through to 'local'
-    // and wrongly triggered a "Switch from AGI Cloud to Local Mode" prompt when
-    // selected inside a Cloud chat. executionModeForModel classifies them as 'cloud'.
-    return executionModeForSelection(modelId, conversationExecutionMode);
-  }, [conversationExecutionMode]);
+  const resolveAppMode = useCallback(
+    (modelId: string): AppMode => {
+      // Use the canonical classifier, which consults the FULL managed-cloud catalog
+      // (cloudModelSourceMap). The old path used getModelById, whose map only holds
+      // local models + ONE "preview" cloud model per provider — so every non-preview
+      // cloud model (e.g. Claude Opus 4.8, GPT-5.5, Grok 4.3) fell through to 'local'
+      // and wrongly triggered a "Switch from AGI Cloud to Local Mode" prompt when
+      // selected inside a Cloud chat. executionModeForModel classifies them as 'cloud'.
+      return executionModeForSelection(modelId, conversationExecutionMode);
+    },
+    [conversationExecutionMode],
+  );
 
   const handleOpenModelPicker = useCallback(
     (scope?: 'local' | 'cloud') => {
@@ -698,13 +709,12 @@ export default function ChatScreen() {
         // persist the delete server-side so a resync doesn't bring it back.
         const previous = useChatCloudMessageStore.getState().messages[id];
         useChatCloudMessageStore.getState().deleteCloudMessage(id, messageId);
-        deleteCloudMessagesRemote(id, [messageId])
-          .catch(() => {
-            if (previous) {
-              useChatCloudMessageStore.getState().setCloudMessages(id, previous);
-            }
-            Alert.alert('Could not delete message', 'Check your connection and try again.');
-          });
+        deleteCloudMessagesRemote(id, [messageId]).catch(() => {
+          if (previous) {
+            useChatCloudMessageStore.getState().setCloudMessages(id, previous);
+          }
+          Alert.alert('Could not delete message', 'Check your connection and try again.');
+        });
         return;
       }
       deleteMessage(id, messageId);
