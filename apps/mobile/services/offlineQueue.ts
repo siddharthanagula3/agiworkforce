@@ -91,9 +91,32 @@ function isPersistedQueueEntry(value: unknown): value is PersistedQueueEntry {
 class OfflineMessageQueue {
   private queue: QueuedMessage[] = [];
   private _isProcessing: boolean = false;
+  private listeners = new Set<() => void>();
+
+  /**
+   * Subscribe to queue-size changes (enqueue/drain). Returns an unsubscribe fn.
+   * Lets the UI badge stay live instead of showing a stale mount-time count.
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch {
+        // A listener error must never break queue mutation.
+      }
+    }
+  }
 
   /** Persist the current queue to MMKV (message data only, no callbacks). */
   private persistToStorage(): void {
+    this.notify();
     try {
       const entries: PersistedQueueEntry[] = this.queue.map(
         ({ id, conversationId, content, model, queuedAt, retryCount }) => ({

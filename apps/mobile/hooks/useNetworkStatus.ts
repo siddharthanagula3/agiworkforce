@@ -48,7 +48,7 @@ export function useNetworkStatus(): NetworkStatus {
 
   // Pull actions out of the store for queue retry
   const sendMessage = useChatStore((s) => s.sendMessage);
-  const clearQueuedPlaceholders = useChatStore((s) => s.clearQueuedPlaceholders);
+  const resolveOfflineMessage = useChatStore((s) => s.resolveOfflineMessage);
 
   /** Refresh the queue-size display after each enqueue / dequeue. */
   const refreshQueueSize = useCallback(() => {
@@ -62,9 +62,12 @@ export function useNetworkStatus(): NetworkStatus {
 
     try {
       await offlineQueue.processQueue(async (msg) => {
-        // Remove the empty queued placeholder before re-sending so the
-        // fresh user + assistant pair created by sendMessage is not a duplicate.
-        clearQueuedPlaceholders(msg.conversationId);
+        // Remove ONLY this entry's placeholder (by its queue id) before
+        // re-sending, so the fresh user + assistant pair is not a duplicate.
+        // clearQueuedPlaceholders wiped EVERY queued message in the
+        // conversation — draining the first would delete the siblings, and a
+        // failed re-send then left them queued but invisible (message lost).
+        resolveOfflineMessage(msg.conversationId, msg.id);
         await sendMessage(msg.conversationId, msg.content, msg.model);
       });
     } finally {
@@ -72,7 +75,7 @@ export function useNetworkStatus(): NetworkStatus {
       setIsReconnecting(false);
       refreshQueueSize();
     }
-  }, [sendMessage, clearQueuedPlaceholders, refreshQueueSize]);
+  }, [sendMessage, resolveOfflineMessage, refreshQueueSize]);
 
   useEffect(() => {
     // Fetch initial state so the badge renders correctly on mount
@@ -103,9 +106,13 @@ export function useNetworkStatus(): NetworkStatus {
     return unsubscribe;
   }, [handleReconnect]);
 
-  // Keep queueSize in sync whenever the component re-renders (cheap O(1) call)
+  // Keep the queued-count badge live: seed on mount and update on every queue
+  // change (enqueue/drain), instead of freezing at the mount-time value.
   useEffect(() => {
     setQueueSize(offlineQueue.getQueueSize());
+    return offlineQueue.subscribe(() => {
+      setQueueSize(offlineQueue.getQueueSize());
+    });
   }, []);
 
   return { isOnline, isReconnecting, queueSize };
