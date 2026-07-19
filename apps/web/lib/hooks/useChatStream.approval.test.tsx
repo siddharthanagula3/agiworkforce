@@ -395,6 +395,95 @@ describe('useChatStream — tool approval → resume', () => {
     });
   });
 
+  it('fires exactly one resume when two decisions complete the batch concurrently', async () => {
+    // Persisted conversation: each decision parks at `await saveMessageToDb` with
+    // `resolving` still false, so two near-simultaneous completing clicks (here, the two
+    // calls approved concurrently) both re-pass the top guard. The atomic check-and-set
+    // at the resume claim must let only ONE dispatch the /approve POST.
+    useChatStore.setState({
+      activeConversationId: PERSISTED_CONVERSATION_ID,
+      conversations: [
+        {
+          id: PERSISTED_CONVERSATION_ID,
+          title: 'Durable approvals',
+          createdAt: '2026-07-17T12:00:00.000Z',
+          updatedAt: '2026-07-17T12:00:00.000Z',
+          isTemporary: false,
+        },
+      ],
+      messages: [
+        {
+          id: PERSISTED_ASSISTANT_ID,
+          role: 'assistant',
+          content: 'I need permission to continue.',
+          createdAt: '2026-07-17T12:00:01.000Z',
+          model: 'auto',
+          metadata: {
+            cloudAgentRun: {
+              runId: RUN_ID,
+              runPath: RUN_PATH,
+              lastSequence: 9,
+              state: 'awaiting_input',
+            },
+            cloudApproval: {
+              schemaVersion: 1,
+              runId: RUN_ID,
+              calls: [
+                { toolCallId: 'call_1', name: TOOL, input: '{"owner":"acme"}' },
+                { toolCallId: 'call_2', name: TOOL },
+              ],
+            },
+            tools: [
+              {
+                name: TOOL,
+                status: 'awaiting_approval',
+                requiresApproval: true,
+                toolCallId: 'call_1',
+              },
+              {
+                name: TOOL,
+                status: 'awaiting_approval',
+                requiresApproval: true,
+                toolCallId: 'call_2',
+              },
+            ],
+          },
+        },
+      ],
+    });
+    __resetPendingTurnsForTests();
+
+    // Route persists (/messages) to a resolved JSON and the resume (/approve) to a
+    // minimal SSE stream, so both concurrent decisions can park at their save await.
+    vi.mocked(fetch).mockImplementation(async (url) => {
+      if (String(url).includes('/approve')) {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          status: 200,
+          headers: new Headers({ 'X-AGI-Agent-Run-Id': RUN_ID, 'X-AGI-Agent-Run-URL': RUN_PATH }),
+        });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      const p1 = result.current.resolveToolApproval(PERSISTED_ASSISTANT_ID, 'call_1', 'approved');
+      const p2 = result.current.resolveToolApproval(PERSISTED_ASSISTANT_ID, 'call_2', 'approved');
+      await Promise.all([p1, p2]);
+    });
+
+    const approveCalls = vi
+      .mocked(fetch)
+      .mock.calls.filter((c) => String(c[0]).includes('/approve'));
+    expect(approveCalls.length, 'exactly one resume POST despite two concurrent decisions').toBe(1);
+  });
+
   it('restores partial multi-tool decisions after reload and resumes once complete', async () => {
     mockSseStream([
       approvalEvent,
