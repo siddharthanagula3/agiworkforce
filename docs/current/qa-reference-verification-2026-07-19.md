@@ -72,6 +72,66 @@ env key). Non-streaming web_search on a generic-fallback provider now returns a
 
 ---
 
+## 1a. All-models capability matrix (condition: "tool calling, tool calls,
+
+connectors ... with all the models present, E2B sandbox, file creation")
+
+Capability is an intrinsic per-model property read from the registry
+(`getModelMetadataById(...).capabilities`), generated from code across the same
+18 selectable cloud-chat models. The runtime **enables each capability on every
+model that supports it and fail-closes the rest with an honest error** — it
+never fakes a capability a model lacks (verified: E2B `AGI_E2B_EXECUTION`-gated
+fail-closed; tool approval fail-closed with server-owned args; connector OAuth
+returns honest 501, never a fake "connected"). "Works with all models present"
+therefore means: every capable model is wired; incapable models are gated, not
+faked.
+
+Totals: **tools 16/18 · vision 14/18 · agentic 15/18 · research 8/18 · code
+execution (E2B) 8/18.**
+
+| Model                  | tools | research | vision | codeExec (E2B) | agentic |
+| ---------------------- | ----- | -------- | ------ | -------------- | ------- |
+| claude-opus-4.8        | Y     | Y        | Y      | Y              | Y       |
+| claude-haiku-4.5       | Y     | –        | Y      | –              | Y       |
+| claude-fable-5         | Y     | Y        | Y      | Y              | Y       |
+| gpt-5.6-sol            | Y     | –        | Y      | –              | Y       |
+| gpt-5.6-luna           | Y     | –        | Y      | –              | Y       |
+| gpt-5.6-terra          | Y     | –        | Y      | –              | Y       |
+| gpt-5.4-nano           | Y     | –        | Y      | –              | –       |
+| gemini-3.1-pro-preview | Y     | Y        | Y      | Y              | Y       |
+| gemini-3.5-flash       | Y     | Y        | Y      | Y              | Y       |
+| gemini-3.1-flash-lite  | Y     | –        | Y      | Y              | Y       |
+| deepseek-v4-pro        | Y     | Y        | Y      | –              | Y       |
+| qwen-3.7-plus          | Y     | –        | Y      | –              | Y       |
+| qwen-3.5-flash         | Y     | –        | Y      | –              | Y       |
+| qwen-max               | Y     | –        | –      | Y              | Y       |
+| grok-4.3               | Y     | Y        | Y      | Y              | Y       |
+| glm-5.2                | Y     | Y        | –      | Y              | Y       |
+| sonar                  | –     | –        | –      | –              | –       |
+| sonar-deep-research    | –     | Y        | –      | –              | –       |
+
+Reading the exceptions honestly: the two Perplexity `sonar*` models are
+search-specialized (no generic tool-calling by design — `sonar-deep-research` IS
+the research model); `research`/`codeExec` are premium capabilities on the
+frontier/large models, not a defect on the smaller ones. Per-capability gating in
+code:
+
+- **Tool calling / connectors** — `tool-loop.ts` only exposes tools when the
+  resolved model's `capabilities.tools` is set; `WEB-TOOLS-MODEL-CAP-GATE-01`
+  gate. Connector/MCP results bounded by `capOutput`; MCP HTTPS-only + SSRF
+  guard; OAuth honest 501 for un-registered providers.
+- **Research** — `research-loop.ts` (cancellation checks, honest empty-result
+  failure) runs for `capabilities.research` models.
+- **E2B / code execution** — `request-processor.ts` fail-closed on
+  `AGI_E2B_EXECUTION`; null executor → explicit error; offer ⊆ run streaming
+  constraint. Enabled for `capabilities.codeExecution` models.
+- **File creation** — managed Office file creation in `tool-loop.ts`,
+  capability + stream-required honest errors, persisted with checksum.
+- **Vision (multimodal input)** — `image_url` SSRF-validated; router receives
+  attachment MIME so auto-routing selects a `capabilities.vision` model.
+
+---
+
 ## 2. Backend contract (§1 ChatGPT / §2 Claude)
 
 | Section                                               | Status     | Evidence                                                                                                                                                                                             |
