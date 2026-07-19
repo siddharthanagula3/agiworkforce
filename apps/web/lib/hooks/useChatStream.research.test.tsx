@@ -227,7 +227,7 @@ describe('useChatStream deep research handling', () => {
     });
 
     const { result } = renderHook(() => useChatStream());
-    let sendPromise: Promise<void>;
+    let sendPromise: Promise<boolean>;
     await act(async () => {
       sendPromise = result.current.sendMessage('research the topic', { research: true });
       // Let the stream deliver its events, then cancel mid-run.
