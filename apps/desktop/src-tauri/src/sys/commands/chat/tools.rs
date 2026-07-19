@@ -44,7 +44,13 @@ fn required_model_capability(tool_name: &str) -> Option<&'static str> {
         return Some("computer_use");
     }
 
-    if normalized == "search_web" || normalized == "web_search" {
+    // Only the Anthropic-native `web_search` server tool needs the native `search`
+    // capability. The generic `search_web` client tool is backed by the keyless
+    // SearchExecutor (Perplexity if configured, else DuckDuckGo + Brave HTML fallback),
+    // so it works for ANY tool-capable model and is intentionally NOT gated here —
+    // gating it turned the web-search toggle into a silent no-op (fake availability) on
+    // every non-native-search model. `search_web` falls through to the tools-only gate.
+    if normalized == "web_search" {
         return Some("search");
     }
 
@@ -1463,7 +1469,34 @@ mod tests {
 
         assert!(!names.contains(&"terminal_execute"));
         assert!(names.contains(&"file_read"));
-        assert!(!names.contains(&"search_web"));
+        // search_web is the generic keyless client tool — offered to any tool-capable
+        // model regardless of the native `search` capability (no fake-availability toggle).
+        assert!(names.contains(&"search_web"));
+    }
+
+    #[test]
+    fn generic_search_web_reaches_models_without_native_search() {
+        // The keyless search_web tool must be offered even when capabilities.search is
+        // false, otherwise the web-search toggle is a silent no-op (fake availability) on
+        // the ~38 non-native-search models. The Anthropic-native web_search stays gated.
+        let tools = vec![test_tool("search_web"), test_tool("web_search")];
+        let caps = ModelCapabilitiesDto {
+            tools: true,
+            search: false,
+            ..Default::default()
+        };
+
+        let filtered = filter_tools_by_capabilities(tools, &caps);
+        let names: Vec<&str> = filtered.iter().map(|tool| tool.name.as_str()).collect();
+
+        assert!(
+            names.contains(&"search_web"),
+            "generic keyless search_web must reach non-native-search models"
+        );
+        assert!(
+            !names.contains(&"web_search"),
+            "native web_search stays gated on the search capability"
+        );
     }
 
     #[test]
