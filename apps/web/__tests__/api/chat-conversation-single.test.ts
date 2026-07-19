@@ -227,8 +227,10 @@ describe('Single Conversation API', () => {
         );
       });
 
-      it('should update conversation project association', async () => {
+      it('should update conversation project association after verifying project ownership', async () => {
         const updated = { ...mockConversation, project_id: 'proj-1' };
+        // 1) destination-project ownership check succeeds, 2) the update runs.
+        mockQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
         mockQuery.mockResolvedValueOnce([updated]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
@@ -245,8 +247,58 @@ describe('Single Conversation API', () => {
         const data = await response.json();
         expect(data.conversation.project_id).toBe('proj-1');
         expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('from user_projects'),
+          expect.arrayContaining(['proj-1', 'user-123']),
+        );
+        expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('project_id'),
           expect.arrayContaining([true, 'proj-1']),
+        );
+      });
+
+      it('rejects moving a conversation into a project the user does not own', async () => {
+        // Ownership check returns no row → foreign/deleted/nonexistent project.
+        mockQuery.mockResolvedValueOnce([]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+          method: 'PUT',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ projectId: 'someone-elses-project' }),
+        });
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(404);
+        // The conversation update must NOT run when ownership fails.
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+        expect(mockQuery).not.toHaveBeenCalledWith(
+          expect.stringContaining('update web_conversations'),
+          expect.anything(),
+        );
+      });
+
+      it('allows clearing the project association (projectId null) without an ownership check', async () => {
+        const updated = { ...mockConversation, project_id: null };
+        mockQuery.mockResolvedValueOnce([updated]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+          method: 'PUT',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ projectId: null }),
+        });
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(200);
+        // Only the update runs — no user_projects lookup for a null target.
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('update web_conversations'),
+          expect.anything(),
         );
       });
 

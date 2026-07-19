@@ -64,6 +64,11 @@ export interface CombinedChatState {
   makeConversationPermanent: (id: string) => void;
   markConversationRead: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  setMessageReaction: (
+    conversationId: string,
+    messageId: string,
+    reaction: 'thumbsUp' | 'thumbsDown' | null,
+  ) => void;
   enqueueOfflineMessage: (
     conversationId: string,
     content: string,
@@ -148,6 +153,7 @@ function buildCombinedState(
     makeConversationPermanent: msg.makeConversationPermanent,
     markConversationRead: msg.markConversationRead,
     deleteMessage: msg.deleteMessage,
+    setMessageReaction: msg.setMessageReaction,
     enqueueOfflineMessage: msg.enqueueOfflineMessage,
     beginImageGeneration: msg.beginImageGeneration,
     completeImageGeneration: msg.completeImageGeneration,
