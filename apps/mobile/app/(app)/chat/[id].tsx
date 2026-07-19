@@ -350,7 +350,21 @@ export default function ChatScreen() {
       const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
 
       setQuotedMessage(null);
-      // Resolve true the moment the store commits the user message (all
+      // Voice / hands-free (awaitCompletion) must wait for the FULL reply so it can
+      // read it aloud and re-arm the mic — resolve on stream completion (sendMessage's
+      // own promise), NOT on accept. Without this the voice caller resolved on
+      // onAccepted (pre-stream), so it read an empty reply and never re-armed. Mirrors
+      // the image path above and the home screen's text path.
+      if (dispatchOptions?.awaitCompletion) {
+        return sendMessage(id, finalText, selectedModel, attachments, sendOptions).catch(
+          (err: unknown) => {
+            console.warn('[ChatScreen] sendMessage rejected:', err);
+            setSendError('Message could not be sent. Please try again.');
+            return false;
+          },
+        );
+      }
+      // Otherwise resolve true the moment the store commits the user message (all
       // pre-flight gates passed) so the composer clears then — not on tap and
       // not only at stream end. Falls back to sendMessage's own accepted/
       // blocked return value if onAccepted never fires.

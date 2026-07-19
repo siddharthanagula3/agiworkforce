@@ -100,12 +100,15 @@ web UI/UX (status per item; verified 2026-07-19 vs current code):
 
 mobile UI/UX (status per item; verified 2026-07-19 vs current code):
 
-- OPEN MOBILEUI-VOICE-NO-REPLY (HIGH): the voice screen's handleSend text path
-  (chat/[id].tsx ~357-370) resolves on onAccepted (pre-stream), ignoring the
-  awaitCompletion:true the voice caller passes (~680-698); onAccepted fires before the
-  stream starts (chatExecutionStore.ts ~1171 vs ~1199), so voice never reads the reply
-  and hands-free never re-arms. The awaitCompletion fix already exists in the image path
-  and the sibling home screen — port that pattern here.
+- DONE MOBILEUI-VOICE-NO-REPLY (HIGH): the voice screen's handleSend text path
+  (chat/[id].tsx) now honors awaitCompletion — when set (the voice caller passes it), it
+  returns sendMessage's own promise (resolves at stream completion) instead of the
+  onAccepted early-resolve race, so handleVoiceSendMessage reads the completed reply for
+  TTS and hands-free re-arms. Direct port of the already-shipped home-screen text path
+  ((tabs)/chat.tsx ~279) and the image path in the same file. Typecheck + voice suites
+  green; feeds the unit-tested findNewAssistantResponse. FOLLOW-UP (ponytail, non-
+  blocking): both screens now duplicate the awaitCompletion-vs-onAccepted dispatch shape
+  — extract a shared resolveSendResult helper to dedupe + unit-test the branch directly.
 - DONE MOBILEUI-RECONNECT-QUEUE-WIPE (MED): reconnect flush now resolves each
   placeholder by (conversationId, queueId) (useNetworkStatus.ts ~70;
   chatMessageStore.ts filters only m.offlineQueueId !== queueId), removing the single
