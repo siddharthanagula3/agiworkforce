@@ -105,7 +105,7 @@ describe('buildGroupedQuickPickItems — e2b-flagged synthetic model is filtered
       };
 
       const synthMeta = {
-        ...actual.getModelMetadataById('claude-sonnet-4.6'),
+        ...actual.getModelMetadataById('claude-sonnet-5'),
         id: SYNTH_ID,
         name: 'Synthetic E2B Model',
         requiresEnvironment: 'e2b' as const,
@@ -144,7 +144,7 @@ describe('buildGroupedQuickPickItems — e2b-flagged synthetic model is filtered
       };
 
       const synthMeta = {
-        ...actual.getModelMetadataById('claude-sonnet-4.6'),
+        ...actual.getModelMetadataById('claude-sonnet-5'),
         id: SYNTH_ID,
         name: 'Synthetic Ungated Model',
         // requiresEnvironment is intentionally absent
