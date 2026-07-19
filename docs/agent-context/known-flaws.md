@@ -91,11 +91,12 @@ web UI/UX (status per item; verified 2026-07-19 vs current code):
   the completion point — no await between read and write — so two concurrent completing
   decisions (double-click, or last two calls approved together) dispatch exactly one
   /approve POST instead of two. Tested (concurrency test asserts single resume).
-- OPEN WEBUI-DELETED-CONV-BLANK-BOUNCE (MED): loadConversation records the 404/403
-  error but the next setActiveConversation(null) resets error:null before
-  router.replace('/chat') and no toast fires (WebChatPage.tsx ~749-754), so the user
-  lands on a blank new-chat surface with no feedback. Next: surface a toast/error before
-  the redirect.
+- DONE WEBUI-DELETED-CONV-BLANK-BOUNCE (MED): the loadConversation-failure branch now
+  captures the store error (the server's 404/403 message) BEFORE setActiveConversation
+  (null) resets it and shows a sonner toast.error alongside the router.replace('/chat'),
+  so opening a deleted/forbidden conversation gives feedback instead of a silent bounce
+  to a blank surface. Verified by typecheck + chat-route tests; no dedicated render test
+  (the WebChatPage integration harness is disproportionate for a 3-line toast).
 
 mobile UI/UX (status per item; verified 2026-07-19 vs current code):
 
