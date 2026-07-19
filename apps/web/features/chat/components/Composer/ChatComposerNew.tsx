@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   Plus,
   X,
+  Clock,
   Paperclip,
   Globe,
   Sparkles,
@@ -249,7 +250,6 @@ function MenuToggleRow({
 const ChatComposerNewComponent = ({
   onSend,
   isLoading = false,
-  isGenerating = false,
   placeholder = 'Ask anything. Type / for commands',
   disabled = false,
   prefillText,
@@ -268,6 +268,14 @@ const ChatComposerNewComponent = ({
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
+  // Follow-up queue (claude.ai / ChatGPT parity): a message composed while the
+  // current turn is still streaming is captured here and auto-sent when the turn
+  // finishes, so the user never has to wait or manually re-send. Snapshotting the
+  // exact onSend arguments (incl. the toggle/skill/project meta) at queue time
+  // avoids sending with stale options if the user changes a toggle afterward.
+  const pendingQueueRef = useRef<Parameters<typeof onSend> | null>(null);
+  const wasLoadingRef = useRef(false);
+  const [queuedPreview, setQueuedPreview] = useState<string | null>(null);
   const {
     attachments,
     previews,
@@ -814,7 +822,7 @@ const ChatComposerNewComponent = ({
 
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
-    if (isLoading || disabled) return;
+    if (disabled) return;
     if (hasAttachmentConflict) return;
     if (trialExhausted) {
       onUpgradeRequest?.();
@@ -822,7 +830,10 @@ const ChatComposerNewComponent = ({
     }
 
     // Image generation mode: delegate entirely to parent via onGenerateImage.
+    // Image generation is not part of the streaming chat turn, so it is not
+    // queued — it simply waits until the current turn is idle.
     if (imageMode) {
+      if (isLoading) return;
       const prompt = message.trim();
       if (!prompt) return;
       onGenerateImage?.(prompt, { aspectRatio: imageAspectRatio, modelId: imageModelId });
@@ -830,7 +841,7 @@ const ChatComposerNewComponent = ({
       return;
     }
 
-    const result = onSend(
+    const sendArgs: Parameters<typeof onSend> = [
       message,
       attachments.length > 0 ? attachments : undefined,
       selectedSkill?.name,
@@ -845,7 +856,21 @@ const ChatComposerNewComponent = ({
         styleMode: styleMode !== 'normal' ? styleMode : undefined,
         skillName: selectedSkill?.name ?? undefined,
       },
-    );
+    ];
+
+    // Follow-up while the current turn is still streaming: queue this message and
+    // flush it when the turn finishes (see the isLoading-transition effect below).
+    // Only the latest queued message is kept. This is the honest counterpart to the
+    // server's per-conversation concurrency guard — the client never fires a second
+    // concurrent turn; it waits for the first to settle.
+    if (isLoading) {
+      pendingQueueRef.current = sendArgs;
+      setQueuedPreview(message.trim() || 'Attachment');
+      clearComposerState();
+      return;
+    }
+
+    const result = onSend(...sendArgs);
 
     if (result === false) return;
     clearComposerState();
@@ -879,6 +904,24 @@ const ChatComposerNewComponent = ({
     onSend,
     clearComposerState,
   ]);
+
+  // Flush a queued follow-up when the streaming turn finishes (isLoading true→false).
+  useEffect(() => {
+    if (wasLoadingRef.current && !isLoading) {
+      const pending = pendingQueueRef.current;
+      if (pending) {
+        pendingQueueRef.current = null;
+        setQueuedPreview(null);
+        onSend(...pending);
+      }
+    }
+    wasLoadingRef.current = isLoading;
+  }, [isLoading, onSend]);
+
+  const cancelQueuedMessage = useCallback(() => {
+    pendingQueueRef.current = null;
+    setQueuedPreview(null);
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -918,12 +961,13 @@ const ChatComposerNewComponent = ({
   const composerDisabled = disabled || trialExhausted;
 
   /**
-   * Derive the 3-state mode for SendButton:
-   * - 'stop'  -- AI is loading (actively streaming); clicking aborts the stream
-   * - 'queue' -- AI is generating but user has typed a message to queue
-   * - 'send'  -- idle; button submits the current message
+   * Derive the SendButton mode. While a turn streams the button always offers
+   * 'stop' (Stop stays reachable); a follow-up composed during streaming is
+   * queued via Enter and shown as a pending chip, then auto-sent on completion
+   * (see handleSubmit + the flush effect above) — so the button never needs a
+   * separate 'queue' state, which would have hidden Stop.
    */
-  const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
+  const sendButtonMode = isLoading ? 'stop' : 'send';
 
   // + button indicator: amber tint when any feature is active
   const hasOverflowActive =
@@ -944,6 +988,26 @@ const ChatComposerNewComponent = ({
           className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
         >
           {localNotice}
+        </div>
+      )}
+
+      {queuedPreview && (
+        <div
+          className="mb-2 flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
+          data-testid="queued-followup"
+        >
+          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate">
+            Queued · sends when the current response finishes: {queuedPreview}
+          </span>
+          <button
+            type="button"
+            onClick={cancelQueuedMessage}
+            className="shrink-0 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Cancel queued message"
+          >
+            Cancel
+          </button>
         </div>
       )}
 
@@ -1159,8 +1223,17 @@ const ChatComposerNewComponent = ({
               onKeyDown={handleKeyDown}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder={imageMode ? 'Describe or edit an image' : placeholder}
-              disabled={isLoading || composerDisabled}
+              placeholder={
+                isLoading && !imageMode
+                  ? 'Reply — sends when the current response finishes'
+                  : imageMode
+                    ? 'Describe or edit an image'
+                    : placeholder
+              }
+              // Type-ahead: the textarea stays enabled while a turn streams so the
+              // user can compose a follow-up (queued + auto-sent on completion).
+              // Image mode has no streaming turn to type ahead of, so it stays gated.
+              disabled={composerDisabled || (imageMode && isLoading)}
               className={cn(
                 'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
                 emptyState
