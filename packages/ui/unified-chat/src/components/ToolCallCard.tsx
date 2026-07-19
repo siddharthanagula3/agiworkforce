@@ -53,6 +53,10 @@ export interface ToolCallCardProps {
   startedAt?: number;
   /** Tool-kind override. Omit to use InlineToolCall's own name-based auto-inference. */
   kind?: InlineToolKind;
+  /** Badge-letter override (Claude parity) — e.g. a connector's own initial ("F"
+   * for Filesystem) instead of the generic per-kind letter. Only used with the
+   * badge icon style. */
+  iconLetter?: string;
   /** Injected transport callbacks — the caller owns the actual approve/reject/cancel side effect (IPC call, REST call, store mutation). */
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
@@ -199,6 +203,7 @@ const ToolCallCardComponent = ({
   elapsedMs,
   startedAt,
   kind,
+  iconLetter,
   onApprove,
   onReject,
   onCancel,
@@ -369,6 +374,7 @@ const ToolCallCardComponent = ({
           status={inlineStatus}
           kind={kind}
           iconStyle="badge"
+          iconLetter={iconLetter}
           argSummary={durationLabel}
           errorMessage={status === 'error' ? error : undefined}
           body={body}

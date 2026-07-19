@@ -128,6 +128,16 @@ function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
   }
 }
 
+/**
+ * The connector's own initial for the badge (Claude parity — "F" for Filesystem,
+ * "G" for GitHub) instead of the generic "M". Derived from an MCP tool name
+ * (`mcp__<serverId>__<tool>`); undefined for non-connector tools.
+ */
+function connectorInitial(name: string): string | undefined {
+  const match = /^mcp__(.)/i.exec(name);
+  return match?.[1]?.toUpperCase();
+}
+
 function categoryToKind(category: AgentEventToolCategory): InlineToolKind {
   switch (category) {
     case 'web-search':
@@ -536,6 +546,11 @@ export function AgentActivityTimeline({
                     elapsedMs={entry.elapsedMs}
                     startedAt={entry.status === 'running' ? entry.startedAtMs : undefined}
                     kind={categoryToKind(entry.category)}
+                    iconLetter={
+                      entry.category === 'connector' || entry.category === 'mcp'
+                        ? connectorInitial(entry.name)
+                        : undefined
+                    }
                     expired={isApprovalExpired?.(entry.toolCallId) ?? false}
                     onApprove={onApprove}
                     onReject={onReject}
