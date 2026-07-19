@@ -25,6 +25,7 @@ import {
   type TaskChipType,
 } from '@/src/features/chat/components/TaskChips';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
+import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
@@ -365,23 +366,21 @@ export default function ChatScreen() {
         );
       }
       // Otherwise resolve true the moment the store commits the user message (all
-      // pre-flight gates passed) so the composer clears then — not on tap and
-      // not only at stream end. Falls back to sendMessage's own accepted/
-      // blocked return value if onAccepted never fires.
-      return new Promise<boolean>((resolve) => {
-        sendMessage(id, finalText, selectedModel, attachments, {
-          ...(sendOptions ?? {}),
-          onAccepted: () => resolve(true),
-        })
-          .then((accepted) => resolve(accepted))
-          .catch((err: unknown) => {
-            // Never fail silently: surface the failure in the SendErrorBanner
-            // (the composer keeps the draft because we resolve false).
-            console.warn('[ChatScreen] sendMessage rejected:', err);
-            setSendError('Message could not be sent. Please try again.');
-            resolve(false);
-          });
-      });
+      // pre-flight gates passed) so the composer clears then — not on tap and not only
+      // at stream end. Shared with the home screen via resolveOnAcceptedSend.
+      return resolveOnAcceptedSend(
+        (onAccepted) =>
+          sendMessage(id, finalText, selectedModel, attachments, {
+            ...(sendOptions ?? {}),
+            onAccepted,
+          }),
+        (err) => {
+          // Never fail silently: surface the failure in the SendErrorBanner
+          // (the composer keeps the draft because we resolve false).
+          console.warn('[ChatScreen] sendMessage rejected:', err);
+          setSendError('Message could not be sent. Please try again.');
+        },
+      );
     },
     [
       id,
