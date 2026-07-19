@@ -117,6 +117,50 @@ describe('getWorkModeEntitlementError', () => {
       });
     }
   });
+
+  it('rejects non-streaming web_search on a generic-fallback provider before reserving credits', async () => {
+    // deepseek has no native web-search branch, so search would only run via the
+    // generic fallback tool, which requires streaming. A non-streaming request
+    // must be rejected (not silently answered without browsing).
+    const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'ws-nostream-1',
+        'x-agi-surface': 'web',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-v4-flash',
+        messages: [{ role: 'user', content: 'What is the latest news today?' }],
+        web_search: true,
+        stream: false,
+      }),
+    });
+
+    const result = await processRequest(request, {
+      ok: true,
+      userId: 'user-pro',
+      token: 'session-token',
+      subscription: {
+        id: 'sub-pro',
+        user_id: 'user-pro',
+        plan_tier: 'pro',
+        status: 'active',
+        current_period_start: new Date('2026-07-01T00:00:00Z'),
+        current_period_end: new Date('2026-08-01T00:00:00Z'),
+        stripe_subscription_id: 'stripe-sub-pro',
+        stripe_price_id: 'stripe-price-pro',
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(422);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: { code: 'web_search_stream_required', param: 'stream' },
+      });
+    }
+  });
 });
 
 describe('resolveManagedUsageLeaseSeconds', () => {
