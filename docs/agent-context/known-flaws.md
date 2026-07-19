@@ -23,33 +23,45 @@ substring — budget_transfer/create_playlist/delete_query misclassified paralle
 safe), provider-stream arg-JSON cap (256KB) + tool-call-per-step cap (32) +
 duplicate tool_call id re-mint.
 
-- OPEN TOOLLOOP-NO-INFLIGHT-TIMEOUT (HIGH): no per-tool/per-provider-call timeout;
-  AbortController is a documented no-op; a hung tool/stream runs until platform
-  SIGKILL, which skips the generator finally → leaked E2B sandbox. Thread a real
-  AbortSignal + Promise.race timeout into runMcpTool/buildToolLoopStream.
-- OPEN TOOLLOOP-UNBOUNDED-FANOUT (MED): Promise.all over all read-only calls, no
-  concurrency pool, no per-turn total cap → outbound request flood. Add p-limit.
+- DONE TOOLLOOP-NO-INFLIGHT-TIMEOUT (HIGH, commit dc0c6e569): per-tool wall-clock
+  bound. `withToolTimeout(run, name, 120_000)` wraps every executeTool; a hung tool
+  resolves to an error result (never rejects, never runs to SIGKILL) so the loop
+  proceeds and the sandbox is paused/killed on the normal end-of-turn path. Tested.
+- DONE TOOLLOOP-UNBOUNDED-FANOUT (MED, commit 5f5273edc): read-only calls run
+  through `mapWithConcurrency(readOnly, 4, …)` (in-repo worker pool, order-preserving,
+  no new dep) instead of `Promise.all` → outbound fan-out capped at 4 in flight. Tested.
 - OPEN TOOLLOOP-CONTEXT-GROWTH (MED): messages grow every step (100KB tool results
   × up to 100 steps), no trim for managed/BYOK → mid-loop context overflow.
 
-E2B (OPEN — tracked, batch in progress):
+E2B (batch mostly DONE — see per-item status):
 
-- E2B-GATE-BYPASS (HIGH): execute_code intercept fires on tool NAME + resolves
-  getE2BExecutor (gated key||flag); with E2B_API_KEY present but AGI_E2B_EXECUTION
-  off, a loop entered for connectors/agiwork can run a model-emitted execute_code.
-  Guard the intercept with e2bCutoverEnabled() (flag-only).
-- E2B-PAUSE-BY-LOOKUP-LEAK (HIGH): tool-loop finally pauses via Redis re-lookup
-  (fail-open); if saveE2BSession errored/Redis down the just-created sandbox is
-  never paused/killed → bills to the 10-min backstop. Dispose the executor's OWN
-  live sandboxId directly; use Redis only as a resume hint.
-- E2B-NO-USER-QUOTA (HIGH): no per-user concurrent-sandbox cap; N conversations =
-  N concurrent 10-min sandboxes. Enforce a per-user cap before Sandbox.create.
-- E2B-KILL-BEFORE-DELETE (MED): killE2BSession deletes the Redis mapping before
-  Sandbox.kill → orphan if kill is skipped/throws. Kill first, delete after.
-- E2B-TRANSIENT-RESUME-ORPHAN (MED): a transient connect() failure creates a fresh
-  sandbox + overwrites the mapping, orphaning the still-live paused one.
-- E2B-NO-ORPHAN-SWEEPER (MED): no cron reaps paused sandboxes by metadata age.
-- E2B-ABORT-NOT-THREADED (MED): no AbortSignal/timeout into sandbox.runCode.
+- DONE E2B-GATE-BYPASS (HIGH): the execution intercept is now guarded by
+  `if (!e2bCutoverEnabled())` (tool-loop.ts:1059, flag-only) before routeExecutionTool,
+  so E2B_API_KEY present + AGI_E2B_EXECUTION off can no longer run a model-emitted
+  execute_code.
+- DONE E2B-PAUSE-BY-LOOKUP-LEAK (HIGH): the executor's pause() now pauses THIS
+  executor's own captured live sandboxId (never a Redis re-lookup), so a failed/absent
+  session write can't leave the just-created sandbox billing to the backstop.
+- DONE E2B-NO-USER-QUOTA (HIGH, commit 9cbe21a6c): scoped sandboxes are tagged with
+  userId in metadata; getE2BExecutor counts the user's running+paused sandboxes via the
+  list-API metadata filter and refuses (fail-closed) at 5 concurrent per user before
+  Sandbox.create. Quota-CHECK failure fails open (100-per-team account cap is the hard
+  backstop). Tested (6 cases).
+- DONE E2B-KILL-BEFORE-DELETE (MED): killE2BSession kills on the captured id FIRST,
+  then clears the Redis mapping in finally → no orphan when kill is skipped/throws.
+- OPEN E2B-TRANSIENT-RESUME-ORPHAN (MED): a transient connect() failure creates a fresh
+  sandbox + overwrites the mapping, orphaning the still-live paused one. Cost now bounded:
+  the orphan counts against the user's concurrency quota (running+paused) and E2B auto-kills
+  it at its timeout. A precise handle-and-kill is deferred.
+- OPEN E2B-NO-ORPHAN-SWEEPER (MED): no cron reaps paused sandboxes by metadata age.
+  Deferred (cron infra; Hobby-plan cron limits + manual-deploy topology). Orphan cost is
+  bounded by the per-user quota + E2B timeout auto-kill in the meantime.
+- MITIGATED E2B-ABORT-NOT-THREADED (MED): @e2b/code-interpreter's RunCodeOpts exposes
+  only timeoutMs/requestTimeoutMs, NO AbortSignal (verified against dist/index.d.ts@2.6.1),
+  so there is no clean per-execution abort; force-killing the sandbox on abort would destroy
+  conversation state. In-flight code is bounded by three layers instead: runCode's 60s
+  execution timeout (SDK default), the 120s withToolTimeout wrapper, and the sandbox
+  timeoutMs auto-pause backstop. No hacky abort was added.
 
 web UI/UX (OPEN — tracked):
 
