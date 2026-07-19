@@ -13,11 +13,13 @@ import {
   Mail,
   Presentation,
   Shield,
+  FolderDown,
 } from 'lucide-react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import { useArtifactsStore } from '../../stores/artifacts-store';
+import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 import type { ArtifactData } from './ArtifactPreview';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -264,6 +266,19 @@ export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArti
         <div role="listitem">
           <OverflowRow count={overflow} onClick={openFirst} />
         </div>
+      )}
+      {/* Download-all: matches claude.ai's button beneath a multi-file response.
+          Reuses the shared downloadAllArtifacts helper (ponytail — same impl as
+          the artifact panel header). */}
+      {artifacts.length > 1 && (
+        <button
+          type="button"
+          onClick={() => void downloadAllArtifacts(artifacts)}
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-border/50 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <FolderDown className="h-3.5 w-3.5" aria-hidden="true" />
+          Download all
+        </button>
       )}
     </div>
   );
