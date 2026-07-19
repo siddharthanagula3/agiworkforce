@@ -59,7 +59,7 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
     expect((await response.json()).error.message).toContain('1 custom connector');
   });
 
-  it('uses the paid safety cap without limiting paid users to one', async () => {
+  it('uses the Pro plan limit from the shared billing catalog', async () => {
     mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
     mocks.query
       .mockResolvedValueOnce([{ count: '1' }])
@@ -81,6 +81,19 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
     expect(response.status).toBe(201);
     const [sql, params] = mocks.query.mock.calls[2] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('custom_connectors'");
-    expect(params).toContain(10);
+    expect(params).toContain(25);
+  });
+
+  it('fails closed for an unknown subscription before network work', async () => {
+    mocks.getSubscription.mockResolvedValue({ plan_tier: 'starter' });
+    mocks.query.mockResolvedValueOnce([{ count: '0' }]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(400);
+    expect(mocks.connect).not.toHaveBeenCalled();
+    expect((await response.json()).error.message).toBe(
+      'Your current subscription does not allow custom connectors. Choose an eligible plan and try again.',
+    );
   });
 });

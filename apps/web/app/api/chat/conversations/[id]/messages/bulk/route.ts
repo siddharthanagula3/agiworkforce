@@ -16,6 +16,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -99,7 +100,7 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
                   metadata = excluded.metadata
               where web_messages.conversation_id = excluded.conversation_id
             returning id, role, content, model, provider,
-                      input_tokens, output_tokens, cost_cents, created_at, metadata
+                      input_tokens, output_tokens, created_at, metadata
           `,
           [
             msg.id,
@@ -123,7 +124,7 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
               (conversation_id, role, content, model, metadata)
             values ($1, $2, $3, $4, $5::jsonb)
             returning id, role, content, model, provider,
-                      input_tokens, output_tokens, cost_cents, created_at, metadata
+                      input_tokens, output_tokens, created_at, metadata
           `,
           [
             conversationId,
@@ -137,7 +138,10 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
       }
     }
 
-    return NextResponse.json({ saved: saved.length, messages: saved });
+    return NextResponse.json({
+      saved: saved.length,
+      messages: saved.map((message) => ManagedCloudMessageWireSchema.parse(message)),
+    });
   } catch (error) {
     // Re-throw typed AppErrors (e.g. the cross-conversation rejection above).
     if (error && typeof error === 'object' && ('status' in error || 'statusCode' in error)) {

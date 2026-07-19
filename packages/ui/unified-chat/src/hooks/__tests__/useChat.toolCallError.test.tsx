@@ -615,7 +615,7 @@ describe('useChat — registry-backed Auto routing', () => {
     );
   });
 
-  it('fails closed before persistence when Desktop managed Auto is not wired', () => {
+  it('admits Desktop managed Auto through the implemented cloud profile', async () => {
     seedCloudConversation();
     const sendMessage = vi.fn(async () => {});
     const runtime: ChatRuntime = {
@@ -630,12 +630,15 @@ describe('useChat — registry-backed Auto routing', () => {
 
     act(() => result.current.sendMessage('Implement a function and unit tests'));
 
-    expect(sendMessage).not.toHaveBeenCalled();
-    expect(useChatStore.getState().messagesByConversation['conv-cloud']).toEqual([]);
-    expect(useChatStore.getState().isStreaming).toBe(false);
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    expect(sendMessage).toHaveBeenCalledWith(
+      'conv-cloud',
+      'Implement a function and unit tests',
+      expect.objectContaining({ model: 'claude-sonnet-5', provider: 'anthropic' }),
+    );
   });
 
-  it('fails closed for an explicit model when the Desktop managed profile is unwired', () => {
+  it('admits an explicit model through the implemented Desktop cloud profile', async () => {
     seedCloudConversation();
     useModelStore.setState({ selectedModelId: routedModel.id });
     const sendMessage = vi.fn(async () => {});
@@ -651,8 +654,12 @@ describe('useChat — registry-backed Auto routing', () => {
 
     act(() => result.current.sendMessage('Explain this function'));
 
-    expect(sendMessage).not.toHaveBeenCalled();
-    expect(useChatStore.getState().messagesByConversation['conv-cloud']).toEqual([]);
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    expect(sendMessage).toHaveBeenCalledWith(
+      'conv-cloud',
+      'Explain this function',
+      expect.objectContaining({ model: 'claude-sonnet-5', provider: 'anthropic' }),
+    );
   });
 
   it('admits a GA explicit model on Web', async () => {

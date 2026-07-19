@@ -11,12 +11,26 @@ export const authenticatedUserSchema = z
 export type AuthenticatedUser = z.infer<typeof authenticatedUserSchema>;
 
 /**
- * req.user's real shape. `token` is NOT a JWT claim, so it can't live inside
- * authenticatedUserSchema (which validates the decoded payload) — it's the
- * raw, already-signature-verified bearer string attached separately by
- * authenticateToken (middleware/auth.ts). Required, not optional: every
- * request that reaches a route handler went through authenticateToken first,
- * which always sets it. Consumed by getUserScopedClient() (lib/neonClients.ts)
- * to bind Postgres RLS via NeonDatabaseAdapter.withUser(token).
+ * Trusted surface class for a managed-cloud caller. Derived from the verified
+ * token ISSUER (auth.ts `verifyGatewayOrClerkToken`), never from a caller
+ * header: first-party gateway (device-authorization) tokens are the CLI/IDE
+ * developer surfaces, and Clerk tokens are the first-party app surfaces
+ * (desktop/mobile). Managed developer access requires Pro or higher
+ * (`developer_surfaces`); app surfaces require `managed_chat`. Local/BYOK never
+ * reach a managed gate, so this classification does not affect them.
  */
-export type AuthenticatedRequestUser = AuthenticatedUser & { token: string };
+export type CloudSurfaceClass = 'app' | 'developer';
+
+/**
+ * req.user's real shape. `token` and `surface` are NOT validated JWT claims, so
+ * they can't live inside authenticatedUserSchema (which validates the decoded
+ * payload) — they are attached separately by authenticateToken
+ * (middleware/auth.ts). Required, not optional: every request that reaches a
+ * route handler went through authenticateToken first, which always sets them.
+ * `token` is consumed by getUserScopedClient() (lib/neonClients.ts) to bind
+ * Postgres RLS via NeonDatabaseAdapter.withUser(token).
+ */
+export type AuthenticatedRequestUser = AuthenticatedUser & {
+  token: string;
+  surface: CloudSurfaceClass;
+};

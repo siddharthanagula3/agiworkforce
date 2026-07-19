@@ -7,6 +7,8 @@
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { loadStripe } from '@stripe/stripe-js';
+import type { SelfServePaidPlanTier } from '@agiworkforce/types';
 
 // Employee purchase functions removed - hiring is now free
 
@@ -35,8 +37,7 @@ function extractErrorMessage(body: unknown, fallback: string): string {
  * Open Stripe Customer Portal for subscription management
  */
 // Updated: Jan 17th 2026 - Added authorization header
-export async function openBillingPortal(customerId: string): Promise<void> {
-  void customerId;
+export async function openBillingPortal(): Promise<void> {
   const authToken = await getAuthToken();
   if (!authToken) {
     throw new Error('User not authenticated. Please log in to access billing.');
@@ -60,16 +61,6 @@ export async function openBillingPortal(customerId: string): Promise<void> {
 
   // Redirect to Stripe Customer Portal
   window.location.href = url;
-}
-
-/**
- * Format price for display
- */
-export function formatPrice(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(amount);
 }
 
 /**
@@ -114,39 +105,24 @@ export async function upgradeToMaxPlan(data: {
   return upgradeToPlan({ ...data, plan: 'max' });
 }
 
-/**
- * Create Hobby Plan subscription and redirect to Stripe Checkout
- */
-export async function upgradeToHobbyPlan(data: {
+/** Create Max 15x subscription and redirect to Stripe Checkout. */
+export async function upgradeToMax15xPlan(data: {
   userId: string;
   userEmail: string;
-  billingPeriod?: 'monthly' | 'yearly';
 }): Promise<void> {
-  return upgradeToPlan({ ...data, plan: 'hobby' });
+  return upgradeToPlan({ ...data, plan: 'max_15x' });
 }
 
 /**
- * Create Basic Plan subscription and redirect to Stripe Checkout. Basic
- * prices by currency (USD/INR), not billing interval — see
- * app/api/checkout/route.ts and lib/pricing.ts.
+ * Create Basic Plan subscription and redirect to Stripe Checkout. The server
+ * derives currency from trusted deployment geolocation; clients never choose
+ * the charged currency.
  */
 export async function upgradeToBasicPlan(data: {
   userId: string;
   userEmail: string;
-  currency?: 'usd' | 'inr';
 }): Promise<void> {
   return upgradeToPlan({ ...data, plan: 'basic' });
-}
-
-/**
- * Create Team Plan subscription and redirect to Stripe Checkout.
- */
-export async function upgradeToTeamPlan(data: {
-  userId: string;
-  userEmail: string;
-  billingPeriod?: 'monthly' | 'yearly';
-}): Promise<void> {
-  return upgradeToPlan({ ...data, plan: 'team' });
 }
 
 /**
@@ -155,9 +131,8 @@ export async function upgradeToTeamPlan(data: {
 async function upgradeToPlan(data: {
   userId: string;
   userEmail: string;
-  plan: 'hobby' | 'basic' | 'pro' | 'max' | 'team';
+  plan: SelfServePaidPlanTier;
   billingPeriod?: 'monthly' | 'yearly';
-  currency?: 'usd' | 'inr';
 }): Promise<void> {
   void data.userId;
   void data.userEmail;
@@ -175,12 +150,8 @@ async function upgradeToPlan(data: {
       Authorization: `Bearer ${authToken}`,
     }),
     body: JSON.stringify({
-      // The checkout API's plan schema doesn't include 'hobby' (superseded by
-      // 'basic'); callers still using upgradeToHobbyPlan are legacy and unrelated
-      // to this pricing-page change, so we pass plan through unchanged here.
       plan: data.plan,
       billingInterval,
-      ...(data.currency ? { currency: data.currency } : {}),
     }),
   });
 
@@ -202,14 +173,14 @@ async function upgradeToPlan(data: {
 }
 
 /**
- * Upgrade an existing active subscription mid-cycle with credit-based proration.
- * The server calculates unused platform credits and applies them as a Stripe
- * customer balance credit that offsets the next invoice.
+ * Upgrade an active subscription immediately. The server applies unused-time
+ * value to the new full-cycle invoice and activates entitlements only after
+ * successful payment.
  */
 export async function upgradePlanMidCycle(data: {
-  plan: 'basic' | 'pro' | 'max';
+  plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
-}): Promise<{ creditAppliedUsd: string }> {
+}): Promise<{ activation: 'webhook_pending' }> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
 
@@ -223,13 +194,49 @@ export async function upgradePlanMidCycle(data: {
     body: JSON.stringify({ plan: data.plan, billingInterval }),
   });
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(err, `Failed to upgrade to ${data.plan}`));
+  const result = (await response.json().catch(() => ({}))) as {
+    activation?: unknown;
+    paymentActionRequired?: unknown;
+    clientSecret?: unknown;
+    error?: unknown;
+  };
+
+  if (response.status === 402 && result.paymentActionRequired === true) {
+    if (typeof result.clientSecret !== 'string' || !result.clientSecret) {
+      throw new Error('Payment authentication is required. Open billing and try again.');
+    }
+    const publishableKey = process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
+    if (!publishableKey?.startsWith('pk_')) {
+      throw new Error('Payment authentication is unavailable. Please contact support.');
+    }
+    const stripe = await loadStripe(publishableKey);
+    if (!stripe) throw new Error('Payment authentication could not be loaded. Please try again.');
+
+    const { error, paymentIntent } = await stripe.confirmPayment({
+      clientSecret: result.clientSecret,
+      redirect: 'if_required',
+    });
+    if (error) throw new Error(error.message || 'Payment authentication failed.');
+    const paymentStatus =
+      paymentIntent && typeof paymentIntent === 'object' && 'status' in paymentIntent
+        ? paymentIntent.status
+        : null;
+    if (typeof paymentStatus !== 'string' || !['processing', 'succeeded'].includes(paymentStatus)) {
+      throw new Error('Payment was not completed. Your current plan is unchanged.');
+    }
+    return { activation: 'webhook_pending' };
   }
 
-  const result = await response.json();
-  return { creditAppliedUsd: result.creditAppliedUsd ?? '0.00' };
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(result, `Failed to upgrade to ${data.plan}`));
+  }
+
+  if (result.activation !== 'webhook_pending') {
+    throw new Error(
+      'Upgrade payment status could not be verified. Your current plan is unchanged.',
+    );
+  }
+  return { activation: 'webhook_pending' };
 }
 
 /**

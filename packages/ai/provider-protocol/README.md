@@ -16,8 +16,8 @@ quirks so that one chat thread can hop providers without payload edge cases:
 - **OpenAI Responses API policy** — decides `service_tier`, `store`,
   `prompt_cache_key` stripping, server-compaction enablement, and disabled-
   reasoning stripping based on a hostname-classified endpoint and the model's
-  `compat` flags. Covers `api.openai.com`, Azure OpenAI, Codex, OpenRouter,
-  and ~15 OpenAI-compatible proxies.
+  `compat` flags. Covers `api.openai.com`, Codex, OpenRouter, and the supported
+  OpenAI-compatible routes in the provider catalog.
 - **OpenAI reasoning-effort resolution** — knows which efforts each GPT-5.x /
   Codex variant supports and how to fall back when a requested effort isn't.
 - **System-prompt cache boundary** — splits a system prompt into a stable

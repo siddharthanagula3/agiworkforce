@@ -191,4 +191,18 @@ describe('enterpriseRouter', () => {
     expect(response.status).toBe(403);
     expect(response.body.error).toBe('Organization admin access required');
   });
+
+  it('retires the exact enterprise usage ledger after verifying admin access', async () => {
+    const response = await request(createApp())
+      .get('/api/v1/enterprise/organizations/11111111-1111-4111-8111-111111111111/usage-ledger')
+      .set('Authorization', `Bearer ${createToken()}`);
+
+    expect(response.status).toBe(410);
+    expect(response.body).toEqual({
+      error: 'Detailed usage ledger is no longer available',
+      code: 'PERCENTAGE_USAGE_REQUIRED',
+      usage_url: '/api/credits/balance',
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/token|cost|usd|metadata|conversation/i);
+  });
 });

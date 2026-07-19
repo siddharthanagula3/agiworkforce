@@ -52,11 +52,11 @@ export default function TermsPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">03 · Payment, refunds, and auto-renewal</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            Paid tiers (Hobby and above) are billed in advance through Stripe.{' '}
-            <strong>Auto-renewal:</strong> subscriptions auto-renew at the end of each billing
-            period (monthly or annual) until you cancel. You can cancel any time from your billing
-            portal; cancellation stops the next auto-renew but does not refund the current period.
-            Refund terms are at{' '}
+            Paid tiers (Basic, Pro, Max, Team, and Enterprise where applicable) are billed in
+            advance through Stripe or the applicable app store. <strong>Auto-renewal:</strong>{' '}
+            subscriptions auto-renew at the end of each billing period (monthly or annual) until you
+            cancel. You can cancel any time from your billing portal; cancellation stops the next
+            auto-renew but does not refund the current period. Refund terms are at{' '}
             <Link href="/refund-policy" style={{ color: 'var(--agi-ink)' }}>
               /refund-policy
             </Link>

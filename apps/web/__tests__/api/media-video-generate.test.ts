@@ -102,6 +102,30 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
+const managedUsageMocks = vi.hoisted(() => ({
+  reserve: vi.fn(),
+  providerStarted: vi.fn(async () => undefined),
+  finalize: vi.fn(async () => ({
+    requestStatus: 'completed',
+    operationResult: 'finalized',
+    settlementStatus: 'succeeded',
+    actualCostCents: 0,
+  })),
+  delivered: vi.fn(async () => undefined),
+}));
+const rlsMocks = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
+}));
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  reserveManagedUsageRequest: managedUsageMocks.reserve,
+  markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
+  finalizeManagedUsageRequest: managedUsageMocks.finalize,
+  markManagedUsageClientDelivered: managedUsageMocks.delivered,
+}));
+
 // ---------------------------------------------------------------------------
 // Mock: video-task-store
 // ---------------------------------------------------------------------------
@@ -132,6 +156,7 @@ function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> =
     headers: {
       'Content-Type': 'application/json',
       Authorization: 'Bearer valid-test-token',
+      'Idempotency-Key': 'agi.media.web.video.operation-123',
       ...extraHeaders,
     },
     body: JSON.stringify(body),
@@ -139,13 +164,13 @@ function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> =
 }
 
 // ---------------------------------------------------------------------------
-// Default subscription fixture (pro tier, active)
+// Default subscription fixture (Max 15x tier, active)
 // ---------------------------------------------------------------------------
-const PRO_SUBSCRIPTION = {
+const VIDEO_SUBSCRIPTION = {
   id: 'sub_test_123',
   user_id: 'user-test-id',
   status: 'active',
-  plan_tier: 'pro',
+  plan_tier: 'max_15x',
   current_period_start: new Date('2026-01-01'),
   current_period_end: new Date('2026-02-01'),
   stripe_subscription_id: 'stripe_sub_test',
@@ -162,7 +187,7 @@ describe('POST /api/media/video/generate', () => {
 
     // Happy-path defaults — Clerk auth
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
-    mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
+    mockGetSubscription.mockResolvedValue(VIDEO_SUBSCRIPTION);
 
     // Re-establish CreditService mock defaults after clearAllMocks
     mockCheckAvailable.mockResolvedValue(true);
@@ -174,6 +199,15 @@ describe('POST /api/media/video/generate', () => {
       attempt_count: 1,
     });
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: TEST_USER.userId });
+    managedUsageMocks.reserve.mockImplementation(async (input) => ({
+      db: input.db,
+      userId: input.userId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      leaseToken: 'lease-video',
+      estimatedCostCents: input.estimatedCostCents,
+    }));
 
     // Set env vars
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
@@ -316,7 +350,7 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 403 when subscription status is past_due', async () => {
-      mockGetSubscription.mockResolvedValue({ ...PRO_SUBSCRIPTION, status: 'past_due' });
+      mockGetSubscription.mockResolvedValue({ ...VIDEO_SUBSCRIPTION, status: 'past_due' });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
@@ -327,7 +361,7 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 403 when plan tier is free', async () => {
-      mockGetSubscription.mockResolvedValue({ ...PRO_SUBSCRIPTION, plan_tier: 'free' });
+      mockGetSubscription.mockResolvedValue({ ...VIDEO_SUBSCRIPTION, plan_tier: 'free' });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
@@ -338,7 +372,7 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 403 when plan tier is hobby', async () => {
-      mockGetSubscription.mockResolvedValue({ ...PRO_SUBSCRIPTION, plan_tier: 'hobby' });
+      mockGetSubscription.mockResolvedValue({ ...VIDEO_SUBSCRIPTION, plan_tier: 'hobby' });
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
@@ -347,8 +381,24 @@ describe('POST /api/media/video/generate', () => {
       expect(data.error.code).toBe('FORBIDDEN');
     });
 
-    it('should allow trialing subscription status', async () => {
-      mockGetSubscription.mockResolvedValue({ ...PRO_SUBSCRIPTION, status: 'trialing' });
+    it('should reject Pro even when the subscription is active', async () => {
+      mockGetSubscription.mockResolvedValue({
+        ...VIDEO_SUBSCRIPTION,
+        plan_tier: 'pro',
+        status: 'active',
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should allow a trialing Max 15x subscription', async () => {
+      mockGetSubscription.mockResolvedValue({
+        ...VIDEO_SUBSCRIPTION,
+        plan_tier: 'max_15x',
+        status: 'trialing',
+      });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ id: 'task-xyz' }),
@@ -359,8 +409,16 @@ describe('POST /api/media/video/generate', () => {
       expect(response.status).toBe(200);
     });
 
-    it('should allow max tier subscription', async () => {
-      mockGetSubscription.mockResolvedValue({ ...PRO_SUBSCRIPTION, plan_tier: 'max' });
+    it('should keep Max 5x below the video tier', async () => {
+      mockGetSubscription.mockResolvedValue({ ...VIDEO_SUBSCRIPTION, plan_tier: 'max' });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should allow Max 15x tier subscription', async () => {
+      mockGetSubscription.mockResolvedValue({ ...VIDEO_SUBSCRIPTION, plan_tier: 'max_15x' });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ id: 'task-xyz' }),
@@ -467,6 +525,71 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
+  describe('Usage admission', () => {
+    it('requires a stable idempotency identity before provider work', async () => {
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }, { 'Idempotency-Key': '' }),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    });
+
+    it('rejects an image operation identity before reserving or calling the video provider', async () => {
+      const response = await POST(
+        makeAuthedRequest(
+          { prompt: 'a sunset', provider: 'runway' },
+          { 'Idempotency-Key': 'agi.media.web.image.operation-123' },
+        ),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toMatchObject({
+        type: 'invalid_request_error',
+        code: 'invalid_media_idempotency_key',
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('reserves, starts, and settles the accepted video task through one lifecycle', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'task-xyz' }) });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a sunset', provider: 'runway' }));
+
+      expect(response.status).toBe(200);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: TEST_USER.userId,
+          idempotencyKey: 'agi.media.web.video.operation-123',
+          provider: 'runway',
+          planTier: 'max_15x',
+          isFlagship: false,
+        }),
+      );
+      expect(managedUsageMocks.providerStarted).toHaveBeenCalledTimes(1);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: 'completed',
+          usage: expect.objectContaining({ operation: 'video', taskId: 'runway_task-xyz' }),
+        }),
+      );
+      expect(managedUsageMocks.delivered).toHaveBeenCalledTimes(1);
+      expect(mockCheckAvailable).not.toHaveBeenCalled();
+      expect(mockDeductCredits).not.toHaveBeenCalled();
+      expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve.mock.invocationCallOrder[0]).toBeLessThan(
+        managedUsageMocks.providerStarted.mock.invocationCallOrder[0]!,
+      );
+      expect(managedUsageMocks.providerStarted.mock.invocationCallOrder[0]).toBeLessThan(
+        mockFetch.mock.invocationCallOrder[0]!,
+      );
+    });
+  });
+
   // =========================================================================
   // Happy path — Runway provider
   // =========================================================================
@@ -488,7 +611,9 @@ describe('POST /api/media/video/generate', () => {
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('runway');
       expect(typeof data.estimated_duration_secs).toBe('number');
-      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 25);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'runway-gen-4', estimatedCostCents: 25 }),
+      );
       const [, runwayRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(runwayRequest.body))).toMatchObject({ model: 'gen4_turbo' });
     });
@@ -548,7 +673,9 @@ describe('POST /api/media/video/generate', () => {
       expect(data.task_id).toBe('google_12345678');
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('google');
-      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 240);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'veo-3', estimatedCostCents: 240 }),
+      );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
         parameters: { durationSeconds: '6', resolution: '720p' },
@@ -571,7 +698,9 @@ describe('POST /api/media/video/generate', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 480);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'veo-3', estimatedCostCents: 480 }),
+      );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
         parameters: { durationSeconds: '8', resolution: '4k' },
@@ -696,16 +825,14 @@ describe('POST /api/media/video/generate', () => {
       await response.json();
 
       expect(response.status).toBe(500);
-      expect(mockSettleCreditsDurably).toHaveBeenCalledWith(
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
         expect.objectContaining({
-          userId: TEST_USER.userId,
-          amountCents: expect.any(Number),
-          metadata: expect.objectContaining({ type: 'refund' }),
-          idempotencyKey: expect.any(String),
+          outcome: 'failed',
+          actualCostCents: 0,
+          usage: expect.objectContaining({ operation: 'video', reason: 'provider_failed' }),
         }),
       );
-      const operation = mockSettleCreditsDurably.mock.calls[0]?.[0] as { amountCents: number };
-      expect(operation.amountCents).toBeLessThan(0);
+      expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
     });
   });
 });

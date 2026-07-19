@@ -3,8 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
-import type { SubscriptionRow, ProfileRow } from '@/lib/server/neon-types';
-import { STRIPE_PRICE_IDS } from '@/lib/pricing';
+import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -14,15 +13,15 @@ import { CheckoutRequestSchema } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
-import { CreditService } from '@/lib/services/credit-service';
-import { getPlanPriceCents, getPlanUsageBudgetCents } from '@agiworkforce/types';
+import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
 
 const TIER_ORDER: Record<string, number> = {
   free: 0,
   basic: 0.5,
   pro: 1,
+  team: 1.5,
   max: 2,
-  team: 3,
+  max_15x: 3,
   enterprise: 4,
 };
 
@@ -60,24 +59,16 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw createError.validation(`Invalid request: ${msg}`);
   }
-  const { plan: targetPlan, billingInterval, currency } = parsed.data;
+  const { plan: targetPlan, billingInterval } = parsed.data;
 
   const db = getNeonDb();
   const stripe = getStripe();
 
   // Fetch current subscription
-  type SubRow = Pick<
-    SubscriptionRow,
-    | 'id'
-    | 'status'
-    | 'plan_tier'
-    | 'stripe_customer_id'
-    | 'stripe_subscription_id'
-    | 'stripe_price_id'
-  >;
+  type SubRow = Pick<SubscriptionRow, 'status' | 'plan_tier' | 'stripe_subscription_id'>;
   const subRows = await db
     .query<SubRow>(
-      `select id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id
+      `select status, plan_tier, stripe_subscription_id
        from subscriptions where user_id = $1 limit 1`,
       [userId],
     )
@@ -97,226 +88,95 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Resolve new price ID. 'basic' prices by currency (USD/INR), not interval.
-  let newPriceId: string | undefined;
-  if (targetPlan === 'basic') {
-    newPriceId =
-      currency === 'inr' ? STRIPE_PRICE_IDS.basic.monthlyInr : STRIPE_PRICE_IDS.basic.monthlyUsd;
-    if (!newPriceId) {
-      throw createError.validation(`No price configured for basic (${currency ?? 'usd'})`);
-    }
-  } else {
-    const planPrices = STRIPE_PRICE_IDS[targetPlan as 'pro' | 'max' | 'team'];
-    if (!planPrices) throw createError.validation(`Unknown plan: ${targetPlan}`);
-    newPriceId = planPrices[billingInterval];
-    if (!newPriceId) {
-      throw createError.validation(`No price configured for ${targetPlan} ${billingInterval}`);
-    }
-  }
-
   const stripeSubId = sub.stripe_subscription_id;
   if (!stripeSubId) throw createError.internal('Subscription has no Stripe subscription ID');
 
-  let stripeCustomerId = sub.stripe_customer_id;
-
-  // Resolve customer ID from profile if missing
-  if (!stripeCustomerId) {
-    const profileRows = await db
-      .query<
-        Pick<ProfileRow, 'stripe_customer_id'>
-      >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
-      .catch(() => [] as Pick<ProfileRow, 'stripe_customer_id'>[]);
-    stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
-  }
-  if (!stripeCustomerId) throw createError.internal('No Stripe customer found for this account');
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Step 1: Calculate credit-based proration credit
-  // ──────────────────────────────────────────────────────────────────────────
-  let customerBalanceCreditCents = 0;
-  try {
-    const balance = await CreditService.getBalance(userId);
-    if (balance && balance.credits_allocated_cents > 0) {
-      const unusedFraction = balance.credits_remaining_cents / balance.credits_allocated_cents;
-      const oldPlanPriceCents = getPlanPriceCents(currentTier, 'monthly');
-      customerBalanceCreditCents = Math.floor(oldPlanPriceCents * unusedFraction);
-      logger.info(
-        {
-          userId,
-          currentTier,
-          unusedFraction,
-          oldPlanPriceCents,
-          customerBalanceCreditCents,
-          creditsAllocated: balance.credits_allocated_cents,
-          creditsRemaining: balance.credits_remaining_cents,
-        },
-        'Calculated credit-based upgrade proration',
-      );
-    }
-  } catch (err) {
-    // Non-fatal: proceed without proration credit if balance lookup fails
-    logger.warn(
-      { err, userId },
-      'Failed to get credit balance for proration; upgrading without credit',
-    );
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Step 2: Apply Stripe customer balance credit for unused old-plan value
-  // ──────────────────────────────────────────────────────────────────────────
-  if (customerBalanceCreditCents > 0) {
-    try {
-      const customer = await stripe.customers.retrieve(stripeCustomerId);
-      if (typeof customer !== 'string' && !customer.deleted) {
-        const existingBalance = customer.balance; // negative = credit
-        await stripe.customers.update(stripeCustomerId, {
-          balance: existingBalance - customerBalanceCreditCents,
-        });
-        logger.info(
-          { userId, stripeCustomerId, creditApplied: customerBalanceCreditCents },
-          'Applied customer balance credit for upgrade proration',
-        );
-      }
-    } catch (err) {
-      // Non-fatal: log and proceed; user still gets new plan
-      logger.error({ err, userId, stripeCustomerId }, 'Failed to apply customer balance credit');
-      customerBalanceCreditCents = 0;
-    }
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // Step 3: Retrieve Stripe subscription to get item ID
-  // ──────────────────────────────────────────────────────────────────────────
-  let stripeItemId: string | null = null;
+  let stripeItem: Stripe.SubscriptionItem | null = null;
+  let subscriptionCurrency = 'usd';
   try {
     const stripeSub = await stripe.subscriptions.retrieve(stripeSubId, {
       expand: ['items.data'],
     });
-    stripeItemId = stripeSub.items.data[0]?.id ?? null;
+    stripeItem = stripeSub.items.data[0] ?? null;
+    subscriptionCurrency = stripeSub.currency;
   } catch (err) {
     logger.error({ err, stripeSubId }, 'Failed to retrieve Stripe subscription for item ID');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
-  if (!stripeItemId) throw createError.internal('Subscription has no items');
+  if (!stripeItem) throw createError.internal('Subscription has no items');
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Step 4: Update Stripe subscription to new price
-  // proration_behavior: 'none' so Stripe does not generate a time-based proration
-  // invoice on top of our credit-based adjustment.
-  // The customer balance credit applied in step 2 will reduce the next invoice.
-  // ──────────────────────────────────────────────────────────────────────────
+  const priceSelection = await getPriceSelectionForCurrency(
+    targetPlan,
+    billingInterval,
+    subscriptionCurrency,
+  );
+  if (!priceSelection) {
+    throw createError.validation(
+      `Upgrade pricing is not configured for ${targetPlan} ${billingInterval} in your billing currency.`,
+    );
+  }
+  const newPriceId = priceSelection.priceId;
+
+  let updatedSubscription: Stripe.Subscription;
   try {
-    await stripe.subscriptions.update(stripeSubId, {
-      items: [{ id: stripeItemId, price: newPriceId }],
-      proration_behavior: 'none',
-      metadata: { plan_tier: targetPlan },
-    });
-    logger.info({ userId, stripeSubId, newPriceId, targetPlan }, 'Stripe subscription updated');
+    updatedSubscription = await stripe.subscriptions.update(
+      stripeSubId,
+      {
+        items: [{ id: stripeItem.id, price: newPriceId }],
+        // A replacement cycle charges the full target plan now and lets Stripe
+        // credit only the unused TIME on the old plan.
+        billing_cycle_anchor: 'now',
+        proration_behavior: 'always_invoice',
+        // Stripe applies the plan change only after the immediate invoice is paid.
+        payment_behavior: 'pending_if_incomplete',
+        expand: ['latest_invoice.confirmation_secret'],
+        metadata: { plan_tier: targetPlan, user_id: userId, upgrade_from: currentTier },
+      },
+      {
+        idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}`,
+      },
+    );
   } catch (err) {
-    // Roll back the customer balance credit to avoid giving free money on failure
-    if (customerBalanceCreditCents > 0) {
-      try {
-        const customer = await stripe.customers.retrieve(stripeCustomerId);
-        if (typeof customer !== 'string' && !customer.deleted) {
-          await stripe.customers.update(stripeCustomerId, {
-            balance: customer.balance + customerBalanceCreditCents,
-          });
-          logger.info(
-            { userId },
-            'Rolled back customer balance credit after subscription update failure',
-          );
-        }
-      } catch (rollbackErr) {
-        logger.error(
-          { rollbackErr, userId },
-          'CRITICAL: Failed to roll back customer balance credit',
-        );
-      }
-    }
+    logger.error({ err, userId, stripeSubId, targetPlan }, 'Stripe upgrade payment failed');
     throw createError.internal('Failed to update subscription on Stripe');
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Step 5: Update local DB plan_tier and price immediately, as an ATOMIC
-  // compare-and-swap. The `coalesce(plan_tier,'free') = $expectedCurrent` guard
-  // means only the request that actually performs the currentTier→target
-  // transition gets rowcount 1; a concurrent double-submit that arrives after
-  // the tier already moved matches nothing (rowcount 0). Step 6 (the additive,
-  // non-idempotent credit grant) is gated on this so a double-submit cannot
-  // grant the upgrade-delta credits twice. COALESCE keeps a NULL plan_tier row
-  // upgradeable (currentTier defaults to 'free'), so the guard never breaks a
-  // legitimate first upgrade.
-  // (The webhook also fires and reconciles these, so skipping on a contended
-  //  or failed update is safe.)
-  // ──────────────────────────────────────────────────────────────────────────
-  let didTransition = false;
-  try {
-    const affected = await db.execute(
-      `update subscriptions set plan_tier = $1, stripe_price_id = $2
-       where user_id = $3 and coalesce(plan_tier, 'free') = $4`,
-      [targetPlan, newPriceId, userId, currentTier],
+  if (updatedSubscription.pending_update) {
+    const invoice =
+      typeof updatedSubscription.latest_invoice === 'object'
+        ? updatedSubscription.latest_invoice
+        : null;
+    return NextResponse.json(
+      {
+        success: false,
+        paymentActionRequired: true,
+        message: 'Complete the upgrade payment before the new plan is activated.',
+        ...(invoice?.confirmation_secret?.client_secret
+          ? { clientSecret: invoice.confirmation_secret.client_secret }
+          : {}),
+      },
+      { status: 402 },
     );
-    didTransition = affected === 1;
-  } catch (err) {
-    logger.error({ err, userId, targetPlan }, 'Failed to update local subscription tier');
-    didTransition = false;
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Step 6: Top up credit account with the delta to new plan's allocation.
-  // ONLY runs for the request that actually performed the tier transition, so
-  // a concurrent double-submit (didTransition=false) cannot double-add. The
-  // webhook fires with the same period (mid-cycle upgrade), so
-  // allocateCreditsForPeriod will find the existing account and not re-add
-  // the full allocation. We add only the incremental difference.
-  // ──────────────────────────────────────────────────────────────────────────
-  if (didTransition) {
-    try {
-      const oldBudgetCents = getPlanUsageBudgetCents(currentTier, 'monthly');
-      const newBudgetCents = getPlanUsageBudgetCents(targetPlan, 'monthly');
-      const deltaCents = newBudgetCents - oldBudgetCents;
-
-      if (deltaCents > 0) {
-        const creditAccountRows = await db.query<{ id: string }>(
-          'select id from token_credits where user_id = $1 and subscription_id = $2 limit 1',
-          [userId, sub.id],
-        );
-        const creditAccount = creditAccountRows[0];
-
-        if (creditAccount) {
-          await db.execute('select add_credits($1, $2, $3, $4, $5)', [
-            userId,
-            creditAccount.id,
-            deltaCents,
-            `Plan upgrade: ${currentTier} → ${targetPlan}`,
-            // add_credits only accepts ('purchase','adjustment','refund','bonus');
-            // 'upgrade' was rejected by the guard so the incremental grant silently
-            // failed. An upgrade credit is an adjustment.
-            'adjustment',
-          ]);
-          logger.info(
-            { userId, creditAccountId: creditAccount.id, deltaCents, currentTier, targetPlan },
-            'Added incremental credits for plan upgrade',
-          );
-        } else {
-          logger.warn(
-            { userId, subscriptionId: sub.id },
-            'No credit account found for upgrade delta; webhook will handle credit allocation',
-          );
-        }
-      }
-    } catch (err) {
-      // Non-fatal: credit top-up failure does not block the upgrade
-      logger.error({ err, userId, currentTier, targetPlan }, 'Failed to add upgrade delta credits');
-    }
+  const appliedPriceId = updatedSubscription.items.data[0]?.price.id;
+  if (appliedPriceId !== newPriceId) {
+    logger.error(
+      { userId, stripeSubId, targetPlan, expectedPriceId: newPriceId, appliedPriceId },
+      'Stripe returned an upgrade without the target price applied',
+    );
+    throw createError.internal('Upgrade payment status could not be verified');
   }
 
+  logger.info(
+    { userId, stripeSubId, newPriceId, targetPlan },
+    'Stripe upgrade paid; awaiting canonical webhook activation',
+  );
   return NextResponse.json({
     success: true,
     newPlan: targetPlan,
     billingInterval,
-    creditApplied: customerBalanceCreditCents,
-    creditAppliedUsd: (customerBalanceCreditCents / 100).toFixed(2),
+    activation: 'webhook_pending',
   });
 }
 

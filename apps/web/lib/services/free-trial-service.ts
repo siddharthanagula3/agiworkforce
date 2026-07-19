@@ -3,8 +3,14 @@ import 'server-only';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
+import { getModelMetadataById } from '@agiworkforce/types';
 export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import {
+  getPlanDailyUsageBudgetMicrousd,
+  toPublicUsagePercentage,
+} from '@/lib/server/managed-usage-policy';
+import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 
 /**
  * Private free-plan usage policy. This module is server-only, so the exact
@@ -13,19 +19,147 @@ import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
  * changing the client contract.
  */
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
-  tokenBudget: 200_000,
-  resetAfterDays: 30,
+  dailyBudgetMicrousd: getPlanDailyUsageBudgetMicrousd('free'),
+  resetAfterHours: 24,
 });
 
 export type FreeTrialReservation = {
   kind: 'free_trial';
   userId: string;
   requestId: string;
+  /** Server-only provider-cost ceiling reserved under the rolling-window lock. */
+  reservedMicrousd: number;
+};
+
+type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
+
+type FreeTrialUsageWindowRow = {
+  daily_cost_microusd: number | string;
+  daily_reserved_microusd: number | string;
+  daily_started_at: string | Date;
+  window_expired: boolean;
+};
+
+type FreeTrialReservationRow = {
+  window_started_at: string | Date;
+  reserved_microusd: number | string;
+  settled_at: string | Date | null;
 };
 
 type ReserveResult =
   | { ok: true; reservation: FreeTrialReservation }
   | { ok: false; code: 'budget_reached' };
+
+export type FreeTrialPublicUsage = {
+  usagePercentage: number;
+  resetAt: string | null;
+  hasUsageRemaining: boolean;
+};
+
+type FreeTrialBudgetResult =
+  | { ok: true; maxOutputTokens: number }
+  | { ok: false; code: 'budget_reached' };
+
+/**
+ * Bound provider input without trusting tokenizer heuristics. UTF-8 bytes are
+ * a conservative ceiling for text tokens. Vision tokenization is provider-
+ * specific, so an image reserves the model's full declared input window until
+ * a verified per-provider image estimator exists.
+ */
+export function estimateConservativeFreeInputTokens(input: {
+  model: string;
+  messages: unknown;
+  tools?: unknown;
+}): number {
+  const payload = { messages: input.messages, ...(input.tools ? { tools: input.tools } : {}) };
+  const serializedBytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength;
+  if (!containsImageInput(payload)) return serializedBytes + 64;
+
+  const metadata = getModelMetadataById(input.model);
+  const modelInputCeiling = metadata?.contextWindow;
+  return Math.max(serializedBytes + 64, modelInputCeiling ?? 1_000_000);
+}
+
+/** Fit one provider invocation inside its immutable private reservation. */
+export function fitFreeTrialOutputBudget(input: {
+  reservation: FreeTrialReservation;
+  provider: string;
+  model: string;
+  estimatedInputTokens: number;
+  requestedMaxOutputTokens: number;
+  observedUsage?: TokenUsage;
+}): FreeTrialBudgetResult {
+  const observed = input.observedUsage ?? {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  };
+  const promptTokens =
+    toNonNegativeInteger(observed.promptTokens) + toNonNegativeInteger(input.estimatedInputTokens);
+  const priorCompletionTokens = toNonNegativeInteger(observed.completionTokens);
+  const requestedMaxOutputTokens = toNonNegativeInteger(input.requestedMaxOutputTokens);
+  if (requestedMaxOutputTokens === 0 || input.reservation.reservedMicrousd <= 0) {
+    return { ok: false, code: 'budget_reached' };
+  }
+
+  const costFor = (nextOutputTokens: number): number =>
+    LLMCostCalculator.calculateCostMicrousd(input.provider, input.model, {
+      promptTokens,
+      completionTokens: priorCompletionTokens + nextOutputTokens,
+      totalTokens: promptTokens + priorCompletionTokens + nextOutputTokens,
+      cacheReadInputTokens: observed.cacheReadInputTokens,
+      cacheCreationInputTokens: observed.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: observed.cacheCreation1hInputTokens,
+    });
+
+  if (costFor(1) > input.reservation.reservedMicrousd) {
+    return { ok: false, code: 'budget_reached' };
+  }
+  if (costFor(requestedMaxOutputTokens) <= input.reservation.reservedMicrousd) {
+    return { ok: true, maxOutputTokens: requestedMaxOutputTokens };
+  }
+
+  let low = 1;
+  let high = requestedMaxOutputTokens - 1;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (costFor(middle) <= input.reservation.reservedMicrousd) low = middle;
+    else high = middle - 1;
+  }
+  return { ok: true, maxOutputTokens: low };
+}
+
+/** Apply the private Free allowance to the exact request crossing provider egress. */
+export function applyFreeTrialProviderBudget(input: {
+  reservation: FreeTrialReservation;
+  provider: string;
+  request: {
+    model: string;
+    messages: unknown;
+    tools?: unknown;
+    max_tokens: number;
+    usePromptCache?: boolean;
+  };
+  observedUsage?: TokenUsage;
+}): FreeTrialBudgetResult {
+  const result = fitFreeTrialOutputBudget({
+    reservation: input.reservation,
+    provider: input.provider,
+    model: input.request.model,
+    estimatedInputTokens: estimateConservativeFreeInputTokens({
+      model: input.request.model,
+      messages: input.request.messages,
+      tools: input.request.tools,
+    }),
+    requestedMaxOutputTokens: input.request.max_tokens,
+    observedUsage: input.observedUsage,
+  });
+  if (result.ok) {
+    input.request.max_tokens = result.maxOutputTokens;
+    input.request.usePromptCache = false;
+  }
+  return result;
+}
 
 export function buildFreeWebsiteSubscription(userId: string): SubscriptionInfo {
   const now = new Date();
@@ -59,102 +193,261 @@ export function isFreeTrialRequest(params: {
 }
 
 /**
- * Gate a free-tier request against the cumulative token budget BEFORE running
- * it. With full agentic capability (tool loops, sandbox, web search) the output
- * size is unbounded, so we cannot reserve an estimate up front — instead we
- * gate on the usage already spent this period and record the ACTUAL tokens
- * afterwards via {@link recordFreeTrialTokens}.
+ * Read the active Free rolling-day window and discard its private operands at
+ * the server boundary. Active reservations count as usage so concurrent work
+ * cannot make the public meter look more available than admission control.
+ */
+export async function getFreeTrialPublicUsage(userId: string): Promise<FreeTrialPublicUsage> {
+  const { dailyBudgetMicrousd, resetAfterHours } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const [window] = await getNeonDb().query<FreeTrialUsageWindowRow>(
+    `select daily_cost_microusd,
+            daily_reserved_microusd,
+            daily_started_at,
+            now() - daily_started_at >= $2 * interval '1 hour' as window_expired
+     from public.website_auto_economy_trial_usage
+     where user_id = $1`,
+    [userId, resetAfterHours],
+  );
+
+  if (!window || window.window_expired) {
+    return { usagePercentage: 0, resetAt: null, hasUsageRemaining: true };
+  }
+
+  const used =
+    toNonNegativeInteger(window.daily_cost_microusd) +
+    toNonNegativeInteger(window.daily_reserved_microusd);
+  const startedAt = new Date(toTimestampParameter(window.daily_started_at));
+  const resetAt = Number.isNaN(startedAt.getTime())
+    ? null
+    : new Date(startedAt.getTime() + resetAfterHours * 60 * 60 * 1000).toISOString();
+
+  return {
+    usagePercentage: toPublicUsagePercentage(used, dailyBudgetMicrousd),
+    resetAt,
+    hasUsageRemaining: used < dailyBudgetMicrousd,
+  };
+}
+
+/**
+ * Atomically reserve the entire remaining private daily budget before provider
+ * egress. The usage row is locked for the duration of the transaction, so a
+ * concurrent request observes the reservation and fails closed.
  *
- * One atomic statement ensures the row exists and resets `period_tokens_used`
- * to 0 when the 30-day period has rolled over, then returns the current usage.
- * The JS gate below rejects once prior usage has reached the budget. Concurrent
- * requests may both pass (a soft budget) but each records its actual tokens, so
- * the next request after the budget is crossed is rejected — bounded overage,
- * acceptable for a free tier.
+ * The durable reservation also records its rolling-window identity. Settlement
+ * can therefore release unused capacity only from that original window and can
+ * never charge a newer window when a slow request completes after rollover.
  */
 export async function beginFreeTrialRequest(params: {
   userId: string;
   requestId: string;
 }): Promise<ReserveResult> {
   const db = getNeonDb();
-  const { tokenBudget, resetAfterDays } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const { dailyBudgetMicrousd, resetAfterHours } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
 
-  await db.execute('insert into public.profiles (id) values ($1) on conflict (id) do nothing', [
-    params.userId,
-  ]);
+  return db.transaction(async (tx) => {
+    await tx.execute('insert into public.profiles (id) values ($1) on conflict (id) do nothing', [
+      params.userId,
+    ]);
 
-  const rows = await db.query<{ period_tokens_used: number }>(
-    `insert into public.website_auto_economy_trial_usage as t
-       (user_id, prompt_count, period_tokens_used, period_started_at, first_prompt_at, last_prompt_at)
-     values ($1, 0, 0, now(), now(), now())
-     on conflict (user_id) do update
-       set period_started_at = case
-             when now() - t.period_started_at >= $2 * interval '1 day' then now()
-             else t.period_started_at end,
-           period_tokens_used = case
-             when now() - t.period_started_at >= $2 * interval '1 day' then 0
-             else t.period_tokens_used end,
+    const [existingReservation] = await tx.query<FreeTrialReservationRow>(
+      `select window_started_at, reserved_microusd, settled_at
+       from public.free_daily_usage_reservations
+       where user_id = $1 and request_id = $2
+       for update`,
+      [params.userId, params.requestId],
+    );
+    if (existingReservation) {
+      // A request id owns at most one provider attempt. Replays must not share
+      // its reservation or execute provider work a second time.
+      return { ok: false, code: 'budget_reached' };
+    }
+
+    await tx.execute(
+      `insert into public.website_auto_economy_trial_usage
+         (user_id, prompt_count, period_tokens_used, period_started_at,
+          daily_cost_microusd, daily_reserved_microusd, daily_started_at,
+          first_prompt_at, last_prompt_at)
+       values ($1, 0, 0, now(), 0, 0, now(), now(), now())
+       on conflict (user_id) do nothing`,
+      [params.userId],
+    );
+
+    let [window] = await tx.query<FreeTrialUsageWindowRow>(
+      `select daily_cost_microusd,
+              daily_reserved_microusd,
+              daily_started_at,
+              now() - daily_started_at >= $2 * interval '1 hour' as window_expired
+       from public.website_auto_economy_trial_usage
+       where user_id = $1
+       for update`,
+      [params.userId, resetAfterHours],
+    );
+    if (!window) throw new Error('Free-tier usage window unavailable');
+
+    if (window.window_expired) {
+      const [resetWindow] = await tx.query<{ daily_started_at: string | Date }>(
+        `update public.website_auto_economy_trial_usage
+         set daily_cost_microusd = 0,
+             daily_reserved_microusd = 0,
+             daily_started_at = now(),
+             last_prompt_at = now()
+         where user_id = $1
+         returning daily_started_at`,
+        [params.userId],
+      );
+      if (!resetWindow) throw new Error('Free-tier usage window reset failed');
+      window = {
+        daily_cost_microusd: 0,
+        daily_reserved_microusd: 0,
+        daily_started_at: resetWindow.daily_started_at,
+        window_expired: false,
+      };
+    }
+
+    const dailyCostMicrousd = toNonNegativeInteger(window.daily_cost_microusd);
+    const dailyReservedMicrousd = toNonNegativeInteger(window.daily_reserved_microusd);
+    const remainingMicrousd = Math.max(
+      0,
+      dailyBudgetMicrousd - dailyCostMicrousd - dailyReservedMicrousd,
+    );
+    if (remainingMicrousd === 0) return { ok: false, code: 'budget_reached' };
+
+    const windowStartedAt = toTimestampParameter(window.daily_started_at);
+    const reserved = await tx.execute(
+      `update public.website_auto_economy_trial_usage
+       set daily_reserved_microusd = daily_reserved_microusd + $2,
            last_prompt_at = now()
-     returning period_tokens_used`,
-    [params.userId, resetAfterDays],
-  );
+       where user_id = $1
+         and daily_started_at = $3::timestamptz`,
+      [params.userId, remainingMicrousd, windowStartedAt],
+    );
+    if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
 
-  const periodTokensUsed = rows[0]?.period_tokens_used ?? 0;
-  if (periodTokensUsed >= tokenBudget) {
-    return { ok: false, code: 'budget_reached' };
-  }
+    await tx.execute(
+      `insert into public.free_daily_usage_reservations
+         (user_id, request_id, window_started_at, reserved_microusd)
+       values ($1, $2, $3::timestamptz, $4)`,
+      [params.userId, params.requestId, windowStartedAt, remainingMicrousd],
+    );
 
-  return {
-    ok: true,
-    reservation: {
-      kind: 'free_trial',
-      userId: params.userId,
-      requestId: params.requestId,
-    },
-  };
+    return {
+      ok: true,
+      reservation: {
+        kind: 'free_trial',
+        userId: params.userId,
+        requestId: params.requestId,
+        reservedMicrousd: remainingMicrousd,
+      },
+    };
+  });
 }
 
 /**
- * Record the ACTUAL tokens a completed free-tier request consumed (input +
- * output, including tool-loop turns). Called once the completion settles in the
- * stream/non-stream response builders. Best-effort: a failure here is logged,
- * never surfaced to the user, and the next request reconciles via the budget
- * gate anyway.
+ * Reconcile a free-tier reservation with precise observed provider cost.
+ * Repeated settlement is a no-op, and zero-usage failures still release their
+ * reservation. Best-effort persistence preserves an already-produced provider
+ * response if the accounting database is temporarily unavailable.
  */
-export async function recordFreeTrialTokens(params: {
-  userId: string;
-  requestId: string;
-  tokens: number;
+export async function settleFreeTrialRequest(params: {
+  reservation: FreeTrialReservation;
+  outcome: FreeTrialSettlementOutcome;
+  provider?: string;
+  model?: string;
+  usage?: TokenUsage;
 }): Promise<void> {
-  const used = Math.max(0, Math.floor(params.tokens));
-  if (used === 0) return;
+  const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  const tokens = Math.max(0, Math.floor(usage.totalTokens));
+  const costMicrousd =
+    params.provider && params.model
+      ? LLMCostCalculator.calculateCostMicrousd(params.provider, params.model, usage)
+      : 0;
   const db = getNeonDb();
 
   try {
-    await db.execute(
-      `with recorded as (
+    await db.transaction(async (tx) => {
+      const [reservation] = await tx.query<FreeTrialReservationRow>(
+        `select window_started_at, reserved_microusd, settled_at
+         from public.free_daily_usage_reservations
+         where user_id = $1 and request_id = $2
+         for update`,
+        [params.reservation.userId, params.reservation.requestId],
+      );
+      if (!reservation || reservation.settled_at) return;
+
+      const windowStartedAt = toTimestampParameter(reservation.window_started_at);
+      const reservedMicrousd = toNonNegativeInteger(reservation.reserved_microusd);
+
+      await tx.execute(
+        `update public.website_auto_economy_trial_usage
+         set daily_reserved_microusd = case
+               when daily_started_at = $2::timestamptz
+                 then greatest(0, daily_reserved_microusd - $3)
+               else daily_reserved_microusd end,
+             daily_cost_microusd = case
+               when daily_started_at = $2::timestamptz then daily_cost_microusd + $4
+               else daily_cost_microusd end,
+             period_tokens_used = period_tokens_used + $5,
+             prompt_count = prompt_count + 1,
+             last_prompt_at = now()
+         where user_id = $1`,
+        [params.reservation.userId, windowStartedAt, reservedMicrousd, costMicrousd, tokens],
+      );
+
+      const metadata = JSON.stringify({
+        requestId: params.reservation.requestId,
+        outcome: params.outcome,
+        ...(params.provider ? { provider: params.provider } : {}),
+        ...(params.model ? { model: params.model } : {}),
+        recordedTokens: tokens,
+      });
+      await tx.execute(
+        `with settled as (
+           update public.free_daily_usage_reservations
+           set actual_cost_microusd = $3,
+               outcome = $4,
+               settled_at = now()
+           where user_id = $1 and request_id = $2 and settled_at is null
+           returning 1
+         )
          insert into public.usage_events (user_id, event_type, quantity, metadata)
-         values ($1, $2, $3, $4::jsonb)
-         on conflict do nothing
-         returning 1
-       )
-       update public.website_auto_economy_trial_usage as t
-       set period_tokens_used = t.period_tokens_used + $3,
-           prompt_count = t.prompt_count + 1,
-           last_prompt_at = now()
-       where t.user_id = $1
-         and exists (select 1 from recorded)`,
-      [
-        params.userId,
-        'website_auto_economy_trial_tokens_recorded',
-        used,
-        JSON.stringify({ requestId: params.requestId, recordedTokens: used }),
-      ],
-    );
+         select $1, 'website_auto_economy_trial_usage_settled', $3, $5::jsonb
+         from settled
+         on conflict do nothing`,
+        [
+          params.reservation.userId,
+          params.reservation.requestId,
+          costMicrousd,
+          params.outcome,
+          metadata,
+        ],
+      );
+    });
   } catch (error) {
     logger.warn(
-      { error, userId: params.userId, requestId: params.requestId },
-      'Free-tier token accounting failed',
+      {
+        error,
+        userId: params.reservation.userId,
+        requestId: params.reservation.requestId,
+      },
+      'Free-tier usage settlement failed',
     );
   }
+}
+
+function toNonNegativeInteger(value: number | string): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function toTimestampParameter(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function containsImageInput(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsImageInput);
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  if (record['type'] === 'image_url' && record['image_url']) return true;
+  return Object.values(record).some(containsImageInput);
 }

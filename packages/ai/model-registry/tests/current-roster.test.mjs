@@ -60,11 +60,11 @@ const currentAnthropic = {
   },
   'claude-sonnet-5': {
     providerModelId: 'claude-sonnet-5',
-    input: 2,
-    cacheRead: 0.2,
-    cacheWrite5m: 2.5,
-    cacheWrite1h: 4,
-    output: 10,
+    input: 3,
+    cacheRead: 0.3,
+    cacheWrite5m: 3.75,
+    cacheWrite1h: 6,
+    output: 15,
     context: 1_000_000,
     maxOutput: 128_000,
   },
@@ -138,17 +138,26 @@ test('publishes the current Claude roster with exact API IDs, limits, and prompt
   assert.equal(sonnetReasoning.canDisableThinking, true);
   assert.equal(sonnetReasoning.request.togglePath, 'thinking.type');
 
-  assert.equal(compatibility.models['claude-sonnet-5'].promo_expires_at, '2026-08-31');
-  assert.deepEqual(compatibility.models['claude-sonnet-5'].post_promo_prices, {
-    input: 3,
-    output: 15,
-    cached_input: 0.3,
-    cached_write: 3.75,
-    cached_write_1h: 6,
-  });
+  assert.equal(compatibility.models['claude-sonnet-5'].promo_expires_at, undefined);
+  assert.equal(compatibility.models['claude-sonnet-5'].post_promo_prices, undefined);
 });
 
-test('selects current-generation OpenAI and Anthropic models without deleting still-served compatibility records', () => {
+test('publishes exact multimodal Qwen replacement IDs and limits', () => {
+  for (const [modelKey, providerModelId] of [
+    ['qwen-3.7-plus', 'qwen3.7-plus'],
+    ['qwen-3.5-flash', 'qwen3.5-flash'],
+  ]) {
+    assert.equal(registry.models[modelKey].identity.providerModelId, providerModelId);
+    assert.equal(registry.limits[modelKey].contextTokens, 1_000_000);
+    assert.equal(registry.limits[modelKey].maxOutputTokens, 64_000);
+    assert.equal(registry.capabilities[modelKey].textInput, true);
+    assert.equal(registry.capabilities[modelKey].imageInput, true);
+    assert.equal(registry.capabilities[modelKey].videoInput, true);
+    assert.equal(registry.capabilities[modelKey].functionCalling, true);
+  }
+});
+
+test('selects only the founder-approved current-generation roster', () => {
   assert.equal(compatibility.providers.openai.defaultModel, 'gpt-5.6-sol');
   assert.equal(compatibility.providers.anthropic.defaultModel, 'claude-sonnet-5');
   const selectableRoster = new Set(Object.values(compatibility.tierAllowedModels).flat());
@@ -185,5 +194,7 @@ test('selects current-generation OpenAI and Anthropic models without deleting st
     registry.models['gpt-5.5'],
     'a still-served model may remain addressable even after leaving current-generation pickers',
   );
-  assert.ok(registry.models['claude-sonnet-4.6']);
+  assert.equal(registry.models['claude-sonnet-4.6'], undefined);
+  assert.equal(registry.models['kimi-k2.6'], undefined);
+  assert.equal(registry.models['qwen-3.5-plus'], undefined);
 });

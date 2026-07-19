@@ -253,6 +253,7 @@ function makeRequest(model: string, conversationId?: string): NextRequest {
       Authorization: 'Bearer test-token',
       'Content-Type': 'application/json',
       'Idempotency-Key': 'test-managed-chat-request',
+      'x-agi-surface': 'web',
     },
     body: JSON.stringify({
       model,
@@ -270,7 +271,7 @@ function makeAgiWorkRequest(model: string): NextRequest {
       Authorization: 'Bearer test-token',
       'Content-Type': 'application/json',
       'Idempotency-Key': 'test-durable-agi-work-request',
-      'X-AGI-Client-Surface': 'web',
+      'x-agi-surface': 'web',
     },
     body: JSON.stringify({
       model,
@@ -294,7 +295,6 @@ function makeSubscription() {
 
 const COMPAT_CASES: Array<{ provider: string; model: string; content: string }> = [
   { provider: 'mistral', model: 'mistral-large-3', content: 'Mistral says hi.' },
-  { provider: 'moonshot', model: 'kimi-k2.6', content: 'Moonshot says hi.' },
   { provider: 'zhipu', model: 'glm-5.2', content: 'Zhipu says hi.' },
   { provider: 'qwen', model: 'qwen-max', content: 'Qwen says hi.' },
   { provider: 'deepseek', model: 'deepseek-v4-flash', content: 'DeepSeek says hi.' },
@@ -440,6 +440,9 @@ describe('Managed Web durable AGI Work dispatch', () => {
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-durable-1');
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('workflow-durable-1');
     await expect(response.text()).resolves.toBe('data: [DONE]\n\n');
+    expect(workflowRouteMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
+      customConnectorLimit: undefined,
+    });
     expect(workflowRouteMocks.start).toHaveBeenCalledWith(
       expect.objectContaining({
         runId: 'run-durable-1',

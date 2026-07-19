@@ -65,6 +65,11 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+const mockGetFreeTrialPublicUsage = vi.fn();
+vi.mock('@/lib/services/free-trial-service', () => ({
+  getFreeTrialPublicUsage: (...args: unknown[]) => mockGetFreeTrialPublicUsage(...args),
+}));
+
 // Mock the rolling-usage helper (session/weekly/flagship-weekly, added
 // 2026-07-05) — real spend is 0 with no oldest transaction by default; tests
 // only assert on the monthly-credit fields this file already covers.
@@ -146,6 +151,11 @@ describe('GET /api/usage', () => {
     mockGetBalance.mockResolvedValue(MOCK_BALANCE);
     mockGetSubscription.mockResolvedValue(MOCK_SUBSCRIPTION);
     mockGetRollingUsage.mockResolvedValue({ usedCents: 0, oldestAt: null });
+    mockGetFreeTrialPublicUsage.mockResolvedValue({
+      usagePercentage: 0,
+      resetAt: null,
+      hasUsageRemaining: true,
+    });
   });
 
   it('should return 401 when no authorization and no Clerk session', async () => {
@@ -197,15 +207,13 @@ describe('GET /api/usage', () => {
     const data = await response.json();
 
     expect(data.plan_tier).toBe('pro');
-    expect(data.credits_allocated_cents).toBe(1200);
-    expect(data.credits_used_cents).toBe(300);
-    expect(data.credits_remaining_cents).toBe(900);
     expect(data.usage_percentage).toBeCloseTo(25, 1); // 300/1200 * 100 = 25%
     expect(data.subscription_status).toBe('active');
-    expect(data.daily_limit_cents).toBe(0);
-    expect(data.daily_used_cents).toBe(0);
-    expect(data.daily_remaining_cents).toBe(0);
-    expect(data.has_daily_limit).toBe(false);
+    expect(data).not.toHaveProperty('credits_allocated_cents');
+    expect(data).not.toHaveProperty('credits_used_cents');
+    expect(data).not.toHaveProperty('credits_remaining_cents');
+    expect(data).not.toHaveProperty('daily_limit_cents');
+    expect(data).not.toHaveProperty('daily_used_cents');
   });
 
   it('should return period dates from balance when available', async () => {
@@ -215,8 +223,8 @@ describe('GET /api/usage', () => {
     expect(response.status).toBe(200);
     const data = await response.json();
 
-    expect(data.period_start).toBe(MOCK_BALANCE.period_start);
-    expect(data.period_end).toBe(MOCK_BALANCE.period_end);
+    expect(data.period_start).toBe(new Date(MOCK_BALANCE.period_start).toISOString());
+    expect(data.period_end).toBe(new Date(MOCK_BALANCE.period_end).toISOString());
   });
 
   it('should fall back to subscription period when balance has no period dates', async () => {
@@ -237,7 +245,7 @@ describe('GET /api/usage', () => {
     expect(data.period_end).toBe(MOCK_SUBSCRIPTION.current_period_end.toISOString());
   });
 
-  it('should return free plan and zero credits when balance and subscription are null', async () => {
+  it('should return free plan and zero usage when balance and subscription are null', async () => {
     mockGetBalance.mockResolvedValueOnce(null);
     mockGetSubscription.mockResolvedValueOnce(null);
 
@@ -248,11 +256,9 @@ describe('GET /api/usage', () => {
     const data = await response.json();
 
     expect(data.plan_tier).toBe('free');
-    expect(data.credits_allocated_cents).toBe(0);
-    expect(data.credits_used_cents).toBe(0);
-    expect(data.credits_remaining_cents).toBe(0);
     expect(data.usage_percentage).toBe(0);
     expect(data.subscription_status).toBe('none');
+    expect(data).not.toHaveProperty('credits_allocated_cents');
   });
 
   it('should calculate 0% usage when credits_allocated_cents is 0', async () => {

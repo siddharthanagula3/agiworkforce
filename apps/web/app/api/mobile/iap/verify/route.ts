@@ -23,7 +23,6 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getPlanUsageBudgetCents } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -189,12 +188,15 @@ async function handleVerify(request: NextRequest) {
     'iap/verify: purchase verified and subscription upserted',
   );
 
+  // Public IAP response exposes only the tier, subscription status, and the
+  // period end. Private managed-compute allowances (cents/units) must never be
+  // serialized to a client; the app derives usage from the percentage-only
+  // usage contract instead. See managed-usage-policy.ts.
   return NextResponse.json({
     success: true,
     planTier: purchase.planTier,
     status: purchase.status,
     currentPeriodEnd: purchase.currentPeriodEnd?.toISOString() ?? null,
-    usageBudgetCents: getPlanUsageBudgetCents(purchase.planTier, 'monthly'),
   });
 }
 

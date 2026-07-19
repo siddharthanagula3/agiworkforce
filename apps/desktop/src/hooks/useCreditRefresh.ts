@@ -62,57 +62,46 @@ export function useCreditRefresh(options: UseCreditRefreshOptions = {}): CreditR
     try {
       const creditBalance = await accountApi.fetchCreditBalance();
 
-      const hasCredits = creditBalance.credits.monthly_remaining_cents > 0;
+      // Update the account store even when the allowance is exhausted so stale
+      // availability is never retained client-side.
+      updateCredits({
+        credits: {
+          percentage_used: creditBalance.credits.usage_percentage,
+          period_end: creditBalance.credits.reset_at ?? undefined,
+        },
+      });
 
-      if (hasCredits) {
-        // Update the account store with new credit info
-        updateCredits({
-          credits: {
-            allocated_cents: creditBalance.credits.monthly_allocated_cents,
-            used_cents: creditBalance.credits.monthly_used_cents,
-            remaining_cents: creditBalance.credits.monthly_remaining_cents,
-            daily_limit_cents: creditBalance.credits.daily_limit_cents,
-            daily_used_cents: creditBalance.credits.daily_used_cents,
-            daily_remaining_cents: creditBalance.credits.daily_remaining_cents,
-          },
-        });
+      if (showWarnings) {
+        const remainingPercent = 100 - creditBalance.credits.usage_percentage;
 
-        // Check for low credit warnings
-        if (showWarnings && creditBalance.credits.monthly_allocated_cents > 0) {
-          const remainingPercent =
-            (creditBalance.credits.monthly_remaining_cents /
-              creditBalance.credits.monthly_allocated_cents) *
-            100;
+        const effectivePercent = remainingPercent;
 
-          const effectivePercent = remainingPercent;
-
-          if (effectivePercent <= CRITICAL_CREDIT_THRESHOLD_PERCENT) {
-            if (lastWarningRef.current !== 'critical') {
-              lastWarningRef.current = 'critical';
-              toast.error('Credits almost depleted!', {
-                description:
-                  'You have less than 5% credits remaining. Please top up your account to continue using AI features.',
-                duration: 10000,
-                action: {
-                  label: 'Upgrade',
-                  onClick: () => {
-                    window.open('https://agiworkforce.com/pricing', '_blank');
-                  },
+        if (effectivePercent <= CRITICAL_CREDIT_THRESHOLD_PERCENT) {
+          if (lastWarningRef.current !== 'critical') {
+            lastWarningRef.current = 'critical';
+            toast.error('Usage almost depleted', {
+              description:
+                'You have less than 5% usage remaining for this period. Upgrade to continue using managed AI features.',
+              duration: 10000,
+              action: {
+                label: 'Upgrade',
+                onClick: () => {
+                  window.open('https://agiworkforce.com/pricing', '_blank');
                 },
-              });
-            }
-          } else if (effectivePercent <= LOW_CREDIT_THRESHOLD_PERCENT) {
-            if (lastWarningRef.current !== 'low' && lastWarningRef.current !== 'critical') {
-              lastWarningRef.current = 'low';
-              toast.warning('Credits running low', {
-                description: `You have ${Math.round(effectivePercent)}% credits remaining for this period.`,
-                duration: 5000,
-              });
-            }
-          } else {
-            // Reset warning state when credits are healthy again
-            lastWarningRef.current = null;
+              },
+            });
           }
+        } else if (effectivePercent <= LOW_CREDIT_THRESHOLD_PERCENT) {
+          if (lastWarningRef.current !== 'low' && lastWarningRef.current !== 'critical') {
+            lastWarningRef.current = 'low';
+            toast.warning('Usage running low', {
+              description: `You have ${Math.round(effectivePercent)}% usage remaining for this period.`,
+              duration: 5000,
+            });
+          }
+        } else {
+          // Reset warning state when usage is healthy again
+          lastWarningRef.current = null;
         }
       }
     } catch (error) {
@@ -161,57 +150,43 @@ export async function refreshCreditsAfterMessage(): Promise<void> {
   try {
     const creditBalance = await accountApi.fetchCreditBalance();
 
-    const hasCredits = creditBalance.credits.monthly_remaining_cents > 0;
+    useAccountStore.getState().setAccount({
+      credits: {
+        percentage_used: creditBalance.credits.usage_percentage,
+        period_end: creditBalance.credits.reset_at ?? undefined,
+      },
+    });
 
-    if (hasCredits) {
-      useAccountStore.getState().setAccount({
-        credits: {
-          allocated_cents: creditBalance.credits.monthly_allocated_cents,
-          used_cents: creditBalance.credits.monthly_used_cents,
-          remaining_cents: creditBalance.credits.monthly_remaining_cents,
-          daily_limit_cents: creditBalance.credits.daily_limit_cents,
-          daily_used_cents: creditBalance.credits.daily_used_cents,
-          daily_remaining_cents: creditBalance.credits.daily_remaining_cents,
-        },
-      });
+    const remainingPercent = 100 - creditBalance.credits.usage_percentage;
 
-      // Check for low credit warnings
-      if (creditBalance.credits.monthly_allocated_cents > 0) {
-        const remainingPercent =
-          (creditBalance.credits.monthly_remaining_cents /
-            creditBalance.credits.monthly_allocated_cents) *
-          100;
+    const effectivePercent = remainingPercent;
 
-        const effectivePercent = remainingPercent;
-
-        if (effectivePercent <= CRITICAL_CREDIT_THRESHOLD_PERCENT) {
-          if (lastWarningLevel !== 'critical') {
-            lastWarningLevel = 'critical';
-            toast.error('Credits almost depleted!', {
-              description:
-                'You have less than 5% credits remaining. Please top up your account to continue using AI features.',
-              duration: 10000,
-              action: {
-                label: 'Upgrade',
-                onClick: () => {
-                  window.open('https://agiworkforce.com/pricing', '_blank');
-                },
-              },
-            });
-          }
-        } else if (effectivePercent <= LOW_CREDIT_THRESHOLD_PERCENT) {
-          if (lastWarningLevel !== 'low' && lastWarningLevel !== 'critical') {
-            lastWarningLevel = 'low';
-            toast.warning('Credits running low', {
-              description: `You have ${Math.round(effectivePercent)}% credits remaining for this period.`,
-              duration: 5000,
-            });
-          }
-        } else {
-          // Reset warning state when credits are healthy again
-          lastWarningLevel = null;
-        }
+    if (effectivePercent <= CRITICAL_CREDIT_THRESHOLD_PERCENT) {
+      if (lastWarningLevel !== 'critical') {
+        lastWarningLevel = 'critical';
+        toast.error('Usage almost depleted', {
+          description:
+            'You have less than 5% usage remaining for this period. Upgrade to continue using managed AI features.',
+          duration: 10000,
+          action: {
+            label: 'Upgrade',
+            onClick: () => {
+              window.open('https://agiworkforce.com/pricing', '_blank');
+            },
+          },
+        });
       }
+    } else if (effectivePercent <= LOW_CREDIT_THRESHOLD_PERCENT) {
+      if (lastWarningLevel !== 'low' && lastWarningLevel !== 'critical') {
+        lastWarningLevel = 'low';
+        toast.warning('Usage running low', {
+          description: `You have ${Math.round(effectivePercent)}% usage remaining for this period.`,
+          duration: 5000,
+        });
+      }
+    } else {
+      // Reset warning state when usage is healthy again
+      lastWarningLevel = null;
     }
   } catch (error) {
     console.warn('[refreshCreditsAfterMessage] Credit balance unavailable (non-blocking):', error);

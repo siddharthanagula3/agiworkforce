@@ -1,7 +1,17 @@
 // apps/web/lib/pricing.ts
 
 import { logger } from './logger';
-import { getPlanPriceUsd, getPlanPriceInr } from '@agiworkforce/types';
+import {
+  getPlanPriceUsd,
+  getPlanPriceInr,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
+
+export type ConfiguredCheckoutPlan = Extract<
+  BillingPlanTier,
+  'basic' | 'pro' | 'max' | 'max_15x' | 'team'
+>;
 
 /**
  * Validate that a Stripe price ID is properly configured
@@ -33,7 +43,7 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
 
 export const STRIPE_PRICE_IDS = {
   basic: {
-    // India (₹399/mo) and rest-of-world (USD $8/mo) are separate Stripe
+    // India (₹399/mo) and rest-of-world (USD $7/mo) are separate Stripe
     // Price objects on the same product — both resolve to tier 'basic'.
     monthlyUsd: validatePriceId(
       process.env['STRIPE_PRICE_BASIC_MONTHLY_USD'],
@@ -52,6 +62,13 @@ export const STRIPE_PRICE_IDS = {
     monthly: validatePriceId(process.env['STRIPE_PRICE_MAX_MONTHLY'], 'STRIPE_PRICE_MAX_MONTHLY'),
     yearly: undefined, // Max plan is monthly-only
   },
+  max_15x: {
+    monthly: validatePriceId(
+      process.env['STRIPE_PRICE_MAX_15X_MONTHLY'],
+      'STRIPE_PRICE_MAX_15X_MONTHLY',
+    ),
+    yearly: undefined, // Max 15x is monthly-only
+  },
   team: {
     monthly: validatePriceId(process.env['STRIPE_PRICE_TEAM_MONTHLY'], 'STRIPE_PRICE_TEAM_MONTHLY'),
     yearly: validatePriceId(process.env['STRIPE_PRICE_TEAM_YEARLY'], 'STRIPE_PRICE_TEAM_YEARLY'),
@@ -63,11 +80,26 @@ export const STRIPE_PRICE_IDS = {
  * Returns true if at least one plan has both monthly and annual prices configured
  */
 export function arePriceIdsConfigured(): boolean {
-  const plans = ['pro', 'max', 'team'] as const;
+  const plans = ['pro', 'max', 'max_15x', 'team'] as const;
   return plans.some(
     (plan) =>
       STRIPE_PRICE_IDS[plan].monthly !== undefined || STRIPE_PRICE_IDS[plan].yearly !== undefined,
   );
+}
+
+/** Canonical Stripe Price lookup used by pricing display, Checkout, and webhooks. */
+export function getConfiguredPriceId(
+  plan: ConfiguredCheckoutPlan,
+  interval: BillingInterval,
+  currency?: string,
+): string | undefined {
+  if (plan === 'basic') {
+    if (interval !== 'monthly') return undefined;
+    return currency?.toLowerCase() === 'inr'
+      ? (STRIPE_PRICE_IDS.basic.monthlyInr ?? STRIPE_PRICE_IDS.basic.monthlyUsd)
+      : STRIPE_PRICE_IDS.basic.monthlyUsd;
+  }
+  return STRIPE_PRICE_IDS[plan][interval];
 }
 
 export const PRICING_CONFIG = {
@@ -93,12 +125,21 @@ export const PRICING_CONFIG = {
     },
     {
       id: 'max',
-      name: 'Max',
+      name: 'Max 5x',
       price: {
         monthly: getPlanPriceUsd('max', 'monthly'),
         yearly: undefined, // Max is monthly-only
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max,
+    },
+    {
+      id: 'max_15x',
+      name: 'Max 15x',
+      price: {
+        monthly: getPlanPriceUsd('max_15x', 'monthly'),
+        yearly: undefined, // Max 15x is monthly-only
+      },
+      stripe_price_ids: STRIPE_PRICE_IDS.max_15x,
     },
     {
       id: 'team',
@@ -108,7 +149,6 @@ export const PRICING_CONFIG = {
         yearly: getPlanPriceUsd('team', 'yearly'),
       },
       stripe_price_ids: STRIPE_PRICE_IDS.team,
-      waitlist: true,
     },
   ],
   getPlanFromPriceId: (priceId: string): string | null => {
@@ -118,7 +158,7 @@ export const PRICING_CONFIG = {
     ) {
       return 'basic';
     }
-    const allPlans = ['pro', 'max', 'team'] as const;
+    const allPlans = ['pro', 'max', 'max_15x', 'team'] as const;
     for (const plan of allPlans) {
       const prices = STRIPE_PRICE_IDS[plan];
       if (prices.monthly === priceId || prices.yearly === priceId) {

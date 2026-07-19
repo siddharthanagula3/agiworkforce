@@ -390,10 +390,10 @@ describe('POST /api/projects · round-10 fields', () => {
 
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
-    expect(params).toContain(5);
+    expect(params).toContain(1);
   });
 
-  it('keeps paid project creation unlimited', async () => {
+  it('uses the Pro project limit from the shared billing catalog', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro' });
     setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-paid' }, error: null });
 
@@ -402,7 +402,30 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(res.status).toBe(201);
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
+    expect(params).toContain(25);
+  });
+
+  it('keeps Max project creation unlimited', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'max' });
+    setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-max' }, error: null });
+
+    const res = await POST(makePostRequest({ name: 'Max project' }));
+
+    expect(res.status).toBe(201);
+    const [, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(params).toContain(null);
+  });
+
+  it('fails closed for a missing subscription before inserting', async () => {
+    mockGetSubscription.mockResolvedValue(null);
+
+    const res = await POST(makePostRequest({ name: 'Blocked project' }));
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect((await res.json()).error.message).toBe(
+      'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.',
+    );
   });
 
   it('POST returns 400 for invalid importedFrom enum', async () => {

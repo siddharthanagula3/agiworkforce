@@ -1,7 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
 import { verifyToken } from '@clerk/backend';
 import jwt from 'jsonwebtoken';
-import { authenticatedUserSchema, type AuthenticatedRequestUser } from '../authenticated-user';
+import {
+  authenticatedUserSchema,
+  type AuthenticatedRequestUser,
+  type CloudSurfaceClass,
+} from '../authenticated-user';
 import { requireEnv } from '../env';
 import { getUserScopedClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
@@ -37,7 +41,20 @@ interface AccountStatusEntry {
 }
 const accountStatusCache = new Map<string, AccountStatusEntry>();
 
-async function verifyGatewayOrClerkToken(token: string): Promise<jwt.JwtPayload> {
+interface VerifiedPrincipal {
+  payload: jwt.JwtPayload;
+  /**
+   * Trusted surface class from the VERIFIED issuer, never a caller header.
+   * First-party gateway tokens are minted ONLY by the device-authorization
+   * flow (routes/deviceAuth.ts, and apps/web device/token) — i.e. the CLI/IDE
+   * developer surfaces. Clerk-issued tokens are the first-party app surfaces
+   * (desktop/mobile). This is what binds the Pro-only developer-surface gate to
+   * an unforgeable credential instead of `x-agi-surface`.
+   */
+  surface: CloudSurfaceClass;
+}
+
+async function verifyGatewayOrClerkToken(token: string): Promise<VerifiedPrincipal> {
   const decoded = jwt.decode(token);
   const issuer =
     decoded && typeof decoded === 'object' && typeof decoded.iss === 'string' ? decoded.iss : null;
@@ -55,17 +72,27 @@ async function verifyGatewayOrClerkToken(token: string): Promise<jwt.JwtPayload>
         : '';
 
     return {
-      userId: claims.sub,
-      email: emailClaim,
-      sub: claims.sub,
+      payload: {
+        userId: claims.sub,
+        email: emailClaim,
+        sub: claims.sub,
+      },
+      surface: 'app',
     };
   }
 
-  return jwt.verify(token, JWT_SECRET, {
+  const payload = jwt.verify(token, JWT_SECRET, {
     algorithms: ['HS256'],
     issuer: 'agiworkforce-api-gateway',
     audience: 'agiworkforce',
   }) as jwt.JwtPayload;
+
+  // A verified first-party gateway token is a device-authorization credential
+  // (CLI/IDE). An explicit `surface: 'app'` claim can only DOWNGRADE the
+  // requirement (never a caller-forgeable escalation, since the whole token is
+  // HS256-signed with JWT_SECRET); absent that claim it defaults to developer.
+  const claimedSurface = typeof payload['surface'] === 'string' ? payload['surface'] : null;
+  return { payload, surface: claimedSurface === 'app' ? 'app' : 'developer' };
 }
 
 function getCachedAccountStatus(userId: string): string | null {
@@ -123,13 +150,14 @@ export async function authenticateToken(
       return;
     }
 
-    const payload = await verifyGatewayOrClerkToken(token);
+    const { payload, surface } = await verifyGatewayOrClerkToken(token);
     // `token` is the raw, already-verified bearer string (verified just above
     // via Clerk verifyToken() or jwt.verify(..., JWT_SECRET)). Attaching it
     // lets the user-scoped database client bind Postgres RLS via
     // NeonDatabaseAdapter.withUser(token) for the handful of call sites that
-    // have real policy coverage — see UserAuth's doc comment there.
-    req.user = { ...authenticatedUserSchema.parse(payload), token };
+    // have real policy coverage — see UserAuth's doc comment there. `surface`
+    // is the trusted developer-vs-app class used by the managed plan gate.
+    req.user = { ...authenticatedUserSchema.parse(payload), token, surface };
 
     // SECURITY (H7, redteam-services 2026-05-04): per-jti revocation check.
     // Tokens issued before the H7 fix do not carry `jti` — accept them so

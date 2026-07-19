@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { View, ActivityIndicator, Pressable } from 'react-native';
-import { BarChart3, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { BarChart3, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
@@ -37,15 +37,12 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function money(cents: number): string {
-  return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
-}
-
 const PLAN_LABELS: Record<string, string> = {
   free: 'Free',
   basic: 'Basic',
   pro: 'Pro',
   max: 'Max',
+  max_15x: 'Max',
   team: 'Team',
   enterprise: 'Enterprise',
 };
@@ -137,27 +134,6 @@ function UsagePercentBar({
 }
 
 // ---------------------------------------------------------------------------
-// StatRow — simple two-column label / value (used only inside "Details")
-// ---------------------------------------------------------------------------
-
-function StatRow({ label, value }: { label: string; value: string }) {
-  const colors = useThemeColors();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        minHeight: 36,
-      }}
-    >
-      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>{label}</Text>
-      <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>{value}</Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Placeholder — billing not yet active
 // ---------------------------------------------------------------------------
 
@@ -220,7 +196,6 @@ export default function CloudUsageScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -247,7 +222,7 @@ export default function CloudUsageScreen() {
   }, [load, isCloudModeActive]);
 
   const planLabel = snapshot ? (PLAN_LABELS[snapshot.planTier] ?? snapshot.planTier) : '';
-  const periodResetLabel = snapshot ? formatResetDate(snapshot.periodEnd) : null;
+  const periodResetLabel = snapshot ? formatResetDate(snapshot.usageResetAt) : null;
 
   return (
     <SettingsScreenShell title="Usage">
@@ -309,9 +284,10 @@ export default function CloudUsageScreen() {
           {snapshot && (
             <>
               {/* Current session — rolling 5h window, layers on top of the
-                  monthly credit budget (founder decision, 2026-07-05). Hidden
-                  when the tier has no derivable session budget (e.g. free). */}
-              {snapshot.sessionCapCents > 0 && (
+                  monthly budget (founder decision, 2026-07-05). Percentage-only
+                  contract: a null reset means the window is inactive for this
+                  tier (e.g. free) or unused, so hide the section entirely. */}
+              {snapshot.sessionResetAt !== null && (
                 <View
                   style={{
                     borderRadius: 14,
@@ -324,7 +300,7 @@ export default function CloudUsageScreen() {
                 >
                   <UsagePercentBar
                     label="Current session"
-                    percentage={(snapshot.sessionUsedCents / snapshot.sessionCapCents) * 100}
+                    percentage={snapshot.sessionUsagePercentage}
                     resetLabel={
                       formatResetsInDuration(snapshot.sessionResetAt) === null
                         ? null
@@ -336,7 +312,7 @@ export default function CloudUsageScreen() {
 
               {/* Weekly limits — "All models" + flagship-only sub-bucket,
                   both rolling 7-day windows. Same layering rationale as session. */}
-              {snapshot.weeklyCapCents > 0 && (
+              {snapshot.weeklyResetAt !== null && (
                 <>
                   <Text
                     style={{
@@ -361,11 +337,11 @@ export default function CloudUsageScreen() {
                     <View style={{ padding: 16 }}>
                       <UsagePercentBar
                         label="All models"
-                        percentage={(snapshot.weeklyUsedCents / snapshot.weeklyCapCents) * 100}
+                        percentage={snapshot.weeklyUsagePercentage}
                         resetLabel={formatResetWeekday(snapshot.weeklyResetAt)}
                       />
                     </View>
-                    {snapshot.flagshipWeeklyCapCents > 0 && (
+                    {snapshot.flagshipWeeklyResetAt !== null && (
                       <View
                         style={{
                           padding: 16,
@@ -375,10 +351,7 @@ export default function CloudUsageScreen() {
                       >
                         <UsagePercentBar
                           label="Flagship models"
-                          percentage={
-                            (snapshot.flagshipWeeklyUsedCents / snapshot.flagshipWeeklyCapCents) *
-                            100
-                          }
+                          percentage={snapshot.flagshipWeeklyUsagePercentage}
                           resetLabel={formatResetWeekday(snapshot.flagshipWeeklyResetAt)}
                         />
                       </View>
@@ -427,23 +400,11 @@ export default function CloudUsageScreen() {
                 </View>
 
                 <View style={{ padding: 16, gap: 20 }}>
-                  {snapshot.hasDailyLimit ? (
-                    <UsagePercentBar
-                      label="Today"
-                      percentage={
-                        snapshot.dailyLimitCents > 0
-                          ? (snapshot.dailyUsedCents / snapshot.dailyLimitCents) * 100
-                          : 0
-                      }
-                      resetLabel="tomorrow"
-                    />
-                  ) : (
-                    <UsagePercentBar
-                      label="This period"
-                      percentage={snapshot.usagePercentage}
-                      resetLabel={periodResetLabel}
-                    />
-                  )}
+                  <UsagePercentBar
+                    label="This period"
+                    percentage={snapshot.usagePercentage}
+                    resetLabel={periodResetLabel}
+                  />
                 </View>
 
                 {/* Footer — refresh */}
@@ -496,58 +457,6 @@ export default function CloudUsageScreen() {
                   </Pressable>
                 </View>
               </View>
-
-              {/* Details — raw dollar figures, collapsed by default (Claude/web pattern:
-                  percentage is the headline, exact numbers are opt-in, never primary). */}
-              <Pressable
-                onPress={() => setDetailsOpen((v) => !v)}
-                accessibilityRole="button"
-                accessibilityLabel={detailsOpen ? 'Hide usage details' : 'Show usage details'}
-                accessibilityState={{ expanded: detailsOpen }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingVertical: 10,
-                  marginBottom: detailsOpen ? 8 : 18,
-                }}
-              >
-                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '500' }}>
-                  Details
-                </Text>
-                {detailsOpen ? (
-                  <ChevronUp size={16} color={colors.textMuted} />
-                ) : (
-                  <ChevronDown size={16} color={colors.textMuted} />
-                )}
-              </Pressable>
-
-              {detailsOpen && (
-                <View
-                  style={{
-                    borderRadius: 14,
-                    backgroundColor: colors.surfaceElevated,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    padding: 16,
-                    gap: 10,
-                    marginBottom: 18,
-                  }}
-                >
-                  <StatRow
-                    label="Included this period"
-                    value={money(snapshot.creditsAllocatedCents)}
-                  />
-                  <StatRow label="Used" value={money(snapshot.creditsUsedCents)} />
-                  <StatRow label="Remaining" value={money(snapshot.creditsRemainingCents)} />
-                  {snapshot.hasDailyLimit && (
-                    <>
-                      <StatRow label="Daily budget" value={money(snapshot.dailyLimitCents)} />
-                      <StatRow label="Used today" value={money(snapshot.dailyUsedCents)} />
-                    </>
-                  )}
-                </View>
-              )}
             </>
           )}
         </>

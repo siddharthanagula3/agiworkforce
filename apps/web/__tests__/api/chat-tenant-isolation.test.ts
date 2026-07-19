@@ -100,6 +100,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)',
     );
 
     expect(res.status).toBe(200);
+    expect((await res.json()).messages[0]).not.toHaveProperty('cost_cents');
     const [sql] = mockQuery.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('on conflict (id) do update');
     expect(sql).toContain('where web_messages.conversation_id = excluded.conversation_id');

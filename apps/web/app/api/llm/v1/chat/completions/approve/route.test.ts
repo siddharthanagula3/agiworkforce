@@ -280,6 +280,9 @@ describe('POST /api/llm/v1/chat/completions/approve — durable checkpoint bound
       db,
       expect.objectContaining({ leaseSeconds: 86_400 }),
     );
+    expect(toolMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
+      customConnectorLimit: 25,
+    });
     expect(workflowMocks.start).toHaveBeenCalledWith(
       expect.objectContaining({
         db,

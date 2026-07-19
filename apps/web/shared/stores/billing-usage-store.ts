@@ -6,13 +6,14 @@
  * Replaces the previous compilation stub. Provides token-budget tracking,
  * cost overview loading, and budget alerts consumed by the agentic chat UI.
  *
- * Limits (dailyBudget / monthlyBudget) are populated from /api/usage when
- * loadCostOverview() is called. Token usage is accumulated locally in the
- * session via addTokenUsage().
+ * The server contributes percentage/reset status only. Token usage may still
+ * be accumulated locally for session diagnostics, but private plan operands
+ * never enter this browser store.
  */
 
 import React from 'react';
 import { create } from 'zustand';
+import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,12 +38,7 @@ export interface BudgetAlert {
   dismissed?: boolean;
 }
 
-export interface CostOverview {
-  daily_cost_cents: number;
-  monthly_cost_cents: number;
-  daily_limit_cents: number | null;
-  monthly_limit_cents: number | null;
-}
+export type CostOverview = ManagedUsageSummaryResponse;
 
 export interface BillingUsageState {
   /** Daily budget in cents (0 = no limit / free tier) */
@@ -51,7 +47,7 @@ export interface BillingUsageState {
   monthlyBudget_cents: number;
   /** Accumulated token cost for the current session in cents */
   sessionCost_cents: number;
-  /** Cost overview loaded from /api/usage */
+  /** Percentage-only usage overview loaded from /api/usage */
   costOverview: CostOverview | null;
   /** Active budget alerts shown in BudgetAlertsPanel */
   budgetAlerts: BudgetAlert[];
@@ -95,15 +91,9 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
 
     // Generate budget alerts against the active budget. Daily is legacy-only;
     // the current product model uses the billing-period budget when daily is unset.
-    const { dailyBudget_cents, monthlyBudget_cents, budgetAlerts, costOverview } = get();
-    const effectiveBudgetCents = dailyBudget_cents > 0 ? dailyBudget_cents : monthlyBudget_cents;
-    if (effectiveBudgetCents > 0) {
-      const totalUsage =
-        newSessionCost +
-        (dailyBudget_cents > 0
-          ? (costOverview?.daily_cost_cents ?? 0)
-          : (costOverview?.monthly_cost_cents ?? 0));
-      const ratio = totalUsage / effectiveBudgetCents;
+    const { budgetAlerts, costOverview } = get();
+    if (costOverview) {
+      const ratio = normalizeUsagePercentage(costOverview.usage_percentage) / 100;
 
       const hasActiveAlert = (type: BudgetAlert['type']) =>
         budgetAlerts.some((a) => a.type === type && !a.dismissed);
@@ -138,11 +128,9 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
     try {
       const response = await fetch('/api/usage', { credentials: 'include' });
       if (response.ok) {
-        const data: CostOverview = await response.json();
+        const data = (await response.json()) as CostOverview;
         set({
           costOverview: data,
-          dailyBudget_cents: data.daily_limit_cents ?? 0,
-          monthlyBudget_cents: data.monthly_limit_cents ?? 0,
           isLoadingOverview: false,
         });
       } else {
@@ -161,7 +149,7 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
 
   getTokenCost: () => {
     const state = get();
-    return state.sessionCost_cents + (state.costOverview?.monthly_cost_cents ?? 0);
+    return state.sessionCost_cents;
   },
 
   _addAlert: (alert) => {

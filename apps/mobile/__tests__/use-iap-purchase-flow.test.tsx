@@ -68,7 +68,6 @@ describe('useIapPurchaseFlow — server reconciliation', () => {
       planTier: 'pro',
       status: 'active',
       currentPeriodEnd: '2026-08-01T00:00:00.000Z',
-      usageBudgetCents: 700,
     });
     mockFinishTransaction.mockResolvedValue(undefined);
 

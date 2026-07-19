@@ -8,7 +8,7 @@ import {
 /**
  * Reasoning-effort-capability wave (2026-07-10): the Anthropic thinking request
  * path is driven by per-model `reasoning.control`, NOT just capabilities.thinking.
- *   - Opus 4.8 / Sonnet 4.6 (effort_levels) → adaptive thinking; classic
+ *   - Opus 4.8 / Sonnet 5 (effort_levels) → adaptive thinking; classic
  *     enabled+budget 400s on Opus.
  *   - Haiku 4.5 (thinking_budget) → classic enabled+budget (NOT adaptive).
  * See docs/research/reasoning-effort-capability-matrix-2026-07-10.md flags 2 & 3.
@@ -21,9 +21,8 @@ describe('anthropicUsesAdaptiveThinking (control-driven)', () => {
     expect(anthropicUsesAdaptiveThinking('claude-opus-4-8')).toBe(true);
   });
 
-  it('returns adaptive for Sonnet 4.6 (transitional effort_levels model)', () => {
-    expect(anthropicUsesAdaptiveThinking('claude-sonnet-4.6')).toBe(true);
-    expect(anthropicUsesAdaptiveThinking('claude-sonnet-4-6')).toBe(true);
+  it('returns adaptive for Sonnet 5', () => {
+    expect(anthropicUsesAdaptiveThinking('claude-sonnet-5')).toBe(true);
   });
 
   it('returns CLASSIC (not adaptive) for Haiku 4.5 (thinking_budget control)', () => {

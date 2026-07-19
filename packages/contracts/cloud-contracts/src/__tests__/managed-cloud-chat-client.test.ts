@@ -68,7 +68,6 @@ describe('createManagedCloudChatClient', () => {
             provider: null,
             input_tokens: 0,
             output_tokens: 0,
-            cost_cents: 0,
             created_at: rawConversation.created_at,
             metadata: {},
           },

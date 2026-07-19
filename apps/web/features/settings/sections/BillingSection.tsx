@@ -59,7 +59,7 @@ const FREE_PLAN_FEATURES = [
   'Ability to search the web',
   'Create files and execute code',
   'Connect local models via Ollama or LM Studio',
-  'Bring your own API keys (every major provider)',
+  'Bring your own supported API keys',
 ];
 
 function PlanIcon({ tier }: { tier: string }) {
@@ -145,16 +145,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function BillingSection() {
   const subscription = useBillingStore((s) => s.subscription);
-  const creditBalance = useBillingStore((s) => s.creditBalance_cents);
-  const dailyUsage = useBillingStore((s) => s.dailyUsage_cents);
-  const dailyLimit = useBillingStore((s) => s.dailyLimit_cents);
 
-  const tier = subscription?.tier ?? 'free';
+  const tier: string = String(subscription?.tier ?? 'free').toLowerCase();
   const planPricing = BILLING_PLAN_PRICING[tier as keyof typeof BILLING_PLAN_PRICING];
-
-  const balanceDollars = creditBalance != null ? (creditBalance / 100).toFixed(2) : null;
-  const usageDollars = (dailyUsage / 100).toFixed(2);
-  const limitDollars = dailyLimit != null ? (dailyLimit / 100).toFixed(2) : null;
 
   const isFreeTier = tier === 'free';
   const isManagedPaid = !isFreeTier && subscription?.status === 'active';
@@ -207,10 +200,10 @@ export function BillingSection() {
     paymentMethods?.find((pm) => pm.is_default)?.card ?? paymentMethods?.[0]?.card;
 
   function usageBadgeText(): string | null {
-    // Tiers are Local/Free, Pro, Max (the 'hobby' tier was removed). The Pro badge compared
-    // against the now-nonexistent 'Hobby' tier — compare against Free instead.
-    if (tier === 'max') return '20x more usage than Pro';
-    if (tier === 'pro') return '5x more usage than Free';
+    if (tier === 'pro') return '5x more usage than Basic';
+    if (tier === 'max') return '5x more usage than Pro';
+    if (tier === 'max_15x') return '15x more usage than Pro';
+    if (tier === 'team') return 'Same usage as Pro';
     return null;
   }
 
@@ -440,35 +433,6 @@ export function BillingSection() {
             >
               {defaultCard ? 'Update' : 'Add payment method'}
             </Link>
-          </div>
-        </section>
-      )}
-
-      {/* Usage section */}
-      {balanceDollars !== null && (
-        <section
-          style={{
-            border: '1px solid var(--settings-border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-elev)',
-            overflow: 'hidden',
-          }}
-        >
-          <SectionHeader title="Usage" />
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Row label="Credit balance">
-              <span style={{ fontSize: 14, fontFamily: 'var(--mono)', color: 'var(--text-2)' }}>
-                ${balanceDollars}
-              </span>
-            </Row>
-            <Row label="Today's usage">
-              <span style={{ fontSize: 14, fontFamily: 'var(--mono)', color: 'var(--text-2)' }}>
-                ${usageDollars}
-                {limitDollars !== null && (
-                  <span style={{ color: 'var(--text-3)' }}> / ${limitDollars}</span>
-                )}
-              </span>
-            </Row>
           </div>
         </section>
       )}

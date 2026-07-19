@@ -90,6 +90,9 @@ export * from './user';
 // Billing plan pricing and included-usage budget helpers
 export * from './billing-catalog';
 
+// Percentage-only public managed-usage status shared by cloud clients.
+export * from './managed-usage-balance';
+
 // Scheduler types (ScheduledTask, ScheduleConfig, CronExpression)
 export * from './scheduler';
 

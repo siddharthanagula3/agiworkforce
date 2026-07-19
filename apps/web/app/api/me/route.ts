@@ -10,7 +10,6 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
-import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import {
@@ -65,13 +64,9 @@ async function handleGetMe(request: NextRequest) {
 
     const db = getNeonDb();
 
-    const [subscription, credits, routing_preferences] = await Promise.all([
+    const [subscription, routing_preferences] = await Promise.all([
       SubscriptionService.getSubscription(userId).catch((subscriptionError: unknown) => {
         logger.warn({ userId, error: subscriptionError }, 'Error fetching subscription');
-        return null;
-      }),
-      CreditService.getBalance(userId).catch((creditError: unknown) => {
-        logger.warn({ error: creditError, userId }, 'Failed to get credit balance');
         return null;
       }),
       (async (): Promise<{ us_only?: boolean; geo_overlay?: string }> => {
@@ -154,7 +149,6 @@ async function handleGetMe(request: NextRequest) {
       updated_at: Date.now() / 1000,
       plan,
       feature_flags,
-      credits,
       routing_preferences,
       capability_handshake: toWireCapabilityHandshake(capability_handshake),
     };

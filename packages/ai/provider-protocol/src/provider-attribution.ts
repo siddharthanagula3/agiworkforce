@@ -25,7 +25,6 @@ export type ProviderRequestCapability = 'llm' | 'audio' | 'image' | 'video' | 'o
 export type ProviderEndpointClass =
   | 'default'
   | 'anthropic-public'
-  | 'cerebras-native'
   | 'chutes-native'
   | 'deepseek-native'
   | 'github-copilot-native'
@@ -36,7 +35,6 @@ export type ProviderEndpointClass =
   | 'openai-public'
   | 'openai-codex'
   | 'opencode-native'
-  | 'azure-openai'
   | 'openrouter'
   | 'xai-native'
   | 'zai-native'
@@ -75,12 +73,8 @@ export interface ProviderRequestCapabilities {
   supportsOpenAICompletionsStreamingUsageCompat: boolean;
 }
 
-const OPENAI_RESPONSES_APIS = new Set([
-  'openai-responses',
-  'azure-openai-responses',
-  'openai-codex-responses',
-]);
-const OPENAI_RESPONSES_PROVIDERS = new Set(['openai', 'azure-openai', 'azure-openai-responses']);
+const OPENAI_RESPONSES_APIS = new Set(['openai-responses', 'openai-codex-responses']);
+const OPENAI_RESPONSES_PROVIDERS = new Set(['openai']);
 
 function readCompatBoolean(
   compat: unknown,
@@ -97,8 +91,6 @@ function resolveKnownProviderFamily(provider: string | undefined): string {
   switch (provider) {
     case 'openai':
     case 'openai-codex':
-    case 'azure-openai':
-    case 'azure-openai-responses':
       return 'openai-family';
     case 'anthropic':
     case 'anthropic-vertex':
@@ -135,9 +127,7 @@ export function resolveProviderRequestCapabilities(
   const endpointClass = resolveBundledOpenAIResponsesEndpointClass(input.baseUrl);
   const usesConfiguredBaseUrl = endpointClass !== 'default';
   const usesKnownNativeOpenAIEndpoint =
-    endpointClass === 'openai-public' ||
-    endpointClass === 'openai-codex' ||
-    endpointClass === 'azure-openai';
+    endpointClass === 'openai-public' || endpointClass === 'openai-codex';
   const usesKnownNativeOpenAIRoute =
     endpointClass === 'default' ? provider === 'openai' : usesKnownNativeOpenAIEndpoint;
   const usesExplicitProxyLikeEndpoint = usesConfiguredBaseUrl && !usesKnownNativeOpenAIEndpoint;

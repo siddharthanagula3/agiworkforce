@@ -21,7 +21,6 @@ describe('MeResponseSchema', () => {
     const freeUser = {
       ...golden,
       email: null,
-      credits: null,
       plan: { tier: 'free', display_name: 'Free', status: 'none', current_period_end: null },
       routing_preferences: {},
     };

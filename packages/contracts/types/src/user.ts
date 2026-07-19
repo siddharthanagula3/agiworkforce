@@ -10,6 +10,8 @@
  * @packageDocumentation
  */
 
+import type { BillingPlanTier } from './billing-catalog';
+
 // ============================================================================
 // Subscription Tier
 // ============================================================================
@@ -18,12 +20,14 @@
  * Subscription tier levels available in the platform.
  *
  * - `free` -- Basic access with limited features and token allowance.
- * - `hobby` -- Enhanced features for individual users.
+ * - `basic` -- Mobile-first entry tier.
  * - `pro` -- Full feature access for professionals.
- * - `max` -- Maximum feature access with highest token limits.
+ * - `max` -- Max 5x usage tier.
+ * - `max_15x` -- Max 15x usage tier.
+ * - `team` -- Per-seat team tier.
  * - `enterprise` -- Custom enterprise deployment with dedicated support.
  */
-export type SubscriptionTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+export type SubscriptionTier = Exclude<BillingPlanTier, 'local-only' | 'byok'>;
 
 // ============================================================================
 // Subscription Status

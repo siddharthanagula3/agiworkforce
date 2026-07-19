@@ -257,6 +257,7 @@ describe('Chat Messages API', () => {
         expect(response.status).toBe(200);
         const data = await response.json();
         expect(data.message).toBeDefined();
+        expect(data.message).not.toHaveProperty('cost_cents');
         // LLM is NOT called inline; streaming is handled by /api/llm/v1/chat/completions
         expect(mockFetch).not.toHaveBeenCalled();
       });

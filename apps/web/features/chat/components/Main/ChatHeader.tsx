@@ -43,23 +43,12 @@ import {
 import type { ChatSession } from '../../types';
 import { ThemeToggle } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { PLAN_LABEL, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+import { PLAN_LABEL, isFreePlan, normalizeUIPlanTier } from '@agiworkforce/types';
 import { useShareConversation } from '../../hooks/use-share-conversation';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function toUIPlanTier(plan: string | undefined): UIPlanTier {
-  const normalized = (plan ?? 'byok').toLowerCase();
-  if (normalized === 'local' || normalized === 'local-only') return 'local';
-  if (normalized === 'byok') return 'byok';
-  // 'hobby' is a legacy value from before the 2026-07-02 tier rename.
-  if (normalized === 'hobby' || normalized === 'basic') return 'basic';
-  if (normalized === 'pro') return 'pro';
-  if (normalized === 'max') return 'max';
-  return 'byok';
-}
 
 function getInitials(name: string | undefined, email: string | undefined): string {
   if (name && name.trim()) {
@@ -82,7 +71,7 @@ function getInitials(name: string | undefined, email: string | undefined): strin
 function ProfilePopover() {
   const { user, logout } = useAuthStore();
 
-  const tier = toUIPlanTier(user?.plan);
+  const tier = normalizeUIPlanTier(user?.plan, 'free');
   const planLabel = PLAN_LABEL[tier];
   const displayName = user?.name ?? user?.email ?? 'User';
   const email = user?.email ?? '';
@@ -128,6 +117,10 @@ function ProfilePopover() {
               tier === 'basic' && 'bg-amber-500/20 text-amber-400 border-amber-500/30',
               tier === 'pro' && 'bg-violet-500/20 text-violet-400 border-violet-500/30',
               tier === 'max' && 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+              tier === 'max_15x' && 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+              tier === 'team' && 'bg-violet-500/20 text-violet-400 border-violet-500/30',
+              tier === 'enterprise' && 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+              tier === 'free' && 'bg-amber-500/20 text-amber-400 border-amber-500/30',
               (tier === 'byok' || tier === 'local') &&
                 'bg-white/10 text-muted-foreground border-white/10',
             )}

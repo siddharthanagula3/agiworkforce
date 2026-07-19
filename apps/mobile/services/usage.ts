@@ -1,64 +1,55 @@
 import { api } from './api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import {
+  parseManagedUsageSummaryResponse,
+  type ManagedUsageSummaryResponse,
+} from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
-// Types — mirrors apps/web/app/api/usage/route.ts's actual response shape.
+// Types — the canonical PERCENTAGE-ONLY usage contract (GET /api/usage returns
+// ManagedUsageSummaryResponse). Private managed-compute allowances (cents /
+// ledger units / dollar figures) never cross this boundary, so the app can
+// never render exact dollars or divide by an absent cap into $NaN.
 // ---------------------------------------------------------------------------
 
 export interface UsageSnapshot {
   planTier: string;
-  creditsAllocatedCents: number;
-  creditsUsedCents: number;
-  creditsRemainingCents: number;
   /** 0-100, already clamped-rounded server-side. */
   usagePercentage: number;
+  usageResetAt: string | null;
+  hasUsageRemaining: boolean;
   periodStart: string | null;
   periodEnd: string | null;
-  dailyUsedCents: number;
-  dailyLimitCents: number;
-  dailyRemainingCents: number;
-  hasDailyLimit: boolean;
   subscriptionStatus: string;
   /**
-   * Session (rolling 5h) / weekly / flagship-weekly caps layer on top of the
-   * monthly credit budget above (founder decision, 2026-07-05) — see
-   * getPlanWeeklyUsageBudgetCents in @agiworkforce/types/billing-catalog.
-   * Cap of 0 means "not applicable for this tier" (e.g. free); callers
-   * should hide that section rather than show a 0/0 bar.
+   * Rolling-window usage as percentages of their (private) tier budgets. A
+   * `*ResetAt` of null means the window is not active for this tier (e.g. Free)
+   * or has no usage yet — callers hide that section rather than show 0/0.
    */
-  sessionUsedCents: number;
-  sessionCapCents: number;
+  sessionUsagePercentage: number;
   sessionResetAt: string | null;
-  weeklyUsedCents: number;
-  weeklyCapCents: number;
+  weeklyUsagePercentage: number;
   weeklyResetAt: string | null;
-  flagshipWeeklyUsedCents: number;
-  flagshipWeeklyCapCents: number;
+  flagshipWeeklyUsagePercentage: number;
   flagshipWeeklyResetAt: string | null;
 }
 
-interface UsageApiResponse {
-  plan_tier: string;
-  credits_allocated_cents: number;
-  credits_used_cents: number;
-  credits_remaining_cents: number;
-  usage_percentage: number;
-  period_start: string | null;
-  period_end: string | null;
-  daily_used_cents: number;
-  daily_limit_cents: number;
-  daily_remaining_cents: number;
-  has_daily_limit: boolean;
-  subscription_status: string;
-  session_used_cents: number;
-  session_cap_cents: number;
-  session_reset_at: string | null;
-  weekly_used_cents: number;
-  weekly_cap_cents: number;
-  weekly_reset_at: string | null;
-  flagship_weekly_used_cents: number;
-  flagship_weekly_cap_cents: number;
-  flagship_weekly_reset_at: string | null;
+function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
+  return {
+    planTier: summary.plan_tier,
+    usagePercentage: summary.usage_percentage,
+    usageResetAt: summary.usage_reset_at,
+    hasUsageRemaining: summary.has_usage_remaining,
+    periodStart: summary.period_start,
+    periodEnd: summary.period_end,
+    subscriptionStatus: summary.subscription_status,
+    sessionUsagePercentage: summary.session_usage_percentage,
+    sessionResetAt: summary.session_reset_at,
+    weeklyUsagePercentage: summary.weekly_usage_percentage,
+    weeklyResetAt: summary.weekly_reset_at,
+    flagshipWeeklyUsagePercentage: summary.flagship_weekly_usage_percentage,
+    flagshipWeeklyResetAt: summary.flagship_weekly_reset_at,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -66,34 +57,14 @@ interface UsageApiResponse {
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch the user's current usage snapshot (plan allowance vs. usage, as a
- * percentage — see GET /api/usage). Throws on network/auth failure; callers
- * should catch and handle gracefully.
+ * Fetch the user's current usage snapshot (plan usage as a percentage — see
+ * GET /api/usage). The body is validated and projected to the public
+ * percentage-only contract; a malformed response throws rather than rendering
+ * NaN. Throws on network/auth failure; callers should catch and handle
+ * gracefully.
  */
 export async function fetchUsageSnapshot(): Promise<UsageSnapshot> {
   if (!FEATURES.usageDashboard) throw new Error('usage: cloud usage not available in v1');
-  const data = await api.get<UsageApiResponse>('/api/usage');
-  return {
-    planTier: data.plan_tier,
-    creditsAllocatedCents: data.credits_allocated_cents,
-    creditsUsedCents: data.credits_used_cents,
-    creditsRemainingCents: data.credits_remaining_cents,
-    usagePercentage: data.usage_percentage,
-    periodStart: data.period_start,
-    periodEnd: data.period_end,
-    dailyUsedCents: data.daily_used_cents,
-    dailyLimitCents: data.daily_limit_cents,
-    dailyRemainingCents: data.daily_remaining_cents,
-    hasDailyLimit: data.has_daily_limit,
-    subscriptionStatus: data.subscription_status,
-    sessionUsedCents: data.session_used_cents,
-    sessionCapCents: data.session_cap_cents,
-    sessionResetAt: data.session_reset_at,
-    weeklyUsedCents: data.weekly_used_cents,
-    weeklyCapCents: data.weekly_cap_cents,
-    weeklyResetAt: data.weekly_reset_at,
-    flagshipWeeklyUsedCents: data.flagship_weekly_used_cents,
-    flagshipWeeklyCapCents: data.flagship_weekly_cap_cents,
-    flagshipWeeklyResetAt: data.flagship_weekly_reset_at,
-  };
+  const data = await api.get<unknown>('/api/usage');
+  return project(parseManagedUsageSummaryResponse(data));
 }

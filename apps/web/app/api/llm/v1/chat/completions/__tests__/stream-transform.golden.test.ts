@@ -27,9 +27,6 @@ vi.mock('@/lib/cors', () => ({
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/assert-quota', () => ({
-  reconcileUsage: vi.fn(() => Promise.resolve()),
-}));
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     generateIdempotencyKey: vi.fn(() => 'idempotency-key'),

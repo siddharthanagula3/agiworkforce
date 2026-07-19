@@ -124,24 +124,6 @@
       },
       "evidenceRefs": []
     },
-    "claude-sonnet-4.6": {
-      "identity": {
-        "key": "claude-sonnet-4.6",
-        "displayName": "Claude 4.6 Sonnet",
-        "provider": "anthropic",
-        "providerModelId": "claude-sonnet-4-6",
-        "kind": "code",
-        "familyPartner": "claude-opus-4.8"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "February 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
     "claude-haiku-4.5": {
       "identity": {
         "key": "claude-haiku-4.5",
@@ -299,18 +281,18 @@
       },
       "evidenceRefs": []
     },
-    "qwen-flash": {
+    "qwen-3.5-flash": {
       "identity": {
-        "key": "qwen-flash",
-        "displayName": "Qwen Flash",
+        "key": "qwen-3.5-flash",
+        "displayName": "Qwen 3.5 Flash",
         "provider": "qwen",
         "providerModelId": "qwen3.5-flash",
-        "kind": "chat"
+        "kind": "multimodal"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "November 2025",
+        "released": "February 2026",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -362,23 +344,6 @@
         "status": "active",
         "availability": "live",
         "released": "January 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "kimi-k2.6": {
-      "identity": {
-        "key": "kimi-k2.6",
-        "displayName": "Kimi K2.6",
-        "provider": "moonshot",
-        "providerModelId": "kimi-k2.6",
-        "kind": "multimodal"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "April 2026",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -622,23 +587,6 @@
       },
       "evidenceRefs": []
     },
-    "ideogram-2": {
-      "identity": {
-        "key": "ideogram-2",
-        "displayName": "Ideogram 2.0",
-        "provider": "managed_cloud",
-        "providerModelId": "ideogram-2.0",
-        "kind": "image"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "January 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
     "veo-3": {
       "identity": {
         "key": "veo-3",
@@ -653,23 +601,6 @@
         "released": "January 2026",
         "deprecationDate": null,
         "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "stable-diffusion-xl": {
-      "identity": {
-        "key": "stable-diffusion-xl",
-        "displayName": "Stable Diffusion XL",
-        "provider": "managed_cloud",
-        "providerModelId": "stable-diffusion-xl-1024-v1-0",
-        "kind": "image"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "July 2023",
-        "deprecationDate": null,
-        "deprecated": true
       },
       "evidenceRefs": []
     },
@@ -964,18 +895,18 @@
       },
       "evidenceRefs": []
     },
-    "qwen-3.5-plus": {
+    "qwen-3.7-plus": {
       "identity": {
-        "key": "qwen-3.5-plus",
-        "displayName": "Qwen 3.5 Plus",
+        "key": "qwen-3.7-plus",
+        "displayName": "Qwen 3.7 Plus",
         "provider": "qwen",
-        "providerModelId": "qwen3.5-plus",
+        "providerModelId": "qwen3.7-plus",
         "kind": "multimodal"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "April 2026",
+        "released": "May 2026",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -1047,13 +978,7 @@
       "gpt-5.4-nano",
       "gpt-4.1-nano"
     ],
-    "anthropic": [
-      "claude-fable-5",
-      "claude-opus-4.8",
-      "claude-sonnet-5",
-      "claude-sonnet-4.6",
-      "claude-haiku-4.5"
-    ],
+    "anthropic": ["claude-fable-5", "claude-opus-4.8", "claude-sonnet-5", "claude-haiku-4.5"],
     "google": [
       "gemini-embedding-2",
       "gemini-3.1-pro-preview",
@@ -1069,13 +994,12 @@
     "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro"],
     "qwen": [
       "qwen-max",
-      "qwen-flash",
+      "qwen-3.5-flash",
       "qwen-turbo",
       "qwen-coder-flash",
       "qwen-coder-plus",
-      "qwen-3.5-plus"
+      "qwen-3.7-plus"
     ],
-    "moonshot": ["kimi-k2.6"],
     "mistral": [
       "mistral-large-3",
       "mistral-medium-3",
@@ -1091,7 +1015,7 @@
       "sonar-deep-research"
     ],
     "runway": ["runway-gen-4"],
-    "managed_cloud": ["ideogram-2", "stable-diffusion-xl", "stable-image-core"],
+    "managed_cloud": ["stable-image-core"],
     "nvidia_nim": [
       "nvidia/llama-3.3-70b-instruct",
       "nvidia/nemotron-3-ultra-550b-a55b",
@@ -1166,15 +1090,6 @@
       "modelKey": "claude-sonnet-5",
       "provider": "anthropic",
       "providerModelId": "claude-sonnet-5",
-      "harnessId": "anthropic/messages",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "anthropic/claude-sonnet-4.6": {
-      "modelKey": "claude-sonnet-4.6",
-      "provider": "anthropic",
-      "providerModelId": "claude-sonnet-4-6",
       "harnessId": "anthropic/messages",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -1261,8 +1176,8 @@
       "availability": "live",
       "selectable": true
     },
-    "qwen/qwen-flash": {
-      "modelKey": "qwen-flash",
+    "qwen/qwen-3.5-flash": {
+      "modelKey": "qwen-3.5-flash",
       "provider": "qwen",
       "providerModelId": "qwen3.5-flash",
       "harnessId": "qwen/chat-completions",
@@ -1293,15 +1208,6 @@
       "provider": "qwen",
       "providerModelId": "qwen3-coder-plus",
       "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "moonshot/kimi-k2.6": {
-      "modelKey": "kimi-k2.6",
-      "provider": "moonshot",
-      "providerModelId": "kimi-k2.6",
-      "harnessId": "moonshot/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true
@@ -1432,15 +1338,6 @@
       "availability": "live",
       "selectable": true
     },
-    "managed_cloud/ideogram-2": {
-      "modelKey": "ideogram-2",
-      "provider": "managed_cloud",
-      "providerModelId": "ideogram-2.0",
-      "harnessId": "managed-cloud/gateway",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true
-    },
     "google/veo-3": {
       "modelKey": "veo-3",
       "provider": "google",
@@ -1449,15 +1346,6 @@
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true
-    },
-    "managed_cloud/stable-diffusion-xl": {
-      "modelKey": "stable-diffusion-xl",
-      "provider": "managed_cloud",
-      "providerModelId": "stable-diffusion-xl-1024-v1-0",
-      "harnessId": "managed-cloud/gateway",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": false
     },
     "managed_cloud/stable-image-core": {
       "modelKey": "stable-image-core",
@@ -1612,10 +1500,10 @@
       "availability": "live",
       "selectable": true
     },
-    "qwen/qwen-3.5-plus": {
-      "modelKey": "qwen-3.5-plus",
+    "qwen/qwen-3.7-plus": {
+      "modelKey": "qwen-3.7-plus",
       "provider": "qwen",
-      "providerModelId": "qwen3.5-plus",
+      "providerModelId": "qwen3.7-plus",
       "harnessId": "qwen/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -1746,7 +1634,10 @@
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-qwen",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {
+        "webSearch": { "providerSupport": "native", "implementation": "unwired" },
+        "codeExecution": { "providerSupport": "native", "implementation": "unwired" }
+      }
     },
     "moonshot/chat-completions": {
       "provider": "moonshot",
@@ -2174,20 +2065,6 @@
       "functionCalling": true,
       "reasoning": true
     },
-    "claude-sonnet-4.6": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
     "claude-haiku-4.5": {
       "textInput": true,
       "imageInput": true,
@@ -2314,11 +2191,11 @@
       "functionCalling": true,
       "reasoning": true
     },
-    "qwen-flash": {
+    "qwen-3.5-flash": {
       "textInput": true,
-      "imageInput": false,
+      "imageInput": true,
       "audioInput": false,
-      "videoInput": false,
+      "videoInput": true,
       "textOutput": true,
       "imageOutput": false,
       "audioOutput": false,
@@ -2326,7 +2203,7 @@
       "streaming": true,
       "structuredOutput": true,
       "functionCalling": true,
-      "reasoning": false
+      "reasoning": true
     },
     "qwen-turbo": {
       "textInput": true,
@@ -2359,20 +2236,6 @@
     "qwen-coder-plus": {
       "textInput": true,
       "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
-    "kimi-k2.6": {
-      "textInput": true,
-      "imageInput": true,
       "audioInput": false,
       "videoInput": false,
       "textOutput": true,
@@ -2580,20 +2443,6 @@
       "functionCalling": false,
       "reasoning": false
     },
-    "ideogram-2": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": false,
-      "imageOutput": true,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": false,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false
-    },
     "veo-3": {
       "textInput": true,
       "imageInput": false,
@@ -2603,20 +2452,6 @@
       "imageOutput": false,
       "audioOutput": false,
       "videoOutput": true,
-      "streaming": false,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false
-    },
-    "stable-diffusion-xl": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": false,
-      "imageOutput": true,
-      "audioOutput": false,
-      "videoOutput": false,
       "streaming": false,
       "structuredOutput": false,
       "functionCalling": false,
@@ -2860,11 +2695,11 @@
       "functionCalling": true,
       "reasoning": true
     },
-    "qwen-3.5-plus": {
+    "qwen-3.7-plus": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
-      "videoInput": false,
+      "videoInput": true,
       "textOutput": true,
       "imageOutput": false,
       "audioOutput": false,
@@ -2970,26 +2805,11 @@
     "claude-sonnet-5": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 2,
-      "outputPerMillion": 10,
-      "cacheReadPerMillion": 0.2,
-      "cacheWritePerMillion": 2.5,
-      "cacheWrite1hPerMillion": 4,
-      "promoExpiresAt": "2026-08-31",
-      "postPromoPrices": {
-        "input": 3,
-        "output": 15,
-        "cached_input": 0.3,
-        "cached_write": 3.75,
-        "cached_write_1h": 6
-      }
-    },
-    "claude-sonnet-4.6": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
       "inputPerMillion": 3,
       "outputPerMillion": 15,
-      "cacheReadPerMillion": 0.3
+      "cacheReadPerMillion": 0.3,
+      "cacheWritePerMillion": 3.75,
+      "cacheWrite1hPerMillion": 6
     },
     "claude-haiku-4.5": {
       "currency": "USD",
@@ -3052,11 +2872,13 @@
       "inputPerMillion": 1.2,
       "outputPerMillion": 6
     },
-    "qwen-flash": {
+    "qwen-3.5-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0.1,
-      "outputPerMillion": 0.4
+      "inputPerMillion": 0.029,
+      "outputPerMillion": 0.287,
+      "cacheReadPerMillion": 0.0058,
+      "cacheWritePerMillion": 0.03625
     },
     "qwen-turbo": {
       "currency": "USD",
@@ -3075,13 +2897,6 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 0.5,
       "outputPerMillion": 2
-    },
-    "kimi-k2.6": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.95,
-      "outputPerMillion": 4,
-      "cacheReadPerMillion": 0.16
     },
     "mistral-large-3": {
       "currency": "USD",
@@ -3172,12 +2987,6 @@
       "outputPerMillion": 80,
       "imagePerImage": 0.06
     },
-    "ideogram-2": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 20
-    },
     "veo-3": {
       "currency": "USD",
       "unit": "per_second",
@@ -3185,12 +2994,6 @@
       "outputPerMillion": 750,
       "videoPerSecond": 0.4,
       "videoPerSecondByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 }
-    },
-    "stable-diffusion-xl": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 4
     },
     "stable-image-core": {
       "currency": "USD",
@@ -3301,12 +3104,13 @@
       "outputPerMillion": 4.4,
       "cacheReadPerMillion": 0.26
     },
-    "qwen-3.5-plus": {
+    "qwen-3.7-plus": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 0.4,
-      "outputPerMillion": 2.4,
-      "cacheReadPerMillion": 0.05
+      "outputPerMillion": 1.6,
+      "cacheReadPerMillion": 0.08,
+      "cacheWritePerMillion": 0.5
     },
     "nvidia/nemotron-3-ultra-550b-a55b": {
       "currency": "USD",
@@ -3365,7 +3169,6 @@
       "maxOutputTokens": 128000,
       "knowledgeCutoff": "2026-01"
     },
-    "claude-sonnet-4.6": { "contextTokens": 200000 },
     "claude-haiku-4.5": {
       "contextTokens": 200000,
       "maxInputTokens": 200000,
@@ -3380,11 +3183,10 @@
     "deepseek-v4-flash": { "contextTokens": 1000000 },
     "deepseek-v4-pro": { "contextTokens": 1000000 },
     "qwen-max": { "contextTokens": 1000000 },
-    "qwen-flash": { "contextTokens": 1000000 },
+    "qwen-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "qwen-turbo": { "contextTokens": 1000000 },
     "qwen-coder-flash": { "contextTokens": 1000000 },
     "qwen-coder-plus": { "contextTokens": 1000000 },
-    "kimi-k2.6": { "contextTokens": 262144 },
     "mistral-large-3": { "contextTokens": 262000 },
     "mistral-medium-3": { "contextTokens": 131072 },
     "mistral-small-3": { "contextTokens": 131072 },
@@ -3399,9 +3201,7 @@
     "imagen-4-fast": { "contextTokens": 4000 },
     "runway-gen-4": { "contextTokens": 4000 },
     "imagen-4-ultra": { "contextTokens": 4000 },
-    "ideogram-2": { "contextTokens": 4000 },
     "veo-3": { "contextTokens": 4000 },
-    "stable-diffusion-xl": { "contextTokens": 4000 },
     "stable-image-core": { "contextTokens": 4000 },
     "gpt-image-2": { "contextTokens": 4000 },
     "tts-1": { "contextTokens": 4096 },
@@ -3424,7 +3224,7 @@
     "gpt-4.1-nano": { "contextTokens": 1047576 },
     "gemini-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "glm-5.2": { "contextTokens": 1000000 },
-    "qwen-3.5-plus": { "contextTokens": 1000000 },
+    "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "nvidia/nemotron-3-ultra-550b-a55b": { "contextTokens": 1000000 },
     "nvidia/nemotron-3-super-120b-a12b": { "contextTokens": 131072 },
     "nvidia/nemotron-3-nano-30b-a3b": { "contextTokens": 1000000 }
@@ -3437,13 +3237,6 @@
     "claude-fable-5": {},
     "claude-opus-4.8": {},
     "claude-sonnet-5": {},
-    "claude-sonnet-4.6": {
-      "swebench": 78.5,
-      "humaneval": 96.2,
-      "mmlu": 89.5,
-      "gpqa": 76,
-      "aime": 88
-    },
     "claude-haiku-4.5": { "swebench": 45, "humaneval": 88, "mmlu": 85, "gpqa": 55, "aime": 40 },
     "gemini-embedding-2": {},
     "gemini-3.1-pro-preview": {
@@ -3465,11 +3258,10 @@
     "deepseek-v4-flash": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
     "deepseek-v4-pro": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
     "qwen-max": { "swebench": 58, "humaneval": 93, "mmlu": 88, "gpqa": 65, "aime": 60 },
-    "qwen-flash": { "swebench": 25, "humaneval": 70, "mmlu": 75, "gpqa": 35, "aime": 25 },
+    "qwen-3.5-flash": {},
     "qwen-turbo": { "swebench": 28, "humaneval": 72, "mmlu": 76, "gpqa": 38, "aime": 28 },
     "qwen-coder-flash": { "swebench": 40, "humaneval": 82, "mmlu": 70, "gpqa": 35, "aime": 25 },
     "qwen-coder-plus": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
-    "kimi-k2.6": { "swebench": 80.2, "humaneval": 96, "mmlu": 89, "gpqa": 86, "aime": 99 },
     "mistral-large-3": { "swebench": 55, "humaneval": 92, "mmlu": 88, "gpqa": 68, "aime": 62 },
     "mistral-medium-3": { "swebench": 42, "humaneval": 85, "mmlu": 84, "gpqa": 55, "aime": 45 },
     "mistral-small-3": {},
@@ -3484,9 +3276,7 @@
     "imagen-4-fast": {},
     "runway-gen-4": {},
     "imagen-4-ultra": {},
-    "ideogram-2": {},
     "veo-3": {},
-    "stable-diffusion-xl": {},
     "stable-image-core": {},
     "gpt-image-2": {},
     "tts-1": {},
@@ -3504,105 +3294,112 @@
     "gpt-4.1-nano": {},
     "gemini-3.5-flash": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
     "glm-5.2": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
-    "qwen-3.5-plus": { "swebench": 70, "humaneval": 94, "mmlu": 90, "gpqa": 78, "aime": 88 },
+    "qwen-3.7-plus": {},
     "nvidia/nemotron-3-ultra-550b-a55b": {},
     "nvidia/nemotron-3-super-120b-a12b": {},
     "nvidia/nemotron-3-nano-30b-a3b": {}
   },
   "evidence": [
     {
-      "id": "verification/2026-07-17/1",
+      "id": "verification/2026-07-18/1",
+      "date": "2026-07-18",
+      "verifiedBy": "founder-provider-policy-and-official-qwen-anthropic-docs",
+      "status": "CORRECTION",
+      "notes": "Removed founder-banned provider stubs and retired model records. Added the exact current qwen3.7-plus and qwen3.5-flash API IDs. Alibaba Cloud Model Studio official documentation confirms text+image+video input, text output, 1M context, 64K max output, function calling, structured output, thinking, and context caching for both models. Qwen pricing is deployment- and prompt-length-dependent; the catalog records published list-price tiers and does not use limited-time discounts. Claude Sonnet 5 uses its founder-selected standard $3/$15 per-million prices with $0.30 cache reads, $3.75 five-minute cache writes, and $6 one-hour cache writes rather than a temporary introductory price. Sources retrieved 2026-07-18: alibabacloud.com/help/en/model-studio/vision-model, alibabacloud.com/help/en/model-studio/model-pricing, alibabacloud.com/help/en/model-studio/context-cache, alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions, platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5, and platform.claude.com/docs/en/build-with-claude/prompt-caching."
+    },
+    {
+      "id": "verification/2026-07-17/2",
       "date": "2026-07-17",
       "verifiedBy": "official-openai-responses-web-search-docs-and-regression-contract",
       "status": "PASS",
       "notes": "Wired OpenAI Responses native web search end-to-end for current catalog models. The managed Web route no longer forces Chat Completions, injects the stable {type:web_search} tool, requests web_search_call.action.sources, translates search lifecycle/citation/source events into the canonical stream, and exposes additive source-card events to Web, Desktop, and Mobile. capabilities.search is now true for gpt-5.5, the GPT-5.6 family, GPT-5.4 Mini, and GPT-5.4 Nano because the application execution path is covered by focused provider, wire, registry, and route tests. Official sources retrieved 2026-07-17: developers.openai.com/api/docs/guides/tools-web-search and developers.openai.com/api/docs/guides/your-data."
     },
     {
-      "id": "verification/2026-07-17/2",
+      "id": "verification/2026-07-17/3",
       "date": "2026-07-17",
       "verifiedBy": "founder-tier-policy-and-official-openai-nano-docs",
       "status": "CORRECTION",
       "notes": "Applied the founder-confirmed cloud subscription roster: Basic includes GPT-5.4 Nano and excludes GPT-5.4 Mini and Claude Haiku 4.5; Haiku remains Pro+. Max+ intentionally inherits the Max model roster and differs through budget and product limits, not additional model names. GPT-5.4 Nano identity, context, modalities, endpoints, and pricing were rechecked against the official OpenAI model page and OpenRouter catalog on 2026-07-17. This changes admission only; runtime profiles and harness status still fail closed independently."
     },
     {
-      "id": "verification/2026-07-15/3",
+      "id": "verification/2026-07-15/4",
       "date": "2026-07-15",
       "verifiedBy": "official-openai-anthropic-current-roster-live-probes",
       "status": "CORRECTION",
-      "notes": "Corrected the current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic model metadata and minimal Messages requests returned HTTP 200 for claude-fable-5, claude-opus-4-8, claude-sonnet-5, and claude-haiku-4-5; official model, effort, and pricing pages confirm context/output limits, reasoning controls, and 5-minute/1-hour prompt-cache rates. Sonnet 5 introductory prices expire 2026-08-31. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
+      "notes": "Corrected the current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic model metadata and minimal Messages requests returned HTTP 200 for claude-fable-5, claude-opus-4-8, claude-sonnet-5, and claude-haiku-4-5; official model, effort, and pricing pages confirm context/output limits, reasoning controls, and 5-minute/1-hour prompt-cache rates. The product catalog uses the founder-selected standard Sonnet 5 prices rather than temporary promotional pricing. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
     },
     {
-      "id": "verification/2026-07-15/4",
+      "id": "verification/2026-07-15/5",
       "date": "2026-07-15",
       "verifiedBy": "official-google-gemini-embedding-docs",
       "status": "CORRECTION",
       "notes": "Replaced the Desktop Google Batch app-owned gemini-embedding-001 default with the current gemini-embedding-2 model in the canonical registry. Official Google Gemini Embeddings documentation lists gemini-embedding-2 as the latest multimodal embedding model (April 2026), with text, image, video, audio, and PDF input, an 8,192-token input limit, flexible 128-3,072 dimensions, $0.20 per 1M standard text-input tokens, and $0.10 per 1M Batch text-input tokens. Embedding spaces are incompatible with gemini-embedding-001, so data migration/re-embedding remains an explicit application concern rather than an alias redirect. Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/embeddings and ai.google.dev/gemini-api/docs/pricing."
     },
     {
-      "id": "verification/2026-07-15/5",
+      "id": "verification/2026-07-15/6",
       "date": "2026-07-15",
       "verifiedBy": "official-google-runway-video-pricing-docs",
       "status": "CORRECTION",
       "notes": "Moved Web video reservations onto canonical per-second model pricing. Official Google Gemini API pricing lists Veo 3.1 Standard at $0.40/second for 720p and 1080p and $0.60/second for 4k; the Veo guide requires 8-second output for 1080p/4k. Official Runway pricing lists gen4_turbo at 5 credits/second with credits costing $0.01 ($0.05/second). Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/pricing, ai.google.dev/gemini-api/docs/veo, docs.dev.runwayml.com/guides/pricing, and docs.dev.runwayml.com/api-details/api_changelog."
     },
     {
-      "id": "verification/2026-07-14/6",
+      "id": "verification/2026-07-14/7",
       "date": "2026-07-14",
       "verifiedBy": "official-openai-docs-gpt-5.4-nano",
       "status": "CORRECTION",
       "notes": "Replaced legacy gpt-5-nano with current gpt-5.4-nano. Official OpenAI model documentation confirms exact ID gpt-5.4-nano, model type reasoning, snapshot gpt-5.4-nano-2026-03-17, 400K context, 272K maximum input, 128K maximum output, text+image input, text output, Responses + Chat Completions + Batch support, and reasoning efforts none/low/medium/high/xhigh. Official pricing is $0.20 input, $0.02 cached input, and $1.25 output per 1M tokens. AGI selects the Responses path for this reasoning model. Provider-native web search and hosted tools remain false in the legacy global capability flags until each application route actually wires them; those features belong in the future route/harness registry rather than intrinsic model metadata."
     },
     {
-      "id": "verification/2026-07-11/7",
+      "id": "verification/2026-07-11/8",
       "date": "2026-07-11",
       "verifiedBy": "websearch-enable-2026-07-11",
       "status": "CORRECTION",
-      "notes": "Founder directive: capabilities.search must be true only for models that GENUINELY produce web results today, false for every model where it would be a cosmetic no-op. Traced the full request path (apps/web/lib/web-search-support.ts + request-processor.ts appendWebSearchTool + each provider's translate/wire layer), not just the provider allowlist. Anthropic (claude-opus-4.8/claude-sonnet-4.6/claude-haiku-4.5) and Google (gemini-3.1-pro-preview/gemini-3.1-flash-lite/gemini-3.5-flash) confirmed working end-to-end: web_search_20260209 / google_search survive translate.ts untouched into the wire call; gemini-3.5-flash additionally has a live-recorded groundingMetadata integration test. Kept search:true — no change. OpenAI (gpt-5.5/gpt-5.6-*/gpt-5.4-mini/gpt-5-nano/gpt-4.1-nano) confirmed NOT working on the web route: adapter-factory.ts hardcodes useResponsesApi:false, and packages/ai/providers/openai/src/translate.ts's OPENAI_RESPONSES_ONLY_TOOL_TYPES strips web_search_preview before the wire (it is Responses-API-only) — every OpenAI model was already search:false; left unchanged, but do NOT flip any OpenAI model true until the web route grows a real Responses-API path. CORRECTED 4 cosmetic-true models to false: grok-4.3 (xai), qwen-max and qwen-3.5-plus (qwen), kimi-k2.6 (moonshot) — appendWebSearchTool has no injection branch for xai/qwen/moonshot (confirmed by request-processor.web-search.test.ts and web-search-support.test.ts, which already document xai/qwen/moonshot as no-wired-path providers), and repo-wide search found zero wiring of any provider's real native mechanism either (xAI Agent Tools web_search/x_search tool -- the older search_parameters flag it replaces was retired by xAI on 2026-01-12; Qwen DashScope enable_search request param; Moonshot builtin_function $web_search tool -- all real, current, documented APIs per provider docs, just not called anywhere in this codebase). These 4 are the WP4 target list: wiring any of them up requires provider-specific request shaping (a boolean param for Qwen, a tool-array entry for Moonshot, a tool-array entry for xAI), not one generic mechanism. apps/desktop/src/__tests__/modelRouter.test.ts:42-45 asserts grok-4.3 capabilities.search===true on the premise 'Grok has built-in real-time data access' -- that premise is stale (xAI search has never been automatic; it always required an explicit opt-in mechanism, and AGI never wired one up); flagged for the desktop owner to update, not changed here (out of this pass's scope)."
+      "notes": "Founder directive: capabilities.search must be true only for models that genuinely produce web results through the application path, false wherever it would be a cosmetic no-op. The Web request path, provider translation, wire payload, and canonical source events were traced rather than trusting a provider allowlist. Anthropic and Google native search were confirmed end-to-end. Providers without an implemented search request shape were corrected to false and remain fail-closed until their real tool or request parameter is wired and covered by provider, route, and source-event tests."
     },
     {
-      "id": "verification/2026-06-03/8",
+      "id": "verification/2026-06-03/9",
       "date": "2026-06-03",
       "verifiedBy": "official-docs-model-repair",
       "status": "PASS",
-      "notes": "OpenAI verified from official OpenAI developer documentation before catalog repair: gpt-5.5 is the latest text/agent flagship, gpt-5.4-mini remains the latest mini-family model, and gpt-image-2 is the latest GPT Image model available to this product catalog. Anthropic verified from platform.claude.com/docs: current Claude API IDs are claude-opus-4-8, claude-sonnet-4-6, and claude-haiku-4-5-20251001 / alias claude-haiku-4-5. Google verified from ai.google.dev and deepmind.google: gemini-3.5-flash is a current Gemini API model with 1M input context, 64K output, function calling, structured output, Search as a tool, and code execution; Standard pricing is $1.50 input, $9.00 output, and $0.15 cached input per 1M tokens. Google media routes verified from official docs: Imagen 4 Fast API ID is imagen-4.0-fast-generate-001 and Veo 3.1 API ID is veo-3.1-generate-preview. AGI keeps unverified OpenAI video IDs out of the selectable catalog and routes video generation to verified Google Veo 3.1 rather than carrying stale video IDs."
+      "notes": "Historical catalog repair verified provider identities and media routes from official documentation. Later audits supersede this roster: active selectable models come only from the current curated records and generated tier lists. AGI keeps unverified video IDs out of the selectable catalog and routes video generation only through verified current media records."
     },
     {
-      "id": "verification/2026-06-20/9",
+      "id": "verification/2026-06-20/10",
       "date": "2026-06-20",
       "verifiedBy": "catalog-cleanup-2026-06-20",
       "status": "PARTIAL",
       "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
     },
     {
-      "id": "verification/2026-06-20/10",
+      "id": "verification/2026-06-20/11",
       "date": "2026-06-20",
       "verifiedBy": "research-agent-2026-06-20",
       "status": "PASS",
-      "notes": "GLM-5.2 contextWindow confirmed 1M (was 200K). Groq llama-3.3-70b-versatile and llama-3.1-8b-instant marked deprecated (shutdown 2026-08-16). Qwen API IDs updated to Qwen3 generation: qwen-max→qwen3-max, qwen-flash→qwen3.5-flash, qwen-coder-plus→qwen3-coder-plus, qwen-coder-flash→qwen3-coder-flash. qwen-3.6-plus renamed to qwen-3.5-plus (apiModelId qwen3.6-plus did not exist; correct ID is qwen3.5-plus). qwen-turbo marked deprecated (absorbed by qwen3.5-flash). NVIDIA Nemotron models updated to Nemotron 3 family: ultra-253b→nemotron-3-ultra-550b-a55b, super-49b→nemotron-3-super-120b-a12b, nano-8b→nemotron-3-nano-30b-a3b (all 1M ctx). Grok-4.3, DeepSeek V4, Kimi K2.6 confirmed current — no changes needed. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, alibabacloud DashScope."
+      "notes": "Re-verified the active GLM, Groq, Qwen, NVIDIA, xAI, DeepSeek, and Moonshot roster against official provider documentation. Deprecated or retired records were removed from the selectable catalog, and current API IDs, context limits, and multimodal capabilities now live only on active records. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, and Alibaba Cloud Model Studio."
     },
     {
-      "id": "verification/2026-06-23/11",
+      "id": "verification/2026-06-23/12",
       "date": "2026-06-23",
       "verifiedBy": "screenshot-verified-openai-compare-2026-06-23",
       "status": "PASS",
       "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com): gpt-5-nano = $0.05 input / $0.01 cached / $0.40 output, 400K ctx, reasoning tokens SUPPORTED (released Aug 2025, still served); gpt-4.1-nano = $0.10 input / $0.03 cached / $0.40 output, 1,047,576 ctx, NO reasoning tokens, fine-tuning supported (released Apr 2025, still served). Added to tierAllowedModels.economy. Prior catalog had no nano tier (cheapest OpenAI was gpt-5.4-mini at $0.75/$4.50). For fixed-price cost control prefer gpt-4.1-nano (cannot emit reasoning tokens). Release dates from public launch info (GPT-5 nano Aug 2025, GPT-4.1 nano Apr 2025); the Compare page shows knowledge-cutoff, not release."
     },
     {
-      "id": "verification/2026-07-09/12",
+      "id": "verification/2026-07-09/13",
       "date": "2026-07-09",
       "verifiedBy": "research-agent-2026-07-09",
       "status": "PASS",
       "notes": "Added GPT-5.6 family (GA 2026-07-09), verified from developers.openai.com/api/docs/models/gpt-5.6-{sol,terra,luna} (platform.openai.com/docs/models now 301s to this host). Exact API IDs gpt-5.6-sol/-terra/-luna; bare alias gpt-5.6 routes to Sol per the sol page. All: 1,050,000 ctx, 128K max output, reasoning+vision+tools+streaming, knowledge cutoff 2026-02-16. Pricing per 1M: sol $5/$0.50/$30, terra $2.50/$0.25/$15, luna $1/$0.10/$6. No dated snapshot IDs published yet for 5.6 (do not invent). computerUse/codeExecution enumerated on the terra page (web search, file search, image generation, code interpreter, computer use, MCP); carried to sol/luna as family-level API tools pending per-page enumeration. gpt-5.5 NOT deprecated: still listed as Default frontier model with gpt-5.5 + gpt-5.5-2026-04-23 IDs; 5.6 launched alongside, not replacing. Benchmarks intentionally omitted for 5.6 (none published on the model pages)."
     },
     {
-      "id": "verification/2026-07-10/13",
+      "id": "verification/2026-07-10/14",
       "date": "2026-07-10",
       "verifiedBy": "live-api-verification-2026-07-10",
       "status": "CORRECTION",
       "notes": "REVERTED the gpt-5.6 family (sol/terra/luna) added 2026-07-09 — LIVE curl to api.openai.com/v1/chat/completions with a real key returns HTTP 404 'model does not exist' for gpt-5.6-sol/-terra/-luna and bare gpt-5.6. The 2026-07-09 'verified from developers.openai.com' claim was a documentation hallucination, not provisioned models. Confirmed REAL and retained: gpt-5.5 (HTTP 200 with max_completion_tokens; the earlier 400 was the max_tokens-vs-max_completion_tokens param, not model absence), gpt-5.4/-mini/-nano/-pro, gpt-5-nano, gpt-4.1-nano. Latest real OpenAI flagship in this account = gpt-5.5. Lesson: verify model IDs against a live API call, not just doc pages."
     },
     {
-      "id": "verification/2026-07-10/14",
+      "id": "verification/2026-07-10/15",
       "date": "2026-07-10",
       "verifiedBy": "reasoning-effort-capability-wave-2026-07-10",
       "status": "PASS",
@@ -3910,7 +3707,7 @@
           "description": "Shared reasoning economy route. Model and provider are selected by the canonical registry."
         },
         "reasoning_balanced": {
-          "modelKey": "kimi-k2.6",
+          "modelKey": "qwen-3.7-plus",
           "label": "Reasoning Balanced",
           "description": "Shared reasoning balanced route. Model and provider are selected by the canonical registry."
         },
@@ -4020,7 +3817,7 @@
           "description": "Shared coding premium pro route. Model and provider are selected by the canonical registry."
         },
         "reasoning_premium_pro": {
-          "modelKey": "kimi-k2.6",
+          "modelKey": "qwen-3.7-plus",
           "label": "Reasoning Premium Pro",
           "description": "Shared reasoning premium pro route. Model and provider are selected by the canonical registry."
         },
@@ -4057,8 +3854,8 @@
         "gpt-5.4-nano",
         "gemini-3.1-flash-lite",
         "deepseek-v4-flash",
-        "qwen-3.5-plus",
-        "kimi-k2.6",
+        "qwen-3.7-plus",
+        "qwen-3.5-flash",
         "glm-5.2",
         "sonar"
       ],

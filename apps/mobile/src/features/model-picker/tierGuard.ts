@@ -62,6 +62,7 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
     case 'team':
       return 'pro';
     case 'max':
+    case 'max_15x':
       return 'max';
     case 'enterprise':
       // Enterprise gets the highest gate set; Max is the highest UIPlanTier.

@@ -31,9 +31,13 @@ describe('tierStore', () => {
     it.each([
       ['local', true],
       ['byok', true],
+      ['free', true],
       ['basic', false],
       ['pro', false],
+      ['team', false],
       ['max', false],
+      ['max_15x', false],
+      ['enterprise', false],
     ] as const)('%s → %s', (tier, expected) => {
       useTierStore.getState().setTier(tier);
       expect(selectIsFreePlan(useTierStore.getState())).toBe(expected);
@@ -44,9 +48,13 @@ describe('tierStore', () => {
     it.each([
       ['local', false],
       ['byok', false],
+      ['free', false],
       ['basic', false],
       ['pro', false],
+      ['team', false],
       ['max', true],
+      ['max_15x', true],
+      ['enterprise', true],
     ] as const)('%s → %s', (tier, expected) => {
       useTierStore.getState().setTier(tier);
       expect(selectCanSwitchProvider(useTierStore.getState())).toBe(expected);
@@ -81,8 +89,8 @@ describe('tierStore', () => {
       expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe('allow');
     });
 
-    it('upgrade-required for cross-provider on free/basic/pro', () => {
-      for (const tier of ['local', 'byok', 'basic', 'pro'] as const) {
+    it('upgrade-required for cross-provider below Max and for Team', () => {
+      for (const tier of ['local', 'byok', 'free', 'basic', 'pro', 'team'] as const) {
         useTierStore.setState({ tier, currentConversationProvider: 'anthropic' });
         expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe(
           'upgrade-required',
@@ -90,8 +98,8 @@ describe('tierStore', () => {
       }
     });
 
-    it('allows cross-provider on max', () => {
-      useTierStore.setState({ tier: 'max', currentConversationProvider: 'anthropic' });
+    it.each(['max', 'max_15x', 'enterprise'] as const)('allows cross-provider on %s', (tier) => {
+      useTierStore.setState({ tier, currentConversationProvider: 'anthropic' });
       expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe('allow');
     });
   });

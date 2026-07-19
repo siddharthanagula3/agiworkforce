@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
-import { CreditService } from '@/lib/services/credit-service';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getSecurityHeaders, getCorsHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
@@ -44,6 +43,7 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
+import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 
 /** Current Vercel Hobby maximum; durable AGI Work will span workflow steps. */
 export const maxDuration = 300;
@@ -82,9 +82,10 @@ async function refundFailedReservation(
   reason: 'streaming_failure' | 'request_failure',
 ): Promise<void> {
   if (processed.freeTrial) {
-    // Free usage is gated before dispatch and actual tokens are recorded only
-    // after provider usage is observed, so a pre-provider failure has nothing
-    // to release or refund.
+    await settleFreeTrialRequest({
+      reservation: processed.freeTrial,
+      outcome: 'failed',
+    });
     return;
   }
 
@@ -110,26 +111,11 @@ async function refundFailedReservation(
     return;
   }
 
-  const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
-  try {
-    await CreditService.settleCreditsDurably({
-      userId,
-      amountCents: -processed.estimatedCostCents,
-      description: `Refund for failed request: ${processed.provider}/${processed.chatRequest.model}`,
-      metadata: { type: 'refund', reason, requestId: processed.requestId },
-      idempotencyKey: refundKey,
-    });
-  } catch (settlementError) {
-    logger.error(
-      {
-        event: 'chat_refund_settlement_unrecorded',
-        error: settlementError,
-        userId,
-        requestId: processed.requestId,
-      },
-      'Chat refund could not be persisted',
-    );
-  }
+  throw new ManagedUsageRequestError(
+    'Managed usage reservation is missing.',
+    503,
+    'billing_protocol_error',
+  );
 }
 
 function resolveAgentOriginSurface(request: NextRequest): CloudAgentOriginSurface {
@@ -318,7 +304,7 @@ async function handleChatCompletions(request: NextRequest) {
     const [operatorTools, connectorTools] = await Promise.all([
       loadMcpToolDefs(),
       loadUserConnectorToolDefs(userId, {
-        customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier),
+        customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
       }),
     ]);
     const mcpTools = [...operatorTools, ...connectorTools];

@@ -31,7 +31,7 @@ import type { Provider } from './model-catalog';
  *   enabled: true,
  *   apiKeyConfigured: true,
  *   baseUrl: 'https://api.anthropic.com',
- *   models: ['claude-opus-4.8', 'claude-sonnet-4.6'],
+ *   models: ['claude-opus-4.8', 'claude-sonnet-5'],
  * };
  * ```
  */

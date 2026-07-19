@@ -410,8 +410,8 @@ pub struct ContinuousJobRunnerStatus {
     #[serde(default)]
     pub jobs_agentic_fallback_failed: u64,
     pub ledger_entries: u64,
-    pub credits_monthly_remaining_cents: Option<i32>,
-    pub credits_daily_remaining_cents: Option<i32>,
+    pub usage_percentage: Option<f64>,
+    pub has_usage_remaining: Option<bool>,
 }
 
 impl Default for ContinuousJobRunnerStatus {
@@ -442,8 +442,8 @@ impl Default for ContinuousJobRunnerStatus {
             jobs_agentic_fallback_applied: 0,
             jobs_agentic_fallback_failed: 0,
             ledger_entries: 0,
-            credits_monthly_remaining_cents: None,
-            credits_daily_remaining_cents: None,
+            usage_percentage: None,
+            has_usage_remaining: None,
         }
     }
 }
@@ -2368,12 +2368,12 @@ async fn run_continuous_loop(
         if request.stop_on_credit_exhaustion {
             match fetch_credit_balance_for_runner(&app_handle).await {
                 Ok(balance) => {
-                    let monthly_remaining = balance.credits.monthly_remaining_cents;
-                    let daily_remaining = balance.credits.daily_remaining_cents;
+                    let usage_percentage = balance.credits.usage_percentage;
+                    let has_usage_remaining = balance.credits.has_usage_remaining;
 
                     update_status(|status| {
-                        status.credits_monthly_remaining_cents = Some(monthly_remaining);
-                        status.credits_daily_remaining_cents = Some(daily_remaining);
+                        status.usage_percentage = Some(usage_percentage);
+                        status.has_usage_remaining = Some(has_usage_remaining);
                         status.last_error = None;
                     })
                     .await;
@@ -2962,8 +2962,8 @@ pub async fn continuous_job_runner_start(
             jobs_agentic_fallback_applied: 0,
             jobs_agentic_fallback_failed: 0,
             ledger_entries,
-            credits_monthly_remaining_cents: None,
-            credits_daily_remaining_cents: None,
+            usage_percentage: None,
+            has_usage_remaining: None,
         };
     }
 

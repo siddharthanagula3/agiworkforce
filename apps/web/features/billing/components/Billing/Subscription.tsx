@@ -21,32 +21,41 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
-  getPlanPriceUsd,
-  getPlanUsageBudgetCents,
+  BILLING_PLAN_PRICING,
+  getBillingPlanPricing,
   isPlanSelectableOnSurface,
 } from '@agiworkforce/types';
+import {
+  formatCatalogPrice,
+  getBillingPlanDisplay,
+  type DisplayPaidPlan,
+  type SelectablePaidPlan,
+} from '@features/billing/lib/plan-display';
 import { BillingInfo, normalizePlan, normalizeStatus } from './types';
 
-function formatPlanPrice(plan: 'basic' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
-  if (billingPeriod === 'monthly') {
-    return `$${getPlanPriceUsd(plan, 'monthly')}`;
-  }
-  return `$${(getPlanPriceUsd(plan, 'yearly') / 12).toFixed(2)}`;
+function formatPlanPrice(plan: DisplayPaidPlan, billingPeriod: 'monthly' | 'yearly') {
+  const pricing = BILLING_PLAN_PRICING[plan];
+  return billingPeriod === 'yearly' && pricing.yearlyPriceUsd > 0
+    ? formatCatalogPrice(pricing.yearlyPriceUsd / 12)
+    : formatCatalogPrice(pricing.monthlyPriceUsd);
 }
 
-function formatPlanBilledAmount(
-  plan: 'basic' | 'pro' | 'max',
-  billingPeriod: 'monthly' | 'yearly',
-) {
+function formatPlanBilledAmount(plan: DisplayPaidPlan, billingPeriod: 'monthly' | 'yearly') {
   const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
-  return `$${getPlanPriceUsd(plan, interval).toFixed(2).replace(/\.00$/, '')}`;
+  return formatCatalogPrice(
+    interval === 'yearly'
+      ? BILLING_PLAN_PRICING[plan].yearlyPriceUsd
+      : BILLING_PLAN_PRICING[plan].monthlyPriceUsd,
+  );
 }
 
-function formatUsageBudgetLine(plan: 'basic' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
-  const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
-  const budgetCents = getPlanUsageBudgetCents(plan, interval);
-  return `${budgetCents.toLocaleString()} credits/${billingPeriod === 'yearly' ? 'year' : 'month'} ($${(budgetCents / 100).toFixed(2)} in AI usage)`;
+function annualSavingsPct(plan: DisplayPaidPlan): number {
+  const pricing = BILLING_PLAN_PRICING[plan];
+  if (pricing.monthlyPriceUsd <= 0 || pricing.yearlyPriceUsd <= 0) return 0;
+  return Math.round((1 - pricing.yearlyPriceUsd / 12 / pricing.monthlyPriceUsd) * 100);
 }
+
+const MAX_DISPLAYED_ANNUAL_SAVINGS = Math.max(annualSavingsPct('pro'), annualSavingsPct('team'));
 
 function getPlanIcon(plan: string) {
   const normalized = normalizePlan(plan);
@@ -59,6 +68,10 @@ function getPlanIcon(plan: string) {
       return <Crown className="h-5 w-5" />;
     case 'max':
       return <Crown className="h-5 w-5 text-amber-500" />;
+    case 'max_15x':
+      return <Crown className="h-5 w-5 text-amber-500" />;
+    case 'team':
+      return <Building className="h-5 w-5" />;
     case 'enterprise':
       return <Building className="h-5 w-5" />;
     default:
@@ -71,10 +84,12 @@ function getStatusDisplay(status: string | undefined) {
   switch (normalized) {
     case 'active':
       return { icon: <CheckCircle className="h-4 w-4 text-success" />, label: 'Active' };
-    case 'cancelled':
+    case 'trialing':
+      return { icon: <CheckCircle className="h-4 w-4 text-success" />, label: 'Trial' };
+    case 'canceled':
       return {
         icon: <XCircle className="h-4 w-4 text-muted-foreground" />,
-        label: 'Cancelled',
+        label: 'Canceled',
       };
     case 'past_due':
       return { icon: <AlertTriangle className="h-4 w-4 text-amber-500" />, label: 'Past Due' };
@@ -83,18 +98,37 @@ function getStatusDisplay(status: string | undefined) {
         icon: <AlertTriangle className="h-4 w-4 text-destructive" />,
         label: 'Unpaid',
       };
+    case 'incomplete':
+      return {
+        icon: <AlertTriangle className="h-4 w-4 text-amber-500" />,
+        label: 'Payment incomplete',
+      };
+    case 'incomplete_expired':
+      return {
+        icon: <XCircle className="h-4 w-4 text-muted-foreground" />,
+        label: 'Payment expired',
+      };
+    case 'paused':
+      return {
+        icon: <AlertTriangle className="h-4 w-4 text-amber-500" />,
+        label: 'Paused',
+      };
+    case 'none':
+      return {
+        icon: <XCircle className="h-4 w-4 text-muted-foreground" />,
+        label: 'No subscription',
+      };
   }
 }
 
 interface SubscriptionProps {
   billing: BillingInfo | null;
-  stripeCustomerId: string | null;
   isManagingBilling: boolean;
   billingPeriod: 'monthly' | 'yearly';
   onBillingPeriodChange: (period: 'monthly' | 'yearly') => void;
   onManageBilling: () => void;
   onUpgrade: (
-    plan: 'basic' | 'pro' | 'max' | 'enterprise',
+    plan: SelectablePaidPlan | 'enterprise',
     billingPeriod?: 'monthly' | 'yearly',
   ) => void;
   formatCurrency: (amount: number, currency: string) => string;
@@ -103,7 +137,6 @@ interface SubscriptionProps {
 
 export const Subscription: React.FC<SubscriptionProps> = ({
   billing,
-  stripeCustomerId,
   isManagingBilling,
   billingPeriod,
   onBillingPeriodChange,
@@ -133,10 +166,12 @@ export const Subscription: React.FC<SubscriptionProps> = ({
             <div>
               <p className="text-sm text-muted-foreground">Plan Price</p>
               <p className="text-2xl font-bold">
-                {billing?.price === 0
+                {billing?.plan === 'free'
                   ? 'Free'
-                  : formatCurrency(billing?.price || 0, billing?.currency || 'USD')}
-                {(billing?.price ?? 0) > 0 && (
+                  : billing?.price != null && billing.currency
+                    ? formatCurrency(billing.price, billing.currency)
+                    : 'See invoice'}
+                {billing?.price != null && billing.price > 0 && billing.currency && (
                   <span className="text-sm text-muted-foreground">/month</span>
                 )}
               </p>
@@ -168,7 +203,9 @@ export const Subscription: React.FC<SubscriptionProps> = ({
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Billing Period</p>
-              <p className="text-sm font-medium">{billing?.plan === 'free' ? 'N/A' : 'Monthly'}</p>
+              <p className="text-sm font-medium">
+                {billing?.plan === 'free' ? 'N/A' : 'Not available'}
+              </p>
             </div>
           </div>
 
@@ -184,7 +221,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                 <Button
                   variant="outline"
                   onClick={onManageBilling}
-                  disabled={isManagingBilling || !stripeCustomerId}
+                  disabled={isManagingBilling}
                   className="flex items-center gap-2"
                 >
                   <Settings className="h-4 w-4" />
@@ -216,7 +253,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
       </Card>
 
       {/* Upgrade Options */}
-      {normalizePlan(billing?.plan) !== 'max' && normalizePlan(billing?.plan) !== 'enterprise' && (
+      {!['max_15x', 'team', 'enterprise'].includes(normalizePlan(billing?.plan)) && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -247,7 +284,7 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                   >
                     Yearly
                     <Badge variant="secondary" className="ml-1 text-xs">
-                      Save 14%
+                      Save {MAX_DISPLAYED_ANNUAL_SAVINGS}%
                     </Badge>
                   </button>
                 </div>
@@ -256,9 +293,8 @@ export const Subscription: React.FC<SubscriptionProps> = ({
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {/* Basic Plan — mobile-only (founder decision, 2026-07): shown as an
-                  upgrade option only on mobile, hidden on web/desktop. An existing
-                  Basic subscriber still sees their plan in the current-plan card above. */}
+              {/* Basic is selectable on customer app surfaces; developer surfaces
+                  remain a separate Pro entitlement. */}
               {normalizePlan(billing?.plan) === 'free' &&
                 isPlanSelectableOnSurface('basic', 'web') && (
                   <Card className="border-2 border-muted-foreground/30">
@@ -268,29 +304,15 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                         <CardTitle>Basic</CardTitle>
                       </div>
                       <div className="text-2xl font-bold">
-                        {billingPeriod === 'yearly' ? (
-                          <>
-                            <div className="text-3xl font-bold">
-                              {formatPlanPrice('basic', 'yearly')}
-                              <span className="text-lg text-muted-foreground">/month</span>
-                            </div>
-                            <div className="mt-1 text-sm text-muted-foreground">
-                              Billed yearly as {formatPlanBilledAmount('basic', 'yearly')}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            {formatPlanPrice('basic', 'monthly')}
-                            <span className="text-sm text-muted-foreground">/month</span>
-                          </>
-                        )}
+                        {formatPlanPrice('basic', 'monthly')}
+                        <span className="text-sm text-muted-foreground">/month</span>
                       </div>
                     </CardHeader>
                     <CardContent>
                       <ul className="space-y-2 text-sm">
                         <li className="flex items-center space-x-2">
                           <CheckCircle className="h-4 w-4 text-success" />
-                          <span>{formatUsageBudgetLine('basic', billingPeriod)}</span>
+                          <span>Basic plan usage</span>
                         </li>
                         <li className="flex items-center space-x-2">
                           <CheckCircle className="h-4 w-4 text-success" />
@@ -302,13 +324,13 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                         </li>
                         <li className="flex items-center space-x-2">
                           <CheckCircle className="h-4 w-4 text-success" />
-                          <span>Basic computer use</span>
+                          <span>Chat tools and web search</span>
                         </li>
                       </ul>
                       <Button
                         className="mt-4 w-full"
                         variant="outline"
-                        onClick={() => onUpgrade('basic', billingPeriod)}
+                        onClick={() => onUpgrade('basic', 'monthly')}
                       >
                         Get Basic
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -350,11 +372,11 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                     <ul className="space-y-2 text-sm">
                       <li className="flex items-center space-x-2">
                         <CheckCircle className="h-4 w-4 text-success" />
-                        <span>{formatUsageBudgetLine('pro', billingPeriod)}</span>
+                        <span>5x Basic usage</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <CheckCircle className="h-4 w-4 text-success" />
-                        <span>Same price as direct provider rates</span>
+                        <span>Managed CLI, Chrome, and VS Code access</span>
                       </li>
                       <li className="flex items-center space-x-2">
                         <CheckCircle className="h-4 w-4 text-success" />
@@ -380,52 +402,144 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                 </Card>
               )}
 
-              {/* Max Plan — monthly billing only */}
-              <Card className="border-2 border-secondary">
-                <CardHeader>
-                  <div className="flex items-center space-x-2">
-                    <Star className="h-5 w-5 text-primary" />
-                    <CardTitle>Max</CardTitle>
-                  </div>
-                  <div className="text-2xl font-bold">
-                    {formatPlanPrice('max', 'monthly')}
-                    <span className="text-sm text-muted-foreground">/month</span>
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">Billed monthly</div>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2 text-sm">
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-success" />
-                      <span>{formatUsageBudgetLine('max', 'monthly')}</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-success" />
-                      <span>Deep reasoning &amp; thinking models</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-success" />
-                      <span>Advanced agentic coding models</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-success" />
-                      <span>Video generation &amp; analysis</span>
-                    </li>
-                    <li className="flex items-center space-x-2">
-                      <CheckCircle className="h-4 w-4 text-success" />
-                      <span>Priority support</span>
-                    </li>
-                  </ul>
-                  <Button
-                    className="mt-4 w-full"
-                    variant="outline"
-                    onClick={() => onUpgrade('max', 'monthly')}
-                  >
-                    Upgrade to Max
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </CardContent>
-              </Card>
+              {/* Max 5x — monthly billing only */}
+              {!['max', 'max_15x'].includes(normalizePlan(billing?.plan)) && (
+                <Card className="border-2 border-secondary">
+                  <CardHeader>
+                    <div className="flex items-center space-x-2">
+                      <Star className="h-5 w-5 text-primary" />
+                      <CardTitle>{getBillingPlanPricing('max').label}</CardTitle>
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {formatPlanPrice('max', 'monthly')}
+                      <span className="text-sm text-muted-foreground">/month</span>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">Billed monthly</div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>5x Pro usage</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>Deep reasoning &amp; thinking models</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>Advanced agentic coding models</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>Image generation &amp; analysis</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>Priority support</span>
+                      </li>
+                    </ul>
+                    <Button
+                      className="mt-4 w-full"
+                      variant="outline"
+                      onClick={() => onUpgrade('max', 'monthly')}
+                    >
+                      Upgrade to {getBillingPlanPricing('max').label}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Max 15x — the video-capable individual tier. */}
+              {normalizePlan(billing?.plan) !== 'max_15x' && (
+                <Card className="border-2 border-amber-500/50">
+                  <CardHeader>
+                    <div className="flex items-center space-x-2">
+                      <Star className="h-5 w-5 text-amber-500" />
+                      <CardTitle>{getBillingPlanPricing('max_15x').label}</CardTitle>
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {formatPlanPrice('max_15x', 'monthly')}
+                      <span className="text-sm text-muted-foreground">/month</span>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">Billed monthly</div>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>15x Pro usage</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>Everything in {getBillingPlanPricing('max').label}</span>
+                      </li>
+                      <li className="flex items-center space-x-2">
+                        <CheckCircle className="h-4 w-4 text-success" />
+                        <span>Video generation</span>
+                      </li>
+                    </ul>
+                    <Button
+                      className="mt-4 w-full"
+                      variant="outline"
+                      onClick={() => onUpgrade('max_15x', 'monthly')}
+                    >
+                      Upgrade to {getBillingPlanPricing('max_15x').label}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Team is a Pro-level seat plan, so it is offered from Free,
+                  Basic, or Pro rather than as a downgrade from Max. */}
+              {['free', 'basic', 'pro'].includes(normalizePlan(billing?.plan)) &&
+                isPlanSelectableOnSurface('team', 'web') && (
+                  <Card className="border-2 border-muted-foreground/30">
+                    <CardHeader>
+                      <div className="flex items-center space-x-2">
+                        <Building className="h-5 w-5 text-primary" />
+                        <CardTitle>{getBillingPlanPricing('team').label}</CardTitle>
+                      </div>
+                      <div className="text-2xl font-bold">
+                        {billingPeriod === 'yearly' ? (
+                          <>
+                            <div className="text-3xl font-bold">
+                              {formatPlanPrice('team', 'yearly')}
+                              <span className="text-lg text-muted-foreground">/seat/month</span>
+                            </div>
+                            <div className="mt-1 text-sm text-muted-foreground">
+                              Billed yearly as {formatPlanBilledAmount('team', 'yearly')}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {formatPlanPrice('team', 'monthly')}
+                            <span className="text-sm text-muted-foreground">/seat/month</span>
+                          </>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="space-y-2 text-sm">
+                        {getBillingPlanDisplay('team').features.map((feature) => (
+                          <li key={feature} className="flex items-center space-x-2">
+                            <CheckCircle className="h-4 w-4 text-success" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <a
+                        className="mt-4 flex h-10 w-full items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+                        href="/contact-sales?plan=team"
+                      >
+                        Contact sales
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </a>
+                    </CardContent>
+                  </Card>
+                )}
 
               {/* Enterprise Plan */}
               <Card className="border-2 border-muted-foreground/30">
@@ -443,11 +557,11 @@ export const Subscription: React.FC<SubscriptionProps> = ({
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-center space-x-2">
                       <CheckCircle className="h-4 w-4 text-success" />
-                      <span>Everything in Max</span>
+                      <span>Everything in {getBillingPlanPricing('max_15x').label}</span>
                     </li>
                     <li className="flex items-center space-x-2">
                       <CheckCircle className="h-4 w-4 text-success" />
-                      <span>Custom credit allocation</span>
+                      <span>Contracted plan usage</span>
                     </li>
                     <li className="flex items-center space-x-2">
                       <CheckCircle className="h-4 w-4 text-success" />

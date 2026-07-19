@@ -5,6 +5,13 @@ vi.mock('@agiworkforce/routing', () => ({
   classifyTaskLocally: vi.fn(() => ({ type: 'general', confidence: 0.8 })),
   resolveAutoRoute: vi.fn(),
 }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+  return {
+    ...actual,
+    getSlotForModel: vi.fn(() => 'general_balanced_pro'),
+  };
+});
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn() },
 }));
@@ -33,6 +40,7 @@ vi.mock('@agiworkforce/provider-protocol', () => ({
 }));
 
 import { resolveAutoRoute } from '@agiworkforce/routing';
+import { getSlotForModel } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import {
@@ -79,6 +87,7 @@ describe('scheduled managed agent executor', () => {
       plan_tier: 'pro',
       status: 'active',
     } as never);
+    vi.mocked(getSlotForModel).mockReturnValue('general_balanced_pro');
     vi.mocked(resolveAutoRoute).mockReturnValue({
       status: 'selected',
       requestedSelection: 'auto-balanced',
@@ -187,6 +196,8 @@ describe('scheduled managed agent executor', () => {
         userId: 'user-1',
         idempotencyKey: 'schedule-run:run-1',
         estimatedCostCents: 2,
+        planTier: 'pro',
+        isFlagship: false,
       }),
     );
     expect(markManagedUsageProviderStarted).toHaveBeenCalledOnce();
@@ -199,6 +210,16 @@ describe('scheduled managed agent executor', () => {
       provider: 'openai',
       billingStatus: 'succeeded',
     });
+  });
+
+  it('classifies a scheduled flagship route for the rolling flagship ceiling', async () => {
+    vi.mocked(getSlotForModel).mockReturnValueOnce('flagship_general_pro_plus');
+
+    await executeScheduledAgent(task, new AbortController().signal, 'run-flagship');
+
+    expect(reserveManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ isFlagship: true }),
+    );
   });
 
   it('does not invent a one-cent minimum when catalog pricing rounds usage to zero', async () => {

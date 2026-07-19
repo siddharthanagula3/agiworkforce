@@ -4,13 +4,19 @@ import Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
-import { getSubscriptionPeriod } from '@/lib/stripe-types';
 import {
   handleCreditTopUp,
   upsertSubscriptionFromSession,
   updateSubscriptionFromStripeSubscription,
   CreditService,
 } from './db';
+
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const current = invoice.parent?.subscription_details?.subscription;
+  if (typeof current === 'string') return current;
+  if (current?.id) return current.id;
+  return (invoice as unknown as { subscription?: string | null }).subscription ?? null;
+}
 
 export async function dispatchStripeEvent(
   db: DatabaseAdapter,
@@ -71,6 +77,7 @@ export async function dispatchStripeEvent(
       break;
     }
     case 'customer.subscription.created':
+    case 'customer.subscription.pending_update_applied':
     case 'customer.subscription.updated': {
       const subscription = event.data.object as Stripe.Subscription;
       await updateSubscriptionFromStripeSubscription(db, stripe, subscription);
@@ -79,73 +86,12 @@ export async function dispatchStripeEvent(
     case 'invoice.paid':
     case 'invoice.payment_succeeded': {
       const invoice = event.data.object as Stripe.Invoice;
-      const stripeCustomerId = invoice.customer as string | null;
-      const stripeSubId = (invoice as unknown as { subscription?: string | null }).subscription;
+      const stripeSubId = getInvoiceSubscriptionId(invoice);
 
       logger.info({ invoiceId: invoice.id }, 'Payment succeeded for invoice');
-
-      const updateData: {
-        status: string;
-        current_period_start?: string;
-        current_period_end?: string;
-      } = { status: 'active' };
-
-      let shouldUpsert = true;
       if (stripeSubId) {
-        try {
-          const subscription = await stripe.subscriptions.retrieve(stripeSubId);
-          updateData.status = subscription.status;
-          const period = getSubscriptionPeriod(subscription);
-          if (period) {
-            updateData.current_period_start = new Date(period.start * 1000).toISOString();
-            updateData.current_period_end = new Date(period.end * 1000).toISOString();
-          }
-        } catch (error) {
-          logger.error({ error, stripeSubId }, 'Failed to retrieve subscription for invoice');
-          shouldUpsert = false;
-        }
-      }
-
-      if (shouldUpsert) {
-        try {
-          if (stripeSubId) {
-            await db
-              .execute(
-                'update subscriptions set status = $1, current_period_start = $2, current_period_end = $3 where stripe_subscription_id = $4',
-                [
-                  updateData.status,
-                  updateData.current_period_start ?? null,
-                  updateData.current_period_end ?? null,
-                  stripeSubId,
-                ],
-              )
-              .catch((updateError: unknown) => {
-                logger.error(
-                  { error: updateError, stripeSubId },
-                  'Failed to update subscription for payment succeeded',
-                );
-              });
-          } else if (stripeCustomerId) {
-            await db
-              .execute(
-                'update subscriptions set status = $1, current_period_start = $2, current_period_end = $3 where stripe_customer_id = $4',
-                [
-                  updateData.status,
-                  updateData.current_period_start ?? null,
-                  updateData.current_period_end ?? null,
-                  stripeCustomerId,
-                ],
-              )
-              .catch((updateError: unknown) => {
-                logger.error(
-                  { error: updateError, stripeCustomerId },
-                  'Failed to update subscription by customer ID for payment succeeded',
-                );
-              });
-          }
-        } catch (error) {
-          logger.error({ error }, 'Error updating subscription for payment succeeded');
-        }
+        const subscription = await stripe.subscriptions.retrieve(stripeSubId);
+        await updateSubscriptionFromStripeSubscription(db, stripe, subscription);
       }
       break;
     }
@@ -221,7 +167,7 @@ export async function dispatchStripeEvent(
     case 'invoice.payment_failed': {
       const invoice = event.data.object as Stripe.Invoice;
       const stripeCustomerId = invoice.customer as string | null;
-      const stripeSubId = (invoice as unknown as { subscription?: string | null }).subscription;
+      const stripeSubId = getInvoiceSubscriptionId(invoice);
       logger.warn({ invoiceId: invoice.id, stripeSubId }, 'Payment failed for invoice');
 
       if (stripeSubId) {

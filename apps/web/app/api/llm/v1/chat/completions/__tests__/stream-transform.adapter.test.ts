@@ -9,7 +9,7 @@
  * billing: this suite feeds a StreamChunk sequence through
  * `buildAdapterStreamResponse` itself and asserts both (a) the exact SSE
  * bytes on the wire, including `data: [DONE]` framing, and (b)
- * CreditService.settleCreditsDurably / LLMCostCalculator.calculateCost /
+ * managed usage finalization / LLMCostCalculator.calculateCost /
  * recordModelUsage are called with the correct reconciliation math -- the
  * money path advisor flagged as unverified by the assembler-level parity
  * test alone.
@@ -25,14 +25,10 @@ vi.mock('@/lib/cors', () => ({
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/services/credit-service', () => ({
-  CreditService: {
-    generateIdempotencyKey: vi.fn(() => 'idempotency-key'),
-    deductCredits: vi.fn(() => Promise.resolve()),
-    settleCreditsDurably: vi.fn(() =>
-      Promise.resolve({ status: 'succeeded', success: true, attempt_count: 1 }),
-    ),
-  },
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  finalizeManagedUsageRequest: vi.fn(() => Promise.resolve()),
+  markManagedUsageClientDelivered: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
@@ -44,23 +40,23 @@ vi.mock('@/lib/cost-tracker', () => ({
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
-  recordFreeTrialTokens: vi.fn(() => Promise.resolve()),
+  settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
 }));
 
 import { buildAdapterStreamResponse } from '../lib/stream-transform';
 import type { ProcessedRequest } from '../lib/request-processor';
 import type { StreamChunk } from '@agiworkforce/types';
-import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { recordModelUsage } from '@/lib/cost-tracker';
 import { logger } from '@/lib/logger';
-import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import { finalizeManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 
-const mockSettleCreditsDurably = CreditService.settleCreditsDurably as ReturnType<typeof vi.fn>;
+const mockFinalizeManagedUsageRequest = finalizeManagedUsageRequest as ReturnType<typeof vi.fn>;
 const mockCalculateCost = LLMCostCalculator.calculateCost as ReturnType<typeof vi.fn>;
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
 const mockLoggerInfo = logger.info as ReturnType<typeof vi.fn>;
-const mockRecordFreeTrialTokens = recordFreeTrialTokens as ReturnType<typeof vi.fn>;
+const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof vi.fn>;
 
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
@@ -80,6 +76,14 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
     originalModel: undefined,
     fallbackReason: undefined,
     freeTrial: undefined,
+    managedUsage: {
+      db: {} as never,
+      userId: 'user-paid',
+      idempotencyKey: 'managed-request-001',
+      requestHash: 'a'.repeat(64),
+      leaseToken: 'lease-001',
+      estimatedCostCents: 5,
+    },
     ...overrides,
   } as ProcessedRequest;
 }
@@ -183,7 +187,7 @@ describe('buildAdapterStreamResponse · wire bytes', () => {
 });
 
 describe('buildAdapterStreamResponse · billing reconciliation', () => {
-  it('calls LLMCostCalculator.calculateCost with the accumulated usage and reconciles the difference', async () => {
+  it('calculates accumulated usage and finalizes the actual cost', async () => {
     const chunks: StreamChunk[] = [
       { type: 'text-delta', delta: 'Hi' },
       { type: 'usage', inputTokens: 120, outputTokens: 80, cacheReadTokens: 10 },
@@ -209,27 +213,22 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       cacheCreation1hInputTokens: undefined,
     });
 
-    // actualCostCents (mocked 4) - estimatedCostCents (5) = -1 !== 0 -> reconciles.
-    expect(mockSettleCreditsDurably).toHaveBeenCalledWith({
-      userId: 'user-002',
-      amountCents: -1,
-      description: 'Credit adjustment (streaming): anthropic/claude-opus-4-8',
-      metadata: expect.objectContaining({
-        provider: 'anthropic',
-        model: 'claude-opus-4-8',
-        type: 'streaming_reconciliation',
-        estimatedCostCents: 5,
-        actualCostCents: 4,
-        promptTokens: 120,
-        completionTokens: 80,
-        totalTokens: 200,
-        requestId: 'req-adapter-001',
-      }),
-      idempotencyKey: 'idempotency-key',
+    expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith({
+      ...makeProcessed().managedUsage,
+      outcome: 'completed',
+      actualCostCents: 4,
+      usage: {
+        inputTokens: 120,
+        outputTokens: 80,
+        reasoningTokens: undefined,
+        cacheReadTokens: 10,
+        cacheWriteTokens: undefined,
+        cacheWrite1hTokens: undefined,
+      },
     });
   });
 
-  it('skips reconciliation when actual cost matches the estimate exactly', async () => {
+  it('finalizes even when actual cost matches the estimate exactly', async () => {
     mockCalculateCost.mockReturnValue(5);
     const chunks: StreamChunk[] = [
       { type: 'text-delta', delta: 'Hi' },
@@ -247,7 +246,9 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
+    expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'completed', actualCostCents: 5 }),
+    );
   });
 
   it('records actual tokens but skips paid reconciliation for a free-tier request', async () => {
@@ -262,6 +263,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       chunksOf(chunks),
       makeProcessed({
         estimatedCostCents: 0,
+        managedUsage: undefined,
         freeTrial: {
           kind: 'free_trial',
           userId: 'user-004',
@@ -274,11 +276,21 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
     );
     await readAllText(response as any);
 
-    expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
-    expect(mockRecordFreeTrialTokens).toHaveBeenCalledWith({
-      userId: 'user-004',
-      requestId: 'req-adapter-001',
-      tokens: 150,
+    expect(mockFinalizeManagedUsageRequest).not.toHaveBeenCalled();
+    expect(mockSettleFreeTrialRequest).toHaveBeenCalledWith({
+      reservation: {
+        kind: 'free_trial',
+        userId: 'user-004',
+        requestId: 'req-adapter-001',
+      },
+      outcome: 'completed',
+      provider: 'anthropic',
+      model: 'claude-opus-4-8',
+      usage: expect.objectContaining({
+        promptTokens: 100,
+        completionTokens: 50,
+        totalTokens: 150,
+      }),
     });
     expect(response.headers.has('x-agi-trial-tokens-used')).toBe(false);
     expect(response.headers.has('x-agi-trial-tokens-budget')).toBe(false);

@@ -5,10 +5,12 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
+  createManagedUsageErrorBody,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
   markManagedUsageProviderStarted,
   parseManagedUsageIdempotencyKey,
+  reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
 } from './managed-usage-request-service';
 
@@ -23,6 +25,23 @@ function fakeDb(rows: Record<string, unknown>[]): DatabaseAdapter {
 }
 
 describe('managed usage request service', () => {
+  it('serializes one shared public error envelope while callers choose the error type', () => {
+    const error = new ManagedUsageRequestError(
+      'Wait for usage to leave the window.',
+      429,
+      'rolling_weekly_limit_reached',
+    );
+
+    expect(createManagedUsageErrorBody(error, 'insufficient_quota')).toEqual({
+      error: {
+        message: 'Wait for usage to leave the window.',
+        type: 'insufficient_quota',
+        code: 'rolling_weekly_limit_reached',
+        contract_version: MANAGED_CHAT_CONTRACT_VERSION,
+      },
+    });
+  });
+
   it('publishes a versioned error contract for missing legacy keys', () => {
     expect(MANAGED_CHAT_CONTRACT_VERSION).toBe('2026-07-15');
     expect(() => parseManagedUsageIdempotencyKey(null)).toThrowError(
@@ -75,6 +94,8 @@ describe('managed usage request service', () => {
       model: 'claude-sonnet-5',
       estimatedCostCents: 7,
       leaseToken: 'lease-1',
+      planTier: 'pro',
+      isFlagship: true,
     });
 
     expect(reservation).toMatchObject({
@@ -85,7 +106,7 @@ describe('managed usage request service', () => {
       estimatedCostCents: 7,
     });
     expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('reserve_managed_usage_request'),
+      expect.stringContaining('reserve_managed_usage_request_with_limits'),
       [
         'user_1',
         'agi.chat.web.send.turn_12345',
@@ -95,6 +116,10 @@ describe('managed usage request service', () => {
         7,
         'lease-1',
         900,
+        50,
+        250,
+        75,
+        true,
       ],
     );
   });
@@ -123,10 +148,43 @@ describe('managed usage request service', () => {
       model: 'gpt-5.4-mini',
       estimatedCostCents: 7,
       leaseToken: 'lease-2',
+      planTier: 'pro',
+      isFlagship: false,
     }).catch((caught) => caught);
 
     expect(error).toBeInstanceOf(ManagedUsageRequestError);
     expect(error).toMatchObject({ status, code });
+  });
+
+  it.each([
+    ['session_limit', 'rolling_five_hour_limit_reached'],
+    ['weekly_limit', 'rolling_weekly_limit_reached'],
+    ['flagship_weekly_limit', 'flagship_weekly_limit_reached'],
+  ] as const)('maps %s to a fail-closed rolling-cap error', async (decision, code) => {
+    const db = fakeDb([
+      {
+        reservation_decision: decision,
+        request_status: 'declined',
+        lease_token: null,
+        estimated_cost_cents: 7,
+      },
+    ]);
+
+    const error = await reserveManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'external-client:turn_123',
+      requestHash: 'd'.repeat(64),
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
+      estimatedCostCents: 7,
+      leaseToken: 'lease-4',
+      planTier: 'pro',
+      isFlagship: decision === 'flagship_weekly_limit',
+    }).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ManagedUsageRequestError);
+    expect(error).toMatchObject({ status: 429, code });
   });
 
   it('marks provider start and finalizes actual usage with the same identity', async () => {
@@ -172,5 +230,107 @@ describe('managed usage request service', () => {
         JSON.stringify({ inputTokens: 10, outputTokens: 5 }),
       ],
     );
+  });
+
+  it('atomically extends a provider step with the original request and lease identity', async () => {
+    const db = fakeDb([
+      {
+        extension_decision: 'extended',
+        request_status: 'provider_started',
+        estimated_cost_cents: 12,
+        settlement_status: 'succeeded',
+        error_code: null,
+      },
+    ]);
+    const reservation = {
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'external-client:turn_123',
+      requestHash: 'e'.repeat(64),
+      leaseToken: 'lease-5',
+      estimatedCostCents: 7,
+    };
+
+    await expect(
+      reserveManagedUsageProviderStep({
+        reservation,
+        operationKey: 'provider:2',
+        estimatedCostCents: 5,
+        planTier: 'pro',
+        isFlagship: true,
+      }),
+    ).resolves.toEqual({ operationResult: 'extended', estimatedCostCents: 12 });
+    expect(reservation.estimatedCostCents).toBe(12);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('extend_managed_usage_request_provider_step'),
+      [
+        'user_1',
+        'external-client:turn_123',
+        'e'.repeat(64),
+        'lease-5',
+        'provider:2',
+        5,
+        50,
+        250,
+        75,
+        true,
+      ],
+    );
+  });
+
+  it('fails closed when a provider-step extension reaches the weekly cap', async () => {
+    const db = fakeDb([
+      {
+        extension_decision: 'weekly_limit',
+        request_status: 'provider_started',
+        estimated_cost_cents: 7,
+        settlement_status: null,
+        error_code: 'ROLLING_WEEKLY_LIMIT_REACHED',
+      },
+    ]);
+
+    const error = await reserveManagedUsageProviderStep({
+      reservation: {
+        db,
+        userId: 'user_1',
+        idempotencyKey: 'external-client:turn_123',
+        requestHash: 'f'.repeat(64),
+        leaseToken: 'lease-6',
+        estimatedCostCents: 7,
+      },
+      operationKey: 'provider:3',
+      estimatedCostCents: 5,
+      planTier: 'pro',
+      isFlagship: false,
+    }).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ManagedUsageRequestError);
+    expect(error).toMatchObject({ status: 429, code: 'rolling_weekly_limit_reached' });
+  });
+
+  it('emits one valid seven-argument finalization function call', async () => {
+    const db = fakeDb([
+      {
+        request_status: 'completed',
+        operation_result: 'finalized',
+        settlement_status: 'succeeded',
+        actual_cost_cents: 5,
+      },
+    ]);
+
+    await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'external-client:turn_123',
+      requestHash: 'a'.repeat(64),
+      leaseToken: 'lease-7',
+      estimatedCostCents: 7,
+      outcome: 'completed',
+      actualCostCents: 5,
+    });
+
+    const sql = vi.mocked(db.query).mock.calls[0]?.[0] ?? '';
+    expect(sql.match(/\$1::text/g)).toHaveLength(1);
+    expect(sql).toMatch(/\$7::jsonb\s*\)/);
   });
 });

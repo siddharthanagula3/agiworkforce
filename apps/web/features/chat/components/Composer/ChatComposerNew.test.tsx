@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
-import { getSelectableModels } from '@shared/config/llm';
+import { getSelectableModels, isAutoModeModelId } from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -49,19 +49,6 @@ vi.mock('@features/chat/hooks/use-skills-list', () => ({
   }),
 }));
 
-vi.mock('./GhostTextOverlay', () => ({
-  GhostTextOverlay: ({
-    suggestion,
-    isLoading,
-  }: {
-    inputText: string;
-    suggestion: string;
-    isLoading: boolean;
-  }) => (
-    <div data-testid="ghost-text-overlay" data-suggestion={suggestion} data-loading={isLoading} />
-  ),
-}));
-
 vi.mock('./DragDropOverlay', () => ({
   DragDropOverlay: () => null,
 }));
@@ -104,18 +91,6 @@ vi.mock('./VoiceInputButton', () => ({
       Voice
     </button>
   ),
-}));
-
-const mockUseApiPromptCompletion = vi.fn(() => ({
-  suggestion: '',
-  isLoading: false,
-  accept: (): string => ' accepted',
-  clear: vi.fn(),
-}));
-
-vi.mock('../../hooks/useApiPromptCompletion', () => ({
-  useApiPromptCompletion: (...args: Parameters<typeof mockUseApiPromptCompletion>) =>
-    mockUseApiPromptCompletion(...args),
 }));
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -341,6 +316,36 @@ describe('ChatComposerNew', () => {
     );
   });
 
+  it('offers explicit recovery choices when an image conflicts with the selected model', () => {
+    const textOnlyModel = getSelectableModels().find(
+      (model) => model.capabilities.vision === false,
+    );
+    expect(textOnlyModel, 'the canonical registry must expose a text-only model').toBeDefined();
+    act(() => useModelStore.getState().setSelectedModelId(textOnlyModel!.id));
+
+    const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    expect(input).not.toBeDisabled();
+
+    fireEvent.change(input!, {
+      target: { files: [new File(['image'], 'diagram.png', { type: 'image/png' })] },
+    });
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent("can't read the attached image");
+    expect(screen.getByRole('button', { name: 'Use Auto' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove attachments' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose a compatible model' }));
+    expect(screen.getAllByRole('button', { name: /^Use / }).length).toBeGreaterThan(1);
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Auto' }));
+    expect(isAutoModeModelId(useModelStore.getState().selectedModelId)).toBe(true);
+    expect(screen.queryByText(/can't read the attached image/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
+  });
+
   it('keeps free chat image upload, voice, and skills available', async () => {
     const visionModel = getSelectableModels().find((model) => model.capabilities.vision === true);
     expect(visionModel, 'the canonical registry must expose a vision model').toBeDefined();
@@ -486,9 +491,9 @@ describe('ChatComposerNew', () => {
     });
   });
 
-  it('shows the ghost-text overlay component', () => {
+  it('does not start hidden per-keystroke managed completion work', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
-    expect(screen.getByTestId('ghost-text-overlay')).toBeInTheDocument();
+    expect(screen.queryByTestId('ghost-text-overlay')).not.toBeInTheDocument();
   });
 
   it('renders Skills, Connectors, and Plugins entries in the overflow menu', () => {
@@ -542,20 +547,6 @@ describe('ChatComposerNew', () => {
   it('disables textarea when disabled prop is set', () => {
     render(<ChatComposerNew onSend={vi.fn()} disabled />);
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeDisabled();
-  });
-
-  it('footer hint passed to ComposerFooter changes when suggestion is present', () => {
-    // Override the mock to simulate a live suggestion
-    mockUseApiPromptCompletion.mockReturnValueOnce({
-      suggestion: 'some suggestion',
-      isLoading: false,
-      accept: () => 'some suggestion',
-      clear: vi.fn(),
-    });
-
-    render(<ChatComposerNew onSend={vi.fn()} />);
-    // ComposerFooter is mocked as a stub; verify it renders without error
-    expect(screen.getByTestId('composer-footer')).toBeInTheDocument();
   });
 
   it('renders the work-mode toggle ONLY when backed by host project data (never disconnected)', () => {

@@ -235,8 +235,8 @@ describe('Me API', () => {
       });
     });
 
-    describe('Credit Balance', () => {
-      it('should include credit balance', async () => {
+    describe('Managed usage privacy', () => {
+      it('does not expose private credit balance operands', async () => {
         const request = new NextRequest('http://localhost/api/me', {
           method: 'GET',
         });
@@ -244,22 +244,8 @@ describe('Me API', () => {
         const response = await GET(request);
         const data = await response.json();
 
-        expect(data.credits).toBeDefined();
-        expect(data.credits.available_cents).toBe(1000);
-      });
-
-      it('should return null credits on balance fetch error', async () => {
-        mockMeGetBalance.mockRejectedValueOnce(new Error('Credit fetch failed'));
-
-        const request = new NextRequest('http://localhost/api/me', {
-          method: 'GET',
-        });
-
-        const response = await GET(request);
-        expect(response.status).toBe(200);
-
-        const data = await response.json();
-        expect(data.credits).toBeNull();
+        expect(data).not.toHaveProperty('credits');
+        expect(mockMeGetBalance).not.toHaveBeenCalled();
       });
     });
 

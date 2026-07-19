@@ -128,7 +128,6 @@ export async function mockCloudAccountEndpoints(
       advanced_model_access: planTier === 'max',
       code_execution: true,
     },
-    credits: null,
     routing_preferences: {},
   } satisfies MeResponse;
 

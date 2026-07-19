@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -87,7 +88,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
               metadata = excluded.metadata,
               model = excluded.model
           where web_messages.conversation_id = excluded.conversation_id
-        returning id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
+        returning id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata
       `,
       [
         clientMessageId ?? null,
@@ -120,7 +121,9 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     }
   }
 
-  return NextResponse.json({ message });
+  return NextResponse.json({
+    message: message ? ManagedCloudMessageWireSchema.parse(message) : undefined,
+  });
 }
 
 export const POST = withErrorHandler(handleSendMessage);

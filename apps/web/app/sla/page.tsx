@@ -19,9 +19,9 @@ export default function SlaPage() {
           <p className="agi-page-lede">
             What we plan to commit to at general availability, and what happens when we miss.{' '}
             <strong>
-              AGI is pre-launch: the numbers below are planned targets for paid tiers, not yet a
-              binding contractual commitment. They take effect when paid plans reach general
-              availability. Local + BYOK free modes run on best-effort.
+              AGI Managed Cloud is in public alpha. The numbers below are planned targets, not yet a
+              binding contractual commitment. They take effect only when a plan agreement says so.
+              Local and BYOK modes run on best-effort.
             </strong>
           </p>
         </section>
@@ -76,12 +76,12 @@ export default function SlaPage() {
                 <td>Email</td>
               </tr>
               <tr>
-                <td>Pro</td>
+                <td>Basic and Pro</td>
                 <td>24 hours</td>
                 <td>Priority email</td>
               </tr>
               <tr>
-                <td>Max</td>
+                <td>Max 5x, Max 15x, and Team</td>
                 <td>8 hours</td>
                 <td>Priority email</td>
               </tr>

@@ -105,7 +105,7 @@ export interface ScheduleConfig {
  *   },
  *   action: {
  *     type: 'agent',
- *     agentConfig: { name: 'Standup Bot', model: 'claude-sonnet-4-6', provider: 'anthropic' },
+ *     agentConfig: { name: 'Standup Bot', model: 'claude-sonnet-5', provider: 'anthropic' },
  *     prompt: 'Summarize work items from the last 24 hours',
  *   },
  *   status: 'active',

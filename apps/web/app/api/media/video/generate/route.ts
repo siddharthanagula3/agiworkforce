@@ -16,14 +16,26 @@ import {
   getProviderDefaultModel,
   getRoutingSlotModel,
   isModelLive,
+  canUseBillingPlanCapability,
   type ModelMetadata,
 } from '@agiworkforce/types';
+import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { storeVideoTask } from '@/lib/video-task-store';
-import { randomUUID } from 'crypto';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  ManagedUsageRequestError,
+  createManagedUsageErrorBody,
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest,
+  markManagedUsageClientDelivered,
+  markManagedUsageProviderStarted,
+  parseManagedUsageIdempotencyKey,
+  reserveManagedUsageRequest,
+  type ManagedUsageRequestReservation,
+} from '@/lib/services/managed-usage-request-service';
 
 /**
  * Video Generation API
@@ -33,7 +45,7 @@ import { randomUUID } from 'crypto';
  * Video generation is async - this endpoint creates a task and returns a task_id
  * for polling via GET /api/media/video/status?task_id=xxx.
  *
- * Requires Pro or Max subscription tier.
+ * Requires Max 15x or an Enterprise subscription.
  */
 
 // Next.js route configuration - video task creation can take up to 30s
@@ -76,6 +88,22 @@ interface GoogleVeoResponse {
     code: number;
     message: string;
   };
+}
+
+function managedUsageErrorResponse(
+  request: NextRequest,
+  error: ManagedUsageRequestError,
+): NextResponse {
+  return NextResponse.json(
+    createManagedUsageErrorBody(
+      error,
+      error.status === 402 || error.status === 429 ? 'insufficient_quota' : 'invalid_request_error',
+    ),
+    {
+      status: error.status,
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    },
+  );
 }
 
 /**
@@ -392,12 +420,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Video generation requires Pro or Max tier
-  const allowedTiers = new Set(['pro', 'max', 'enterprise', 'team']);
   const userTier = subscription.plan_tier?.toLowerCase() || 'free';
-  if (!allowedTiers.has(userTier)) {
+  if (!canUseBillingPlanCapability(userTier, 'video_generation')) {
     throw createError.forbidden(
-      'Video generation is available on Pro, Max, and Enterprise plans. Upgrade your plan to unlock AI-powered video creation.',
+      'Video generation is available on Max 15x and Enterprise plans. Upgrade your plan to unlock AI-powered video creation.',
     );
   }
 
@@ -428,39 +454,45 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const { provider, model } = resolveVideoModel(requestedProvider, requestedModelId);
   const billableDurationSecs = normalizeBillableDuration(provider, duration_secs, resolution);
 
-  // Cost pre-check: verify the user has enough credits before starting the task
   const estimatedCostCents = getVideoCostCents(model, resolution, billableDurationSecs);
-  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
-  if (!hasCredits) {
-    const balance = await CreditService.getBalance(userId);
-    logger.warn(
-      { userId: userId, provider, estimatedCostCents, balance },
-      'Insufficient credits for video generation',
-    );
-    throw createError.forbidden(
-      `Insufficient credits for video generation. You need at least ${estimatedCostCents} credits. Please upgrade your plan or add credits.`,
-    );
-  }
-
-  // Reserve credits before invoking the provider to prevent race conditions
-  const requestId = randomUUID();
-  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
-  const reserveResult = await CreditService.deductCredits(
-    userId,
-    estimatedCostCents,
-    `Credit reservation: video generation (${provider})`,
-    { provider, model: model.id, type: 'reservation', requestId },
-    reservationKey,
-  );
-
-  if (!reserveResult.success) {
-    logger.warn(
-      { userId: userId, estimatedCostCents, reserveResult },
-      'Failed to reserve video generation credits',
-    );
-    throw createError.forbidden(
-      `Insufficient credits for video generation (${reserveResult.code ?? 'credit_error'}).`,
-    );
+  let reservation: ManagedUsageRequestReservation;
+  let sourceSurface: 'web' | 'mobile' | 'desktop';
+  try {
+    const idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('Idempotency-Key'));
+    const mediaIdentity = parseManagedMediaIdempotencyKey(idempotencyKey);
+    if (!mediaIdentity || mediaIdentity.operation !== 'video') {
+      throw new ManagedUsageRequestError(
+        'Idempotency-Key must identify one Managed Cloud video operation.',
+        400,
+        'invalid_media_idempotency_key',
+      );
+    }
+    sourceSurface = mediaIdentity.surface;
+    const scoped = await getUserScopedDb(request);
+    if (scoped.userId !== userId) {
+      throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
+    }
+    reservation = await reserveManagedUsageRequest({
+      db: scoped.db,
+      userId,
+      idempotencyKey,
+      requestHash: fingerprintManagedUsageRequest(validationResult.data),
+      provider,
+      model: model.id,
+      estimatedCostCents,
+      planTier: subscription.plan_tier,
+      isFlagship: false,
+    });
+  } catch (error) {
+    const managedError =
+      error instanceof ManagedUsageRequestError
+        ? error
+        : new ManagedUsageRequestError(
+            'Managed usage billing is temporarily unavailable.',
+            503,
+            'billing_unavailable',
+          );
+    return managedUsageErrorResponse(request, managedError);
   }
 
   logger.info(
@@ -480,6 +512,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   let estimatedDuration: number;
 
   try {
+    await markManagedUsageProviderStarted(reservation);
     if (provider === 'runway') {
       const result = await generateWithRunway(prompt, billableDurationSecs, resolution, model);
       taskId = result.taskId;
@@ -495,21 +528,18 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       estimatedDuration = result.estimatedDuration;
     }
   } catch (error) {
-    // Refund the reserved credits since the task was never created
-    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     try {
-      await CreditService.settleCreditsDurably({
-        userId,
-        amountCents: -estimatedCostCents,
-        description: `Refund: video generation failed (${provider})`,
-        metadata: {
+      await finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: {
+          operation: 'video',
+          sourceSurface,
           provider,
           model: model.id,
-          type: 'refund',
-          reason: 'task_creation_failure',
-          requestId,
+          reason: 'provider_failed',
         },
-        idempotencyKey: refundKey,
       });
     } catch (settlementError) {
       logger.error(
@@ -518,15 +548,12 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
           error: settlementError,
           userId,
           provider,
-          requestId,
+          idempotencyKey: reservation.idempotencyKey,
         },
-        'Video generation refund could not be persisted',
+        'Video generation failure settlement could not be persisted',
       );
     }
-    logger.warn(
-      { userId: userId, provider, requestId },
-      'Video task creation failed - credits refunded',
-    );
+    logger.warn({ userId: userId, provider }, 'Video task creation failed');
 
     // Re-throw AppError instances (from createError.*)
     if (error && typeof error === 'object' && 'statusCode' in error) {
@@ -536,14 +563,29 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     throw createError.internal('Failed to start video generation. Please try again.');
   }
 
+  await finalizeManagedUsageRequest({
+    ...reservation,
+    outcome: 'completed',
+    actualCostCents: estimatedCostCents,
+    usage: {
+      operation: 'video',
+      sourceSurface,
+      provider,
+      model: model.id,
+      taskId,
+      durationSecs: billableDurationSecs,
+      resolution,
+    },
+  });
+
   // Store task_id → user_id mapping in-process memory with TTL for ownership verification.
   // This allows the status endpoint to verify the requesting user owns the task.
   // In a distributed/serverless deployment, replace with Redis or Neon persistence.
   storeVideoTask(taskId, userId);
 
   logger.info(
-    { userId: userId, provider, taskId, estimatedCostCents, requestId },
-    'Video generation credits reserved',
+    { userId: userId, provider, taskId, estimatedCostCents },
+    'Video generation usage settled',
   );
 
   const response: VideoGenerationResponse = {
@@ -564,6 +606,15 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     },
     'Video generation task created',
   );
+
+  try {
+    await markManagedUsageClientDelivered(reservation);
+  } catch (error) {
+    logger.warn(
+      { error, userId, idempotencyKey: reservation.idempotencyKey },
+      'Video delivery marker could not be persisted',
+    );
+  }
 
   return NextResponse.json(response, {
     headers: {

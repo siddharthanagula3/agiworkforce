@@ -96,12 +96,19 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
 
   // Reuse the gateway's exact token contract (services/api-gateway/.../deviceAuth.ts):
   // same claims + JWT_SECRET, so a token minted here is accepted by the gateway.
-  const accessToken = jwt.sign({ userId: record.user_id, email: record.user_email ?? '' }, secret, {
-    expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
-    issuer: 'agiworkforce-api-gateway',
-    audience: 'agiworkforce',
-    jwtid: crypto.randomUUID(),
-  });
+  // `surface: 'developer'` marks this as a device-authorization (CLI/IDE)
+  // credential; the gateway's managed plan gate reads it as the TRUSTED
+  // developer-surface class so managed developer access requires Pro or higher.
+  const accessToken = jwt.sign(
+    { userId: record.user_id, email: record.user_email ?? '', surface: 'developer' },
+    secret,
+    {
+      expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
+      issuer: 'agiworkforce-api-gateway',
+      audience: 'agiworkforce',
+      jwtid: crypto.randomUUID(),
+    },
+  );
 
   // Single-use: mark consumed so a leaked device_code cannot be replayed.
   const consumed = await db.query<{ status: string }>(

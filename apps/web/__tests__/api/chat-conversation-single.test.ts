@@ -68,6 +68,7 @@ describe('Single Conversation API', () => {
       output_tokens: 0,
       cost_cents: 0,
       created_at: '2026-01-25T00:00:00Z',
+      metadata: null,
     },
     {
       id: 'msg-2',
@@ -79,6 +80,7 @@ describe('Single Conversation API', () => {
       output_tokens: 5,
       cost_cents: 0.001,
       created_at: '2026-01-25T00:01:00Z',
+      metadata: null,
     },
   ];
 
@@ -124,6 +126,7 @@ describe('Single Conversation API', () => {
         const data = await response.json();
         expect(data.conversation).toEqual(mockConversation);
         expect(data.messages).toHaveLength(2);
+        expect(data.messages[1]).not.toHaveProperty('cost_cents');
       });
 
       it('should return 404 if conversation not found', async () => {

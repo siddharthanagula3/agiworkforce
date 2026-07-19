@@ -11,7 +11,12 @@ import {
   Home,
   Info,
 } from 'lucide-react';
-import { PLAN_LABEL, type UIPlanTier, type UsageMeter } from '@agiworkforce/types';
+import {
+  PLAN_LABEL,
+  normalizeUIPlanTier,
+  type UIPlanTier,
+  type UsageMeter,
+} from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 import { useSettingsStore } from '../stores/settingsStore';
 import { Tooltip } from './ui/Tooltip';
@@ -48,30 +53,14 @@ function getAvatarColor(name: string): string {
  * Legacy `free` is the alias for `byok` per MEMORY.md tier list.
  */
 function resolvePlanTier(plan: string): UIPlanTier {
-  if (plan === 'local') return 'local';
-  if (plan === 'byok' || plan === 'free') return 'byok';
-  // 'hobby' is a legacy value from before the 2026-07-02 tier rename.
-  if (plan === 'hobby' || plan === 'basic') return 'basic';
-  if (plan === 'pro') return 'pro';
-  // 'pro_plus' was removed with no successor (never shipped); closest
-  // remaining tier is 'max'.
-  if (plan === 'pro_plus' || plan === 'pro+' || plan === 'max') return 'max';
-  // Fallback: treat unknown as byok (free tier)
-  return 'byok';
+  return normalizeUIPlanTier(plan, 'byok');
 }
 
 /** Derive usage source from the plan tier without inventing quota numbers. */
 function deriveUsageMeter(tier: UIPlanTier): UsageMeter {
-  switch (tier) {
-    case 'local':
-      return { remaining: null, resetsAt: null, source: 'unbounded' };
-    case 'byok':
-      return { remaining: null, resetsAt: null, source: 'user-api-key' };
-    case 'basic':
-    case 'pro':
-    case 'max':
-      return { remaining: null, resetsAt: null, source: 'managed-plan' };
-  }
+  if (tier === 'local') return { remaining: null, resetsAt: null, source: 'unbounded' };
+  if (tier === 'byok') return { remaining: null, resetsAt: null, source: 'user-api-key' };
+  return { remaining: null, resetsAt: null, source: 'managed-plan' };
 }
 
 /** Format days-until-reset from an ISO timestamp. */

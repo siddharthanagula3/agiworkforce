@@ -42,6 +42,7 @@ import { getUserCustomConnectorSummaries } from '@/lib/user-connector-tools';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   getCustomRemoteMcpLimit,
+  getCustomRemoteMcpLimitErrorMessage,
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
 
@@ -160,6 +161,14 @@ async function handlePost(request: NextRequest) {
     throw createError.validation('name is required (1–200 chars)');
   }
 
+  const db = getNeonDb();
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const planTier = subscription?.plan_tier;
+  const connectorLimit = getCustomRemoteMcpLimit(planTier);
+  if (connectorLimit === 0) {
+    throw createError.validation(getCustomRemoteMcpLimitErrorMessage(planTier));
+  }
+
   const parsedUrl = await validateHttpsMcpUrl(body.url);
 
   const transport: 'sse' | 'streamable-http' =
@@ -173,10 +182,6 @@ async function handlePost(request: NextRequest) {
   if (authToken.length > 4096) {
     throw createError.validation('authToken is too long');
   }
-
-  const db = getNeonDb();
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const connectorLimit = getCustomRemoteMcpLimit(subscription?.plan_tier);
 
   // Enforce the per-user cap before doing any network work.
   let existingCount: { count: string }[];
@@ -192,10 +197,8 @@ async function handlePost(request: NextRequest) {
       throw error;
     }
   }
-  if (Number(existingCount[0]?.count ?? '0') >= connectorLimit) {
-    throw createError.validation(
-      `You can add up to ${connectorLimit} custom connector${connectorLimit === 1 ? '' : 's'}. Remove one before adding another.`,
-    );
+  if (connectorLimit !== null && Number(existingCount[0]?.count ?? '0') >= connectorLimit) {
+    throw createError.validation(getCustomRemoteMcpLimitErrorMessage(planTier));
   }
 
   const shortId = await allocateShortId(db, userId);
@@ -255,9 +258,7 @@ async function handlePost(request: NextRequest) {
       throw createError.conflict('You already have a custom connector for this URL.');
     }
     if (isUserResourceLimitError(error)) {
-      throw createError.validation(
-        `You can add up to ${connectorLimit} custom connector${connectorLimit === 1 ? '' : 's'}. Remove one before adding another.`,
-      );
+      throw createError.validation(getCustomRemoteMcpLimitErrorMessage(planTier));
     }
     throw error;
   }

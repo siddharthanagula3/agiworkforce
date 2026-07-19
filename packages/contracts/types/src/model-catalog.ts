@@ -582,8 +582,9 @@ export interface RoutingSlotDefinition {
  *
  * Compatibility cap thresholds retained for legacy quota consumers:
  *   - `warnAt 0.8`     — surface `X-Quota-Warning` header / in-stream metadata.
- *   - `downgradeAt 1.0`— silent route swap to workhorse model.
- *   - `hardCapAt 1.5`  — refuse with paywall payload (HTTP 429).
+ *   - `hardCapAt 1.0`  — refuse with paywall payload (HTTP 429).
+ * `downgradeAt` remains in the compatibility shape but is equal to the hard
+ * cap, whose fail-closed branch takes precedence. There is no grace overage.
  *
  * Frozen at module load (Vercel `server-no-shared-module-state`).
  */
@@ -832,8 +833,8 @@ export const SLOT_REGISTRY: Readonly<Record<RoutingSlot, RoutingSlotDefinition>>
 // ---------------------------------------------------------------------------
 // Compatibility product-tier entitlements and quota policy.
 //
-// Standard cap behavior (every paid tier, locked Round 4):
-//   warn at 80% → silent downgrade at 100% → hard cap at 150%.
+// Standard cap behavior for compatibility quota consumers:
+//   warn at 80% → hard cap at 100%, with no grace overage.
 // `STANDARD_CAP_BEHAVIOR` is shared by every tier that has a token budget so
 // the constant is referenced (not copied) — Object.freeze keeps callers from
 // mutating it, and the registry-level deep-freeze below covers the parent.
@@ -841,7 +842,7 @@ export const SLOT_REGISTRY: Readonly<Record<RoutingSlot, RoutingSlotDefinition>>
 const STANDARD_CAP_BEHAVIOR: TierCapBehavior = Object.freeze({
   warnAt: 0.8,
   downgradeAt: 1.0,
-  hardCapAt: 1.5,
+  hardCapAt: 1.0,
 });
 
 /**
@@ -1065,9 +1066,17 @@ for (const tier of Object.keys(TIER_POLICIES_DEFINITION) as ProductTier[]) {
 Object.freeze(TIER_POLICIES_DEFINITION);
 
 /**
- * Canonical tier-policy registry. Frozen at module load. Consumers SHOULD use
- * `getTierPolicy(tier)` instead of indexing this directly so the
- * normalize-tier-string layer is applied.
+ * Routing/compat tier-policy registry (product-feature UX + slot routing). Frozen
+ * at module load. Consumers SHOULD use `getTierPolicy(tier)` instead of indexing
+ * this directly so the normalize-tier-string layer is applied.
+ *
+ * NOT THE ENTITLEMENT SOURCE OF TRUTH. `ProductTier` only has free/pro/max/
+ * enterprise, so `normalizeProductTier` collapses basic→pro and max_15x→max here.
+ * Money/access decisions (managed chat, developer surfaces, image/video gen, plan
+ * limits) MUST use the canonical billing catalog — `canUseBillingPlanCapability`,
+ * `getBillingPlanCapabilities`, `SELF_SERVE_PAID_PLAN_TIERS` in billing-catalog.ts
+ * — which distinguishes all nine tiers. Convergence of this second owner is
+ * tracked in docs/agent-context/known-flaws.md (MODEL-CATALOG-TIER-POLICY-OWNER).
  */
 export const TIER_POLICIES = TIER_POLICIES_DEFINITION;
 
@@ -1234,6 +1243,9 @@ function normalizeProductTier(tier: string | null | undefined): ProductTier {
     case 'max+':
     case 'max_plus':
     case 'max-plus':
+    case 'max_15x':
+    case 'max-15x':
+    case 'max15x':
       return 'max';
     case 'enterprise':
       return 'enterprise';
@@ -1396,6 +1408,9 @@ export function normalizeSubscriptionAccessTier(tier: string): SubscriptionAcces
     case 'team':
       return 'pro';
     case 'max':
+    case 'max_15x':
+    case 'max-15x':
+    case 'max15x':
     case 'max+':
     case 'max_plus':
     case 'max-plus':

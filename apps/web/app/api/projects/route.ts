@@ -16,7 +16,11 @@ import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import { getProjectLimit, isUserResourceLimitError } from '@/lib/services/free-plan-entitlements';
+import {
+  getProjectLimit,
+  getProjectLimitErrorMessage,
+  isUserResourceLimitError,
+} from '@/lib/services/free-plan-entitlements';
 import { ManagedCloudProjectCreateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 
@@ -74,7 +78,11 @@ async function handleCreateProject(request: NextRequest) {
   }
   const body = parseProjectRequest(ManagedCloudProjectCreateRequestSchema, rawBody);
   const subscription = await SubscriptionService.getSubscription(db, userId);
-  const projectLimit = getProjectLimit(subscription?.plan_tier);
+  const planTier = subscription?.plan_tier;
+  const projectLimit = getProjectLimit(planTier);
+  if (projectLimit === 0) {
+    throw createError.validation(getProjectLimitErrorMessage(planTier));
+  }
 
   // Build columns/values for the insert, optionally including round-10 fields
   const baseColumns = ['user_id', 'name', 'description', 'instructions', 'color'];
@@ -147,9 +155,7 @@ async function handleCreateProject(request: NextRequest) {
     rowData = inserted;
   } catch (firstError) {
     if (isUserResourceLimitError(firstError)) {
-      throw createError.validation(
-        'Free accounts can have up to 5 Projects. Delete a Project or upgrade to create another.',
-      );
+      throw createError.validation(getProjectLimitErrorMessage(planTier));
     }
     if (
       hasRound10 &&
@@ -165,9 +171,7 @@ async function handleCreateProject(request: NextRequest) {
         rowData = inserted;
       } catch (retryError) {
         if (isUserResourceLimitError(retryError)) {
-          throw createError.validation(
-            'Free accounts can have up to 5 Projects. Delete a Project or upgrade to create another.',
-          );
+          throw createError.validation(getProjectLimitErrorMessage(planTier));
         }
         logger.error({ error: retryError, userId }, 'Failed to create project');
         throw createError.internal('Failed to create project');

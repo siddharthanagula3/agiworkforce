@@ -3,19 +3,24 @@
  *
  * Covers the 2026-07-05 addition of session (rolling 5h) / weekly /
  * flagship-weekly usage fields, layered on top of the existing monthly
- * credit balance response — see billing-catalog.ts's
- * getPlanWeeklyUsageBudgetCents header comment for why these are a pacing
- * layer, not a replacement for the monthly budget.
+ * percentage-only public response. Exact managed-compute allowances stay in
+ * the server-owned policy and must not be serialized to clients.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockGetClerkAuthUser, mockGetBalance, mockGetSubscription, mockGetRollingUsage } =
-  vi.hoisted(() => ({
-    mockGetClerkAuthUser: vi.fn(),
-    mockGetBalance: vi.fn(),
-    mockGetSubscription: vi.fn(),
-    mockGetRollingUsage: vi.fn(),
-  }));
+const {
+  mockGetClerkAuthUser,
+  mockGetBalance,
+  mockGetSubscription,
+  mockGetRollingUsage,
+  mockGetFreeTrialPublicUsage,
+} = vi.hoisted(() => ({
+  mockGetClerkAuthUser: vi.fn(),
+  mockGetBalance: vi.fn(),
+  mockGetSubscription: vi.fn(),
+  mockGetRollingUsage: vi.fn(),
+  mockGetFreeTrialPublicUsage: vi.fn(),
+}));
 
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: mockGetClerkAuthUser,
@@ -31,6 +36,10 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: mockGetRollingUsage,
+}));
+
+vi.mock('@/lib/services/free-trial-service', () => ({
+  getFreeTrialPublicUsage: mockGetFreeTrialPublicUsage,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -55,6 +64,11 @@ describe('GET /api/usage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
+    mockGetFreeTrialPublicUsage.mockResolvedValue({
+      usagePercentage: 0,
+      resetAt: null,
+      hasUsageRemaining: true,
+    });
   });
 
   it('includes session/weekly/flagship-weekly fields derived from real rolling-window spend for a paid tier', async () => {
@@ -71,8 +85,8 @@ describe('GET /api/usage', () => {
       period_start: '2026-07-01T00:00:00.000Z',
       period_end: '2026-08-01T00:00:00.000Z',
     });
-    // session used=20 (of cap 46), weekly all-models used=50 (of cap 231),
-    // flagship-only used=10 (of cap 69) — see billing-catalog pro derivation.
+    // Exact inputs are intentionally test fixtures only; the response exposes
+    // percentages and reset times, never those operands.
     mockGetRollingUsage
       .mockResolvedValueOnce({ usedCents: 20, oldestAt: '2026-07-05T03:00:00.000Z' })
       .mockResolvedValueOnce({ usedCents: 50, oldestAt: '2026-07-01T12:00:00.000Z' })
@@ -82,35 +96,48 @@ describe('GET /api/usage', () => {
     expect(res.status).toBe(200);
     const json = await res.json();
 
-    expect(json.session_used_cents).toBe(20);
-    expect(json.session_cap_cents).toBe(46); // round(round(1000*12/52) * 0.2)
+    expect(json.usage_percentage).toBe(10);
+    expect(json.session_usage_percentage).toBe(40);
     expect(json.session_reset_at).toBe(
       new Date(Date.parse('2026-07-05T03:00:00.000Z') + 5 * 60 * 60 * 1000).toISOString(),
     );
-
-    expect(json.weekly_used_cents).toBe(50);
-    expect(json.weekly_cap_cents).toBe(231); // round(1000*12/52)
-
-    expect(json.flagship_weekly_used_cents).toBe(10);
-    expect(json.flagship_weekly_cap_cents).toBe(69); // round(231*0.3)
+    expect(json.weekly_usage_percentage).toBe(20);
+    expect(json.flagship_weekly_usage_percentage).toBeCloseTo(13.33, 2);
+    expect(json).not.toHaveProperty('credits_allocated_cents');
+    expect(json).not.toHaveProperty('credits_used_cents');
+    expect(json).not.toHaveProperty('credits_remaining_cents');
+    expect(json).not.toHaveProperty('session_used_cents');
+    expect(json).not.toHaveProperty('session_cap_cents');
+    expect(json).not.toHaveProperty('weekly_used_cents');
+    expect(json).not.toHaveProperty('weekly_cap_cents');
+    expect(json).not.toHaveProperty('flagship_weekly_used_cents');
+    expect(json).not.toHaveProperty('flagship_weekly_cap_cents');
 
     // Real rolling-window queries were actually called (not skipped) for a paid tier.
     expect(mockGetRollingUsage).toHaveBeenCalledTimes(3);
   });
 
-  it('skips the rolling-window queries and zeroes the fields for free tier (no derivable budget)', async () => {
+  it('uses the precise rolling Free daily percentage without exposing private operands', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'free', status: 'none' });
     mockGetBalance.mockResolvedValue(null);
+    mockGetFreeTrialPublicUsage.mockResolvedValue({
+      usagePercentage: 75,
+      resetAt: '2026-07-19T12:00:00.000Z',
+      hasUsageRemaining: true,
+    });
 
     const res = await GET(makeRequest());
     const json = await res.json();
 
-    expect(json.session_cap_cents).toBe(0);
-    expect(json.weekly_cap_cents).toBe(0);
-    expect(json.flagship_weekly_cap_cents).toBe(0);
-    expect(json.session_used_cents).toBe(0);
+    expect(json.usage_percentage).toBe(75);
+    expect(json.usage_reset_at).toBe('2026-07-19T12:00:00.000Z');
+    expect(json.session_usage_percentage).toBe(0);
+    expect(json.weekly_usage_percentage).toBe(0);
+    expect(json.flagship_weekly_usage_percentage).toBe(0);
     expect(json.session_reset_at).toBeNull();
     expect(mockGetRollingUsage).not.toHaveBeenCalled();
+    expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith('user-1');
+    expect(JSON.stringify(json)).not.toMatch(/microusd|daily_cost|daily_reserved/i);
   });
 
   it('returns null reset timestamps when there is no usage yet in the window', async () => {
@@ -130,6 +157,48 @@ describe('GET /api/usage', () => {
     expect(json.session_reset_at).toBeNull();
     expect(json.weekly_reset_at).toBeNull();
     expect(json.flagship_weekly_reset_at).toBeNull();
+  });
+
+  it('reports no immediately available usage when a shared rolling admission window is exhausted', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_cents: 2000,
+      credits_used_cents: 100,
+      credits_remaining_cents: 1900,
+      period_start: '2026-07-01T00:00:00.000Z',
+      period_end: '2026-08-01T00:00:00.000Z',
+    });
+    // Pro's private five-hour allowance is exhausted while billing-period and
+    // weekly balances remain. The public response exposes only the decision.
+    mockGetRollingUsage
+      .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-18T16:00:00.000Z' })
+      .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-15T00:00:00.000Z' })
+      .mockResolvedValueOnce({ usedCents: 0, oldestAt: null });
+
+    const res = await GET(makeRequest());
+    const json = await res.json();
+
+    expect(json.session_usage_percentage).toBe(100);
+    expect(json.has_usage_remaining).toBe(false);
+  });
+
+  it('keeps non-flagship work available when only the flagship sub-limit is exhausted', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_cents: 2000,
+      credits_used_cents: 100,
+      credits_remaining_cents: 1900,
+    });
+    mockGetRollingUsage
+      .mockResolvedValueOnce({ usedCents: 10, oldestAt: '2026-07-18T16:00:00.000Z' })
+      .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-15T00:00:00.000Z' })
+      .mockResolvedValueOnce({ usedCents: 150, oldestAt: '2026-07-15T00:00:00.000Z' });
+
+    const res = await GET(makeRequest());
+    const json = await res.json();
+
+    expect(json.flagship_weekly_usage_percentage).toBe(100);
+    expect(json.has_usage_remaining).toBe(true);
   });
 
   it('returns 401 when unauthenticated', async () => {

@@ -19,6 +19,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   Input,
@@ -37,8 +38,6 @@ const PROVIDER_PRESETS: Record<string, string> = {
   vLLM: 'http://localhost:8000/v1',
   Groq: 'https://api.groq.com/openai/v1',
   OpenRouter: 'https://openrouter.ai/api/v1',
-  'Together AI': 'https://api.together.xyz/v1',
-  Fireworks: 'https://api.fireworks.ai/inference/v1',
   Mistral: 'https://api.mistral.ai/v1',
   DeepSeek: 'https://api.deepseek.com/v1',
   Custom: '',
@@ -256,6 +255,9 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Custom Model' : 'Add Custom Model'}</DialogTitle>
+          <DialogDescription>
+            Connect an OpenAI-compatible local or supported provider endpoint.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">

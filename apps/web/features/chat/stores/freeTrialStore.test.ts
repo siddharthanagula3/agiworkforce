@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useFreeTrialStore } from './freeTrialStore';
+import { buildFreeTrialPaywallSlot, useFreeTrialStore } from './freeTrialStore';
 
 describe('free trial client state', () => {
   beforeEach(() => {
@@ -19,5 +19,9 @@ describe('free trial client state', () => {
 
     useFreeTrialStore.getState().clearLimitReached();
     expect(useFreeTrialStore.getState().limitReached).toBe(false);
+  });
+
+  it('offers the shared Basic tier when free hosted usage is exhausted', () => {
+    expect(buildFreeTrialPaywallSlot('free_trial_token_budget_reached').requiredTier).toBe('basic');
   });
 });

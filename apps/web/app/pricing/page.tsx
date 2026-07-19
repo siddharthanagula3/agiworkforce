@@ -5,24 +5,30 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import {
   BILLING_PLAN_PRICING,
+  canUseBillingPlanCapability,
   formatPrivacyModeLabel,
+  getBillingPlanProductLimits,
   isPlanSelectableOnSurface,
+  SELF_SERVE_PAID_PLAN_TIERS,
+  type BillingPlanLimit,
   type BillingPlanTier,
+  type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import {
   upgradeToBasicPlan,
   upgradeToProPlan,
   upgradeToMaxPlan,
-  upgradeToTeamPlan,
+  upgradeToMax15xPlan,
+  upgradePlanMidCycle,
 } from '@features/billing/services/stripe-payments';
+import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Reveal } from '@/features/marketing/components/Reveal';
-import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
-import { WaitlistForm } from '../byok/WaitlistForm';
 
 // Paid-plan checkout (2026-07-04): open by default, matching the
 // managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
@@ -40,8 +46,48 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
 
-type Currency = 'usd' | 'inr';
-type CheckoutPlan = 'basic' | 'pro' | 'max' | 'team';
+type CheckoutPlan = SelfServePaidPlanTier;
+
+const localizedPriceEntrySchema = z.object({
+  amountMinor: z.number().int().nonnegative(),
+  currency: z.string().regex(/^[a-z]{3}$/i),
+  localized: z.boolean(),
+  checkoutReady: z.boolean(),
+});
+
+const localizedPlanPricesSchema = z.object({
+  monthly: localizedPriceEntrySchema.optional(),
+  yearly: localizedPriceEntrySchema.optional(),
+});
+
+const localizedPricingCatalogSchema = z.object({
+  country: z.string().min(2).max(2),
+  requestedCurrency: z.string().regex(/^[a-z]{3}$/i),
+  plans: z.object({
+    basic: localizedPlanPricesSchema,
+    pro: localizedPlanPricesSchema,
+    max: localizedPlanPricesSchema,
+    max_15x: localizedPlanPricesSchema,
+    team: localizedPlanPricesSchema,
+  }),
+});
+
+type LocalizedPricingCatalog = z.infer<typeof localizedPricingCatalogSchema>;
+
+function formatLocalizedAmount(
+  entry: z.infer<typeof localizedPriceEntrySchema> | undefined,
+  fallbackUsd: number,
+  divisor = 1,
+): string {
+  if (!entry) return `$${(fallbackUsd / divisor).toFixed(2).replace(/\.00$/, '')}`;
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: entry.currency.toUpperCase(),
+    currencyDisplay: 'narrowSymbol',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(entry.amountMinor / 100 / divisor);
+}
 
 function CheckIcon() {
   return (
@@ -77,31 +123,78 @@ interface CompareRow {
   price: string;
   billingInterval: string;
   usageCapacity: string;
+  projects: string;
+  customMcp: string;
+  skillsConnectors: string;
+  agiWork: string;
+  imageGeneration: string;
+  videoGeneration: string;
+  apiAccess: string;
+  developerSurfaces: string;
+  teamControls: string;
   bestFor: string;
   highlighted?: boolean;
+}
+
+function formatLimit(limit: BillingPlanLimit, singular: string, plural: string): string {
+  if (limit === 'unlimited') return 'Unlimited';
+  if (limit === 'custom') return 'Custom';
+  return `${limit} ${limit === 1 ? singular : plural}`;
+}
+
+function managedPlanCapabilities(plan: BillingPlanTier) {
+  const limits = getBillingPlanProductLimits(plan);
+  return {
+    projects: limits ? formatLimit(limits.projects, 'project', 'projects') : '—',
+    customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : '—',
+    skillsConnectors: canUseBillingPlanCapability(plan, 'skills_connectors') ? 'Yes' : 'No',
+    agiWork: canUseBillingPlanCapability(plan, 'agi_work') ? 'Yes' : 'No',
+    imageGeneration: canUseBillingPlanCapability(plan, 'image_generation') ? 'Yes' : 'No',
+    videoGeneration: canUseBillingPlanCapability(plan, 'video_generation') ? 'Yes' : 'No',
+    apiAccess: canUseBillingPlanCapability(plan, 'managed_api') ? 'Yes' : 'No',
+    developerSurfaces: canUseBillingPlanCapability(plan, 'developer_surfaces')
+      ? 'CLI, Chrome & VS Code'
+      : 'No managed access',
+    teamControls: canUseBillingPlanCapability(plan, 'team_admin')
+      ? plan === 'team'
+        ? 'Sales-assisted pilot'
+        : 'Yes'
+      : 'No',
+  };
 }
 
 export default function PricingPage() {
   const { t } = useTranslation('pricing');
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const { data: billing, isLoading: billingLoading } = useBillingData();
 
   const [annual, setAnnual] = useState(false);
-  const [currency, setCurrency] = useState<Currency>('usd');
+  const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
+  const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
 
-  // Best-effort locale detection for India (₹399/mo Basic), with a manual
-  // toggle so any user can override. No geo-IP dependency by design.
+  // Display the exact same trusted country-derived Stripe prices that Checkout
+  // validates server-side. A malformed/unavailable response falls back to the
+  // public USD catalog without changing the charged amount.
   useEffect(() => {
-    try {
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-      const lang = typeof navigator !== 'undefined' ? navigator.language || '' : '';
-      if (tz === 'Asia/Kolkata' || tz === 'Asia/Calcutta' || lang.toLowerCase().endsWith('-in')) {
-        setCurrency('inr');
-      }
-    } catch {
-      // Intl/navigator unavailable (SSR or unsupported env) - stay on USD default.
-    }
+    const controller = new AbortController();
+    void fetch('/api/pricing/localized', { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Localized pricing is unavailable');
+        return response.json();
+      })
+      .then((value: unknown) => {
+        const parsed = localizedPricingCatalogSchema.safeParse(value);
+        if (!parsed.success) throw new Error('Localized pricing response is invalid');
+        setLocalizedPricing(parsed.data);
+        setPricingStatus('ready');
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setPricingStatus('error');
+      });
+    return () => controller.abort();
   }, []);
 
   const localLabel = formatPrivacyModeLabel('local');
@@ -109,24 +202,87 @@ export default function PricingPage() {
 
   const pro = BILLING_PLAN_PRICING.pro;
   const max = BILLING_PLAN_PRICING.max;
+  const max15x = BILLING_PLAN_PRICING.max_15x;
   const basic = BILLING_PLAN_PRICING.basic;
   const team = BILLING_PLAN_PRICING.team;
 
   const proSavingsPct = annualSavingsPct(pro);
   const teamSavingsPct = annualSavingsPct(team);
 
-  const proPrice =
-    annual && proSavingsPct > 0
-      ? (pro.yearlyPriceUsd / 12).toFixed(2)
-      : pro.monthlyPriceUsd.toFixed(2);
-  const teamPrice =
-    annual && teamSavingsPct > 0
-      ? (team.yearlyPriceUsd / 12).toFixed(2)
-      : team.monthlyPriceUsd.toFixed(2);
-  const basicPrice =
-    currency === 'inr' && basic.monthlyPriceInr
-      ? `₹${basic.monthlyPriceInr}`
-      : `$${basic.monthlyPriceUsd}`;
+  const localizedPlans = localizedPricing?.plans;
+  const proPrice = annual
+    ? formatLocalizedAmount(localizedPlans?.pro.yearly, pro.yearlyPriceUsd, 12)
+    : formatLocalizedAmount(localizedPlans?.pro.monthly, pro.monthlyPriceUsd);
+  const teamPrice = annual
+    ? formatLocalizedAmount(localizedPlans?.team.yearly, team.yearlyPriceUsd, 12)
+    : formatLocalizedAmount(localizedPlans?.team.monthly, team.monthlyPriceUsd);
+  const basicPrice = formatLocalizedAmount(localizedPlans?.basic.monthly, basic.monthlyPriceUsd);
+  const maxPrice = formatLocalizedAmount(localizedPlans?.max.monthly, max.monthlyPriceUsd);
+  const max15xPrice = formatLocalizedAmount(
+    localizedPlans?.max_15x.monthly,
+    max15x.monthlyPriceUsd,
+  );
+  const hasActivePaidPlan =
+    billing != null &&
+    billing.plan !== 'free' &&
+    ['active', 'trialing'].includes(billing.status ?? '');
+  const paidPlanSelectionDisabled =
+    pendingPlan !== null ||
+    (Boolean(user) && billingLoading) ||
+    !CHECKOUT_ENABLED ||
+    (Boolean(user) && !hasActivePaidPlan && pricingStatus !== 'ready');
+
+  function selectedPriceEntry(plan: CheckoutPlan) {
+    const interval = annual && plan === 'pro' ? 'yearly' : 'monthly';
+    return localizedPlans?.[plan][interval];
+  }
+
+  function isPlanCheckoutReady(plan: CheckoutPlan): boolean {
+    if (!user || hasActivePaidPlan) return true;
+    return selectedPriceEntry(plan)?.checkoutReady === true;
+  }
+
+  const unavailableCheckoutPlans: CheckoutPlan[] =
+    user && !hasActivePaidPlan && pricingStatus === 'ready'
+      ? SELF_SERVE_PAID_PLAN_TIERS.filter((plan) => !isPlanCheckoutReady(plan))
+      : [];
+
+  function planRelationship(plan: CheckoutPlan): 'upgrade' | 'current' | 'lower' {
+    if (!hasActivePaidPlan || !billing) return 'upgrade';
+    if (billing.plan === plan) return 'current';
+
+    const currentIndex = SELF_SERVE_PAID_PLAN_TIERS.indexOf(billing.plan as SelfServePaidPlanTier);
+    const targetIndex = SELF_SERVE_PAID_PLAN_TIERS.indexOf(plan);
+    return currentIndex < 0 || targetIndex < currentIndex ? 'lower' : 'upgrade';
+  }
+
+  function renderPlanAction(plan: CheckoutPlan, upgradeLabel: string) {
+    const relationship = planRelationship(plan);
+    if (relationship === 'current') {
+      return (
+        <button type="button" className="agi-tier-cta" disabled>
+          Current plan
+        </button>
+      );
+    }
+    if (relationship === 'lower') {
+      return (
+        <Link href="/billing" className="agi-tier-cta agi-tier-cta--ghost">
+          Manage billing
+        </Link>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="agi-tier-cta"
+        disabled={paidPlanSelectionDisabled || !isPlanCheckoutReady(plan)}
+        onClick={() => void handleUpgrade(plan)}
+      >
+        {upgradeLabel}
+      </button>
+    );
+  }
 
   async function handleUpgrade(plan: CheckoutPlan) {
     if (!user) {
@@ -135,7 +291,12 @@ export default function PricingPage() {
     }
 
     if (!CHECKOUT_ENABLED) {
-      window.location.href = '/pricing#waitlist';
+      toast.error('Checkout is temporarily unavailable. Please try again later.');
+      return;
+    }
+
+    if (!hasActivePaidPlan && !isPlanCheckoutReady(plan)) {
+      toast.error(`${BILLING_PLAN_PRICING[plan].label} checkout is unavailable in your region.`);
       return;
     }
 
@@ -144,18 +305,24 @@ export default function PricingPage() {
     try {
       const userId = user.id;
       const userEmail = user.email || '';
+      if (hasActivePaidPlan) {
+        await upgradePlanMidCycle({
+          plan,
+          billingInterval: plan === 'pro' ? (annual ? 'yearly' : 'monthly') : 'monthly',
+        });
+        toast.dismiss(toastId);
+        toast.success(`Payment confirmed. Activating ${BILLING_PLAN_PRICING[plan].label} now.`);
+        return;
+      }
+
       if (plan === 'basic') {
-        await upgradeToBasicPlan({ userId, userEmail, currency });
+        await upgradeToBasicPlan({ userId, userEmail });
       } else if (plan === 'pro') {
         await upgradeToProPlan({ userId, userEmail, billingPeriod: annual ? 'yearly' : 'monthly' });
       } else if (plan === 'max') {
         await upgradeToMaxPlan({ userId, userEmail });
-      } else if (plan === 'team') {
-        await upgradeToTeamPlan({
-          userId,
-          userEmail,
-          billingPeriod: annual ? 'yearly' : 'monthly',
-        });
+      } else if (plan === 'max_15x') {
+        await upgradeToMax15xPlan({ userId, userEmail });
       }
       toast.dismiss(toastId);
     } catch (err) {
@@ -175,6 +342,15 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareLocalUsage'),
+      projects: 'Device-bound',
+      customMcp: 'Unlimited local',
+      skillsConnectors: 'Local',
+      agiWork: 'Local',
+      imageGeneration: 'Model-dependent',
+      videoGeneration: 'Model-dependent',
+      apiAccess: 'No managed access',
+      developerSurfaces: 'CLI',
+      teamControls: 'No',
       bestFor: t('compareLocalBestFor'),
     },
     {
@@ -183,6 +359,15 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareByokUsage'),
+      projects: 'Device-bound',
+      customMcp: 'Unlimited custom',
+      skillsConnectors: 'Local',
+      agiWork: 'Local',
+      imageGeneration: 'Provider-dependent',
+      videoGeneration: 'Provider-dependent',
+      apiAccess: 'Your provider API',
+      developerSurfaces: 'CLI',
+      teamControls: 'No',
       bestFor: t('compareByokBestFor'),
     },
     {
@@ -191,38 +376,56 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareFreeUsage'),
+      ...managedPlanCapabilities('free'),
       bestFor: t('compareFreeBestFor'),
     },
     {
       planId: 'basic',
       label: basic.label,
-      price: `$${basic.monthlyPriceUsd}/mo (₹${basic.monthlyPriceInr}/mo ${t('inIndia')})`,
+      price: `${basicPrice}/mo`,
       billingInterval: t('monthly'),
       usageCapacity: t('compareBasicUsage'),
+      ...managedPlanCapabilities('basic'),
       bestFor: t('compareBasicBestFor'),
     },
     {
       planId: 'pro',
       label: pro.label,
-      price: `$${pro.monthlyPriceUsd}/mo`,
-      billingInterval: t('compareProInterval', { yearly: (pro.yearlyPriceUsd / 12).toFixed(2) }),
+      price: `${formatLocalizedAmount(localizedPlans?.pro.monthly, pro.monthlyPriceUsd)}/mo`,
+      billingInterval: t('compareProInterval', {
+        yearly: formatLocalizedAmount(localizedPlans?.pro.yearly, pro.yearlyPriceUsd, 12),
+      }),
       usageCapacity: t('compareProUsage'),
+      ...managedPlanCapabilities('pro'),
       bestFor: t('compareProBestFor'),
     },
     {
       planId: 'max',
       label: max.label,
-      price: `$${max.monthlyPriceUsd}/mo`,
+      price: `${maxPrice}/mo`,
       billingInterval: t('monthlyOnly'),
       usageCapacity: t('compareMaxUsage'),
+      ...managedPlanCapabilities('max'),
       bestFor: t('compareMaxBestFor'),
+    },
+    {
+      planId: 'max_15x',
+      label: max15x.label,
+      price: `${max15xPrice}/mo`,
+      billingInterval: t('monthlyOnly'),
+      usageCapacity: '15x Pro usage',
+      ...managedPlanCapabilities('max_15x'),
+      bestFor: 'Highest-capacity work and video generation',
     },
     {
       planId: 'team',
       label: team.label,
-      price: `$${team.monthlyPriceUsd}/seat/mo`,
-      billingInterval: t('compareTeamInterval', { yearly: (team.yearlyPriceUsd / 12).toFixed(2) }),
+      price: `${formatLocalizedAmount(localizedPlans?.team.monthly, team.monthlyPriceUsd)}/seat/mo`,
+      billingInterval: t('compareTeamInterval', {
+        yearly: formatLocalizedAmount(localizedPlans?.team.yearly, team.yearlyPriceUsd, 12),
+      }),
       usageCapacity: t('compareTeamUsage'),
+      ...managedPlanCapabilities('team'),
       bestFor: t('compareTeamBestFor'),
       highlighted: true,
     },
@@ -232,6 +435,7 @@ export default function PricingPage() {
       price: t('custom'),
       billingInterval: t('annualContract'),
       usageCapacity: t('compareEnterpriseUsage'),
+      ...managedPlanCapabilities('enterprise'),
       bestFor: t('compareEnterpriseBestFor'),
       highlighted: true,
     },
@@ -378,12 +582,28 @@ export default function PricingPage() {
             </button>
           </div>
 
+          {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
+            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+              Loading checkout availability…
+            </p>
+          ) : null}
+          {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
+            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+              Checkout availability could not be verified. Refresh this page to try again.
+            </p>
+          ) : null}
+          {unavailableCheckoutPlans.map((plan) => (
+            <p key={plan} role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
+              {BILLING_PLAN_PRICING[plan].label} checkout is not available in your region yet.
+            </p>
+          ))}
+
           <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
               <h3 className="agi-tier-name">{team.label}</h3>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">${teamPrice}</span>
+                <span className="agi-tier-price-num">{teamPrice}</span>
                 <span className="agi-tier-price-sub">
                   {t('perSeatPerMonth')}
                   {annual && teamSavingsPct > 0 ? (
@@ -416,19 +636,9 @@ export default function PricingPage() {
                 </li>
               </ul>
               <div className="agi-tier-cta-group">
-                <button
-                  type="button"
-                  className="agi-tier-cta"
-                  disabled={pendingPlan === 'team'}
-                  onClick={() => void handleUpgrade('team')}
-                >
-                  {t('teamCta')}
-                </button>
-                <WaitlistTrigger
-                  label={t('talkToSalesCta')}
-                  source="billing"
-                  className="agi-tier-cta agi-tier-cta--ghost"
-                />
+                <Link href="/contact-sales?plan=team" className="agi-tier-cta">
+                  {t('talkToSalesCta')}
+                </Link>
               </div>
             </Reveal>
 
@@ -475,38 +685,6 @@ export default function PricingPage() {
           </h2>
           <p className="agi-fl-section-lede">{t('individualLede')}</p>
 
-          <div
-            className="agi-tier-toggle"
-            role="group"
-            aria-label={t('currencyLabel')}
-            style={{ marginTop: 32 }}
-          >
-            <button
-              type="button"
-              aria-pressed={currency === 'usd'}
-              onClick={() => setCurrency('usd')}
-              className={
-                currency === 'usd'
-                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                  : 'agi-tier-toggle-btn'
-              }
-            >
-              USD
-            </button>
-            <button
-              type="button"
-              aria-pressed={currency === 'inr'}
-              onClick={() => setCurrency('inr')}
-              className={
-                currency === 'inr'
-                  ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                  : 'agi-tier-toggle-btn'
-              }
-            >
-              INR ({t('inIndia')})
-            </button>
-          </div>
-
           <div className="agi-tier-grid agi-tier-grid--four" style={{ marginTop: 24 }}>
             <Reveal as="article" className="agi-tier">
               <h3 className="agi-tier-name">{BILLING_PLAN_PRICING.free.label}</h3>
@@ -534,9 +712,7 @@ export default function PricingPage() {
               </Link>
             </Reveal>
 
-            {/* Basic is mobile-only (founder decision, 2026-07) — hidden from the
-                web plan-selection list; existing Basic subscribers still see it
-                as their current plan in billing. */}
+            {/* Basic is available across the customer app surfaces. */}
             {isPlanSelectableOnSurface('basic', 'web') && (
               <Reveal as="article" delay={40} className="agi-tier">
                 <h3 className="agi-tier-name">{basic.label}</h3>
@@ -559,26 +735,18 @@ export default function PricingPage() {
                     {t('basicFeature3')}
                   </li>
                 </ul>
-                <button
-                  type="button"
-                  className="agi-tier-cta"
-                  disabled={pendingPlan === 'basic'}
-                  onClick={() => void handleUpgrade('basic')}
-                >
-                  {t('basicCta')}
-                </button>
+                {renderPlanAction('basic', t('basicCta'))}
               </Reveal>
             )}
 
             <Reveal as="article" delay={80} className="agi-tier">
               <h3 className="agi-tier-name">{pro.label}</h3>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">${proPrice}</span>
+                <span className="agi-tier-price-num">{proPrice}</span>
                 <span className="agi-tier-price-sub">
                   {annual && proSavingsPct > 0
                     ? t('perMonthBilledAnnually')
                     : t('perMonthBilledMonthly')}
-                  {currency === 'inr' ? ' · USD only' : ''}
                 </span>
               </p>
               <p className="agi-tier-body">{t('proTierBody')}</p>
@@ -596,24 +764,14 @@ export default function PricingPage() {
                   {t('proFeature3')}
                 </li>
               </ul>
-              <button
-                type="button"
-                className="agi-tier-cta"
-                disabled={pendingPlan === 'pro'}
-                onClick={() => void handleUpgrade('pro')}
-              >
-                {t('proCta')}
-              </button>
+              {renderPlanAction('pro', t('proCta'))}
             </Reveal>
 
             <Reveal as="article" delay={120} className="agi-tier">
               <h3 className="agi-tier-name">{max.label}</h3>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">${max.monthlyPriceUsd}</span>
-                <span className="agi-tier-price-sub">
-                  {t('perMonthBilledMonthly')}
-                  {currency === 'inr' ? ' · USD only' : ''}
-                </span>
+                <span className="agi-tier-price-num">{maxPrice}</span>
+                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
               </p>
               <p className="agi-tier-body">{t('maxTierBody')}</p>
               <ul className="agi-tier-features">
@@ -630,32 +788,32 @@ export default function PricingPage() {
                   {t('maxFeature3')}
                 </li>
               </ul>
-              <button
-                type="button"
-                className="agi-tier-cta"
-                disabled={pendingPlan === 'max'}
-                onClick={() => void handleUpgrade('max')}
-              >
-                {t('maxCta')}
-              </button>
+              {renderPlanAction('max', t('maxCta'))}
             </Reveal>
-          </div>
-        </section>
 
-        {/* ──────────── Early access (anchor target for the checkout gate) ─ */}
-        <section
-          id="waitlist"
-          className="agi-fl-section"
-          aria-labelledby="pricing-waitlist-title"
-          style={{ scrollMarginTop: 96 }}
-        >
-          <p className="agi-fl-eyebrow">{t('waitlistEyebrow')}</p>
-          <h2 id="pricing-waitlist-title" className="agi-fl-h2">
-            {t('waitlistHeading')}
-          </h2>
-          <p className="agi-fl-section-lede">{t('waitlistBody')}</p>
-          <div style={{ marginTop: 28, maxWidth: 560 }}>
-            <WaitlistForm source="billing" ctaLabel={t('requestHostedAccessCta')} />
+            <Reveal as="article" delay={160} className="agi-tier">
+              <h3 className="agi-tier-name">{max15x.label}</h3>
+              <p className="agi-tier-price">
+                <span className="agi-tier-price-num">{max15xPrice}</span>
+                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
+              </p>
+              <p className="agi-tier-body">Highest-capacity managed AI for sustained work.</p>
+              <ul className="agi-tier-features">
+                <li>
+                  <CheckIcon />
+                  15x Pro usage
+                </li>
+                <li>
+                  <CheckIcon />
+                  Everything in {max.label}
+                </li>
+                <li>
+                  <CheckIcon />
+                  Video generation
+                </li>
+              </ul>
+              {renderPlanAction('max_15x', `Get ${max15x.label}`)}
+            </Reveal>
           </div>
         </section>
 
@@ -668,6 +826,7 @@ export default function PricingPage() {
           <p className="agi-fl-section-lede">{t('compareSubheading')}</p>
           <div style={{ overflowX: 'auto', marginTop: 36 }}>
             <table
+              aria-label="Plan capabilities"
               style={{
                 width: '100%',
                 borderCollapse: 'collapse',
@@ -677,7 +836,22 @@ export default function PricingPage() {
             >
               <thead>
                 <tr>
-                  {['plan', 'price', 'billingInterval', 'usageCapacity', 'bestFor'].map((col) => (
+                  {[
+                    ['plan', 'Plan'],
+                    ['price', 'Price'],
+                    ['billingInterval', 'Billing'],
+                    ['usageCapacity', 'Managed usage'],
+                    ['projects', 'Projects'],
+                    ['customMcp', 'Custom MCP'],
+                    ['skillsConnectors', 'Skills & connectors'],
+                    ['agiWork', 'AGI Work'],
+                    ['imageGeneration', 'Images'],
+                    ['videoGeneration', 'Video'],
+                    ['apiAccess', 'Managed API'],
+                    ['developerSurfaces', 'Developer surfaces'],
+                    ['teamControls', 'Team controls'],
+                    ['bestFor', 'Best for'],
+                  ].map(([col, label]) => (
                     <th
                       key={col}
                       style={{
@@ -693,7 +867,7 @@ export default function PricingPage() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {t(`compareCol${col.charAt(0).toUpperCase()}${col.slice(1)}`)}
+                      {label}
                     </th>
                   ))}
                 </tr>
@@ -750,6 +924,29 @@ export default function PricingPage() {
                       >
                         {row.usageCapacity}
                       </td>
+                      {[
+                        row.projects,
+                        row.customMcp,
+                        row.skillsConnectors,
+                        row.agiWork,
+                        row.imageGeneration,
+                        row.videoGeneration,
+                        row.apiAccess,
+                        row.developerSurfaces,
+                        row.teamControls,
+                      ].map((value, index) => (
+                        <td
+                          key={`${row.planId}-capability-${index}`}
+                          style={{
+                            padding: '14px 16px',
+                            borderBottom: '1px solid var(--agi-rule)',
+                            color: 'var(--agi-ink-2)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {value}
+                        </td>
+                      ))}
                       <td
                         style={{
                           padding: '14px 16px',

@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
-import { STRIPE_PRICE_IDS } from '@/lib/pricing';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -15,6 +14,7 @@ import { CheckoutRequestSchema } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -107,27 +107,15 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(`Invalid request: ${errorMessages}`);
   }
 
-  const { plan, billingInterval, currency } = validationResult.data;
-
-  // Lookup Price ID with type safety. 'basic' prices by currency (USD/INR),
-  // not by billing interval — every other plan prices by interval.
-  let priceId: string | undefined;
-  if (plan === 'basic') {
-    priceId =
-      currency === 'inr' ? STRIPE_PRICE_IDS.basic.monthlyInr : STRIPE_PRICE_IDS.basic.monthlyUsd;
-    if (!priceId) {
-      throw createError.validation(`No price configured for basic (${currency ?? 'usd'})`);
-    }
-  } else {
-    const planPrices = STRIPE_PRICE_IDS[plan as 'pro' | 'max' | 'team'];
-    if (!planPrices) {
-      throw createError.validation(`Invalid plan: ${plan}`);
-    }
-    priceId = planPrices[billingInterval];
-    if (!priceId) {
-      throw createError.validation(`No price configured for ${plan} ${billingInterval}`);
-    }
+  const { plan, billingInterval } = validationResult.data;
+  const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
+  const priceSelection = await getCheckoutPriceSelection(plan, billingInterval, country);
+  if (!priceSelection) {
+    throw createError.validation(
+      `Checkout pricing is not configured for ${plan} ${billingInterval} in your region.`,
+    );
   }
+  const { priceId, currency } = priceSelection;
 
   // Get or create Stripe customer to prevent duplicate customers
   let stripeCustomerId: string | null = null;
@@ -152,6 +140,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     !!existingSubscription &&
     existingSubscription.plan_tier !== 'free' &&
     activeStatuses.has(existingSubscription.status);
+
+  if (hasActiveSubscription) {
+    throw createError.conflict(
+      'Use the in-app upgrade flow so payment proration and existing usage are carried safely.',
+    );
+  }
 
   // First, check if we have a customer ID stored in profiles
   const profileRows = await db
@@ -205,48 +199,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // If the user is already subscribed, open Billing Portal instead of starting a new Checkout.
-  if (hasActiveSubscription) {
-    try {
-      // As a resilience fallback, try to discover the customer by email if still missing.
-      if (!stripeCustomerId && user.email) {
-        const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-        if (customers.data.length > 0) {
-          stripeCustomerId = customers.data[0]?.id ?? null;
-          await db
-            .execute('update profiles set stripe_customer_id = $1 where id = $2', [
-              stripeCustomerId,
-              user.id,
-            ])
-            .catch(() => undefined);
-        }
-      }
-
-      if (!stripeCustomerId) {
-        throw createError.internal('Missing Stripe customer ID for billing portal');
-      }
-
-      const portalSession = await stripe.billingPortal.sessions.create({
-        customer: stripeCustomerId,
-        return_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
-      });
-
-      return NextResponse.json({ url: portalSession.url });
-    } catch (error) {
-      logger.error(
-        { error, userId: user.id },
-        'Failed to create billing portal session for existing subscriber',
-      );
-      throw createError.internal('Failed to open billing portal');
-    }
-  }
-
   // Create Stripe Checkout Session
   try {
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      payment_method_types: ['card'],
       locale: 'auto', // Auto-detect browser locale to prevent i18n module errors
+      currency,
       customer: stripeCustomerId || undefined, // Use existing customer if available
       customer_email: stripeCustomerId ? undefined : user.email, // Only set if no customer
       line_items: [

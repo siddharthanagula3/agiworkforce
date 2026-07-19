@@ -85,25 +85,13 @@ export const accountApi = {
         subscription: {
           plan_tier: 'free',
           status: 'active',
-          current_period_end: undefined,
+          current_period_end: null,
         },
         credits: {
-          monthly_allocated_cents: 0,
-          monthly_remaining_cents: 0,
-          monthly_used_cents: 0,
-          monthly_reset_at: new Date().toISOString(),
-          seconds_until_monthly_reset: 0,
-          daily_limit_cents: 0,
-          daily_used_cents: 0,
-          daily_remaining_cents: 0,
-          daily_reset_at: new Date().toISOString(),
-          seconds_until_daily_reset: 0,
-        },
-        formatted: {
-          monthly_remaining: '$0.00',
-          monthly_allocated: '$0.00',
-          daily_remaining: '$0.00',
-          daily_limit: '$0.00',
+          usage_percentage: 0,
+          reset_at: null,
+          seconds_until_reset: 0,
+          has_usage_remaining: false,
         },
       };
     }

@@ -319,6 +319,20 @@ describe('CSRF protection on state-changing endpoints', () => {
   // ───────────────────────────────────────────────────────────────────────────
   describe('GET /api/chat/conversations/[id] — no CSRF required', () => {
     it('does NOT call requireCsrfToken for GET requests', async () => {
+      mockNeonQuery
+        .mockReset()
+        .mockResolvedValueOnce([
+          {
+            id: 'test-conv-id',
+            title: 'Test',
+            model: 'auto',
+            created_at: '2026-01-01',
+            updated_at: '2026-01-01',
+          },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ total: '0' }]);
+
       await convGET(makeConvRequest('GET'), convRouteContext);
 
       expect(mockRequireCsrfToken).not.toHaveBeenCalled();

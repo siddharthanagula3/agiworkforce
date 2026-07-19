@@ -27,10 +27,6 @@ vi.mock('@/lib/services/credit-service', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 7) },
 }));
-vi.mock('@/lib/assert-quota', () => ({
-  reconcileUsage: vi.fn(async () => undefined),
-}));
-
 import { buildToolLoopStream } from './tool-loop-anthropic';
 import { runResearchLoop, READY_MARKER } from './research-loop';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';

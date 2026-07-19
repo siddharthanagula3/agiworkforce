@@ -1,54 +1,18 @@
 import 'server-only';
 
+import { parseManagedUsageSummaryResponse } from '@agiworkforce/types';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { handleCorsPreflightRequest } from '@/lib/cors';
-
-const TimeRangeSchema = z.enum(['7d', '30d', '90d', 'all']).default('30d');
-
-interface TrendRow {
-  date: string;
-  total_tokens: string;
-  total_cost_cents: string;
-  session_count: string;
-}
-
-interface ProviderBreakdownRow {
-  provider: string;
-  total_tokens: string;
-  total_cost_cents: string;
-  session_count: string;
-}
-
-interface OverviewRow {
-  total_spent_cents: string;
-  total_tokens: string;
-  days_in_range: string;
-  session_count: string;
-}
-
-interface PeriodRow {
-  tokens: string;
-  cost_cents: string;
-  sessions: string;
-}
-
-function rangeToDays(range: string): number | null {
-  if (range === '7d') return 7;
-  if (range === '30d') return 30;
-  if (range === '90d') return 90;
-  return null;
-}
+import { withRateLimit } from '@/lib/rate-limit';
+import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 
 /**
- * GET /api/billing/analytics?timeRange=30d
- * Enhanced billing analytics dashboard data.
+ * Legacy alias for the percentage-only managed-usage summary.
+ * Stripe invoices remain the exact, user-owned monetary history.
  */
 async function handleGetBillingAnalytics(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-analytics');
@@ -56,166 +20,23 @@ async function handleGetBillingAnalytics(request: NextRequest) {
 
   let userId: string;
   try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
+    userId = (await getClerkAuthUser(request)).userId;
   } catch {
     throw createError.unauthorized('Authentication required');
   }
 
-  const { searchParams } = new URL(request.url);
-  const parsed = TimeRangeSchema.safeParse(searchParams.get('timeRange') ?? '30d');
-  if (!parsed.success) {
-    throw createError.validation('Invalid timeRange parameter');
-  }
-  const timeRange = parsed.data;
-  const days = rangeToDays(timeRange);
-  const intervalClause = days !== null ? `interval '${days} days'` : null;
-  const currentFilter = intervalClause ? `and created_at >= now() - ${intervalClause}` : '';
-  const prevFilter = intervalClause
-    ? `and created_at >= now() - ${intervalClause} * 2 and created_at < now() - ${intervalClause}`
-    : '';
-
-  const db = getNeonDb();
-
   try {
-    const [trends, providers, overview, currentPeriod, previousPeriod] = await Promise.all([
-      db.query<TrendRow>(
-        `select
-           date_trunc('day', created_at)::date::text as date,
-           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
-           sum(amount_cents)::text as total_cost_cents,
-           count(distinct metadata->>'session_id')::text as session_count
-         from public.credit_transactions
-         where user_id = $1
-           and transaction_type = 'deduction'
-           ${currentFilter}
-         group by date_trunc('day', created_at)::date
-         order by date_trunc('day', created_at)::date asc`,
-        [userId],
-      ),
-
-      db.query<ProviderBreakdownRow>(
-        `select
-           coalesce(metadata->>'provider', 'unknown') as provider,
-           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
-           sum(amount_cents)::text as total_cost_cents,
-           count(distinct metadata->>'session_id')::text as session_count
-         from public.credit_transactions
-         where user_id = $1
-           and transaction_type = 'deduction'
-           ${currentFilter}
-         group by metadata->>'provider'
-         order by sum(amount_cents) desc`,
-        [userId],
-      ),
-
-      db.query<OverviewRow>(
-        `select
-           sum(amount_cents)::text as total_spent_cents,
-           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
-           greatest(extract(epoch from (max(created_at) - min(created_at))) / 86400, 1)::text as days_in_range,
-           count(distinct metadata->>'session_id')::text as session_count
-         from public.credit_transactions
-         where user_id = $1
-           and transaction_type = 'deduction'
-           ${currentFilter}`,
-        [userId],
-      ),
-
-      db.query<PeriodRow>(
-        `select
-           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as tokens,
-           sum(amount_cents)::text as cost_cents,
-           count(distinct metadata->>'session_id')::text as sessions
-         from public.credit_transactions
-         where user_id = $1
-           and transaction_type = 'deduction'
-           ${currentFilter}`,
-        [userId],
-      ),
-
-      db.query<PeriodRow>(
-        `select
-           coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as tokens,
-           sum(amount_cents)::text as cost_cents,
-           count(distinct metadata->>'session_id')::text as sessions
-         from public.credit_transactions
-         where user_id = $1
-           and transaction_type = 'deduction'
-           ${prevFilter}`,
-        [userId],
-      ),
-    ]);
-
-    // Costs are NET signed sums now (reservation + reconciliation = actual).
-    // Clamp to >= 0 (BILLING FIX 0044: was sum(abs(...)), which counted refunds
-    // as charges). A retroactive correction landing in-window can't show negative.
-    const totalSpent = Math.max(0, parseInt(overview[0]?.total_spent_cents ?? '0', 10));
-    const totalTokens = parseInt(overview[0]?.total_tokens ?? '0', 10);
-    const daysInRange = parseFloat(overview[0]?.days_in_range ?? '1');
-
-    const curTokens = parseInt(currentPeriod[0]?.tokens ?? '0', 10);
-    const curCost = Math.max(0, parseInt(currentPeriod[0]?.cost_cents ?? '0', 10));
-    const curSessions = parseInt(currentPeriod[0]?.sessions ?? '0', 10);
-    const prevTokens = parseInt(previousPeriod[0]?.tokens ?? '0', 10);
-    const prevCost = Math.max(0, parseInt(previousPeriod[0]?.cost_cents ?? '0', 10));
-    const prevSessions = parseInt(previousPeriod[0]?.sessions ?? '0', 10);
-
-    const pctChange = (cur: number, prev: number) =>
-      prev === 0 ? (cur > 0 ? 100 : 0) : Math.round(((cur - prev) / prev) * 100 * 10) / 10;
-
-    const totalProviderCost = providers.reduce(
-      (s, p) => s + Math.max(0, parseInt(p.total_cost_cents, 10)),
-      0,
+    return NextResponse.json(
+      parseManagedUsageSummaryResponse(await getManagedUsageSummary(userId)),
     );
-
-    return NextResponse.json({
-      overview: {
-        total_spent: totalSpent,
-        total_tokens_used: totalTokens,
-        avg_cost_per_day: daysInRange > 0 ? Math.round(totalSpent / daysInRange) : 0,
-        avg_tokens_per_day: daysInRange > 0 ? Math.round(totalTokens / daysInRange) : 0,
-        projected_monthly_spend: Math.round((totalSpent / daysInRange) * 30),
-        savings_from_plan: 0,
-      },
-      trends: trends.map((t) => ({
-        date: t.date,
-        tokens: parseInt(t.total_tokens, 10),
-        cost: Math.max(0, parseInt(t.total_cost_cents, 10)),
-        sessions: parseInt(t.session_count, 10),
-      })),
-      provider_breakdown: providers.map((p) => {
-        const pCost = Math.max(0, parseInt(p.total_cost_cents, 10));
-        return {
-          provider: p.provider,
-          tokens: parseInt(p.total_tokens, 10),
-          cost: pCost,
-          percentage:
-            totalProviderCost > 0 ? Math.round((pCost / totalProviderCost) * 1000) / 10 : 0,
-          sessions: parseInt(p.session_count, 10),
-        };
-      }),
-      top_sessions: [],
-      period_comparison: {
-        current_period: { tokens: curTokens, cost: curCost, sessions: curSessions },
-        previous_period: { tokens: prevTokens, cost: prevCost, sessions: prevSessions },
-        percent_change: {
-          tokens: pctChange(curTokens, prevTokens),
-          cost: pctChange(curCost, prevCost),
-          sessions: pctChange(curSessions, prevSessions),
-        },
-      },
-      time_range: timeRange,
-    });
   } catch (error) {
-    logger.error({ error, userId }, 'Failed to fetch billing analytics');
-    throw createError.internal('Failed to fetch billing analytics');
+    logger.error({ error, userId }, 'Failed to fetch billing usage summary');
+    throw createError.internal('Failed to fetch billing usage summary');
   }
 }
 
 export const GET = withErrorHandler(handleGetBillingAnalytics);
 
 export async function OPTIONS(request: NextRequest) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  return preflightResponse || new NextResponse(null, { status: 204 });
+  return handleCorsPreflightRequest(request) || new NextResponse(null, { status: 204 });
 }

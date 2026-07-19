@@ -97,6 +97,11 @@ import {
   isManagedOfficeFileTool,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
+import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service';
+import {
+  reserveManagedUsageProviderStep,
+  ManagedUsageRequestError,
+} from '@/lib/services/managed-usage-request-service';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1128,6 +1133,7 @@ export async function* runToolLoop(
     // Ensure streaming for the loop.
     stream: true,
   };
+  const observedUsage = options.usage ?? createObservedProviderUsage();
 
   // Mutable message thread for re-invocations.
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
@@ -1657,8 +1663,74 @@ export async function* runToolLoop(
       }
       step++;
 
-      // Build the request for this step.
+      // Build the request for this step. Free turns re-fit at every provider
+      // boundary so earlier model/tool work cannot spend the same allowance
+      // again on a later step.
       const stepRequest = { ...llmRequest, messages };
+      if (processed.freeTrial) {
+        const fitted = applyFreeTrialProviderBudget({
+          reservation: processed.freeTrial,
+          provider: processed.provider,
+          request: stepRequest,
+          observedUsage: {
+            promptTokens: observedUsage.inputTokens,
+            completionTokens: observedUsage.outputTokens + observedUsage.reasoningTokens,
+            totalTokens:
+              observedUsage.inputTokens +
+              observedUsage.outputTokens +
+              observedUsage.reasoningTokens,
+            cacheReadInputTokens: observedUsage.cacheReadTokens,
+            cacheCreationInputTokens: observedUsage.cacheWriteTokens,
+            cacheCreation1hInputTokens: observedUsage.cacheWrite1hTokens,
+          },
+        });
+        if (!fitted.ok) {
+          yield encoder.encode(
+            eventStream.emit({
+              type: 'error',
+              message:
+                'You have reached the current free usage limit. Upgrade your plan, or switch to Local or BYOK to keep going.',
+              code: 'free_trial_token_budget_reached',
+              retryable: false,
+            }),
+          );
+          yield* flushTerminal('error');
+          return;
+        }
+      }
+
+      // Paid Managed Cloud admission control: atomically extend the durable
+      // reservation before every provider turn. The first operation is covered
+      // by the initial request reservation; each later turn re-checks the
+      // rolling 5-hour, rolling weekly, flagship-week, and billing-period
+      // balance limits and FAILS CLOSED before any provider egress. The stable
+      // global `provider:<step>` operation key keeps a workflow replay
+      // idempotent, so a restart or reconnect never reserves or charges twice.
+      if (processed.managedUsage) {
+        try {
+          await reserveManagedUsageProviderStep({
+            reservation: processed.managedUsage,
+            operationKey: `provider:${step}`,
+            estimatedCostCents: processed.estimatedCostCents,
+            planTier: processed.subscriptionTier ?? '',
+            isFlagship: processed.isFlagshipRequest,
+          });
+        } catch (err) {
+          if (err instanceof ManagedUsageRequestError) {
+            yield encoder.encode(
+              eventStream.emit({
+                type: 'error',
+                message: err.message,
+                code: err.code,
+                retryable: err.status === 429 || err.status === 503,
+              }),
+            );
+            yield* flushTerminal('error');
+            return;
+          }
+          throw err;
+        }
+      }
 
       // Per-step continuity side-channel: captures the signed thinking blocks
       // (text + Anthropic signature) and the tag-free assistant text from the
@@ -1709,7 +1781,7 @@ export async function* runToolLoop(
               execute: executeProviderStep,
             })
           : await executeProviderStep();
-        mergeObservedUsage(options.usage, providerStep.usage);
+        mergeObservedUsage(observedUsage, providerStep.usage);
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         const msg = err instanceof Error ? err.message : String(err);

@@ -27,11 +27,11 @@ export function InputFooter({
 
   return (
     <div className="mt-2 flex items-center justify-end gap-4 px-1">
-      {/* Right · credit usage bar */}
+      {/* Right · plan usage bar */}
       {!hideCredits && (
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-[10px] tabular-nums text-muted-foreground">
-            {usedCredits}/{totalCredits}
+            {Math.round(pct)}% used
           </span>
           <div
             className="h-1 w-20 overflow-hidden rounded-full bg-muted"
@@ -39,7 +39,7 @@ export function InputFooter({
             aria-valuenow={pct}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Credit usage"
+            aria-label="Plan usage"
           >
             <div
               className={cn('h-full rounded-full transition-all duration-300', barColor)}

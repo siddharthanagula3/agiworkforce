@@ -1,18 +1,17 @@
 /**
  * Usage Warning Banner
- * Full-width dismissible alert shown when credit usage hits a threshold.
- * Alerts users when approaching credit limits (ChatGPT/Claude.ai style).
+ * Full-width dismissible alert shown when plan usage hits a threshold.
  */
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle, AlertCircle, X, TrendingUp } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useRouter } from 'next/navigation';
+import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
 interface UsageData {
-  used: number;
-  limit: number;
   provider: string;
+  usagePercentage: number;
 }
 
 interface UsageWarningBannerProps {
@@ -28,10 +27,8 @@ export function UsageWarningBanner({ usageData, className }: UsageWarningBannerP
   const criticalProvider = usageData.reduce<{
     provider: string;
     percentage: number;
-    used: number;
-    limit: number;
   } | null>((acc, data) => {
-    const percentage = data.limit > 0 ? (data.used / data.limit) * 100 : 0;
+    const percentage = normalizeUsagePercentage(data.usagePercentage);
     if (!acc || percentage > acc.percentage) {
       return { ...data, percentage };
     }
@@ -40,7 +37,7 @@ export function UsageWarningBanner({ usageData, className }: UsageWarningBannerP
 
   if (!criticalProvider) return null;
 
-  const { provider, percentage, used, limit } = criticalProvider;
+  const { provider, percentage } = criticalProvider;
 
   // Only show warning if over 80%
   if (percentage < 80) return null;
@@ -54,18 +51,18 @@ export function UsageWarningBanner({ usageData, className }: UsageWarningBannerP
   const getMessage = () => {
     if (isOverLimit) {
       return {
-        text: `Daily credit limit reached ($${(used / 100).toFixed(2)} of $${(limit / 100).toFixed(2)}). Upgrade to continue.`,
+        text: '100% of plan usage used. Upgrade to continue.',
         action: 'Upgrade Now',
       };
     }
     if (isCritical) {
       return {
-        text: `${percentage.toFixed(0)}% of daily credits used. Upgrade to avoid interruptions.`,
+        text: `${percentage.toFixed(0)}% of plan usage used. Upgrade to avoid interruptions.`,
         action: 'View Plans',
       };
     }
     return {
-      text: `${percentage.toFixed(0)}% of daily credits used.`,
+      text: `${percentage.toFixed(0)}% of plan usage used.`,
       action: 'Monitor',
     };
   };
@@ -148,15 +145,14 @@ export function useUsageMonitoring(userId: string | null) {
           return;
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as ManagedUsageSummaryResponse;
 
         // Convert API response to UsageData format for the banner
-        // Single entry representing the user's overall credit usage
+        // Single entry representing the user's overall plan usage.
         const result: UsageData[] = [
           {
-            provider: data.plan_tier || 'Credits',
-            used: data.credits_used_cents || 0,
-            limit: data.credits_allocated_cents || 0,
+            provider: data.plan_tier || 'Plan',
+            usagePercentage: normalizeUsagePercentage(data.usage_percentage),
           },
         ];
 
