@@ -17,6 +17,7 @@ import {
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
 import type { Artifact } from '@/types/chat';
 import { GeneratedFileCard } from './GeneratedFileCard';
+import { SafeArtifactPreview, type PreviewableKind } from './SafeArtifactPreview';
 
 interface ArtifactFullScreenProps {
   artifact: Artifact | null;
@@ -27,16 +28,24 @@ interface ArtifactFullScreenProps {
 }
 
 /**
- * Languages/types for which a preview pane would be shown in a full HTML sandbox.
+ * Languages/types for which a preview pane is offered.
  *
- * SECURITY NOTE: Live preview is NOT implemented on mobile. The app does not
- * have a DOMPurify-equivalent sanitizer nor a properly sandboxed WebView
- * (MathBlock's WebView uses originWhitelist=['*'] and exposes the RN bridge,
- * which is unsafe for untrusted artifact HTML). Until a dedicated security
- * review produces a verified sandbox, previewable artifacts show a placeholder.
- * Tracked as follow-up: "Mobile live artifact preview — security review needed."
+ * SECURITY: `html`/`svg` render LIVE through {@link SafeArtifactPreview}, a
+ * hardened WebView (JS disabled, strict CSP `default-src 'none'`, no RN bridge,
+ * navigation blocked) — safe for untrusted artifact markup. `mermaid`/`jsx`/`tsx`
+ * need JavaScript or compilation to render and therefore CANNOT be shown in the
+ * JS-disabled sandbox; they keep the preview toggle but display an honest
+ * "source only" note rather than executing anything.
  */
 const PREVIEWABLE_LANGUAGES = new Set(['html', 'svg', 'mermaid', 'jsx', 'tsx']);
+
+/** The kind to live-render, or null when the artifact can't be safely previewed. */
+function livePreviewKind(artifact: Artifact): PreviewableKind | null {
+  const lang = artifact.language?.toLowerCase() ?? '';
+  if (lang === 'html') return 'html';
+  if (lang === 'svg') return 'svg';
+  return null;
+}
 
 /**
  * Returns true if this artifact type/language qualifies for the preview/source
@@ -198,6 +207,7 @@ export function ArtifactFullScreen({
   if (!artifact) return null;
 
   const canPreview = isPreviewable(artifact);
+  const previewKind = livePreviewKind(artifact);
   const isCode = artifact.type === 'code';
   const isMonospace = isCode || PREVIEWABLE_LANGUAGES.has(artifact.language?.toLowerCase() ?? '');
 
@@ -380,8 +390,14 @@ export function ArtifactFullScreen({
         </View>
 
         {/* ── Content ── */}
-        {canPreview && viewMode === 'preview' ? (
-          /* Preview pane — placeholder until a verified sandbox is built.
+        {canPreview && viewMode === 'preview' && previewKind ? (
+          /* LIVE preview for html/svg via the hardened SafeArtifactPreview sandbox
+           * (JS disabled, strict CSP, no RN bridge, navigation blocked). */
+          <SafeArtifactPreview content={artifact.content} kind={previewKind} style={{ flex: 1 }} />
+        ) : canPreview && viewMode === 'preview' ? (
+          /* Preview pane for mermaid/jsx/tsx — these need JS or compilation, which
+           * the JS-disabled sandbox intentionally does not provide, so we show an
+           * honest note instead of executing anything.
            *
            * SECURITY: We do NOT render untrusted artifact HTML in a WebView here.
            * The existing MathBlock WebView is not a viable sandbox: it uses
@@ -410,7 +426,7 @@ export function ArtifactFullScreen({
                 textAlign: 'center',
               }}
             >
-              Preview not available on mobile yet
+              Live preview isn’t available for this type
             </Text>
             <Text
               style={{
@@ -420,8 +436,9 @@ export function ArtifactFullScreen({
                 lineHeight: 20,
               }}
             >
-              Live rendering of HTML, SVG, and Mermaid artifacts requires a sandboxed environment.
-              Switch to Source view to read the content.
+              HTML and SVG render live in a sandbox; Mermaid and JSX/TSX need JavaScript or
+              compilation, which the secure preview intentionally disables. Switch to Source view to
+              read the content.
             </Text>
             <Pressable
               onPress={() => setViewMode('source')}
