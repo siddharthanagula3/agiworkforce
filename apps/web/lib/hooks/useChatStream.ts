@@ -1605,7 +1605,18 @@ export function useChatStream(): UseChatStreamReturn {
         if (!token) throw new Error('Not authenticated');
         return token;
       };
-      const authToken = await getAuthToken();
+      // Pre-flight the token BEFORE adding any message. Previously this threw
+      // uncaught (getToken() null on an expired/revoked session), and since the
+      // composer has already cleared the input, the user's message vanished with
+      // no error shown. Mirror continueGeneration: surface the error and stop
+      // cleanly before mutating the transcript.
+      let authToken: string;
+      try {
+        authToken = await getAuthToken();
+      } catch {
+        setError('Your session has expired. Please sign in again.');
+        return;
+      }
 
       const userMessageId = crypto.randomUUID();
       const userMessage: Message = {
