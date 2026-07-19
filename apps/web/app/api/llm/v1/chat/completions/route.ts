@@ -29,6 +29,7 @@ import {
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import {
   createCloudAgentRun,
+  findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
   transitionCloudAgentRun,
@@ -131,6 +132,39 @@ async function beginCloudAgentRun(
 ): Promise<{ run: CloudAgentRun; db: DatabaseAdapter } | NextResponse> {
   try {
     const db = processed.managedUsage?.db ?? (await getUserScopedDb(request)).db;
+
+    // Concurrency guard: a conversation may have only one active (billable) run
+    // at a time. A new turn arriving while a prior run is still running/queued
+    // (and not already cancelling) would otherwise silently spawn a second
+    // parallel paid run. Reject with 409 so the client stops the prior turn
+    // first. Same-request retries and cooperatively-cancelling runs are excluded
+    // by the service query, so an idempotent replay or a stop-then-send
+    // follow-up is never blocked.
+    if (processed.conversationId) {
+      const activeRun = await findActiveCloudAgentRunForConversation(db, {
+        userId,
+        conversationId: processed.conversationId,
+        excludeRequestId: processed.requestId,
+      });
+      if (activeRun) {
+        await refundFailedReservation(userId, processed, 'request_failure');
+        const conflictHeaders: Record<string, string> = { ...getSecurityHeaders() };
+        addAgentRunHeaders(conflictHeaders, activeRun);
+        return NextResponse.json(
+          {
+            error: {
+              message:
+                'This conversation already has a response in progress. Stop it before sending a new message.',
+              type: 'invalid_request_error',
+              code: 'conversation_run_in_progress',
+              run_id: activeRun.id,
+            },
+          },
+          { status: 409, headers: conflictHeaders },
+        );
+      }
+    }
+
     const run = await createCloudAgentRun(db, {
       userId,
       requestId: processed.requestId,
