@@ -16,9 +16,10 @@ conservative user-authored facts but only on `outcome === 'completed'`, with no
 surface gating so it already covers mobile — verified). Fix: a pure
 `shouldConsolidateMemoryOnClient({executionMode, isTemporaryChat})` gate now
 restricts client consolidation to LOCAL, non-temporary turns; cloud auto-memory
-is server-owned (matching web). Regression tests cover the truth table. RESIDUAL:
-the consolidation service's cloud branch (+ its cloud-memory write path) is now
-unreachable from the app and should be removed in the memory dedup pass; local
+is server-owned (matching web). Regression tests cover the truth table. The
+now-unreachable cloud branch of `consolidateFactsFromTurn` (+ its cloud-memory
+write path and `executionMode` param) has since been DELETED in the memory dedup
+pass — `consolidateFactsFromTurn` is now on-device-only. RESIDUAL: local
 consolidation still runs at send-setup rather than on-completion (acceptable —
 on-device, user-authored; the handoff only required replacing the cloud branch).
 
