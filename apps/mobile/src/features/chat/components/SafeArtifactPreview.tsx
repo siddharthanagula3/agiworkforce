@@ -1,29 +1,32 @@
 /**
- * SafeArtifactPreview — statically renders an UNTRUSTED, model-generated HTML or
- * SVG artifact inside a hardened WebView sandbox.
+ * SafeArtifactPreview — renders an UNTRUSTED, model-generated artifact inside a
+ * hardened WebView sandbox.
  *
- * SECURITY MODEL (why this is safe where a plain WebView is not):
- *   - `javaScriptEnabled={false}` — scripts in the artifact NEVER execute, so
- *     `<script>`/`onload`/`javascript:` XSS cannot run.
- *   - No `onMessage` / `injectedJavaScript` — the RN bridge
- *     (window.ReactNativeWebView) is not exposed, so untrusted content has
- *     nothing to call back into the host with.
- *   - A strict `Content-Security-Policy` (`default-src 'none'`) blocks ALL
- *     network egress (external img/css/font/fetch) — only `data:` images and
- *     inline styles are allowed, preventing data exfiltration.
- *   - `originWhitelist={[]}` + `onShouldStartLoadWithRequest` reject every
- *     navigation except the initial in-memory document, so a link/redirect
- *     cannot navigate the WebView anywhere.
+ * html/svg (SECURITY MODEL):
+ *   - `javaScriptEnabled={false}` — scripts in the artifact NEVER execute.
+ *   - No `onMessage`/`injectedJavaScript` — the RN bridge is not exposed.
+ *   - Strict CSP `default-src 'none'` blocks ALL network egress.
+ *   - `originWhitelist={[]}` + navigation rejected.
  *
- * Only `html` and `svg` are rendered here. mermaid/jsx/tsx need JS or
- * compilation and are intentionally NOT rendered (the caller shows source).
+ * mermaid (needs JS to render, so a tighter, still-bridge-less model):
+ *   - JS enabled ONLY to run the trusted, PINNED mermaid library from one CDN
+ *     (CSP `script-src` is limited to that origin); still NO RN bridge.
+ *   - The untrusted diagram source is injected as a JSON data literal (never
+ *     HTML/JS) and rendered with mermaid `securityLevel: 'strict'`.
+ *   - Any escape is confined to the WebView (no bridge, no host access).
  */
 import { useMemo } from 'react';
 import { WebView } from 'react-native-webview';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { buildSandboxedArtifactHtml, type PreviewableKind } from './sandboxedArtifactHtml';
+import {
+  buildMermaidPreviewHtml,
+  buildSandboxedArtifactHtml,
+  type PreviewableKind,
+} from './sandboxedArtifactHtml';
 
 export type { PreviewableKind } from './sandboxedArtifactHtml';
+
+const MERMAID_CDN_PREFIX = 'https://cdn.jsdelivr.net';
 
 export interface SafeArtifactPreviewProps {
   content: string;
@@ -32,23 +35,35 @@ export interface SafeArtifactPreviewProps {
 }
 
 export function SafeArtifactPreview({ content, kind, style }: SafeArtifactPreviewProps) {
-  const html = useMemo(() => buildSandboxedArtifactHtml(content, kind), [content, kind]);
+  const isMermaid = kind === 'mermaid';
+  const html = useMemo(
+    () =>
+      isMermaid
+        ? buildMermaidPreviewHtml(content)
+        : buildSandboxedArtifactHtml(content, kind === 'svg' ? 'svg' : 'html'),
+    [content, kind, isMermaid],
+  );
 
   return (
     <WebView
       source={{ html }}
       style={style}
-      originWhitelist={[]}
-      javaScriptEnabled={false}
+      originWhitelist={isMermaid ? [MERMAID_CDN_PREFIX] : []}
+      // mermaid needs JS to render; html/svg never execute scripts.
+      javaScriptEnabled={isMermaid}
       domStorageEnabled={false}
       incognito
       cacheEnabled={false}
       allowsInlineMediaPlayback={false}
       mediaPlaybackRequiresUserAction
       setSupportMultipleWindows={false}
-      // Reject every navigation except the initial in-memory document.
+      // Allow only the initial in-memory document (+ the pinned mermaid CDN for
+      // mermaid); reject every other navigation.
       onShouldStartLoadWithRequest={(req) =>
-        req.url === 'about:blank' || req.url === 'about:srcdoc' || req.url.startsWith('data:')
+        req.url === 'about:blank' ||
+        req.url === 'about:srcdoc' ||
+        req.url.startsWith('data:') ||
+        (isMermaid && req.url.startsWith(MERMAID_CDN_PREFIX))
       }
       overScrollMode="never"
       accessibilityRole="image"

@@ -28,9 +28,15 @@ WebView: `javaScriptEnabled={false}` (embedded scripts cannot run), no
 `default-src 'none'; style-src 'unsafe-inline'; img-src data:` (blocks all network
 egress), `originWhitelist={[]}` + navigation rejected. The security-critical
 document builder is a pure module (`sandboxedArtifactHtml.ts`) with 4 tests
-asserting the CSP + no script-src. RESIDUAL: mermaid and jsx/tsx need JS or
-compilation, which the JS-disabled sandbox intentionally omits, so they keep an
-honest "source only" note (a future isolated JS-enabled sandbox could add mermaid).
+asserting the CSP + no script-src. Mermaid now ALSO renders live via
+`buildMermaidPreviewHtml` — a separate, tighter sandbox: JS enabled ONLY to run
+the trusted PINNED mermaid CDN (`script-src` limited to that one origin, still NO
+RN bridge), the untrusted diagram source injected as a JSON data literal with `<`
+escaped to `<` (a security test caught + guards the classic `</script>`
+break-out) and rendered with mermaid `securityLevel:'strict'`. RESIDUAL: jsx/tsx
+need compilation and keep an honest "source only" note; mermaid fetches the pinned
+library from jsDelivr on first render (a minor external dependency for cloud-mode
+diagram previews; could be bundled locally later).
 
 2026-07-19 Mobile non-image attachments were reference stubs
 (`MOBILE-DOC-ATTACHMENT-STUB-01`, Fixed in repo): a non-image attachment reached
