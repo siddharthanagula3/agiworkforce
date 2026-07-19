@@ -21,9 +21,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/download',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'AGI Desktop application preview',
       },
     ],
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: 'Download AGI Desktop',
     description:
       'Signed Linux x64 AppImage availability, with current macOS and Windows release status.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {

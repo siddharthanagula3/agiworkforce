@@ -22,9 +22,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/pricing',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'AGI pricing plans',
       },
     ],
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Pricing | AGI Cloud, Local, and BYOK plans',
     description: 'Compare AGI Managed Cloud plans and the separate Local and BYOK choices.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {

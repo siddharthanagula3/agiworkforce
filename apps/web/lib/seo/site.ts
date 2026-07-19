@@ -23,15 +23,16 @@ export const SITE_LEGAL_NAME = 'AGI Automation LLC';
 export const TWITTER_HANDLE = '@agiworkforce';
 
 /**
- * The real dimensions of `public/app-preview.png` are 1024x665.
- * Next.js does NOT infer these; asserting 1200x630 (the old default) tells
- * crawlers to expect an image that does not exist, which some validators and
- * link unfurlers treat as a broken card. Keep these in lockstep with the file.
+ * Open Graph / social share card. Rendered dynamically by `app/api/og/route.tsx`
+ * (next/og) as a branded 1200x630 card — the standard OG aspect ratio that
+ * Slack / X / iMessage / LinkedIn unfurl — replacing the old static
+ * `public/app-preview.png` desktop screenshot. Dimensions are declared here
+ * because the route is generated (crawlers can't infer them).
  */
 export const OG_IMAGE = {
-  url: '/app-preview.png',
-  width: 1024,
-  height: 665,
+  url: '/api/og',
+  width: 1200,
+  height: 630,
   alt: 'AGI - one AI workspace across models and tools',
 } as const;
 

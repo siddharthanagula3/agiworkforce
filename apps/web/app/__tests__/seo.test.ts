@@ -41,11 +41,11 @@ describe('buildMetadata', () => {
     expect(og(meta).url).toBe(`${SITE_URL}/byok`);
   });
 
-  it('uses the real share-image dimensions (1024x665, not 1200x630)', () => {
+  it('uses the dynamic OG card at standard 1200x630 dimensions', () => {
     const image = og(meta).images?.[0];
     expect(image?.url).toBe(OG_IMAGE.url);
-    expect(image?.width).toBe(1024);
-    expect(image?.height).toBe(665);
+    expect(image?.width).toBe(1200);
+    expect(image?.height).toBe(630);
   });
 
   it('emits a Twitter summary_large_image card mirroring the OG title', () => {

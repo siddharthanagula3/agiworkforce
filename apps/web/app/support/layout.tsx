@@ -20,9 +20,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/support',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'AGI Support',
       },
     ],
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     title: 'Support',
     description:
       'Need help? Contact our support team, report bugs, or request features. We respond fast.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {

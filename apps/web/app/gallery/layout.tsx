@@ -19,9 +19,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/gallery',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'AGI Gallery',
       },
     ],
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     title: 'Gallery',
     description:
       'Example projects showing AGI in action - code generation, research, automation, and more.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {

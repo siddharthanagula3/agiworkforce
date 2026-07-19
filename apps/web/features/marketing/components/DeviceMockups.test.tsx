@@ -100,7 +100,7 @@ describe('ProductFrame façade', () => {
       <ProductFrame
         variant="terminal"
         title="agi · zsh"
-        image={{ src: '/app-preview.png', width: 2940, height: 1414, alt: 'CLI' }}
+        image={{ src: '/logo-512.png', width: 2940, height: 1414, alt: 'CLI' }}
       />,
     );
     const root = deviceRoot(container);

@@ -21,9 +21,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/use-cases',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'AGI Use Cases',
       },
     ],
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: 'Use Cases',
     description:
       'How real teams use AGI across consulting, sales, healthcare, legal, finance, and IT.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {
