@@ -45,3 +45,42 @@ export async function connectConnector(connectorId: string): Promise<void> {
 export async function disconnectConnector(connectorId: string): Promise<void> {
   await api.delete(`/api/connectors?connectorId=${encodeURIComponent(connectorId)}`);
 }
+
+export interface AddCustomConnectorInput {
+  name: string;
+  /** Public HTTPS remote-MCP endpoint (validated server-side; no embedded creds). */
+  url: string;
+  transport?: 'sse' | 'streamable-http';
+  /** Optional bearer token stored encrypted server-side; never echoed back. */
+  authToken?: string;
+}
+
+export interface CustomConnectorResult {
+  id: string;
+  shortId: string;
+  name: string;
+  url: string;
+}
+
+/**
+ * Add a user-owned custom remote-MCP connector, reusing the same server route
+ * the web app uses (`POST /api/connectors/custom`). The server validates the URL
+ * (https, public DNS-resolved host, no embedded credentials) and enforces the
+ * per-tier custom-connector limit — so this needs no OAuth app registration and
+ * works today. Its tools appear to models as `mcp__custom-<shortId>__<tool>`.
+ */
+export async function addCustomConnector(
+  input: AddCustomConnectorInput,
+): Promise<CustomConnectorResult> {
+  const response = await api.post<{ connector: CustomConnectorResult }>('/api/connectors/custom', {
+    name: input.name.trim(),
+    url: input.url.trim(),
+    ...(input.transport ? { transport: input.transport } : {}),
+    ...(input.authToken?.trim() ? { authToken: input.authToken.trim() } : {}),
+  });
+  return response.connector;
+}
+
+export async function deleteCustomConnector(id: string): Promise<void> {
+  await api.delete(`/api/connectors/custom?id=${encodeURIComponent(id)}`);
+}
