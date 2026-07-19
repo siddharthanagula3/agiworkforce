@@ -124,6 +124,44 @@ mobile UI/UX (status per item; verified 2026-07-19 vs current code):
   mutation calls persistToStorage → notify), so it updates live on enqueue/drain/clear
   rather than only at mount. Verified in code.
 
+2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
+3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
+covered by the web/mobile qa-reference doc; the audit hunted concrete demo-blocking
+code gaps (not founder-gated / not style):
+
+- DONE DESKTOP-WEBSEARCH-FAKE-AVAILABILITY (HIGH, commit fb62bae3b): the generic
+  search*web client tool was gated on capabilities.search (tools.rs required_model*
+  capability), so on the 38 models without native provider search (Grok, DeepSeek,
+  Qwen, gpt-4.1-nano…) toggling web search silently did nothing. But search_web is
+  backed by the KEYLESS SearchExecutor (Perplexity if configured, else DuckDuckGo +
+  Brave-HTML fallback — search_executor.rs run_search_with_app_handle), so it works for
+  any tool-capable model. Now only the Anthropic-native web_search server tool is
+  search-gated; generic search_web reaches every tool-capable model. 2 Rust tests.
+- OPEN CLI-TAVILY-GET-NOT-POST (LOW, founder-key-gated): apps/cli
+  src/features/exec/tools/web/mod.rs ~167-186 issues ONE reqwest GET (q/count query
+  params) for both Brave AND Tavily, but Tavily's /search requires a POST with a JSON
+  body — so the Tavily branch errors whenever TAVILY_API_KEY is set (Brave takes
+  precedence, so low impact). FIX deferred: branch Tavily to POST+JSON, but VERIFY
+  Tavily's current API contract against its docs first (do not guess the body shape).
+  Also the raw response body is passed to the model unparsed (~190).
+- OPEN VSCODE-BYOK-NO-REGISTRATION-UI (MED, product/parity): apps/extension-vscode
+  utils/api.ts ~180 falls back to a legacy BYOK key but "no UI sets it anymore"; there
+  is no command to register a provider key, contradicting the "VSCode = Local+BYOK+
+  Cloud" note. Either add a BYOK key-registration command or update the product note.
+- OPEN VSCODE-CHAT-REQUIRES-CLI-BINARY (MED, packaging): both VSCode chat surfaces
+  spawn `agi app-server` (localRuntimeClient.ts ~593; default cliPath 'agi'), so on a
+  machine without the CLI on PATH every send returns a VISIBLE "local runtime
+  unavailable" error (not a hang). Demo packaging must bundle/point to the CLI.
+- VERIFIED-CLEAN (this audit): Chrome extension (apps/extension) — 1105 tests pass,
+  the old computer-use allow-all P0 is remediated (policy.ts EXTENSION_PAGE_ONLY +
+  default-ON approval gate + origin re-validation), no open BROKEN path or live leak;
+  remaining items are product scope (job-autofill-only computer use) or tracked
+  low-sev residuals (EXT-MIRROR-TEST-FAKE-COVERAGE-01, EXT-CLOUD-INVITE-RESIDUAL-01).
+  Desktop chat/stream/stop/tool-loop/artifacts/code-exec/error-toasts and CLI's six
+  capabilities verified WORKING end-to-end. Desktop Cloud mode stays intentionally
+  gated ("coming soon", DCL-4 — founder decision, not a bug). TOOLLOOP-CONTEXT-GROWTH
+  remains the one shared OPEN agentic risk (mid-loop context trim, MED).
+
 2026-07-19 QA-docx systematic cross-reference (backend 470-case + Claude cases +
 mobile 400+-case reference docx walked section-by-section vs code, 4 parallel
 audit agents). Capability surfaces (search/tools/connectors/MCP/research/files/
