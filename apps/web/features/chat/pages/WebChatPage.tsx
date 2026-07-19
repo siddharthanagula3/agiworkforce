@@ -752,9 +752,15 @@ export default function WebChatPage() {
       if (urlConversationId !== activeConversationId) {
         void loadConversation(urlConversationId).then((ok) => {
           if (!ok) {
+            // loadConversation set the store error (server's 404/403 message) before
+            // returning false; capture it BEFORE setActiveConversation(null) resets it
+            // to null, so the user gets feedback instead of a silent bounce to a blank
+            // /chat surface.
+            const reason = useChatStore.getState().error;
             setBareChatSessionId(null);
             setActiveConversation(null);
             router.replace('/chat');
+            toast.error(reason || 'This conversation is unavailable — it may have been deleted.');
           }
         });
       }
