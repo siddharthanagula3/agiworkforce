@@ -63,30 +63,53 @@ E2B (batch mostly DONE — see per-item status):
   execution timeout (SDK default), the 120s withToolTimeout wrapper, and the sandbox
   timeoutMs auto-pause backstop. No hacky abort was added.
 
-web UI/UX (OPEN — tracked):
+web UI/UX (status per item; verified 2026-07-19 vs current code):
 
-- WEBUI-REGEN-DELETE-BEFORE-RESEND (HIGH): Regenerate deletes the persisted turn
-  before the resend; a failed resend loses the exchange permanently.
-- WEBUI-AUTH-SEND-SILENT-LOSS (HIGH): getAuthToken() outside the try in sendMessage;
-  a null/expired token throws with no setError, input already cleared → message
-  vanishes silently. Mirror continueGeneration's try/catch.
-- WEBUI-MIDSTREAM-SWITCH-SPINNER (MED): switching conversation mid-stream strands
-  the reply (perpetual spinner until reload).
-- WEBUI-APPROVAL-DOUBLE-SUBMIT (MED): tool-approval Approve/Reject can double-fire.
-- WEBUI-DELETED-CONV-BLANK-BOUNCE (MED): opening a deleted/forbidden conversation
-  silently bounces to blank /chat with no message.
+- OPEN WEBUI-REGEN-DELETE-BEFORE-RESEND (HIGH): handleRegenerateMessage
+  (WebChatPage.tsx ~1739) awaits deletePersistedMessages(rollbackIds) — server +
+  local store delete — THEN sendMessage (~1742), with no try/catch or restore, so a
+  failed resend loses the user+assistant exchange permanently. Next: resend-first, or
+  optimistic-restore on resend failure.
+- DONE WEBUI-AUTH-SEND-SILENT-LOSS (HIGH): useChatStream.ts sendMessage now
+  pre-flights the token in a try/catch (setError + return) BEFORE addMessage, so an
+  expired/revoked session shows "Your session has expired" instead of silently eating
+  the message. Verified in code (useChatStream.ts ~1608-1619).
+- DONE WEBUI-MIDSTREAM-SWITCH-SPINNER (MED): streaming is tracked per-conversation
+  (web-chat-store.ts streamingConversationIds; setActiveConversation reconciles
+  isLoading off that set; selectIsActiveConversationStreaming). Switching away from a
+  streaming conversation no longer strands a perpetual spinner; switching back restores
+  it. Verified in code.
+- DONE WEBUI-APPROVAL-DOUBLE-SUBMIT (MED): resolveToolApproval now claims the resume
+  with an atomic check-and-set (if (turn.resolving) return; turn.resolving = true) at
+  the completion point — no await between read and write — so two concurrent completing
+  decisions (double-click, or last two calls approved together) dispatch exactly one
+  /approve POST instead of two. Tested (concurrency test asserts single resume).
+- OPEN WEBUI-DELETED-CONV-BLANK-BOUNCE (MED): loadConversation records the 404/403
+  error but the next setActiveConversation(null) resets error:null before
+  router.replace('/chat') and no toast fires (WebChatPage.tsx ~749-754), so the user
+  lands on a blank new-chat surface with no feedback. Next: surface a toast/error before
+  the redirect.
 
-mobile UI/UX (OPEN — tracked):
+mobile UI/UX (status per item; verified 2026-07-19 vs current code):
 
-- MOBILEUI-VOICE-NO-REPLY (HIGH): handleSend text path resolves on onAccepted
-  (pre-stream), ignoring awaitCompletion, so voice mode never reads the reply and
-  hands-free never re-arms.
-- MOBILEUI-RECONNECT-QUEUE-WIPE (MED): clearQueuedPlaceholders removes ALL queued
-  msgs for a conversation, not the one entry → queued messages can vanish. Use
-  resolveOfflineMessage(conversationId, queueId).
-- MOBILEUI-EDIT-BLOCKED-GLOBAL (MED): editMessage gates on global isStreaming, not
-  streamingConversations.has(conversationId) (retryMessage is correct).
-- MOBILEUI-OFFLINE-BADGE-FROZEN (MED): queued-count badge only set on mount.
+- OPEN MOBILEUI-VOICE-NO-REPLY (HIGH): the voice screen's handleSend text path
+  (chat/[id].tsx ~357-370) resolves on onAccepted (pre-stream), ignoring the
+  awaitCompletion:true the voice caller passes (~680-698); onAccepted fires before the
+  stream starts (chatExecutionStore.ts ~1171 vs ~1199), so voice never reads the reply
+  and hands-free never re-arms. The awaitCompletion fix already exists in the image path
+  and the sibling home screen — port that pattern here.
+- DONE MOBILEUI-RECONNECT-QUEUE-WIPE (MED): reconnect flush now resolves each
+  placeholder by (conversationId, queueId) (useNetworkStatus.ts ~70;
+  chatMessageStore.ts filters only m.offlineQueueId !== queueId), removing the single
+  entry instead of wiping all queued messages. Verified in code.
+- DONE MOBILEUI-EDIT-BLOCKED-GLOBAL (MED): editMessage now gates on
+  streamingConversations.has(conversationId) (chatExecutionStore.ts ~2732), matching
+  retryMessage, so a stream in another conversation no longer blocks editing an idle
+  one. Verified in code.
+- DONE MOBILEUI-OFFLINE-BADGE-FROZEN (MED): the queued-count badge subscribes to
+  offlineQueue change notifications (useNetworkStatus.ts ~111-116; every offlineQueue
+  mutation calls persistToStorage → notify), so it updates live on enqueue/drain/clear
+  rather than only at mount. Verified in code.
 
 2026-07-19 QA-docx systematic cross-reference (backend 470-case + Claude cases +
 mobile 400+-case reference docx walked section-by-section vs code, 4 parallel
