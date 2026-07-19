@@ -41,11 +41,13 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import * as WebBrowser from 'expo-web-browser';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   listConnectedConnectors,
   disconnectConnector,
+  getGitHubInstallWebUrl,
   type ConnectedConnector,
 } from '@/services/connectors';
 
@@ -667,10 +669,22 @@ export default function CloudConnectorsScreen({
             },
           },
         ]);
+      } else if (entry.id === 'github') {
+        // GitHub uses a GitHub-App installation with a Clerk-cookie web flow.
+        // Open that vetted flow in a browser (rather than reimplement OAuth
+        // state/CSRF on the client), then refresh so the new installation shows.
+        void (async () => {
+          try {
+            await WebBrowser.openBrowserAsync(getGitHubInstallWebUrl());
+          } catch {
+            // Browser could not open — nothing was connected; leave state as-is.
+          }
+          void load();
+        })();
       } else {
-        // Server-side OAuth flows for individual providers are not live yet
-        // (POST /api/connectors answers 501 for OAuth connectors) — be honest
-        // rather than faking a connected state.
+        // Generic third-party OAuth providers still require server-side OAuth app
+        // registration (POST /api/connectors answers 501) — be honest rather than
+        // faking a connected state.
         Alert.alert(
           `Connect ${entry.name}`,
           `${entry.name} sign-in isn't available on mobile yet. It's coming soon.`,

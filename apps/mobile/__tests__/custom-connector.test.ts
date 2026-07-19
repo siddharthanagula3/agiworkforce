@@ -12,7 +12,7 @@ jest.mock('../services/api', () => ({
   },
 }));
 
-import { addCustomConnector } from '../services/connectors';
+import { addCustomConnector, getGitHubInstallWebUrl } from '../services/connectors';
 import { isLikelyHttpsUrl } from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
 
 beforeEach(() => jest.clearAllMocks());
@@ -51,6 +51,12 @@ describe('addCustomConnector', () => {
       name: 'n',
       url: 'https://x.y',
     });
+  });
+});
+
+describe('getGitHubInstallWebUrl', () => {
+  it('points at the vetted web GitHub-App install-start flow', () => {
+    expect(getGitHubInstallWebUrl()).toMatch(/^https:\/\/.+\/api\/github\/install\/start$/);
   });
 });
 
