@@ -547,22 +547,22 @@ export default function ChatTabScreen() {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            // Vertically center the greeting block (mode toggle + mark + greeting)
-            // like the Claude mobile new-chat screen, instead of top-aligning it.
-            // `flexGrow:1 + justifyContent:center` is the standard RN scroll-center.
+            // Bottom-anchor the greeting block just above the composer (ChatGPT mobile
+            // new-chat: composer-focused, greeting sits low, NO suggestion cards — founder
+            // decision 2026-07-19) rather than floating it in the vertical center.
             flexGrow: 1,
             alignItems: 'center',
-            justifyContent: 'center',
+            justifyContent: 'flex-end',
             paddingHorizontal: 24,
-            paddingVertical: 24,
+            paddingTop: 24,
+            paddingBottom: 16,
           }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
         >
-          {/* Centered brand mark above the greeting — the empty-state visual anchor,
-              mirroring the Claude mobile new-chat screen (ref: claude_reference/
-              263_mobile__new-chat-empty). Uses AGI's own mark, not Claude's star. */}
+          {/* Brand mark above the greeting — the empty-state visual anchor. Sits low
+              (bottom-anchored) above the composer, ChatGPT-mobile style. */}
           <View style={{ marginBottom: 14 }}>
             <AgiMark size={44} />
           </View>

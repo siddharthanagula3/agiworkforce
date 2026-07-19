@@ -151,11 +151,14 @@ agents reading the reference screenshots vs component code). Concrete fixes:
   reaction badge. Brings mobile to parity with the web MessageBubble action bar. Also
   hardened 3 brittle test lucide mocks to a Proxy (any icon → stub) so future icon adds
   can't break them. 10 MessageBubble tests green.
-- DEFERRED (founder-decision, NOT bugs): mobile home is a Claude-style centered greeting
-  vs ChatGPT's bottom-anchored composer — but adding ChatGPT's starter-card rows
-  conflicts with [[feedback-mobile-home-simple]]; mobile header ModeToggle is an
-  intentional Local/Cloud trust-boundary divergence; streaming indicator (spinning mark
-  vs caret) is an intentional brand choice.
+- DONE mobile home layout (FOUNDER DECISION 2026-07-19 = "bottom-anchor, no cards"): the
+  new-chat greeting block was vertically-centered (Claude-style); changed the home
+  ScrollView contentContainerStyle justifyContent center→flex-end so the greeting sits low
+  just above the composer (ChatGPT-mobile composer-focused feel), still NO suggestion/
+  starter cards (honors [[feedback-mobile-home-simple]]). (tabs)/chat.tsx. Layout-only.
+- DEFERRED (founder-decision, NOT bugs): mobile header ModeToggle is an intentional
+  Local/Cloud trust-boundary divergence; streaming indicator (spinning mark vs caret) is
+  an intentional brand choice.
 - OPEN (LOW, legacy web path): ToolTimeline (the legacy fallback used only when
   !canonicalActivity) renders a double leading icon on non-file tool steps and a weak
   "Result" affordance vs Claude's chip. Legacy path; low priority, tracked with #26
