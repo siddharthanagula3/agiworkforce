@@ -23,7 +23,7 @@ permissions:
 
 env:
   RUST_VERSION: '1.94.0'
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
 
 jobs:
   validate-version:
