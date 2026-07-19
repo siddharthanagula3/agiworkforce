@@ -39,7 +39,7 @@ permissions:
 
 env:
   RUST_VERSION: '1.94.0'
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
   PNPM_VERSION: '9.15.3'
 
 jobs:
@@ -281,7 +281,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

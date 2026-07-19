@@ -4,7 +4,7 @@
 
 set -e
 
-REQUIRED_NODE_VERSION="22.12.0"
+REQUIRED_NODE_VERSION="24.0.0"
 CURRENT_NODE_VERSION=$(node -v | sed 's/v//')
 
 # Function to compare version numbers
@@ -37,8 +37,8 @@ if ! command -v node &> /dev/null; then
     echo "Please install Node.js ${REQUIRED_NODE_VERSION} or higher"
     echo ""
     echo "Using nvm:"
-    echo "  nvm install 22.12.0"
-    echo "  nvm use 22.12.0"
+    echo "  nvm install 24.0.0"
+    echo "  nvm use 24.0.0"
     exit 1
 fi
 
@@ -51,14 +51,14 @@ set -e
 
 if [[ $COMPARE_RESULT -eq 2 ]]; then
     echo "❌ Error: Node.js version ${CURRENT_NODE_VERSION} is too old"
-    echo "This project requires Node.js ${REQUIRED_NODE_VERSION} or higher (for Vite 7 compatibility)"
+    echo "This project requires Node.js ${REQUIRED_NODE_VERSION} or higher (repo standardizes on Node 24 LTS)"
     echo ""
     echo "Current version: ${CURRENT_NODE_VERSION}"
     echo "Required version: ${REQUIRED_NODE_VERSION}"
     echo ""
     echo "To fix:"
-    echo "  nvm install 22.12.0"
-    echo "  nvm use 22.12.0"
+    echo "  nvm install 24.0.0"
+    echo "  nvm use 24.0.0"
     echo ""
     echo "Or if using a different version manager:"
     echo "  Install Node.js ${REQUIRED_NODE_VERSION} or higher"

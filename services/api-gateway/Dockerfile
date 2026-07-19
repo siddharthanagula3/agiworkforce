@@ -15,7 +15,7 @@
 # =============================================================================
 # Stage 1: Dependencies
 # =============================================================================
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 
 RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
 
@@ -30,7 +30,7 @@ RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 # =============================================================================
 # Stage 2: Build
 # =============================================================================
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 
 RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
 
@@ -50,7 +50,7 @@ RUN pnpm run build
 # =============================================================================
 # Stage 3: Production Dependencies
 # =============================================================================
-FROM node:22-alpine AS prod-deps
+FROM node:24-alpine AS prod-deps
 
 RUN corepack enable && corepack prepare pnpm@9.15.3 --activate
 
@@ -65,7 +65,7 @@ RUN pnpm install --prod --frozen-lockfile 2>/dev/null || pnpm install --prod && 
 # =============================================================================
 # Stage 4: Production Runtime
 # =============================================================================
-FROM node:22-alpine AS production
+FROM node:24-alpine AS production
 
 # Security: Install dumb-init for proper signal handling
 # This ensures SIGTERM/SIGINT are properly forwarded to Node.js

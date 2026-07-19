@@ -11,7 +11,7 @@
   "license": "PROPRIETARY",
   "packageManager": "pnpm@9.15.3",
   "engines": {
-    "node": "22",
+    "node": "24",
     "pnpm": ">=9.15.0"
   },
   "pnpm": {
