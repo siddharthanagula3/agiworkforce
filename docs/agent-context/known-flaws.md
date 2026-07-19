@@ -6,6 +6,21 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Mobile GitHub connector connect flow
+(`MOBILE-GITHUB-CONNECT-01`, Fixed in repo): tapping GitHub in mobile connectors
+showed only a "coming soon" alert. GitHub uses a GitHub-App installation with a
+Clerk-cookie web flow (`/api/github/install/start` → GitHub install → callback →
+`github_installations`). Rather than reimplement OAuth state/CSRF on the client
+(the risky path), mobile now opens that VETTED web flow in a browser
+(`expo-web-browser` → `getGitHubInstallWebUrl()`), then refreshes its connector
+list on return so the new installation appears (GET /api/connectors derives GitHub
+state from `github_installations`). No new server endpoints, no CSRF changes. 1
+test on the URL. RESIDUAL: the user completes the install in a web browser session
+(signing into the web app there if needed) — the standard mobile-reuses-web-OAuth
+pattern; a fully native install-start would need a Bearer-auth endpoint + non-cookie
+server state (separate slice). Generic OAuth providers still need FOUNDER OAuth-app
+registrations.
+
 2026-07-19 Mobile custom remote-MCP connector add
 (`MOBILE-CUSTOM-MCP-ADD-01`, Fixed in repo): mobile Cloud connectors could only
 list/disconnect and 501 on OAuth — there was NO way to add a connector. Mobile
