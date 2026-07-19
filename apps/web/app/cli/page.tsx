@@ -111,17 +111,7 @@ export default function CliPage() {
               </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame
-                variant="terminal"
-                title="agi · zsh"
-                badge="sandboxed"
-                image={{
-                  src: '/screens/cli-welcome.png',
-                  width: 2940,
-                  height: 1912,
-                  alt: 'The agi terminal UI: local model via Ollama, cost HUD, sandbox on',
-                }}
-              />
+              <ProductFrame variant="terminal" title="agi · zsh" badge="sandboxed" />
             </div>
           </div>
         </section>
