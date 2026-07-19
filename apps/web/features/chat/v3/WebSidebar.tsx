@@ -9,7 +9,6 @@ import {
   Box,
   Sliders,
   GitBranch,
-  Repeat,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -88,13 +87,6 @@ type NavItem = {
 };
 
 function navItemsForMode(mode: V3Mode): NavItem[] {
-  if (mode === 'chat') {
-    return [
-      { id: 'projects', label: 'Projects', icon: FolderOpen },
-      { id: 'artifacts', label: 'Artifacts', icon: Box },
-      { id: 'customize', label: 'Customize', icon: Sliders },
-    ];
-  }
   if (mode === 'work') {
     return [
       { id: 'cw-projects', label: 'Projects', icon: FolderOpen },
@@ -104,9 +96,10 @@ function navItemsForMode(mode: V3Mode): NavItem[] {
       { id: 'customize', label: 'Customize', icon: Sliders },
     ];
   }
-  // code
+  // chat (the only other surfaced mode)
   return [
-    { id: 'routines', label: 'Routines', icon: Repeat },
+    { id: 'projects', label: 'Projects', icon: FolderOpen },
+    { id: 'artifacts', label: 'Artifacts', icon: Box },
     { id: 'customize', label: 'Customize', icon: Sliders },
   ];
 }
@@ -195,7 +188,6 @@ export function WebSidebar({
         'cw-artifacts': 'work-artifacts',
         'cw-dispatch': 'work-dispatch',
         schedules: 'schedules',
-        routines: 'code',
         settings: 'voice-settings',
       };
       const view = viewMap[id];
@@ -204,7 +196,7 @@ export function WebSidebar({
     [onNavigateView],
   );
 
-  const newLabel = mode === 'code' ? 'New session' : 'New chat';
+  const newLabel = 'New chat';
 
   return (
     <aside
