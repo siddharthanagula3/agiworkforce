@@ -9,31 +9,7 @@ import { useStreamingArtifactStore } from '../../stores/streaming-artifact-store
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArtifactPreview } from './ArtifactPreview';
 import { StreamingArtifactView } from './StreamingArtifactView';
-
-// ============================================================================
-// Download All helper (Fix 41)
-// ============================================================================
-
-async function downloadAllArtifacts(artifacts: Artifact[]) {
-  const JSZip = (await import('jszip')).default;
-  const zip = new JSZip();
-
-  artifacts.forEach((artifact) => {
-    const ext = artifact.language || artifact.type || 'txt';
-    const safeName = (artifact.title || 'artifact').replace(/[/\\:*?"<>|]/g, '_');
-    zip.file(`${safeName}.${ext}`, artifact.content);
-  });
-
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'artifacts.zip';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
+import { downloadAllArtifacts } from '../../utils/downloadArtifacts';
 
 // ============================================================================
 // Artifact Tab
