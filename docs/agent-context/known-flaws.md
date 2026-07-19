@@ -106,9 +106,11 @@ mobile UI/UX (status per item; verified 2026-07-19 vs current code):
   onAccepted early-resolve race, so handleVoiceSendMessage reads the completed reply for
   TTS and hands-free re-arms. Direct port of the already-shipped home-screen text path
   ((tabs)/chat.tsx ~279) and the image path in the same file. Typecheck + voice suites
-  green; feeds the unit-tested findNewAssistantResponse. FOLLOW-UP (ponytail, non-
-  blocking): both screens now duplicate the awaitCompletion-vs-onAccepted dispatch shape
-  — extract a shared resolveSendResult helper to dedupe + unit-test the branch directly.
+  green; feeds the unit-tested findNewAssistantResponse. FOLLOW-UP DONE (ponytail): the
+  identical non-await accept-race is now the shared resolveOnAcceptedSend helper
+  (src/features/chat/utils/sendDispatch.ts), used by both the home and conversation
+  screens with 4 unit tests. The awaitCompletion path stays inline per screen — the two
+  deliberately differ in rejection routing, so unifying it would change behavior.
 - DONE MOBILEUI-RECONNECT-QUEUE-WIPE (MED): reconnect flush now resolves each
   placeholder by (conversationId, queueId) (useNetworkStatus.ts ~70;
   chatMessageStore.ts filters only m.offlineQueueId !== queueId), removing the single
