@@ -410,6 +410,25 @@ https pre-check). RESIDUAL: generic OAuth providers (Slack/Gmail) still 501 (nee
 FOUNDER OAuth-app registrations); GitHub App-install browser flow on mobile is a
 separate slice.
 
+2026-07-19 Custom-connector activity badge and summary
+(`CONNECTOR-BADGE-CUSTOM-NAME`, Correctness fixed / real-name display DEFERRED):
+a user's custom remote connector executes as `mcp__custom-<shortId>__<tool>`,
+where the serverId is an opaque `custom-<hex>` id carrying no human name. The
+Claude-style activity feed derived its badge letter and summary label from that
+serverId, so EVERY custom connector rendered a wrong "C" badge (from "custom-")
+and a leaked-id summary ("Using Custom A1b2c3d4e5 connector"). FIXED (no contract
+change): `connectorInitial` (unified-chat `AgentActivityTimeline`) and
+`mcpServerLabel`/`canonicalToolSummary` (web `tool-loop.ts`) now detect the
+`custom-` namespace and degrade to the generic connector badge ("M") and phrasing
+("Using connector") instead of the misleading id-derived output. Named servers
+(github → "G"/"Using GitHub connector") are unchanged. Tests: AgentActivityTimeline
+connector-badge cases + `tool-loop.summary.test.ts`. DEFERRED (needs the deferred
+model-emitted field): showing the connector's REAL name/initial requires threading
+the display name (`user_custom_connectors.name`) through the catalog →
+`WebMcpToolDef` → the versioned agent-event tool schema → `AgentActivityEntry`;
+that is the "new model-emitted field — NOT blind" work under task #25, not done
+here.
+
 2026-07-19 Mobile live artifact preview (`MOBILE-ARTIFACT-PREVIEW-01`, Fixed in
 repo for html/svg): mobile previously showed only a placeholder for previewable
 artifacts (HTML/SVG/mermaid) — the prior SECURITY NOTE said no sandboxed WebView

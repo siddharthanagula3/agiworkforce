@@ -445,7 +445,14 @@ function humanizeIdentifier(value: string): string {
 
 function mcpServerLabel(toolName: string): string | null {
   const parsed = parseQualifiedToolName(toolName);
-  return parsed ? humanizeIdentifier(parsed.serverId) : null;
+  if (!parsed) return null;
+  // A user's custom remote connector has an opaque `custom-<hex>` serverId that
+  // carries no human name; humanizing it leaks an internal id ("Custom A1b2c3")
+  // into the activity feed. Return null so the summary uses generic connector
+  // phrasing. Surfacing the real name needs the connector display name threaded
+  // onto the tool def / event — tracked as CONNECTOR-BADGE-CUSTOM-NAME.
+  if (/^custom-/i.test(parsed.serverId)) return null;
+  return humanizeIdentifier(parsed.serverId);
 }
 
 function canonicalToolCategory(
@@ -471,7 +478,8 @@ function canonicalToolCategory(
   return 'other';
 }
 
-function canonicalToolSummary(
+/** Exported for unit tests. Builds the user-facing activity-feed summary line. */
+export function canonicalToolSummary(
   toolName: string,
   category: AgentEventToolCategory,
   args?: Record<string, unknown>,
@@ -482,7 +490,7 @@ function canonicalToolSummary(
   if (phrase) return phrase;
 
   const server = mcpServerLabel(toolName);
-  if (category === 'connector') return `Using ${server ?? 'connected'} connector`;
+  if (category === 'connector') return server ? `Using ${server} connector` : 'Using connector';
   if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
   return `Running ${humanizeIdentifier(toolName)}`;
 }
