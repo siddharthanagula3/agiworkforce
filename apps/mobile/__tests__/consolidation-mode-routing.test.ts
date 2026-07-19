@@ -23,7 +23,10 @@ jest.mock('../services/cloudSyncEngine', () => ({
   markMemoryForSync: (...args: unknown[]) => mockMarkMemoryForSync(...args),
 }));
 
-import { consolidateFactsFromTurn } from '../src/features/memory/services/consolidation';
+import {
+  consolidateFactsFromTurn,
+  shouldConsolidateMemoryOnClient,
+} from '../src/features/memory/services/consolidation';
 import { useCloudMemoryStore } from '../stores/memory/cloudMemoryStore';
 
 beforeEach(() => {
@@ -79,5 +82,28 @@ describe('consolidateFactsFromTurn — mode routing', () => {
     expect(res).toEqual({ extracted: 0, inserted: 0 });
     expect(useCloudMemoryStore.getState().entries.length).toBe(0);
     expect(mockInsertMemoryFact).not.toHaveBeenCalled();
+  });
+
+  describe('shouldConsolidateMemoryOnClient (call-site gate)', () => {
+    it('consolidates on-device for a local, non-temporary turn', () => {
+      expect(
+        shouldConsolidateMemoryOnClient({ executionMode: 'local', isTemporaryChat: false }),
+      ).toBe(true);
+    });
+
+    it('does NOT consolidate on the client for a cloud turn (server owns cloud auto-memory)', () => {
+      expect(
+        shouldConsolidateMemoryOnClient({ executionMode: 'cloud', isTemporaryChat: false }),
+      ).toBe(false);
+    });
+
+    it('never consolidates in a temporary chat, in either mode', () => {
+      expect(
+        shouldConsolidateMemoryOnClient({ executionMode: 'local', isTemporaryChat: true }),
+      ).toBe(false);
+      expect(
+        shouldConsolidateMemoryOnClient({ executionMode: 'cloud', isTemporaryChat: true }),
+      ).toBe(false);
+    });
   });
 });
