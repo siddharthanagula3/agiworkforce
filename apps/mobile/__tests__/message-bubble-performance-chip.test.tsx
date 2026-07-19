@@ -68,7 +68,8 @@ jest.mock('expo-haptics', () => ({
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  return { Clock: Icon };
+  // Any icon name resolves to the stub — robust to new icons added to MessageBubble.
+  return new Proxy({}, { get: () => Icon });
 });
 
 jest.mock('react-native-gesture-handler', () => {

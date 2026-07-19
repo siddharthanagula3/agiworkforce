@@ -131,6 +131,36 @@ mobile UI/UX (status per item; verified 2026-07-19 vs current code):
   mutation calls persistToStorage → notify), so it updates live on enqueue/drain/clear
   rather than only at mount. Verified in code.
 
+2026-07-19 visual/UX parity audit (web vs Claude, mobile vs ChatGPT — 2 read-only
+agents reading the reference screenshots vs component code). Concrete fixes:
+
+- DONE UIWEB-ACTIVITY-CHATGPT-PILL (HIGH, commit 1a75c18d4): the canonical
+  AgentActivityTimeline collapsed header showed "Working for 12s" / "Done in 8s · 3
+  tools" with green/amber status icons — the ChatGPT "Worked for Xm" pattern the founder
+  directive explicitly rejects in favor of Claude's inline timeline. Now builds the
+  header from the per-step semantic summaries we already carry (no elapsed clock, no tool
+  count) and uses monochrome done/check/thinking icons (text-muted-foreground); errors
+  stay destructive-colored. Removed the dead per-second liveNow ticker + nowMs prop +
+  duration helpers. Tests assert the semantic phrase + absence of any elapsed pill.
+- DONE UIMOBILE-NO-VISIBLE-MESSAGE-ACTIONS (HIGH): mobile assistant messages exposed
+  ZERO visible affordances — copy/retry/export/delete were only reachable via a hidden
+  400ms long-press sheet and reactions via an undiscoverable double-tap. Added an
+  always-visible ChatGPT-style action row (copy / regenerate / 👍 / 👎) under completed
+  assistant answers (MessageBubble.tsx), reusing the existing copyToClipboard /
+  onRetryMessage / onReaction handlers; the active thumb replaces the old standalone
+  reaction badge. Brings mobile to parity with the web MessageBubble action bar. Also
+  hardened 3 brittle test lucide mocks to a Proxy (any icon → stub) so future icon adds
+  can't break them. 10 MessageBubble tests green.
+- DEFERRED (founder-decision, NOT bugs): mobile home is a Claude-style centered greeting
+  vs ChatGPT's bottom-anchored composer — but adding ChatGPT's starter-card rows
+  conflicts with [[feedback-mobile-home-simple]]; mobile header ModeToggle is an
+  intentional Local/Cloud trust-boundary divergence; streaming indicator (spinning mark
+  vs caret) is an intentional brand choice.
+- OPEN (LOW, legacy web path): ToolTimeline (the legacy fallback used only when
+  !canonicalActivity) renders a double leading icon on non-file tool steps and a weak
+  "Result" affordance vs Claude's chip. Legacy path; low priority, tracked with #26
+  ToolTimeline safe-delete.
+
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
 covered by the web/mobile qa-reference doc; the audit hunted concrete demo-blocking
