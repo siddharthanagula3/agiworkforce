@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   BrainCircuit,
@@ -376,6 +376,11 @@ export function AgentActivityTimeline({
   isApprovalExpired,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  // While the run is active (running / awaiting approval) the timeline auto-opens
+  // so the user watches the steps stream live (Claude/ChatGPT behaviour), then
+  // collapses to the summary pill when the run finishes. `userForcedClosed` lets
+  // the user override the auto-open during a run; it resets when the run ends.
+  const [userForcedClosed, setUserForcedClosed] = useState(false);
   const [liveNow, setLiveNow] = useState(() => nowMs ?? activity.updatedAtMs);
   const [entryVisibility, setEntryVisibility] = useState(() => ({
     turnId: activity.turnId,
@@ -388,9 +393,32 @@ export function AgentActivityTimeline({
     return () => window.clearInterval(timer);
   }, [activity.status, nowMs]);
 
+  const isActive = activity.status === 'running' || activity.status === 'awaiting-approval';
+  // Effective open state: auto-open while active (unless the user closed it),
+  // else follow the manual `expanded` toggle.
+  const isOpen = userForcedClosed ? false : isActive || expanded;
+
+  // When a run finishes, clear the manual-close and collapse to the summary so
+  // the next run auto-opens and the completed trace reads as a single pill.
+  const prevActive = useRef(isActive);
   useEffect(() => {
-    if (activity.status === 'awaiting-approval') setExpanded(true);
-  }, [activity.status]);
+    if (prevActive.current && !isActive) {
+      setUserForcedClosed(false);
+      setExpanded(false);
+    }
+    prevActive.current = isActive;
+  }, [isActive]);
+
+  const handleToggle = () => {
+    if (isOpen) {
+      // Closing: during an active run, remember the manual close.
+      if (isActive) setUserForcedClosed(true);
+      else setExpanded(false);
+    } else {
+      setUserForcedClosed(false);
+      setExpanded(true);
+    }
+  };
 
   const effectiveNow = nowMs ?? Math.max(liveNow, activity.updatedAtMs);
   const summary = useMemo(
@@ -412,9 +440,9 @@ export function AgentActivityTimeline({
       </span>
       <button
         type="button"
-        onClick={() => setExpanded((value) => !value)}
-        aria-expanded={expanded}
-        aria-label={`${expanded ? 'Hide' : 'Show'} agent activity: ${summary}`}
+        onClick={handleToggle}
+        aria-expanded={isOpen}
+        aria-label={`${isOpen ? 'Hide' : 'Show'} agent activity: ${summary}`}
         className="group flex w-full min-w-0 touch-manipulation items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <RunStatusIcon status={activity.status} />
@@ -422,13 +450,13 @@ export function AgentActivityTimeline({
         <ChevronRight
           className={cn(
             'h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none',
-            expanded && 'rotate-90',
+            isOpen && 'rotate-90',
           )}
           aria-hidden="true"
         />
       </button>
 
-      {expanded && (
+      {isOpen && (
         <div className="relative ml-2 mt-1 space-y-0.5 border-l border-border/70 pl-4">
           {hiddenEntryCount > 0 && (
             <button
