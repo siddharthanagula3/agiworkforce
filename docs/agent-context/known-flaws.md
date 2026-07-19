@@ -6,6 +6,54 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 QA-docx systematic cross-reference (backend 470-case + Claude cases +
+mobile 400+-case reference docx walked section-by-section vs code, 4 parallel
+audit agents). Capability surfaces (search/tools/connectors/MCP/research/files/
+E2B/artifacts, model routing/streaming, memory/projects, billing/usage, cross-
+surface sync) audited PRODUCTION-GRADE — SSRF guards, server-recomputed
+checksums, fail-closed tool approval with server-owned args, atomic usage
+reservation, delta-sync CAS all genuinely implemented. Three concrete gaps found
+and fixed; two flagged backend items verified INTENTIONAL (no change):
+
+- WEB-CONV-PROJECT-MOVE-OWNERSHIP-01 (Fixed): PUT /api/chat/conversations/[id]
+  wrote `projectId` verbatim with no ownership check — a client could tag a
+  conversation to a foreign/deleted/nonexistent project UUID (dangling ref).
+  Now verifies `user_projects` ownership (is_archived=false) before the move,
+  mirroring the create route; clearing (projectId null) still allowed. Tests in
+  chat-conversation-single.test.ts.
+- WEB-PROJECT-KNOWLEDGE-CAP-SILENT-01 (Fixed): project knowledge retrieval reads
+  only the MAX_KNOWLEDGE_FILES (20) most-recent files, but ingest had no cap —
+  files 21+ silently vanished from every project turn's context. Ingest now
+  enforces the same exported cap (409 conflict, fail-fast before extraction);
+  table-missing still maps to the pre-migration 503. Exported MAX_KNOWLEDGE_FILES
+  as the shared SSOT. Tests in knowledge-files/**tests**/route.test.ts.
+- ERROR-CONFLICT-MESSAGE-SWALLOWED-01 (Fixed, surfaced by the above): the API
+  error handler's SAFE_TO_EXPOSE_CODES omitted CONFLICT, so every
+  createError.conflict() user-facing message ("already at the file cap", "slug
+  already taken", "already a member", "already have a custom connector") was
+  flattened to a generic "Conflict". Added CONFLICT to the allow-list (app-
+  defined messages, not a SQL/service-leak vector — same rationale as
+  VALIDATION_ERROR).
+- MOBILE-THUMBS-FEEDBACK-DEAD-CONTROL-01 (Fixed): assistant thumbs rating
+  (double-tap) called onReaction, but the chat screen rendered MessageList
+  WITHOUT the onReaction prop → a no-op; the badge lived in useRecyclingState so
+  it vanished on FlashList row recycle. Now: setMessageReaction persists the
+  rating into message.metadata.reaction (survives recycle/reload), MessageBubble
+  seeds from that metadata, and Cloud conversations PATCH the SAME
+  /messages/[messageId] endpoint the web app uses (cross-surface parity). Tests
+  in cloud-message-mutations.test.ts.
+- WEB-LEGACY-FINISH-REASON-NONOPENAI (Intentional, NO fix): legacy-web wire
+  passes Anthropic/Google `max_tokens`/`refusal`/`stop_sequence` through as
+  literal finish_reason instead of OpenAI vocab. Deliberate + test-pinned
+  (openai-wire-compat.test.ts asserts literal 'refusal'); AGI's own client
+  understands it (CONTINUABLE_FINISH_REASONS includes both). Exposure limited to
+  third-party OpenAI-SDK consumers; left as-is per capability-honesty (don't
+  fight documented, tested behavior).
+- WEB-EFFORT-SILENT-NORMALIZE (Intentional, NO fix): unsupported reasoning effort
+  is normalized to model default rather than 400-rejected. Defensible and
+  consistent with the mobile client (which drops unsupported effort client-side,
+  MOBILE-EFFORT-DROPPED-01).
+
 2026-07-19 QA-parity audit fixes (backend + mobile QA docs vs code). The web
 surface audited SOLID for model routing/streaming/tools/connectors; one web + three
 mobile concrete gaps fixed:

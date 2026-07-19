@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { MAX_KNOWLEDGE_FILES } from '@/lib/services/project-context-service';
 import {
   extractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError,
@@ -153,6 +154,38 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
 
   if (!project) {
     throw createError.notFound('Project not found');
+  }
+
+  // Enforce the knowledge-file cap at ingest (before the expensive extraction).
+  // Retrieval only ever reads the MAX_KNOWLEDGE_FILES most-recent files, so
+  // accepting more would silently drop the oldest from every project turn's
+  // context. Reject with a clear capacity error instead of a silent scope loss.
+  // A missing table maps to the same pre-migration 503 as the insert below.
+  let activeCount = 0;
+  try {
+    const [countRow] = await db.query<{ count: number }>(
+      `select count(*)::int as count
+         from project_knowledge_files
+        where project_id = $1 and deleted_at is null`,
+      [projectId],
+    );
+    activeCount = countRow?.count ?? 0;
+  } catch (error) {
+    if (isSchemaNotReady(error)) {
+      return NextResponse.json(
+        {
+          error: 'knowledge_files_unavailable',
+          message: 'Knowledge files require Cloud Managed (pending migration apply)',
+        },
+        { status: 503 },
+      );
+    }
+    throw error;
+  }
+  if (activeCount >= MAX_KNOWLEDGE_FILES) {
+    throw createError.conflict(
+      `This project already has the maximum of ${MAX_KNOWLEDGE_FILES} knowledge files. Remove a file before adding another.`,
+    );
   }
 
   let extractedText: string | null;
