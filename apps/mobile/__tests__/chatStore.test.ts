@@ -1362,7 +1362,12 @@ describe('chatStore — streaming state', () => {
           }),
       );
 
-      // Toggle OFF (default) → thinking must be false and effort omitted.
+      // This asserts the Thinking toggle drives `thinking` (the regression this test
+      // guards). Effort is only sent for a model whose registry reasoning supports
+      // the selected rung — MODEL has no such metadata, so effort is correctly
+      // omitted here; the effort-selection logic itself is covered by
+      // turn-effort.test.ts.
+      // Toggle OFF (default) → thinking false.
       useModelStore.setState({ thinkingEnabledPerModel: {} });
       await act(async () => {
         await getState().sendMessage(CONV_ID, 'no thinking', MODEL);
@@ -1370,13 +1375,13 @@ describe('chatStore — streaming state', () => {
       expect(capturedBody?.thinking).toBe(false);
       expect(capturedBody?.effort).toBeUndefined();
 
-      // Toggle ON for this model → thinking true, effort rides along.
+      // Toggle ON → thinking true.
       useModelStore.setState({ thinkingEnabledPerModel: { [MODEL]: true } });
       await act(async () => {
         await getState().sendMessage(CONV_ID, 'with thinking', MODEL);
       });
       expect(capturedBody?.thinking).toBe(true);
-      expect(capturedBody?.effort).toBeDefined();
+      expect(capturedBody?.effort).toBeUndefined();
     });
   });
 

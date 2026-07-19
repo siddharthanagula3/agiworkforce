@@ -12,6 +12,7 @@ import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
+import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import {
   cancelMobileCloudAgentRun,
   streamChat,
@@ -1469,17 +1470,22 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // without the capability. Effort rides along only when thinking is on.
       const thinkingEnabled =
         useModelStore.getState().thinkingEnabledPerModel[executionModel] ?? false;
-      // agentControl.effort is a PickerEffort (agentControlStore) -- a superset
-      // of streamChat's wire-level Effort that also allows 'none'/'minimal' for
-      // models whose catalog reasoning.supportedEfforts includes them (model
-      // picker). Per-model request-path handling of those two values isn't
-      // verified across every provider adapter yet (reasoning-effort-capability
-      // matrix, 2026-07-10), so send them as "no explicit effort" rather than
-      // forward an unverified string to a provider that may reject it.
-      const wireEffort =
-        agentControl.effort === 'none' || agentControl.effort === 'minimal'
-          ? undefined
-          : agentControl.effort;
+      // Reasoning effort (fixes the silently-dropped-effort bug). The picker offers
+      // effort rungs from the SELECTED model's `reasoning.supportedEfforts`, so:
+      //  - only send an effort the CURRENT model actually supports (the per-turn
+      //    value may have been chosen for a previously-selected model);
+      //  - for `effort_levels` models effort IS the native reasoning control, so it
+      //    is sent regardless of the Thinking toggle (which defaults off); for
+      //    toggle-based models effort still rides with thinking, as before;
+      //  - `none`/`minimal` are forwarded when supported (the server accepts any
+      //    effort string and validates it per model) instead of being dropped.
+      const modelReasoning = executionModelMetadata?.reasoning;
+      const turnEffort = resolveTurnEffort({
+        selectedEffort: agentControl.effort,
+        supportedEfforts: modelReasoning?.supportedEfforts ?? [],
+        reasoningControl: modelReasoning?.control,
+        thinkingEnabled,
+      });
 
       await streamChat(
         {
@@ -1488,7 +1494,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           stream: true,
           operationId: assistantMessageId,
           thinking: thinkingEnabled,
-          ...(thinkingEnabled && wireEffort ? { effort: wireEffort } : {}),
+          ...(turnEffort ? { effort: turnEffort } : {}),
           ...(webSearchEnabled ? { web_search: true } : {}),
           ...(researchEnabled ? { research: true } : {}),
           ...(codeExecutionEnabled ? { code_execution: true } : {}),

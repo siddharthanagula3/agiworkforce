@@ -107,6 +107,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
     !['free', 'local-only', 'byok'].includes(tier);
+  // Image generation runs only through the Managed Cloud media route, so the
+  // toggle is Cloud-only (previously it also rendered in Local mode, where it
+  // could do nothing).
+  const showImageGenToggle = FEATURES.imageGen && appMode === 'cloud';
   // UI hint only; the API remains authoritative. Basic and every higher paid
   // Cloud plan may request AGI Work, while Free/Local/BYOK cannot.
   const canUseAgiWork = !['free', 'local-only', 'byok'].includes(tier);
@@ -386,7 +390,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         {(FEATURES.webSearch && selectedModelSupportsSearch) ||
         showResearchToggle ||
         showCodeExecutionToggle ||
-        FEATURES.imageGen ||
+        showImageGenToggle ||
         FEATURES.computerUse ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
             {FEATURES.webSearch && selectedModelSupportsSearch ? (
@@ -422,7 +426,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 mutedColor={themeColors.textMuted}
               />
             ) : null}
-            {FEATURES.imageGen ? (
+            {showImageGenToggle ? (
               <CapabilityRow
                 icon={<Paintbrush size={18} color={themeColors.teal} />}
                 label="Image generation"
@@ -452,7 +456,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         {(FEATURES.webSearch && selectedModelSupportsSearch) ||
         showResearchToggle ||
         showCodeExecutionToggle ||
-        FEATURES.imageGen ||
+        showImageGenToggle ||
         FEATURES.computerUse ? (
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
         ) : null}
