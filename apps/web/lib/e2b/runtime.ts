@@ -54,6 +54,16 @@ const E2B_SANDBOX_TIMEOUT_MS = 60_000;
  */
 const E2B_CONVERSATION_TIMEOUT_MS = 10 * 60_000;
 
+/**
+ * Per-user concurrency cap: the max number of live (running OR paused) sandboxes a single
+ * authenticated user may hold across all their conversations. Backstops E2B's 100-per-team
+ * account cap so one user (or a runaway loop opening a sandbox per conversation) cannot
+ * exhaust the whole team's concurrency — and cost — budget. Only scoped (authenticated)
+ * sandboxes are counted and enforced; ephemeral bare-API sandboxes self-dispose within
+ * `E2B_SANDBOX_TIMEOUT_MS` and are never counted here.
+ */
+const MAX_SANDBOXES_PER_USER = 5;
+
 type E2BLanguage = 'python' | 'javascript' | 'typescript' | 'r' | 'java' | 'bash';
 
 /** Map the tool's `language` (python | node | …) to an E2B RunCodeLanguage; default python. */
@@ -73,6 +83,29 @@ async function importSandbox(): Promise<typeof import('@e2b/code-interpreter').S
     logger.warn({ err }, '[e2b] @e2b/code-interpreter unavailable; fail-closed');
     return null;
   }
+}
+
+/**
+ * Count a user's live (running or paused) sandboxes, tagged with `userId` in metadata,
+ * stopping early once `stopAt` is reached (we only ever need to know whether the quota is
+ * hit, not the exact total). Paginates the E2B list API so a user with many sandboxes is
+ * still counted correctly. Filters server-side by `metadata:{userId}` AND state so we
+ * count only this user's still-billable sandboxes.
+ */
+async function countUserSandboxes(
+  Sandbox: NonNullable<Awaited<ReturnType<typeof importSandbox>>>,
+  userId: string,
+  stopAt: number,
+): Promise<number> {
+  const paginator = Sandbox.list({
+    query: { metadata: { userId }, state: ['running', 'paused'] },
+  });
+  let count = 0;
+  while (paginator.hasNext && count < stopAt) {
+    const page = await paginator.nextItems();
+    count += page.length;
+  }
+  return count;
 }
 
 const fail = (err: unknown): ExecutionResult => ({
@@ -142,6 +175,9 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   // package fails closed rather than breaking the build/route.
   const Sandbox = await importSandbox();
   if (!Sandbox) return null;
+  // Capture the narrowed non-null constructor so the nested `createFresh` closure keeps
+  // the non-null type (TS re-widens a guarded outer const inside a later async closure).
+  const SandboxCtor = Sandbox;
 
   type SandboxInstance = InstanceType<typeof Sandbox>;
 
@@ -155,11 +191,48 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
   // Tag sandboxes with an opaque, non-PII identifier (conversationId, never message
   // content) so they're attributable in the E2B dashboard for abuse/fraud/billing
   // observability (mirrors e2b-dev/fragments' `Sandbox.create({ metadata })` pattern).
+  // Also tag with `userId` (opaque, non-PII) so per-user concurrency can be counted via
+  // the E2B list API's metadata filter — see `enforceUserQuota` below.
   // Purely additive: does not affect execution behavior.
-  const metadata: Record<string, string> = conversationId ? { conversationId } : {};
+  const metadata: Record<string, string> = {};
+  if (conversationId) metadata['conversationId'] = conversationId;
+  if (scope?.userId) metadata['userId'] = scope.userId;
   const createOpts = conversationId
     ? { timeoutMs: sandboxTimeoutMs, lifecycle: { onTimeout: 'pause' as const }, metadata }
     : { timeoutMs: sandboxTimeoutMs, metadata };
+
+  /**
+   * Create a fresh sandbox, first enforcing the per-user concurrency cap for scoped
+   * (authenticated) callers. Returns null (fail-closed) when the quota is reached or the
+   * create fails. A quota-CHECK error fails OPEN (proceed to create): the 100-per-team
+   * account cap is the hard backstop, so a transient list-API hiccup must not take down
+   * all execution.
+   */
+  async function createFresh(): Promise<SandboxInstance | null> {
+    if (scope?.userId) {
+      try {
+        const live = await countUserSandboxes(SandboxCtor, scope.userId, MAX_SANDBOXES_PER_USER);
+        if (live >= MAX_SANDBOXES_PER_USER) {
+          logger.warn(
+            { userId: scope.userId, live, limit: MAX_SANDBOXES_PER_USER, conversationId },
+            '[e2b] per-user sandbox quota reached; refusing new sandbox (fail-closed)',
+          );
+          return null;
+        }
+      } catch (err) {
+        logger.warn(
+          { err, userId: scope.userId },
+          '[e2b] sandbox quota check failed; proceeding (team cap still applies)',
+        );
+      }
+    }
+    try {
+      return (await SandboxCtor.create(createOpts)) as SandboxInstance;
+    } catch (err) {
+      logger.warn({ err }, '[e2b] sandbox create failed; fail-closed');
+      return null;
+    }
+  }
 
   let sandbox: SandboxInstance;
   let sandboxId: string;
@@ -179,22 +252,16 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         '[e2b] resume failed (sandbox likely expired); creating a fresh sandbox',
       );
       for (const key of Object.keys(contexts)) delete contexts[key];
-      try {
-        sandbox = (await Sandbox.create(createOpts)) as SandboxInstance;
-        sandboxId = sandbox.sandboxId;
-      } catch (createErr) {
-        logger.warn({ err: createErr }, '[e2b] sandbox create failed; fail-closed');
-        return null;
-      }
+      const fresh = await createFresh();
+      if (!fresh) return null;
+      sandbox = fresh;
+      sandboxId = fresh.sandboxId;
     }
   } else {
-    try {
-      sandbox = (await Sandbox.create(createOpts)) as SandboxInstance;
-      sandboxId = sandbox.sandboxId;
-    } catch (err) {
-      logger.warn({ err }, '[e2b] sandbox create failed; fail-closed');
-      return null;
-    }
+    const fresh = await createFresh();
+    if (!fresh) return null;
+    sandbox = fresh;
+    sandboxId = fresh.sandboxId;
   }
 
   /** Persist the (possibly updated) session mapping so the next call/turn can reuse it. */
