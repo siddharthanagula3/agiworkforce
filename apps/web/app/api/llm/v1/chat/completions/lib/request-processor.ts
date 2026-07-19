@@ -555,11 +555,16 @@ export function applyResearchMode(chatRequest: ChatCompletionRequest): void {
 /**
  * Append the provider-native web-search server tool to `tools` when the caller has
  * requested web search and the resolved model supports search. Pure and exported so
- * the injection is unit-testable across every provider (the previous inline block
- * silently no-op'd for any provider without a branch — xai/qwen/moonshot, whose
- * catalog `search:true` lit the composer toggle, so the request went out with no
- * search tool and the model answered "I can't browse the internet"; those providers
- * are now gated out of the toggle client-side via `providerSupportsWebSearch`).
+ * the injection is unit-testable across every provider. This handles ONLY the native
+ * path (anthropic/google/openai). Providers without a native branch (xai/qwen/zhipu/
+ * deepseek/mistral/…) are NOT gated out of web search — when the model is tools-capable
+ * and the generic backend is configured (`PERPLEXITY_API_KEY`, surfaced as the
+ * `generic_web_search` feature flag), the composer offers web search via
+ * `isWebSearchAvailable`, and the request routes through the generic fallback tool
+ * (`shouldOfferGenericWebSearchTool` → `webSearchToolDef`, executed in the tool loop)
+ * rather than this native injection. The old failure mode (a lit toggle producing no
+ * search tool, so the model answered "I can't browse the internet") only applied to
+ * the retired inline block; the two-path design above closes it for every provider.
  *
  * Providers WITH a branch (kept in sync with `WEB_SEARCH_INJECTION_PROVIDERS` in
  * `@agiworkforce/search`):
