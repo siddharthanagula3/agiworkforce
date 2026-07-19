@@ -598,7 +598,7 @@ describe('useChatStream', () => {
       });
 
       const { result } = renderHook(() => useChatStream());
-      let send: Promise<void> | undefined;
+      let send: Promise<boolean> | undefined;
       act(() => {
         send = result.current.sendMessage('do a long task', {
           conversationId: TEMP_CONVERSATION.id,

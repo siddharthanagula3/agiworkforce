@@ -90,7 +90,15 @@ const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
 export type ToolApprovalDecision = 'approved' | 'rejected';
 
 interface UseChatStreamReturn {
-  sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
+  /**
+   * Send a user message and stream the reply. Resolves to `true` once the new user
+   * turn has been committed to the transcript (added locally + persisting), or `false`
+   * if it bailed before commit (empty content, no conversation, expired session). A
+   * mid-stream failure still resolves `true` — the turn is committed and retryable.
+   * Callers replacing a prior turn (edit/regenerate) use this to delete the old turn's
+   * durable rows ONLY after the new one commits (see sendReplacingMessages).
+   */
+  sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
   stopGeneration: () => void;
   /**
    * Continue Generation (ChatGPT/Claude parity): resume a truncated or
@@ -1574,14 +1582,14 @@ export function useChatStream(): UseChatStreamReturn {
   const resolveToolApproval = useResolveToolApproval(abortControllerRef);
 
   const sendMessage = useCallback(
-    async (content: string, options: SendMessageOptions = {}) => {
-      if (!content.trim()) return;
+    async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
+      if (!content.trim()) return false;
 
       const conversationId = options.conversationId || useChatStore.getState().activeConversationId;
       if (!conversationId) {
         console.error('[useChatStream] No conversation ID available');
         setError('No active conversation. Please create a new conversation first.');
-        return;
+        return false;
       }
 
       if (abortControllerRef.current) {
@@ -1615,7 +1623,7 @@ export function useChatStream(): UseChatStreamReturn {
         authToken = await getAuthToken();
       } catch {
         setError('Your session has expired. Please sign in again.');
-        return;
+        return false;
       }
 
       const userMessageId = crypto.randomUUID();
@@ -1800,6 +1808,10 @@ export function useChatStream(): UseChatStreamReturn {
           activeRunRef.current = null;
         }
       }
+      // Committed: the new user turn was added (and is persisting) before the stream
+      // started, so a mid-stream failure never loses it. The caller may now safely
+      // delete any turn this send replaced (see sendReplacingMessages).
+      return true;
     },
     [
       selectedModel,
