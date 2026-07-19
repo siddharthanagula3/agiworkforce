@@ -223,6 +223,14 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   server-authoritative in web's managed-usage-policy. So this is a client-side MIGRATION
   decision (what should desktop plan.limits.tokenCredits be post-server-authoritative-
   budget?), NOT a restore of the removed fn. Founder/billing call required.
+  SEVERITY CONFIRMED = real PROD crash (not test-only): apps/desktop/vite.config.ts has NO
+  @agiworkforce/\* resolve alias and the package's exports/main both point to ./src/index.ts,
+  so BOTH the production Vite build and the vitest env resolve @agiworkforce/types to source
+  (where the fn is absent) — the module-init throw ships to prod, it is not a test artifact.
+  Corollary: a "fix" that only aliases the test env to ./dist would dishonestly mask the
+  prod crash and is NOT acceptable. The only correct fix is the client-side billing
+  migration decision above. (Likely unnoticed so far only because there are ZERO current
+  users and the pricing/gating path may be lazily imported.)
 
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
