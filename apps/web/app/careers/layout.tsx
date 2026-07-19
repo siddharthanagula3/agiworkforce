@@ -20,9 +20,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/careers',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'Careers at AGI',
       },
     ],
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     title: 'Careers',
     description:
       'Build the future of AI-powered work. Open roles in AI engineering, product, and operations.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {
