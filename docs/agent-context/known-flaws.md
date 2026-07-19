@@ -137,13 +137,14 @@ code gaps (not founder-gated / not style):
   Brave-HTML fallback — search_executor.rs run_search_with_app_handle), so it works for
   any tool-capable model. Now only the Anthropic-native web_search server tool is
   search-gated; generic search_web reaches every tool-capable model. 2 Rust tests.
-- OPEN CLI-TAVILY-GET-NOT-POST (LOW, founder-key-gated): apps/cli
-  src/features/exec/tools/web/mod.rs ~167-186 issues ONE reqwest GET (q/count query
-  params) for both Brave AND Tavily, but Tavily's /search requires a POST with a JSON
-  body — so the Tavily branch errors whenever TAVILY_API_KEY is set (Brave takes
-  precedence, so low impact). FIX deferred: branch Tavily to POST+JSON, but VERIFY
-  Tavily's current API contract against its docs first (do not guess the body shape).
-  Also the raw response body is passed to the model unparsed (~190).
+- DONE CLI-TAVILY-GET-NOT-POST (LOW, founder-key-gated): apps/cli
+  src/features/exec/tools/web/mod.rs branched the request by provider — Tavily now POSTs
+  a JSON body {query, max_results (clamped 0–20), search_depth:"basic"} via the shared
+  tavily_search_body helper (verified against docs.tavily.com), while Brave keeps its
+  GET+query-params path. Previously both used one GET, so the Tavily branch errored
+  whenever TAVILY_API_KEY was set. 2 Rust tests lock the body contract; cargo check +
+  module tests green. (The raw-body-to-model note is unchanged; both providers pass
+  results through the existing untrusted-content wrapper.)
 - OPEN VSCODE-BYOK-NO-REGISTRATION-UI (MED, product/parity): apps/extension-vscode
   utils/api.ts ~180 falls back to a legacy BYOK key but "no UI sets it anymore"; there
   is no command to register a provider key, contradicting the "VSCode = Local+BYOK+
