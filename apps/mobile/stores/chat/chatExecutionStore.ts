@@ -1131,7 +1131,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         isTemporaryChat: useSettingsStore.getState().isTemporaryChat,
       })
     ) {
-      void consolidateFactsFromTurn({ message: content, conversationId, executionMode });
+      void consolidateFactsFromTurn({ message: content, conversationId });
     }
 
     msgStore.setState((state) => {
