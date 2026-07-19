@@ -6,6 +6,31 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 QA-parity audit fixes (backend + mobile QA docs vs code). The web
+surface audited SOLID for model routing/streaming/tools/connectors; one web + three
+mobile concrete gaps fixed:
+
+- `WEB-WEBSEARCH-NONSTREAM-SILENT-01` (Fixed): non-streaming `web_search:true` on a
+  generic-fallback provider attached NO search tool (native branch N/A, generic
+  fallback needs streaming) and answered without browsing. Now request-processor
+  returns 422 `web_search_stream_required` BEFORE reserving credits.
+- `MOBILE-EFFORT-DROPPED-01` (HIGH, Fixed): the model picker's reasoning-effort
+  selection was silently dropped — effort rode only `if (thinkingEnabled && …)` but
+  the effort chips render independently of the (default-off) Thinking toggle, and
+  none/minimal were coerced to undefined. New pure `resolveTurnEffort` sends the
+  picked effort for `effort_levels` models regardless of Thinking, drops
+  unsupported (stale cross-model) values, and forwards none/minimal when supported
+  (server accepts any effort string).
+- `MOBILE-IMAGEGEN-DEAD-TOGGLE-01` (Fixed): the "Image generation" toggle was dead
+  (nothing read `features.imageGen`; also rendered in Local). Now natural-language
+  auto-routing to the media route is gated on the toggle (OFF disables it; /image
+  still forces it), and the row is Cloud-only.
+- `MOBILE-ATTACHMENT-NOVALIDATION-01` (Fixed): attachments were appended with no
+  validation and unsupported/oversized files became silent empty stubs. New
+  `validateAttachments` (reusing docParser's `isParseableDocument`) rejects
+  unsupported types + files > 25 MB up front with a specific Alert, keeping valid
+  ones. Each fix has unit tests.
+
 2026-07-19 Mobile GitHub connector connect flow
 (`MOBILE-GITHUB-CONNECT-01`, Fixed in repo): tapping GitHub in mobile connectors
 showed only a "coming soon" alert. GitHub uses a GitHub-App installation with a

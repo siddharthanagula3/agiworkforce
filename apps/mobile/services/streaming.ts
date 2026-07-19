@@ -262,7 +262,9 @@ interface InitialStreamRequest {
   stream: true;
   operationId: string;
   thinking?: boolean;
-  effort?: Effort;
+  /** Reasoning effort. Includes `none`/`minimal` for models that support them
+   *  (the server accepts any effort string and validates it per model). */
+  effort?: Effort | 'none' | 'minimal';
   /** When true, the server injects its built-in web_search tool for this turn. */
   web_search?: boolean;
   /** When true, the server runs its multi-turn Deep Research loop for this turn. */

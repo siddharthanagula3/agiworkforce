@@ -101,6 +101,21 @@ function detectDocType(uri: string, mimeType?: string): SupportedDocType {
   );
 }
 
+/**
+ * Non-throwing capability check: true when `parseDocument` can extract text from
+ * this file (pdf/txt/md/csv/code or any text/* MIME). Used for attach-time
+ * validation so unsupported formats (docx, zip, …) are rejected up front with a
+ * clear message instead of silently becoming an empty stub at send time.
+ */
+export function isParseableDocument(uri: string, mimeType?: string): boolean {
+  try {
+    detectDocType(uri, mimeType);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readFileText(uri: string): Promise<string> {
   try {
     const content = await readAsStringAsync(uri, { encoding: 'utf8' });
