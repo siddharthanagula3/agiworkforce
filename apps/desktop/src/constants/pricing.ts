@@ -1,4 +1,4 @@
-import { getPlanPriceUsd, getPlanPriceInr, getPlanUsageBudgetCents } from '@agiworkforce/types';
+import { getPlanPriceUsd, getPlanPriceInr } from '@agiworkforce/types';
 
 // 2026-07-02: 'hobby' (target $5/mo) and 'pro_plus' were removed from the
 // shared catalog (packages/contracts/types/src/billing-catalog.ts, commit 343457c8d,
@@ -127,7 +127,13 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 100,
       storage: 1024,
       teamMembers: 1,
-      tokenCredits: getPlanUsageBudgetCents('basic', 'monthly'),
+      // Managed-usage budget is now server-authoritative (moved to web's
+      // managed-usage-policy; getPlanUsageBudgetCents was intentionally removed from the
+      // shared @agiworkforce/types). This client-side field is inert — no desktop code
+      // reads plan.limits.tokenCredits (checkUsageLimit is only invoked for automations/
+      // apiCalls/storage) — so it carries the same 0 as the other plans. The stale import
+      // that referenced the removed fn crashed pricing.ts at module init.
+      tokenCredits: 0,
     },
   },
   {
@@ -153,7 +159,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: 10000,
       storage: 10240,
       teamMembers: 1,
-      tokenCredits: getPlanUsageBudgetCents('pro', 'monthly'),
+      tokenCredits: 0, // inert — server-authoritative (see basic plan note)
     },
     waitlist: true,
   },
@@ -179,7 +185,7 @@ export const PRICING_PLANS: PricingPlan[] = [
       apiCalls: null,
       storage: 51200,
       teamMembers: 1,
-      tokenCredits: getPlanUsageBudgetCents('max', 'monthly'),
+      tokenCredits: 0, // inert — server-authoritative (see basic plan note)
     },
     waitlist: true,
   },
