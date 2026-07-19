@@ -6,6 +6,18 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Mobile non-image attachments were reference stubs
+(`MOBILE-DOC-ATTACHMENT-STUB-01`, Fixed in repo): a non-image attachment reached
+the model as only a `[Attached file: name (mime)]` reference — its CONTENT was
+never included (chat was blind to the document). Now wired to REUSE the existing
+on-device `parseDocument` (services/docParser.ts — pdf/txt/md/csv/code, already
+tested) via a small `services/attachmentContext.ts` helper: supported documents
+contribute their real extracted text (capped at 100k chars); unsupported/binary
+formats (docx, zip, …) fail closed to an honest reference with NO fabricated
+content. 4 unit tests. RESIDUAL: docx and other binary office formats still need a
+parser (docParser handles pdf but not docx); images continue to use the existing
+OCR (local) / image_url (cloud) paths.
+
 2026-07-19 Mobile Deep Research dispatch (`MOBILE-DEEP-RESEARCH-DISPATCH-01`,
 Fixed in repo): mobile Cloud had only a cosmetic `research` ChatMode prompt (no UI
 selector — `setChatMode` had zero callers) and sent NO `research` flag, so the
