@@ -30,6 +30,7 @@ import { Text } from '@/components/ui/text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -292,6 +293,31 @@ export default function SettingsTabScreen() {
   const sections = useMemo<SettingsSection[]>(
     () => [
       {
+        title: 'Account',
+        rows: [
+          {
+            key: 'account-email',
+            label: 'Email',
+            icon: UserRound,
+            value: user?.email ?? (cloudUnlocked ? 'Signed in' : 'Sign in'),
+            onPress: cloudUnlocked ? push('/(app)/settings/cloud-account') : openCloudAccess,
+          },
+          {
+            key: 'account-subscription',
+            label: 'Subscription',
+            icon: CreditCard,
+            value: getBillingPlanPricing(subscriptionTier).label,
+            onPress: push('/(app)/settings/cloud-billing'),
+          },
+          {
+            key: 'account-restore',
+            label: 'Restore purchases',
+            icon: RotateCcw,
+            onPress: push('/(app)/settings/cloud-billing'),
+          },
+        ],
+      },
+      {
         title: 'Device',
         rows: [
           {
@@ -373,13 +399,9 @@ export default function SettingsTabScreen() {
       {
         title: 'Cloud',
         rows: [
-          {
-            key: 'account',
-            label: 'Account',
-            icon: UserRound,
-            tone: 'cloud',
-            onPress: push('/(app)/settings/cloud-account'),
-          },
+          // Account is promoted to the root "Account" section (email + subscription
+          // + restore with live values), so the duplicate Cloud → Account row is
+          // removed (ponytail: one entry point to the account screen).
           {
             key: 'cloud-personalization',
             label: 'Cloud Personalization',
