@@ -134,7 +134,9 @@ describe('MessageBubble canonical agent activity', () => {
     );
 
     expect(html).toContain('Agent activity');
-    expect(html).toContain('Done in 1s');
+    // Claude-style collapsed header = the step's semantic phrase, not a "Done in Xs" pill.
+    expect(html).toContain('Searched official sources');
+    expect(html).not.toContain('Done in 1s');
     expect(html).not.toContain('Legacy duplicate');
   });
 });
