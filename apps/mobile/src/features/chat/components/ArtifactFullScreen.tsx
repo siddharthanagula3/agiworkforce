@@ -44,6 +44,7 @@ function livePreviewKind(artifact: Artifact): PreviewableKind | null {
   const lang = artifact.language?.toLowerCase() ?? '';
   if (lang === 'html') return 'html';
   if (lang === 'svg') return 'svg';
+  if (lang === 'mermaid') return 'mermaid';
   return null;
 }
 
@@ -436,9 +437,8 @@ export function ArtifactFullScreen({
                 lineHeight: 20,
               }}
             >
-              HTML and SVG render live in a sandbox; Mermaid and JSX/TSX need JavaScript or
-              compilation, which the secure preview intentionally disables. Switch to Source view to
-              read the content.
+              HTML, SVG, and Mermaid render live in a sandbox; JSX/TSX need compilation, which the
+              secure preview intentionally omits. Switch to Source view to read the content.
             </Text>
             <Pressable
               onPress={() => setViewMode('source')}
