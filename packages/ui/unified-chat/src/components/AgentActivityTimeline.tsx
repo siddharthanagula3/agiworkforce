@@ -29,33 +29,11 @@ export interface AgentActivityTimelineProps {
   activity: AgentActivityState;
   className?: string;
   defaultExpanded?: boolean;
-  /** Deterministic clock injection for tests and static previews. */
-  nowMs?: number;
   onApprove?: (toolCallId: string) => void;
   onReject?: (toolCallId: string) => void;
   onCancel?: (toolCallId: string) => void;
   onResend?: (toolCallId: string) => void;
   isApprovalExpired?: (toolCallId: string) => boolean;
-}
-
-function formatDuration(ms: number): string {
-  const safeMs = Math.max(0, ms);
-  if (safeMs < 1_000) return `${safeMs}ms`;
-  const totalSeconds = Math.floor(safeMs / 1_000);
-  if (totalSeconds < 60) {
-    const tenths = Math.floor(safeMs / 100) / 10;
-    return `${tenths.toFixed(tenths % 1 === 0 ? 0 : 1)}s`;
-  }
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes < 60) return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return `${hours}h ${remainingMinutes}m ${seconds}s`;
-}
-
-function runElapsed(activity: AgentActivityState, nowMs: number): number {
-  return Math.max(0, (activity.completedAtMs ?? nowMs) - activity.startedAtMs);
 }
 
 function latestActiveSummary(activity: AgentActivityState): string | undefined {
@@ -72,31 +50,32 @@ function latestActiveSummary(activity: AgentActivityState): string | undefined {
   return undefined;
 }
 
-function completedSummary(activity: AgentActivityState): string {
-  const tools = activity.entries.filter((entry) => entry.kind === 'tool').length;
-  const artifacts = activity.entries.filter((entry) => entry.kind === 'artifact').length;
-  const steps = activity.entries.length;
-  const parts: string[] = [];
-  if (tools > 0) parts.push(`${tools} tool${tools === 1 ? '' : 's'}`);
-  if (artifacts > 0) parts.push(`${artifacts} file${artifacts === 1 ? '' : 's'} created`);
-  if (parts.length === 0 && steps > 0) parts.push(`${steps} step${steps === 1 ? '' : 's'}`);
-  return parts.join(' · ');
+/** The most recent entry's semantic phrase — the closest match to Claude's collapsed
+ * "what the agent did" header from per-step data. */
+function finalSummary(activity: AgentActivityState): string | undefined {
+  for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
+    const entry = activity.entries[index];
+    if (entry && 'summary' in entry && entry.summary) return entry.summary;
+  }
+  return undefined;
 }
 
-export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: number): string {
-  const elapsed = formatDuration(runElapsed(activity, nowMs));
+/**
+ * Collapsed-header text. Claude-style: a natural-language phrase describing the work —
+ * NEVER an elapsed-time or tool-count pill (the founder directive explicitly rejects the
+ * ChatGPT "Worked for Xm" pattern). Built entirely from the per-step semantic summaries
+ * we already carry, so no elapsed clock or model-emitted title is needed.
+ */
+export function buildAgentActivitySummary(activity: AgentActivityState): string {
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
-  if (activity.status === 'paused') return `Paused after ${elapsed}`;
-  if (activity.status === 'failed') return `Stopped after ${elapsed}`;
-  if (activity.status === 'cancelled') return `Cancelled after ${elapsed}`;
-  if (activity.status === 'completed') {
-    const completed = completedSummary(activity);
-    return `Done in ${elapsed}${completed ? ` · ${completed}` : ''}`;
-  }
-  return active ? `${active} · ${elapsed}` : `Working for ${elapsed}`;
+  if (activity.status === 'paused') return active ?? 'Paused';
+  if (activity.status === 'failed') return finalSummary(activity) ?? 'Stopped';
+  if (activity.status === 'cancelled') return finalSummary(activity) ?? 'Cancelled';
+  if (activity.status === 'completed') return finalSummary(activity) ?? 'Done';
+  return active ?? 'Working…';
 }
 
 function buildAgentActivityAnnouncement(activity: AgentActivityState): string {
@@ -357,7 +336,7 @@ function StaticRow({
     return (
       <div className="relative pl-8 py-1.5">
         <CheckCircle2
-          className="absolute left-0 top-2 h-4 w-4 text-emerald-500"
+          className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
           aria-hidden="true"
         />
         <p className="mb-1 text-sm text-foreground/90">Created a file</p>
@@ -417,16 +396,15 @@ function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
     return <AlertCircle className="h-4 w-4 text-destructive" aria-hidden="true" />;
   }
   if (status === 'completed') {
-    return <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />;
+    return <CheckCircle2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   }
-  return <BrainCircuit className="h-4 w-4 text-amber-500" aria-hidden="true" />;
+  return <BrainCircuit className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
 }
 
 export function AgentActivityTimeline({
   activity,
   className,
   defaultExpanded = false,
-  nowMs,
   onApprove,
   onReject,
   onCancel,
@@ -439,17 +417,10 @@ export function AgentActivityTimeline({
   // collapses to the summary pill when the run finishes. `userForcedClosed` lets
   // the user override the auto-open during a run; it resets when the run ends.
   const [userForcedClosed, setUserForcedClosed] = useState(false);
-  const [liveNow, setLiveNow] = useState(() => nowMs ?? activity.updatedAtMs);
   const [entryVisibility, setEntryVisibility] = useState(() => ({
     turnId: activity.turnId,
     count: ACTIVITY_PAGE_SIZE,
   }));
-
-  useEffect(() => {
-    if (nowMs !== undefined || activity.status !== 'running') return;
-    const timer = window.setInterval(() => setLiveNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
-  }, [activity.status, nowMs]);
 
   const isActive = activity.status === 'running' || activity.status === 'awaiting-approval';
   // Effective open state: auto-open while active (unless the user closed it),
@@ -478,11 +449,7 @@ export function AgentActivityTimeline({
     }
   };
 
-  const effectiveNow = nowMs ?? Math.max(liveNow, activity.updatedAtMs);
-  const summary = useMemo(
-    () => buildAgentActivitySummary(activity, effectiveNow),
-    [activity, effectiveNow],
-  );
+  const summary = useMemo(() => buildAgentActivitySummary(activity), [activity]);
   const announcement = buildAgentActivityAnnouncement(activity);
   const visibleEntryCount =
     entryVisibility.turnId === activity.turnId ? entryVisibility.count : ACTIVITY_PAGE_SIZE;
@@ -566,7 +533,7 @@ export function AgentActivityTimeline({
           {activity.status === 'completed' && (
             <div className="relative pl-8 py-1.5 text-sm text-muted-foreground">
               <CheckCircle2
-                className="absolute left-0 top-2 h-4 w-4 text-emerald-500"
+                className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"
                 aria-hidden="true"
               />
               Done
