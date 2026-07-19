@@ -483,13 +483,20 @@ async function buildRemoteConnectorCatalog(
   }
 }
 
-function catalogToConnectorToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
+function catalogToConnectorToolDefs(
+  catalog: McpToolCatalog,
+  serverLabel?: string,
+): WebMcpToolDef[] {
   return catalog.tools.map((t) => ({
     qualifiedName: `mcp__${t.serverName}__${t.toolName}`,
     serverId: t.serverName,
     toolName: t.toolName,
     description: t.description ?? t.fallbackDescription,
     origin: 'connector',
+    // Only custom connectors have an opaque `custom-<hex>` serverId with no
+    // human name; pass the row's display name so the activity feed reads
+    // "Using <name> connector" instead of leaking the id.
+    ...(serverLabel ? { serverLabel } : {}),
     inputSchema: t.inputSchema,
   }));
 }
@@ -879,7 +886,7 @@ export async function loadUserConnectorToolDefs(
     const customRows = await getUserCustomConnectorRows(userId, customConnectorLimit);
     for (const row of customRows) {
       const catalog = await buildCustomConnectorCatalog(userId, row);
-      if (catalog) defs.push(...catalogToConnectorToolDefs(catalog));
+      if (catalog) defs.push(...catalogToConnectorToolDefs(catalog, row.name));
     }
 
     if (defs.length > MAX_CONNECTOR_TOOLS_PER_USER) {

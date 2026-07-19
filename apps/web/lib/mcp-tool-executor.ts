@@ -223,6 +223,13 @@ export interface WebMcpToolDef {
   description: string;
   /** Ownership used by the canonical activity stream for truthful UI labels. */
   origin?: 'operator' | 'connector';
+  /**
+   * Human display name of the connector/server (e.g. a user's custom connector
+   * name "Notion"), used for the activity-feed summary when the serverId is an
+   * opaque `custom-<hex>` id that carries no name. Omit for operator/first-party
+   * servers whose serverId already humanizes correctly (github, filesystem, …).
+   */
+  serverLabel?: string;
   /** JSON Schema for the tool's input. */
   inputSchema: Record<string, unknown>;
 }

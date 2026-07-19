@@ -411,23 +411,26 @@ FOUNDER OAuth-app registrations); GitHub App-install browser flow on mobile is a
 separate slice.
 
 2026-07-19 Custom-connector activity badge and summary
-(`CONNECTOR-BADGE-CUSTOM-NAME`, Correctness fixed / real-name display DEFERRED):
+(`CONNECTOR-BADGE-CUSTOM-NAME`, Summary shows real name / badge initial DEFERRED):
 a user's custom remote connector executes as `mcp__custom-<shortId>__<tool>`,
 where the serverId is an opaque `custom-<hex>` id carrying no human name. The
 Claude-style activity feed derived its badge letter and summary label from that
 serverId, so EVERY custom connector rendered a wrong "C" badge (from "custom-")
 and a leaked-id summary ("Using Custom A1b2c3d4e5 connector"). FIXED (no contract
-change): `connectorInitial` (unified-chat `AgentActivityTimeline`) and
-`mcpServerLabel`/`canonicalToolSummary` (web `tool-loop.ts`) now detect the
-`custom-` namespace and degrade to the generic connector badge ("M") and phrasing
-("Using connector") instead of the misleading id-derived output. Named servers
-(github → "G"/"Using GitHub connector") are unchanged. Tests: AgentActivityTimeline
-connector-badge cases + `tool-loop.summary.test.ts`. DEFERRED (needs the deferred
-model-emitted field): showing the connector's REAL name/initial requires threading
-the display name (`user_custom_connectors.name`) through the catalog →
-`WebMcpToolDef` → the versioned agent-event tool schema → `AgentActivityEntry`;
-that is the "new model-emitted field — NOT blind" work under task #25, not done
-here.
+change): (1) `connectorInitial` (unified-chat `AgentActivityTimeline`) and
+`mcpServerLabel` (web `tool-loop.ts`) detect the `custom-` namespace and stop
+emitting the misleading id-derived output; (2) the connector's REAL display name
+(`user_custom_connectors.name`) is now threaded web-internally — `row.name` →
+`catalogToConnectorToolDefs(catalog, row.name)` → `WebMcpToolDef.serverLabel` →
+`offeredServerLabel` → `canonicalToolSummary`/`canonicalApprovalSummary` — so the
+activity feed reads "Using Notion connector" / "Review Notion action" with the
+real name, no versioned-contract change. Named servers unchanged (github →
+"Using GitHub connector"). Tests: AgentActivityTimeline connector-badge cases +
+`tool-loop.summary.test.ts` (incl. the serverLabel path). RESIDUAL DEFERRED: the
+BADGE letter is still the generic "M" for custom connectors — showing the real
+INITIAL needs the display name on the versioned agent-event tool schema →
+`AgentActivityEntry` (the badge reads `entry.name`, the raw tool id). That event
+field is the "new model-emitted field — NOT blind" work under task #25.
 
 2026-07-19 Mobile live artifact preview (`MOBILE-ARTIFACT-PREVIEW-01`, Fixed in
 repo for html/svg): mobile previously showed only a placeholder for previewable
