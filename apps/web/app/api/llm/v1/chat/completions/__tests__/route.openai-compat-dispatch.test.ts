@@ -170,6 +170,7 @@ const rlsMocks = vi.hoisted(() => ({
 const workflowRouteMocks = vi.hoisted(() => ({
   start: vi.fn(),
   createRun: vi.fn(),
+  findActive: vi.fn(),
   loadMcpTools: vi.fn(),
   loadConnectorTools: vi.fn(),
 }));
@@ -185,6 +186,7 @@ vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/cloud-agent-run-service')>()),
   createCloudAgentRun: workflowRouteMocks.createRun,
+  findActiveCloudAgentRunForConversation: workflowRouteMocks.findActive,
 }));
 
 vi.mock('@/lib/user-connector-tools', () => ({
@@ -264,7 +266,7 @@ function makeRequest(model: string, conversationId?: string): NextRequest {
   });
 }
 
-function makeAgiWorkRequest(model: string): NextRequest {
+function makeAgiWorkRequest(model: string, conversationId?: string): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -278,6 +280,7 @@ function makeAgiWorkRequest(model: string): NextRequest {
       messages: [{ role: 'user', content: 'complete this durable task' }],
       stream: true,
       work_mode: 'agiwork',
+      ...(conversationId ? { conversation_id: conversationId } : {}),
     }),
   });
 }
@@ -449,6 +452,70 @@ describe('Managed Web durable AGI Work dispatch', () => {
         userId: 'user-1',
         mcpTools: [],
       }),
+    );
+  });
+});
+
+describe('Managed Web conversation run concurrency guard', () => {
+  it('rejects a new turn with 409 while a prior run for the conversation is still active', async () => {
+    vi.clearAllMocks();
+    const conversationId = '0190a000-0000-7000-8000-0000000000aa';
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
+    const query = vi.fn(async (sql: string) =>
+      /web_conversations/i.test(sql) ? [{ id: conversationId, user_id: 'user-1' }] : [],
+    );
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'user-1' });
+    mockCheckAvailable.mockResolvedValue(true);
+    mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
+    mockGetBalance.mockResolvedValue({
+      account_id: 'acct-1',
+      credits_remaining_cents: 10000,
+      credits_allocated_cents: 20000,
+    });
+    managedUsageMocks.reserve.mockImplementation(async (input) => ({
+      db: input.db,
+      userId: input.userId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      leaseToken: 'lease-test',
+      estimatedCostCents: input.estimatedCostCents,
+    }));
+    mockGetProviderFromModel.mockReturnValue('mistral');
+    workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
+    workflowRouteMocks.loadConnectorTools.mockResolvedValue([]);
+    workflowRouteMocks.findActive.mockResolvedValue({
+      id: 'run-active-1',
+      userId: 'user-1',
+      requestId: 'request-active-1',
+      state: 'running',
+      originSurface: 'web',
+      workMode: 'agiwork',
+      provider: 'mistral',
+      model: 'mistral-large-3',
+      createdAt: '2026-07-18T00:00:00.000Z',
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    });
+
+    const response = await POST(makeAgiWorkRequest('mistral-large-3', conversationId));
+
+    expect(response.status, await response.clone().text()).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'conversation_run_in_progress', run_id: 'run-active-1' },
+    });
+    expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-active-1');
+
+    // The guard keys on the conversation and excludes the caller's own retry.
+    expect(workflowRouteMocks.findActive).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: 'user-1', conversationId }),
+    );
+    // No second parallel run is created and no workflow is started.
+    expect(workflowRouteMocks.createRun).not.toHaveBeenCalled();
+    expect(workflowRouteMocks.start).not.toHaveBeenCalled();
+    // The reservation made for the rejected turn is refunded, not charged.
+    expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed' }),
     );
   });
 });

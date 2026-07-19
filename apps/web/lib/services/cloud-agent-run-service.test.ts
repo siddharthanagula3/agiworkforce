@@ -9,6 +9,7 @@ import {
   claimCloudAgentApprovalCheckpoint,
   completeCloudAgentApprovalCheckpoint,
   createCloudAgentRun,
+  findActiveCloudAgentRunForConversation,
   getCloudAgentRun,
   listCloudAgentRuns,
   requestCloudAgentRunCancellation,
@@ -171,6 +172,43 @@ describe('cloud agent run service', () => {
         'claude-test',
       ],
     );
+  });
+
+  it('finds an active guarding run for a conversation, excluding the caller retry and cancelling runs', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([RUN_ROW]);
+
+    const active = await findActiveCloudAgentRunForConversation(db, {
+      userId: 'user-1',
+      conversationId: '0190a000-0000-7000-8000-000000000099',
+      excludeRequestId: 'agi.chat.web.send.turn-2',
+    });
+
+    expect(active?.id).toBe(RUN_ROW.id);
+    const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
+    expect(sql).toMatch(/state in \('running', 'queued'\)/i);
+    expect(sql).toMatch(/cancellation_requested_at is null/i);
+    expect(sql).toMatch(/request_id <> \$3/i);
+    expect(params).toEqual([
+      'user-1',
+      '0190a000-0000-7000-8000-000000000099',
+      'agi.chat.web.send.turn-2',
+    ]);
+  });
+
+  it('returns null when no active run guards the conversation', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([]);
+
+    const active = await findActiveCloudAgentRunForConversation(db, {
+      userId: 'user-1',
+      conversationId: '0190a000-0000-7000-8000-000000000099',
+    });
+
+    expect(active).toBeNull();
+    expect(vi.mocked(db.query).mock.calls[0]![1]).toEqual([
+      'user-1',
+      '0190a000-0000-7000-8000-000000000099',
+      null,
+    ]);
   });
 
   it('appends an envelope and advances state atomically only for a new sequence', async () => {
