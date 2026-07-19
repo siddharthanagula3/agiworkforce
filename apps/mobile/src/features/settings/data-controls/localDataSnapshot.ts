@@ -176,7 +176,13 @@ export async function resetLocalInMemoryState(): Promise<void> {
     chatMode: 'chat',
     chatStyle: 'normal',
     toolAccess: 'auto',
-    features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+    features: {
+      webSearch: true,
+      imageGen: true,
+      health: false,
+      codeExecution: false,
+      research: false,
+    },
   });
   // Reset device-global settings
   useSettingsStore.setState({

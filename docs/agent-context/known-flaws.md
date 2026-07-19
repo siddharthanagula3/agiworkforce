@@ -6,6 +6,19 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Mobile Deep Research dispatch (`MOBILE-DEEP-RESEARCH-DISPATCH-01`,
+Fixed in repo): mobile Cloud had only a cosmetic `research` ChatMode prompt (no UI
+selector — `setChatMode` had zero callers) and sent NO `research` flag, so the
+server's Deep Research loop never ran on mobile. Now wired end-to-end, reusing the
+existing server support: `FEATURES.research` + `ChatFeatures.research` +
+`StreamRequest.research`; `chatExecutionStore` computes `researchEnabled`
+(mirroring `webSearchEnabled` — gated on the selected model's `research` AND
+`search` capabilities + a paid tier) and sends `research: true`; AddToChatSheet
+shows a capability+tier-gated "Deep research" toggle (cloud-only). Server + inline
+citation/agent-activity rendering already existed. 3 gating tests + full mobile
+suite green. Also fixed a pre-existing stale test model id (`qwen-3.5-plus` →
+`qwen-3.7-plus`) that had been failing the web-search-generic-backend assertion.
+
 2026-07-19 Cross-surface dedup audit outcome (`DEDUP-AUDIT-2026-07-19`): a
 reuse-first audit of usage / models / chats / memory / settings across
 web/mobile/desktop/CLI/VS Code found that the suspected duplication is LARGELY

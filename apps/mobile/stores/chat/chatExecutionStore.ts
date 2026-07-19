@@ -1390,6 +1390,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           genericBackendConfigured: useTierStore.getState().genericWebSearchAvailable,
         });
 
+      // Deep Research: multi-turn cited synthesis. Re-verified per-send (not just
+      // at the AddToChatSheet UI) so the toggle is never cosmetic — the SELECTED
+      // model must declare BOTH the `research` capability AND native `search`
+      // (the server's research loop requires web search: request-processor gates
+      // researchMode on `search`, and the model must be a real deep-research
+      // model), and the account must be PAID (the server rejects research for
+      // free-trial requests). Free UI + wire request stay aligned; the server
+      // still enforces the entitlement.
+      const researchEnabled =
+        FEATURES.research &&
+        useChatViewStore.getState().features.research &&
+        executionModelMetadata?.capabilities?.research === true &&
+        executionModelMetadata?.capabilities?.search === true &&
+        useTierStore.getState().tier !== 'free';
+
       // Per-turn code execution: mirrors webSearchEnabled above, with two extra
       // honesty checks so the toggle is never cosmetic — re-verified here (not
       // just at the AddToChatSheet UI layer) in case the user switched models
@@ -1476,6 +1491,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           thinking: thinkingEnabled,
           ...(thinkingEnabled && wireEffort ? { effort: wireEffort } : {}),
           ...(webSearchEnabled ? { web_search: true } : {}),
+          ...(researchEnabled ? { research: true } : {}),
           ...(codeExecutionEnabled ? { code_execution: true } : {}),
           ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
           ...(options?.skillName ? { skill_name: options.skillName } : {}),

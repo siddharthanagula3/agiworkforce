@@ -9,6 +9,7 @@ import {
   FileText,
   Globe,
   Paintbrush,
+  Telescope,
   FolderPlus,
   Palette,
   Link,
@@ -96,6 +97,16 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     appMode === 'cloud' &&
     selectedModelSupportsCodeExecution &&
     codeExecutionDeploymentAvailable;
+  // Deep Research: cloud-only, paid, and only for a model that declares BOTH the
+  // `research` capability AND native `search` (the server's research loop needs
+  // web search). Same "never a cosmetic toggle" reasoning as web search / code
+  // execution — gated on the SELECTED model + tier so switching models hides it.
+  const showResearchToggle =
+    FEATURES.research &&
+    appMode === 'cloud' &&
+    selectedModelMetadata?.capabilities?.research === true &&
+    selectedModelMetadata?.capabilities?.search === true &&
+    !['free', 'local-only', 'byok'].includes(tier);
   // UI hint only; the API remains authoritative. Basic and every higher paid
   // Cloud plan may request AGI Work, while Free/Local/BYOK cannot.
   const canUseAgiWork = !['free', 'local-only', 'byok'].includes(tier);
@@ -156,6 +167,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       if (!FEATURES.codeExecution) return;
       haptic();
       setFeature('codeExecution', enabled);
+    },
+    [haptic, setFeature],
+  );
+
+  const handleResearchToggle = useCallback(
+    (enabled: boolean) => {
+      if (!FEATURES.research) return;
+      haptic();
+      setFeature('research', enabled);
     },
     [haptic, setFeature],
   );
@@ -364,6 +384,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
         {/* Section 3: Tool availability */}
         {(FEATURES.webSearch && selectedModelSupportsSearch) ||
+        showResearchToggle ||
         showCodeExecutionToggle ||
         FEATURES.imageGen ||
         FEATURES.computerUse ? (
@@ -375,6 +396,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 description="Search current web results when needed"
                 enabled={features.webSearch}
                 onToggle={handleWebSearchToggle}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : null}
+            {showResearchToggle ? (
+              <CapabilityRow
+                icon={<Telescope size={18} color={themeColors.teal} />}
+                label="Deep research"
+                description="Multi-step research with cited sources"
+                enabled={features.research}
+                onToggle={handleResearchToggle}
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
@@ -418,6 +450,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
         {/* Divider */}
         {(FEATURES.webSearch && selectedModelSupportsSearch) ||
+        showResearchToggle ||
         showCodeExecutionToggle ||
         FEATURES.imageGen ||
         FEATURES.computerUse ? (
