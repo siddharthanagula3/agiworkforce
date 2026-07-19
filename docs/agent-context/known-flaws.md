@@ -6,6 +6,76 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 STRENGTHEN pass (founder directive: harden web-search/E2B/tool-loop +
+app UI/UX so it "just works", no redo). 5 adversarial audits; confirmed findings
+tracked here, fixed in batches. DONE = fixed+tested; OPEN = tracked follow-up.
+
+web-search (DONE, commit 8775cf0ab): untrusted-snippet injection delimiters,
+result-count + snippet caps, non-http(s) URL rejection, query-truncation signal.
+
+- OPEN WEBSEARCH-GUARD-NATIVE-NOSEARCH: a native-provider model with
+  capabilities.search:false + tools:true accepts web_search:true but silently
+  drops it (422 honesty guard misses this native-no-search case). Extend the
+  guard in request-processor to reject when neither native nor generic tool attaches.
+
+tool-loop (DONE, commit 5dc1bc40f): read-only classification prefix-only (was
+substring — budget_transfer/create_playlist/delete_query misclassified parallel-
+safe), provider-stream arg-JSON cap (256KB) + tool-call-per-step cap (32) +
+duplicate tool_call id re-mint.
+
+- OPEN TOOLLOOP-NO-INFLIGHT-TIMEOUT (HIGH): no per-tool/per-provider-call timeout;
+  AbortController is a documented no-op; a hung tool/stream runs until platform
+  SIGKILL, which skips the generator finally → leaked E2B sandbox. Thread a real
+  AbortSignal + Promise.race timeout into runMcpTool/buildToolLoopStream.
+- OPEN TOOLLOOP-UNBOUNDED-FANOUT (MED): Promise.all over all read-only calls, no
+  concurrency pool, no per-turn total cap → outbound request flood. Add p-limit.
+- OPEN TOOLLOOP-CONTEXT-GROWTH (MED): messages grow every step (100KB tool results
+  × up to 100 steps), no trim for managed/BYOK → mid-loop context overflow.
+
+E2B (OPEN — tracked, batch in progress):
+
+- E2B-GATE-BYPASS (HIGH): execute_code intercept fires on tool NAME + resolves
+  getE2BExecutor (gated key||flag); with E2B_API_KEY present but AGI_E2B_EXECUTION
+  off, a loop entered for connectors/agiwork can run a model-emitted execute_code.
+  Guard the intercept with e2bCutoverEnabled() (flag-only).
+- E2B-PAUSE-BY-LOOKUP-LEAK (HIGH): tool-loop finally pauses via Redis re-lookup
+  (fail-open); if saveE2BSession errored/Redis down the just-created sandbox is
+  never paused/killed → bills to the 10-min backstop. Dispose the executor's OWN
+  live sandboxId directly; use Redis only as a resume hint.
+- E2B-NO-USER-QUOTA (HIGH): no per-user concurrent-sandbox cap; N conversations =
+  N concurrent 10-min sandboxes. Enforce a per-user cap before Sandbox.create.
+- E2B-KILL-BEFORE-DELETE (MED): killE2BSession deletes the Redis mapping before
+  Sandbox.kill → orphan if kill is skipped/throws. Kill first, delete after.
+- E2B-TRANSIENT-RESUME-ORPHAN (MED): a transient connect() failure creates a fresh
+  sandbox + overwrites the mapping, orphaning the still-live paused one.
+- E2B-NO-ORPHAN-SWEEPER (MED): no cron reaps paused sandboxes by metadata age.
+- E2B-ABORT-NOT-THREADED (MED): no AbortSignal/timeout into sandbox.runCode.
+
+web UI/UX (OPEN — tracked):
+
+- WEBUI-REGEN-DELETE-BEFORE-RESEND (HIGH): Regenerate deletes the persisted turn
+  before the resend; a failed resend loses the exchange permanently.
+- WEBUI-AUTH-SEND-SILENT-LOSS (HIGH): getAuthToken() outside the try in sendMessage;
+  a null/expired token throws with no setError, input already cleared → message
+  vanishes silently. Mirror continueGeneration's try/catch.
+- WEBUI-MIDSTREAM-SWITCH-SPINNER (MED): switching conversation mid-stream strands
+  the reply (perpetual spinner until reload).
+- WEBUI-APPROVAL-DOUBLE-SUBMIT (MED): tool-approval Approve/Reject can double-fire.
+- WEBUI-DELETED-CONV-BLANK-BOUNCE (MED): opening a deleted/forbidden conversation
+  silently bounces to blank /chat with no message.
+
+mobile UI/UX (OPEN — tracked):
+
+- MOBILEUI-VOICE-NO-REPLY (HIGH): handleSend text path resolves on onAccepted
+  (pre-stream), ignoring awaitCompletion, so voice mode never reads the reply and
+  hands-free never re-arms.
+- MOBILEUI-RECONNECT-QUEUE-WIPE (MED): clearQueuedPlaceholders removes ALL queued
+  msgs for a conversation, not the one entry → queued messages can vanish. Use
+  resolveOfflineMessage(conversationId, queueId).
+- MOBILEUI-EDIT-BLOCKED-GLOBAL (MED): editMessage gates on global isStreaming, not
+  streamingConversations.has(conversationId) (retryMessage is correct).
+- MOBILEUI-OFFLINE-BADGE-FROZEN (MED): queued-count badge only set on mount.
+
 2026-07-19 QA-docx systematic cross-reference (backend 470-case + Claude cases +
 mobile 400+-case reference docx walked section-by-section vs code, 4 parallel
 audit agents). Capability surfaces (search/tools/connectors/MCP/research/files/
