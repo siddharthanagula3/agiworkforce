@@ -179,18 +179,34 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   (openSettingsDialog('models-keys')) instead of a lightweight inline model popover like
   Claude. No ModelPopover component exists on desktop yet — building an anchored model+
   effort popover is a dedicated slice, not a wiring tweak. HIGHEST remaining desktop gap.
-- OPEN UIDESK-ACCOUNT-MENU-HIJACKS-SIDEBAR (MED): Sidebar.tsx ~478/544 unmounts
-  Projects+Recents and renders AccountMenu inline when the avatar is clicked, instead of
-  a floating portaled popover anchored to the footer avatar (Claude/web behavior).
+- DONE UIDESK-ACCOUNT-MENU-HIJACKS-SIDEBAR (MED): the sidebar no longer unmounts
+  Projects+Recents when the avatar is clicked. AccountMenu now renders as a floating
+  popover anchored above the footer avatar (position:absolute, bottom:calc(100%+6px),
+  surface-elevated card + shadow) with a full-window click-outside backdrop, so the
+  conversation list stays put (Claude/web behavior). The Projects/Recents `!showAccountMenu`
+  guards were removed. Typecheck clean; render verification blocked by the pre-existing v3
+  test failure below (a contained JSX/CSS reposition; AccountMenu itself unchanged).
 - OPEN UIDESK-NATIVE-WINDOW-DECORATIONS (LOW): tauri.conf.json decorations:true shows the
   standard OS title strip vs Claude's content-integrated flush header; the custom
   features/layout/TitleBar.tsx is orphaned (never mounted). Window-chrome change, higher
   risk — defer.
-- PRE-EXISTING (not caused by this work) DESKTOP-V3-TEST-PLAN-BUDGET-BROKEN: the v3 shell
-  test suites (DesktopShellV3.test / .integration) fail at module load with "TypeError:
-  getPlanUsageBudgetCents is not a function" (featureGates.ts ~130 → stores/auth.ts).
-  Confirmed via git-stash that it fails without this session's UI edits. A billing-util
-  export/mock gap unrelated to the visual changes; tracked for a follow-up.
+- OPEN (PRE-EXISTING, not caused by this work — REAL BUG, HIGH) DESKTOP-PRICING-DANGLING-
+  IMPORT: apps/desktop/src/constants/pricing.ts:1 imports { getPlanUsageBudgetCents } from
+  '@agiworkforce/types' and calls it at module-top-level (pricing.ts ~130/156/182 plan
+  table `tokenCredits: getPlanUsageBudgetCents(...)`). But that fn NO LONGER EXISTS in the
+  types SOURCE — src/billing-catalog.ts exports only getPlanPriceUsd/getPlanPriceCents/
+  getPlanPriceInr; getPlanUsageBudgetCents now lives web-server-only in apps/web/lib/
+  server/managed-usage-policy.ts. It survives ONLY in the STALE committed dist
+  (dist/billing-catalog.js); @agiworkforce/types resolves to ./src (package.json main), so
+  the import is `undefined` → "TypeError: getPlanUsageBudgetCents is not a function" at
+  module init. This is why BOTH v3 shell suites (DesktopShellV3.test/.integration) fail at
+  load — and it is a genuine runtime landmine: any desktop build resolving to src (or a
+  rebuilt dist) crashes when pricing.ts initializes. Confirmed via git-stash it predates
+  this session. FIX (needs care — billing values): desktop must stop importing a web-
+  server-only fn; source the plan `tokenCredits` from a shared/desktop-safe value or drop
+  the field if vestigial. NOT guessed here — needs the intended per-plan token-credit
+  numbers (founder/billing SSOT), not a hallucinated constant. Blocks all v3-shell render
+  tests until fixed.
 
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
