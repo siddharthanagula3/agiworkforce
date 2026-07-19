@@ -106,14 +106,20 @@ export async function pauseE2BSession(scope: E2BSessionScope): Promise<void> {
  */
 export async function killE2BSession(scope: E2BSessionScope): Promise<void> {
   const session = await getE2BSession(scope);
-  await deleteE2BSession(scope);
-  if (!session) return;
-  const Sandbox = await importSandbox();
-  if (!Sandbox) return;
+  if (!session) {
+    await deleteE2BSession(scope);
+    return;
+  }
+  // Kill FIRST (on the captured id), then clear the mapping — deleting first
+  // would orphan the sandbox if kill is skipped (no SDK) or throws, since the
+  // mapping needed to find it again is already gone.
   try {
-    await Sandbox.kill(session.sandboxId);
+    const Sandbox = await importSandbox();
+    if (Sandbox) await Sandbox.kill(session.sandboxId);
   } catch (err) {
     logger.warn({ err, conversationId: scope.conversationId }, '[e2b] kill failed');
+  } finally {
+    await deleteE2BSession(scope);
   }
 }
 
@@ -290,9 +296,29 @@ export async function getE2BExecutor(scope?: E2BSessionScope): Promise<E2BExecut
         return null;
       }
     },
+    async pause(): Promise<void> {
+      // Conversation-scoped only. Pause THIS executor's own live sandbox by its
+      // captured id — never via a Redis re-lookup, which fail-opens: a stale or
+      // absent session mapping (saveE2BSession is best-effort) would otherwise
+      // leave the just-created sandbox billing until its 10-min timeout.
+      if (!scope) return;
+      // Persist first so the next turn can resume; even if this Redis write
+      // fails, the live-handle pause below still stops billing.
+      try {
+        await persistSession();
+      } catch (err) {
+        logger.warn({ err, conversationId }, '[e2b] persistSession before pause failed');
+      }
+      try {
+        // Static pause on the captured live id (consistent with pauseE2BSession).
+        await Sandbox.pause(sandboxId);
+      } catch (err) {
+        logger.warn({ err, conversationId }, '[e2b] pause (live handle) failed');
+      }
+    },
     async dispose(): Promise<void> {
       // Conversation-scoped sessions are NOT killed here — the tool loop pauses them
-      // (via pauseE2BSession) once at turn end so state survives to the next call/turn.
+      // (via pause()) once at turn end so state survives to the next call/turn.
       // Only ephemeral (no-conversationId) callers kill immediately, unchanged from the
       // original per-call behavior.
       if (scope) {
