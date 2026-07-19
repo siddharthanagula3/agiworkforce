@@ -25,4 +25,17 @@ describe('canonicalToolSummary — MCP connectors', () => {
     expect(summary).toBe('Using MCP tool');
     expect(summary).not.toMatch(/custom-|a1b2c3d4e5/i);
   });
+
+  it('uses the connector display name when supplied (custom connector real name)', () => {
+    // The tool loop passes the custom connector's row.name as serverLabel, so an
+    // opaque custom-<hex> connector reads with its real name.
+    const summary = canonicalToolSummary(
+      'mcp__custom-a1b2c3d4e5__do_thing',
+      'connector',
+      undefined,
+      'Notion',
+    );
+    expect(summary).toBe('Using Notion connector');
+    expect(summary).not.toMatch(/custom-|a1b2c3d4e5/i);
+  });
 });
