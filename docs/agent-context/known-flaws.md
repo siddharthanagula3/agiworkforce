@@ -6,6 +6,32 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Cross-surface dedup audit outcome (`DEDUP-AUDIT-2026-07-19`): a
+reuse-first audit of usage / models / chats / memory / settings across
+web/mobile/desktop/CLI/VS Code found that the suspected duplication is LARGELY
+ALREADY CONSOLIDATED — model catalog (`@agiworkforce/types` `model-catalog.ts`
+`getModelsForTierAndSurface`/`getModelMetadataById`, no hardcoded rosters), sync
+reducers (`@agiworkforce/sync` Wave-4), memory engine (`@agiworkforce/agent-core`),
+usage contract (`managed-usage-balance.ts`), and settings gating
+(`@agiworkforce/sync` `mergeCloudSafeSettings`/`rebase…`, reused by BOTH mobile AND
+desktop — the handoff's "Desktop/Web do not share one canonical typed projection"
+is STALE for the gating layer) are all shared and reused. INTENTIONAL, do NOT
+dedup: desktop Rust `cloud_sync.rs` (cross-language parity via golden fixtures),
+desktop `BudgetStatusWidget` (separate local daily-spend IPC), per-surface settings
+FIELD projection + per-surface warning thresholds (different denominators/UX),
+Local/BYOK/Cloud separation. Remaining TRACKED items (not safe blind merges):
+(1) `DEDUP-VSCODE-USAGE-SCHEMA-01` (Low/optional) — `apps/extension-vscode/src/
+protocol/apiResponses.ts` `TierInfoSchema` re-declares a lenient subset of the
+`/api/usage` `ManagedUsageSummaryResponse`; only swap to the shared strict
+`parseManagedUsageSummaryResponse` if `/api/usage` is guaranteed to always return
+the full shape, else keep lenient. (2) `DEDUP-MEMORY-CATEGORY-3WAY-01` (Medium) —
+`MemoryCategory` is modeled 3 incompatible ways (`types/memory.ts` 7 literals;
+`agent-core/memory.ts` 6 — the runtime one; desktop `memoryStore.ts` 4); reconcile
+onto one canonical set in `@agiworkforce/types` — needs a product decision on the
+set, not a blind merge. Also within-web: `chat-store.ts` + `web-chat-store.ts` each
+redeclare `Message`/`Conversation` (possible legacy `web-chat-store`; web owner to
+confirm). DONE from this audit: deleted the dead mobile cloud-consolidation branch.
+
 2026-07-19 Mobile cloud auto-memory pre-success + duplication
 (`MOBILE-CLOUD-AUTOMEMORY-PRESUCCESS-01`, Fixed in repo): mobile
 `chatExecutionStore` fired `consolidateFactsFromTurn` from the user's message
