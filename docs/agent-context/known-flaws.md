@@ -6,6 +6,28 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Per-model tools capability gate for connectors/MCP
+(`WEB-TOOLS-MODEL-CAP-GATE-01`, Fixed in repo): the managed completions
+streaming path loaded operator MCP tools + per-user connector tools and entered
+the agentic tool loop for ANY model, with no check against the selected model's
+registry `tools` capability. Selecting a `tools:false` model — the Perplexity
+`sonar`/`sonar-deep-research` search models are the only such models in the 20
+selectable chat models — with a connected connector shipped function-calling
+tool definitions to a model that cannot do function calling, so the provider
+rejected the whole request. The office-creation, skill, and E2B paths already
+4xx for `tools:false`; connectors/MCP did not. `route.ts` now reads
+`getModelMetadataById(model).capabilities.tools` and skips MCP + connector tool
+loading when it is false, so those models fall through to the standard
+single-turn path (search-native models still answer; connectors/MCP are simply
+not offered). Verified: a streaming `sonar` request no longer calls
+`loadMcpToolDefs`/`loadUserConnectorToolDefs` and returns 200. RESIDUAL: the
+`research` capability flag is decorative server-side — research mode is gated on
+`search`, so `grok-4.3`/`glm-5.2`/`deepseek-v4-pro` (`research:true`,
+`search:false`) get no research; and the 7 fallback-group chat models
+(deepseek×2/qwen×3/grok/glm, `tools:true`/`search:false`) can only web-search
+when BOTH the client `generic_web_search` feature flag and server
+`PERPLEXITY_API_KEY` are set (tracked, next slices).
+
 2026-07-19 Conversation run concurrency guard (`WEB-RUN-CONCURRENCY-01`, Fixed in
 repo): a new managed completion turn for a conversation with a still-active
 (`running`/`queued`, not cancelling) run previously created a SECOND parallel

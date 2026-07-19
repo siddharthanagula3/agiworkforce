@@ -248,7 +248,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
 
-function makeRequest(model: string, conversationId?: string): NextRequest {
+function makeRequest(model: string, conversationId?: string, stream = false): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -260,7 +260,7 @@ function makeRequest(model: string, conversationId?: string): NextRequest {
     body: JSON.stringify({
       model,
       messages: [{ role: 'user', content: 'hi' }],
-      stream: false,
+      stream,
       ...(conversationId ? { conversation_id: conversationId } : {}),
     }),
   });
@@ -517,5 +517,45 @@ describe('Managed Web conversation run concurrency guard', () => {
     expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'failed' }),
     );
+  });
+});
+
+describe('Per-model tools capability gate', () => {
+  it('does not load MCP/connector tools for a tools:false model (perplexity sonar)', async () => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
+    mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
+    mockCheckAvailable.mockResolvedValue(true);
+    mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
+    mockGetBalance.mockResolvedValue({
+      account_id: 'acct-1',
+      credits_remaining_cents: 10000,
+      credits_allocated_cents: 20000,
+    });
+    managedUsageMocks.reserve.mockImplementation(async (input) => ({
+      db: input.db,
+      userId: input.userId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      leaseToken: 'lease-test',
+      estimatedCostCents: input.estimatedCostCents,
+    }));
+    mockGetProviderFromModel.mockReturnValue('perplexity');
+    // If the gate were absent, these would be loaded and shipped to sonar,
+    // which cannot do function calling — the provider would reject the request.
+    workflowRouteMocks.loadMcpTools.mockResolvedValue([{ name: 'op_tool' }]);
+    workflowRouteMocks.loadConnectorTools.mockResolvedValue([{ name: 'gh_tool' }]);
+
+    // sonar is search-native but capabilities.tools === false in the registry.
+    const response = await POST(makeRequest('sonar', undefined, true));
+
+    // The gate skips tool loading entirely for a tools:false model.
+    expect(workflowRouteMocks.loadMcpTools).not.toHaveBeenCalled();
+    expect(workflowRouteMocks.loadConnectorTools).not.toHaveBeenCalled();
+    // No durable agent workflow is started; it falls through to the standard path.
+    expect(workflowRouteMocks.start).not.toHaveBeenCalled();
+    // The request is not rejected by the tools gate (search model still answers).
+    expect(response.status).toBe(200);
   });
 });

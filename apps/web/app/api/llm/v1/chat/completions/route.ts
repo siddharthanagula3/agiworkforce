@@ -21,6 +21,7 @@ import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
 import { createFailoverPlan } from './lib/managed-failover';
 import type { StreamChunk } from '@agiworkforce/types';
+import { getModelMetadataById } from '@agiworkforce/types';
 import {
   ManagedUsageRequestError,
   finalizeManagedUsageRequest,
@@ -335,12 +336,23 @@ async function handleChatCompletions(request: NextRequest) {
     // Fully server-side and degrades to [] on any failure, so the SSE wire shape
     // is unchanged (no new event types) and an unconfigured/empty environment
     // behaves exactly as before.
-    const [operatorTools, connectorTools] = await Promise.all([
-      loadMcpToolDefs(),
-      loadUserConnectorToolDefs(userId, {
-        customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-      }),
-    ]);
+    // Per-model tools gate (WEB-TOOLS-MODEL-CAP-GATE-01): a model whose registry
+    // capability `tools` is false (e.g. the Perplexity `sonar` search models) cannot
+    // do function calling. Shipping MCP / connector tool definitions to it makes the
+    // provider reject the whole request. Skip tool loading for such models so they
+    // fall through to the standard single-turn path — search-native models still
+    // answer; connectors/MCP are simply not offered. The office-creation, skill, and
+    // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
+    const modelSupportsTools =
+      getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
+    const [operatorTools, connectorTools] = modelSupportsTools
+      ? await Promise.all([
+          loadMcpToolDefs(),
+          loadUserConnectorToolDefs(userId, {
+            customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
+          }),
+        ])
+      : [[], []];
     const mcpTools = [...operatorTools, ...connectorTools];
     const loopInputs = classifyToolLoopInputs(mcpTools, processed.llmRequest.tools);
 
