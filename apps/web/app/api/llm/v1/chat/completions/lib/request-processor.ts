@@ -1545,6 +1545,33 @@ export async function processRequest(
   const estimatedPromptTokens = Math.min(rawEstimatedPromptTokens, MAX_ESTIMATED_PROMPT_TOKENS);
 
   const providerLower = provider.toLowerCase();
+
+  // Capability honesty (QA 1.7.20 / 1.11.1), BEFORE any credit reservation: a
+  // caller that explicitly asked to search must not receive a silent model-only
+  // answer. Native-search providers (anthropic/google/openai) search in both
+  // streaming and non-streaming paths, but every other provider searches only
+  // through the generic fallback tool, which runs inside the agentic loop and
+  // therefore requires streaming. So `web_search: true` on a generic-fallback
+  // provider with `stream: false` would attach no search tool at all and answer
+  // without browsing — reject it explicitly (mirrors office_creation_stream_required).
+  if (chatRequest.web_search && !chatRequest.stream && webSearchNeedsGenericTool(providerLower)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              'Web search on this provider requires a streaming chat request. Set stream: true.',
+            type: 'invalid_request_error',
+            code: 'web_search_stream_required',
+            param: 'stream',
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
+
   const effectiveEffort = resolveRequestEffort(
     providerLower,
     chatRequest.model,
