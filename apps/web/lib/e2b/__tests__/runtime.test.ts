@@ -61,6 +61,28 @@ const connect = vi.fn(async (sandboxId: string) => makeSandboxInstance(sandboxId
 const staticKill = vi.fn(async () => true);
 const staticPause = vi.fn(async () => true);
 
+// Sandboxes the E2B account currently holds, as the list API would report them. Tests
+// populate this to exercise the per-user concurrency quota. `staticList` filters by the
+// query's metadata (server-side AND filter) and pages the result once.
+let listedSandboxes: Array<{ metadata: Record<string, string> }> = [];
+const staticList = vi.fn((opts?: { query?: { metadata?: Record<string, string> } }) => {
+  const wanted = opts?.query?.metadata ?? {};
+  const items = listedSandboxes.filter((s) =>
+    Object.entries(wanted).every(([k, v]) => s.metadata[k] === v),
+  );
+  let served = false;
+  return {
+    get hasNext() {
+      return !served;
+    },
+    nextItems: vi.fn(async () => {
+      if (served) return [];
+      served = true;
+      return items;
+    }),
+  };
+});
+
 function makeSandboxInstance(sandboxId: string) {
   return {
     sandboxId,
@@ -80,8 +102,18 @@ function makeSandboxInstance(sandboxId: string) {
 }
 
 vi.mock('@e2b/code-interpreter', () => ({
-  Sandbox: { create, connect, kill: staticKill, pause: staticPause },
+  Sandbox: { create, connect, kill: staticKill, pause: staticPause, list: staticList },
 }));
+
+/** Build `count` live sandboxes tagged for `userId` (as the E2B list API would report). */
+function liveSandboxesFor(
+  userId: string,
+  count: number,
+): Array<{ metadata: Record<string, string> }> {
+  return Array.from({ length: count }, (_, i) => ({
+    metadata: { userId, conversationId: `conv-${userId}-${i}` },
+  }));
+}
 
 describe('getE2BExecutor — ephemeral (no conversationId)', () => {
   beforeEach(() => {
@@ -109,6 +141,7 @@ describe('getE2BExecutor — conversation-scoped', () => {
     sessions.clear();
     vi.clearAllMocks();
     sandboxCounter = 0;
+    listedSandboxes = [];
   });
 
   it('creates a sandbox + context on first use and persists the session', async () => {
@@ -176,6 +209,66 @@ describe('getE2BExecutor — conversation-scoped', () => {
     expect(executor).not.toBeNull();
     expect(connect).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledOnce();
+  });
+});
+
+describe('getE2BExecutor — per-user sandbox quota', () => {
+  beforeEach(() => {
+    sessions.clear();
+    vi.clearAllMocks();
+    sandboxCounter = 0;
+    listedSandboxes = [];
+  });
+
+  it('tags a new sandbox with the userId so it is countable by the list API', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(scope('conv-q1', 'user-quota'));
+    expect(create).toHaveBeenCalledTimes(1);
+    const opts = (create.mock.calls[0] as unknown[])[0] as { metadata?: Record<string, string> };
+    expect(opts.metadata?.['userId']).toBe('user-quota');
+    expect(opts.metadata?.['conversationId']).toBe('conv-q1');
+  });
+
+  it('creates a fresh sandbox when the user is under the quota', async () => {
+    listedSandboxes = liveSandboxesFor('user-under', 4); // limit is 5
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-q2', 'user-under'));
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a new sandbox (fail-closed) when the user is at the quota', async () => {
+    listedSandboxes = liveSandboxesFor('user-max', 5); // at the limit
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-q3', 'user-max'));
+    expect(executor).toBeNull();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('counts only the requesting user, not other users, toward the quota', async () => {
+    // Team is saturated by a different user; this user has none of their own.
+    listedSandboxes = liveSandboxesFor('other-user', 20);
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-q4', 'fresh-user'));
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails OPEN (creates) when the quota list check throws — team cap is the backstop', async () => {
+    staticList.mockImplementationOnce(() => {
+      throw new Error('list API unavailable');
+    });
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(scope('conv-q5', 'user-listerr'));
+    expect(executor).not.toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not run the quota check for ephemeral (no-scope) callers', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor();
+    expect(staticList).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });
 
