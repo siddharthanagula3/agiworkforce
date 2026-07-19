@@ -13,15 +13,8 @@
  *     facts, dedupes, and inserts. Never throws (memory must never break a turn).
  */
 import * as Crypto from 'expo-crypto';
-import {
-  classifyMemoryCategory,
-  extractCandidateMemoryFacts,
-  normalizeMemoryKey,
-} from '@agiworkforce/agent-core';
-import { uuidv7 } from '@agiworkforce/utils/uuidv7';
+import { extractCandidateMemoryFacts, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { insertMemoryFact, listMemoryFacts } from '@/storage/memory';
-import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
-import { markMemoryForSync } from '@/services/cloudSyncEngine';
 import type { MemoryFact } from '@/storage/types';
 
 /**
@@ -49,18 +42,17 @@ export interface ConsolidationResult {
 const MAX_PER_TURN = 5;
 
 /**
- * Extract → dedupe → persist new facts from one user message. Returns counts.
- * Never throws; on any failure returns zeros so the caller's turn is unaffected.
+ * Extract → dedupe → persist new facts from one user message into ON-DEVICE
+ * SQLite. Returns counts. Never throws; on any failure returns zeros so the
+ * caller's turn is unaffected.
  *
  * `enabled` lets the caller skip work entirely (e.g. incognito / temporary chat).
  *
- * `executionMode` routes persistence to the correct memory namespace, mirroring
- * `useMemoryStore.addMemory`:
- *   - 'local' → on-device SQLite (`memory_facts`).
- *   - 'cloud' → the cloud memory store + sync queue (pushed via cloudSyncEngine,
- *     so facts learned in a cloud chat sync across devices like web/desktop).
- * TRUST BOUNDARY: a cloud turn NEVER writes to local SQLite, and a local turn
- * never writes to the cloud store — the two namespaces stay physically separate.
+ * LOCAL MODE ONLY. Cloud auto-memory is owned by the managed server
+ * (`recordManagedAutoMemoryTurn`, completed-turns only, exactly like web); the
+ * client must not duplicate that write. Callers gate on
+ * `shouldConsolidateMemoryOnClient`, which only permits local turns — so this
+ * never runs for a cloud turn.
  */
 /**
  * Whether the CLIENT should consolidate memory for a turn. Only Local mode
@@ -81,55 +73,15 @@ export async function consolidateFactsFromTurn(params: {
   message: string;
   conversationId: string | null;
   enabled?: boolean;
-  executionMode?: 'local' | 'cloud';
 }): Promise<ConsolidationResult> {
-  const { message, conversationId, enabled = true, executionMode = 'local' } = params;
+  const { message, conversationId, enabled = true } = params;
   if (!enabled) return { extracted: 0, inserted: 0 };
 
   try {
     const candidates = extractCandidateMemoryFacts(message);
     if (candidates.length === 0) return { extracted: 0, inserted: 0 };
 
-    if (executionMode === 'cloud') {
-      // Dedupe against the (synced) cloud memory store, then write fresh facts
-      // there and queue them for the next push. No local SQLite write.
-      const existing: MemoryFact[] = useCloudMemoryStore
-        .getState()
-        .entries.filter((e) => !e.isDeleted)
-        .map((e) => ({
-          id: e.id,
-          fact: e.content,
-          source_conversation_id: null,
-          pinned: false,
-          created_at: new Date(e.createdAt).getTime(),
-        }));
-      const fresh = dedupeAgainstExisting(candidates, existing).slice(0, MAX_PER_TURN);
-
-      let inserted = 0;
-      for (const fact of fresh) {
-        try {
-          const id = uuidv7();
-          const now = new Date().toISOString();
-          useCloudMemoryStore.getState().upsertCloudMemory({
-            id,
-            content: fact,
-            category: classifyMemoryCategory(fact),
-            source: 'mobile',
-            pinned: false,
-            createdAt: now,
-            updatedAt: now,
-            isDeleted: false,
-          });
-          markMemoryForSync(id);
-          inserted += 1;
-        } catch {
-          // Skip a single failed insert; keep going.
-        }
-      }
-      return { extracted: candidates.length, inserted };
-    }
-
-    // Local path: on-device SQLite (unchanged).
+    // On-device SQLite (local mode only — see the header; cloud is server-owned).
     const existing = await listMemoryFacts({ limit: 500 });
     const fresh = dedupeAgainstExisting(candidates, existing).slice(0, MAX_PER_TURN);
 
