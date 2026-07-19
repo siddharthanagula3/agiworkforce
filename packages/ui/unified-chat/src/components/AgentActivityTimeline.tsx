@@ -189,24 +189,63 @@ function sourceDomain(url: string): string {
   }
 }
 
+/** Favicon for a source row: real favicon (Google service) with a Globe2 fallback. */
+function SourceFavicon({ url }: { url: string }) {
+  const [errored, setErrored] = useState(false);
+  let domain = '';
+  try {
+    domain = new URL(url).hostname;
+  } catch {
+    /* keep empty */
+  }
+  const src = !errored && domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : '';
+  if (!src) {
+    return (
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted">
+        <Globe2 className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      className="h-5 w-5 shrink-0 rounded-full"
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
+/** How many source rows to show before collapsing the rest behind "+N more". */
+const MAX_VISIBLE_SOURCES = 5;
+
 function SourceLinks({
   entry,
 }: {
   entry: Extract<AgentActivityEntry, { kind: 'tool' | 'sources' }>;
 }) {
+  const [showAll, setShowAll] = useState(false);
   if (!entry.sources || entry.sources.length === 0) return null;
+  const total = entry.sources.length;
+  const visible = showAll ? entry.sources : entry.sources.slice(0, MAX_VISIBLE_SOURCES);
+  const hidden = total - visible.length;
   return (
     <div className="ml-8 mt-1.5 space-y-1.5 pb-1" aria-label="Sources">
-      {entry.query && (
-        <p className="truncate text-[11px] text-muted-foreground/70">{entry.query}</p>
-      )}
-      {entry.sources.map((source, index) => {
+      <div className="flex items-center gap-2">
+        {entry.query && (
+          <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground/70">
+            {entry.query}
+          </p>
+        )}
+        <span className="shrink-0 text-[11px] text-muted-foreground/70">
+          {total} result{total === 1 ? '' : 's'}
+        </span>
+      </div>
+      {visible.map((source, index) => {
         const href = safeHref(source.url);
         const content = (
           <>
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Globe2 className="h-3 w-3" aria-hidden="true" />
-            </span>
+            <SourceFavicon url={source.url} />
             <span className="min-w-0 flex-1 truncate text-xs text-foreground">
               {source.title || sourceDomain(source.url)}
             </span>
@@ -235,6 +274,15 @@ function SourceLinks({
           </div>
         );
       })}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="touch-manipulation rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          +{hidden} more
+        </button>
+      )}
     </div>
   );
 }
