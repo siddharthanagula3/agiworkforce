@@ -9,7 +9,16 @@ import {
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
 import { memo, useCallback, useMemo } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
-import { Clock, FileText, Download, AlertCircle, RefreshCw } from 'lucide-react-native';
+import {
+  Clock,
+  FileText,
+  Download,
+  AlertCircle,
+  RefreshCw,
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+} from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
@@ -110,11 +119,34 @@ interface MessageBubbleProps {
 
 /**
  * Single chat message bubble.
- * Uses avatar-based layout (like ChatGPT/Claude):
- * - Avatar on the left
- * - Role label (You / model name)
- * - Content, reasoning, tool calls, artifacts rendered inline
+ * ChatGPT-mobile layout: user turns are right-aligned rounded pills; assistant turns are
+ * full-width plain text (no avatar, no role label) with an always-visible action row
+ * (copy / regenerate / 👍 / 👎) beneath completed answers.
  */
+function MessageActionButton({
+  label,
+  icon: Icon,
+  onPress,
+  color,
+}: {
+  label: string;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  onPress: () => void;
+  color: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={6}
+      style={{ padding: 6, borderRadius: 8 }}
+    >
+      <Icon size={16} color={color} />
+    </Pressable>
+  );
+}
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   onApprove,
@@ -233,6 +265,22 @@ export const MessageBubble = memo(function MessageBubble({
       }
     },
     [isAssistant, hapticsEnabled, message.id, onReaction, setReaction],
+  );
+
+  // Explicit reaction toggle for the always-visible action row: tapping a thumb sets it,
+  // tapping the active thumb clears it (double-tap keeps its own null→up→down cycle).
+  const applyReaction = useCallback(
+    (target: Exclude<ReactionType, null>) => {
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      setReaction((prev) => {
+        const next: ReactionType = prev === target ? null : target;
+        onReaction?.(message.id, next);
+        return next;
+      });
+    },
+    [hapticsEnabled, message.id, onReaction, setReaction],
   );
 
   const handleOpenEditModal = useCallback(() => {
@@ -754,28 +802,49 @@ export const MessageBubble = memo(function MessageBubble({
         </View>
       </Pressable>
 
-      {/* Reaction badge (assistant messages only) */}
-      {isAssistant && reaction && (
+      {/* Assistant action row (ChatGPT-style, always visible). These actions were
+          previously only reachable via a hidden 400ms long-press sheet (copy/retry/
+          export/delete) or an undiscoverable double-tap (reactions); surface the core
+          ones inline so a completed answer has visible affordances. Reuses the existing
+          copyToClipboard / onRetryMessage / onReaction handlers \u2014 the active thumb also
+          replaces the old standalone reaction badge. */}
+      {isAssistant && !message.isStreaming && message.content.trim() ? (
         <View
-          style={{
-            flexDirection: 'row',
-            paddingTop: 2,
-          }}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 10 }}
+          accessibilityLabel="Message actions"
         >
-          <View
-            style={{
-              backgroundColor: themeColors.accentSurface,
-              borderRadius: 12,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-            }}
-          >
-            <Text style={{ fontSize: 14 }}>
-              {reaction === 'thumbsUp' ? '\uD83D\uDC4D' : '\uD83D\uDC4E'}
-            </Text>
-          </View>
+          <MessageActionButton
+            label="Copy"
+            icon={Copy}
+            onPress={() => copyToClipboard(message.content)}
+            color={themeColors.textMuted}
+          />
+          {onRetryMessage ? (
+            <MessageActionButton
+              label="Regenerate response"
+              icon={RefreshCw}
+              onPress={() => onRetryMessage(message.id)}
+              color={themeColors.textMuted}
+            />
+          ) : null}
+          {onReaction ? (
+            <>
+              <MessageActionButton
+                label="Good response"
+                icon={ThumbsUp}
+                onPress={() => applyReaction('thumbsUp')}
+                color={reaction === 'thumbsUp' ? themeColors.agentSuccess : themeColors.textMuted}
+              />
+              <MessageActionButton
+                label="Bad response"
+                icon={ThumbsDown}
+                onPress={() => applyReaction('thumbsDown')}
+                color={reaction === 'thumbsDown' ? themeColors.agentError : themeColors.textMuted}
+              />
+            </>
+          ) : null}
         </View>
-      )}
+      ) : null}
 
       {/* Artifact full-screen modal */}
       <ArtifactFullScreen
