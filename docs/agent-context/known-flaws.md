@@ -201,7 +201,17 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   standard OS title strip vs Claude's content-integrated flush header; the custom
   features/layout/TitleBar.tsx is orphaned (never mounted). Window-chrome change, higher
   risk — defer.
-- OPEN (PRE-EXISTING, not caused by this work — REAL BUG, HIGH) DESKTOP-PRICING-DANGLING-
+- DONE DESKTOP-PRICING-DANGLING-IMPORT (was HIGH prod crash): FIXED without guessing any
+  billing value. Investigation showed plan.limits.tokenCredits is DEAD data — the desktop
+  only ever calls checkUsageLimit for automations/apiCalls/storage (usageSlice.ts), never
+  tokenCredits, and no UI reads the field. So the three crashing
+  `tokenCredits: getPlanUsageBudgetCents('basic'|'pro'|'max','monthly')` calls were replaced
+  with the file's existing `tokenCredits: 0` convention (the local-only/byok/enterprise
+  plans already use 0) and the dangling import removed. Zero behavior change (inert field),
+  no invented number. The v3 shell test suites now LOAD and pass (16 tests) — which also
+  retroactively verifies the account-menu float change (45794e009). Original diagnosis
+  below kept for history.
+- (history) OPEN → the original DESKTOP-PRICING-DANGLING-
   IMPORT: apps/desktop/src/constants/pricing.ts:1 imports { getPlanUsageBudgetCents } from
   '@agiworkforce/types' and calls it at module-top-level (pricing.ts ~130/156/182 plan
   table `tokenCredits: getPlanUsageBudgetCents(...)`). But that fn NO LONGER EXISTS in the
@@ -231,6 +241,12 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   prod crash and is NOT acceptable. The only correct fix is the client-side billing
   migration decision above. (Likely unnoticed so far only because there are ZERO current
   users and the pricing/gating path may be lazily imported.)
+- OPEN (PRE-EXISTING, discovered this pass) DESKTOP-PLANCARD-TIER-MAP-INCOMPLETE (MED):
+  apps/desktop/src/features/pricing/PlanCard.tsx:23 — the tier→content object is typed
+  Record<UIPlanTier, TierContent> but only defines local/byok/basic/pro/max, missing
+  enterprise/free/max_15x/team → a real desktop `tsc` error. Confirmed pre-existing via
+  git-stash (fails without this session's edits; PlanCard does not import constants/pricing).
+  Separate from the pricing crash above; needs the missing tier content entries.
 
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
