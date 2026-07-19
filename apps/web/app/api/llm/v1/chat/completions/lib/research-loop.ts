@@ -43,7 +43,11 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
-import { toolStatusEvent as loopToolStatusEvent, toolResultEvent } from './tool-loop';
+import {
+  toolStatusEvent as loopToolStatusEvent,
+  toolResultEvent,
+  trimToolResultHistory,
+} from './tool-loop';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
 import {
   accumulateObservedProviderUsage,
@@ -586,6 +590,10 @@ export async function* runResearchLoop(
     turnMessages: typeof messages,
     forwardContent: boolean,
   ): AsyncGenerator<Uint8Array, TurnResult> {
+    // Bound accumulated tool-result history so a long multi-round research run can't
+    // overflow the model context window (shared with the main tool loop). In place +
+    // message-preserving, so tool_call/result pairing stays valid.
+    trimToolResultHistory(turnMessages);
     const stepRequest = { ...baseRequest, messages: turnMessages };
     const callsBefore = observedUsage.providerCalls;
     const stepSink: ToolLoopStepSink = {
