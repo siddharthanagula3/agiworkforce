@@ -62,6 +62,21 @@ const MAX_PER_TURN = 5;
  * TRUST BOUNDARY: a cloud turn NEVER writes to local SQLite, and a local turn
  * never writes to the cloud store — the two namespaces stay physically separate.
  */
+/**
+ * Whether the CLIENT should consolidate memory for a turn. Only Local mode
+ * consolidates on-device here; Cloud mode is owned by the managed server
+ * (`recordManagedAutoMemoryTurn`, which persists the same conservative
+ * user-authored facts but only after a completed turn, exactly like web), so the
+ * client must not duplicate that write or learn before the turn succeeds.
+ * Temporary/incognito chats never learn.
+ */
+export function shouldConsolidateMemoryOnClient(opts: {
+  executionMode: 'local' | 'cloud';
+  isTemporaryChat: boolean;
+}): boolean {
+  return !opts.isTemporaryChat && opts.executionMode === 'local';
+}
+
 export async function consolidateFactsFromTurn(params: {
   message: string;
   conversationId: string | null;

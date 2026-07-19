@@ -55,7 +55,10 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useChatViewStore, type ChatMode, type ChatStyle } from './chatViewStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
-import { consolidateFactsFromTurn } from '@/src/features/memory/services/consolidation';
+import {
+  consolidateFactsFromTurn,
+  shouldConsolidateMemoryOnClient,
+} from '@/src/features/memory/services/consolidation';
 import { recognizeText } from '@/src/features/image/services/ocr';
 import {
   executionModeForConversation,
@@ -1113,11 +1116,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // Non-fatal: memory/personalization injection must never block a chat turn.
     }
 
-    // Learn from this turn: extract durable facts from the user's message and
-    // persist new ones (deduped) into the mode-matching memory namespace
-    // (cloud-synced in cloud mode, on-device SQLite in local mode). Fire-and-forget
-    // — never await, never block the turn — and skip in temporary/incognito chats.
-    if (!useSettingsStore.getState().isTemporaryChat) {
+    // Learn from this turn (LOCAL mode only): extract durable facts from the user's
+    // message and persist new ones (deduped) into the on-device SQLite memory.
+    // Fire-and-forget — never await, never block the turn — and skip temporary chats.
+    //
+    // Cloud mode intentionally does NOT consolidate here. The managed server owns
+    // cloud auto-memory: `recordManagedAutoMemoryTurn` persists the same conservative
+    // user-authored facts, but only AFTER a completed turn (outcome === 'completed'),
+    // exactly like web. Consolidating on the client for cloud mode would duplicate the
+    // server's write and — worse — learn from this send BEFORE the turn succeeds.
+    if (
+      shouldConsolidateMemoryOnClient({
+        executionMode,
+        isTemporaryChat: useSettingsStore.getState().isTemporaryChat,
+      })
+    ) {
       void consolidateFactsFromTurn({ message: content, conversationId, executionMode });
     }
 
