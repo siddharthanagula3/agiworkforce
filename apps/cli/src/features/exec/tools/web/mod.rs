@@ -120,6 +120,16 @@ pub(super) async fn resolve_and_validate_for_pinning(
     Ok(addrs)
 }
 
+/// Build the Tavily `/search` POST body. Tavily requires POST + JSON (verified against
+/// docs.tavily.com); `max_results` is clamped to Tavily's documented 0–20 range.
+fn tavily_search_body(query: &str, max_results: usize) -> serde_json::Value {
+    serde_json::json!({
+        "query": query,
+        "max_results": max_results.min(20),
+        "search_depth": "basic",
+    })
+}
+
 pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result<ToolResult> {
     let query = match args.get("query") {
         Some(q) => q,
@@ -148,7 +158,16 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
         });
     }
 
-    let (url, header_name, header_value) = if !std::env::var("BRAVE_SEARCH_API_KEY")
+    // Brave uses GET + query params; Tavily requires POST + a JSON body (verified against
+    // docs.tavily.com/documentation/api-reference/endpoint/search). Both authenticate via
+    // the header selected here. Sending Tavily a GET (the previous behavior) returned an
+    // HTTP error, so the Tavily branch never actually searched.
+    enum SearchApi {
+        BraveGet,
+        TavilyPost,
+    }
+
+    let (url, header_name, header_value, api) = if !std::env::var("BRAVE_SEARCH_API_KEY")
         .unwrap_or_default()
         .is_empty()
     {
@@ -157,6 +176,7 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
             "https://api.search.brave.com/res/v1/web/search".to_string(),
             "X-Subscription-Token".to_string(),
             key,
+            SearchApi::BraveGet,
         )
     } else if !std::env::var("TAVILY_API_KEY")
         .unwrap_or_default()
@@ -167,23 +187,29 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
             "https://api.tavily.com/search".to_string(),
             "Authorization".to_string(),
             format!("Bearer {}", key),
+            SearchApi::TavilyPost,
         )
     } else {
         (
             "https://api.search.brave.com/res/v1/web/search".to_string(),
             "X-Subscription-Token".to_string(),
             api_key,
+            SearchApi::BraveGet,
         )
     };
 
     let client = reqwest::Client::new();
-    let resp = client
-        .get(&url)
-        .header(&header_name, &header_value)
-        .query(&[("q", query.as_str()), ("count", &_max_results.to_string())])
-        .timeout(Duration::from_secs(15))
-        .send()
-        .await;
+    let request = match api {
+        SearchApi::TavilyPost => client
+            .post(&url)
+            .header(&header_name, &header_value)
+            .json(&tavily_search_body(query.as_str(), _max_results)),
+        SearchApi::BraveGet => client
+            .get(&url)
+            .header(&header_name, &header_value)
+            .query(&[("q", query.as_str()), ("count", &_max_results.to_string())]),
+    };
+    let resp = request.timeout(Duration::from_secs(15)).send().await;
 
     match resp {
         Ok(r) => {
@@ -364,7 +390,7 @@ pub(super) async fn execute_tool_search(args: &HashMap<String, String>) -> Resul
 
 #[cfg(test)]
 mod tests {
-    use super::validate_fetch_url;
+    use super::{tavily_search_body, validate_fetch_url};
 
     #[test]
     fn validate_fetch_url_rejects_literal_internal_ipv4_hosts() {
@@ -424,5 +450,21 @@ mod tests {
         ] {
             validate_fetch_url(url).expect(url);
         }
+    }
+
+    #[test]
+    fn tavily_body_matches_verified_contract() {
+        // Tavily /search requires POST + JSON {query, max_results, search_depth}
+        // (docs.tavily.com). Lock the shape so it can't silently drift back to a GET.
+        let body = tavily_search_body("what is the news today", 8);
+        assert_eq!(body["query"], "what is the news today");
+        assert_eq!(body["max_results"], 8);
+        assert_eq!(body["search_depth"], "basic");
+    }
+
+    #[test]
+    fn tavily_body_clamps_max_results_to_documented_range() {
+        assert_eq!(tavily_search_body("q", 100)["max_results"], 20);
+        assert_eq!(tavily_search_body("q", 3)["max_results"], 3);
     }
 }
