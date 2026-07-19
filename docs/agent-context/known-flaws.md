@@ -161,6 +161,37 @@ agents reading the reference screenshots vs component code). Concrete fixes:
   "Result" affordance vs Claude's chip. Legacy path; low priority, tracked with #26
   ToolTimeline safe-delete.
 
+2026-07-19 desktop-shell visual parity audit (Tauri v3 shell vs Claude; the shared
+unified-chat chat renderer was audited separately). Concrete fixes + tracked items:
+
+- DONE UIDESK-EMPTY-STATE-MARKETING-CLUTTER (MED): the desktop new-chat empty state
+  (features/chat/BrandedGreeting.tsx) stacked an italic platform slogan ("Beyond one
+  model. Beyond one surface…") under the greeting — un-Claude marketing clutter on the
+  first screen an investor sees. Removed it; kept the time-aware headline + subline +
+  brand glyph (Claude = single centered greeting).
+- DONE UIDESK-SIDEBAR-GHOST-NEWCHAT + WORDMARK-GLYPH (MED): the sidebar new-chat control
+  was a bordered elevated box (border + surface-elevated bg); switched to Claude's ghost
+  row (transparent, borderless, hover-fill). The rail wordmark was plain "AGI" text; now
+  anchored by the AgiMark brand glyph (shown collapsed + expanded), matching Claude's
+  logo-anchored rail. Both in features/v3/Sidebar.tsx; typecheck clean, no new test fails.
+- OPEN UIDESK-MODEL-PICKER-OPENS-SETTINGS (HIGH, needs a new component): the composer
+  model pill's onModelSelectorClick (App.tsx ~1492/1519) opens the heavy settings dialog
+  (openSettingsDialog('models-keys')) instead of a lightweight inline model popover like
+  Claude. No ModelPopover component exists on desktop yet — building an anchored model+
+  effort popover is a dedicated slice, not a wiring tweak. HIGHEST remaining desktop gap.
+- OPEN UIDESK-ACCOUNT-MENU-HIJACKS-SIDEBAR (MED): Sidebar.tsx ~478/544 unmounts
+  Projects+Recents and renders AccountMenu inline when the avatar is clicked, instead of
+  a floating portaled popover anchored to the footer avatar (Claude/web behavior).
+- OPEN UIDESK-NATIVE-WINDOW-DECORATIONS (LOW): tauri.conf.json decorations:true shows the
+  standard OS title strip vs Claude's content-integrated flush header; the custom
+  features/layout/TitleBar.tsx is orphaned (never mounted). Window-chrome change, higher
+  risk — defer.
+- PRE-EXISTING (not caused by this work) DESKTOP-V3-TEST-PLAN-BUDGET-BROKEN: the v3 shell
+  test suites (DesktopShellV3.test / .integration) fail at module load with "TypeError:
+  getPlanUsageBudgetCents is not a function" (featureGates.ts ~130 → stores/auth.ts).
+  Confirmed via git-stash that it fails without this session's UI edits. A billing-util
+  export/mock gap unrelated to the visual changes; tracked for a follow-up.
+
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
 covered by the web/mobile qa-reference doc; the audit hunted concrete demo-blocking

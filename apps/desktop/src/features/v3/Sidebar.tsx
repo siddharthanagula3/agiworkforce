@@ -30,6 +30,7 @@ import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
 import { AccountMenu } from './AccountMenu';
+import { AgiMark } from '@agiworkforce/ui';
 
 // ─── recents grouping ────────────────────────────────────────────────────────
 
@@ -329,6 +330,9 @@ export function Sidebar({
       >
         <span
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
             color: 'var(--chat-text-primary)',
             fontWeight: 700,
             fontSize: 14,
@@ -336,6 +340,8 @@ export function Sidebar({
             flex: collapsed ? undefined : 1,
           }}
         >
+          {/* Brand glyph anchors the rail (Claude-style), shown collapsed and expanded. */}
+          <AgiMark size={20} />
           {!collapsed && 'AGI'}
         </span>
         <button
@@ -364,7 +370,7 @@ export function Sidebar({
         <button
           onClick={() => onNewChat?.()}
           title={newLabel}
-          className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+          className="transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
           style={{
             width: '100%',
             display: 'flex',
@@ -373,8 +379,10 @@ export function Sidebar({
             padding: collapsed ? '7px 0' : '7px 10px',
             justifyContent: collapsed ? 'center' : 'flex-start',
             borderRadius: 8,
-            border: '1px solid var(--chat-border)',
-            background: 'var(--chat-surface-elevated)',
+            // Claude-style ghost row: transparent, borderless, hover-fill — not a boxed
+            // elevated form control.
+            border: 'none',
+            background: 'transparent',
             cursor: 'pointer',
             color: 'var(--chat-text-primary)',
             fontSize: 13,
