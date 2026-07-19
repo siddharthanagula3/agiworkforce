@@ -3,7 +3,11 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { HeroAppWindow } from '@/features/marketing/components/HeroAppWindow';
 import { MobileHeroVisual } from '@/features/marketing/components/MobileHeroVisual';
-import { MobileMockup, VSCodeMockup, ChromeMockup } from '@/features/marketing/components/SurfaceMockups';
+import {
+  MobileMockup,
+  VSCodeMockup,
+  ChromeMockup,
+} from '@/features/marketing/components/SurfaceMockups';
 import { RouteFlow } from '@/features/marketing/components/RouteFlow';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { ApprovalWindow, DiffWindow } from '@/features/marketing/components/ShowcaseScenes';
@@ -45,13 +49,13 @@ export const metadata: Metadata = {
     description: 'One workspace on six surfaces. Local, BYOK, or AGI managed cloud. Your rules.',
     type: 'website',
     url: 'https://agiworkforce.com',
-    images: [{ url: '/app-preview.png', width: 1024, height: 665, alt: 'AGI Web composer' }],
+    images: [{ url: '/api/og', width: 1200, height: 630, alt: 'AGI Web composer' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'AGI | One AI Workspace. Six Surfaces. Your Rules.',
     description: 'One workspace on six surfaces. Local, BYOK, or AGI managed cloud. Your rules.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
   },
 };
 

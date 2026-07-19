@@ -23,13 +23,13 @@ export const metadata: Metadata = {
       'On-device Local chat by default. Your data stays on the phone unless you explicitly choose otherwise. AGI managed cloud is public alpha.',
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
-    images: [{ url: '/app-preview.png', width: 1024, height: 665, alt: 'AGI app preview' }],
+    images: [{ url: '/api/og', width: 1200, height: 630, alt: 'AGI app preview' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
     description: `Local Mode by default. AGI managed cloud is public alpha. ${LAUNCH.publicLabel}.`,
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
   },
 };
 

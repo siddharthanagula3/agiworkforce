@@ -97,12 +97,6 @@ export default function DownloadPage() {
                 variant: 'web',
                 title: 'agiworkforce.com/chat',
                 badge: 'Web',
-                image: {
-                  src: '/app-preview.png',
-                  width: 1024,
-                  height: 665,
-                  alt: 'AGI Web composer with model and tool controls',
-                },
               },
             },
             {

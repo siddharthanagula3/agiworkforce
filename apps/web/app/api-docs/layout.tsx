@@ -21,9 +21,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/api-docs',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'AGI API Documentation',
       },
     ],
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: 'API Documentation',
     description:
       'Complete REST API reference for AGI. Authentication, endpoints, webhooks, and SDK guides.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {

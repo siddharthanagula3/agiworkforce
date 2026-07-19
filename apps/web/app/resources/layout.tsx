@@ -19,9 +19,9 @@ export const metadata: Metadata = {
     url: 'https://agiworkforce.com/resources',
     images: [
       {
-        url: '/app-preview.png',
-        width: 1024,
-        height: 665,
+        url: '/api/og',
+        width: 1200,
+        height: 630,
         alt: 'AGI Resources',
       },
     ],
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     title: 'Resources',
     description:
       'Guides, tutorials, and resources to master AI automation with AGI. From beginner to expert.',
-    images: ['/app-preview.png'],
+    images: ['/api/og'],
     creator: '@agiworkforce',
   },
   alternates: {
