@@ -62,6 +62,47 @@ function typeBadge(type: ArtifactData['type']): string {
   }
 }
 
+/** Category word for the Claude-style "{Kind} · {EXT}" subtitle (e.g. "Code", "Document"). */
+function kindLabel(type: ArtifactData['type']): string {
+  switch (type) {
+    case 'html':
+    case 'react':
+    case 'svg':
+    case 'mermaid':
+    case 'code':
+      return 'Code';
+    case 'spreadsheet':
+    case 'csv':
+    case 'table':
+      return 'Spreadsheet';
+    case 'presentation':
+      return 'Slides';
+    case 'email':
+      return 'Email';
+    case 'document':
+    default:
+      return 'Document';
+  }
+}
+
+/** Short uppercase extension for the subtitle (e.g. MD, HTML, PY). */
+function extLabel(artifact: ArtifactData): string {
+  const raw = (artifact.language || artifact.type || '').toLowerCase();
+  const map: Record<string, string> = {
+    markdown: 'MD',
+    md: 'MD',
+    javascript: 'JS',
+    typescript: 'TS',
+    python: 'PY',
+    html: 'HTML',
+    svg: 'SVG',
+    csv: 'CSV',
+    json: 'JSON',
+    document: 'DOC',
+  };
+  return (map[raw] || raw || 'file').toUpperCase().slice(0, 6);
+}
+
 /** Icon for each artifact type. Exported for reuse in the artifact viewer header. */
 export function TypeIcon({ type, className }: { type: ArtifactData['type']; className?: string }) {
   const cls = cn('shrink-0', className);
@@ -203,9 +244,10 @@ function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onCli
           </span>
         )}
 
-        {artifact.language && artifact.language !== artifact.type && (
-          <span className="text-[11px] text-muted-foreground/70 truncate">{artifact.language}</span>
-        )}
+        {/* Claude-style "{Kind} · {EXT}" subtitle (e.g. "Document · MD", "Code · HTML"). */}
+        <span className="text-[11px] text-muted-foreground/70 truncate">
+          {kindLabel(artifact.type)} · {extLabel(artifact)}
+        </span>
       </div>
     </button>
   );
