@@ -19,6 +19,8 @@ export interface ChatFeatures {
   health: boolean;
   /** Server-side code execution (E2B sandbox) for this turn — cloud only. */
   codeExecution: boolean;
+  /** Deep Research (multi-turn cited synthesis) for this turn — cloud, paid. */
+  research: boolean;
 }
 
 export interface ConversationSearchResult {
@@ -178,7 +180,13 @@ export const useChatViewStore = create<ViewState>()(
       workMode: 'chat',
       chatStyle: 'normal',
       toolAccess: 'auto',
-      features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+      features: {
+        webSearch: true,
+        imageGen: true,
+        health: false,
+        codeExecution: false,
+        research: false,
+      },
 
       searchConversations: (query: string) => {
         const trimmed = query.trim();
