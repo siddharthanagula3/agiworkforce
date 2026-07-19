@@ -9,7 +9,7 @@
  * real E2B SDK binding -- only the loop mechanics via a mocked executor,
  * matching the design doc's "mocked executor" verification approach.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
@@ -124,6 +124,15 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockPauseE2BSession.mockReset();
     mockPersistGeneratedFileBytes.mockReset();
     mockReserveManagedUsageProviderStep.mockReset();
+    // The E2B execution intercept now fail-closes unless the cut-over flag is on
+    // (a model-emitted execute_code must never run on key presence alone). These
+    // e2e tests exercise the reachable execution path, so enable the flag —
+    // matching production, where execute_code only runs under AGI_E2B_EXECUTION=1.
+    vi.stubEnv('AGI_E2B_EXECUTION', '1');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('executes an execute_code tool call via the E2B interception point and re-invokes the model', async () => {
@@ -241,6 +250,48 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       state: 'ready_for_review',
     });
     expect(activity[7]?.event).toEqual({ type: 'stop', reason: 'end-turn' });
+  });
+
+  it('fail-closes a model-emitted execute_code when the cut-over flag is OFF (gate-bypass guard)', async () => {
+    // Key present but AGI_E2B_EXECUTION off: a model-emitted execute_code (e.g. a
+    // loop entered for connectors/AGI-Work) must NOT run managed compute.
+    vi.stubEnv('AGI_E2B_EXECUTION', '');
+
+    const step1 = sseStreamFrom([
+      chunk({
+        tool_calls: [{ index: 0, id: 'call_1', function: { name: 'execute_code', arguments: '' } }],
+      }),
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            function: { arguments: JSON.stringify({ language: 'python', code: 'print(1)' }) },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    const step2 = sseStreamFrom([chunk({ content: 'ok' }), chunk({}, 'stop')]);
+    mockBuildToolLoopStream.mockResolvedValueOnce(step1).mockResolvedValueOnce(step2);
+
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: 'should-not-run' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } as E2BExecutor);
+
+    await drain(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+
+    // The sandbox was never resolved or run, and the tool result is an explicit error.
+    expect(mockGetE2BExecutor).not.toHaveBeenCalled();
+    expect(runCode).not.toHaveBeenCalled();
+    const secondCallRequest = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const toolResultMessage = secondCallRequest.messages.find((m) => m.role === 'tool');
+    expect(toolResultMessage?.content).toContain('not available');
   });
 
   it('re-fits every Free provider turn against cumulative observed usage', async () => {

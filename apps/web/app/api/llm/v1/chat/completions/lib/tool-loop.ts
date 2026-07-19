@@ -63,6 +63,7 @@ import {
 } from '@/lib/mcp-tool-executor';
 import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
+import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
 import type { E2BExecutor } from '@/lib/e2b/types';
 import {
@@ -979,6 +980,18 @@ async function runMcpTool(
   // FAIL-CLOSED: a null/erroring executor surfaces an explicit error to the model — never a
   // silent no-op, never a provider-native fallback.
   if (isExecutionTool(toolCall.qualifiedName)) {
+    // Reachability gate: execution tools may run ONLY when the explicit cut-over
+    // flag is on. getE2BExecutor() is (by design) constructable on key presence
+    // alone for operator verification, so without this check a loop entered for
+    // OTHER reasons (connectors / AGI-Work) plus a model-emitted execute_code
+    // would silently run managed compute whenever E2B_API_KEY is set but the
+    // cut-over flag is off. Fail closed as unavailable in that case.
+    if (!e2bCutoverEnabled()) {
+      return {
+        content: `Tool ${toolCall.qualifiedName} is not available.`,
+        isError: true,
+      };
+    }
     const executor = await e2bExecutor();
     const result = await routeExecutionTool(executor, toolCall.qualifiedName, toolCall.args);
     return {
@@ -2044,7 +2057,15 @@ export async function* runToolLoop(
       if (e2bSessionScope) {
         // Pause (not kill): stops billing while preserving sandbox + context state so
         // the NEXT turn's runToolLoop can resume it via the same authenticated scope.
-        await pauseE2BSession(e2bSessionScope);
+        // Pause via the executor's OWN live sandbox handle — NOT pauseE2BSession's
+        // Redis re-lookup, which fail-opens (a stale/absent mapping would leave this
+        // sandbox billing until its timeout). Fall back to the lookup only if the
+        // executor predates the pause() method.
+        if (e2bExecutor.pause) {
+          await e2bExecutor.pause();
+        } else {
+          await pauseE2BSession(e2bSessionScope);
+        }
       } else {
         // No conversation to resume into -- release the sandbox immediately.
         await e2bExecutor.dispose();

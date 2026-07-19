@@ -55,6 +55,14 @@ export interface E2BExecutor {
   listFiles?(path: string): Promise<SandboxFileEntry[] | null>;
   /** Read a file's raw bytes. Optional, same contract as `listFiles`. */
   readFileBytes?(path: string): Promise<Uint8Array | null>;
+  /**
+   * Pause a conversation-scoped sandbox at turn end using this executor's OWN
+   * live sandbox handle (no Redis re-lookup), so a stale/absent session mapping
+   * cannot leave the just-created sandbox running (billing) until its timeout.
+   * No-op for ephemeral sessions (they kill on dispose). Optional so simple
+   * mocks may omit it.
+   */
+  pause?(): Promise<void>;
   /** Release the sandbox session. */
   dispose(): Promise<void>;
 }
