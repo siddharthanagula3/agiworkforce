@@ -123,6 +123,16 @@ export const FEATURES = {
    *  which the tool-call accumulator already renders. */
   webSearch: true,
 
+  /** Deep Research (multi-turn plan → search → cited synthesis) via the
+   *  AddToChatSheet "Deep research" toggle. 2026-07-19: enabled — the
+   *  chat-completions body carries `research: true` (chatExecutionStore →
+   *  streaming.ts) when the toggle is on; the server runs its research loop
+   *  (route.ts) and streams citations/agent activity the inline renderer already
+   *  handles. Per-send it is additionally gated on the selected model's
+   *  `research` + `search` capabilities and a paid tier, so this flag alone never
+   *  makes the toggle appear for an unsupported model or a free account. */
+  research: true,
+
   /** Computer use (cloud execution). */
   computerUse: false,
 

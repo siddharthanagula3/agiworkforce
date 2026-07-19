@@ -265,6 +265,8 @@ interface InitialStreamRequest {
   effort?: Effort;
   /** When true, the server injects its built-in web_search tool for this turn. */
   web_search?: boolean;
+  /** When true, the server runs its multi-turn Deep Research loop for this turn. */
+  research?: boolean;
   /** When true, the server injects its built-in E2B code-execution tool for this turn. */
   code_execution?: boolean;
   /** Paid Cloud product mode; independent from approval/permission policy. */

@@ -153,7 +153,13 @@ function resetStores() {
     chatStyle: 'normal',
     toolAccess: 'auto',
     workMode: 'chat',
-    features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+    features: {
+      webSearch: true,
+      imageGen: true,
+      health: false,
+      codeExecution: false,
+      research: false,
+    },
   });
   useProjectStore.setState({
     projects: [],
@@ -275,7 +281,7 @@ describe('AddToChatSheet', () => {
 
     it('shows Web search in Cloud for a tools-capable model through the generic backend', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'qwen-3.5-plus' });
+      useModelStore.setState({ selectedModel: 'qwen-3.7-plus' });
       useTierStore.setState({ genericWebSearchAvailable: true });
 
       const { getByText } = renderSheet();
@@ -285,12 +291,36 @@ describe('AddToChatSheet', () => {
 
     it('hides generic Web search in Cloud when the deployment backend is unavailable', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: 'qwen-3.5-plus' });
+      useModelStore.setState({ selectedModel: 'qwen-3.7-plus' });
       useTierStore.setState({ genericWebSearchAvailable: false });
 
       const { queryByText } = renderSheet();
 
       expect(queryByText('Web search')).toBeNull();
+    });
+
+    it('hides the Deep research row by default (local mode, free tier, non-research model)', () => {
+      const { queryByText } = renderSheet();
+      expect(queryByText('Deep research')).toBeNull();
+    });
+
+    it('shows Deep research in Cloud for a research+search model on a paid plan', () => {
+      // claude-opus-4.8 has capabilities.research: true AND search: true.
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: 'claude-opus-4.8' });
+      useTierStore.setState({ tier: 'max' });
+
+      const { getByText } = renderSheet();
+      expect(getByText('Deep research')).toBeTruthy();
+    });
+
+    it('hides Deep research for a free account even with a research-capable model', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: 'claude-opus-4.8' });
+      useTierStore.setState({ tier: 'free' });
+
+      const { queryByText } = renderSheet();
+      expect(queryByText('Deep research')).toBeNull();
     });
   });
 
