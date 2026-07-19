@@ -174,11 +174,22 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   row (transparent, borderless, hover-fill). The rail wordmark was plain "AGI" text; now
   anchored by the AgiMark brand glyph (shown collapsed + expanded), matching Claude's
   logo-anchored rail. Both in features/v3/Sidebar.tsx; typecheck clean, no new test fails.
-- OPEN UIDESK-MODEL-PICKER-OPENS-SETTINGS (HIGH, needs a new component): the composer
-  model pill's onModelSelectorClick (App.tsx ~1492/1519) opens the heavy settings dialog
-  (openSettingsDialog('models-keys')) instead of a lightweight inline model popover like
-  Claude. No ModelPopover component exists on desktop yet — building an anchored model+
-  effort popover is a dedicated slice, not a wiring tweak. HIGHEST remaining desktop gap.
+- OPEN UIDESK-MODEL-PICKER-OPENS-SETTINGS (HIGH — DATA-WIRING, not a new component):
+  the composer model control opens the heavy settings dialog instead of Claude's inline
+  model dropdown. CORRECTED SCOPE (verified in code, supersedes the earlier "needs a new
+  ModelPopover" read): the shared inline popover ALREADY exists — packages/ui/unified-chat
+  ModelSelector.tsx (Radix popover, tested), rendered by ChatInput inside ChatInterface,
+  and WEB uses it inline. Desktop passes ONLY onModelSelectorClick={openSettingsDialog(
+  'models-keys')} to ChatInterface and NO model data (no modelsById/models prop — grep of
+  App.tsx/DesktopShellV3 confirms), so the shared selector has no host models and falls
+  back to the click→settings behavior. TRUE FIX (ponytail): thread desktop's model list
+  (modelStore / llm_get_available_models) into ChatInterface's modelsById + selectedModelId
+  - onSelectModel props so the EXISTING shared ModelSelector renders inline; do NOT build a
+    new component. Real integration: map the Rust model shape → ModelSelector's modelsById,
+    thread through App.tsx→DesktopShellV3→ChatInterface, wire selection back to modelStore +
+    Rust. Full-render test is currently blocked by DESKTOP-PRICING-DANGLING-IMPORT (the v3
+    suite won't load); best done once that founder-gated blocker is resolved so the flow can
+    be render-tested. Not rushed untested.
 - DONE UIDESK-ACCOUNT-MENU-HIJACKS-SIDEBAR (MED): the sidebar no longer unmounts
   Projects+Recents when the avatar is clicked. AccountMenu now renders as a floating
   popover anchored above the footer avatar (position:absolute, bottom:calc(100%+6px),
