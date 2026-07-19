@@ -2115,6 +2115,14 @@ export function useResolveToolApproval(
 
       // Wait until EVERY pending call in the turn is decided before resuming.
       if (turn.decisions.size < turn.calls.length) return;
+      // Claim the resume atomically. Two decisions can be in flight at once — a rapid
+      // double-click on one button, or the last two calls approved near-simultaneously —
+      // and on a persisted conversation each parks at the `await saveMessageToDb` above
+      // with `resolving` still false, so both re-pass the top guard and both reach here
+      // after the batch is complete. This check-and-set has no await between the read and
+      // the write, so it is atomic in JS's single-threaded model: exactly one caller
+      // claims the resume and dispatches a single POST; the other returns here.
+      if (turn.resolving) return;
       turn.resolving = true;
 
       for (const call of turn.calls) {
