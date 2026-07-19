@@ -7,6 +7,7 @@ import {
   isReadOnlyTool,
   collectProviderStream,
   withToolTimeout,
+  mapWithConcurrency,
   TOOL_LOOP_STREAM_LIMITS,
 } from './tool-loop';
 
@@ -119,5 +120,27 @@ describe('withToolTimeout — per-tool-call wall-clock bound', () => {
     const r = await withToolTimeout(Promise.reject(new Error('boom')), 'bad_tool', 1000);
     expect(r.isError).toBe(true);
     expect(r.content).toContain('boom');
+  });
+});
+
+describe('mapWithConcurrency — bounded parallel tool fan-out', () => {
+  it('never runs more than `limit` at once and preserves order', async () => {
+    let active = 0;
+    let peak = 0;
+    const items = Array.from({ length: 12 }, (_, i) => i);
+    const out = await mapWithConcurrency(items, 4, async (n) => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((r) => setTimeout(r, 5));
+      active--;
+      return n * 2;
+    });
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(out).toEqual(items.map((n) => n * 2));
+  });
+
+  it('handles an empty list and a single item', async () => {
+    expect(await mapWithConcurrency([], 4, async (n) => n)).toEqual([]);
+    expect(await mapWithConcurrency([7], 4, async (n) => n + 1)).toEqual([8]);
   });
 });

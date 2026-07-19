@@ -135,6 +135,9 @@ const MAX_TOOL_CALLS_PER_STEP = 32;
  */
 const TOOL_CALL_TIMEOUT_MS = 120_000;
 
+/** Max read-only tool calls run concurrently in one step (bounds outbound fan-out). */
+const MAX_PARALLEL_TOOL_CALLS = 4;
+
 /** Tools whose names suggest read-only operations: safe to parallelize. */
 const READ_ONLY_TOOL_PREFIXES = [
   'read_file',
@@ -731,6 +734,7 @@ export const TOOL_LOOP_STREAM_LIMITS = {
   maxToolArgsJsonChars: MAX_TOOL_ARGS_JSON_CHARS,
   maxToolCallsPerStep: MAX_TOOL_CALLS_PER_STEP,
   toolCallTimeoutMs: TOOL_CALL_TIMEOUT_MS,
+  maxParallelToolCalls: MAX_PARALLEL_TOOL_CALLS,
 } as const;
 
 /**
@@ -738,6 +742,30 @@ export const TOOL_LOOP_STREAM_LIMITS = {
  * `timeoutMs` (a hung tool can't wedge the turn) or if it rejects (one tool
  * can't crash the whole batch). Never rejects. Exported for unit tests.
  */
+/**
+ * Run `fn` over `items` with at most `limit` in flight at once, preserving input
+ * order in the results. Bounds parallel tool fan-out so a model emitting many
+ * read-only calls can't flood outbound requests / provider rate limits. Exported
+ * for unit tests.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]!, index);
+    }
+  };
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 export function withToolTimeout(
   run: Promise<ToolLoopToolResult>,
   toolName: string,
@@ -1449,12 +1477,15 @@ export async function* runToolLoop(
       return withToolTimeout(run, tc.qualifiedName, TOOL_CALL_TIMEOUT_MS);
     };
 
-    // Execute read-only tools concurrently.
-    const parallelResults = await Promise.all(
-      readOnly.map(async (tc) => {
+    // Execute read-only tools concurrently, but bounded — a model emitting many
+    // read-only calls must not flood outbound requests / provider rate limits.
+    const parallelResults = await mapWithConcurrency(
+      readOnly,
+      MAX_PARALLEL_TOOL_CALLS,
+      async (tc) => {
         const result = await executeTool(tc);
         return { tc, ...result };
-      }),
+      },
     );
     results.push(...parallelResults);
 
