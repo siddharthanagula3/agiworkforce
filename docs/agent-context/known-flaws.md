@@ -6,6 +6,22 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Mobile cloud auto-memory pre-success + duplication
+(`MOBILE-CLOUD-AUTOMEMORY-PRESUCCESS-01`, Fixed in repo): mobile
+`chatExecutionStore` fired `consolidateFactsFromTurn` from the user's message
+during send-setup, BEFORE the assistant turn succeeded and regardless of outcome,
+in BOTH local and cloud modes. For cloud mode this also DUPLICATED the managed
+server's own auto-memory (`recordManagedAutoMemoryTurn`, which persists the same
+conservative user-authored facts but only on `outcome === 'completed'`, with no
+surface gating so it already covers mobile — verified). Fix: a pure
+`shouldConsolidateMemoryOnClient({executionMode, isTemporaryChat})` gate now
+restricts client consolidation to LOCAL, non-temporary turns; cloud auto-memory
+is server-owned (matching web). Regression tests cover the truth table. RESIDUAL:
+the consolidation service's cloud branch (+ its cloud-memory write path) is now
+unreachable from the app and should be removed in the memory dedup pass; local
+consolidation still runs at send-setup rather than on-completion (acceptable —
+on-device, user-authored; the handoff only required replacing the cloud branch).
+
 2026-07-19 Per-model tools capability gate for connectors/MCP
 (`WEB-TOOLS-MODEL-CAP-GATE-01`, Fixed in repo): the managed completions
 streaming path loaded operator MCP tools + per-user connector tools and entered
