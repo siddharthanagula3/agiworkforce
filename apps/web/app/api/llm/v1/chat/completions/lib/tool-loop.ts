@@ -478,28 +478,48 @@ function canonicalToolCategory(
   return 'other';
 }
 
-/** Exported for unit tests. Builds the user-facing activity-feed summary line. */
+/**
+ * Exported for unit tests. Builds the user-facing activity-feed summary line.
+ * `serverLabel` (the connector's display name) overrides the serverId-derived
+ * label, so a custom connector reads "Using <name> connector" instead of the
+ * generic phrasing its opaque `custom-<hex>` id would otherwise force.
+ */
 export function canonicalToolSummary(
   toolName: string,
   category: AgentEventToolCategory,
   args?: Record<string, unknown>,
+  serverLabel?: string,
 ): string {
   const phrase =
     (isUrlFetchTool(toolName) ? urlFetchDomainPhrase(args) : undefined) ??
     toolStatusPhrase(toolName);
   if (phrase) return phrase;
 
-  const server = mcpServerLabel(toolName);
+  const server = serverLabel ?? mcpServerLabel(toolName);
   if (category === 'connector') return server ? `Using ${server} connector` : 'Using connector';
   if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
   return `Running ${humanizeIdentifier(toolName)}`;
 }
 
-function canonicalApprovalSummary(toolName: string, category: AgentEventToolCategory): string {
-  const server = mcpServerLabel(toolName);
+function canonicalApprovalSummary(
+  toolName: string,
+  category: AgentEventToolCategory,
+  serverLabel?: string,
+): string {
+  const server = serverLabel ?? mcpServerLabel(toolName);
   if (category === 'connector') return `Review ${server ?? 'connector'} action`;
   if (category === 'mcp') return `Review ${server ?? 'MCP'} action`;
   return `Review ${humanizeIdentifier(toolName)} action`;
+}
+
+/**
+ * The connector's human display name from the offered tool defs, if present.
+ * Only custom connectors carry a `serverLabel` (their opaque `custom-<hex>`
+ * serverId has no name); returns undefined for everything else, so the summary
+ * falls back to serverId humanization.
+ */
+function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): string | undefined {
+  return offeredTools.find((t) => t.qualifiedName === toolName)?.serverLabel;
 }
 
 function canonicalStopReason(finishReason: string | null): AgentEventStopReason {
@@ -1507,7 +1527,12 @@ export async function* runToolLoop(
           toolCallId: tc.id,
           name: tc.qualifiedName,
           category,
-          summary: canonicalToolSummary(tc.qualifiedName, category, tc.args),
+          summary: canonicalToolSummary(
+            tc.qualifiedName,
+            category,
+            tc.args,
+            offeredServerLabel(tc.qualifiedName, mcpTools),
+          ),
           input: toAgentEventJson(tc.args),
         }),
       );
@@ -2134,7 +2159,11 @@ export async function* runToolLoop(
             toolCallId: tc.id,
             name: tc.qualifiedName,
             category,
-            summary: canonicalApprovalSummary(tc.qualifiedName, category),
+            summary: canonicalApprovalSummary(
+              tc.qualifiedName,
+              category,
+              offeredServerLabel(tc.qualifiedName, mcpTools),
+            ),
             input: toAgentEventJson(tc.args),
           });
           approvalEvents.push(emitted.envelope);
