@@ -196,6 +196,8 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
   it('returns 201 with mapped file on valid input', async () => {
     // Project ownership check succeeds
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    // Active-file count under the cap
+    mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
     // Insert returns the new row
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
@@ -228,12 +230,38 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       byteCount: 1024,
       checksumSha256: CHECKSUM,
     });
-    expect(mockNeonQuery.mock.calls[1]?.[0]).toContain('extracted_text');
-    expect(mockNeonQuery.mock.calls[1]?.[1]).toContain('The launch date is October 4.');
+    expect(mockNeonQuery.mock.calls[2]?.[0]).toContain('extracted_text');
+    expect(mockNeonQuery.mock.calls[2]?.[1]).toContain('The launch date is October 4.');
+  });
+
+  it('returns 409 and does not extract or insert when the project is already at the file cap', async () => {
+    // Ownership check succeeds; active-file count is already at the cap (20).
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: 20 }]);
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 1024,
+        checksumSha256: CHECKSUM,
+        sourceSurface: 'web',
+        storageUri: 'storage/files/spec.pdf',
+      }),
+      routeContext('proj-1'),
+    );
+
+    expect(res.status).toBe(409);
+    const json = (await res.json()) as { error?: { message?: string } };
+    expect(json.error?.message ?? '').toContain('maximum');
+    // Fail-fast: no extraction and no insert past the ownership + count queries.
+    expect(mockExtractProjectKnowledgeFile).not.toHaveBeenCalled();
+    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
   });
 
   it('returns a user-safe 400 and does not insert when extraction rejects the object', async () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
     mockExtractProjectKnowledgeFile.mockRejectedValue(
       new MockProjectKnowledgeExtractionError('The uploaded file failed its integrity check.'),
     );
@@ -253,7 +281,8 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error?: { message?: string } };
     expect(json.error?.message).toContain('integrity check');
-    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+    // Ownership check + active-file count ran; extraction rejected before insert.
+    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
   });
 
   it('returns 400 when sourceSurface is invalid', async () => {

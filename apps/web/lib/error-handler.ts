@@ -34,6 +34,11 @@ const SAFE_TO_EXPOSE_CODES = new Set<string>([
   'VALIDATION_ERROR',
   'INVALID_MODEL',
   'CSRF_REQUIRED',
+  // Conflicts are raised via createError.conflict() with app-defined,
+  // user-facing messages ("already at the file cap", "slug already taken",
+  // "already a member") that the UI needs to explain what to do next — same
+  // rationale as VALIDATION_ERROR, never a SQL/service-leak vector.
+  'CONFLICT',
 ]);
 
 function safeErrorMessage(error: AppError): string {

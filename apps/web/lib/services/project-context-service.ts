@@ -37,7 +37,13 @@ export interface ProjectContext {
 // manifest is a bounded index.
 const MAX_INSTRUCTIONS_CHARS = 8_000;
 const MAX_DESCRIPTION_CHARS = 1_000;
-const MAX_KNOWLEDGE_FILES = 20;
+/**
+ * Retrieval reads at most this many knowledge files per turn (most-recent
+ * first). Ingest enforces the SAME cap (knowledge-files POST) so a project can
+ * never hold more files than retrieval will actually use — otherwise older
+ * files would silently drop out of every project turn's context.
+ */
+export const MAX_KNOWLEDGE_FILES = 20;
 const MAX_FILE_SUMMARY_CHARS = 300;
 const MAX_FILE_CONTENT_CHARS = 16_000;
 const MAX_TOTAL_FILE_CONTENT_CHARS = 48_000;

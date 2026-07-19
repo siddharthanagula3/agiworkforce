@@ -126,6 +126,31 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   const hasArchivedUpdate = Object.prototype.hasOwnProperty.call(body, 'archived');
   if (hasArchivedUpdate) updates['archived'] = body['archived'];
 
+  // Moving a conversation into a project must verify the destination project is
+  // owned by this user and live — otherwise the client could tag the thread to a
+  // foreign, deleted, or non-existent project UUID, leaving a dangling reference
+  // that scopes nothing. (Clearing the project — projectId null — is always
+  // allowed.) Mirrors the ownership check the create route already enforces.
+  const targetProjectId = updates['projectId'];
+  if (hasProjectIdUpdate && typeof targetProjectId === 'string' && targetProjectId.length > 0) {
+    let ownedProject: { id: string } | undefined;
+    try {
+      [ownedProject] = await getNeonChatDb().query<{ id: string }>(
+        `select id
+           from user_projects
+          where id = $1 and user_id = $2 and is_archived = false
+          limit 1`,
+        [targetProjectId, userId],
+      );
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to validate conversation project');
+      throw createError.internal('Failed to validate project');
+    }
+    if (!ownedProject) {
+      throw createError.notFound('Project not found');
+    }
+  }
+
   const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
     `
       update web_conversations

@@ -155,7 +155,13 @@ export const MessageBubble = memo(function MessageBubble({
   const [showExportSheet, setShowExportSheet] = useRecyclingState(false, [message.id]);
   const [editModalVisible, setEditModalVisible] = useRecyclingState(false, [message.id]);
   const [editText, setEditText] = useRecyclingState('', [message.id]);
-  const [reaction, setReaction] = useRecyclingState<ReactionType>(null, [message.id]);
+  // Seed from persisted metadata.reaction so a rating survives FlashList row
+  // recycling and reload (and is restored from the server on Cloud). Re-seeds
+  // when the row recycles to a different message.id.
+  const [reaction, setReaction] = useRecyclingState<ReactionType>(
+    (message.metadata?.reaction as ReactionType) ?? null,
+    [message.id],
+  );
   const { width } = useWindowDimensions();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const reducedMotion = useReducedMotion();

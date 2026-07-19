@@ -30,6 +30,7 @@ import {
   type ManagedCloudConversation,
 } from '@agiworkforce/cloud-contracts';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
+import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { getConversationMessageStore } from './conversationRepository';
 // SEPARATION-FIX: cloud conversations are physically separated into their own store.
 // Lazy import to avoid circular dependency at module initialisation time.
@@ -68,6 +69,11 @@ interface MessageState {
   makeConversationPermanent: (id: string) => void;
   markConversationRead: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  setMessageReaction: (
+    conversationId: string,
+    messageId: string,
+    reaction: 'thumbsUp' | 'thumbsDown' | null,
+  ) => void;
   enqueueOfflineMessage: (
     conversationId: string,
     content: string,
@@ -418,6 +424,39 @@ export const useChatMessageStore = create<MessageState>()(
             },
           };
         });
+      },
+
+      setMessageReaction: (conversationId, messageId, reaction) => {
+        const ownerStore = getConversationMessageStore(conversationId);
+        // Optimistically persist the rating into message metadata so it survives
+        // FlashList row recycling and reload (the previous per-row state was
+        // dropped on scroll — a dead control). metadata.reaction mirrors the web
+        // shape (PATCH /messages/[messageId]).
+        ownerStore.setState((state) => {
+          const msgs = state.messages[conversationId];
+          if (!msgs) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: msgs.map((m) =>
+                m.id === messageId ? { ...m, metadata: { ...m.metadata, reaction } } : m,
+              ),
+            },
+          };
+        });
+        // Cloud conversations: persist server-side so the rating is durable and
+        // visible cross-surface (web reads the same metadata.reaction). Best-
+        // effort — the tap must not block on the network, and local state is the
+        // source of truth for display.
+        const conversation = ownerStore
+          .getState()
+          .conversations.find((c) => c.id === conversationId);
+        if (conversation && executionModeForConversation(conversation) === 'cloud') {
+          void setCloudMessageReactionRemote(conversationId, messageId, reaction).catch(() => {
+            // Swallow: the reaction is already reflected locally; a failed remote
+            // write just means it will re-sync on the next rating change.
+          });
+        }
       },
 
       enqueueOfflineMessage: (conversationId, content, model, queueId) => {
