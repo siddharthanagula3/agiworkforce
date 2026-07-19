@@ -6,6 +6,19 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Mobile custom remote-MCP connector add
+(`MOBILE-CUSTOM-MCP-ADD-01`, Fixed in repo): mobile Cloud connectors could only
+list/disconnect and 501 on OAuth — there was NO way to add a connector. Mobile
+now has an "Add custom MCP" flow (`AddCustomConnectorModal` + `addCustomConnector`
+service) that reuses the SAME server route the web app uses
+(`POST /api/connectors/custom`), which validates the HTTPS MCP URL (public host,
+no embedded creds) and enforces the per-tier limit — so it needs NO OAuth app
+registration and works today; the connector's tools reach models as
+`mcp__custom-<shortId>__<tool>`. 4 unit tests (service payload trimming +
+https pre-check). RESIDUAL: generic OAuth providers (Slack/Gmail) still 501 (need
+FOUNDER OAuth-app registrations); GitHub App-install browser flow on mobile is a
+separate slice.
+
 2026-07-19 Mobile live artifact preview (`MOBILE-ARTIFACT-PREVIEW-01`, Fixed in
 repo for html/svg): mobile previously showed only a placeholder for previewable
 artifacts (HTML/SVG/mermaid) — the prior SECURITY NOTE said no sandboxed WebView

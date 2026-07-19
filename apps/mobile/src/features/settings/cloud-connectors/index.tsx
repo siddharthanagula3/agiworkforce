@@ -41,6 +41,7 @@ import {
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { AddCustomConnectorModal } from './AddCustomConnectorModal';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   listConnectedConnectors,
@@ -619,6 +620,7 @@ export default function CloudConnectorsScreen({
   // reference connectors directory layout.
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [search, setSearch] = useState('');
+  const [addCustomVisible, setAddCustomVisible] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -782,6 +784,31 @@ export default function CloudConnectorsScreen({
             />
           </View>
 
+          {/* Add a user-owned custom remote-MCP connector (works today; no OAuth
+              app registration needed — server validates the HTTPS URL). */}
+          <Pressable
+            onPress={() => setAddCustomVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Add custom MCP connector"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderStyle: 'dashed',
+              paddingVertical: 12,
+              marginBottom: 14,
+            }}
+          >
+            <Link size={16} color={colors.teal} />
+            <Text style={{ color: colors.textPrimary, fontWeight: '600', fontSize: 15 }}>
+              Add custom MCP
+            </Text>
+          </Pressable>
+
           {/* Filter chips (All | Connected | categories) */}
           <ScrollView
             horizontal
@@ -860,6 +887,15 @@ export default function CloudConnectorsScreen({
           )}
         </>
       )}
+
+      <AddCustomConnectorModal
+        visible={addCustomVisible}
+        onClose={() => setAddCustomVisible(false)}
+        onAdded={() => {
+          setAddCustomVisible(false);
+          void load();
+        }}
+      />
     </SettingsScreenShell>
   );
 }
