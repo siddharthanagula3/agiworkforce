@@ -43,11 +43,13 @@ describe('AgentActivityTimeline', () => {
   it('auto-expands a running run live and collapses on a manual toggle', () => {
     // Claude/ChatGPT behaviour: while the run is active the timeline streams its
     // steps live (expanded), not a single collapsed summary line.
-    render(<AgentActivityTimeline activity={activity()} nowMs={2_000} />);
+    render(<AgentActivityTimeline activity={activity()} />);
 
     const trigger = screen.getByRole('button', { name: /hide agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    // Claude-style header: the semantic phrase of the work, never a "Working for Xs" pill.
     expect(trigger.textContent).toContain('Searching official sources');
+    expect(trigger.textContent).not.toMatch(/Working for|\bs\b · |Done in/i);
     expect(screen.getByText('Official agent documentation')).toBeTruthy();
     expect(screen.getByText('example.com')).toBeTruthy();
 
@@ -60,14 +62,14 @@ describe('AgentActivityTimeline', () => {
 
   it('collapses a completed run to its summary pill', () => {
     render(
-      <AgentActivityTimeline
-        activity={activity({ status: 'completed', completedAtMs: 2_000 })}
-        nowMs={3_000}
-      />,
+      <AgentActivityTimeline activity={activity({ status: 'completed', completedAtMs: 2_000 })} />,
     );
     const trigger = screen.getByRole('button', { name: /show agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('Official agent documentation')).toBeNull();
+    // Collapsed header is the Claude-style semantic phrase, not a "Done in Xs" pill.
+    expect(trigger.textContent).toContain('Searching official sources');
+    expect(trigger.textContent).not.toMatch(/Done in/i);
   });
 
   it('wires approval actions to the canonical tool call id', () => {
@@ -136,11 +138,14 @@ describe('AgentActivityTimeline', () => {
 
     render(<AgentActivityTimeline activity={completed} defaultExpanded />);
 
-    expect(screen.getByText('Context automatically compacted')).toBeTruthy();
+    // Appears both as the collapsed-header summary (finalSummary) and as the expanded
+    // step — Claude shows the phrase in the header and the detail below.
+    expect(screen.getAllByText('Context automatically compacted').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /research-report\.html/i }).getAttribute('href')).toBe(
       '/api/files/report-1',
     );
-    expect(screen.getByText(/Done in 2\.5s/i)).toBeTruthy();
+    // No ChatGPT-style elapsed pill anywhere — the summary is a semantic phrase.
+    expect(screen.queryByText(/Done in/i)).toBeNull();
   });
 
   it('reveals long runs in bounded inline pages instead of mounting every step', () => {
@@ -162,7 +167,8 @@ describe('AgentActivityTimeline', () => {
     );
 
     expect(screen.queryByText('Progress step 1')).toBeNull();
-    expect(screen.getByText('Progress step 55')).toBeTruthy();
+    // 'Progress step 55' is both the header summary (last step) and the visible step row.
+    expect(screen.getAllByText('Progress step 55').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: /show 15 earlier steps/i }));
 
