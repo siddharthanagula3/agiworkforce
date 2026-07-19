@@ -127,6 +127,14 @@ const DEFAULT_AGI_WORK_MAX_DURATION_MS = 4 * 60_000;
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
 const MAX_TOOL_CALLS_PER_STEP = 32;
 
+/**
+ * Per-tool-call wall-clock cap. A hung tool (stuck MCP/connector call, wedged
+ * sandbox exec) would otherwise block the turn until the platform SIGKILLs the
+ * function — which skips the generator `finally`, leaking the E2B sandbox
+ * (still billing). Bounding each call lets the loop settle and the finally run.
+ */
+const TOOL_CALL_TIMEOUT_MS = 120_000;
+
 /** Tools whose names suggest read-only operations: safe to parallelize. */
 const READ_ONLY_TOOL_PREFIXES = [
   'read_file',
@@ -722,7 +730,41 @@ export function searchResultsEvent(sources: FetchedSource[], responseModel: stri
 export const TOOL_LOOP_STREAM_LIMITS = {
   maxToolArgsJsonChars: MAX_TOOL_ARGS_JSON_CHARS,
   maxToolCallsPerStep: MAX_TOOL_CALLS_PER_STEP,
+  toolCallTimeoutMs: TOOL_CALL_TIMEOUT_MS,
 } as const;
+
+/**
+ * Bound a tool-call promise: resolve to an error result if it exceeds
+ * `timeoutMs` (a hung tool can't wedge the turn) or if it rejects (one tool
+ * can't crash the whole batch). Never rejects. Exported for unit tests.
+ */
+export function withToolTimeout(
+  run: Promise<ToolLoopToolResult>,
+  toolName: string,
+  timeoutMs: number,
+): Promise<ToolLoopToolResult> {
+  return new Promise<ToolLoopToolResult>((resolve) => {
+    const timer = setTimeout(() => {
+      resolve({
+        content: `Tool ${toolName} timed out after ${timeoutMs / 1000}s and was abandoned.`,
+        isError: true,
+      });
+    }, timeoutMs);
+    run.then(
+      (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        resolve({
+          content: `Tool ${toolName} failed: ${err instanceof Error ? err.message : String(err)}`,
+          isError: true,
+        });
+      },
+    );
+  });
+}
 
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
 export async function collectProviderStream(stream: ReadableStream): Promise<{
@@ -1394,7 +1436,7 @@ export async function* runToolLoop(
           userId: options.userId,
           model: responseModel,
         });
-      return options.toolExecutor
+      const run = options.toolExecutor
         ? options.toolExecutor({
             operationKey: `tool:${tc.id}`,
             retrySafety: resolveToolRetrySafety(tc.qualifiedName),
@@ -1402,6 +1444,9 @@ export async function* runToolLoop(
             execute,
           })
         : execute();
+      // Bound the call: a hung tool resolves to an error result instead of
+      // wedging the turn (which would SIGKILL the fn and skip sandbox cleanup).
+      return withToolTimeout(run, tc.qualifiedName, TOOL_CALL_TIMEOUT_MS);
     };
 
     // Execute read-only tools concurrently.
