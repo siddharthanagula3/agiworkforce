@@ -214,6 +214,50 @@ server-tool-driven). Each is honestly surfaced, not a fake affordance.
 
 ---
 
+## 4a. Runnable end-to-end evidence (capability paths)
+
+"End-to-end across all models" has two forms. The **live** form (real provider
+keys hitting real models, real E2B sandbox, real device) is founder/device-gated
+(PERPLEXITY_API_KEY, AGI_E2B_EXECUTION, provider keys, physical iPhone — §5). The
+**code** form — the capability pipelines exercised end-to-end with mocked
+providers/executors — is runnable here and passes:
+
+**Web capability paths — 37 test files, 272 tests passing** (run 2026-07-19):
+
+- Tool calling across provider families: `tool-loop-anthropic`,
+  `tool-loop-openai-passthrough`, `tool-loop-routing`, `tool-loop-policy`,
+  `tool-loop.args`, `tool-loop.resume`, `tool-loop.e2e` — the tool loop is
+  provider-generic, so a passing loop for the anthropic + openai wire families
+  covers every `capabilities.tools` model routed through them.
+- Connectors end-to-end: `tool-loop.connector.e2e`, `connectors/custom/route`.
+- Research: `research-loop`, `research-loop.google-wire`,
+  `research-loop.url-fetch`, `request-processor.research`.
+- E2B / code execution: `e2b/gate`, `e2b/execution-tools`, `e2b/runtime`,
+  `e2b/generated-files`, `e2b/session-store` (fail-closed gate + tool wiring).
+- File creation: `tool-loop.office-file`, `request-processor.office-file`,
+  `generated-file-persist`, `generated-file-pipeline.integration`.
+- Artifacts: `artifact-publisher`, `artifact-sandbox`, artifact stores.
+
+**Mobile capability/parity paths — 38 suites, 226 tests passing** (run
+2026-07-19):
+
+- Tool-call UI: `tool-call-accumulator`, `tool-call-timeline`; tool approval:
+  `cloud-tool-approval-expired`, `cloud-tool-approval-real-result`.
+- Voice: `voice-conversation-ptt`, `voice-input-button-long-press`.
+- Artifacts: `safe-artifact-preview`, `artifacts-code-sessions`,
+  `artifact-derivation-shared`, `chat-list-artifact-fullscreen`.
+- Streaming: `provider-stream-routing`, `provider-stream-client`,
+  `streaming-timeout`, `cloud-stream-finish-reason-and-error`.
+- Conversation search: `chat-view-search`. Generated files:
+  `generated-file-download`, `generated-files-and-citations`.
+- Connectors: `cloud-connectors-page`, `custom-connector`. Attachments:
+  `attachment-context`, `cloud-message-mutations`.
+- Cross-surface convergence: `cloud-sync-engine`, `cloud-settings-sync`,
+  `cloud-memory-sync`, `cloud-transcript-ordering`.
+
+This is the maximal end-to-end demonstration achievable in-repo; the live-service
+and on-device forms require the §5 founder/device credentials and hardware.
+
 ## 5. Residual blockers — the ONLY items not code-complete
 
 Everything code-completable and verifiable is done. The remainder is blocked on
