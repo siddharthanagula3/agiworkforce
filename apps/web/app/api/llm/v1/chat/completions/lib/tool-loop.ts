@@ -117,6 +117,15 @@ const DEFAULT_AGI_WORK_MAX_STEPS = 100;
  */
 const DEFAULT_AGI_WORK_MAX_DURATION_MS = 4 * 60_000;
 
+/**
+ * Bound accumulation from the (untrusted) provider stream within one step:
+ * total argument JSON per tool call, and the number of tool calls accepted.
+ * A buggy/compromised provider emitting unbounded `arguments` fragments or a
+ * flood of tool_calls would otherwise grow server memory without limit.
+ */
+const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
+const MAX_TOOL_CALLS_PER_STEP = 32;
+
 /** Tools whose names suggest read-only operations: safe to parallelize. */
 const READ_ONLY_TOOL_PREFIXES = [
   'read_file',
@@ -132,10 +141,17 @@ const READ_ONLY_TOOL_PREFIXES = [
   'describe',
 ];
 
-function isReadOnlyTool(toolName: string): boolean {
+/** Exported for unit tests (read-only classification is parallel-safety-critical). */
+export function isReadOnlyTool(toolName: string): boolean {
   if (toolName === SKILL_TOOL_NAME) return true;
   const lower = toolName.toLowerCase();
-  return READ_ONLY_TOOL_PREFIXES.some((p) => lower.startsWith(p) || lower.includes(p));
+  // Prefix match ONLY. A substring match misclassified mutating tools as
+  // parallel-safe — `budget_transfer` contains "get", `create_playlist`
+  // contains "list", `delete_query` contains "query" — which broke the
+  // "mutating tools serialize" guarantee and raced shared connector/server
+  // state. Prefix match keeps genuine read verbs (get_/list_/search_/query_)
+  // parallel while defaulting unknown/mutating names to serial execution.
+  return READ_ONLY_TOOL_PREFIXES.some((p) => lower.startsWith(p));
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -702,7 +718,13 @@ export function searchResultsEvent(sources: FetchedSource[], responseModel: stri
  *
  * Returns everything needed to decide what to do next.
  */
-async function collectProviderStream(stream: ReadableStream): Promise<{
+export const TOOL_LOOP_STREAM_LIMITS = {
+  maxToolArgsJsonChars: MAX_TOOL_ARGS_JSON_CHARS,
+  maxToolCallsPerStep: MAX_TOOL_CALLS_PER_STEP,
+} as const;
+
+/** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
+export async function collectProviderStream(stream: ReadableStream): Promise<{
   lines: Array<{ line: SseLine; publicTextDelta?: string }>;
   finishReason: string | null;
   pendingToolCalls: PendingToolCall[];
@@ -782,8 +804,14 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
               if (typeof fnObj['name'] === 'string' && fnObj['name']) {
                 entry.name = fnObj['name'];
               }
-              if (typeof fnObj['arguments'] === 'string') {
-                entry.argsJson += fnObj['arguments'];
+              if (
+                typeof fnObj['arguments'] === 'string' &&
+                entry.argsJson.length < MAX_TOOL_ARGS_JSON_CHARS
+              ) {
+                entry.argsJson = (entry.argsJson + fnObj['arguments']).slice(
+                  0,
+                  MAX_TOOL_ARGS_JSON_CHARS,
+                );
               }
             }
           }
@@ -806,21 +834,26 @@ async function collectProviderStream(stream: ReadableStream): Promise<{
     lines.push({ line: buffer });
   }
 
-  // Build pending tool call list.
+  // Build pending tool call list. Cap the number accepted from one step and
+  // de-dupe provider tool_call ids: a provider that repeats an id would produce
+  // two role:'tool' messages sharing one id (the next turn's request may be
+  // rejected 400) and, in manual mode, two approval cards with an ambiguous
+  // tool_call_id. A repeated id is re-minted so every accepted call is unique.
   const pendingToolCalls: PendingToolCall[] = [];
+  const seenToolCallIds = new Set<string>();
   for (const [, tc] of toolCallAccum) {
     if (!tc.name) continue;
+    if (pendingToolCalls.length >= MAX_TOOL_CALLS_PER_STEP) break;
     let args: Record<string, unknown> = {};
     try {
       args = JSON.parse(tc.argsJson || '{}') as Record<string, unknown>;
     } catch {
       args = { _raw: tc.argsJson };
     }
-    pendingToolCalls.push({
-      id: tc.id || crypto.randomUUID(),
-      qualifiedName: tc.name,
-      args,
-    });
+    let id = tc.id || crypto.randomUUID();
+    if (seenToolCallIds.has(id)) id = crypto.randomUUID();
+    seenToolCallIds.add(id);
+    pendingToolCalls.push({ id, qualifiedName: tc.name, args });
   }
 
   return {
