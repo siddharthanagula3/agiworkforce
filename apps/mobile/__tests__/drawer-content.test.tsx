@@ -391,7 +391,7 @@ describe('DrawerContent', () => {
     expect(settings.getByLabelText('Settings').props.accessibilityState.selected).toBe(true);
   });
 
-  it('opens the new chat composer from the header button', () => {
+  it('opens the new chat composer from the compose pill', () => {
     const { getByLabelText } = renderDrawer();
 
     fireEvent.press(getByLabelText('New chat'));
