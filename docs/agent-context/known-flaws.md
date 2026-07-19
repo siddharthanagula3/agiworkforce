@@ -281,10 +281,20 @@ code gaps (not founder-gated / not style):
   whenever TAVILY_API_KEY was set. 2 Rust tests lock the body contract; cargo check +
   module tests green. (The raw-body-to-model note is unchanged; both providers pass
   results through the existing untrusted-content wrapper.)
-- OPEN VSCODE-BYOK-NO-REGISTRATION-UI (MED, product/parity): apps/extension-vscode
-  utils/api.ts ~180 falls back to a legacy BYOK key but "no UI sets it anymore"; there
-  is no command to register a provider key, contradicting the "VSCode = Local+BYOK+
-  Cloud" note. Either add a BYOK key-registration command or update the product note.
+- CORRECTED VSCODE-BYOK — the earlier "no BYOK UI" finding was PARTLY WRONG (researched
+  2026-07-19, founder asked). TRUE provider BYOK (your own Anthropic/OpenAI/Google/xAI/
+  DeepSeek/… key — 16 providers) ALREADY WORKS in VSCode: the extension's local chat spawns
+  and delegates to the `agi app-server` (localRuntimeClient.ts:593), the same Rust binary as
+  the CLI, which supports BYOK via `agi login <provider>` (real per-provider wire routing).
+  So keys configured in the CLI are used by VSCode chat automatically — no VSCode key entry
+  needed. SEPARATELY, VSCode DOES have a palette command `agi-workforce.setApiKey`
+  (commandSetup.ts:335, package.json:112) that stores an AGI-ISSUED api key (sk-agi-…, a
+  first-party managed-cloud Bearer) — used by inline features + as the getAuthToken
+  fallback. The stale utils/api.ts comment ("no UI sets it anymore") was corrected. REMAINING
+  GAP (product decision, if desired): no VSCode-NATIVE command to register a THIRD-PARTY
+  provider key from inside the editor (today you use the terminal `agi login`). Building one
+  = a "Set provider API key" command that writes to the app-server's provider config. Not
+  required for BYOK to function; it's an in-editor convenience.
 - OPEN VSCODE-CHAT-REQUIRES-CLI-BINARY (MED, packaging): both VSCode chat surfaces
   spawn `agi app-server` (localRuntimeClient.ts ~593; default cliPath 'agi'), so on a
   machine without the CLI on PATH every send returns a VISIBLE "local runtime
