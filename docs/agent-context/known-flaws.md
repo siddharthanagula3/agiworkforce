@@ -432,6 +432,36 @@ INITIAL needs the display name on the versioned agent-event tool schema →
 `AgentActivityEntry` (the badge reads `entry.name`, the raw tool id). That event
 field is the "new model-emitted field — NOT blind" work under task #25.
 
+2026-07-19 Deployment topology + backend duplication
+(`SVC-DEPLOY-TOPOLOGY-VERCEL-SINGLE`, Documented / gateway decision PENDING):
+production is ONE Vercel project (Hobby plan) running the Next.js app
+(`apps/web`), which serves every live flow — web chat, mobile cloud chat
+(`/api/llm/v1/chat/completions`), sync, credits, usage, auth, device-auth,
+agents, mcp, models. Data = Neon; auth = Clerk; rate-limit = Upstash serverless
+(`@upstash/ratelimit`, free tier — NOT a self-hosted Redis). Domains (all alias
+the same deployment): `agiworkforce.com` (primary, also the mobile
+`EXPO_PUBLIC_API_URL` base) and `api.agiworkforce.com` (the OpenAI-compatible
+`/v1/*` surface, host-rewritten in `next.config.ts` to `/api/llm/v1/*`) are
+USED; `chat.agiworkforce.com` has NO code-level host routing (serves the
+homepage, not the chat app — unwired vestigial alias, redirect it to `/chat` or
+drop it); `agiworkforce.vercel.app` is the platform-default fallback.
+NOT deployed and NOT required for the demo: `services/api-gateway` (Express;
+only a Dockerfile + CI build, no PaaS config) and `services/signaling-server`
+(WebSocket relay, only for remote-control/companion which is flag-gated off,
+`companion:false`). On Hobby, neither always-on service is even runnable.
+The api-gateway REST routes (chat/sync/credits/llm/usage/models) DUPLICATE the
+Next.js routes; the only live web references (2 `/api/v1/providers` proxy routes
+
+- `lib/mcp-client.ts`) were dead and removed (commit 136285075). PENDING founder
+  decision (blocked, roadmap): retire the whole api-gateway (if AGI Code
+  remote-control is not near-term) vs. keep only its WebSocket + QR-pairing core
+  (which Vercel serverless structurally cannot host) and delete the duplicated
+  REST routes. Node is pinned to 22 intentionally everywhere (`engines`, `.nvmrc`,
+  CI); the Vercel "Node override" matches that pin. A move to 24 must bump all
+  pins together with a green build, not the Vercel setting alone. NOTE: none of
+  this ships until `chore/repo-restructure-2026-07` (132 commits ahead of
+  `origin/main` @ 08f96db) merges to main.
+
 2026-07-19 Mobile live artifact preview (`MOBILE-ARTIFACT-PREVIEW-01`, Fixed in
 repo for html/svg): mobile previously showed only a placeholder for previewable
 artifacts (HTML/SVG/mermaid) — the prior SECURITY NOTE said no sandboxed WebView
