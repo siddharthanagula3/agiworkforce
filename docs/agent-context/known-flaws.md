@@ -243,16 +243,19 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   (isPlanSelectableOnSurface(..., 'desktop')), so nothing renders blank. Desktop `tsc`
   --noEmit is now 0 errors (was red all session). max_15x/team card copy, if ever shown on
   desktop, is a founder/product-copy follow-up — not invented here.
-- OPEN (PRE-EXISTING, founder-gated product decision) DESKTOP-BASIC-TIER-SURFACE-CONTRADICTION
-  (MED): 1 red test — PlansModal.test "hides the mobile-only Basic tier from the desktop plan
-  list" fails because Basic IS shown on desktop. Root: the shared config
-  PLAN_SURFACE_VISIBILITY.basic = ['web','desktop','mobile'] (billing-catalog.ts:116)
-  CONTRADICTS the desktop test + PlanCard.tsx:46 comment which both assert Basic is
-  mobile-only. Confirmed pre-existing via git-stash (fails identically without this session's
-  edits; not caused by the pricing/PlanCard fixes). DECISION NEEDED (do NOT guess): is the $8
-  Basic tier available on desktop (config right → update the stale desktop test + comment) or
-  mobile-only (config wrong → drop 'desktop'/'web' from basic's surface list)? Billing/
-  product surface strategy — founder call.
+- DONE DESKTOP-BASIC-TIER-SURFACE-CONTRADICTION (MED): FOUNDER DECISION 2026-07-19 — Basic
+  is available on ALL surfaces (config PLAN_SURFACE_VISIBILITY.basic=['web','desktop','mobile']
+  was correct; the desktop test + PlanCard comment were stale). Flipped PlansModal.test to
+  expect Basic SHOWN on desktop and updated the PlanCard comment; the red test is now green
+  (8/8). Also: founder set Basic price to $7/mo (not $8); the catalog already read $7
+  (billing-catalog.ts basic.monthlyPriceUsd:7, INR 399), so all DISPLAYS already show $7.
+- OPEN (FOUNDER/STRIPE — not code) BASIC-STRIPE-PRICE-7-VS-8: the Basic catalog/display price
+  is $7 but the Stripe price OBJECT is $8 (desktop pricing.ts basic_monthly_usd = a test-mode
+  $8 price; web checkout uses env-var Stripe IDs STRIPE_PRICE_BASIC_MONTHLY_USD). Whichever
+  surface actually charges must point at a $7 Stripe price. Requires creating a $7 Stripe
+  price (test + live) and updating the env var / desktop reference — a founder Stripe action
+  (code must not create Stripe prices). Desktop IDs are unused reference metadata (checkout
+  is web-only), so no desktop charge mismatch; the live risk is web's env-configured price.
 
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT

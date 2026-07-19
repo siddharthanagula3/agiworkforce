@@ -87,10 +87,12 @@ describe('PlansModal paid-plan CTA routing (public alpha — no waitlist)', () =
     cleanup();
   });
 
-  it('hides the mobile-only Basic tier from the desktop plan list', () => {
+  it('shows the Basic tier in the desktop plan list (Basic is cross-surface)', () => {
+    // Founder decision 2026-07-19: Basic ($7/mo, ₹399) is available on ALL surfaces
+    // (PLAN_SURFACE_VISIBILITY.basic = ['web','desktop','mobile']), so it renders here.
     render(<PlansModal open onOpenChange={vi.fn()} />);
 
-    expect(screen.queryByTestId('plan-basic')).toBeNull();
+    expect(screen.getByTestId('plan-basic')).toBeInTheDocument();
     expect(screen.getByTestId('plan-pro')).toBeInTheDocument();
     expect(screen.getByTestId('plan-max')).toBeInTheDocument();
   });

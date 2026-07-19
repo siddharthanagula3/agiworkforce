@@ -48,8 +48,8 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaLabel: 'Current plan',
     ctaVariant: 'current',
   },
-  // Basic is mobile-only (PLAN_SURFACE_VISIBILITY) — kept for type
-  // completeness; PlansModal filters it out of the desktop plan list.
+  // Basic ($7/mo, ₹399) is cross-surface (PLAN_SURFACE_VISIBILITY.basic =
+  // ['web','desktop','mobile']) — it renders in the desktop plan list.
   basic: {
     price: `$${getPlanPriceUsd('basic', 'monthly')} / mo`,
     bullets: [
