@@ -114,6 +114,30 @@ describe('useChatStream', () => {
     vi.restoreAllMocks();
   });
 
+  describe('auth failure at send time', () => {
+    it('surfaces an error and adds no message when the token is unavailable', async () => {
+      // Expired/revoked session: getToken() returns null. Previously this threw
+      // uncaught after the composer cleared the input, silently losing the message.
+      authMocks.getToken.mockResolvedValueOnce(null);
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('this must not vanish silently', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      expect(useChatStore.getState().error).toBeTruthy();
+      expect(fetchSpy).not.toHaveBeenCalled();
+      // No half-added user/assistant bubble in the transcript.
+      expect(
+        useChatStore.getState().messages.some((m) => m.content === 'this must not vanish silently'),
+      ).toBe(false);
+    });
+  });
+
   describe('canonical x_agent_event activity', () => {
     it('renders a retried canonical text event exactly once', async () => {
       const textEnvelope = {
