@@ -138,6 +138,22 @@ const TOOL_CALL_TIMEOUT_MS = 120_000;
 /** Max read-only tool calls run concurrently in one step (bounds outbound fan-out). */
 const MAX_PARALLEL_TOOL_CALLS = 4;
 
+/**
+ * Total budget for accumulated tool-RESULT content across the whole loop. Tool results
+ * (search dumps, file reads, sandbox stdout) can each be large and there can be up to
+ * `maxSteps` of them, so without a bound a long agentic run overflows the model context
+ * window mid-loop. Old results beyond this budget are shrunk to a marker before each
+ * provider call — never removed, which would desync an assistant tool_call from its
+ * result. ~200K chars ≈ 50K tokens, leaving room for the system prompt, transcript, and
+ * the next completion on every current managed/BYOK model.
+ */
+const MAX_TOOL_RESULT_HISTORY_CHARS = 200_000;
+/** The N most-recent tool results are always kept verbatim (recent context matters most). */
+const KEEP_RECENT_TOOL_RESULTS = 6;
+/** Replaces an old tool result's content once it's trimmed for context budget. */
+const TRUNCATED_TOOL_RESULT_MARKER =
+  '[earlier tool result omitted to keep the conversation within the model context window]';
+
 /** Tools whose names suggest read-only operations: safe to parallelize. */
 const READ_ONLY_TOOL_PREFIXES = [
   'read_file',
@@ -735,6 +751,8 @@ export const TOOL_LOOP_STREAM_LIMITS = {
   maxToolCallsPerStep: MAX_TOOL_CALLS_PER_STEP,
   toolCallTimeoutMs: TOOL_CALL_TIMEOUT_MS,
   maxParallelToolCalls: MAX_PARALLEL_TOOL_CALLS,
+  maxToolResultHistoryChars: MAX_TOOL_RESULT_HISTORY_CHARS,
+  keepRecentToolResults: KEEP_RECENT_TOOL_RESULTS,
 } as const;
 
 /**
@@ -764,6 +782,45 @@ export async function mapWithConcurrency<T, R>(
   const workerCount = Math.max(1, Math.min(limit, items.length));
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
   return results;
+}
+
+/**
+ * Bound the total size of accumulated tool-RESULT content in-place so a long agentic loop
+ * can't overflow the model context window mid-run. Preserves EVERY message — dropping a
+ * tool message would desync an assistant `tool_call` from its result and make the provider
+ * request invalid — and keeps the `keepRecent` most-recent tool results verbatim; older
+ * ones are shrunk to a short marker, oldest first, until the retained tool content is under
+ * `maxChars`. Only string tool contents are touched (multimodal parts are left alone).
+ * Returns the number of results truncated. Exported for unit tests.
+ */
+export function trimToolResultHistory(
+  messages: Array<{ role: string; content?: unknown }>,
+  maxChars: number = MAX_TOOL_RESULT_HISTORY_CHARS,
+  keepRecent: number = KEEP_RECENT_TOOL_RESULTS,
+): number {
+  const toolIdx: number[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    if (messages[i]?.role === 'tool') toolIdx.push(i);
+  }
+  const len = (i: number): number =>
+    typeof messages[i]?.content === 'string' ? (messages[i]!.content as string).length : 0;
+  let total = 0;
+  for (const i of toolIdx) total += len(i);
+  if (total <= maxChars) return 0;
+
+  // Never truncate the most-recent results — that's the context the model is actively
+  // reasoning over. Trim older ones oldest-first until back under budget.
+  const truncatable = toolIdx.slice(0, Math.max(0, toolIdx.length - keepRecent));
+  let truncated = 0;
+  for (const i of truncatable) {
+    if (total <= maxChars) break;
+    const before = len(i);
+    if (before <= TRUNCATED_TOOL_RESULT_MARKER.length) continue;
+    messages[i]!.content = TRUNCATED_TOOL_RESULT_MARKER;
+    total -= before - TRUNCATED_TOOL_RESULT_MARKER.length;
+    truncated++;
+  }
+  return truncated;
 }
 
 export function withToolTimeout(
@@ -1784,6 +1841,18 @@ export async function* runToolLoop(
         return;
       }
       step++;
+
+      // Bound accumulated tool-result history before every provider call so a long
+      // agentic loop (many large search/file/sandbox results) can't overflow the model
+      // context window mid-run. Truncates only old tool-result CONTENT in place — no
+      // message is dropped, so every assistant tool_call keeps its matching result.
+      const trimmedResults = trimToolResultHistory(messages);
+      if (trimmedResults > 0) {
+        logger.info(
+          { trimmedResults, step, provider: processed.provider },
+          '[tool-loop] trimmed old tool-result history to fit the context window',
+        );
+      }
 
       // Build the request for this step. Free turns re-fit at every provider
       // boundary so earlier model/tool work cannot spend the same allowance

@@ -8,6 +8,7 @@ import {
   collectProviderStream,
   withToolTimeout,
   mapWithConcurrency,
+  trimToolResultHistory,
   TOOL_LOOP_STREAM_LIMITS,
 } from './tool-loop';
 
@@ -142,5 +143,78 @@ describe('mapWithConcurrency — bounded parallel tool fan-out', () => {
   it('handles an empty list and a single item', async () => {
     expect(await mapWithConcurrency([], 4, async (n) => n)).toEqual([]);
     expect(await mapWithConcurrency([7], 4, async (n) => n + 1)).toEqual([8]);
+  });
+});
+
+describe('trimToolResultHistory — bound accumulated tool-result context', () => {
+  interface TestMsg {
+    role: string;
+    content: unknown;
+    tool_call_id?: string;
+    tool_calls?: Array<{ id: string }>;
+  }
+  const sys: TestMsg = { role: 'system', content: 'you are helpful' };
+  const user: TestMsg = { role: 'user', content: 'do a big research task' };
+  const toolMsg = (id: string, size: number): TestMsg => ({
+    role: 'tool',
+    content: 'x'.repeat(size),
+    tool_call_id: id,
+  });
+  const asst = (id: string): TestMsg => ({ role: 'assistant', content: '', tool_calls: [{ id }] });
+
+  it('is a no-op when total tool content is under budget', () => {
+    const msgs: TestMsg[] = [sys, user, asst('a'), toolMsg('a', 100)];
+    expect(trimToolResultHistory(msgs, 10_000, 2)).toBe(0);
+    expect(msgs[3]!.content).toBe('x'.repeat(100));
+  });
+
+  it('truncates the OLDEST results first, keeps the most recent verbatim, drops no message', () => {
+    // 5 tool results of 1000 chars each = 5000; budget 2500, keep the newest 2.
+    const msgs: TestMsg[] = [
+      sys,
+      user,
+      asst('t1'),
+      toolMsg('t1', 1000),
+      asst('t2'),
+      toolMsg('t2', 1000),
+      asst('t3'),
+      toolMsg('t3', 1000),
+      asst('t4'),
+      toolMsg('t4', 1000),
+      asst('t5'),
+      toolMsg('t5', 1000),
+    ];
+    const lenBefore = msgs.length;
+    const truncated = trimToolResultHistory(msgs, 2500, 2);
+
+    expect(truncated).toBeGreaterThan(0);
+    // No message removed → every assistant tool_call keeps its matching result.
+    expect(msgs.length).toBe(lenBefore);
+    // The two most-recent results are untouched.
+    expect(msgs.find((m) => m.tool_call_id === 't4')!.content).toBe('x'.repeat(1000));
+    expect(msgs.find((m) => m.tool_call_id === 't5')!.content).toBe('x'.repeat(1000));
+    // The oldest was truncated to the marker.
+    expect(msgs.find((m) => m.tool_call_id === 't1')!.content).toContain('omitted');
+    // System + user messages are never touched.
+    expect(msgs[0]).toBe(sys);
+    expect(msgs[1]).toBe(user);
+    // Retained tool content is now within budget.
+    const retained = msgs
+      .filter((m) => m.role === 'tool')
+      .reduce((sum, m) => sum + String(m.content).length, 0);
+    expect(retained).toBeLessThanOrEqual(2500);
+  });
+
+  it('leaves non-string (multimodal) tool content alone', () => {
+    const parts = [{ type: 'image', url: 'data:...' }];
+    const msgs: TestMsg[] = [
+      sys,
+      asst('m'),
+      { role: 'tool', content: parts, tool_call_id: 'm' },
+      asst('big'),
+      toolMsg('big', 5000),
+    ];
+    trimToolResultHistory(msgs, 100, 0);
+    expect(msgs[2]!.content).toBe(parts); // untouched structured content
   });
 });

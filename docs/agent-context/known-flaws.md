@@ -30,8 +30,15 @@ duplicate tool_call id re-mint.
 - DONE TOOLLOOP-UNBOUNDED-FANOUT (MED, commit 5f5273edc): read-only calls run
   through `mapWithConcurrency(readOnly, 4, …)` (in-repo worker pool, order-preserving,
   no new dep) instead of `Promise.all` → outbound fan-out capped at 4 in flight. Tested.
-- OPEN TOOLLOOP-CONTEXT-GROWTH (MED): messages grow every step (100KB tool results
-  × up to 100 steps), no trim for managed/BYOK → mid-loop context overflow.
+- DONE TOOLLOOP-CONTEXT-GROWTH (MED): the accumulated message thread grew every step
+  (large tool results × up to maxSteps) with no trim → a long agentic run overflowed the
+  model context window mid-loop. Added trimToolResultHistory (tool-loop.ts): before every
+  provider call it bounds total tool-RESULT content to ~200K chars, shrinking the OLDEST
+  results to a marker (oldest-first) while keeping the 6 most-recent verbatim, and NEVER
+  removing a message (so every assistant tool_call keeps its matching result). Wired into
+  the main tool loop AND the research loop (research-loop.ts reuses the same exported
+  helper — ponytail). 3 unit tests (no-op under budget, oldest-first + pairing preserved,
+  multimodal content left alone); full 281-test lib suite green.
 
 E2B (batch mostly DONE — see per-item status):
 
