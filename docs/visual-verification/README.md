@@ -4,7 +4,17 @@ Status: Current
 Owner: Platform lead
 Last updated: 2026-05-22
 
-This directory holds the visual-verification deliverables for the AGI Workforce suite. The /goal completion criterion requires "screenshots confirming UI parity against Claude/OpenAI references" — these PNGs are the AGI-side capture step.
+This directory holds the visual-verification methodology and the competitor reference
+images used for parity comparisons (`_reference-comparisons/`).
+
+> **Pruned 2026-07-19:** the point-in-time AGI-side capture output (round-17/18/22
+> `web/`, `desktop/`, `mobile/`, `cli/`, `chrome-extension/`, `vscode-extension/`
+> screenshots, `.snap`, `*-findings.json`, `similarity-report.md`, and the r22 smoke
+> report) was removed — those captured a May-2026 UI that has since changed
+> substantially, so they were stale weight. Filename references in the findings/parity
+> tables below are retained as a historical record; regenerate fresh captures with the
+> e2e specs documented under "How to capture". Only `_reference-comparisons/` image
+> files remain.
 
 ## How to capture
 

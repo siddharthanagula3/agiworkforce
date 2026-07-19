@@ -1,8 +1,0 @@
-{
-  "route": "/pricing",
-  "pageErrors": [],
-  "consoleErrors": [
-    "[Tauri] Unregistered command in test mode: analytics_set_privacy_mode",
-    "[analytics] failed to set privacy mode: Error: Command not registered in tauri-mock: analytics_set_privacy_mode. This indicates a frontend-backend wiring issue.\n    at invoke (http://127.0.0.1:5175/src/lib/tauri-mock.ts:2233:19)\n    at async analyticsSetPrivacyMode (http://127.0.0.1:5175/src/api/analytics.ts:67:9)"
-  ]
-}
