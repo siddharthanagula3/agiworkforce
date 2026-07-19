@@ -2,8 +2,13 @@
  * Hardening unit tests for tool-loop internals: read-only classification
  * (parallel-safety) and untrusted-provider-stream accumulation bounds.
  */
-import { describe, it, expect } from 'vitest';
-import { isReadOnlyTool, collectProviderStream, TOOL_LOOP_STREAM_LIMITS } from './tool-loop';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  isReadOnlyTool,
+  collectProviderStream,
+  withToolTimeout,
+  TOOL_LOOP_STREAM_LIMITS,
+} from './tool-loop';
 
 function sseStream(events: unknown[]): ReadableStream {
   const enc = new TextEncoder();
@@ -80,5 +85,39 @@ describe('collectProviderStream — untrusted accumulation bounds', () => {
     expect((raw as string).length).toBeLessThanOrEqual(
       TOOL_LOOP_STREAM_LIMITS.maxToolArgsJsonChars,
     );
+  });
+});
+
+describe('withToolTimeout — per-tool-call wall-clock bound', () => {
+  it('returns the tool result when it settles before the timeout', async () => {
+    const r = await withToolTimeout(
+      Promise.resolve({ content: 'ok', isError: false }),
+      'my_tool',
+      1000,
+    );
+    expect(r).toEqual({ content: 'ok', isError: false });
+  });
+
+  it('resolves to an error result when the tool hangs past the timeout (no reject)', async () => {
+    vi.useFakeTimers();
+    try {
+      const hung = new Promise<{ content: string; isError: boolean }>(() => {
+        /* never settles */
+      });
+      const p = withToolTimeout(hung, 'stuck_tool', 120_000);
+      await vi.advanceTimersByTimeAsync(120_000);
+      const r = await p;
+      expect(r.isError).toBe(true);
+      expect(r.content).toContain('timed out');
+      expect(r.content).toContain('stuck_tool');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('converts a rejection into an error result (one tool cannot crash the batch)', async () => {
+    const r = await withToolTimeout(Promise.reject(new Error('boom')), 'bad_tool', 1000);
+    expect(r.isError).toBe(true);
+    expect(r.content).toContain('boom');
   });
 });
