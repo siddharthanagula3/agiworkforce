@@ -96,7 +96,7 @@ import { POST } from '@/app/api/llm/v1/chat/completions/route';
 function makeRequest(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: { 'Content-Type': 'application/json', 'x-agi-surface': 'web', ...headers },
     body: JSON.stringify({
       model: 'auto-balanced',
       messages: [{ role: 'user', content: 'hello' }],

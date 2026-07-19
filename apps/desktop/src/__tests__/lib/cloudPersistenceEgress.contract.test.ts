@@ -79,7 +79,6 @@ beforeEach(() => {
           provider: null,
           input_tokens: 0,
           output_tokens: 0,
-          cost_cents: 0,
           created_at: conversation.created_at,
           metadata: {},
         },

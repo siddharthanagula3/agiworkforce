@@ -160,7 +160,7 @@ async function handleToolApproval(request: NextRequest) {
       const [operatorTools, connectorTools] = await Promise.all([
         loadMcpToolDefs(),
         loadUserConnectorToolDefs(userId, {
-          customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier),
+          customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
         }),
       ]);
       return [...operatorTools, ...connectorTools];

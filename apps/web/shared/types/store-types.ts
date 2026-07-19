@@ -28,7 +28,7 @@ export interface StorePaginatedResponse<T> {
 // ========================================
 
 export type UserRole = 'user' | 'admin' | 'moderator';
-export type UserPlan = 'free' | 'pro' | 'enterprise';
+export type UserPlan = BillingPlanTier;
 
 export interface UserProfile {
   firstName: string;
@@ -400,3 +400,4 @@ export interface SearchResult<T = unknown> {
 // Import them directly when needed, e.g.:
 // import type { AuthStore } from './unified-auth-store';
 // import type { ChatStore } from './chat-store';
+import type { BillingPlanTier } from '@agiworkforce/types';

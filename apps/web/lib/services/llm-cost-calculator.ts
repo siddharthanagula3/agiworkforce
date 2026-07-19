@@ -109,16 +109,39 @@ export class LLMCostCalculator {
     usage: TokenUsage,
     now: Date = new Date(),
   ): number {
+    return Math.round(this.calculateCostDollars(provider, model, usage, now) * 100);
+  }
+
+  /**
+   * Calculate precise cost in millionths of a dollar for sub-cent internal
+   * metering. Rounds up to the nearest microdollar so non-empty work cannot
+   * disappear through whole-cent rounding.
+   */
+  static calculateCostMicrousd(
+    provider: string,
+    model: string,
+    usage: TokenUsage,
+    now: Date = new Date(),
+  ): number {
+    return Math.ceil(this.calculateCostDollars(provider, model, usage, now) * 1_000_000);
+  }
+
+  private static calculateCostDollars(
+    provider: string,
+    model: string,
+    usage: TokenUsage,
+    now: Date,
+  ): number {
     try {
       // Validate inputs
       if (!provider || typeof provider !== 'string') {
         logger.warn({ provider, model }, 'LLM cost calculator: Invalid provider, using fallback');
-        return this.calculateWithFallback(usage);
+        return this.calculateWithFallbackDollars(usage);
       }
 
       if (!model || typeof model !== 'string') {
         logger.warn({ provider, model }, 'LLM cost calculator: Invalid model, using fallback');
-        return this.calculateWithFallback(usage);
+        return this.calculateWithFallbackDollars(usage);
       }
 
       if (
@@ -170,8 +193,7 @@ export class LLMCostCalculator {
       const outputCost = (completionTokens / 1_000_000) * pricing.outputCostPer1MTokens;
 
       const totalCostDollars = inputCost + cacheReadCost + cacheWriteCost + outputCost;
-      // Convert to cents and round to nearest cent
-      return Math.round(totalCostDollars * 100);
+      return totalCostDollars;
     } catch (error) {
       logger.error({ error, provider, model }, 'LLM cost calculator: Unexpected error');
       return 0;
@@ -181,14 +203,14 @@ export class LLMCostCalculator {
   /**
    * Calculate cost using fallback pricing
    */
-  private static calculateWithFallback(usage: TokenUsage): number {
+  private static calculateWithFallbackDollars(usage: TokenUsage): number {
     const promptTokens = Math.max(0, usage?.promptTokens || 0);
     const completionTokens = Math.max(0, usage?.completionTokens || 0);
 
     const inputCost = (promptTokens / 1_000_000) * FALLBACK_PRICING.inputCostPer1MTokens;
     const outputCost = (completionTokens / 1_000_000) * FALLBACK_PRICING.outputCostPer1MTokens;
 
-    return Math.round((inputCost + outputCost) * 100);
+    return inputCost + outputCost;
   }
 
   /**

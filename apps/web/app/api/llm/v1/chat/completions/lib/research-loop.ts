@@ -45,7 +45,6 @@ import { logger } from '@/lib/logger';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import { toolStatusEvent as loopToolStatusEvent, toolResultEvent } from './tool-loop';
 import { isUrlFetchTool, executeUrlFetch } from '@/lib/url-fetch/url-fetch-tool';
-import { reconcileUsage } from '@/lib/assert-quota';
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
@@ -495,7 +494,7 @@ function stripMarkers(text: string): string {
  */
 export async function* runResearchLoop(
   processed: ProcessedRequest,
-  billing: { userId: string; token: string },
+  _billing: { userId: string; token: string },
   options: ResearchLoopOptions = {},
 ): AsyncGenerator<Uint8Array> {
   const encoder = new TextEncoder();
@@ -884,29 +883,15 @@ export async function* runResearchLoop(
     yield status('complete', 'Research complete');
     yield encoder.encode(sseDone());
   } finally {
-    // Financial settlement belongs to the route's managed usage lifecycle.
-    // This finally block only updates quota counters and always runs on
-    // completion, provider error, and generator.return() cancellation.
-    const totalTokens = observedUsage.inputTokens + observedUsage.outputTokens;
+    // Financial settlement and every enforced usage window belong to the
+    // route's single managed-usage lifecycle. This block only preserves the
+    // observed provider usage that lifecycle settles on normal completion,
+    // provider error, and generator.return() cancellation.
     if (observedUsage.providerCalls === 0) {
       logger.warn(
         { provider: processed.provider, requestId: processed.requestId },
         '[research-loop] provider emitted no usage; managed settlement will use its reservation estimate',
       );
-    }
-    if (totalTokens > 0) {
-      void reconcileUsage({
-        userId: billing.userId,
-        token: billing.token,
-        actualTokens: totalTokens,
-        feature: processed.quotaFeature,
-        isFlagship: processed.isFlagshipRequest,
-      }).catch((err) => {
-        logger.warn(
-          { userId: billing.userId, error: err instanceof Error ? err.message : err },
-          '[research-loop] reconcileUsage counter update failed',
-        );
-      });
     }
   }
 }

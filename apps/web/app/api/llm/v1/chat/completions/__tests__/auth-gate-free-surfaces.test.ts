@@ -53,48 +53,93 @@ function subscription(planTier: string) {
   };
 }
 
-describe('runAuthGate free chat surfaces', () => {
+describe('runAuthGate managed cloud surface entitlements', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
     mocks.getSubscription.mockResolvedValue(subscription('free'));
   });
 
-  it.each(['web', 'mobile', 'desktop'])('admits free chat from %s', async (surface) => {
-    const result = await runAuthGate(request(surface));
+  it.each(['free', 'basic'])('admits %s chat on Web, Mobile, and Desktop', async (plan) => {
+    mocks.getSubscription.mockResolvedValue(subscription(plan));
 
-    expect(result.ok).toBe(true);
+    for (const surface of ['web', 'mobile', 'desktop']) {
+      const result = await runAuthGate(request(surface));
+
+      expect(result.ok).toBe(true);
+    }
   });
 
-  it.each(['chrome', 'vscode', 'api', undefined])(
-    'keeps free chat off the %s surface',
-    async (surface) => {
+  it.each(['chrome', 'vscode', 'cli'])('requires Pro for %s', async (surface) => {
+    for (const plan of ['free', 'basic']) {
+      mocks.getSubscription.mockResolvedValue(subscription(plan));
       const result = await runAuthGate(request(surface));
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.response.status).toBe(403);
         await expect(result.response.json()).resolves.toMatchObject({
-          error: { code: 'free_trial_surface_unavailable' },
+          error: { code: 'developer_surface_plan_required', requiredTier: 'pro' },
         });
       }
-    },
-  );
+    }
 
-  it('does not apply the free-surface restriction to a paid plan', async () => {
     mocks.getSubscription.mockResolvedValue(subscription('pro'));
+    await expect(runAuthGate(request(surface))).resolves.toMatchObject({ ok: true });
+  });
 
+  it('requires Pro for managed API access', async () => {
+    mocks.getSubscription.mockResolvedValue(subscription('basic'));
+    const blocked = await runAuthGate(request('api'));
+    expect(blocked.ok).toBe(false);
+    if (!blocked.ok) {
+      await expect(blocked.response.json()).resolves.toMatchObject({
+        error: { code: 'managed_api_plan_required', requiredTier: 'pro' },
+      });
+    }
+
+    mocks.getSubscription.mockResolvedValue(subscription('pro'));
+    await expect(runAuthGate(request('api'))).resolves.toMatchObject({ ok: true });
+  });
+
+  it('fails closed when any plan omits its client surface', async () => {
+    mocks.getSubscription.mockResolvedValue(subscription('enterprise'));
     const result = await runAuthGate(request());
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(403);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: { code: 'managed_cloud_surface_unknown' },
+      });
+    }
   });
 
   it('treats an API key as the paid API surface even if it claims to be web', async () => {
+    mocks.getSubscription.mockResolvedValue(subscription('basic'));
     const result = await runAuthGate(request('web', 'sk_live_test-key'));
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(403);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: { code: 'managed_api_plan_required' },
+      });
     }
   });
+
+  it.each(['local-only', 'byok', 'not-a-plan'])(
+    'does not cross the %s trust boundary into Managed Cloud chat',
+    async (plan) => {
+      mocks.getSubscription.mockResolvedValue(subscription(plan));
+      const result = await runAuthGate(request('web'));
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        await expect(result.response.json()).resolves.toMatchObject({
+          error: { code: 'managed_chat_plan_required' },
+        });
+      }
+    },
+  );
 });

@@ -1239,12 +1239,12 @@ fn is_git_plugin_source(source: &str) -> bool {
 
 /// Fetch the user's remaining credit percentage from the AGI cloud API.
 /// Returns `None` on any network/parse failure so callers can fall back gracefully.
-/// The response shape is `{ credits: { monthly_remaining_cents, monthly_allocated_cents } }`.
+/// The response exposes only percentage/reset metadata and availability.
 async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
     #[derive(serde::Deserialize)]
     struct Credits {
-        monthly_remaining_cents: Option<u64>,
-        monthly_allocated_cents: Option<u64>,
+        usage_percentage: f64,
+        has_usage_remaining: bool,
     }
     #[derive(serde::Deserialize)]
     struct BalanceResp {
@@ -1265,13 +1265,11 @@ async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
 
     let body: BalanceResp = resp.json().await.ok()?;
     let credits = body.credits?;
-    let allocated = credits.monthly_allocated_cents.unwrap_or(0);
-    if allocated == 0 {
-        return None;
+    if !credits.has_usage_remaining {
+        return Some(0);
     }
-    let remaining = credits.monthly_remaining_cents.unwrap_or(0);
-    let pct = ((remaining as f64 / allocated as f64) * 100.0).round() as u8;
-    Some(pct.min(100))
+    let used = credits.usage_percentage.clamp(0.0, 100.0);
+    Some((100.0 - used).round() as u8)
 }
 
 /// Main async entry point — called from `main.rs`.
@@ -3325,6 +3323,7 @@ pub async fn run_oneshot(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[test]
     fn cli_does_not_advertise_an_unimplemented_cloud_task_surface() {
@@ -3337,6 +3336,34 @@ mod tests {
             !subcommands.iter().any(|command| command == "cloud"),
             "managed execution uses the normal model/session path; an unwired cloud task command must not be exposed: {subcommands:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn cloud_balance_reads_the_public_percentage_contract() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind test listener");
+        let address = listener.local_addr().expect("listener address");
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept request");
+            let mut request = [0_u8; 2048];
+            let _ = socket.read(&mut request).await.expect("read request");
+            let body = r#"{"credits":{"usage_percentage":28,"reset_at":"2026-08-01T00:00:00.000Z","seconds_until_reset":86400,"has_usage_remaining":true}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket
+                .write_all(response.as_bytes())
+                .await
+                .expect("write response");
+        });
+
+        let remaining = fetch_remaining_pct("test-token", &format!("http://{address}")).await;
+        server.await.expect("test server finished");
+
+        assert_eq!(remaining, Some(72));
     }
 
     #[test]

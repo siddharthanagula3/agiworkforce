@@ -158,6 +158,30 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
+const managedUsageMocks = vi.hoisted(() => ({
+  reserve: vi.fn(),
+  providerStarted: vi.fn(async () => undefined),
+  finalize: vi.fn(async () => ({
+    requestStatus: 'completed',
+    operationResult: 'finalized',
+    settlementStatus: 'succeeded',
+    actualCostCents: 5,
+  })),
+  delivered: vi.fn(async () => undefined),
+}));
+const rlsMocks = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
+}));
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  reserveManagedUsageRequest: managedUsageMocks.reserve,
+  markManagedUsageProviderStarted: managedUsageMocks.providerStarted,
+  finalizeManagedUsageRequest: managedUsageMocks.finalize,
+  markManagedUsageClientDelivered: managedUsageMocks.delivered,
+}));
+
 // ---------------------------------------------------------------------------
 // Mock: global fetch (used for provider API calls)
 // ---------------------------------------------------------------------------
@@ -168,6 +192,7 @@ global.fetch = mockFetch;
 // Import route after all mocks are in place
 // ---------------------------------------------------------------------------
 import { POST, OPTIONS } from '@/app/api/media/image/generate/route';
+import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 
 // ---------------------------------------------------------------------------
 // Shared test helpers
@@ -188,6 +213,7 @@ function makeRequest(body: unknown, headers: Record<string, string> = {}): NextR
 function makeAuthedRequest(body: unknown, extraHeaders: Record<string, string> = {}): NextRequest {
   return makeRequest(body, {
     Authorization: 'Bearer valid-test-token',
+    'Idempotency-Key': 'agi.media.web.image.operation-123',
     ...extraHeaders,
   });
 }
@@ -231,6 +257,15 @@ describe('POST /api/media/image/generate', () => {
       attempt_count: 1,
     });
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
+    rlsMocks.getUserScopedDb.mockResolvedValue({ db: {}, userId: TEST_USER.userId });
+    managedUsageMocks.reserve.mockImplementation(async (input) => ({
+      db: input.db,
+      userId: input.userId,
+      idempotencyKey: input.idempotencyKey,
+      requestHash: input.requestHash,
+      leaseToken: 'lease-image',
+      estimatedCostCents: input.estimatedCostCents,
+    }));
 
     // Set required env vars
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
@@ -439,6 +474,18 @@ describe('POST /api/media/image/generate', () => {
 
       expect(response.status).toBe(200);
     });
+
+    it('should allow max 15x tier subscription', async () => {
+      mockGetSubscription.mockResolvedValue({ ...PRO_SUBSCRIPTION, plan_tier: 'max_15x' });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://example.com/image.png' }] }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
+
+      expect(response.status).toBe(200);
+    });
   });
 
   // =========================================================================
@@ -530,6 +577,112 @@ describe('POST /api/media/image/generate', () => {
     });
   });
 
+  describe('Managed usage lifecycle', () => {
+    it('requires a stable idempotency identity before provider work', async () => {
+      const response = await POST(
+        makeRequest(
+          { prompt: 'a cat', provider: 'openai' },
+          { Authorization: 'Bearer valid-test-token' },
+        ),
+      );
+
+      expect(response.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+    });
+
+    it('rejects a video operation identity before reserving or calling the image provider', async () => {
+      const response = await POST(
+        makeAuthedRequest(
+          { prompt: 'a cat', provider: 'openai' },
+          { 'Idempotency-Key': 'agi.media.web.video.operation-123' },
+        ),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(400);
+      expect(data.error).toMatchObject({
+        type: 'invalid_request_error',
+        code: 'invalid_media_idempotency_key',
+      });
+      expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
+      expect(managedUsageMocks.providerStarted).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('uses the canonical reservation lifecycle and settles returned images at actual cost', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://example.com/image.png' }] }),
+      });
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai', n: 1 }));
+
+      expect(response.status).toBe(200);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: TEST_USER.userId,
+          idempotencyKey: 'agi.media.web.image.operation-123',
+          provider: 'openai',
+          estimatedCostCents: 5,
+          planTier: 'pro',
+          isFlagship: false,
+        }),
+      );
+      expect(managedUsageMocks.providerStarted).toHaveBeenCalledTimes(1);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          outcome: 'completed',
+          actualCostCents: 5,
+          usage: expect.objectContaining({ operation: 'image', outputCount: 1 }),
+        }),
+      );
+      expect(managedUsageMocks.delivered).toHaveBeenCalledTimes(1);
+      expect(mockCheckAvailable).not.toHaveBeenCalled();
+      expect(mockDeductCredits).not.toHaveBeenCalled();
+      expect(mockSettleCreditsDurably).not.toHaveBeenCalled();
+      expect(managedUsageMocks.reserve.mock.invocationCallOrder[0]).toBeLessThan(
+        managedUsageMocks.providerStarted.mock.invocationCallOrder[0]!,
+      );
+      expect(managedUsageMocks.providerStarted.mock.invocationCallOrder[0]).toBeLessThan(
+        mockFetch.mock.invocationCallOrder[0]!,
+      );
+    });
+
+    it('returns a safe quota error when the atomic reservation is declined', async () => {
+      managedUsageMocks.reserve.mockRejectedValueOnce(
+        new ManagedUsageRequestError(
+          'Usage budget exhausted for this billing period.',
+          402,
+          'insufficient_credits',
+        ),
+      );
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a cat', provider: 'openai' }));
+      const data = await response.json();
+
+      expect(response.status).toBe(402);
+      expect(data.error).toMatchObject({
+        type: 'insufficient_quota',
+        code: 'insufficient_credits',
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(data.error).not.toHaveProperty('remaining_cents');
+    });
+
+    it('settles failed provider work at zero actual cost', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Provider connection refused'));
+
+      const response = await POST(makeAuthedRequest({ prompt: 'a storm', provider: 'openai' }));
+
+      expect(response.status).toBe(422);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      );
+      expect(managedUsageMocks.delivered).not.toHaveBeenCalled();
+    });
+  });
+
   // =========================================================================
   // Provider fallback — no providers configured
   // =========================================================================
@@ -570,7 +723,7 @@ describe('POST /api/media/image/generate', () => {
       expect(data.images).toHaveLength(1);
       expect(data.images[0].url).toBe('https://example.com/gpt-image.png');
       expect(data.model).toBe('gpt-image-2-medium');
-      expect(typeof data.cost_estimate).toBe('number');
+      expect(data).not.toHaveProperty('cost_estimate');
       expect(typeof data.latency_ms).toBe('number');
     });
 
@@ -640,7 +793,9 @@ describe('POST /api/media/image/generate', () => {
       expect(String(mockFetch.mock.calls[0]?.[0])).toContain(
         '/models/imagen-4.0-fast-generate-001:predict',
       );
-      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 2);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'imagen-4-fast', estimatedCostCents: 2 }),
+      );
     });
   });
 
@@ -673,7 +828,9 @@ describe('POST /api/media/image/generate', () => {
       expect(data.provider).toBe('stability');
       expect(data.images[0].b64_json).toBe('stabilitybase64data==');
       expect(data.model).toBe('stable-image-core');
-      expect(mockCheckAvailable).toHaveBeenCalledWith(TEST_USER.userId, 3);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'stable-image-core', estimatedCostCents: 3 }),
+      );
     });
   });
 

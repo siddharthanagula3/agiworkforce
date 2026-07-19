@@ -4,7 +4,7 @@
  * - Rate limiting: Applied per-endpoint based on operation type
  * - Input validation: Zod schemas with .strict() to reject unexpected fields
  * - Authentication: JWT required (via authenticateToken)
- * - Plan enforcement: Hobby/Pro/Max/Enterprise required (via requireProPlan)
+ * - Plan enforcement: Canonical managed-chat entitlement required
  * - Ownership validation: Users can only access their own conversations
  *
  * Rate limit rationale (OWASP compliant):
@@ -13,27 +13,24 @@
  * - GET /:id: 60/min - read single, lightweight
  * - DELETE /:id: 10/min - destructive operation
  * - PATCH /:id: 30/min - metadata write
- * - POST /send: 30/min - SSE streaming LLM proxy (Anthropic, OpenAI, Google)
+ * - POST /send: 30/min - retired unmetered execution path
  */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { authenticateToken } from '../middleware/auth';
-import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
-import { requireProPlan } from '../middleware/planGate';
+import { requireManagedChatPlan } from '../middleware/planGate';
 import { AppError } from '../middleware/errorHandler';
 import { getSystemClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
-import { buildProviderAdapter } from '../lib/providerAdapters';
 
 const router: Router = Router();
 
 // Apply authentication and plan enforcement to all routes on this router.
 router.use(authenticateToken);
-router.use(requireProPlan);
+router.use(requireManagedChatPlan);
 
 // =============================================================================
 // VALIDATION SCHEMAS
@@ -55,14 +52,6 @@ const updateConversationSchema = z
   .refine((data) => Object.keys(data).length > 0, {
     message: 'At least one field must be provided for update',
   });
-
-const sendMessageSchema = z
-  .object({
-    conversation_id: z.string().uuid().optional(),
-    message: z.string().min(1).max(32000),
-    model: z.string().max(100).optional(),
-  })
-  .strict();
 
 // =============================================================================
 // HELPER: Verify conversation ownership
@@ -88,30 +77,6 @@ async function verifyConversationOwnership(conversationId: string, userId: strin
   if (conversation.user_id !== userId) {
     throw new AppError('Conversation not found', 404);
   }
-}
-
-// =============================================================================
-// HELPERS: LLM Provider Resolution
-// =============================================================================
-
-type Provider = 'anthropic' | 'openai' | 'google';
-
-// Cheap prefix heuristic used by the eligibility middleware (which runs before
-// body validation and must not throw for unknown models) and to pick the
-// adapter for /send. Upstream mechanics live in packages/ai/providers adapters
-// (restructure Wave 2); this route only chooses among the managed trio and
-// defaults to anthropic, preserving the pre-migration behavior.
-function resolveProvider(model: string): Provider {
-  if (model.startsWith('claude-')) return 'anthropic';
-  if (
-    model.startsWith('gpt-') ||
-    model.startsWith('o1-') ||
-    model.startsWith('o3-') ||
-    model.startsWith('o4-')
-  )
-    return 'openai';
-  if (model.startsWith('gemini-')) return 'google';
-  return 'anthropic'; // default
 }
 
 // =============================================================================
@@ -324,167 +289,12 @@ router.patch('/:id', createRateLimiter('cloud-chat-patch'), async (req: Request,
   res.json({ conversation: updated });
 });
 
-/**
- * POST /api/cloud-chat/send
- * Send a message and stream the LLM response via SSE.
- * Supports Anthropic, OpenAI, and Google providers.
- *
- * SSE protocol:
- * - First event: { conversation_id: string }
- * - Content events: { text: string }
- * - Error events: { error: string }
- * - Terminal event: [DONE]
- *
- * SECURITY: Rate limited to 30/min as it is an action-based operation.
- */
-router.post(
-  '/send',
-  createRateLimiter('cloud-chat-send'),
-  requireManagedComputeEligibility((req) => {
-    const model =
-      typeof req.body?.model === 'string' ? req.body.model : 'claude-haiku-4-5-20251001';
-    return { provider: resolveProvider(model), model };
-  }),
-  async (req: Request, res: Response) => {
-    const user = req.user;
-    if (!user) {
-      throw new AppError('Unauthorized', 401);
-    }
-
-    const { conversation_id, message, model } = sendMessageSchema.parse(req.body);
-
-    const db = getSystemClient('shadow-schema-compatibility');
-
-    // Auto-create conversation if none provided
-    let conversationId = conversation_id;
-    if (!conversationId) {
-      const newId = randomUUID();
-      const now = new Date().toISOString();
-      const { error: createErr } = await db.from('conversations').insert({
-        id: newId,
-        user_id: user.userId,
-        title: message.slice(0, 100),
-        model: model ?? null,
-        is_archived: false,
-        is_deleted: false,
-        created_at: now,
-        updated_at: now,
-      });
-      if (createErr) {
-        logger.error({ error: createErr }, 'Failed to auto-create conversation');
-        throw new AppError('Failed to create conversation', 500);
-      }
-      conversationId = newId;
-    } else {
-      await verifyConversationOwnership(conversationId, user.userId);
-    }
-
-    // Persist user message
-    const userMsgId = randomUUID();
-    const { error: userMsgErr } = await db.from('messages').insert({
-      id: userMsgId,
-      conversation_id: conversationId,
-      role: 'user',
-      content: message,
-      model: null,
-      created_at: new Date().toISOString(),
-    });
-    if (userMsgErr) {
-      logger.error({ error: userMsgErr }, 'Failed to persist user message');
-      throw new AppError('Failed to save message', 500);
-    }
-
-    // Fetch conversation history for context
-    const { data: history } = await db
-      .from('messages')
-      .select('role, content')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(50);
-
-    const messages = (history ?? []).map((m: { role: string; content: string }) => ({
-      role: m.role as 'user' | 'assistant' | 'system',
-      content: m.content,
-    }));
-
-    // Resolve provider and call upstream LLM
-    const resolvedModel = model ?? 'claude-haiku-4-5-20251001';
-    const provider = resolveProvider(resolvedModel);
-
-    // Set SSE headers
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-
-    let fullContent = '';
-
-    try {
-      // Send conversation_id as first event
-      res.write(`data: ${JSON.stringify({ conversation_id: conversationId })}\n\n`);
-
-      const adapter = buildProviderAdapter(provider);
-      if (!adapter) {
-        res.write(`data: ${JSON.stringify({ error: `${provider} is not configured` })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
-        return;
-      }
-
-      const chatRequest = openAIWireRequestToChatRequest({
-        model: resolvedModel,
-        messages,
-      });
-
-      const abort = new AbortController();
-      req.on('close', () => abort.abort());
-
-      for await (const chunk of adapter.stream(chatRequest, abort.signal)) {
-        if (chunk.type === 'text-delta' && chunk.delta) {
-          fullContent += chunk.delta;
-          res.write(`data: ${JSON.stringify({ text: chunk.delta })}\n\n`);
-        } else if (chunk.type === 'error') {
-          logger.error(
-            { provider, model: resolvedModel, code: chunk.code, message: chunk.message },
-            'cloud-chat upstream error chunk',
-          );
-          res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`);
-        }
-      }
-
-      // Persist assistant message
-      const { error: assistantMsgErr } = await db.from('messages').insert({
-        id: randomUUID(),
-        conversation_id: conversationId,
-        role: 'assistant',
-        content: fullContent,
-        model: resolvedModel,
-        created_at: new Date().toISOString(),
-      });
-      if (assistantMsgErr) {
-        logger.error({ error: assistantMsgErr }, 'Failed to persist assistant message');
-      }
-
-      // Update conversation timestamp
-      await db
-        .from('conversations')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', conversationId);
-
-      res.write('data: [DONE]\n\n');
-      res.end();
-    } catch (err) {
-      logger.error({ error: err }, 'SSE stream error');
-      try {
-        res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`);
-        res.write('data: [DONE]\n\n');
-        res.end();
-      } catch {
-        // Response already ended
-      }
-    }
-  },
-);
+router.post('/send', createRateLimiter('cloud-chat-send'), (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: 'Legacy cloud chat execution is no longer available',
+    code: 'CANONICAL_COMPLETION_REQUIRED',
+    completion_url: '/api/llm/v1/chat/completions',
+  });
+});
 
 export { router as cloudChatRouter };

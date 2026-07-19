@@ -10,7 +10,6 @@ import {
 } from '@agiworkforce/ui';
 import { Progress } from '@agiworkforce/ui';
 import {
-  DollarSign,
   Download,
   CheckCircle,
   AlertTriangle,
@@ -24,11 +23,10 @@ import {
   Clock,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { BillingInfo, normalizePlan, safePercentage } from './types';
+import { BillingInfo, safePercentage } from './types';
 
 interface UsageProps {
   billing: BillingInfo | null;
-  stripeCustomerId: string | null;
   isManagingBilling: boolean;
   invoicesLoading: boolean;
   paymentMethodsLoading: boolean;
@@ -54,7 +52,6 @@ interface UsageProps {
 
 export const Usage: React.FC<UsageProps> = ({
   billing,
-  stripeCustomerId,
   isManagingBilling,
   invoicesLoading,
   paymentMethodsLoading,
@@ -64,42 +61,39 @@ export const Usage: React.FC<UsageProps> = ({
   formatCurrency,
   formatDate,
 }) => {
+  const usagePercent = safePercentage(
+    billing?.usage?.totalTokens ?? 0,
+    billing?.usage?.totalLimit || 1,
+  );
+
   return (
     <>
       {/* Total Usage Overview */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Zap className="h-5 w-5" />
-              <span>Credit Usage</span>
+              <span>Plan Usage</span>
             </CardTitle>
-            <CardDescription>Combined credit usage across all LLM providers</CardDescription>
+            <CardDescription>Managed usage in your current billing period</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Used</span>
-                <span className="text-2xl font-bold">
-                  {(Number.isFinite(billing?.usage?.totalTokens)
-                    ? billing!.usage.totalTokens
-                    : 0
-                  ).toLocaleString()}
-                </span>
+                <span className="text-sm text-muted-foreground">Current period</span>
+                <span className="text-2xl font-bold">{usagePercent.toFixed(0)}% used</span>
               </div>
-              <Progress
-                value={safePercentage(
-                  billing?.usage?.totalTokens ?? 0,
-                  billing?.usage?.totalLimit || 1,
-                )}
-                className="h-3"
-              />
+              <Progress value={usagePercent} className="h-3" />
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {billing?.plan === 'free' ? 'Monthly Limit' : 'Credit Allocation'}
+                  {(100 - usagePercent).toFixed(0)}% remaining
                 </span>
                 <span className="font-medium">
-                  {(billing?.usage?.totalLimit ?? 0).toLocaleString()} credits
+                  Resets{' '}
+                  {billing?.current_period_end
+                    ? formatDate(billing.current_period_end)
+                    : 'on your next billing date'}
                 </span>
               </div>
               {(billing?.usage?.totalTokens ?? 0) > 0 &&
@@ -118,44 +112,6 @@ export const Usage: React.FC<UsageProps> = ({
                     </span>
                   </div>
                 )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <DollarSign className="h-5 w-5" />
-              <span>Total Cost</span>
-            </CardTitle>
-            <CardDescription>Estimated cost (currently free)</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Would be</span>
-                <span className="text-2xl font-bold">
-                  {formatCurrency(billing?.usage?.totalCost ?? 0, billing?.currency || 'USD')}
-                </span>
-              </div>
-              <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-950/30">
-                <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                  <CheckCircle className="h-5 w-5" />
-                  <span className="font-medium">
-                    {normalizePlan(billing?.plan) === 'free' && 'Free Tier Active'}
-                    {normalizePlan(billing?.plan) === 'basic' && 'Basic Plan Active'}
-                    {normalizePlan(billing?.plan) === 'pro' && 'Pro Plan Active'}
-                    {normalizePlan(billing?.plan) === 'max' && 'Max Plan Active'}
-                    {normalizePlan(billing?.plan) === 'enterprise' && 'Enterprise Plan Active'}
-                  </span>
-                </div>
-                {normalizePlan(billing?.plan) === 'free' && (
-                  <p className="mt-1 text-sm text-green-600 dark:text-green-500">
-                    You&apos;re saving {formatCurrency(billing?.usage?.totalCost ?? 0, 'USD')} with
-                    the free plan!
-                  </p>
-                )}
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -183,18 +139,16 @@ export const Usage: React.FC<UsageProps> = ({
                 <p className="mt-1 text-sm text-muted-foreground">
                   Add a payment method through the billing portal
                 </p>
-                {stripeCustomerId && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-4"
-                    onClick={onManageBilling}
-                    disabled={isManagingBilling}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Manage in Portal
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={onManageBilling}
+                  disabled={isManagingBilling}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Manage in Portal
+                </Button>
               </div>
             ) : (
               <div className="space-y-3">
@@ -241,31 +195,27 @@ export const Usage: React.FC<UsageProps> = ({
                           )}
                         </div>
                       </div>
-                      {stripeCustomerId && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={onManageBilling}
-                          disabled={isManagingBilling}
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onManageBilling}
+                        disabled={isManagingBilling}
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
                     </div>
                   );
                 })}
-                {stripeCustomerId && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={onManageBilling}
-                    disabled={isManagingBilling}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Manage Payment Methods
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={onManageBilling}
+                  disabled={isManagingBilling}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Manage Payment Methods
+                </Button>
               </div>
             )}
           </CardContent>

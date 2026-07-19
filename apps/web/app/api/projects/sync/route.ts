@@ -34,7 +34,11 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import { getProjectLimit, isUserResourceLimitError } from '@/lib/services/free-plan-entitlements';
+import {
+  getProjectLimit,
+  getProjectLimitErrorMessage,
+  isUserResourceLimitError,
+} from '@/lib/services/free-plan-entitlements';
 
 const MAX_PROJECTS_PULL = 500;
 
@@ -116,7 +120,11 @@ async function handlePost(request: NextRequest) {
   }
 
   const subscription = await SubscriptionService.getSubscription(db, userId);
-  const projectLimit = getProjectLimit(subscription?.plan_tier);
+  const planTier = subscription?.plan_tier;
+  const projectLimit = getProjectLimit(planTier);
+  if (projectLimit === 0) {
+    throw createError.validation(getProjectLimitErrorMessage(planTier));
+  }
 
   const applied: Array<{ id: string; server_version: string }> = [];
   const conflicts: Array<{ id: string; current: ProjectDelta | null }> = [];
@@ -233,9 +241,7 @@ async function handlePost(request: NextRequest) {
     return NextResponse.json({ applied, conflicts, cursor });
   } catch (error) {
     if (isUserResourceLimitError(error)) {
-      throw createError.validation(
-        'Free accounts can have up to 5 Projects. Delete a Project or upgrade before syncing another.',
-      );
+      throw createError.validation(getProjectLimitErrorMessage(planTier));
     }
     logger.error({ error, userId }, 'Projects sync push failed');
     throw createError.internal('Failed to push project changes');

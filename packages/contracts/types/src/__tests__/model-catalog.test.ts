@@ -30,12 +30,17 @@ import {
   listCanonicalModels,
   modelsCatalog,
   normalizeModelId,
+  normalizeSubscriptionAccessTier,
   requireProviderDefaultModel,
   resolveAutoModeModel,
   SLOT_REGISTRY,
 } from '../model-catalog';
 
 describe('model catalog helpers', () => {
+  it('keeps Max 15x on the Max model-access roster', () => {
+    expect(normalizeSubscriptionAccessTier('max_15x')).toBe('max');
+  });
+
   it('owns the current specialized embedding default in the canonical registry', () => {
     const embeddingSlot = (
       modelRegistry.policies.auto.slots as Record<string, { modelKey: string } | undefined>
@@ -163,19 +168,18 @@ describe('model catalog helpers', () => {
   });
 
   it('builds context limit and cost maps from canonical ids', () => {
-    // claude-sonnet-4-6 (dash format) resolves to claude-sonnet-4.6 via apiModelId lookup.
-    const aliasId = normalizeModelId('claude-sonnet-4-6');
+    const aliasId = normalizeModelId('claude-sonnet-5');
     const openaiModel = requireProviderDefaultModel('openai');
-    const contextLimits = getModelContextLimits([openaiModel, 'claude-sonnet-4-6']);
-    const costRates = getModelCostRates([openaiModel, 'claude-sonnet-4-6']);
+    const contextLimits = getModelContextLimits([openaiModel, 'claude-sonnet-5']);
+    const costRates = getModelCostRates([openaiModel, 'claude-sonnet-5']);
 
-    expect(aliasId).toBe('claude-sonnet-4.6');
+    expect(aliasId).toBe('claude-sonnet-5');
     // Canonicalization removed: unknown IDs pass through as-is (no legacy redirect).
     expect(normalizeModelId('gpt-5.4-codex-medium')).toBe('gpt-5.4-codex-medium');
     expect(contextLimits[openaiModel]).toBeGreaterThan(0);
-    expect(contextLimits['claude-sonnet-4.6']).toBeGreaterThan(0);
+    expect(contextLimits['claude-sonnet-5']).toBeGreaterThan(0);
     expect(costRates[openaiModel]).toMatchObject({ provider: 'openai' });
-    expect(costRates['claude-sonnet-4.6']).toMatchObject({ provider: 'anthropic' });
+    expect(costRates['claude-sonnet-5']).toMatchObject({ provider: 'anthropic' });
   });
 
   it('derives provider model lists from the canonical catalog', () => {
@@ -241,7 +245,7 @@ describe('model catalog helpers', () => {
     expect(isAutoModeModelId('AUTO-BALANCED')).toBe(false);
     expect(isAutoModeModelId('gpt-5.4-mini')).toBe(false);
     expect(isAutoModeModelId(null)).toBe(false);
-    expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
+    expect(detectProviderFromModelId('claude-sonnet-5')).toBe('anthropic');
     expect(resolveAutoModeModel('auto-economy', 'free')).toBe('gemini-3.1-flash-lite');
     // Basic/hobby clamp every Auto alias to the economy routing profile.
     expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe('gemini-3.1-flash-lite');
@@ -257,12 +261,12 @@ describe('model catalog helpers', () => {
     // Variant partners must resolve to a real catalog model (no dangling partner),
     // without pinning the specific partner id.
     expect(getModelMetadataById(getModelVariantPartner('gpt-5.4-mini'))).not.toBeNull();
-    expect(getModelMetadataById(getModelVariantPartner('claude-sonnet-4-6'))).not.toBeNull();
+    expect(getModelMetadataById(getModelVariantPartner('claude-sonnet-5'))).not.toBeNull();
     expect(getProviderProbeModel('openai')).toBe('gpt-5.6-luna');
     expect(getProviderProbeModel('anthropic')).toBe('claude-haiku-4.5');
 
     const fallbackIds = getEconomyFallbackModels().map((entry) => entry.model);
-    expect(fallbackIds.indexOf('qwen-3.5-plus')).toBeGreaterThanOrEqual(0);
+    expect(fallbackIds.indexOf('qwen-3.7-plus')).toBeGreaterThanOrEqual(0);
     expect(fallbackIds).toContain('gpt-5.6-luna');
     expect(fallbackIds).not.toContain('gpt-5.4-mini');
     expect(fallbackIds).toContain('gpt-5.4-nano');
@@ -274,7 +278,7 @@ describe('model catalog helpers', () => {
     // gpt-5.4-codex was a phantom (never a real OpenAI model) — it may be a
     // migration alias, but must stay absent from picker options.
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-codex')).toBe(false);
-    expect(coreOptions.some((entry) => entry.id === 'kimi-k2.6')).toBe(true);
+    expect(coreOptions.some((entry) => entry.id === 'qwen-3.7-plus')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-sol')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-terra')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-luna')).toBe(true);
@@ -401,8 +405,8 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     it('coding task → coding_premium_pro slot (Sonnet 5)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe('claude-sonnet-5');
     });
-    it('reasoning task → reasoning_premium_pro slot (Kimi K2.6)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe('kimi-k2.6');
+    it('reasoning task → reasoning_premium_pro slot (Qwen 3.7 Plus)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe('qwen-3.7-plus');
     });
     it('multimodal task → multimodal_pro slot (Gemini 3.5 Flash)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe('gemini-3.5-flash');
@@ -445,12 +449,10 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     it('coding → workhorse_general (escalation_coding not in free allowedSlots)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
       expect(result).toBe('gemini-3.1-flash-lite');
-      expect(result).not.toBe('claude-sonnet-4.6');
     });
     it('reasoning → workhorse_general (reasoning_premium not in free allowedSlots)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
       expect(result).toBe('gemini-3.1-flash-lite');
-      expect(result).not.toBe('kimi-k2.6');
     });
     it('multimodal → workhorse_general (Flash-Lite handles vision)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'multimodal');
@@ -502,28 +504,27 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   });
 
   describe('US-only routing toggle (Pro+/Max only)', () => {
-    it('Max reasoning + usOnly=true skips kimi-k2.6 (Moonshot)', () => {
-      // Default: reasoning -> reasoning_premium_pro -> kimi-k2.6
-      expect(resolveAutoModeModel('auto-balanced', 'max', 'reasoning')).toBe('kimi-k2.6');
+    it('Max reasoning + usOnly=true skips Qwen', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'max', 'reasoning')).toBe('qwen-3.7-plus');
       // With usOnly: skips Moonshot/DeepSeek/Zhipu/MiniMax/Qwen.
       const result = resolveAutoModeModel('auto-balanced', 'max', 'reasoning', {
         usOnly: true,
       });
-      expect(result).not.toBe('kimi-k2.6');
+      expect(result).not.toBe('qwen-3.7-plus');
       expect(result).not.toBe('deepseek-v4-flash');
       expect(result).not.toBe('glm-4.7');
     });
 
-    it('Max reasoning + usOnly=true also skips kimi-k2.6', () => {
+    it('Max reasoning + usOnly=true also skips Qwen', () => {
       const result = resolveAutoModeModel('auto-balanced', 'max', 'reasoning', { usOnly: true });
-      expect(result).not.toBe('kimi-k2.6');
+      expect(result).not.toBe('qwen-3.7-plus');
     });
 
     it('Pro tier ignores usOnly flag (toggle gated by usOnlyRoutingAvailable)', () => {
       // Pro tier policy does not set usOnlyRoutingAvailable, so the flag is
-      // ignored and reasoning still routes to kimi-k2.6.
+      // ignored and reasoning still routes to Qwen 3.7 Plus.
       const result = resolveAutoModeModel('auto-balanced', 'pro', 'reasoning', { usOnly: true });
-      expect(result).toBe('kimi-k2.6');
+      expect(result).toBe('qwen-3.7-plus');
     });
 
     it('Free tier reasoning with usOnly=true is ignored (toggle not available)', () => {
@@ -748,7 +749,7 @@ describe('model env-gating (requiresEnvironment)', () => {
     // Anthropic's server-managed web_search tool — making that code path
     // permanently dead for every Claude model. Assert the fix stays in place.
     it('every current-generation Anthropic model advertises search support', () => {
-      for (const modelId of ['claude-opus-4.8', 'claude-sonnet-4.6', 'claude-haiku-4.5']) {
+      for (const modelId of ['claude-opus-4.8', 'claude-sonnet-5', 'claude-haiku-4.5']) {
         const metadata = getModelMetadataById(modelId);
         expect(metadata, `missing catalog entry for ${modelId}`).not.toBeNull();
         expect(metadata!.capabilities.search, `${modelId} capabilities.search`).toBe(true);

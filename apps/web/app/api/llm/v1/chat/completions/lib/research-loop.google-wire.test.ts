@@ -31,10 +31,6 @@ vi.mock('@/lib/services/credit-service', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 7) },
 }));
-vi.mock('@/lib/assert-quota', () => ({
-  reconcileUsage: vi.fn(async () => undefined),
-}));
-
 // Keep chunksToOpenAiSse REAL; replace only buildToolLoopStream (the network
 // dispatch) with the recorded-bytes pipeline.
 vi.mock('./tool-loop-anthropic', async (importOriginal) => {

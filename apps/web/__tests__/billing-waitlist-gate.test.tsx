@@ -1,9 +1,8 @@
 /**
  * billing-waitlist-gate.test.tsx
  *
- * Guards that free users are routed to /pricing#waitlist (not a live
- * Stripe checkout flow) when the NEXT_PUBLIC_CHECKOUT_ENABLED kill-switch
- * is explicitly set to disable checkout.
+ * Guards that the incident-response checkout kill-switch blocks purchase
+ * requests without reviving the retired managed-cloud waitlist.
  *
  * Checkout is open by default since 2026-07-04 (matching the managed-compute
  * public-alpha decision); NEXT_PUBLIC_CHECKOUT_ENABLED=false/0/off is now an
@@ -11,7 +10,7 @@
  * explicitly rather than relying on it being unset.
  *
  * FAILS without the fix (the components fire live purchase requests).
- * PASSES with the fix (all purchase paths redirect to the waitlist).
+ * PASSES with the fix (purchase paths remain in context and show an error).
  *
  * Lane files: BillingDashboard.tsx, CreditAlertModal.tsx
  *
@@ -104,9 +103,7 @@ vi.mock('sonner', () => ({
 vi.mock('@agiworkforce/types', () => ({
   getPlanPriceUsd: vi.fn(() => 29),
   getPlanUsageBudgetCents: vi.fn(() => 50000),
-  // Basic is mobile-only: not selectable on web/desktop.
-  isPlanSelectableOnSurface: (tier: string, surface: string) =>
-    !(tier === 'basic' && surface !== 'mobile'),
+  isPlanSelectableOnSurface: () => true,
   getBillingPlanPricing: (tier: string) => ({
     label: tier.charAt(0).toUpperCase() + tier.slice(1),
   }),
@@ -193,24 +190,23 @@ describe('billing waitlist gate — NEXT_PUBLIC_CHECKOUT_ENABLED=false (kill-swi
   // -------------------------------------------------------------------------
 
   describe('BillingDashboard — handleUpgrade', () => {
-    it('redirects to /pricing#waitlist, does NOT call stripe service, when gate is off', async () => {
+    it('shows temporary unavailability without redirecting or calling Stripe', async () => {
       render(React.createElement(BillingDashboard));
 
-      // The header CTA reads "Upgrade to Pro" for a free web user — Basic is
-      // mobile-only (founder decision, 2026-07), so the web ladder skips it.
+      // Basic is the first paid tier on Web, Mobile, and Desktop.
       const allUpgradeBtns = await screen.findAllByRole('button', { name: /upgrade/i });
       const upgradeBtn = allUpgradeBtns.find((btn) =>
-        btn.textContent?.toLowerCase().includes('pro'),
+        btn.textContent?.toLowerCase().includes('basic'),
       );
       expect(upgradeBtn).toBeTruthy();
 
       fireEvent.click(upgradeBtn!);
 
       await waitFor(() => {
-        expect(window.location.href).toBe('/pricing#waitlist');
+        expect(window.location.href).toBe('http://localhost/billing');
       });
 
-      // Confirm no stripe purchase flow was invoked (gate is off → waitlist).
+      // Confirm no Stripe purchase flow was invoked while the kill-switch is active.
       const { upgradeToProPlan, upgradeToBasicPlan } =
         await import('@features/billing/services/stripe-payments');
       expect(upgradeToProPlan).not.toHaveBeenCalled();

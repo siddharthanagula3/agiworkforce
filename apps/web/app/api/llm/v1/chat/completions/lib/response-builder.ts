@@ -3,17 +3,17 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { secureToken } from '@/lib/secure-random';
-import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import type { ProcessedRequest } from './request-processor';
 import {
+  ManagedUsageRequestError,
   finalizeManagedUsageRequest,
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
-import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 
 export async function buildNonStreamResponse(
   request: NextRequest,
@@ -45,7 +45,6 @@ export async function buildNonStreamResponse(
     chatRequest,
     requestedModel,
     provider,
-    estimatedCostCents,
     quotaWarningHeader,
     usedFallback,
     resolvedTaskType,
@@ -67,8 +66,6 @@ export async function buildNonStreamResponse(
         cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
       });
 
-  const costDifference = actualCostCents - estimatedCostCents;
-
   if (processed.managedUsage) {
     // Financial terminal state is durable before the successful HTTP response
     // is constructed. Do not swallow this failure and hand out an unmetered
@@ -86,50 +83,12 @@ export async function buildNonStreamResponse(
         cacheWrite1hTokens: llmResponse.cacheCreation1hInputTokens,
       },
     });
-  } else {
-    try {
-      if (!freeTrial && costDifference !== 0) {
-        const reconciliationKey = CreditService.generateIdempotencyKey(
-          userId,
-          'reconciliation',
-          requestId,
-        );
-        await CreditService.settleCreditsDurably({
-          userId,
-          amountCents: costDifference,
-          description:
-            costDifference > 0
-              ? `Additional charge: ${provider}/${llmResponse.model}`
-              : `Credit adjustment: ${provider}/${llmResponse.model}`,
-          metadata: {
-            provider,
-            model: llmResponse.model,
-            type: 'reconciliation',
-            estimatedCostCents,
-            actualCostCents,
-            promptTokens: llmResponse.promptTokens,
-            completionTokens: llmResponse.completionTokens,
-            totalTokens: llmResponse.totalTokens,
-            requestId,
-          },
-          idempotencyKey: reconciliationKey,
-        });
-      }
-    } catch (reconciliationError) {
-      logger.error(
-        {
-          error: reconciliationError,
-          userId,
-          requestId,
-          provider,
-          model: llmResponse.model,
-          estimatedCostCents,
-          actualCostCents,
-          costDifference,
-        },
-        'Credit reconciliation failed after successful LLM response - may require manual adjustment',
-      );
-    }
+  } else if (!freeTrial) {
+    throw new ManagedUsageRequestError(
+      'Managed usage reservation is missing.',
+      503,
+      'billing_protocol_error',
+    );
   }
 
   // Cache analytics
@@ -172,10 +131,19 @@ export async function buildNonStreamResponse(
   }
 
   if (freeTrial) {
-    await recordFreeTrialTokens({
-      userId: freeTrial.userId,
-      requestId: freeTrial.requestId,
-      tokens: llmResponse.totalTokens,
+    await settleFreeTrialRequest({
+      reservation: freeTrial,
+      outcome: 'completed',
+      provider,
+      model: llmResponse.model,
+      usage: {
+        promptTokens: llmResponse.promptTokens,
+        completionTokens: llmResponse.completionTokens,
+        totalTokens: llmResponse.totalTokens,
+        cacheReadInputTokens: llmResponse.cachedInputTokens,
+        cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
+        cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
+      },
     });
   }
 
@@ -183,7 +151,7 @@ export async function buildNonStreamResponse(
 
   // BILLING FIX (0044): reconcileUsage/increment_usage was a SECOND, buggy
   // charge path that added the raw token count to credits_used_cents (a cents
-  // ledger), double-charging on top of the authoritative deduct_credits()
+  // ledger), double-charging on top of the authoritative managed reservation
   // reservation/reconciliation below. Removed — deduct_credits is the single
   // source of truth for credits_used_cents.
 
@@ -230,7 +198,6 @@ export async function buildNonStreamResponse(
         llmResponse.search_results.length > 0 && { search_results: llmResponse.search_results }),
       x_agi_workforce: {
         provider,
-        cost_cents: actualCostCents,
         routing: {
           task_type: resolvedTaskType,
           task_confidence: classifierConfidence,
@@ -257,7 +224,6 @@ export async function buildNonStreamResponse(
         }),
         cache: {
           tokens_saved: cacheMetrics.tokensSavedByCache,
-          cost_saved_cents: cacheMetrics.savedCostCents,
         },
       },
     },

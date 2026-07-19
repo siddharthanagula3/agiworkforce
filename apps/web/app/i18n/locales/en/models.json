@@ -15,7 +15,6 @@
     "local": "Local"
   },
   "comingSoonProviders": {
-    "azure": "Azure OpenAI",
     "aws_bedrock": "AWS Bedrock"
   },
   "models": {

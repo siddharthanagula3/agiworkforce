@@ -55,35 +55,4 @@ export async function addTokensToUserBalance(
   }
 }
 
-/**
- * Get user's token balance
- *
- * NOTE: Uses user_token_balances table (authoritative source) instead of
- * the deprecated users.token_balance column (dropped in migration 20260113000002).
- */
-export async function getUserTokenBalance(_userId: string): Promise<number> {
-  try {
-    const authToken = await getAuthToken();
-    if (!authToken) return 0;
-
-    const res = await fetch('/api/usage', {
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    if (!res.ok) return 0;
-
-    const body = (await res.json()) as Record<string, unknown>;
-    return typeof body['credits_remaining_cents'] === 'number'
-      ? body['credits_remaining_cents']
-      : 0;
-  } catch (error) {
-    logger.error('[Get Token Balance] Error:', error);
-    captureError(error as Error, {
-      tags: { feature: 'billing', operation: 'get_token_balance' },
-      extra: { _userId },
-      level: 'warning',
-    });
-    return 0;
-  }
-}
-
 // Note: isStripeConfigured() is exported from stripe-payments.ts · do not duplicate here.

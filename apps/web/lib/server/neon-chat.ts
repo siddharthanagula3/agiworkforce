@@ -26,7 +26,6 @@ export type ChatMessageRow = {
   provider: string | null;
   input_tokens: number;
   output_tokens: number;
-  cost_cents: number;
   created_at: string;
   metadata: Record<string, unknown> | null;
 };

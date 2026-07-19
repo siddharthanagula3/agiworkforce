@@ -180,7 +180,7 @@ export interface EnhancedPrompt {
  *   estimatedCost: 0.015,
  *   estimatedLatency: 2500,
  *   fallbacks: [APIProvider.GPT, APIProvider.Gemini],
- *   model: 'claude-sonnet-4-6',
+ *   model: 'claude-sonnet-5',
  *   config: {
  *     temperature: 0.7,
  *     maxTokens: 4096

@@ -9,11 +9,7 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { createRateLimiter } from '../middleware/rateLimit';
-import {
-  getSystemClient,
-  getUserScopedClient,
-  type CloudDbClient,
-} from '../lib/neonClients';
+import { getSystemClient, getUserScopedClient, type CloudDbClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const router: Router = Router();
@@ -312,41 +308,15 @@ router.get(
   async (req: Request, res: Response) => {
     const user = requireUser(req);
     const { orgId } = uuidParamSchema.parse(req.params);
-    const { limit } = auditQuerySchema.parse(req.query);
     const membershipDb = getUserScopedClient(user);
-    const db = getSystemClient('shadow-schema-compatibility');
 
     await requireMembershipRole(membershipDb, orgId, user.userId, 'admin');
 
-    const { data, error } = await db
-      .from('organization_usage_ledger')
-      .select(
-        `
-        id,
-        organization_id,
-        user_id,
-        privacy_mode,
-        provider,
-        model,
-        input_tokens,
-        output_tokens,
-        provider_cost_usd,
-        charged_amount_usd,
-        gross_margin_usd,
-        gross_margin_pct,
-        created_at
-      `,
-      )
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      logger.error({ error, orgId, userId: user.userId }, 'Failed to fetch usage ledger');
-      throw new AppError('Failed to fetch usage ledger', 500);
-    }
-
-    res.json({ entries: data ?? [], limit });
+    res.status(410).json({
+      error: 'Detailed usage ledger is no longer available',
+      code: 'PERCENTAGE_USAGE_REQUIRED',
+      usage_url: '/api/credits/balance',
+    });
   },
 );
 

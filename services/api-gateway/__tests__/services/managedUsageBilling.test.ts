@@ -93,56 +93,47 @@ describe('managed usage registry-driven cost accounting', () => {
   });
 });
 
-describe('managed usage post_promo_prices date-awareness', () => {
-  // Sonnet 5's promo cutoff (packages/contracts/types/src/models.json). Dates straddle
-  // the exact cutoff instant -- the underlying isManagedModelPromoExpired
-  // check treats `now >= cutoff` as expired, so 2026-08-31T00:00:00.000Z
-  // itself is already post-promo, not the last promo day.
-  const PROMO_MODEL = 'claude-sonnet-5';
-  const STILL_PROMO = new Date('2026-08-30T23:59:59.999Z');
-  const AT_CUTOFF = new Date('2026-08-31T00:00:00.000Z');
-  const WELL_PAST_CUTOFF = new Date('2026-09-01T00:00:00.000Z');
+describe('managed usage Sonnet 5 standard pricing', () => {
+  const MODEL = 'claude-sonnet-5';
+  const BEFORE_RETIRED_PROMO_CUTOFF = new Date('2026-08-30T23:59:59.999Z');
+  const RETIRED_PROMO_CUTOFF = new Date('2026-08-31T00:00:00.000Z');
+  const AFTER_RETIRED_PROMO_CUTOFF = new Date('2026-09-01T00:00:00.000Z');
 
-  it('bills promo rates for input and cached_input before the cutoff', () => {
-    // Promo: input $2/M, cached_input $0.2/M.
+  it('bills standard input and cached-input rates at every date', () => {
     expect(
       calculateManagedUsageCostCents(
-        PROMO_MODEL,
+        MODEL,
         { inputTokens: 1_000_000, outputTokens: 0 },
-        STILL_PROMO,
-      ),
-    ).toBe(200);
-    expect(
-      calculateManagedUsageCostCents(
-        PROMO_MODEL,
-        { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
-        STILL_PROMO,
-      ),
-    ).toBe(20);
-  });
-
-  it('switches every rate field to post_promo_prices at the exact cutoff instant', () => {
-    // Post-promo: input $3/M, cached_input $0.3/M.
-    expect(
-      calculateManagedUsageCostCents(
-        PROMO_MODEL,
-        { inputTokens: 1_000_000, outputTokens: 0 },
-        AT_CUTOFF,
+        BEFORE_RETIRED_PROMO_CUTOFF,
       ),
     ).toBe(300);
-    // A fix that only swapped input/output and left cached_input on the
-    // promo rate would land here at 20 cents instead of 30 -- this is the
-    // assertion that catches that half-fixed version.
     expect(
       calculateManagedUsageCostCents(
-        PROMO_MODEL,
+        MODEL,
         { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
-        AT_CUTOFF,
+        BEFORE_RETIRED_PROMO_CUTOFF,
       ),
     ).toBe(30);
   });
 
-  it('bills a mixed input/output/cache-read/cache-write request correctly on both sides of the boundary', () => {
+  it('keeps standard rates at the retired promotional cutoff instant', () => {
+    expect(
+      calculateManagedUsageCostCents(
+        MODEL,
+        { inputTokens: 1_000_000, outputTokens: 0 },
+        RETIRED_PROMO_CUTOFF,
+      ),
+    ).toBe(300);
+    expect(
+      calculateManagedUsageCostCents(
+        MODEL,
+        { inputTokens: 0, outputTokens: 0, cacheReadTokens: 1_000_000 },
+        RETIRED_PROMO_CUTOFF,
+      ),
+    ).toBe(30);
+  });
+
+  it('bills mixed usage at standard rates on both sides of the retired boundary', () => {
     const usage = {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
@@ -150,42 +141,36 @@ describe('managed usage post_promo_prices date-awareness', () => {
       cacheWriteTokens: 1_000_000,
     };
 
-    // Pre-promo: (1M*$2)+(1M*$10)+(1M*$0.2)+(1M*$2.5) = $14.70 -> 1470 cents.
-    expect(calculateManagedUsageCostCents(PROMO_MODEL, usage, STILL_PROMO)).toBe(1470);
-    // Post-promo: (1M*$3)+(1M*$15)+(1M*$0.3)+(1M*$3.75) = $22.05 -> 2205 cents.
-    expect(calculateManagedUsageCostCents(PROMO_MODEL, usage, WELL_PAST_CUTOFF)).toBe(2205);
+    expect(calculateManagedUsageCostCents(MODEL, usage, BEFORE_RETIRED_PROMO_CUTOFF)).toBe(2205);
+    expect(calculateManagedUsageCostCents(MODEL, usage, AFTER_RETIRED_PROMO_CUTOFF)).toBe(2205);
   });
 
-  it('derives the 1h cache-write rate as 2x the effective (date-aware) input rate', () => {
+  it('derives the 1h cache-write rate from the standard input rate', () => {
     const usage = {
       inputTokens: 0,
       outputTokens: 0,
       cacheWriteTokens: 1_000_000,
       cacheWrite1hTokens: 1_000_000,
     };
-    // Pre-promo: 2 * $2/M = $4/M -> 400 cents (matches models.json's promo
-    // cached_write_1h: 4, even though that field is never read directly).
-    expect(calculateManagedUsageCostCents(PROMO_MODEL, usage, STILL_PROMO)).toBe(400);
-    // Post-promo: 2 * $3/M = $6/M -> 600 cents (matches post_promo_prices
-    // .cached_write_1h: 6).
-    expect(calculateManagedUsageCostCents(PROMO_MODEL, usage, WELL_PAST_CUTOFF)).toBe(600);
+    expect(calculateManagedUsageCostCents(MODEL, usage, BEFORE_RETIRED_PROMO_CUTOFF)).toBe(600);
+    expect(calculateManagedUsageCostCents(MODEL, usage, AFTER_RETIRED_PROMO_CUTOFF)).toBe(600);
   });
 
   it('leaves a model with no promo_expires_at unaffected by the date parameter', () => {
     const usage = { inputTokens: 1_000_000, outputTokens: 0 };
-    expect(calculateManagedUsageCostCents('claude-opus-4.8', usage, STILL_PROMO)).toBe(
-      calculateManagedUsageCostCents('claude-opus-4.8', usage, WELL_PAST_CUTOFF),
+    expect(
+      calculateManagedUsageCostCents('claude-opus-4.8', usage, BEFORE_RETIRED_PROMO_CUTOFF),
+    ).toBe(calculateManagedUsageCostCents('claude-opus-4.8', usage, AFTER_RETIRED_PROMO_CUTOFF));
+  });
+
+  it('estimates the same standard price regardless of the retired cutoff', () => {
+    const body = { model: MODEL, messages: [{ role: 'user', content: 'hi' }] };
+    expect(estimateManagedUsageCostCents(body, BEFORE_RETIRED_PROMO_CUTOFF)).toBe(
+      estimateManagedUsageCostCents(body, AFTER_RETIRED_PROMO_CUTOFF),
     );
   });
 
-  it('estimateManagedUsageCostCents honors the same date-aware switch', () => {
-    const body = { model: PROMO_MODEL, messages: [{ role: 'user', content: 'hi' }] };
-    const preEstimate = estimateManagedUsageCostCents(body, STILL_PROMO);
-    const postEstimate = estimateManagedUsageCostCents(body, WELL_PAST_CUTOFF);
-    expect(postEstimate).toBeGreaterThan(preEstimate);
-  });
-
-  it('finalizeManagedUsage threads its injected clock into post_promo_prices selection', async () => {
+  it('finalizeManagedUsage sends the standard price to the ledger', async () => {
     const { client, rpc } = rpcClient([
       {
         data: [
@@ -208,13 +193,11 @@ describe('managed usage post_promo_prices date-awareness', () => {
       requestHash: 'a'.repeat(64),
       leaseToken: 'lease-1',
       outcome: 'completed',
-      model: PROMO_MODEL,
+      model: MODEL,
       usage: { inputTokens: 1_000_000, outputTokens: 0 },
-      now: WELL_PAST_CUTOFF,
+      now: AFTER_RETIRED_PROMO_CUTOFF,
     });
 
-    // The post-promo input rate ($3/M -> 300 cents) must reach the RPC
-    // payload, not the promo rate ($2/M -> 200 cents).
     expect(rpc).toHaveBeenCalledWith(
       'finalize_managed_usage_request',
       expect.objectContaining({ p_actual_cost_cents: 300 }),

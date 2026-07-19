@@ -117,7 +117,9 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
     const res = await GET(makeGet());
     expect(res.status).toBe(200);
 
-    const parsed = ChatSyncPullResponseSchema.safeParse(await res.json());
+    const body = await res.json();
+    expect(body.messages[0]).not.toHaveProperty('cost_cents');
+    const parsed = ChatSyncPullResponseSchema.safeParse(body);
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -210,6 +212,37 @@ describe('POST /api/chat/sync — shared cloud contract', () => {
     expect(sql).toContain(
       'input_tokens = case when incoming.has_input_tokens then incoming.input_tokens else existing.input_tokens end',
     );
+    expect(sql).not.toContain('cost_cents');
+  });
+
+  it('strips private provider cost from message conflict rows', async () => {
+    mockQuery.mockResolvedValueOnce([
+      {
+        kind: 'conflict',
+        id: MSG_ID,
+        server_version: null,
+        current: messageRow,
+      },
+    ]);
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: MSG_ID,
+            conversationId: CONV_ID,
+            role: 'assistant',
+            content: 'stale content',
+            baseVersion: '42',
+          },
+        ],
+      }),
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.conflicts.messages[0].current).not.toHaveProperty('cost_cents');
   });
 
   it('explicitly rejects a legacy mutable push instead of comparing client clocks', async () => {

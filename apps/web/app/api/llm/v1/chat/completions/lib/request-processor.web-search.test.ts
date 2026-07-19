@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
+import { NextRequest } from 'next/server';
 import {
   applyWorkMode,
+  getWorkModeEntitlementError,
   appendWebSearchTool,
   isFreeTierBlockedAddOn,
   resolveManagedUsageLeaseSeconds,
+  processRequest,
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
 import {
@@ -47,6 +50,72 @@ describe('applyWorkMode', () => {
       stream: false,
       work_mode: 'chat',
     });
+  });
+});
+
+describe('getWorkModeEntitlementError', () => {
+  it.each(['free', 'basic', 'local-only', 'byok', 'not-a-plan'])(
+    'rejects AGI Work for %s',
+    (planTier) => {
+      expect(getWorkModeEntitlementError('agiwork', planTier)).toEqual({
+        code: 'agi_work_plan_required',
+        message: 'AGI Work requires Pro or higher.',
+        requiredTier: 'pro',
+      });
+    },
+  );
+
+  it.each(['pro', 'max', 'max_15x', 'team', 'enterprise'])('admits AGI Work for %s', (planTier) => {
+    expect(getWorkModeEntitlementError('agiwork', planTier)).toBeNull();
+  });
+
+  it('does not gate ordinary chat through the AGI Work capability', () => {
+    expect(getWorkModeEntitlementError('chat', 'basic')).toBeNull();
+    expect(getWorkModeEntitlementError(undefined, 'free')).toBeNull();
+  });
+
+  it('returns a structured 403 before any Managed Cloud work starts for Basic', async () => {
+    const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': 'work-mode-basic-1',
+        'x-agi-surface': 'web',
+      },
+      body: JSON.stringify({
+        model: 'auto',
+        messages: [{ role: 'user', content: 'Build a report.' }],
+        work_mode: 'agiwork',
+      }),
+    });
+
+    const result = await processRequest(request, {
+      ok: true,
+      userId: 'user-basic',
+      token: 'session-token',
+      subscription: {
+        id: 'sub-basic',
+        user_id: 'user-basic',
+        plan_tier: 'basic',
+        status: 'active',
+        current_period_start: new Date('2026-07-01T00:00:00Z'),
+        current_period_end: new Date('2026-08-01T00:00:00Z'),
+        stripe_subscription_id: 'stripe-sub-basic',
+        stripe_price_id: 'stripe-price-basic',
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(403);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: {
+          code: 'agi_work_plan_required',
+          requiredTier: 'pro',
+          type: 'invalid_request_error',
+        },
+      });
+    }
   });
 });
 

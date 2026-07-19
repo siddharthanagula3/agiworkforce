@@ -46,7 +46,6 @@ export const ManagedCloudMessageWireSchema = z.object({
   provider: z.string().nullable(),
   input_tokens: z.coerce.number(),
   output_tokens: z.coerce.number(),
-  cost_cents: z.coerce.number(),
   created_at: z.string().min(1),
   metadata: z.record(z.string(), z.unknown()).nullable(),
 });
@@ -215,7 +214,6 @@ export interface ManagedCloudMessage {
   provider?: string;
   inputTokens: number;
   outputTokens: number;
-  costCents: number;
   createdAt: string;
   metadata?: Record<string, unknown>;
 }
@@ -250,7 +248,6 @@ export function normalizeManagedCloudMessage(
     ...(wire.provider ? { provider: wire.provider } : {}),
     inputTokens: wire.input_tokens,
     outputTokens: wire.output_tokens,
-    costCents: wire.cost_cents,
     createdAt: wire.created_at,
     ...(wire.metadata ? { metadata: wire.metadata } : {}),
   };

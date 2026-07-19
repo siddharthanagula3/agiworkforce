@@ -5,7 +5,6 @@ export { SlashCommandMenu } from './SlashCommandMenu';
 export { SendButton } from './SendButton';
 export { ComposerFooter } from './ComposerFooter';
 export { InputFooter } from './InputFooter';
-export { GhostTextOverlay } from './GhostTextOverlay';
 export { StyleSelector } from './StyleSelector';
 export { AttachmentPreview } from './AttachmentPreview';
 export { VoiceInputButton as ComposerVoiceInput } from './VoiceInputButton';

@@ -20,9 +20,11 @@ import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import {
   FREE_TRIAL_MODEL,
+  applyFreeTrialProviderBudget,
   beginFreeTrialRequest,
   isFreeTrialRequest,
   isFreePlanTier,
+  settleFreeTrialRequest,
   type FreeTrialReservation,
 } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -39,6 +41,7 @@ import {
   type Effort,
   getSlotForModel,
   normalizeModelId,
+  canUseBillingPlanCapability,
 } from '@agiworkforce/types';
 import type { RoutingSlot, ThinkingBlock } from '@agiworkforce/types';
 import {
@@ -49,13 +52,12 @@ import {
   resolveAutoRoute,
 } from '@agiworkforce/routing';
 import type { RoutingTaskType } from '@agiworkforce/routing';
-import { assertQuota, reconcileUsage } from '@/lib/assert-quota';
-import type { QuotaFeature, QuotaOutcome } from '@/lib/assert-quota';
 import type { AuthGateSuccess } from './auth-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
   ManagedUsageRequestError,
+  createManagedUsageErrorBody,
   fingerprintManagedUsageRequest,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
@@ -203,6 +205,8 @@ export type ManagedSkillSelectionResult =
   | { ok: true }
   | { ok: false; code: 'skill_not_found'; message: string };
 
+type QuotaFeature = 'chat' | 'image' | 'video' | 'computer_use';
+
 /**
  * Add only path-free Skill metadata and the canonical server-owned definition.
  * The selected body remains withheld until the model makes a real load call.
@@ -246,6 +250,29 @@ export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
   chatRequest.web_search = true;
   chatRequest.web_fetch = true;
   chatRequest.code_execution = true;
+}
+
+export type WorkModeEntitlementError = {
+  code: 'agi_work_plan_required';
+  message: string;
+  requiredTier: 'pro';
+};
+
+/**
+ * AGI Work is a separate paid capability from ordinary Managed Cloud chat.
+ * Keep this gate independent from the caller surface so Basic cannot enable
+ * the tool loop by sending `work_mode: "agiwork"` from Web or Desktop.
+ */
+export function getWorkModeEntitlementError(
+  workMode: ChatCompletionRequest['work_mode'],
+  planTier: string | null | undefined,
+): WorkModeEntitlementError | null {
+  if (workMode !== 'agiwork' || canUseBillingPlanCapability(planTier, 'agi_work')) return null;
+  return {
+    code: 'agi_work_plan_required',
+    message: 'AGI Work requires Pro or higher.',
+    requiredTier: 'pro',
+  };
 }
 
 /**
@@ -401,7 +428,7 @@ export function anthropicUsesAdaptiveThinking(model: string): boolean {
   const metadata = getModelMetadataById(model);
   if (metadata?.provider !== 'anthropic' || !metadata.capabilities.thinking) return false;
   const control = metadata.reasoning?.control;
-  // effort_levels ⇒ adaptive+output_config.effort (Opus 4.8 / Sonnet 4.6).
+  // effort_levels ⇒ adaptive+output_config.effort (Opus 4.8 / Sonnet 5).
   // thinking_budget ⇒ classic enabled+budget (Haiku 4.5) — NOT adaptive.
   if (control === 'thinking_budget') return false;
   return true;
@@ -701,20 +728,28 @@ export function handleCreditError(_deductResult: {
 }
 
 function managedUsageErrorResponse(error: ManagedUsageRequestError): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        message: error.message,
-        type: 'invalid_request_error',
-        code: error.code,
-        contract_version: error.contractVersion,
+  return NextResponse.json(createManagedUsageErrorBody(error, 'invalid_request_error'), {
+    status: error.status,
+    headers: { 'X-AGI-Chat-Contract-Version': MANAGED_CHAT_CONTRACT_VERSION },
+  });
+}
+
+function freeTrialBudgetReachedResponse(): ProcessFailure {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          message:
+            'You have reached the current free usage limit. Upgrade your plan, or switch to Local or BYOK to keep going.',
+          type: 'insufficient_quota',
+          code: 'free_trial_token_budget_reached',
+          trial: { model: FREE_TRIAL_MODEL },
+        },
       },
-    },
-    {
-      status: error.status,
-      headers: { 'X-AGI-Chat-Contract-Version': MANAGED_CHAT_CONTRACT_VERSION },
-    },
-  );
+      { status: 429 },
+    ),
+  };
 }
 
 const MAX_BODY_BYTES = 2_000_000;
@@ -724,7 +759,7 @@ export async function processRequest(
   request: NextRequest,
   auth: AuthGateSuccess,
 ): Promise<ProcessResult> {
-  const { userId, token, subscription } = auth;
+  const { userId, subscription } = auth;
 
   let requestId: string;
   try {
@@ -812,6 +847,25 @@ export async function processRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  const workModeEntitlementError = getWorkModeEntitlementError(
+    chatRequest.work_mode,
+    subscription.plan_tier,
+  );
+  if (workModeEntitlementError) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            ...workModeEntitlementError,
+            type: 'invalid_request_error',
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
   let userScopedDb: Awaited<ReturnType<typeof getUserScopedDb>> | undefined;
   let conversationIsTemporary = false;
 
@@ -1370,11 +1424,6 @@ export async function processRequest(
   const isFlagshipRequest =
     resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
 
-  const quotaEstimateTokens = collectManagedPromptMaterials(chatRequest).reduce(
-    (sum, material) => sum + estimateTokens(material),
-    0,
-  );
-
   let quotaFeature: QuotaFeature = 'chat';
   if (resolvedSlot === 'image_generation') {
     quotaFeature = 'image';
@@ -1384,65 +1433,11 @@ export async function processRequest(
     quotaFeature = 'computer_use';
   }
 
-  let quotaOutcome: QuotaOutcome = { kind: 'ok' };
-  let quotaWarningHeader: string | null = null;
-  if (!freeTrialEnabled) {
-    try {
-      quotaOutcome = await assertQuota({
-        userId: userId,
-        token,
-        tier: subscription.plan_tier,
-        requestedTokens: quotaEstimateTokens,
-        feature: quotaFeature,
-        slot: resolvedSlot ?? undefined,
-      });
-    } catch (gateError) {
-      // Fail-open: gate error falls back to legacy CreditService flow
-      logger.warn(
-        { userId: userId, error: gateError instanceof Error ? gateError.message : gateError },
-        '[assertQuota] gate errored, falling back to credit-only flow',
-      );
-    }
-  }
-
-  if (quotaOutcome.kind === 'paywall') {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: quotaOutcome.reason,
-            type: 'paywall',
-            code: 'tier_quota_exceeded',
-            paywall: {
-              feature: quotaOutcome.feature,
-              requiredTier: quotaOutcome.requiredTier,
-              reason: quotaOutcome.reason,
-            },
-          },
-        },
-        { status: 429 },
-      ),
-    };
-  }
-
-  if (quotaOutcome.kind === 'downgrade') {
-    logger.info(
-      {
-        userId: userId,
-        from: chatRequest.model,
-        to: quotaOutcome.modelOverride,
-        reason: quotaOutcome.reason,
-      },
-      '[assertQuota] downgrade applied',
-    );
-    chatRequest.model = quotaOutcome.modelOverride;
-    provider = resolveProviderFromModel(chatRequest.model);
-    usedFallback = true;
-    fallbackReason = quotaOutcome.reason;
-  } else if (quotaOutcome.kind === 'warn') {
-    quotaWarningHeader = quotaOutcome.warning;
-  }
+  // The durable managed-usage reservation below is the sole paid usage gate.
+  // Keeping the former token/daily assertQuota gate here created a second,
+  // fail-open policy owner that could contradict the canonical 5-hour,
+  // weekly, flagship-weekly, and billing-period spend caps.
+  const quotaWarningHeader: string | null = null;
 
   // Egress policy: validate custom provider base URLs
   // WEB-30 (audit 2026-05-19): extended map from 4 providers to 9 so all
@@ -1587,27 +1582,6 @@ export async function processRequest(
 
   if (freeTrialEnabled) {
     estimatedCostCents = 0;
-    const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });
-    if (!trialReservationResult.ok) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          {
-            error: {
-              message:
-                'You have reached the current free usage limit. Upgrade your plan, or switch to Local or BYOK to keep going.',
-              type: 'insufficient_quota',
-              code: 'free_trial_token_budget_reached',
-              trial: {
-                model: FREE_TRIAL_MODEL,
-              },
-            },
-          },
-          { status: 429 },
-        ),
-      };
-    }
-    freeTrial = trialReservationResult.reservation;
   } else {
     // Credit allocation + availability check
     let existingBalance = await CreditService.getBalance(userId);
@@ -1735,6 +1709,8 @@ export async function processRequest(
         model: chatRequest.model,
         estimatedCostCents,
         leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest.work_mode),
+        planTier: subscription.plan_tier,
+        isFlagship: isFlagshipRequest,
       });
       estimatedCostCents = managedUsage.estimatedCostCents;
     } catch (error) {
@@ -1776,7 +1752,7 @@ export async function processRequest(
         providerLower,
         toolsCapable: resolvedModelCaps?.tools ?? true,
         stream: chatRequest.stream,
-        freeTrial: Boolean(freeTrial),
+        freeTrial: freeTrialEnabled,
         backendConfigured: webSearchBackendConfigured(),
       })
     ) {
@@ -1850,6 +1826,23 @@ export async function processRequest(
     usePromptCache: chatRequest.use_prompt_cache,
   };
 
+  if (freeTrialEnabled) {
+    const trialReservationResult = await beginFreeTrialRequest({ userId, requestId });
+    if (!trialReservationResult.ok) return freeTrialBudgetReachedResponse();
+
+    freeTrial = trialReservationResult.reservation;
+    const fitted = applyFreeTrialProviderBudget({
+      reservation: freeTrial,
+      provider,
+      request: llmRequest,
+    });
+    if (!fitted.ok) {
+      await settleFreeTrialRequest({ reservation: freeTrial, outcome: 'failed' });
+      return freeTrialBudgetReachedResponse();
+    }
+    maxTokens = llmRequest.max_tokens;
+  }
+
   return {
     ok: true,
     requestId,
@@ -1884,5 +1877,3 @@ export async function processRequest(
     llmRequest,
   };
 }
-
-export { reconcileUsage };

@@ -4,6 +4,7 @@
  */
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,7 +30,6 @@ export interface ImageGenerationResponse {
   images: GeneratedImage[];
   provider: string;
   model: string;
-  cost_estimate: number;
   latency_ms: number;
   error?: string;
 }
@@ -71,6 +71,14 @@ async function requireAuthToken(): Promise<string> {
   return token;
 }
 
+function createWebMediaIdempotencyKey(operation: ManagedMediaOperation): string {
+  return createManagedMediaIdempotencyKey({
+    surface: 'web',
+    operation,
+    operationId: crypto.randomUUID(),
+  });
+}
+
 // ---------------------------------------------------------------------------
 // API functions
 // ---------------------------------------------------------------------------
@@ -81,6 +89,7 @@ async function requireAuthToken(): Promise<string> {
 export async function generateImages(
   request: ImageGenerationRequest,
 ): Promise<ImageGenerationResponse> {
+  const idempotencyKey = createWebMediaIdempotencyKey('image');
   const token = await requireAuthToken();
 
   const response = await fetch('/api/media/image/generate', {
@@ -88,6 +97,7 @@ export async function generateImages(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
+      'Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(request),
   });
@@ -118,6 +128,7 @@ export async function generateImages(
 export async function generateVideo(
   request: VideoGenerationRequest,
 ): Promise<VideoGenerationResponse> {
+  const idempotencyKey = createWebMediaIdempotencyKey('video');
   const token = await requireAuthToken();
 
   const response = await fetch('/api/media/video/generate', {
@@ -125,6 +136,7 @@ export async function generateVideo(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
+      'Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(request),
   });

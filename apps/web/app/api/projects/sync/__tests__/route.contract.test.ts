@@ -150,10 +150,30 @@ describe('POST /api/projects/sync — shared cloud contract', () => {
     expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
     expect(sql).toContain('assert_user_resource_limit(');
     expect(sql).toContain("'projects'");
-    expect(params[2]).toBe(5);
+    expect(params[2]).toBe(1);
     const pushed = JSON.parse(String(params[1]));
     expect(pushed[0].baseVersion).toBe('0');
     expect(pushed[0].updatedAt).toBeUndefined();
+  });
+
+  it('fails closed for an unknown subscription before applying a push', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'starter' });
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [{ id: PROJ_ID, name: 'Blocked', baseVersion: '0' }],
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+    expect((await res.json()).error.message).toBe(
+      'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.',
+    );
   });
 
   it('returns the current server row when a stale baseVersion loses CAS', async () => {

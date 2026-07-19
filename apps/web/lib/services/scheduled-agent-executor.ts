@@ -2,6 +2,7 @@ import 'server-only';
 
 import { classifyTaskLocally, resolveAutoRoute } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
+import { getSlotForModel } from '@agiworkforce/types';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -74,6 +75,9 @@ export async function executeScheduledAgent(
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');
   }
+  const resolvedSlot = getSlotForModel(route.modelKey);
+  const isFlagshipRoute =
+    resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
 
   const estimatedPromptTokens = Math.ceil(prompt.length / 3.5) + 32;
   const estimatedCostCents = LLMCostCalculator.estimateCost(
@@ -102,6 +106,8 @@ export async function executeScheduledAgent(
     model: route.modelKey,
     estimatedCostCents,
     leaseSeconds: 120,
+    planTier: subscriptionTier,
+    isFlagship: isFlagshipRoute,
   });
 
   let providerCompleted = false;

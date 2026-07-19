@@ -4,8 +4,8 @@
  * Cross-provider LLM payload normalization helpers.
  *
  * This package encodes painful production knowledge about per-vendor and
- * per-endpoint quirks (Azure OpenAI dropping `service_tier`, Cerebras
- * rejecting `store`, DeepSeek's reasoning-tag format, Anthropic cache_control
+ * per-endpoint quirks (compatible proxies rejecting `store`, DeepSeek's
+ * reasoning-tag format, Anthropic cache_control
  * on Vertex, etc.). All exports are pure functions: no runtime, no IO, no
  * provider SDK couplings. Use them at the request-build boundary in any
  * provider adapter.

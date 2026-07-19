@@ -3,28 +3,44 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
-  FREE_CUSTOM_REMOTE_MCP_LIMIT,
-  FREE_PROJECT_LIMIT,
-  PAID_CUSTOM_REMOTE_MCP_LIMIT,
   getCustomRemoteMcpLimit,
   getProjectLimit,
+  getProjectLimitErrorMessage,
+  getCustomRemoteMcpLimitErrorMessage,
   isUserResourceLimitError,
 } from './free-plan-entitlements';
 
-describe('free plan entitlements', () => {
-  it('grants five projects and exactly one custom remote MCP on free', () => {
-    expect(FREE_PROJECT_LIMIT).toBe(5);
-    expect(FREE_CUSTOM_REMOTE_MCP_LIMIT).toBe(1);
-    expect(getProjectLimit('free')).toBe(5);
-    expect(getProjectLimit(null)).toBe(5);
-    expect(getCustomRemoteMcpLimit('free')).toBe(1);
+describe('managed cloud resource entitlements', () => {
+  it.each([
+    ['free', 1, 1],
+    ['basic', 5, 5],
+    ['pro', 25, 25],
+    ['team', 25, 25],
+    ['max', null, null],
+    ['max_15x', null, null],
+  ] as const)('uses the shared product limits for %s', (plan, projects, connectors) => {
+    expect(getProjectLimit(plan)).toBe(projects);
+    expect(getCustomRemoteMcpLimit(plan)).toBe(connectors);
   });
 
-  it('keeps projects unlimited and the existing connector safety cap for paid tiers', () => {
-    expect(PAID_CUSTOM_REMOTE_MCP_LIMIT).toBe(10);
-    expect(getProjectLimit('pro')).toBeNull();
-    expect(getProjectLimit('max')).toBeNull();
-    expect(getCustomRemoteMcpLimit('pro')).toBe(10);
+  it.each([null, undefined, '', 'starter', 'max_20x'])(
+    'fails closed for missing or unknown plan %j',
+    (plan) => {
+      expect(getProjectLimit(plan)).toBe(0);
+      expect(getCustomRemoteMcpLimit(plan)).toBe(0);
+    },
+  );
+
+  it('builds plan-specific, user-safe limit messages', () => {
+    expect(getProjectLimitErrorMessage('basic')).toBe(
+      'Basic accounts can have up to 5 Projects. Delete a Project or upgrade to add another.',
+    );
+    expect(getCustomRemoteMcpLimitErrorMessage('team')).toBe(
+      'Team accounts can add up to 25 custom connectors. Remove one or upgrade to add another.',
+    );
+    expect(getProjectLimitErrorMessage('unknown')).toBe(
+      'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.',
+    );
   });
 
   it('recognizes only the database quota sentinel', () => {

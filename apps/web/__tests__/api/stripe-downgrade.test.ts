@@ -720,8 +720,9 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Should handle gracefully
-      expect(response.status).toBe(200);
+      // Fail closed so Stripe retries after the missing Price mapping is fixed;
+      // acknowledging 200 would silently preserve stale entitlements forever.
+      expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
 

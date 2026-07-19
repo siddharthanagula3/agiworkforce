@@ -72,15 +72,13 @@ export function resolveOpenAICompletionsCompatDefaults(
     endpointClass === 'deepseek-native' ||
     (isDefaultRoute && isDefaultRouteProvider(provider, 'deepseek'));
   const isNonStandard =
-    endpointClass === 'cerebras-native' ||
     endpointClass === 'chutes-native' ||
     endpointClass === 'deepseek-native' ||
     endpointClass === 'mistral-public' ||
     endpointClass === 'opencode-native' ||
     endpointClass === 'xai-native' ||
     isZai ||
-    (isDefaultRoute &&
-      isDefaultRouteProvider(provider, 'cerebras', 'chutes', 'deepseek', 'opencode', 'xai'));
+    (isDefaultRoute && isDefaultRouteProvider(provider, 'chutes', 'deepseek', 'opencode', 'xai'));
   const isOpenRouterLike = provider === 'openrouter' || endpointClass === 'openrouter';
   const usesMaxTokens =
     endpointClass === 'chutes-native' ||

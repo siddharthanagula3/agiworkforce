@@ -16,11 +16,10 @@ describe('TierInfo shape', () => {
     expect(info.tier).toBe('hobby');
   });
 
-  it('constructs a TierInfo with usage data', () => {
-    const info = { tier: 'pro', tokensUsed: 500_000, tokenCap: 10_000_000 };
+  it('constructs a TierInfo with percentage usage data', () => {
+    const info = { tier: 'pro', usagePercentage: 42 };
     expect(info.tier).toBe('pro');
-    expect(info.tokensUsed).toBe(500_000);
-    expect(info.tokenCap).toBe(10_000_000);
+    expect(info.usagePercentage).toBe(42);
   });
 });
 
@@ -29,8 +28,7 @@ describe('TierInfo shape', () => {
 describe('showTierStatus display logic', () => {
   function buildTierStatusItems(
     tier: string,
-    tokensUsed?: number,
-    tokenCap?: number,
+    usagePercentage?: number,
   ): Array<{ label: string; description?: string; detail?: string }> {
     const items: Array<{ label: string; description?: string; detail?: string }> = [];
 
@@ -39,19 +37,11 @@ describe('showTierStatus display logic', () => {
       description: 'Your AGI Workforce subscription tier',
     });
 
-    if (tokensUsed !== undefined && tokenCap !== undefined) {
-      const pct = Math.round((tokensUsed / tokenCap) * 100);
-      const usedFmt = (tokensUsed / 1_000).toFixed(1);
-      const capFmt = (tokenCap / 1_000).toFixed(1);
+    if (usagePercentage !== undefined) {
+      const pct = Math.round(usagePercentage);
       items.push({
-        label: `$(pulse) Token usage: ${usedFmt}K / ${capFmt}K (${pct}%)`,
-        description: 'Tokens used this billing period',
-      });
-    } else if (tokensUsed !== undefined) {
-      const usedFmt = (tokensUsed / 1_000).toFixed(1);
-      items.push({
-        label: `$(pulse) Token usage: ${usedFmt}K used`,
-        description: 'Tokens used this billing period',
+        label: `$(pulse) Cloud usage: ${pct}% used`,
+        description: 'Plan usage this period',
       });
     }
 
@@ -77,25 +67,16 @@ describe('showTierStatus display logic', () => {
     expect(items[0].description).toContain('subscription tier');
   });
 
-  it('includes token usage item when both used and cap are provided', () => {
-    const items = buildTierStatusItems('hobby', 1_000_000, 2_000_000);
-    const usageItem = items.find((i) => i.label.includes('Token usage'));
+  it('includes cloud usage item when a percentage is provided', () => {
+    const items = buildTierStatusItems('pro', 50);
+    const usageItem = items.find((i) => i.label.includes('Cloud usage'));
     expect(usageItem).toBeDefined();
-    expect(usageItem?.label).toContain('50%');
-    expect(usageItem?.label).toContain('1000.0K');
-    expect(usageItem?.label).toContain('2000.0K');
+    expect(usageItem?.label).toContain('50% used');
   });
 
-  it('includes token usage item with only used tokens (no cap)', () => {
-    const items = buildTierStatusItems('free', 50_000);
-    const usageItem = items.find((i) => i.label.includes('Token usage'));
-    expect(usageItem).toBeDefined();
-    expect(usageItem?.label).toContain('50.0K used');
-  });
-
-  it('omits token usage item when no token data available', () => {
+  it('omits cloud usage item when no usage data available', () => {
     const items = buildTierStatusItems('unknown');
-    const usageItem = items.find((i) => i.label.includes('Token usage'));
+    const usageItem = items.find((i) => i.label.includes('Cloud usage'));
     expect(usageItem).toBeUndefined();
   });
 
@@ -112,16 +93,16 @@ describe('showTierStatus display logic', () => {
     expect(dashItem).toBeDefined();
   });
 
-  it('shows 100% when at exact cap', () => {
-    const items = buildTierStatusItems('hobby', 2_000_000, 2_000_000);
-    const usageItem = items.find((i) => i.label.includes('Token usage'));
-    expect(usageItem?.label).toContain('100%');
+  it('shows 100% when plan usage is at the cap', () => {
+    const items = buildTierStatusItems('pro', 100);
+    const usageItem = items.find((i) => i.label.includes('Cloud usage'));
+    expect(usageItem?.label).toContain('100% used');
   });
 
-  it('shows >100% at 150% usage (paywall threshold)', () => {
-    const items = buildTierStatusItems('hobby', 3_000_000, 2_000_000);
-    const usageItem = items.find((i) => i.label.includes('Token usage'));
-    expect(usageItem?.label).toContain('150%');
+  it('rounds the reported percentage', () => {
+    const items = buildTierStatusItems('pro', 42.6);
+    const usageItem = items.find((i) => i.label.includes('Cloud usage'));
+    expect(usageItem?.label).toContain('43% used');
   });
 });
 

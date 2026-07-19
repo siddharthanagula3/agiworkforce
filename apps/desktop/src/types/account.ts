@@ -1,3 +1,9 @@
+import type {
+  ManagedUsageBalance,
+  ManagedUsageBalanceResponse,
+  ManagedUsageSubscription,
+} from '@agiworkforce/types';
+
 export interface DeviceLinkResponse {
   link_code: string;
   device_id: string;
@@ -36,42 +42,9 @@ export interface UserProfile {
   credits?: CreditBalance | null;
 }
 
-/** Subscription information from credits API */
-export interface SubscriptionInfo {
-  plan_tier: string;
-  status: string;
-  current_period_end?: string;
-}
-
-/** Credits information from credits API */
-export interface CreditsInfo {
-  monthly_allocated_cents: number;
-  monthly_remaining_cents: number;
-  monthly_used_cents: number;
-  monthly_reset_at: string;
-  seconds_until_monthly_reset: number;
-  daily_limit_cents: number;
-  daily_used_cents: number;
-  daily_remaining_cents: number;
-  daily_reset_at: string;
-  seconds_until_daily_reset: number;
-}
-
-/** Formatted credits for display */
-export interface FormattedCredits {
-  monthly_remaining: string;
-  monthly_allocated: string;
-  daily_remaining: string;
-  daily_limit: string;
-}
-
-/** Response from fetch_credit_balance command */
-export interface CreditBalanceResponse {
-  object: string;
-  subscription: SubscriptionInfo;
-  credits: CreditsInfo;
-  formatted: FormattedCredits;
-}
+export type SubscriptionInfo = ManagedUsageSubscription;
+export type CreditsInfo = ManagedUsageBalance;
+export type CreditBalanceResponse = ManagedUsageBalanceResponse;
 
 /** Response from report_llm_usage command */
 export interface DeductCreditsResponse {

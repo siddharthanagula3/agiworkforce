@@ -15,17 +15,7 @@ import {
 } from '@/lib/price-tier-mapping';
 import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
-import { getUsageBudgetCentsFromPriceCents } from '@agiworkforce/types';
-
-export function getUsageBudgetOverrideCentsFromStripePrice(
-  price: Pick<Stripe.Price, 'unit_amount'> | null | undefined,
-): number | undefined {
-  const unitAmountCents = price?.unit_amount;
-  if (typeof unitAmountCents !== 'number' || unitAmountCents < 0) {
-    return undefined;
-  }
-  return getUsageBudgetCentsFromPriceCents(unitAmountCents);
-}
+import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 
 export async function ensureProfileExists(
   db: DatabaseAdapter,
@@ -371,59 +361,11 @@ export async function upsertSubscriptionFromSession(
     }
   }
 
-  const priceId = session.line_items?.data?.[0]?.price?.id;
-
-  if (priceId && !isPriceIdRegistered(priceId)) {
-    logger.warn(
-      {
-        sessionId: session.id,
-        priceId,
-        registeredPriceIds: Object.keys(getTierMapping()),
-      },
-      'Checkout session contained unrecognised price ID - skipping subscription upsert. ' +
-        'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
-    );
-    return;
-  }
-
-  const planTier = resolvePlanTier(session.metadata as Record<string, string> | null, priceId);
-
-  if (!planTier || !isValidPlanTier(planTier)) {
-    logger.error(
-      {
-        sessionId: session.id,
-        priceId,
-        hasMetadata: !!session.metadata?.['plan_tier'],
-        inferredFromPrice: priceId ? 'attempted' : 'no-price-id',
-        registeredPriceIds: Object.keys(getTierMapping()),
-        envVarHint:
-          'Ensure STRIPE_PRICE_HOBBY_MONTHLY, STRIPE_PRICE_PRO_MONTHLY, etc. are set in Vercel environment variables',
-      },
-      'CRITICAL: Cannot determine valid plan_tier for subscription - check if Stripe price IDs are registered in environment variables',
-    );
-    return NextResponse.json(
-      {
-        error:
-          'Cannot determine subscription plan tier. Check that STRIPE_PRICE_* environment variables are configured.',
-      },
-      { status: 500 },
-    );
-  }
-
   const stripeSubId = session.subscription as string | null;
 
-  logger.debug(
-    { sessionId: session.id, resolvedUserId, planTier, stripeCustomerId, stripeSubId },
-    'Session details',
-  );
-
   let stripePriceId: string | null = null;
-  let overrideCreditsCents: number | undefined;
   if (session.line_items?.data && session.line_items.data.length > 0) {
     stripePriceId = session.line_items.data[0]?.price?.id || null;
-    overrideCreditsCents = getUsageBudgetOverrideCentsFromStripePrice(
-      session.line_items.data[0]?.price,
-    );
   } else if (session.id) {
     try {
       const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
@@ -431,9 +373,6 @@ export async function upsertSubscriptionFromSession(
       });
       if (expandedSession.line_items?.data && expandedSession.line_items.data.length > 0) {
         stripePriceId = expandedSession.line_items.data[0]?.price?.id || null;
-        overrideCreditsCents = getUsageBudgetOverrideCentsFromStripePrice(
-          expandedSession.line_items.data[0]?.price,
-        );
       }
     } catch (error) {
       logger.error({ error, sessionId: session.id }, 'Failed to retrieve expanded session');
@@ -469,9 +408,6 @@ export async function upsertSubscriptionFromSession(
           'Retrieved price_id from subscription',
         );
       }
-      overrideCreditsCents =
-        overrideCreditsCents ?? getUsageBudgetOverrideCentsFromStripePrice(firstItem?.price);
-
       stripeCouponId = getSubscriptionCouponId(subscription);
     } catch (error) {
       logger.error(
@@ -493,8 +429,6 @@ export async function upsertSubscriptionFromSession(
       const retryItem = subscription.items.data[0];
       if (retryItem) {
         stripePriceId = retryItem.price.id;
-        overrideCreditsCents =
-          overrideCreditsCents ?? getUsageBudgetOverrideCentsFromStripePrice(retryItem.price);
         logger.info(
           { priceId: stripePriceId, subscriptionId: stripeSubId },
           'Successfully retrieved price_id from subscription on retry',
@@ -517,8 +451,6 @@ export async function upsertSubscriptionFromSession(
       const finalItem = finalSubscription.items.data[0];
       if (finalItem) {
         stripePriceId = finalItem.price?.id || finalItem.plan?.id || null;
-        overrideCreditsCents =
-          overrideCreditsCents ?? getUsageBudgetOverrideCentsFromStripePrice(finalItem.price);
         if (stripePriceId) {
           logger.info(
             { priceId: stripePriceId },
@@ -539,7 +471,49 @@ export async function upsertSubscriptionFromSession(
       { sessionId: session.id, subscriptionId: stripeSubId, userId: resolvedUserId },
       'CRITICAL: stripe_price_id is still null after all attempts',
     );
+    throw new Error('Cannot provision subscription without a registered Stripe Price');
   }
+
+  if (!isPriceIdRegistered(stripePriceId)) {
+    logger.error(
+      {
+        sessionId: session.id,
+        priceId: stripePriceId,
+        registeredPriceIds: Object.keys(getTierMapping()),
+      },
+      'Checkout session contained an unrecognised Price; refusing entitlement provisioning',
+    );
+    throw new Error('Cannot provision subscription from an unregistered Stripe Price');
+  }
+
+  const planTier = resolvePlanTier(
+    session.metadata as Record<string, string> | null,
+    stripePriceId,
+  );
+  if (!planTier || !isValidPlanTier(planTier)) {
+    logger.error(
+      {
+        sessionId: session.id,
+        priceId: stripePriceId,
+        registeredPriceIds: Object.keys(getTierMapping()),
+      },
+      'Registered Stripe Price did not resolve to a valid entitlement tier',
+    );
+    throw new Error('Cannot determine subscription tier from its registered Stripe Price');
+  }
+
+  const metadataTier = session.metadata?.['plan_tier']?.toLowerCase();
+  if (metadataTier && metadataTier !== planTier) {
+    logger.warn(
+      { sessionId: session.id, metadataTier, priceTier: planTier, priceId: stripePriceId },
+      'Ignoring stale subscription metadata because the purchased Stripe Price is authoritative',
+    );
+  }
+
+  logger.debug(
+    { sessionId: session.id, resolvedUserId, planTier, stripeCustomerId, stripeSubId },
+    'Session details',
+  );
 
   if (!stripeCouponId && session.id) {
     try {
@@ -627,7 +601,6 @@ export async function upsertSubscriptionFromSession(
           planTier,
           new Date(currentPeriodStart),
           new Date(currentPeriodEnd),
-          { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
         );
         logger.info(
           { userId: resolvedUserId, subscriptionId: data.id, planTier, attempt },
@@ -672,28 +645,33 @@ export async function updateSubscriptionFromStripeSubscription(
 ): Promise<void> {
   logger.info({ subscriptionId: subscription.id }, 'Processing subscription update');
 
+  if (subscription.pending_update) {
+    logger.info(
+      { subscriptionId: subscription.id },
+      'Skipping subscription provisioning until pending upgrade payment succeeds',
+    );
+    return;
+  }
+
   const stripeSubId = subscription.id;
   const stripeCustomerId = subscription.customer as string | null;
 
   let stripePriceId: string | null = null;
-  let overrideCreditsCents: number | undefined;
   const firstSubItem = subscription.items.data[0];
   if (firstSubItem) {
     stripePriceId = firstSubItem.price.id;
-    overrideCreditsCents = getUsageBudgetOverrideCentsFromStripePrice(firstSubItem.price);
   }
 
   if (stripePriceId && !isPriceIdRegistered(stripePriceId)) {
-    logger.warn(
+    logger.error(
       {
         subscriptionId: subscription.id,
         priceId: stripePriceId,
         registeredPriceIds: Object.keys(getTierMapping()),
       },
-      'Webhook contained unrecognised price ID - skipping subscription update. ' +
-        'This may happen legitimately during price migration; verify STRIPE_PRICE_* env vars if unexpected.',
+      'Webhook contained an unregistered Price; refusing entitlement provisioning',
     );
-    return;
+    throw new Error('Cannot provision subscription from an unregistered Stripe Price');
   }
 
   const resolvedTier = resolvePlanTier(
@@ -710,15 +688,15 @@ export async function updateSubscriptionFromStripeSubscription(
         hasMetadata: !!subscription.metadata?.['plan_tier'],
         registeredPriceIds: Object.keys(getTierMapping()),
         envVarHint:
-          'Ensure STRIPE_PRICE_HOBBY_MONTHLY, STRIPE_PRICE_PRO_MONTHLY, etc. are set in Vercel environment variables',
+          'Ensure the current Stripe Price env vars (STRIPE_PRICE_BASIC_MONTHLY_USD, STRIPE_PRICE_PRO_MONTHLY, STRIPE_PRICE_MAX_MONTHLY, STRIPE_PRICE_MAX_15X_MONTHLY, STRIPE_PRICE_TEAM_MONTHLY, and their yearly/regional variants) are set in Vercel environment variables',
       },
       'CRITICAL: Cannot determine valid plan_tier for subscription update - check if Stripe price IDs are registered in environment variables',
     );
     logger.warn(
       { subscriptionId: subscription.id },
-      'Skipping subscription update due to unmapped price ID. Existing subscription data preserved.',
+      'Subscription update cannot proceed until its Stripe Price is registered.',
     );
-    return;
+    throw new Error('Cannot determine subscription tier from its registered Stripe Price');
   }
 
   if (!subscription.metadata?.['plan_tier']) {
@@ -755,9 +733,10 @@ export async function updateSubscriptionFromStripeSubscription(
       .query<{
         id: string;
         user_id: string;
+        plan_tier: string | null;
         current_period_start: string | null;
       }>(
-        'select id, user_id, current_period_start from subscriptions where stripe_subscription_id = $1 limit 1',
+        'select id, user_id, plan_tier, current_period_start from subscriptions where stripe_subscription_id = $1 limit 1',
         [stripeSubId],
       )
       .catch((fetchError: unknown) => {
@@ -775,6 +754,25 @@ export async function updateSubscriptionFromStripeSubscription(
       resolvedUserId = existingSub.user_id;
 
       const isNewPeriod = existingSub.current_period_start !== updateData.current_period_start;
+
+      const isPaidPlanUpgrade =
+        isNewPeriod &&
+        !!existingSub.plan_tier &&
+        existingSub.plan_tier !== planTier &&
+        getPlanUsageBudgetCents(existingSub.plan_tier, 'monthly') > 0 &&
+        getPlanUsageBudgetCents(planTier, 'monthly') >=
+          getPlanUsageBudgetCents(existingSub.plan_tier, 'monthly');
+
+      if (isPaidPlanUpgrade && updateData.current_period_start && updateData.current_period_end) {
+        await SubscriptionService.carryCreditsForUpgradePeriod(
+          resolvedUserId,
+          existingSub.id,
+          existingSub.plan_tier!,
+          planTier,
+          new Date(updateData.current_period_start),
+          new Date(updateData.current_period_end),
+        );
+      }
 
       const updated = await db
         .query<{ id: string }>(
@@ -817,14 +815,18 @@ export async function updateSubscriptionFromStripeSubscription(
         const pStart = updateData.current_period_start;
         const pEnd = updateData.current_period_end;
         try {
-          if (isNewPeriod) {
+          if (isPaidPlanUpgrade) {
+            logger.info(
+              { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
+              'Usage carried into replacement upgrade period',
+            );
+          } else if (isNewPeriod) {
             await SubscriptionService.resetCreditsForNewPeriod(
               resolvedUserId,
               updatedRow.id,
               planTier,
               new Date(pStart),
               new Date(pEnd),
-              { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
             );
             logger.info(
               { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
@@ -837,7 +839,6 @@ export async function updateSubscriptionFromStripeSubscription(
               planTier,
               new Date(pStart),
               new Date(pEnd),
-              { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
             );
             logger.info(
               { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
@@ -1017,7 +1018,6 @@ export async function updateSubscriptionFromStripeSubscription(
               planTier,
               new Date(pStart),
               new Date(pEnd),
-              { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
             );
             logger.info(
               { userId: resolvedUserId, subscriptionId: upsertedRow.id, planTier },

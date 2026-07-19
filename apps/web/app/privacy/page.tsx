@@ -82,8 +82,9 @@ export default function PrivacyPage() {
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             <strong>Hosted AI providers we may route requests to (cloud mode, optional):</strong>{' '}
             Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Moonshot, Groq, Mistral. BYOK mode
-            routes from your client directly to the provider; cloud mode (Hobby tier and above)
-            routes through our gateway. Local mode (Ollama, LM Studio) never contacts any of these.
+            routes from your client directly to the provider; managed Cloud routes through our
+            gateway according to the selected plan and model. Local mode (Ollama, LM Studio) never
+            contacts any of these.
           </p>
         </section>
 

@@ -125,7 +125,7 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
-  /** Provider/model string set by useChatStream (e.g. "anthropic/claude-sonnet-4-6"). */
+  /** Provider/model string set by useChatStream (e.g. "anthropic/claude-sonnet-5"). */
   model?: string;
   employeeId?: string;
   employeeName?: string;

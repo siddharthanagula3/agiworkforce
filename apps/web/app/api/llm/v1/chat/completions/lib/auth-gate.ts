@@ -7,7 +7,11 @@ import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subsc
 import { buildFreeWebsiteSubscription, isFreePlanTier } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { canUseFreeCloudChat, resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  canUseManagedCloudChatSurface,
+  getCloudChatSurfaceCapability,
+  resolveCloudChatSurface,
+} from '@/lib/free-chat-surface-policy';
 
 export type AuthGateSuccess = {
   ok: true;
@@ -26,25 +30,50 @@ export type AuthGateResult = AuthGateSuccess | AuthGateFailure;
 // Narrow helper for route.ts: resolves the union so `if (!authResult.ok) return authResult.response` works
 export type AnyResponse = NextResponse | Response;
 
-function enforceFreeChatSurface(request: NextRequest, success: AuthGateSuccess): AuthGateResult {
+function enforceManagedCloudSurface(
+  request: NextRequest,
+  success: AuthGateSuccess,
+): AuthGateResult {
   const isApiKey = success.token.startsWith('sk_live_') || success.token.startsWith('sk_test_');
   const surface = isApiKey ? 'api' : resolveCloudChatSurface(request);
-  if (isFreePlanTier(success.subscription.plan_tier) && !canUseFreeCloudChat(surface)) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: 'Chrome, IDE, and API access require a paid plan.',
-            type: 'invalid_request_error',
-            code: 'free_trial_surface_unavailable',
-          },
+  if (canUseManagedCloudChatSurface(success.subscription.plan_tier, surface)) return success;
+
+  const capability = getCloudChatSurfaceCapability(surface);
+  const error =
+    capability === null
+      ? {
+          message: 'Managed Cloud requests must identify a supported client surface.',
+          code: 'managed_cloud_surface_unknown',
+        }
+      : capability === 'developer_surfaces'
+        ? {
+            message: 'Managed Cloud CLI, browser extension, and IDE access require Pro or higher.',
+            code: 'developer_surface_plan_required',
+            requiredTier: 'pro',
+          }
+        : capability === 'managed_api'
+          ? {
+              message: 'Managed API access requires Pro or higher.',
+              code: 'managed_api_plan_required',
+              requiredTier: 'pro',
+            }
+          : {
+              message: 'Managed Cloud chat is not available on this plan.',
+              code: 'managed_chat_plan_required',
+            };
+
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        error: {
+          ...error,
+          type: 'invalid_request_error',
         },
-        { status: 403 },
-      ),
-    };
-  }
-  return success;
+      },
+      { status: 403 },
+    ),
+  };
 }
 
 export async function runAuthGate(request: NextRequest): Promise<AuthGateResult> {
@@ -104,7 +133,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
-    return enforceFreeChatSurface(request, {
+    return enforceManagedCloudSurface(request, {
       ok: true,
       userId,
       token,
@@ -115,7 +144,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const activeStatuses = ['active', 'trialing'];
   if (!activeStatuses.includes(subscription.status)) {
     if (isFreePlanTier(subscription.plan_tier)) {
-      return enforceFreeChatSurface(request, {
+      return enforceManagedCloudSurface(request, {
         ok: true,
         userId,
         token,
@@ -141,5 +170,5 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  return enforceFreeChatSurface(request, { ok: true, userId, token, subscription });
+  return enforceManagedCloudSurface(request, { ok: true, userId, token, subscription });
 }

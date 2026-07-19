@@ -9,23 +9,11 @@
  */
 import { useEffect } from 'react';
 import { useTierStore } from '@agiworkforce/unified-chat';
-import type { UIPlanTier } from '@agiworkforce/types';
+import { normalizeUIPlanTier } from '@agiworkforce/types';
 import { useBillingData, type BillingPlan } from '@features/billing/hooks/use-billing-queries';
 
-function mapPlanTier(plan: BillingPlan | undefined): UIPlanTier {
-  switch (plan) {
-    case 'free':
-      return 'byok';
-    case 'basic':
-      return 'basic';
-    case 'pro':
-      return 'pro';
-    case 'max':
-    case 'enterprise':
-      return 'max';
-    default:
-      return 'byok';
-  }
+function mapPlanTier(plan: BillingPlan | undefined) {
+  return normalizeUIPlanTier(plan, 'free');
 }
 
 export function useTierBridge(): void {

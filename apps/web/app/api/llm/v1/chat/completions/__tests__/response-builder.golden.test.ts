@@ -27,14 +27,10 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('@/lib/secure-random', () => ({
   secureToken: vi.fn(() => 'FIXEDTOKEN'),
 }));
-vi.mock('@/lib/services/credit-service', () => ({
-  CreditService: {
-    generateIdempotencyKey: vi.fn(() => 'idempotency-key'),
-    deductCredits: vi.fn(() => Promise.resolve()),
-    settleCreditsDurably: vi.fn(() =>
-      Promise.resolve({ status: 'succeeded', success: true, attempt_count: 1 }),
-    ),
-  },
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  finalizeManagedUsageRequest: vi.fn(() => Promise.resolve()),
+  markManagedUsageClientDelivered: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
@@ -55,15 +51,16 @@ vi.mock('@/lib/cost-tracker', () => ({
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
-  recordFreeTrialTokens: vi.fn(() => Promise.resolve()),
+  settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
 }));
 
 import { buildNonStreamResponse } from '../lib/response-builder';
 import type { ProcessedRequest } from '../lib/request-processor';
-import { CreditService } from '@/lib/services/credit-service';
-import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import { finalizeManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 
-const mockRecordFreeTrialTokens = recordFreeTrialTokens as ReturnType<typeof vi.fn>;
+const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof vi.fn>;
+const mockFinalizeManagedUsageRequest = finalizeManagedUsageRequest as ReturnType<typeof vi.fn>;
 
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
   return {
@@ -82,6 +79,14 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
     indicResult: { isIndic: false, dominantScript: null, indicRatio: 0 },
     originalModel: undefined,
     fallbackReason: undefined,
+    managedUsage: {
+      db: {} as never,
+      userId: 'user-paid',
+      idempotencyKey: 'managed-request-001',
+      requestHash: 'a'.repeat(64),
+      leaseToken: 'lease-001',
+      estimatedCostCents: 100,
+    },
     ...overrides,
   } as ProcessedRequest;
 }
@@ -100,7 +105,7 @@ beforeEach(() => {
 describe('buildNonStreamResponse golden fixture', () => {
   it('runs the successful-turn owner after durable billing settlement', async () => {
     const onSuccessfulTurn = vi.fn(async () => {
-      expect(CreditService.settleCreditsDurably).toHaveBeenCalledOnce();
+      expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledOnce();
     });
 
     await buildNonStreamResponse(
@@ -122,7 +127,7 @@ describe('buildNonStreamResponse golden fixture', () => {
     expect(onSuccessfulTurn).toHaveBeenCalledOnce();
   });
 
-  it('persists reconciliation through the durable settlement owner', async () => {
+  it('finalizes actual cost through the managed usage owner', async () => {
     await buildNonStreamResponse(
       makeRequest() as any,
       {
@@ -138,24 +143,19 @@ describe('buildNonStreamResponse golden fixture', () => {
       'token-durable',
     );
 
-    expect(CreditService.settleCreditsDurably).toHaveBeenCalledWith({
-      userId: 'user-durable',
-      amountCents: 23,
-      description: 'Additional charge: anthropic/claude-opus-4-8',
-      metadata: {
-        provider: 'anthropic',
-        model: 'claude-opus-4-8',
-        type: 'reconciliation',
-        estimatedCostCents: 100,
-        actualCostCents: 123,
-        promptTokens: 100,
-        completionTokens: 20,
-        totalTokens: 120,
-        requestId: 'req-test-001',
+    expect(mockFinalizeManagedUsageRequest).toHaveBeenCalledWith({
+      ...makeProcessed().managedUsage,
+      outcome: 'completed',
+      actualCostCents: 123,
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        reasoningTokens: undefined,
+        cacheReadTokens: undefined,
+        cacheWriteTokens: undefined,
+        cacheWrite1hTokens: undefined,
       },
-      idempotencyKey: 'idempotency-key',
     });
-    expect(CreditService.deductCredits).not.toHaveBeenCalled();
   });
 
   it('serializes a plain text response with usage and cache token fields', async () => {
@@ -198,7 +198,6 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       x_agi_workforce: {
         provider: 'anthropic',
-        cost_cents: 123,
         routing: {
           task_type: 'general',
           task_confidence: 0.9,
@@ -206,12 +205,14 @@ describe('buildNonStreamResponse golden fixture', () => {
           slot: null,
           quota_warning: null,
         },
-        cache: { tokens_saved: 0, cost_saved_cents: 0 },
+        cache: { tokens_saved: 0 },
       },
     });
+    expect(json.x_agi_workforce).not.toHaveProperty('cost_cents');
+    expect(json.x_agi_workforce.cache).not.toHaveProperty('cost_saved_cents');
   });
 
-  it('records actual free-tier usage without publishing a numeric budget', async () => {
+  it('settles actual free-tier usage without publishing a numeric budget', async () => {
     const response = await buildNonStreamResponse(
       makeRequest() as any,
       {
@@ -224,6 +225,7 @@ describe('buildNonStreamResponse golden fixture', () => {
       },
       makeProcessed({
         estimatedCostCents: 0,
+        managedUsage: undefined,
         freeTrial: {
           kind: 'free_trial',
           userId: 'user-free',
@@ -234,10 +236,20 @@ describe('buildNonStreamResponse golden fixture', () => {
       'token-free',
     );
 
-    expect(mockRecordFreeTrialTokens).toHaveBeenCalledWith({
-      userId: 'user-free',
-      requestId: 'req-test-001',
-      tokens: 120,
+    expect(mockSettleFreeTrialRequest).toHaveBeenCalledWith({
+      reservation: {
+        kind: 'free_trial',
+        userId: 'user-free',
+        requestId: 'req-test-001',
+      },
+      outcome: 'completed',
+      provider: 'anthropic',
+      model: 'claude-opus-4-8',
+      usage: expect.objectContaining({
+        promptTokens: 100,
+        completionTokens: 20,
+        totalTokens: 120,
+      }),
     });
     expect(response.headers.has('x-agi-trial-tokens-used')).toBe(false);
     expect(response.headers.has('x-agi-trial-tokens-budget')).toBe(false);

@@ -1,15 +1,11 @@
 /**
- * Regression: the Cloud Usage settings screen previously fetched a
- * non-existent endpoint (`/api/usage/summary` — apps/web has no such route,
- * only `/api/usage`) and, even when data was mocked, showed raw dollar
- * figures (`$X.XX`) as the primary metric with a percentage computed from an
- * arbitrary heuristic (`totalCost / (maxModelCost * 10)`) unrelated to the
- * user's actual plan allowance. Fixed to call the real `/api/usage` endpoint
- * (which already returns a real `usage_percentage` from
- * credits_used/credits_allocated) and to show percentage-first as the
- * primary metric — matching the Claude-style reference pattern (a bar,
- * "X% used", "Resets <date>") — with raw dollar figures moved into a
- * collapsed "Details" section, never the headline number.
+ * Cloud Usage settings screen — PERCENTAGE-ONLY contract.
+ *
+ * The screen consumes the canonical `/api/usage` percentage summary
+ * (ManagedUsageSummaryResponse via services/usage.ts). It must never render an
+ * exact dollar figure or a private cents allowance, and it must never divide by
+ * an absent cap into `$NaN`. Rolling session/weekly bars are driven directly by
+ * server percentages and hidden when their window is inactive (null reset).
  */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -37,8 +33,6 @@ jest.mock('lucide-react-native', () => {
   return {
     BarChart3: Icon,
     RefreshCw: Icon,
-    ChevronDown: Icon,
-    ChevronUp: Icon,
     CloudOff: Icon,
   };
 });
@@ -70,30 +64,34 @@ jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { usageDashboard: true } })
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
+/** A valid percentage-only snapshot (camelCase projection of /api/usage). */
+function snap(overrides: Record<string, unknown> = {}) {
+  return {
+    planTier: 'pro',
+    usagePercentage: 25,
+    usageResetAt: '2026-08-01T00:00:00.000Z',
+    hasUsageRemaining: true,
+    periodStart: '2026-07-01T00:00:00.000Z',
+    periodEnd: '2026-08-01T00:00:00.000Z',
+    subscriptionStatus: 'active',
+    sessionUsagePercentage: 0,
+    sessionResetAt: null,
+    weeklyUsagePercentage: 0,
+    weeklyResetAt: null,
+    flagshipWeeklyUsagePercentage: 0,
+    flagshipWeeklyResetAt: null,
+    ...overrides,
+  };
+}
+
 describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Existing tests below exercise the "already in Cloud mode" data-loading
-    // path; the Local-mode-blocked banner has its own describe block further
-    // down.
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
-  it('shows usage as a percentage, not a raw dollar figure, on the primary card', async () => {
-    mockFetchUsageSnapshot.mockResolvedValue({
-      planTier: 'pro',
-      creditsAllocatedCents: 1000,
-      creditsUsedCents: 250,
-      creditsRemainingCents: 750,
-      usagePercentage: 25,
-      periodStart: '2026-07-01T00:00:00.000Z',
-      periodEnd: '2026-08-01T00:00:00.000Z',
-      dailyUsedCents: 0,
-      dailyLimitCents: 0,
-      dailyRemainingCents: 0,
-      hasDailyLimit: false,
-      subscriptionStatus: 'active',
-    });
+  it('shows usage as a percentage, never a dollar figure, on the primary card', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'pro', usagePercentage: 25 }));
 
     const { getByText, queryByText } = render(<CloudUsageScreen />);
 
@@ -101,152 +99,103 @@ describe('Cloud Usage screen — percentage-first (Claude-style), real endpoint'
       expect(getByText('25% used')).toBeTruthy();
     });
     expect(getByText('Pro plan')).toBeTruthy();
-    // The old primary-card raw dollar figure must not appear before "Details" is opened.
-    expect(queryByText('$10.00')).toBeNull();
-    expect(queryByText('$2.50')).toBeNull();
+    // No exact dollar/cents allowance may appear anywhere on the screen.
+    expect(queryByText(/\$\d/)).toBeNull();
   });
 
-  it('reveals exact dollar figures only inside the collapsed Details section', async () => {
-    mockFetchUsageSnapshot.mockResolvedValue({
-      planTier: 'basic',
-      creditsAllocatedCents: 200,
-      creditsUsedCents: 50,
-      creditsRemainingCents: 150,
-      usagePercentage: 25,
-      periodStart: '2026-07-01T00:00:00.000Z',
-      periodEnd: '2026-08-01T00:00:00.000Z',
-      dailyUsedCents: 0,
-      dailyLimitCents: 0,
-      dailyRemainingCents: 0,
-      hasDailyLimit: false,
-      subscriptionStatus: 'active',
-    });
+  it('never exposes an exact-dollar Details section (the retired private leak)', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'basic', usagePercentage: 25 }));
 
-    const { getByLabelText, getByText, queryByText } = render(<CloudUsageScreen />);
+    const { getByText, queryByText, queryByLabelText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
       expect(getByText('25% used')).toBeTruthy();
     });
-    expect(queryByText('$2.00')).toBeNull();
-
-    fireEvent.press(getByLabelText('Show usage details'));
-
-    await waitFor(() => {
-      expect(getByText('$2.00')).toBeTruthy();
-    });
-    expect(getByText('$0.50')).toBeTruthy();
+    expect(queryByLabelText('Show usage details')).toBeNull();
+    expect(queryByText('Details')).toBeNull();
+    expect(queryByText(/\$\d/)).toBeNull();
   });
 
-  it('shows the daily budget bar (not the monthly one) for free-tier users with a daily limit', async () => {
-    mockFetchUsageSnapshot.mockResolvedValue({
-      planTier: 'free',
-      creditsAllocatedCents: 0,
-      creditsUsedCents: 0,
-      creditsRemainingCents: 0,
-      usagePercentage: 0,
-      periodStart: null,
-      periodEnd: null,
-      dailyUsedCents: 0.3,
-      dailyLimitCents: 0.5,
-      dailyRemainingCents: 0.2,
-      hasDailyLimit: true,
-      subscriptionStatus: 'none',
-    });
+  it('renders the period bar for a free tier from its percentage and reset', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(
+      snap({
+        planTier: 'free',
+        usagePercentage: 10,
+        usageResetAt: '2026-07-20T00:00:00.000Z',
+        periodStart: null,
+        periodEnd: null,
+        subscriptionStatus: 'none',
+      }),
+    );
 
-    const { getByText } = render(<CloudUsageScreen />);
+    const { getByText, queryByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('Today')).toBeTruthy();
+      expect(getByText('This period')).toBeTruthy();
     });
-    expect(getByText('Resets tomorrow')).toBeTruthy();
+    expect(getByText('10% used')).toBeTruthy();
+    expect(getByText('Free plan')).toBeTruthy();
+    expect(queryByText(/\$\d/)).toBeNull();
   });
 });
 
-describe('Cloud Usage screen — session (rolling 5h) + weekly limits (2026-07-05)', () => {
+describe('Cloud Usage screen — session (rolling 5h) + weekly limits', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
-  it('shows Current session and Weekly limits (All models + Flagship models) for a paid tier', async () => {
-    mockFetchUsageSnapshot.mockResolvedValue({
-      planTier: 'pro',
-      creditsAllocatedCents: 1000,
-      creditsUsedCents: 250,
-      creditsRemainingCents: 750,
-      usagePercentage: 25,
-      periodStart: '2026-07-01T00:00:00.000Z',
-      periodEnd: '2026-08-01T00:00:00.000Z',
-      dailyUsedCents: 0,
-      dailyLimitCents: 0,
-      dailyRemainingCents: 0,
-      hasDailyLimit: false,
-      subscriptionStatus: 'active',
-      sessionUsedCents: 20,
-      sessionCapCents: 46,
-      sessionResetAt: new Date(Date.now() + 3 * 60 * 60 * 1000 + 27 * 60 * 1000).toISOString(),
-      weeklyUsedCents: 196,
-      weeklyCapCents: 231,
-      weeklyResetAt: '2026-07-08T18:00:00.000Z',
-      flagshipWeeklyUsedCents: 20,
-      flagshipWeeklyCapCents: 69,
-      flagshipWeeklyResetAt: '2026-07-08T18:00:00.000Z',
-    });
+  it('shows Current session and Weekly limits (All models + Flagship) for a paid tier', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(
+      snap({
+        planTier: 'pro',
+        usagePercentage: 25,
+        sessionUsagePercentage: 43,
+        sessionResetAt: new Date(Date.now() + 3 * 60 * 60 * 1000 + 27 * 60 * 1000).toISOString(),
+        weeklyUsagePercentage: 85,
+        weeklyResetAt: '2026-07-22T18:00:00.000Z',
+        flagshipWeeklyUsagePercentage: 29,
+        flagshipWeeklyResetAt: '2026-07-22T18:00:00.000Z',
+      }),
+    );
 
     const { getByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
       expect(getByText('Current session')).toBeTruthy();
     });
-    // 20/46 rounds to 43% used.
     expect(getByText('43% used')).toBeTruthy();
     expect(getByText(/Resets in 3 hr/)).toBeTruthy();
 
     expect(getByText('Weekly limits')).toBeTruthy();
     expect(getByText('All models')).toBeTruthy();
     expect(getByText('Flagship models')).toBeTruthy();
-    // 196/231 rounds to 85% used, 20/69 rounds to 29% used (matches the
-    // Claude reference numbers this feature was modeled on).
     expect(getByText('85% used')).toBeTruthy();
     expect(getByText('29% used')).toBeTruthy();
   });
 
-  it('hides Current session and Weekly limits entirely when caps are 0 (free tier)', async () => {
-    mockFetchUsageSnapshot.mockResolvedValue({
-      planTier: 'free',
-      creditsAllocatedCents: 0,
-      creditsUsedCents: 0,
-      creditsRemainingCents: 0,
-      usagePercentage: 0,
-      periodStart: null,
-      periodEnd: null,
-      dailyUsedCents: 0.3,
-      dailyLimitCents: 0.5,
-      dailyRemainingCents: 0.2,
-      hasDailyLimit: true,
-      subscriptionStatus: 'none',
-      sessionUsedCents: 0,
-      sessionCapCents: 0,
-      sessionResetAt: null,
-      weeklyUsedCents: 0,
-      weeklyCapCents: 0,
-      weeklyResetAt: null,
-      flagshipWeeklyUsedCents: 0,
-      flagshipWeeklyCapCents: 0,
-      flagshipWeeklyResetAt: null,
-    });
+  it('hides Current session and Weekly limits when their windows are inactive (free tier)', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(
+      snap({
+        planTier: 'free',
+        usagePercentage: 0,
+        periodStart: null,
+        periodEnd: null,
+        subscriptionStatus: 'none',
+      }),
+    );
 
     const { getByText, queryByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('Today')).toBeTruthy();
+      expect(getByText('This period')).toBeTruthy();
     });
     expect(queryByText('Current session')).toBeNull();
     expect(queryByText('Weekly limits')).toBeNull();
   });
 });
 
-describe('Cloud Usage screen — blocked by Local Mode (2026-07-05)', () => {
+describe('Cloud Usage screen — blocked by Local Mode', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useChatAppModeStore.setState({ appMode: 'local' });
@@ -263,29 +212,7 @@ describe('Cloud Usage screen — blocked by Local Mode (2026-07-05)', () => {
   });
 
   it('fetches usage as soon as the user switches to Cloud mode via the banner', async () => {
-    mockFetchUsageSnapshot.mockResolvedValue({
-      planTier: 'pro',
-      creditsAllocatedCents: 1000,
-      creditsUsedCents: 250,
-      creditsRemainingCents: 750,
-      usagePercentage: 25,
-      periodStart: '2026-07-01T00:00:00.000Z',
-      periodEnd: '2026-08-01T00:00:00.000Z',
-      dailyUsedCents: 0,
-      dailyLimitCents: 0,
-      dailyRemainingCents: 0,
-      hasDailyLimit: false,
-      subscriptionStatus: 'active',
-      sessionUsedCents: 0,
-      sessionCapCents: 0,
-      sessionResetAt: null,
-      weeklyUsedCents: 0,
-      weeklyCapCents: 0,
-      weeklyResetAt: null,
-      flagshipWeeklyUsedCents: 0,
-      flagshipWeeklyCapCents: 0,
-      flagshipWeeklyResetAt: null,
-    });
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'pro', usagePercentage: 25 }));
 
     const { getByText, getByLabelText, queryByText } = render(<CloudUsageScreen />);
 

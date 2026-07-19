@@ -17,10 +17,10 @@ export default function RefundPolicyPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Refunds.</h1>
           <p className="agi-page-lede">
-            We don&rsquo;t make you fight for a refund.{' '}
+            We review billing problems promptly.{' '}
             <strong>
-              If a charge doesn&rsquo;t match expectations and you reach out within 30 days,
-              we&rsquo;ll refund it. No multi-step process.
+              Eligibility depends on the type of charge, account usage, applicable law, and any
+              contract-specific terms.
             </strong>
           </p>
         </section>
@@ -29,24 +29,25 @@ export default function RefundPolicyPage() {
           <table className="agi-ledger">
             <tbody>
               <tr>
-                <td>Hobby subscription</td>
+                <td>Paid subscriptions</td>
                 <td>
-                  Pro-rated refund on cancellation if requested within 30 days of the most recent
-                  charge. Email contact@agiworkforce.com.
+                  Cancellation stops the next renewal and access continues through the paid term.
+                  Current-period charges are not automatically refunded, except where required by
+                  law or when we confirm a duplicate, unauthorized, or billing-error charge.
                 </td>
               </tr>
               <tr>
-                <td>Annual Hobby</td>
+                <td>Plan upgrades</td>
                 <td>
-                  Pro-rated refund for unused months if requested within 30 days. After 30 days, the
-                  remaining annual term stays active and does not auto-renew.
+                  Immediate upgrades use the credit shown by Stripe for unused subscription time.
+                  This is an invoice adjustment, not a reset or refund of already-consumed usage.
                 </td>
               </tr>
               <tr>
-                <td>Hobby credits</td>
+                <td>Purchased usage add-ons</td>
                 <td>
-                  Unused credits are refunded at the rate paid. Credits expire 12 months after
-                  purchase.
+                  Used add-ons are not refundable. Contact support about an unused, duplicate, or
+                  mistaken purchase; statutory rights still apply.
                 </td>
               </tr>
               <tr>
@@ -70,8 +71,9 @@ export default function RefundPolicyPage() {
             <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
               contact@agiworkforce.com
             </a>{' '}
-            with the email on your account and a brief reason. We respond within one business day
-            and refund within five.
+            with the email on your account, charge date, and a brief reason. We aim to respond
+            within one business day. Approved refunds are returned through the original payment
+            method on the payment processor&rsquo;s timeline.
           </p>
           <div className="agi-cta-row">
             <a href="mailto:contact@agiworkforce.com" className="agi-cta-primary">

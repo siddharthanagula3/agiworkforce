@@ -6,39 +6,35 @@
  * own store-console access, which this scaffolding does not have. Swap every
  * `TODO` SKU for the real one once it's created, then delete this comment block.
  *
- * Tier set mirrors `BILLING_PLAN_PRICING` in `@agiworkforce/types` (billing-catalog.ts):
- * basic (monthly only), pro (monthly + yearly), max (monthly only), team (monthly + yearly).
+ * Purchasable tier set = `SELF_SERVE_PAID_PLAN_TIERS` in `@agiworkforce/types`
+ * (billing-catalog.ts), the canonical self-serve list: basic, pro, max, max_15x.
+ * Team is deliberately EXCLUDED — it is sales-assisted until organization
+ * billing is complete, so it must never be offered as an in-app purchase.
  * `free`, `local-only`, `byok`, and `enterprise` are not purchasable in-app.
  */
 import {
   BILLING_PLAN_PRICING,
+  SELF_SERVE_PAID_PLAN_TIERS,
   type BillingInterval,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 
-export type PurchasableTier = Extract<BillingPlanTier, 'basic' | 'pro' | 'max' | 'team'>;
+export type PurchasableTier = (typeof SELF_SERVE_PAID_PLAN_TIERS)[number];
 
 /**
- * Derived from `BILLING_PLAN_PRICING` (the single source of truth in
- * `@agiworkforce/types`) rather than hardcoded here a second time — a tier
- * is purchasable in-app iff it has a positive monthly price. Keeps this list
- * from drifting if pricing.ts adds/removes a paid tier.
+ * Single source of truth: the canonical self-serve paid tiers. Deriving from
+ * `SELF_SERVE_PAID_PLAN_TIERS` (rather than "any tier with a positive monthly
+ * price") is what keeps sales-assisted Team out of the in-app purchase set.
  */
-const PURCHASABLE_TIERS: ReadonlySet<BillingPlanTier> = new Set(
-  Object.values(BILLING_PLAN_PRICING)
-    .filter((p) => p.monthlyPriceUsd > 0)
-    .map((p) => p.id),
-);
+const PURCHASABLE_TIERS: ReadonlySet<BillingPlanTier> = new Set(SELF_SERVE_PAID_PLAN_TIERS);
 
 export function isPurchasableTier(tier: BillingPlanTier): tier is PurchasableTier {
   return PURCHASABLE_TIERS.has(tier);
 }
 
-/** Tiers that offer a yearly interval, derived the same way from `BILLING_PLAN_PRICING`. */
+/** Self-serve tiers that also offer a yearly interval (from `BILLING_PLAN_PRICING`). */
 export const YEARLY_AVAILABLE_TIERS: ReadonlySet<PurchasableTier> = new Set(
-  Object.values(BILLING_PLAN_PRICING)
-    .filter((p) => p.yearlyPriceUsd > 0)
-    .map((p) => p.id as PurchasableTier),
+  SELF_SERVE_PAID_PLAN_TIERS.filter((tier) => BILLING_PLAN_PRICING[tier].yearlyPriceUsd > 0),
 );
 
 interface IapProductId {
@@ -78,14 +74,10 @@ export const IAP_PRODUCTS: IapProductCatalog = {
       android: 'sub_max_monthly',
     },
   },
-  team: {
+  max_15x: {
     monthly: {
-      ios: 'com.agiworkforce.app.sub.team.monthly',
-      android: 'sub_team_monthly',
-    },
-    yearly: {
-      ios: 'com.agiworkforce.app.sub.team.yearly',
-      android: 'sub_team_yearly',
+      ios: 'com.agiworkforce.app.sub.max15x.monthly',
+      android: 'sub_max15x_monthly',
     },
   },
 };

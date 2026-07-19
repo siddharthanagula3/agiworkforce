@@ -5,20 +5,13 @@
  * - Fails closed: any DB error or missing subscription blocks access
  * - Attaches planTier to request for downstream route use
  *
- * Tier hierarchy: free < hobby < pro < max < enterprise
- * Cloud models require hobby or above.
+ * The shared billing catalog owns which canonical plans include managed chat.
  */
 
 import type { NextFunction, Request, Response } from 'express';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { getUserScopedClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
-
-/**
- * Subscription tiers that are allowed to access cloud models.
- * Hobby plan has limited credits; Pro/Max/Enterprise have full access.
- * Only "free" and unknown tiers are blocked.
- */
-const ALLOWED_TIERS = new Set(['hobby', 'pro', 'max', 'enterprise']);
 
 declare global {
   namespace Express {
@@ -34,10 +27,10 @@ declare global {
  * Prerequisites: `authenticateToken` must have run first — `req.user` must be set.
  *
  * On success: attaches `req.planTier` and calls `next()`.
- * On free plan: returns 403 with upgrade_url.
- * On DB error or missing subscription: returns 503 (fail closed).
+ * On a non-managed or unknown plan: returns 403 with upgrade_url.
+ * A missing subscription row is Free; database errors return 503.
  */
-export async function requireProPlan(
+export async function requireManagedChatPlan(
   req: Request,
   res: Response,
   next: NextFunction,
@@ -61,7 +54,7 @@ export async function requireProPlan(
       .from('subscriptions')
       .select('plan_tier')
       .eq('user_id', user.userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       logger.error(
@@ -76,14 +69,27 @@ export async function requireProPlan(
       return;
     }
 
-    const tier: string = subscription?.plan_tier ?? 'free';
+    const tier = subscription?.plan_tier ?? 'free';
 
-    if (!ALLOWED_TIERS.has(tier)) {
-      res.status(403).json({
-        error: 'Cloud models require a Hobby plan or above. Upgrade to get started.',
-        upgrade_url: '/dashboard/billing',
-        current_tier: tier,
-      });
+    // Bind the required capability to the TRUSTED surface class (from the
+    // verified token issuer in auth.ts), not a caller header. Developer
+    // surfaces (CLI/IDE device tokens) require Pro-or-higher
+    // `developer_surfaces`; app surfaces (desktop/mobile) require `managed_chat`.
+    const requiredCapability = user.surface === 'developer' ? 'developer_surfaces' : 'managed_chat';
+
+    if (!canUseBillingPlanCapability(tier, requiredCapability)) {
+      res.status(403).json(
+        user.surface === 'developer'
+          ? {
+              error: 'Managed Cloud CLI and IDE access require Pro or higher.',
+              code: 'developer_surface_plan_required',
+              upgrade_url: '/dashboard/billing',
+            }
+          : {
+              error: 'Managed chat is not available for this plan.',
+              upgrade_url: '/dashboard/billing',
+            },
+      );
       return;
     }
 

@@ -160,7 +160,7 @@ function isModelSelectableForTier(model: AIModel, tier: string): boolean {
   if (model.providerKey === 'managed_cloud') {
     return getAllowedAutoModesForTier(tier).includes(model.id);
   }
-  if (tier === 'free' || tier === 'hobby') return false;
+  if (tier === 'free') return false;
   return isModelAllowedForTier(model.id, tier);
 }
 

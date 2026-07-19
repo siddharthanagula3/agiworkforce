@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-17",
+  "lastUpdated": "2026-07-18",
   "verificationLog": [
+    {
+      "date": "2026-07-18",
+      "verifiedBy": "founder-provider-policy-and-official-qwen-anthropic-docs",
+      "status": "CORRECTION",
+      "notes": "Removed founder-banned provider stubs and retired model records. Added the exact current qwen3.7-plus and qwen3.5-flash API IDs. Alibaba Cloud Model Studio official documentation confirms text+image+video input, text output, 1M context, 64K max output, function calling, structured output, thinking, and context caching for both models. Qwen pricing is deployment- and prompt-length-dependent; the catalog records published list-price tiers and does not use limited-time discounts. Claude Sonnet 5 uses its founder-selected standard $3/$15 per-million prices with $0.30 cache reads, $3.75 five-minute cache writes, and $6 one-hour cache writes rather than a temporary introductory price. Sources retrieved 2026-07-18: alibabacloud.com/help/en/model-studio/vision-model, alibabacloud.com/help/en/model-studio/model-pricing, alibabacloud.com/help/en/model-studio/context-cache, alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions, platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5, and platform.claude.com/docs/en/build-with-claude/prompt-caching."
+    },
     {
       "date": "2026-07-17",
       "verifiedBy": "official-openai-responses-web-search-docs-and-regression-contract",
@@ -18,7 +24,7 @@
       "date": "2026-07-15",
       "verifiedBy": "official-openai-anthropic-current-roster-live-probes",
       "status": "CORRECTION",
-      "notes": "Corrected the current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic model metadata and minimal Messages requests returned HTTP 200 for claude-fable-5, claude-opus-4-8, claude-sonnet-5, and claude-haiku-4-5; official model, effort, and pricing pages confirm context/output limits, reasoning controls, and 5-minute/1-hour prompt-cache rates. Sonnet 5 introductory prices expire 2026-08-31. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
+      "notes": "Corrected the current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirm exact IDs, 1,050,000 context, 922,000 maximum input, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. Anthropic model metadata and minimal Messages requests returned HTTP 200 for claude-fable-5, claude-opus-4-8, claude-sonnet-5, and claude-haiku-4-5; official model, effort, and pricing pages confirm context/output limits, reasoning controls, and 5-minute/1-hour prompt-cache rates. The product catalog uses the founder-selected standard Sonnet 5 prices rather than temporary promotional pricing. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
     },
     {
       "date": "2026-07-15",
@@ -42,13 +48,13 @@
       "date": "2026-07-11",
       "verifiedBy": "websearch-enable-2026-07-11",
       "status": "CORRECTION",
-      "notes": "Founder directive: capabilities.search must be true only for models that GENUINELY produce web results today, false for every model where it would be a cosmetic no-op. Traced the full request path (apps/web/lib/web-search-support.ts + request-processor.ts appendWebSearchTool + each provider's translate/wire layer), not just the provider allowlist. Anthropic (claude-opus-4.8/claude-sonnet-4.6/claude-haiku-4.5) and Google (gemini-3.1-pro-preview/gemini-3.1-flash-lite/gemini-3.5-flash) confirmed working end-to-end: web_search_20260209 / google_search survive translate.ts untouched into the wire call; gemini-3.5-flash additionally has a live-recorded groundingMetadata integration test. Kept search:true — no change. OpenAI (gpt-5.5/gpt-5.6-*/gpt-5.4-mini/gpt-5-nano/gpt-4.1-nano) confirmed NOT working on the web route: adapter-factory.ts hardcodes useResponsesApi:false, and packages/ai/providers/openai/src/translate.ts's OPENAI_RESPONSES_ONLY_TOOL_TYPES strips web_search_preview before the wire (it is Responses-API-only) — every OpenAI model was already search:false; left unchanged, but do NOT flip any OpenAI model true until the web route grows a real Responses-API path. CORRECTED 4 cosmetic-true models to false: grok-4.3 (xai), qwen-max and qwen-3.5-plus (qwen), kimi-k2.6 (moonshot) — appendWebSearchTool has no injection branch for xai/qwen/moonshot (confirmed by request-processor.web-search.test.ts and web-search-support.test.ts, which already document xai/qwen/moonshot as no-wired-path providers), and repo-wide search found zero wiring of any provider's real native mechanism either (xAI Agent Tools web_search/x_search tool -- the older search_parameters flag it replaces was retired by xAI on 2026-01-12; Qwen DashScope enable_search request param; Moonshot builtin_function $web_search tool -- all real, current, documented APIs per provider docs, just not called anywhere in this codebase). These 4 are the WP4 target list: wiring any of them up requires provider-specific request shaping (a boolean param for Qwen, a tool-array entry for Moonshot, a tool-array entry for xAI), not one generic mechanism. apps/desktop/src/__tests__/modelRouter.test.ts:42-45 asserts grok-4.3 capabilities.search===true on the premise 'Grok has built-in real-time data access' -- that premise is stale (xAI search has never been automatic; it always required an explicit opt-in mechanism, and AGI never wired one up); flagged for the desktop owner to update, not changed here (out of this pass's scope)."
+      "notes": "Founder directive: capabilities.search must be true only for models that genuinely produce web results through the application path, false wherever it would be a cosmetic no-op. The Web request path, provider translation, wire payload, and canonical source events were traced rather than trusting a provider allowlist. Anthropic and Google native search were confirmed end-to-end. Providers without an implemented search request shape were corrected to false and remain fail-closed until their real tool or request parameter is wired and covered by provider, route, and source-event tests."
     },
     {
       "date": "2026-06-03",
       "verifiedBy": "official-docs-model-repair",
       "status": "PASS",
-      "notes": "OpenAI verified from official OpenAI developer documentation before catalog repair: gpt-5.5 is the latest text/agent flagship, gpt-5.4-mini remains the latest mini-family model, and gpt-image-2 is the latest GPT Image model available to this product catalog. Anthropic verified from platform.claude.com/docs: current Claude API IDs are claude-opus-4-8, claude-sonnet-4-6, and claude-haiku-4-5-20251001 / alias claude-haiku-4-5. Google verified from ai.google.dev and deepmind.google: gemini-3.5-flash is a current Gemini API model with 1M input context, 64K output, function calling, structured output, Search as a tool, and code execution; Standard pricing is $1.50 input, $9.00 output, and $0.15 cached input per 1M tokens. Google media routes verified from official docs: Imagen 4 Fast API ID is imagen-4.0-fast-generate-001 and Veo 3.1 API ID is veo-3.1-generate-preview. AGI keeps unverified OpenAI video IDs out of the selectable catalog and routes video generation to verified Google Veo 3.1 rather than carrying stale video IDs."
+      "notes": "Historical catalog repair verified provider identities and media routes from official documentation. Later audits supersede this roster: active selectable models come only from the current curated records and generated tier lists. AGI keeps unverified video IDs out of the selectable catalog and routes video generation only through verified current media records."
     },
     {
       "date": "2026-06-20",
@@ -60,7 +66,7 @@
       "date": "2026-06-20",
       "verifiedBy": "research-agent-2026-06-20",
       "status": "PASS",
-      "notes": "GLM-5.2 contextWindow confirmed 1M (was 200K). Groq llama-3.3-70b-versatile and llama-3.1-8b-instant marked deprecated (shutdown 2026-08-16). Qwen API IDs updated to Qwen3 generation: qwen-max→qwen3-max, qwen-flash→qwen3.5-flash, qwen-coder-plus→qwen3-coder-plus, qwen-coder-flash→qwen3-coder-flash. qwen-3.6-plus renamed to qwen-3.5-plus (apiModelId qwen3.6-plus did not exist; correct ID is qwen3.5-plus). qwen-turbo marked deprecated (absorbed by qwen3.5-flash). NVIDIA Nemotron models updated to Nemotron 3 family: ultra-253b→nemotron-3-ultra-550b-a55b, super-49b→nemotron-3-super-120b-a12b, nano-8b→nemotron-3-nano-30b-a3b (all 1M ctx). Grok-4.3, DeepSeek V4, Kimi K2.6 confirmed current — no changes needed. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, alibabacloud DashScope."
+      "notes": "Re-verified the active GLM, Groq, Qwen, NVIDIA, xAI, DeepSeek, and Moonshot roster against official provider documentation. Deprecated or retired records were removed from the selectable catalog, and current API IDs, context limits, and multimodal capabilities now live only on active records. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, and Alibaba Cloud Model Studio."
     },
     {
       "date": "2026-06-23",
@@ -99,7 +105,7 @@
         "inputPerMillion": 1,
         "outputPerMillion": 1
       },
-      "modelPrefixes": ["ideogram"],
+      "modelPrefixes": ["stable"],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
       "defaultModel": "gemini-3.1-flash-lite",
       "taskRouting": {},
@@ -242,14 +248,14 @@
       },
       "modelPrefixes": ["qwen"],
       "aliases": ["qwen", "alibaba"],
-      "defaultModel": "qwen-max",
+      "defaultModel": "qwen-3.7-plus",
       "taskRouting": {
-        "fast_completion": "qwen-max",
+        "fast_completion": "qwen-3.5-flash",
         "code_generation": "qwen-coder-plus",
-        "complex_reasoning": "qwen-max",
-        "chat": "qwen-max",
-        "vision": "qwen-max",
-        "long_context": "qwen-max"
+        "complex_reasoning": "qwen-3.7-plus",
+        "chat": "qwen-3.7-plus",
+        "vision": "qwen-3.7-plus",
+        "long_context": "qwen-3.7-plus"
       },
       "canonicalization": {}
     },
@@ -266,15 +272,7 @@
       },
       "modelPrefixes": ["kimi", "moonshot"],
       "aliases": ["moonshot", "kimi"],
-      "defaultModel": "kimi-k2.6",
-      "taskRouting": {
-        "fast_completion": "kimi-k2.6",
-        "code_generation": "kimi-k2.6",
-        "complex_reasoning": "kimi-k2.6",
-        "chat": "kimi-k2.6",
-        "vision": "kimi-k2.6",
-        "long_context": "kimi-k2.6"
-      },
+      "taskRouting": {},
       "canonicalization": {}
     },
     "perplexity": {
@@ -365,142 +363,6 @@
       "taskRouting": {},
       "canonicalization": {}
     },
-    "together": {
-      "label": "Together AI",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.88,
-        "outputPerMillion": 0.88
-      },
-      "modelPrefixes": [],
-      "aliases": ["together", "together-ai", "together_ai", "togetherai"],
-      "taskRouting": {},
-      "canonicalization": {}
-    },
-    "fireworks": {
-      "label": "Fireworks AI",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.9,
-        "outputPerMillion": 0.9
-      },
-      "modelPrefixes": ["accounts/fireworks"],
-      "aliases": ["fireworks", "fireworks-ai", "fireworks_ai", "fireworksai"],
-      "taskRouting": {},
-      "canonicalization": {}
-    },
-    "cerebras": {
-      "label": "Cerebras",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.1,
-        "outputPerMillion": 0.1
-      },
-      "modelPrefixes": [],
-      "aliases": ["cerebras"],
-      "taskRouting": {},
-      "canonicalization": {}
-    },
-    "deepinfra": {
-      "label": "DeepInfra",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.35,
-        "outputPerMillion": 0.35
-      },
-      "modelPrefixes": [],
-      "aliases": ["deepinfra", "deep-infra", "deep_infra"],
-      "taskRouting": {},
-      "canonicalization": {}
-    },
-    "cohere": {
-      "label": "Cohere",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 2.5,
-        "outputPerMillion": 10
-      },
-      "modelPrefixes": ["command"],
-      "aliases": ["cohere"],
-      "taskRouting": {},
-      "canonicalization": {}
-    },
-    "ai21": {
-      "label": "AI21 Labs",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.2,
-        "outputPerMillion": 0.8
-      },
-      "modelPrefixes": ["jamba"],
-      "aliases": ["ai21", "ai21-labs", "ai21_labs"],
-      "taskRouting": {},
-      "canonicalization": {}
-    },
-    "sambanova": {
-      "label": "Sambanova",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 0.1,
-        "outputPerMillion": 0.1
-      },
-      "modelPrefixes": ["Meta-Llama"],
-      "aliases": ["sambanova", "samba-nova", "samba_nova"],
-      "taskRouting": {},
-      "canonicalization": {}
-    },
-    "azure": {
-      "label": "Azure OpenAI",
-      "sseDelimiter": "\n\n",
-      "tokenMultiplier": {
-        "prompt": 1,
-        "completion": 1
-      },
-      "defaultPricing": {
-        "inputPerMillion": 2.5,
-        "outputPerMillion": 10
-      },
-      "modelPrefixes": [],
-      "aliases": ["azure", "azure-openai", "azure_openai"],
-      "defaultModel": "gpt-5.5",
-      "taskRouting": {
-        "fast_completion": "gpt-5.4-mini",
-        "code_generation": "gpt-5.5",
-        "complex_reasoning": "gpt-5.5",
-        "chat": "gpt-5.5",
-        "vision": "gpt-5.5",
-        "long_context": "gpt-5.5"
-      },
-      "canonicalization": {}
-    },
     "bedrock": {
       "label": "AWS Bedrock",
       "sseDelimiter": "\n\n",
@@ -512,7 +374,7 @@
         "inputPerMillion": 3,
         "outputPerMillion": 15
       },
-      "modelPrefixes": ["anthropic.", "amazon.", "meta.", "ai21.", "cohere.", "mistral."],
+      "modelPrefixes": ["anthropic.", "amazon.", "meta.", "mistral."],
       "aliases": ["bedrock", "aws-bedrock", "aws_bedrock"],
       "taskRouting": {},
       "canonicalization": {}
@@ -1132,14 +994,6 @@
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks", "Long Documents"],
       "deprecation_date": null,
-      "promo_expires_at": "2026-08-31",
-      "post_promo_prices": {
-        "input": 3,
-        "output": 15,
-        "cached_input": 0.3,
-        "cached_write": 3.75,
-        "cached_write_1h": 6
-      },
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -1157,11 +1011,11 @@
         "minTier": "pro"
       },
       "costOverride": {
-        "inputCost": 2,
-        "outputCost": 10,
-        "cached_input": 0.2,
-        "cached_write": 2.5,
-        "cached_write_1h": 4
+        "inputCost": 3,
+        "outputCost": 15,
+        "cached_input": 0.3,
+        "cached_write": 3.75,
+        "cached_write_1h": 6
       },
       "contextOverride": 1000000,
       "capabilitiesOverride": {
@@ -1181,49 +1035,6 @@
       },
       "speedOverride": "fast",
       "releasedOverride": "June 30, 2026"
-    },
-    "claude-sonnet-4.6": {
-      "id": "claude-sonnet-4.6",
-      "apiModelId": "claude-sonnet-4-6",
-      "name": "Claude 4.6 Sonnet",
-      "provider": "anthropic",
-      "modelType": "code",
-      "variantPartner": "claude-opus-4.8",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high", "xhigh", "max"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "messages",
-          "effortPath": "output_config.effort",
-          "togglePath": "thinking.type",
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      }
     },
     "claude-haiku-4.5": {
       "id": "claude-haiku-4.5",
@@ -1559,61 +1370,63 @@
         "caching": false
       }
     },
-    "qwen-flash": {
-      "id": "qwen-flash",
+    "qwen-3.5-flash": {
+      "id": "qwen-3.5-flash",
       "apiModelId": "qwen3.5-flash",
-      "name": "Qwen Flash",
+      "name": "Qwen 3.5 Flash",
       "provider": "qwen",
-      "modelType": "chat",
-      "quality": "fair",
+      "modelType": "multimodal",
+      "inputModalities": ["text", "image", "video"],
+      "maxOutputTokens": 64000,
+      "quality": "good",
       "qualityTier": "fast",
-      "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual", "Long Context"],
+      "bestFor": ["Quick Tasks", "Budget Usage", "Multimodal", "Long Context"],
       "deprecation_date": null,
       "reasoning": {
         "capable": true,
         "control": "thinking_toggle",
         "canDisableThinking": true,
-        "thinkingBudget": {
-          "min": 0,
-          "max": 38912,
-          "default": 0
-        },
         "request": {
           "api": "chat",
           "effortPath": null,
           "togglePath": "enable_thinking",
-          "budgetPath": "thinking_budget"
+          "budgetPath": null
         }
       },
-      "costOverride": {
-        "inputCost": 0.1,
-        "outputCost": 0.4
+      "tierPolicy": {
+        "minTier": "free"
       },
+      "costOverride": {
+        "inputCost": 0.029,
+        "outputCost": 0.287,
+        "cached_input": 0.0058,
+        "cached_write": 0.03625
+      },
+      "longContext": {
+        "inputCost": 0.172,
+        "cached_input": 0.0344,
+        "cached_write": 0.215,
+        "outputCost": 1.72
+      },
+      "pricingNote": "Global list price per 1M tokens: $0.029 input/$0.287 output through 128K input, $0.115/$1.147 from 128K through 256K, and $0.172/$1.72 above 256K through 1M. The recorded cache-read price is the automatic implicit-cache rate of 20% of input; explicit five-minute cache hits cost 10% and writes cost 125%.",
       "contextOverride": 1000000,
       "capabilitiesOverride": {
         "streaming": true,
         "tools": true,
-        "vision": false,
+        "vision": true,
         "json": true,
-        "thinking": false,
+        "thinking": true,
         "computerUse": false,
-        "agentic": false,
+        "agentic": true,
         "imageGen": false,
         "videoGen": false,
         "search": false,
         "research": false,
         "codeExecution": false,
-        "caching": false
-      },
-      "benchmarkOverride": {
-        "swebench": 25,
-        "humaneval": 70,
-        "mmlu": 75,
-        "gpqa": 35,
-        "aime": 25
+        "caching": true
       },
       "speedOverride": "very-fast",
-      "releasedOverride": "November 2025"
+      "releasedOverride": "February 2026"
     },
     "qwen-turbo": {
       "id": "qwen-turbo",
@@ -1626,7 +1439,7 @@
       "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual", "Long Context"],
       "deprecated": true,
       "deprecation_date": "2026-06-20",
-      "supersedes_note": "qwen-turbo no longer updated; use qwen-flash (qwen3.5-flash API ID)",
+      "supersedes_note": "qwen-turbo no longer updated; use qwen-3.5-flash (qwen3.5-flash API ID)",
       "status": "deprecated",
       "reasoning": {
         "capable": false,
@@ -1668,61 +1481,6 @@
           "togglePath": "enable_thinking",
           "budgetPath": null
         }
-      }
-    },
-    "kimi-k2.6": {
-      "id": "kimi-k2.6",
-      "apiModelId": "kimi-k2.6",
-      "name": "Kimi K2.6",
-      "provider": "moonshot",
-      "modelType": "multimodal",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": [
-        "Agent Swarm",
-        "Long-Horizon Coding",
-        "Multi-Agent Orchestration",
-        "Vision",
-        "Video"
-      ],
-      "deprecation_date": null,
-      "supersedes": [
-        "kimi-k2.5",
-        "kimi-k2.5-thinking",
-        "kimi-k2.5-turbo",
-        "kimi-k2",
-        "kimi-k2-instruct"
-      ],
-      "supersedes_effective_date": "2026-05-25",
-      "supersedes_note": "All kimi-k2-* and kimi-k2.5* aliases are EOL 2026-05-25 per Moonshot deprecation notice. Use kimi-k2.6 only; canonicalization map redirects legacy IDs for transitional compatibility.",
-      "reasoning": {
-        "capable": true,
-        "control": "always_on",
-        "canDisableThinking": false,
-        "request": {
-          "api": "chat",
-          "effortPath": null,
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "free"
-      },
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
       }
     },
     "mistral-large-3": {
@@ -2067,7 +1825,7 @@
       "modelType": "video",
       "quality": "excellent",
       "qualityTier": "balanced",
-      "bestFor": ["AI Video Generation", "Pro+ / Max tiers"],
+      "bestFor": ["AI Video Generation", "Max 15x and Enterprise"],
       "deprecation_date": null,
       "videoPerSecondCost": 0.05,
       "videoPerSecondCostByResolution": { "720p": 0.05 },
@@ -2139,43 +1897,6 @@
       "speedOverride": "slow",
       "releasedOverride": "January 2026"
     },
-    "ideogram-2": {
-      "id": "ideogram-2",
-      "apiModelId": "ideogram-2.0",
-      "name": "Ideogram 2.0",
-      "provider": "managed_cloud",
-      "modelType": "image",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Text in Images", "Logos", "Typography"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 20
-      },
-      "contextOverride": 4000,
-      "capabilitiesOverride": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": true,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "January 2026"
-    },
     "veo-3": {
       "id": "veo-3",
       "apiModelId": "veo-3.1-generate-preview",
@@ -2215,47 +1936,6 @@
       },
       "speedOverride": "slow",
       "releasedOverride": "January 2026"
-    },
-    "stable-diffusion-xl": {
-      "id": "stable-diffusion-xl",
-      "apiModelId": "stable-diffusion-xl-1024-v1-0",
-      "name": "Stable Diffusion XL",
-      "provider": "managed_cloud",
-      "modelType": "image",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Open Source Image Gen", "Custom Style", "Self-Host Path"],
-      "deprecated": true,
-      "status": "deprecated",
-      "deprecation_date": null,
-      "imageApi": "stability",
-      "pricingNote": "Legacy SDXL engine entry retained for compatibility only. AGI's hosted Stability adapter uses the current Stable Image Core v2beta endpoint.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 4
-      },
-      "contextOverride": 4000,
-      "capabilitiesOverride": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": true,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "July 2023"
     },
     "stable-image-core": {
       "id": "stable-image-core",
@@ -2827,12 +2507,14 @@
         "minTier": "free"
       }
     },
-    "qwen-3.5-plus": {
-      "id": "qwen-3.5-plus",
-      "apiModelId": "qwen3.5-plus",
-      "name": "Qwen 3.5 Plus",
+    "qwen-3.7-plus": {
+      "id": "qwen-3.7-plus",
+      "apiModelId": "qwen3.7-plus",
+      "name": "Qwen 3.7 Plus",
       "provider": "qwen",
       "modelType": "multimodal",
+      "inputModalities": ["text", "image", "video"],
+      "maxOutputTokens": 64000,
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": [
@@ -2847,21 +2529,30 @@
         "capable": true,
         "control": "thinking_toggle",
         "canDisableThinking": true,
-        "thinkingBudget": {
-          "min": 0,
-          "max": 38912,
-          "default": 0
-        },
         "request": {
           "api": "chat",
           "effortPath": null,
           "togglePath": "enable_thinking",
-          "budgetPath": "thinking_budget"
+          "budgetPath": null
         }
       },
       "tierPolicy": {
         "minTier": "free"
       },
+      "costOverride": {
+        "inputCost": 0.4,
+        "outputCost": 1.6,
+        "cached_input": 0.08,
+        "cached_write": 0.5
+      },
+      "longContext": {
+        "inputCost": 1.2,
+        "cached_input": 0.24,
+        "cached_write": 1.5,
+        "outputCost": 4.8
+      },
+      "pricingNote": "International list price per 1M tokens: $0.40 input/$1.60 output through 256K input and $1.20/$4.80 above 256K through 1M. The recorded cache-read price is the automatic implicit-cache rate of 20% of input; explicit five-minute cache hits cost 10% and writes cost 125%. Limited-time discounts are intentionally excluded.",
+      "contextOverride": 1000000,
       "capabilitiesOverride": {
         "streaming": true,
         "tools": true,
@@ -2874,9 +2565,11 @@
         "videoGen": false,
         "search": false,
         "research": false,
-        "codeExecution": true,
+        "codeExecution": false,
         "caching": true
-      }
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "May 2026"
     },
     "nvidia/nemotron-3-ultra-550b-a55b": {
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
@@ -2999,8 +2692,8 @@
       "gpt-5.4-nano",
       "gemini-3.1-flash-lite",
       "deepseek-v4-flash",
-      "qwen-3.5-plus",
-      "kimi-k2.6",
+      "qwen-3.7-plus",
+      "qwen-3.5-flash",
       "glm-5.2",
       "sonar"
     ],

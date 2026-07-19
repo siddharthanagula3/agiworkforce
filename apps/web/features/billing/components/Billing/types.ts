@@ -2,10 +2,28 @@ import React from 'react';
 
 // pro_plus removed 2026-06-20; 'hobby' renamed to 'basic' 2026-07-02.
 // Locked tiers are free, basic, pro, max, team, enterprise.
-export const VALID_PLANS = ['free', 'basic', 'pro', 'max', 'enterprise'] as const;
+export const VALID_PLANS = [
+  'free',
+  'basic',
+  'pro',
+  'max',
+  'max_15x',
+  'team',
+  'enterprise',
+] as const;
 export type PlanTier = (typeof VALID_PLANS)[number];
 
-export const VALID_STATUSES = ['active', 'cancelled', 'past_due', 'unpaid'] as const;
+export const VALID_STATUSES = [
+  'active',
+  'trialing',
+  'canceled',
+  'past_due',
+  'unpaid',
+  'incomplete',
+  'incomplete_expired',
+  'paused',
+  'none',
+] as const;
 export type BillingStatus = (typeof VALID_STATUSES)[number];
 
 export function isValidPlan(plan: unknown): plan is PlanTier {
@@ -21,7 +39,8 @@ export function normalizePlan(plan: unknown): PlanTier {
 }
 
 export function normalizeStatus(status: unknown): BillingStatus {
-  return isValidStatus(status) ? status : 'active';
+  if (status === 'cancelled') return 'canceled';
+  return isValidStatus(status) ? status : 'none';
 }
 
 export interface LLMUsage {
@@ -35,12 +54,12 @@ export interface LLMUsage {
 }
 
 export interface BillingInfo {
-  plan: 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
-  status: 'active' | 'cancelled' | 'past_due' | 'unpaid';
-  current_period_start: string;
-  current_period_end: string;
-  price: number;
-  currency: string;
+  plan: PlanTier;
+  status: BillingStatus;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  price: number | null;
+  currency: string | null;
   features: string[];
   usage: {
     totalTokens: number;

@@ -71,8 +71,6 @@ const FORTHCOMING: { item: string; detail: string; quarter: string }[] = [
     detail: 'Marketplace listing planned for public launch.',
     quarter: LAUNCH.date,
   },
-  { item: 'Pro tier', detail: 'Opens after security audit closes.', quarter: 'TBD' },
-  { item: 'Max tier', detail: 'Opens after Pro stabilizes.', quarter: 'TBD' },
 ];
 
 export default function ChangelogPage() {

@@ -11,12 +11,8 @@
  * - It's unclear which prices are actually valid
  */
 
-import {
-  getPlanPriceCents,
-  getPlanUsageBudgetCents,
-  type BillingInterval,
-  type BillingPlanTier,
-} from '@agiworkforce/types';
+import { getPlanPriceCents, type BillingInterval, type BillingPlanTier } from '@agiworkforce/types';
+import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 
 interface PriceMappingEntry {
   tier: BillingPlanTier;
@@ -47,6 +43,10 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   // Max tier — monthly only; no yearly price
   const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
   if (maxMonthly) mapping[maxMonthly.toLowerCase()] = { tier: 'max', interval: 'monthly' };
+
+  const max15xMonthly = process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
+  if (max15xMonthly)
+    mapping[max15xMonthly.toLowerCase()] = { tier: 'max_15x', interval: 'monthly' };
 
   // Team tier
   const teamMonthly = process.env['STRIPE_PRICE_TEAM_MONTHLY'];
@@ -112,7 +112,7 @@ export function getTierMapping(): Record<string, PriceMappingEntry> {
  * Get plan tier from price ID using strict mapping
  *
  * @param priceId - The Stripe price ID
- * @returns The plan tier ('hobby', 'pro', 'max', 'enterprise') or null if not found
+ * @returns The canonical plan tier or null if not found
  * @throws Error if price ID is found in mapping but is in inconsistent state
  */
 export function getPlanTierFromPriceId(priceId: string | null | undefined): string | null {
@@ -131,30 +131,20 @@ export function getPlanTierFromPriceId(priceId: string | null | undefined): stri
 }
 
 /**
- * Get plan tier from price ID with fallback to metadata
+ * Resolve a subscription tier from its registered Stripe Price.
  *
- * This safely combines metadata and price ID lookup
- * @param metadata - Stripe metadata object
+ * Subscription metadata is advisory and can become stale when a customer
+ * changes price through Stripe's portal. It must never override—or stand in
+ * for—the purchased Price when provisioning entitlements.
+ * @param _metadata - Stripe metadata retained for call-site compatibility
  * @param priceId - Stripe price ID
- * @returns The plan tier, or null if neither metadata nor price mapping has it
+ * @returns The registered Price tier, or null when the Price is not configured
  */
 export function resolvePlanTier(
-  metadata: Record<string, string> | null | undefined,
+  _metadata: Record<string, string> | null | undefined,
   priceId: string | null | undefined,
 ): string | null {
-  // First check metadata (most reliable)
-  if (metadata?.['plan_tier']) {
-    return metadata['plan_tier'].toLowerCase();
-  }
-
-  // Then try strict price ID mapping
-  const tierFromPrice = getPlanTierFromPriceId(priceId);
-  if (tierFromPrice) {
-    return tierFromPrice;
-  }
-
-  // Return null instead of defaulting - let caller handle missing tier
-  return null;
+  return getPlanTierFromPriceId(priceId);
 }
 
 /**
@@ -162,7 +152,9 @@ export function resolvePlanTier(
  */
 export function isValidPlanTier(tier: string | null | undefined): tier is string {
   if (!tier) return false;
-  return ['free', 'basic', 'pro', 'max', 'team', 'enterprise'].includes(tier.toLowerCase());
+  return ['free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'].includes(
+    tier.toLowerCase(),
+  );
 }
 
 export function getBillingDetailsFromPriceId(priceId: string | null | undefined): {
@@ -215,6 +207,7 @@ export function getMappingStatus(): {
     basic: [],
     pro: [],
     max: [],
+    max_15x: [],
     team: [],
     enterprise: [],
   };

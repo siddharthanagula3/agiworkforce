@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -59,7 +60,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
     const [messages, countRows] = await Promise.all([
       db.query<ChatMessageRow>(
         `
-          select id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
+          select id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata
           from web_messages
           where conversation_id = $1
           order by created_at asc
@@ -78,7 +79,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
     return NextResponse.json({
       conversation,
-      messages,
+      messages: messages.map((message) => ManagedCloudMessageWireSchema.parse(message)),
       total,
       hasMore,
     });

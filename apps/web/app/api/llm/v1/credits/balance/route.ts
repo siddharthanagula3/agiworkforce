@@ -8,15 +8,16 @@ import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
+import { toPublicUsagePercentage } from '@/lib/server/managed-usage-policy';
+import type { ManagedUsageBalanceResponse } from '@agiworkforce/types';
+import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 
 /**
  * Credits Balance API
  * Endpoint: GET /v1/credits/balance (via api.agiworkforce.com)
  *
- * Returns the user's current credit balance including:
- * - Monthly allocation and remaining
- * - Daily limits and usage
- * - Subscription tier
+ * Returns percentage-only managed-usage status. Private allocations, ledger
+ * units, and conversion math must never cross this API boundary.
  */
 
 async function handleGetBalance(request: NextRequest) {
@@ -82,43 +83,39 @@ async function handleGetBalance(request: NextRequest) {
       ? Math.max(0, Math.floor((nextMonthReset.getTime() - now.getTime()) / 1000))
       : 0;
 
-  return NextResponse.json(
-    {
-      object: 'credit_balance',
-      subscription: {
-        plan_tier: subscription.plan_tier,
-        status: subscription.status,
-        current_period_end: subscription.current_period_end,
-      },
-      credits: {
-        // Monthly credits
-        monthly_allocated_cents: balance?.credits_allocated_cents || 0,
-        monthly_remaining_cents: balance?.credits_remaining_cents || 0,
-        monthly_used_cents:
-          (balance?.credits_allocated_cents || 0) - (balance?.credits_remaining_cents || 0),
-        monthly_reset_at: nextMonthReset?.toISOString() ?? null,
-        seconds_until_monthly_reset: secondsUntilMonthlyReset,
+  const allocated = balance?.credits_allocated_cents ?? 0;
+  const used = balance?.credits_used_cents ?? 0;
+  const remaining = balance?.credits_remaining_cents ?? 0;
+  const isFreePlan = subscription.plan_tier.toLowerCase() === 'free';
+  const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(userId) : null;
+  const resetAt = freeUsage?.resetAt ?? nextMonthReset?.toISOString() ?? null;
+  const resetDate = resetAt ? new Date(resetAt) : null;
+  const secondsUntilReset =
+    resetDate && !Number.isNaN(resetDate.getTime())
+      ? Math.max(0, Math.floor((resetDate.getTime() - now.getTime()) / 1000))
+      : 0;
 
-        // Daily limits
-        daily_limit_cents: 0,
-        daily_used_cents: 0,
-        daily_remaining_cents: 0,
-        daily_reset_at: null,
-        seconds_until_daily_reset: null,
-        has_daily_limit: false,
-      },
-      // Formatted for display
-      formatted: {
-        monthly_remaining: `$${((balance?.credits_remaining_cents || 0) / 100).toFixed(2)}`,
-        monthly_allocated: `$${((balance?.credits_allocated_cents || 0) / 100).toFixed(2)}`,
-        daily_remaining: '$0.00',
-        daily_limit: '$0.00',
-      },
+  const responseBody: ManagedUsageBalanceResponse = {
+    object: 'credit_balance',
+    subscription: {
+      plan_tier: subscription.plan_tier,
+      status: subscription.status,
+      current_period_end:
+        subscription.current_period_end instanceof Date
+          ? subscription.current_period_end.toISOString()
+          : (subscription.current_period_end ?? null),
     },
-    {
-      headers: getCorsHeaders(request),
+    credits: {
+      usage_percentage: freeUsage?.usagePercentage ?? toPublicUsagePercentage(used, allocated),
+      reset_at: resetAt,
+      seconds_until_reset: freeUsage ? secondsUntilReset : secondsUntilMonthlyReset,
+      has_usage_remaining: freeUsage?.hasUsageRemaining ?? (allocated > 0 && remaining > 0),
     },
-  );
+  };
+
+  return NextResponse.json(responseBody, {
+    headers: getCorsHeaders(request),
+  });
 }
 
 export const GET = withErrorHandler(handleGetBalance);

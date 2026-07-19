@@ -359,6 +359,14 @@ describe('User Profile Store', () => {
       setUser(createMockUserProfile({ plan: 'enterprise' }));
       expect(useUserProfileStore.getState().user?.plan).toBe('enterprise');
     });
+
+    it.each(['basic', 'max', 'max_15x', 'team'] as const)(
+      'should support the %s plan from the shared billing catalog',
+      (plan) => {
+        useUserProfileStore.getState().setUser(createMockUserProfile({ plan }));
+        expect(useUserProfileStore.getState().user?.plan).toBe(plan);
+      },
+    );
   });
 
   describe('Role Types', () => {

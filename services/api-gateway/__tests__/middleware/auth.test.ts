@@ -119,6 +119,37 @@ describe('authenticateToken Middleware', () => {
     });
   });
 
+  it('derives the trusted developer surface from a first-party gateway token', async () => {
+    // A verified first-party (device-authorization) token is a CLI/IDE
+    // developer credential. Its surface must be bound to the token, not a
+    // caller header, so the managed plan gate can require Pro or higher.
+    const validToken = jwt.sign(
+      { userId: 'user-dev-surface', email: 'dev@example.com' },
+      process.env['JWT_SECRET']!,
+      { expiresIn: '1h', ...JWT_SIGN_OPTIONS },
+    );
+    mockReq.headers = { authorization: `Bearer ${validToken}` };
+
+    await authenticateToken(mockReq as Request, mockRes as Response, mockNext);
+
+    expect(mockNext).toHaveBeenCalled();
+    expect((mockReq as Request & { user?: { surface?: string } }).user?.surface).toBe('developer');
+  });
+
+  it('honors a signed app-surface downgrade claim (never a header)', async () => {
+    const validToken = jwt.sign(
+      { userId: 'user-app-surface', email: 'app@example.com', surface: 'app' },
+      process.env['JWT_SECRET']!,
+      { expiresIn: '1h', ...JWT_SIGN_OPTIONS },
+    );
+    mockReq.headers = { authorization: `Bearer ${validToken}` };
+
+    await authenticateToken(mockReq as Request, mockRes as Response, mockNext);
+
+    expect(mockNext).toHaveBeenCalled();
+    expect((mockReq as Request & { user?: { surface?: string } }).user?.surface).toBe('app');
+  });
+
   it('should handle malformed Zod payload in JWT', async () => {
     // Create a token with invalid payload structure
     const invalidPayloadToken = jwt.sign(

@@ -1,9 +1,9 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Pricing | Local & BYOK free forever, AGI Cloud for Teams & Enterprise',
+  title: 'Pricing | AGI Cloud, Local, and BYOK plans',
   description:
-    'AGI pricing: Local and BYOK are free forever on Desktop and CLI, managed cloud is open in public alpha (Free/Pro/Max as the individual on-ramp), and Team & Enterprise plans give your org shared, governed access to frontier models.',
+    'AGI public alpha pricing for Free, Basic, Pro, Max 5x, Max 15x, Team, and Enterprise, with Local and BYOK choices kept separate from Managed Cloud.',
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -15,9 +15,9 @@ export const metadata: Metadata = {
     'enterprise AI',
   ],
   openGraph: {
-    title: 'Pricing | Local & BYOK free forever, AGI Cloud for Teams & Enterprise',
+    title: 'Pricing | AGI Cloud, Local, and BYOK plans',
     description:
-      'Local and BYOK stay free forever. Team and Enterprise plans give your org shared, governed access to frontier models with centralized billing.',
+      'Compare Free, Basic, Pro, Max 5x, Max 15x, Team, and Enterprise while keeping Local and BYOK separate from Managed Cloud.',
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -31,9 +31,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pricing | Local & BYOK free forever, AGI Cloud for Teams & Enterprise',
-    description:
-      'Local and BYOK stay free forever. Team and Enterprise plans give your org shared, governed access to frontier models with centralized billing.',
+    title: 'Pricing | AGI Cloud, Local, and BYOK plans',
+    description: 'Compare AGI Managed Cloud plans and the separate Local and BYOK choices.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

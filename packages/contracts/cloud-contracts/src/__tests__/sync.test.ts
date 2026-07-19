@@ -47,7 +47,6 @@ const messageDelta = {
   provider: 'provider-y',
   input_tokens: 120,
   output_tokens: 480,
-  cost_cents: 3,
   metadata: null,
   created_at: '2026-07-02T00:00:01.000Z',
   updated_at: '2026-07-02T00:00:01.000Z',
@@ -82,17 +81,6 @@ describe('ChatSyncPullResponseSchema', () => {
       messages: [messageDelta],
       artifacts: [artifactDelta],
       cursor: '44',
-      hasMore: false,
-    };
-    expect(ChatSyncPullResponseSchema.safeParse(page).success).toBe(true);
-  });
-
-  it('accepts numeric-as-string cost_cents (pg numeric serialization)', () => {
-    const page = {
-      conversations: [],
-      messages: [{ ...messageDelta, cost_cents: '3.5' }],
-      artifacts: [],
-      cursor: '43',
       hasMore: false,
     };
     expect(ChatSyncPullResponseSchema.safeParse(page).success).toBe(true);
@@ -194,6 +182,7 @@ describe('ChatSyncPushResponseSchema', () => {
             conversationId: conversationDelta.id,
             role: 'assistant',
             content: 'updated stream content',
+            costCents: 99,
             metadata: { cloudApproval: null },
             baseVersion: '43',
           },

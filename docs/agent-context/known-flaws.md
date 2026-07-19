@@ -6,6 +6,103 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-18 Website billing/metering truth (`WEB-BILLING-TRUTH-01`, Fixed in
+repo; production and founder gates remain): public prices, surface visibility,
+capabilities, project/MCP limits, and relative usage labels now come from the
+shared billing catalog; exact managed allowances live only in the server-side
+usage policy. Public usage routes return only percentages, reset times, and
+whether usage remains, and Web, Mobile, and VS Code consumers read that
+percentage contract (VS Code via `/api/usage`). Desktop still renders stale exact
+token/cost usage and is NOT yet converged — the founder release order puts its
+billing convergence after Website and Mobile. Free is paced by one
+private daily allowance with a durable atomic reservation before provider
+execution, idempotent settlement, and release on completed, failed, cancelled,
+and zero-usage requests. Paid upgrades use a Stripe replacement cycle with
+time-based proration and pending-payment activation; the canonical paid webhook
+carries already-spent subscription and rolling-window usage into the higher
+plan rather than resetting it. Paid five-hour, weekly, and flagship-weekly
+spend windows warn at 80% and hard-stop at 100%; the financial reservation
+serializes per tenant and includes the estimated in-flight request before any
+provider call, so concurrent requests cannot use the same remaining allowance.
+Project creation/sync and custom MCP discovery
+enforce the same Free 1/1, Basic 5/5, Pro and Team 25/25, and Max unlimited
+limits. Remaining gates: migration `0065_free_daily_usage_budget.sql` must be
+applied after `0064`, then `0066_managed_usage_rolling_caps.sql` must be applied
+after `0065` before these reservation paths are deployed; all configured Stripe
+Prices and their currency options must be verified; Stripe Customer Portal
+subscription changes must be disabled or configured so they cannot bypass the
+replacement-cycle upgrade route; production webhook/payment-method/SCA behavior
+needs sanctioned non-production and then founder-authorized production QA.
+Multi-step managed tool loops now extend the reservation before every provider
+turn: `runToolLoop` calls `reserveManagedUsageProviderStep` (SQL
+`extend_managed_usage_request_provider_step` in `0066`) before egress on both the
+synchronous completions route and the durable cloud-agent workflow, using the
+stable global `provider:<step>` key so restart/replay is idempotent, failing
+closed when a rolling five-hour / weekly / flagship-week / billing-period limit
+is reached, and finalize settles the extended total to actual. RESIDUAL: external
+per-call tool fees (generic web search, E2B sandbox execution) are still NOT
+included in the managed reservation, so a long tool-heavy loop can exceed the
+rolling ceiling by those fees; and the whole path stays inactive until migration
+`0066` is applied. No migration, deploy, Stripe setting, or production data was
+mutated in this run.
+
+2026-07-19 Commercial + security convergence slice (Fixed in repo; production
+and founder gates remain):
+
+- Managed multi-step reservation extension wired into the real tool loop (see
+  `WEB-BILLING-TRUTH-01` above). Residual: external tool fees + undeployed `0066`.
+- P0 Mobile IAP private-allowance leak fixed (`MOBILE-IAP-ALLOWANCE-LEAK-01`):
+  `apps/web/app/api/mobile/iap/verify/route.ts` and the Mobile client no longer
+  serialize `usageBudgetCents`; a behavioral regression test asserts no
+  cents/budget/allowance field is present in the response.
+- P0 developer-surface entitlement bypass fixed at the exploit vector
+  (`DEV-SURFACE-ENTITLEMENT-BYPASS-01`): the API gateway binds the required
+  capability to a TRUSTED, verified-issuer surface class — first-party
+  device-authorization tokens ⇒ `developer_surfaces` (Pro+); Clerk app tokens ⇒
+  `managed_chat` — stamped `surface:'developer'` at both device-token mint sites
+  and enforced in `planGate` + the LLM proxy. RESIDUAL (`DEV-SURFACE-WEB-CLAIM-01`,
+  P1): the web `/api/llm/v1/chat/completions` route still classifies Clerk-token
+  clients by the caller `x-agi-surface`/`x-client` header (advisory). Developer
+  clients (CLI/VS Code) authenticate via first-party device tokens (now gated) or
+  the unspoofable chrome-extension origin, so the residual is a Clerk session
+  token lacking an issuance-time surface claim; durable fix = a signed surface
+  claim in the Clerk JWT template.
+- P0 Mobile usage migrated to the percentage-only contract
+  (`apps/mobile/services/usage.ts` + the cloud-usage screen): no `$NaN`, no exact
+  dollars, validated via `parseManagedUsageSummaryResponse`. Mobile IAP drift
+  fixed (`MOBILE-IAP-PLACEHOLDER-GATED-01`): Team removed from the self-serve set
+  (sales-assisted), Max 15x added, both the mobile and web-server IAP catalogs
+  derive from the canonical `SELF_SERVE_PAID_PLAN_TIERS`, and `FEATURES.iap` is
+  gated OFF while every SKU is a placeholder.
+- P1 VS Code usage rewired from the dead `/api/auth/me` (route does not exist in
+  `apps/web`) to canonical `/api/usage`, rendering a percentage and dropping the
+  exact token/cap client fields, type, sidebar meter, and UI.
+- P1 API gateway `/models` tier ladder regenerated from the canonical catalog
+  (removed `pro_plus`; accepts free/basic/pro/max/max_15x/team/enterprise via
+  `normalizeSubscriptionAccessTier`).
+- P1 `MODEL-CATALOG-TIER-POLICY-OWNER-01`: `model-catalog.ts` `TIER_POLICIES` is a
+  routing/compat shape (collapses basic→pro, max_15x→max) and is NOT the
+  entitlement SSOT — the real money/access gates (image/video/managed) use the
+  canonical billing catalog `canUseBillingPlanCapability`. Convergence of this
+  second owner (consumed by the capability handshake + Desktop) is deferred:
+  risky and Desktop-Rust-unverifiable in this environment. A clarifying comment
+  was added at the `TIER_POLICIES` export.
+- `PROVIDER-REMOVAL-REPO-WIDE-01` (tracked, NOT in this commit): banned-provider
+  and retired-model removal is complete in the authored registry but not
+  repo-wide (Desktop Rust/UI transports, legacy SDXL, CLI Cohere/Together
+  discovery mappings, arbitrary custom endpoints). Per the handoff this is an
+  isolated follow-up slice (centralized denylist + repo-wide production-reference
+  guard) to land after this billing/security commit.
+
+Verification for this slice: focused TS suites pass in-session — web vitest
+(tool-loop e2e, managed-usage service + migration-contract, mobile-iap-verify
+privacy, route managed-failover), api-gateway vitest (full suite 251 passed),
+mobile jest (cloud-usage, IAP flow, paywall, billing-off), VS Code vitest
+(tierStatus) — with web/mobile/gateway/vscode `tsc --noEmit` clean. NOT run in
+this environment: cargo/Rust checks (Desktop/CLI/crates are not buildable here)
+and live browser QA (requires the Neon/Clerk/Stripe runtime behind `.env.local`).
+No migration, deploy, Stripe setting, or production data was mutated.
+
 2026-07-18 Website Reflect gap (`WEB-REFLECT-01`, Partially remediated):
 Website Settings now exposes an on-demand Reflect recap for 30-, 90-, 180-,
 and 365-day ranges. The owner-scoped server service requires the account's

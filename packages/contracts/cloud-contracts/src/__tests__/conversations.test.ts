@@ -35,7 +35,6 @@ const message = {
   provider: 'provider-x',
   input_tokens: 10,
   output_tokens: 5,
-  cost_cents: 1,
   created_at: '2026-07-14T00:01:00.000Z',
   metadata: { source: 'cloud' },
 };
@@ -101,7 +100,6 @@ describe('managed-cloud conversation wire contract', () => {
       provider: 'provider-x',
       inputTokens: 10,
       outputTokens: 5,
-      costCents: 1,
       createdAt: message.created_at,
       metadata: { source: 'cloud' },
     });

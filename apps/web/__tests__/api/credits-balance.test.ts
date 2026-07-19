@@ -40,6 +40,11 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+const mockGetFreeTrialPublicUsage = vi.fn();
+vi.mock('@/lib/services/free-trial-service', () => ({
+  getFreeTrialPublicUsage: (...args: unknown[]) => mockGetFreeTrialPublicUsage(...args),
+}));
+
 // Mock errors — real implementations so createError.* returns proper AppError instances
 vi.mock('@/lib/errors', async () => {
   const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
@@ -103,6 +108,11 @@ describe('Credits Balance API', () => {
 
     vi.mocked(SubscriptionService.getSubscription).mockResolvedValue(mockSubscription);
     vi.mocked(CreditService.getBalance).mockResolvedValue(mockBalance);
+    mockGetFreeTrialPublicUsage.mockResolvedValue({
+      usagePercentage: 0,
+      resetAt: null,
+      hasUsageRemaining: true,
+    });
   });
 
   describe('GET /api/llm/v1/credits/balance', () => {
@@ -159,7 +169,7 @@ describe('Credits Balance API', () => {
     });
 
     describe('Balance Response', () => {
-      it('should return complete balance information', async () => {
+      it('should return the public usage contract', async () => {
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Bearer valid-token' },
         });
@@ -171,7 +181,7 @@ describe('Credits Balance API', () => {
         expect(data.object).toBe('credit_balance');
         expect(data.subscription).toBeDefined();
         expect(data.credits).toBeDefined();
-        expect(data.formatted).toBeDefined();
+        expect(data).not.toHaveProperty('formatted');
       });
 
       it('should include subscription info', async () => {
@@ -187,7 +197,7 @@ describe('Credits Balance API', () => {
         expect(data.subscription.current_period_end).toBeDefined();
       });
 
-      it('should include monthly credits info', async () => {
+      it('should expose only percentage, reset, and availability fields', async () => {
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Bearer valid-token' },
         });
@@ -195,41 +205,19 @@ describe('Credits Balance API', () => {
         const response = await GET(request);
         const data = await response.json();
 
-        expect(data.credits.monthly_allocated_cents).toBe(1200);
-        expect(data.credits.monthly_remaining_cents).toBe(800);
-        expect(data.credits.monthly_used_cents).toBe(400);
-        expect(data.credits.monthly_reset_at).toBeDefined();
-        expect(data.credits.seconds_until_monthly_reset).toBeGreaterThanOrEqual(0);
-      });
-
-      it('should zero out legacy daily-limit fields', async () => {
-        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
-          headers: { Authorization: 'Bearer valid-token' },
-        });
-
-        const response = await GET(request);
-        const data = await response.json();
-
-        expect(data.credits.daily_limit_cents).toBe(0);
-        expect(data.credits.daily_used_cents).toBe(0);
-        expect(data.credits.daily_remaining_cents).toBe(0);
-        expect(data.credits.daily_reset_at).toBeNull();
-        expect(data.credits.seconds_until_daily_reset).toBeNull();
-        expect(data.credits.has_daily_limit).toBe(false);
-      });
-
-      it('should include formatted values for display', async () => {
-        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
-          headers: { Authorization: 'Bearer valid-token' },
-        });
-
-        const response = await GET(request);
-        const data = await response.json();
-
-        expect(data.formatted.monthly_remaining).toBe('$8.00');
-        expect(data.formatted.monthly_allocated).toBe('$12.00');
-        expect(data.formatted.daily_remaining).toBe('$0.00');
-        expect(data.formatted.daily_limit).toBe('$0.00');
+        expect(data.credits.usage_percentage).toBe(33.33);
+        expect(data.credits.has_usage_remaining).toBe(true);
+        expect(data.credits.reset_at).toBeDefined();
+        expect(data.credits.seconds_until_reset).toBeGreaterThanOrEqual(0);
+        expect(Object.keys(data.credits).sort()).toEqual([
+          'has_usage_remaining',
+          'reset_at',
+          'seconds_until_reset',
+          'usage_percentage',
+        ]);
+        expect(JSON.stringify(data)).not.toMatch(
+          /_cents|monthly_allocated|monthly_remaining|formatted|\$/i,
+        );
       });
     });
 
@@ -259,9 +247,8 @@ describe('Credits Balance API', () => {
         expect(response.status).toBe(200);
 
         const data = await response.json();
-        // Should return zeros when balance fails
-        expect(data.credits.monthly_allocated_cents).toBe(0);
-        expect(data.credits.monthly_remaining_cents).toBe(0);
+        expect(data.credits.usage_percentage).toBe(0);
+        expect(data.credits.has_usage_remaining).toBe(false);
       });
 
       it('should handle null balance', async () => {
@@ -275,9 +262,35 @@ describe('Credits Balance API', () => {
         expect(response.status).toBe(200);
 
         const data = await response.json();
-        expect(data.credits.monthly_allocated_cents).toBe(0);
-        expect(data.credits.monthly_remaining_cents).toBe(0);
-        expect(data.credits.daily_limit_cents).toBe(0);
+        expect(data.credits.usage_percentage).toBe(0);
+        expect(data.credits.has_usage_remaining).toBe(false);
+      });
+
+      it('uses the rolling Free daily snapshot when no paid ledger exists', async () => {
+        vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
+          ...mockSubscription,
+          plan_tier: 'free',
+        });
+        vi.mocked(CreditService.getBalance).mockResolvedValue(null);
+        mockGetFreeTrialPublicUsage.mockResolvedValue({
+          usagePercentage: 75,
+          resetAt: '2026-07-19T12:00:00.000Z',
+          hasUsageRemaining: true,
+        });
+
+        const response = await GET(
+          new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+            headers: { Authorization: 'Bearer valid-token' },
+          }),
+        );
+        const data = await response.json();
+
+        expect(data.credits).toMatchObject({
+          usage_percentage: 75,
+          reset_at: '2026-07-19T12:00:00.000Z',
+          has_usage_remaining: true,
+        });
+        expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith(mockUser.id);
       });
     });
 

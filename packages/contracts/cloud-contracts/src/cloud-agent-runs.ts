@@ -12,6 +12,7 @@ export const CloudAgentOriginSurfaceSchema = z.enum([
   'mobile',
   'chrome',
   'vscode',
+  'cli',
   'api',
 ]);
 export const CloudAgentWorkModeSchema = z.enum(['chat', 'agiwork', 'research']);

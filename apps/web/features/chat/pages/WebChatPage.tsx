@@ -20,6 +20,7 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
+  getBillingPlanPricing,
   summarizeSendPreview,
   type CloudWorkMode,
   type ProviderMode,
@@ -80,10 +81,16 @@ import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
-import { UpgradePlanDialog } from '../components/dialogs/UpgradePlanDialog';
+import { UpgradePlanDialog, type UpgradeTarget } from '../components/dialogs/UpgradePlanDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
-import { upgradeToProPlan, upgradeToMaxPlan } from '@features/billing/services/stripe-payments';
+import {
+  upgradePlanMidCycle,
+  upgradeToBasicPlan,
+  upgradeToProPlan,
+  upgradeToMaxPlan,
+  upgradeToMax15xPlan,
+} from '@features/billing/services/stripe-payments';
 import {
   buildAcceptedHandoffSystemMessage,
   buildHandoffContextCandidates,
@@ -536,20 +543,39 @@ export default function WebChatPage() {
   // Route the upgrade CTA to the real Stripe checkout flow (same service the
   // billing dashboard uses). No waitlist email capture.
   const handleUpgradePlan = useCallback(
-    async (plan: 'pro' | 'max', annual: boolean) => {
+    async (plan: UpgradeTarget, annual: boolean) => {
       if (!user) {
         toast.error('Please sign in to upgrade.');
         return;
       }
       setUpgradePlanOpen(false);
       const billingPeriod = annual ? 'yearly' : 'monthly';
-      const toastId = toast.loading('Redirecting to checkout...');
+      const hasActivePaidPlan =
+        subscription != null &&
+        !['free', 'local-only', 'byok'].includes(subscription.tier) &&
+        ['active', 'trialing'].includes(subscription.status);
+      const toastId = toast.loading(
+        hasActivePaidPlan ? 'Upgrading your plan...' : 'Redirecting to checkout...',
+      );
       try {
-        const args = { userId: user.id, userEmail: user.email || '', billingPeriod } as const;
-        if (plan === 'pro') {
-          await upgradeToProPlan(args);
-        } else {
-          await upgradeToMaxPlan(args);
+        if (hasActivePaidPlan) {
+          await upgradePlanMidCycle({ plan, billingInterval: billingPeriod });
+        } else if (plan === 'basic') {
+          await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
+        } else if (plan === 'pro') {
+          await upgradeToProPlan({
+            userId: user.id,
+            userEmail: user.email || '',
+            billingPeriod,
+          });
+        } else if (plan === 'max') {
+          await upgradeToMaxPlan({
+            userId: user.id,
+            userEmail: user.email || '',
+            billingPeriod: 'monthly',
+          });
+        } else if (plan === 'max_15x') {
+          await upgradeToMax15xPlan({ userId: user.id, userEmail: user.email || '' });
         }
         // On success the service redirects to Stripe; the dismiss below only
         // runs if navigation has not yet replaced the page.
@@ -559,7 +585,7 @@ export default function WebChatPage() {
         toast.error(err instanceof Error ? err.message : 'Failed to start checkout.');
       }
     },
-    [user],
+    [subscription, user],
   );
 
   const messages = useChatStore((s) => s.messages);
@@ -1915,15 +1941,10 @@ export default function WebChatPage() {
   );
 
   // Billing tier label for the user profile footer.
-  const tierLabel = useMemo(() => {
-    const tier = subscription?.tier ?? 'free';
-    if (tier === 'free') return 'Free';
-    if (tier === 'hobby') return 'Hobby';
-    if (tier === 'pro') return 'Pro';
-    if (tier === 'max') return 'Max';
-    if (tier === 'enterprise') return 'Enterprise';
-    return null;
-  }, [subscription?.tier]);
+  const tierLabel = useMemo(
+    () => getBillingPlanPricing(subscription?.tier ?? 'free').label,
+    [subscription?.tier],
+  );
 
   const handleLogout = useCallback(async () => {
     await logout();

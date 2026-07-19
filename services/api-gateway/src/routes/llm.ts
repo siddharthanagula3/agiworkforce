@@ -1,10 +1,10 @@
 /**
  * @file LLM Proxy Routes — Managed Cloud Model Access
  * @security
- * - Rate limiting: Tier-based (30/min hobby, 120/min pro)
+ * - Rate limiting: Server-enforced per route
  * - Input validation: Zod schemas with .strict() to reject unexpected fields
  * - Authentication: JWT required (via authenticateToken)
- * - Plan enforcement: Free tier blocked; hobby limited to small models
+ * - Plan enforcement: Canonical plan and model-tier admission
  * - Server-side API keys: Never exposed to client
  *
  * Proxies OpenAI-compatible LLM requests (desktop ManagedCloudProvider and
@@ -18,7 +18,10 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import {
+  canAccessModelForSubscriptionTier,
+  canUseBillingPlanCapability,
   getAllowedModelsForTier,
+  getMinimumRequiredTier,
   getModelMetadataById,
   type Provider as CatalogProvider,
   type ProviderAdapter,
@@ -33,6 +36,7 @@ import {
   type OpenAIWireChatRequest,
 } from '@agiworkforce/provider-protocol';
 import { authenticateToken } from '../middleware/auth';
+import type { CloudSurfaceClass } from '../authenticated-user';
 import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/neonClients';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
@@ -75,27 +79,23 @@ router.use(createRateLimiter('default'));
 // =============================================================================
 
 /**
- * Models allowed on the Hobby tier — derived from `models.json` (P0-I).
+ * Models allowed on the Basic tier — derived from the shared model catalog.
  *
  * The catalog SSOT keeps `tierAllowedModels.economy` as the canonical
- * Hobby + Free model list (per `tasks/auto-routing-spec.md` §1: Hobby
- * pool = economy tier with workhorse / escalation / reasoning slots).
+ * Basic + Free model list.
  * Reading the set here keeps the gateway in sync with picker UI, web
  * surface, and CLI without a separately-curated allow-list that drifts.
  *
  * Exported for unit tests; not part of the route API.
  */
-export const HOBBY_ALLOWED_MODELS: ReadonlySet<string> = new Set(
+export const BASIC_ALLOWED_MODELS: ReadonlySet<string> = new Set(
   getAllowedModelsForTier('economy'),
 );
 
 /**
- * Tier ladder (founder directive 2026-07-16: routing/access is tier-based —
- * Pro must never reach flagship-priced models on managed credits):
- * - basic/hobby/pro/team → economy + pro_additions (Basic matches Pro's model
- *   set; the tiers differ by usage budget, not allowlist)
- * - max/enterprise → everything the catalog admits, including
- *   flagship_additions (Opus/Fable/Sol class)
+ * Tier model sets are catalog-derived. Basic receives economy models, Pro and
+ * Team add pro_additions, and Max/Max 15x/Enterprise add flagships. Free chat
+ * uses the economy set under its private server-side allowance.
  */
 export const PRO_ALLOWED_MODELS: ReadonlySet<string> = new Set([
   ...getAllowedModelsForTier('economy'),
@@ -198,24 +198,13 @@ export function resolveProvider(model: string): Provider {
  * binding — a DB-level backstop behind the `.eq('user_id', userId)` filter
  * below, not a replacement for it. Keep the filter.
  *
- * Tier dispatch is an explicit allowlist (CONTRADICTIONS-HUNTER round 3
- * fix): previously only 'free' and 'hobby' were checked, so 'basic'/'team'
- * (and any other unrecognized string) silently fell through to unrestricted
- * access with no model check. 'basic' is the 2026-07-02 rename of 'hobby'
- * and gets the identical economy-model restriction rather than a duplicated
- * branch. 'team' gets the same allowance as 'pro' (no model restriction).
- * Any tier not listed below fails closed to the same 403 as 'free', instead
- * of falling through. NOTE: this route still has no credit/budget deduction
- * for any tier (only a `usage_events` observability insert below and the
- * flat per-route rate limit) — that's WP2 scope, intentionally untouched
- * here.
- *
  * Exported for unit tests; not part of the route API.
  */
 export async function enforcePlanTier(
   userId: string,
   token: string,
   model: string,
+  surface: CloudSurfaceClass = 'app',
 ): Promise<string> {
   const userDb = getUserScopedClient({ userId, token });
   const { data: subscription, error } = await userDb
@@ -229,39 +218,41 @@ export async function enforcePlanTier(
     throw new AppError('Service temporarily unavailable', 503);
   }
 
-  // null data means no subscription row — treat as free tier (throws 403 below)
-  const tier: string = subscription?.plan_tier ?? 'free';
-
-  switch (tier) {
-    case 'free':
-      throw new AppError('Upgrade to a paid plan to use cloud models', 403);
-    case 'hobby':
-    case 'basic':
-    case 'team':
-    case 'pro':
-      // Pro-class tiers (Basic shares Pro's model set; they differ by usage
-      // budget) never reach flagship-priced models on managed credits.
-      if (!PRO_ALLOWED_MODELS.has(model)) {
-        throw new AppError(
-          `Model "${model}" requires a Max or Enterprise plan on managed cloud.`,
-          403,
-        );
-      }
-      return tier;
-    case 'max':
-    case 'enterprise':
-      // Full catalog-admitted set, including flagship — but still an
-      // allowlist so catalog-unknown models fail closed here too.
-      if (!FLAGSHIP_ALLOWED_MODELS.has(model)) {
-        throw new AppError(`Model "${model}" is not available on managed cloud.`, 403);
-      }
-      return tier;
-    default:
-      // Unrecognized plan_tier value — fail closed like 'free', not an
-      // unrestricted fallthrough.
-      logger.warn({ userId, tier }, 'LLM proxy: unrecognized plan_tier, failing closed');
-      throw new AppError('Upgrade to a paid plan to use cloud models', 403);
+  const tier = subscription?.plan_tier ?? 'free';
+  // Bind the required capability to the trusted surface class. Developer
+  // surfaces (CLI/IDE device tokens) require Pro-or-higher developer_surfaces;
+  // app surfaces require managed_chat. This closes the header-forgeable
+  // developer-surface bypass at the LLM proxy, mirroring the plan-gate.
+  const requiredCapability = surface === 'developer' ? 'developer_surfaces' : 'managed_chat';
+  if (!canUseBillingPlanCapability(tier, requiredCapability)) {
+    logger.warn(
+      { userId, tier, surface },
+      'LLM proxy: plan lacks managed capability, failing closed',
+    );
+    throw new AppError(
+      surface === 'developer'
+        ? 'Managed Cloud CLI and IDE access require Pro or higher.'
+        : 'Managed models are not available for this plan',
+      403,
+    );
   }
+
+  const minimumTier = getMinimumRequiredTier(model);
+  if (!minimumTier) {
+    throw new AppError(`Model "${model}" is not available on managed cloud.`, 403);
+  }
+
+  const allowed =
+    (tier === 'free' && minimumTier === 'basic') || canAccessModelForSubscriptionTier(model, tier);
+  if (allowed) return tier;
+
+  if (tier === 'free') {
+    throw new AppError(`Model "${model}" is not available on the Free plan.`, 403);
+  }
+  if (minimumTier === 'pro') {
+    throw new AppError(`Model "${model}" requires a Pro plan or above.`, 403);
+  }
+  throw new AppError(`Model "${model}" requires a Max plan or above.`, 403);
 }
 
 /**
@@ -367,7 +358,7 @@ router.post(
       body.model,
     );
     const provider = resolveProvider(body.model);
-    const tier = await enforcePlanTier(user.userId, user.token, body.model);
+    const tier = await enforcePlanTier(user.userId, user.token, body.model, user.surface);
 
     const adapter = buildProviderAdapter(provider);
     if (!adapter) {
@@ -554,7 +545,7 @@ router.post(
         const candidate = remainingFallbackModels.shift() as string;
         try {
           const candidateProvider = resolveProvider(candidate);
-          await enforcePlanTier(user.userId, user.token, candidate);
+          await enforcePlanTier(user.userId, user.token, candidate, user.surface);
           const candidateAdapter = buildProviderAdapter(candidateProvider);
           if (!candidateAdapter) {
             logger.warn(

@@ -24,9 +24,6 @@ vi.mock('@/lib/cors', () => ({
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/assert-quota', () => ({
-  reconcileUsage: vi.fn(() => Promise.resolve()),
-}));
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     generateIdempotencyKey: vi.fn(() => 'idempotency-key'),
@@ -43,16 +40,16 @@ vi.mock('@/lib/cost-tracker', () => ({
   recordModelUsage: vi.fn(),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
-  recordFreeTrialTokens: vi.fn(() => Promise.resolve()),
+  settleFreeTrialRequest: vi.fn(() => Promise.resolve()),
 }));
 
 import { buildStreamResponse } from '../lib/stream-transform';
 import type { ProcessedRequest } from '../lib/request-processor';
 import { recordModelUsage } from '@/lib/cost-tracker';
-import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
-const mockRecordFreeTrialTokens = recordFreeTrialTokens as ReturnType<typeof vi.fn>;
+const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof vi.fn>;
 
 /** Create a minimal ProcessedRequest stub for buildStreamResponse. */
 function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
@@ -172,10 +169,20 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     );
     await drainStream(response as any);
 
-    expect(mockRecordFreeTrialTokens).toHaveBeenCalledWith({
-      userId: 'user-free',
-      requestId: 'req-test-001',
-      tokens: 200,
+    expect(mockSettleFreeTrialRequest).toHaveBeenCalledWith({
+      reservation: {
+        kind: 'free_trial',
+        userId: 'user-free',
+        requestId: 'req-test-001',
+      },
+      outcome: 'completed',
+      provider: 'openai',
+      model: 'gpt-5.5',
+      usage: expect.objectContaining({
+        promptTokens: 120,
+        completionTokens: 80,
+        totalTokens: 200,
+      }),
     });
     expect(response.headers.has('x-agi-trial-tokens-used')).toBe(false);
     expect(response.headers.has('x-agi-trial-tokens-budget')).toBe(false);
@@ -253,7 +260,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const events = [
       JSON.stringify({
         choices: [{ delta: { content: 'Hi' }, index: 0 }],
-        model: 'anthropic/claude-sonnet-4-6',
+        model: 'anthropic/claude-sonnet-5',
       }),
       JSON.stringify({
         choices: [],
@@ -271,7 +278,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
     const response = await buildStreamResponse(
       makeRequest() as any,
       makeStream(events),
-      makeProcessed({ provider: 'openrouter', requestedModel: 'anthropic/claude-sonnet-4-6' }),
+      makeProcessed({ provider: 'openrouter', requestedModel: 'anthropic/claude-sonnet-5' }),
       'user-004',
       'token-004',
     );

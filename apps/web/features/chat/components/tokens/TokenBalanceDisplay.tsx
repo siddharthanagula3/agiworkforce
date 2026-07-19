@@ -1,6 +1,6 @@
 /**
- * Token Balance Display Component
- * Shows user's remaining credit balance in the chat interface.
+ * Plan Usage Display Component
+ * Shows the user's percentage-only plan usage in the chat interface.
  * Fetches from /api/usage server endpoint for accurate billing data.
  */
 
@@ -10,17 +10,9 @@ import { Card, Button } from '@agiworkforce/ui';
 import { Coins, TrendingUp, AlertTriangle, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
-interface UsageData {
-  plan_tier: string;
-  credits_allocated_cents: number;
-  credits_used_cents: number;
-  credits_remaining_cents: number;
-  usage_percentage: number;
-  period_start: string | null;
-  period_end: string | null;
-  subscription_status: string;
-}
+type UsageData = ManagedUsageSummaryResponse;
 
 interface TokenBalanceDisplayProps {
   compact?: boolean;
@@ -102,22 +94,17 @@ export function TokenBalanceDisplay({ compact = false, className }: TokenBalance
         )}
       >
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <span className="text-muted-foreground">Loading balance...</span>
+        <span className="text-muted-foreground">Loading usage...</span>
       </div>
     );
   }
 
-  const remainingCents = usage?.credits_remaining_cents ?? 0;
-  const allocatedCents = usage?.credits_allocated_cents ?? 0;
-  const usagePercentage = usage?.usage_percentage ?? 0;
+  const usagePercentage = normalizeUsagePercentage(usage?.usage_percentage);
+  const remainingPercentage = Math.max(0, 100 - Math.round(usagePercentage));
   const planTier = usage?.plan_tier ?? 'free';
 
-  // Format as dollars for display
-  const remainingDollars = remainingCents / 100;
-  const allocatedDollars = allocatedCents / 100;
-
   const isLow = usagePercentage >= 80;
-  const isCritical = usagePercentage >= 95 || remainingCents <= 50; // 95%+ used or < $0.50
+  const isCritical = usagePercentage >= 95;
 
   if (compact) {
     return (
@@ -162,17 +149,17 @@ export function TokenBalanceDisplay({ compact = false, className }: TokenBalance
               {isCritical ? (
                 <>
                   <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <span className="text-red-700">Credits Critical</span>
+                  <span className="text-red-700">Usage limit reached</span>
                 </>
               ) : isLow ? (
                 <>
                   <TrendingUp className="h-4 w-4 text-yellow-600" />
-                  <span className="text-yellow-700">Credits Low</span>
+                  <span className="text-yellow-700">Usage running low</span>
                 </>
               ) : (
                 <>
                   <Coins className="h-4 w-4" />
-                  <span>Credit Balance</span>
+                  <span>Plan usage</span>
                 </>
               )}
             </div>
@@ -186,31 +173,28 @@ export function TokenBalanceDisplay({ compact = false, className }: TokenBalance
                   !isLow && 'text-primary',
                 )}
               >
-                ${remainingDollars.toFixed(2)}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                / ${allocatedDollars.toFixed(2)}
+                {Math.round(usagePercentage)}% used
               </span>
             </div>
 
             <div className="mt-1 text-xs text-muted-foreground capitalize">
               {planTier} plan
-              {usage?.period_end && (
-                <> &middot; Resets {new Date(usage.period_end).toLocaleDateString()}</>
+              {usage?.usage_reset_at && (
+                <> &middot; Resets {new Date(usage.usage_reset_at).toLocaleDateString()}</>
               )}
             </div>
 
             {isCritical && (
               <div className="mt-3 rounded-md bg-red-100 p-2 text-xs text-red-700">
-                <strong>Action Required:</strong> Your credits are critically low. Upgrade your plan
-                to continue using AI features.
+                <strong>Action Required:</strong> Your plan usage limit has been reached. Upgrade to
+                continue using managed AI features.
               </div>
             )}
 
             {isLow && !isCritical && (
               <div className="mt-3 rounded-md bg-yellow-100 p-2 text-xs text-yellow-700">
-                <strong>Notice:</strong> You are running low on credits. Consider upgrading to avoid
-                interruptions.
+                <strong>Notice:</strong> You are nearing your plan usage limit. Consider upgrading
+                to avoid interruptions.
               </div>
             )}
           </div>
@@ -253,8 +237,7 @@ export function TokenBalanceDisplay({ compact = false, className }: TokenBalance
             />
           </div>
           <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-            <span>{usagePercentage.toFixed(0)}% used</span>
-            <span>${allocatedDollars.toFixed(2)} total</span>
+            <span>{remainingPercentage}% remaining</span>
           </div>
         </div>
 

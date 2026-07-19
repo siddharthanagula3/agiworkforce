@@ -2,17 +2,17 @@
  * @file Credits API Routes
  * @security
  * - Rate limiting: Applied per-endpoint based on financial sensitivity
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
  * - Authentication: JWT required for all endpoints
+ * - Privacy: Public responses contain percentage/reset status only
  *
  * Rate limit rationale (OWASP compliant):
  * - GET /balance: 10/min - read operation, moderate limit
- * - POST /check: 10/min - read operation, moderate limit
- * - POST /deduct: 5/min - financial write operation, strictest limit
+ * - POST /check: 10/min - retired compatibility response
+ * - POST /deduct: 5/min - retired compatibility response
  */
 
 import { Router, type Request, type Response } from 'express';
-import { z } from 'zod';
+import type { ManagedUsageBalance } from '@agiworkforce/types';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/neonClients';
@@ -21,37 +21,46 @@ import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
+const EMPTY_PUBLIC_USAGE_BALANCE: ManagedUsageBalance = Object.freeze({
+  usage_percentage: 0,
+  reset_at: null,
+  seconds_until_reset: 0,
+  has_usage_remaining: false,
+});
+
+function asNonNegativeNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function asIsoTimestamp(value: unknown): string | null {
+  if (typeof value !== 'string' && !(value instanceof Date)) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+/** Keep private ledger operands inside the service boundary. */
+function toPublicUsageBalance(balance: Record<string, unknown> | null): ManagedUsageBalance {
+  if (!balance?.['account_id']) return { ...EMPTY_PUBLIC_USAGE_BALANCE };
+
+  const allocated = asNonNegativeNumber(balance['credits_allocated_cents']);
+  const used = Math.min(allocated, asNonNegativeNumber(balance['credits_used_cents']));
+  const remaining = asNonNegativeNumber(balance['credits_remaining_cents']);
+  const resetAt = asIsoTimestamp(balance['period_end']);
+  const resetTime = resetAt ? Date.parse(resetAt) : Number.NaN;
+
+  return {
+    usage_percentage: allocated > 0 ? Math.round((used / allocated) * 10_000) / 100 : 0,
+    reset_at: resetAt,
+    seconds_until_reset: Number.isNaN(resetTime)
+      ? 0
+      : Math.max(0, Math.floor((resetTime - Date.now()) / 1_000)),
+    has_usage_remaining: allocated > 0 && remaining > 0,
+  };
+}
+
 router.use(authenticateToken);
 // SECURITY: Baseline rate limit for all credit endpoints (100/min fallback)
 router.use(createRateLimiter('default'));
-
-// Schema for checking credits - SECURITY: .strict() rejects unexpected fields
-const checkCreditsSchema = z
-  .object({
-    amount_cents: z.number().int().positive(),
-  })
-  .strict();
-
-// Schema for deducting credits - SECURITY: .strict() rejects unexpected fields
-// Note: metadata uses .passthrough() for flexibility, but outer object is strict
-const deductCreditsSchema = z
-  .object({
-    amount_cents: z.number().int().positive(),
-    description: z.string().max(500).optional(),
-    metadata: z
-      .object({
-        model: z.string().max(100).optional(),
-        provider: z.string().max(50).optional(),
-        input_tokens: z.number().int().nonnegative().optional(),
-        output_tokens: z.number().int().nonnegative().optional(),
-        conversation_id: z.string().max(100).optional(),
-      })
-      .passthrough()
-      .optional(),
-    // Idempotency key to prevent duplicate deductions on retry
-    idempotency_key: z.string().max(256).optional(),
-  })
-  .strict();
 
 /**
  * GET /api/credits/balance
@@ -87,140 +96,23 @@ router.get(
     // The RPC returns an array, get the first row
     const balance = Array.isArray(data) ? data[0] : data;
 
-    if (!balance || !balance.account_id) {
-      res.json({
-        has_credits: false,
-        account_id: null,
-        credits_allocated_cents: 0,
-        credits_used_cents: 0,
-        credits_remaining_cents: 0,
-        daily_limit_cents: 0,
-        daily_used_cents: 0,
-        daily_remaining_cents: 0,
-        period_start: null,
-        period_end: null,
-      });
-      return;
-    }
-
-    res.json({
-      has_credits: true,
-      account_id: balance.account_id,
-      credits_allocated_cents: balance.credits_allocated_cents,
-      credits_used_cents: balance.credits_used_cents,
-      credits_remaining_cents: balance.credits_remaining_cents,
-      daily_limit_cents: balance.daily_limit_cents,
-      daily_used_cents: balance.daily_used_cents,
-      daily_remaining_cents: balance.daily_remaining_cents,
-      period_start: balance.period_start,
-      period_end: balance.period_end,
-      last_daily_reset_at: balance.last_daily_reset_at,
-    });
+    res.json(toPublicUsageBalance(balance ?? null));
   },
 );
 
 /**
- * POST /api/credits/check
- * Check if user has enough credits for a given amount
- *
- * SECURITY: Rate limited to 10 requests/minute per user
+ * Client-supplied ledger amounts are no longer accepted. Managed requests are
+ * reserved and settled by the authenticated LLM route after it calculates the
+ * provider cost server-side.
  */
-router.post('/check', createRateLimiter('credits-check'), async (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
-
-  // SECURITY: Use strict schema to reject unexpected fields
-  const { amount_cents } = checkCreditsSchema.parse(req.body);
-
-  // P1-GW-RLS: check_credits_available runs with caller privileges (no
-  // SECURITY DEFINER — 0020_functions.sql) over RLS-protected token_credits
-  // (0037_rls_user_isolation.sql). See get_credit_balance above for the full
-  // rationale — same table, same policy, same withUser() binding.
-  const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
-  const { data, error } = await userDb.rpc('check_credits_available', {
-    p_user_id: user.userId,
-    p_amount_cents: amount_cents,
+function retireClientManagedCreditOperation(_req: Request, res: Response): void {
+  res.status(410).json({
+    error: 'Client-managed credit operations are no longer available',
+    code: 'SERVER_MANAGED_BILLING_REQUIRED',
   });
+}
 
-  if (error) {
-    logger.error({ error }, 'Failed to check credits');
-    throw new AppError('Failed to check credits', 500);
-  }
-
-  res.json({
-    available: data === true,
-    requested_cents: amount_cents,
-  });
-});
-
-/**
- * POST /api/credits/deduct
- * Deduct credits from the authenticated user's account
- * This should be called after each LLM usage from the desktop app
- *
- * SECURITY: Rate limited to 5 requests/minute per user (strictest - financial)
- */
-router.post('/deduct', createRateLimiter('credits-deduct'), async (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
-
-  const { amount_cents, description, metadata, idempotency_key } = deductCreditsSchema.parse(
-    req.body,
-  );
-
-  // P1-GW-RLS: deduct_credits runs with caller privileges (no SECURITY
-  // DEFINER — 0020_functions.sql) over RLS-protected token_credits /
-  // credit_transactions (0037_rls_user_isolation.sql). See get_credit_balance
-  // above for the full rationale — same withUser() binding, financial write
-  // path, so the DB-level backstop matters most here.
-  const userDb = getUserScopedClient({ userId: user.userId, token: user.token });
-  const { data, error } = await userDb.rpc('deduct_credits', {
-    p_user_id: user.userId,
-    p_amount_cents: amount_cents,
-    p_description: description || `LLM usage: ${metadata?.model || 'unknown model'}`,
-    p_metadata: metadata || {},
-    p_idempotency_key: idempotency_key || null,
-  });
-
-  if (error) {
-    logger.error({ error }, 'Failed to deduct credits');
-    throw new AppError('Failed to deduct credits', 500);
-  }
-
-  // The RPC returns an array, get the first row
-  const result = Array.isArray(data) ? data[0] : data;
-
-  if (!result) {
-    throw new AppError('No credit account found', 404);
-  }
-
-  // Check if deduction was successful
-  if (!result.success) {
-    res.status(402).json({
-      success: false,
-      error: result.error || 'Credit deduction failed',
-      code: result.code,
-      remaining_cents: result.remaining_cents,
-      daily_limit: result.daily_limit,
-      daily_used: result.daily_used,
-      daily_remaining: result.daily_remaining,
-      reset_in_hours: result.reset_in_hours,
-    });
-    return;
-  }
-
-  res.json({
-    success: true,
-    remaining_cents: result.remaining_cents,
-    daily_limit: result.daily_limit,
-    daily_used: result.daily_used,
-    daily_remaining: result.daily_remaining,
-    reset_in_hours: result.reset_in_hours,
-  });
-});
+router.post('/check', createRateLimiter('credits-check'), retireClientManagedCreditOperation);
+router.post('/deduct', createRateLimiter('credits-deduct'), retireClientManagedCreditOperation);
 
 export { router as creditsRouter };

@@ -1,8 +1,6 @@
 'use client';
 
 import BillingDashboard from '@features/billing/pages/BillingDashboard';
-import { TokenAnalyticsDashboard } from '@features/chat/components/tokens/TokenAnalyticsDashboard';
-import { TokenBalanceDisplay } from '@features/chat/components/tokens/TokenBalanceDisplay';
 
 export default function BillingPage() {
   return (
@@ -15,14 +13,8 @@ export default function BillingPage() {
           </p>
         </div>
 
-        {/* Credit Balance */}
-        <TokenBalanceDisplay />
-
-        {/* Billing - plan, features, invoices, payment methods */}
+        {/* Plan, percentage usage, invoices, and payment methods */}
         <BillingDashboard />
-
-        {/* Usage Analytics - token usage trends, per-session breakdown, costs */}
-        <TokenAnalyticsDashboard />
       </div>
     </div>
   );

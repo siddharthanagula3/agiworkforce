@@ -42,7 +42,7 @@ import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottom
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 /** Ordered purchasable tiers — used to pick "the next tier up" from the user's current one. */
-const PURCHASABLE_TIER_ORDER: PurchasableTier[] = ['basic', 'pro', 'max', 'team'];
+const PURCHASABLE_TIER_ORDER: PurchasableTier[] = ['basic', 'pro', 'max', 'max_15x'];
 
 function nextPurchasableTier(currentTier: string): PurchasableTier {
   const idx = PURCHASABLE_TIER_ORDER.indexOf(currentTier as PurchasableTier);

@@ -5,8 +5,6 @@ import {
   asPlanTier,
 } from '../lib/cloudAccountTypes';
 import { cloudAccountAuth } from './cloudAccountAuth';
-import { WEB_APP_URL } from '../api/config';
-import { guardedFetch } from '../lib/egressGuard';
 
 export interface PlanFeatures {
   automationsPerDay: number | 'unlimited';
@@ -211,54 +209,6 @@ class SubscriptionService {
         console.error('[Subscription] Error in state listener:', error);
       }
     });
-  }
-
-  async trackUsage(
-    eventType: string,
-    quantity: number = 1,
-    metadata: Record<string, unknown> = {},
-  ): Promise<void> {
-    const session = cloudAccountAuth.getSession();
-    if (!session?.access_token) return;
-
-    try {
-      const headers = await this.csrfHeaders();
-      const amountCents =
-        typeof metadata['amount_cents'] === 'number' ? (metadata['amount_cents'] as number) : 0;
-      await guardedFetch(`${WEB_APP_URL}/api/usage/deduct`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          ...headers,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          amount_cents: amountCents,
-          description: eventType,
-          metadata: { ...metadata, quantity },
-        }),
-      });
-    } catch (error) {
-      console.warn('[Subscription] Usage tracking skipped:', error);
-    }
-  }
-
-  private async csrfHeaders(): Promise<Record<string, string>> {
-    const response = await guardedFetch(`${WEB_APP_URL}/api/csrf`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to fetch CSRF token: ${response.status}`);
-    }
-    const data = (await response.json()) as { token?: string; csrfToken?: string };
-    const token = data.token ?? data.csrfToken;
-    if (!token) throw new Error('Missing CSRF token');
-    return {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': token,
-      'X-Requested-With': 'agiworkforce-desktop',
-    };
   }
 }
 

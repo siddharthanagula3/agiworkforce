@@ -21,7 +21,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ChatSyncPullResponseSchema,
   ChatSyncPushRequestSchema,
+  ChatSyncPushResponseSchema,
   ServerVersionSchema,
   type ArtifactWireDelta,
   type ConversationWireDelta,
@@ -78,7 +80,7 @@ async function handlePull(request: NextRequest) {
     const messages = await db.query<MessageDelta>(
       `
         select m.id, m.conversation_id, m.role, m.content, m.model, m.provider,
-               m.input_tokens, m.output_tokens, m.cost_cents, m.metadata,
+               m.input_tokens, m.output_tokens, m.metadata,
                m.created_at, m.updated_at, m.deleted_at, m.server_version
         from web_messages m
         join web_conversations c on c.id = m.conversation_id
@@ -118,7 +120,9 @@ async function handlePull(request: NextRequest) {
       artSaturated,
     );
 
-    return NextResponse.json({ conversations, messages, artifacts, cursor, hasMore });
+    return NextResponse.json(
+      ChatSyncPullResponseSchema.parse({ conversations, messages, artifacts, cursor, hasMore }),
+    );
   } catch (error) {
     logger.error({ error, userId }, 'Cloud sync pull failed');
     throw createError.internal('Failed to pull sync changes');
@@ -261,8 +265,6 @@ async function handlePush(request: NextRequest) {
                    item ? 'inputTokens' as has_input_tokens,
                    coalesce((item ->> 'outputTokens')::integer, 0) as output_tokens,
                    item ? 'outputTokens' as has_output_tokens,
-                   coalesce((item ->> 'costCents')::numeric, 0) as cost_cents,
-                   item ? 'costCents' as has_cost_cents,
                    coalesce(item -> 'metadata', '{}'::jsonb) as metadata,
                    item ? 'metadata' as has_metadata,
                    (item ->> 'baseVersion')::bigint as base_version,
@@ -275,7 +277,6 @@ async function handlePush(request: NextRequest) {
                    provider = case when incoming.has_provider then incoming.provider else existing.provider end,
                    input_tokens = case when incoming.has_input_tokens then incoming.input_tokens else existing.input_tokens end,
                    output_tokens = case when incoming.has_output_tokens then incoming.output_tokens else existing.output_tokens end,
-                   cost_cents = case when incoming.has_cost_cents then incoming.cost_cents else existing.cost_cents end,
                    metadata = case when incoming.has_metadata then incoming.metadata else existing.metadata end,
                    updated_at = now()
               from input as incoming, web_conversations as parent
@@ -293,17 +294,16 @@ async function handlePush(request: NextRequest) {
                  or (incoming.has_provider and existing.provider is distinct from incoming.provider)
                  or (incoming.has_input_tokens and existing.input_tokens is distinct from incoming.input_tokens)
                  or (incoming.has_output_tokens and existing.output_tokens is distinct from incoming.output_tokens)
-                 or (incoming.has_cost_cents and existing.cost_cents is distinct from incoming.cost_cents)
                  or (incoming.has_metadata and coalesce(existing.metadata, '{}'::jsonb) is distinct from incoming.metadata)
                )
             returning existing.id, existing.server_version
           ), inserted as (
             insert into web_messages
               (id, conversation_id, role, content, model, provider, input_tokens,
-               output_tokens, cost_cents, metadata, created_at, updated_at, deleted_at)
+               output_tokens, metadata, created_at, updated_at, deleted_at)
             select incoming.id, incoming.conversation_id, incoming.role, incoming.content,
                    incoming.model, incoming.provider, incoming.input_tokens,
-                   incoming.output_tokens, incoming.cost_cents, incoming.metadata,
+                   incoming.output_tokens, incoming.metadata,
                    now(), now(), case when incoming.should_delete then now() else null end
               from input as incoming
              where incoming.base_version = 0
@@ -342,7 +342,6 @@ async function handlePush(request: NextRequest) {
                    and (not incoming.has_provider or existing.provider is not distinct from incoming.provider)
                    and (not incoming.has_input_tokens or existing.input_tokens = incoming.input_tokens)
                    and (not incoming.has_output_tokens or existing.output_tokens = incoming.output_tokens)
-                   and (not incoming.has_cost_cents or existing.cost_cents = incoming.cost_cents)
                    and (not incoming.has_metadata or coalesce(existing.metadata, '{}'::jsonb) = incoming.metadata)
                  )
                )
@@ -357,7 +356,7 @@ async function handlePush(request: NextRequest) {
                      'id', current.id::text, 'conversation_id', current.conversation_id::text,
                      'role', current.role, 'content', current.content, 'model', current.model,
                      'provider', current.provider, 'input_tokens', current.input_tokens,
-                     'output_tokens', current.output_tokens, 'cost_cents', current.cost_cents,
+                     'output_tokens', current.output_tokens,
                      'metadata', current.metadata, 'created_at', current.created_at,
                      'updated_at', current.updated_at, 'deleted_at', current.deleted_at,
                      'server_version', current.server_version::text
@@ -479,7 +478,9 @@ async function handlePush(request: NextRequest) {
       applied.artifacts,
       conflictRows,
     );
-    return NextResponse.json({ protocolVersion: 2, applied, conflicts, cursor });
+    return NextResponse.json(
+      ChatSyncPushResponseSchema.parse({ protocolVersion: 2, applied, conflicts, cursor }),
+    );
   } catch (error) {
     logger.error({ error, userId }, 'Cloud sync push failed');
     throw createError.internal('Failed to push sync changes');

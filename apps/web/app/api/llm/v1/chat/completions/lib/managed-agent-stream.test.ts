@@ -9,8 +9,8 @@ const finalize = vi.fn(async (_input: unknown) => {
 const delivered = vi.fn(async (_input: unknown) => {
   events.push('delivered');
 });
-const recordFreeTrialTokens = vi.fn(async (_input: unknown) => {
-  events.push('free-recorded');
+const settleFreeTrialRequest = vi.fn(async (_input: unknown) => {
+  events.push('free-settled');
 });
 const appendCloudAgentEvent = vi.fn(async (_db: unknown, input: { envelope: unknown }) => {
   events.push('event-persisted');
@@ -30,7 +30,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({
-  recordFreeTrialTokens: (input: unknown) => recordFreeTrialTokens(input),
+  settleFreeTrialRequest: (input: unknown) => settleFreeTrialRequest(input),
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
@@ -183,7 +183,7 @@ describe('managed agent stream', () => {
 
   it('records all observed provider tokens for a free-tier tool loop before completion', async () => {
     events.length = 0;
-    recordFreeTrialTokens.mockClear();
+    settleFreeTrialRequest.mockClear();
     const usage = createObservedProviderUsage();
     accumulateObservedProviderUsage(usage, { inputTokens: 90, outputTokens: 30 });
     const freeProcessed = {
@@ -206,12 +206,53 @@ describe('managed agent stream', () => {
 
     await readAll(stream);
 
-    expect(recordFreeTrialTokens).toHaveBeenCalledWith({
-      userId: 'free-user',
-      requestId: 'free-request',
-      tokens: 120,
+    expect(settleFreeTrialRequest).toHaveBeenCalledWith({
+      reservation: {
+        kind: 'free_trial',
+        userId: 'free-user',
+        requestId: 'free-request',
+      },
+      outcome: 'completed',
+      provider: 'anthropic',
+      model: 'claude-test',
+      usage: expect.objectContaining({
+        promptTokens: 90,
+        completionTokens: 30,
+        totalTokens: 120,
+      }),
     });
-    expect(events).toEqual(['free-recorded', 'terminal-visible']);
+    expect(events).toEqual(['free-settled', 'terminal-visible']);
+  });
+
+  it('releases a free-tier reservation when the tool loop fails before usage', async () => {
+    settleFreeTrialRequest.mockClear();
+    const freeProcessed = {
+      ...processed,
+      managedUsage: undefined,
+      freeTrial: {
+        kind: 'free_trial',
+        userId: 'free-user',
+        requestId: 'free-failed-request',
+      },
+    } as ProcessedRequest;
+
+    await readAll(
+      buildManagedAgentStream({
+        generator: failedGenerator(),
+        processed: freeProcessed,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+      }),
+    );
+
+    expect(settleFreeTrialRequest).toHaveBeenCalledWith({
+      reservation: freeProcessed.freeTrial,
+      outcome: 'failed',
+      provider: 'anthropic',
+      model: 'claude-test',
+      usage: expect.objectContaining({ totalTokens: 0 }),
+    });
   });
 
   it('persists canonical activity before making it visible and preserves an awaiting-input terminal', async () => {

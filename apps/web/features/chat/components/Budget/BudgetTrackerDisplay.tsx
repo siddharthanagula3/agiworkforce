@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBillingUsageStore } from '@shared/stores/billing-usage-store';
-import { useChatStore, type ChatMessage } from '@agiworkforce/unified-chat';
+import type { ManagedUsageBalance, ManagedUsageBalanceResponse } from '@agiworkforce/types';
 
 interface BudgetTrackerDisplayProps {
   className?: string;
@@ -11,27 +11,13 @@ interface BudgetTrackerDisplayProps {
   showCreditBalance?: boolean;
 }
 
-interface CreditBalance {
-  monthly_remaining_cents: number;
-  monthly_allocated_cents: number;
-  daily_remaining_cents: number;
-  daily_limit_cents: number;
-}
-
-interface CreditsResponse {
-  credits: CreditBalance;
-}
-
-const CENTS_TO_DOLLARS = 0.01;
-const EMPTY_MESSAGES: ChatMessage[] = [];
-
-async function fetchCreditBalance(): Promise<CreditBalance | null> {
+async function fetchCreditBalance(): Promise<ManagedUsageBalance | null> {
   try {
     const response = await fetch('/api/llm/v1/credits/balance', {
       credentials: 'include',
     });
     if (!response.ok) return null;
-    const data: CreditsResponse = await response.json();
+    const data: ManagedUsageBalanceResponse = await response.json();
     return data.credits ?? null;
   } catch {
     return null;
@@ -45,14 +31,7 @@ export function BudgetTrackerDisplay({
   const sessionCost_cents = useBillingUsageStore((s) => s.sessionCost_cents);
   const dailyBudget_cents = useBillingUsageStore((s) => s.dailyBudget_cents);
 
-  const activeConversationId = useChatStore((s) => s.activeConversationId);
-  const messages = useChatStore((s) =>
-    activeConversationId
-      ? (s.messagesByConversation[activeConversationId] ?? EMPTY_MESSAGES)
-      : EMPTY_MESSAGES,
-  );
-
-  const [creditBalance, setCreditBalance] = useState<CreditBalance | null>(null);
+  const [creditBalance, setCreditBalance] = useState<ManagedUsageBalance | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
 
   useEffect(() => {
@@ -73,23 +52,12 @@ export function BudgetTrackerDisplay({
     };
   }, [showCreditBalance]);
 
-  const tokensUsed = useMemo(
-    () =>
-      messages.reduce(
-        (sum, msg) => sum + ((msg.metadata?.['tokensUsed'] as number | undefined) ?? 0),
-        0,
-      ),
-    [messages],
-  );
-
-  const costThisSession = sessionCost_cents * CENTS_TO_DOLLARS;
-
-  const tokensRemaining =
+  const sessionUsedPercent =
     dailyBudget_cents > 0
-      ? Math.max(0, Math.round((dailyBudget_cents - sessionCost_cents) / 0.002))
-      : undefined;
+      ? Math.min(100, Math.max(0, Math.round((sessionCost_cents / dailyBudget_cents) * 100)))
+      : null;
 
-  if (tokensUsed === 0 && sessionCost_cents === 0 && !showCreditBalance) {
+  if (sessionUsedPercent === null && !showCreditBalance) {
     return null;
   }
 
@@ -99,27 +67,10 @@ export function BudgetTrackerDisplay({
       aria-label="Session budget"
     >
       <div className="space-y-2 text-xs">
-        {/* Token usage */}
-        {tokensUsed > 0 && (
+        {sessionUsedPercent !== null && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Tokens used:</span>
-            <span className="font-medium tabular-nums">{tokensUsed.toLocaleString()}</span>
-          </div>
-        )}
-
-        {/* Session cost */}
-        {sessionCost_cents > 0 && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Cost this session:</span>
-            <span className="font-medium tabular-nums">${costThisSession.toFixed(4)}</span>
-          </div>
-        )}
-
-        {/* Daily tokens remaining (from billing store) */}
-        {tokensRemaining !== undefined && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Daily remaining:</span>
-            <span className="font-medium tabular-nums">{tokensRemaining.toLocaleString()}</span>
+            <span className="text-muted-foreground">Current session:</span>
+            <span className="font-medium tabular-nums">{sessionUsedPercent}% used</span>
           </div>
         )}
 
@@ -128,46 +79,22 @@ export function BudgetTrackerDisplay({
           <>
             {balanceLoading ? (
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Credit balance:</span>
+                <span className="text-muted-foreground">Plan usage:</span>
                 <span className="font-medium text-muted-foreground animate-pulse">loading…</span>
               </div>
             ) : creditBalance ? (
               <>
                 <div className="border-t border-white/[0.06] pt-2 mt-2">
                   <p className="text-muted-foreground mb-1.5 font-medium uppercase tracking-wide text-[10px]">
-                    Credit Balance
+                    Plan usage
                   </p>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Monthly remaining:</span>
-                  <span
-                    className={cn(
-                      'font-medium tabular-nums',
-                      creditBalance.monthly_remaining_cents <= 0 && 'text-destructive',
-                    )}
-                  >
-                    ${(creditBalance.monthly_remaining_cents * CENTS_TO_DOLLARS).toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Monthly allocated:</span>
+                  <span className="text-muted-foreground">Current period:</span>
                   <span className="font-medium tabular-nums">
-                    ${(creditBalance.monthly_allocated_cents * CENTS_TO_DOLLARS).toFixed(2)}
+                    {Math.min(100, Math.max(0, Math.round(creditBalance.usage_percentage)))}% used
                   </span>
                 </div>
-                {creditBalance.daily_limit_cents > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Daily remaining:</span>
-                    <span
-                      className={cn(
-                        'font-medium tabular-nums',
-                        creditBalance.daily_remaining_cents <= 0 && 'text-destructive',
-                      )}
-                    >
-                      ${(creditBalance.daily_remaining_cents * CENTS_TO_DOLLARS).toFixed(2)}
-                    </span>
-                  </div>
-                )}
               </>
             ) : null}
           </>

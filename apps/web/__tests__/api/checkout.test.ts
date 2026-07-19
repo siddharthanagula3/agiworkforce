@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const { mockCheckoutCreate, mockGetCheckoutPriceSelection, mockDbQuery } = vi.hoisted(() => ({
+  mockCheckoutCreate: vi.fn(() => ({
+    id: 'test-session-id',
+    url: 'https://checkout.stripe.com/test',
+  })),
+  mockGetCheckoutPriceSelection: vi.fn(),
+  mockDbQuery: vi.fn(),
+}));
+
 // Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
@@ -20,13 +29,17 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+vi.mock('@/lib/server/localized-pricing-service', () => ({
+  getCheckoutPriceSelection: (...args: unknown[]) => mockGetCheckoutPriceSelection(...args),
+}));
+
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(() => ({ userId: 'test-user-id' })),
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: vi.fn().mockResolvedValue([{ stripe_customer_id: 'cus_test123' }]),
+    query: mockDbQuery,
     execute: vi.fn().mockResolvedValue(1),
     transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
     withUser: vi.fn(() => ({})),
@@ -38,10 +51,7 @@ vi.mock('stripe', () => {
   class MockStripe {
     checkout = {
       sessions: {
-        create: vi.fn(() => ({
-          id: 'test-session-id',
-          url: 'https://checkout.stripe.com/test',
-        })),
+        create: mockCheckoutCreate,
       },
     };
     customers = {
@@ -58,18 +68,6 @@ vi.mock('stripe', () => {
     },
   };
 });
-
-// Mock pricing configuration
-vi.mock('@/lib/pricing', () => ({
-  STRIPE_PRICE_IDS: {
-    hobby: { monthly: 'price_hobby_monthly', annual: 'price_hobby_yearly' },
-    pro: { monthly: 'price_pro_monthly', annual: 'price_pro_yearly' },
-    max: { monthly: 'price_max_monthly', annual: 'price_max_yearly' },
-  },
-  PRICING_CONFIG: {
-    getPlanFromPriceId: vi.fn(),
-  },
-}));
 
 // STRIPE_CHECKOUT_ENABLED is read at module-scope in the route, so it must be
 // set before the import. Use vi.hoisted to run this before the static import
@@ -88,6 +86,15 @@ describe('POST /api/checkout', () => {
     vi.clearAllMocks();
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
     process.env['STRIPE_CHECKOUT_ENABLED'] = 'true';
+    mockGetCheckoutPriceSelection.mockResolvedValue({
+      priceId: 'price_pro_monthly',
+      currency: 'usd',
+    });
+    mockDbQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) return [];
+      if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_test123' }];
+      return [];
+    });
   });
 
   it('should return 401 if user is not authenticated', async () => {
@@ -145,5 +152,111 @@ describe('POST /api/checkout', () => {
     expect(response.status).toBe(400);
     expect(data.error.code).toBe('VALIDATION_ERROR');
     expect(data.error.message).toMatch(/Invalid|plan/);
+  });
+
+  it('keeps Team sales-assisted until seat and organization provisioning is wired', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan: 'team', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockGetCheckoutPriceSelection).not.toHaveBeenCalled();
+    expect(mockCheckoutCreate).not.toHaveBeenCalled();
+  });
+
+  it('supports Max 15x through the canonical plan schema', async () => {
+    mockGetCheckoutPriceSelection.mockResolvedValueOnce({
+      priceId: 'price_max_15x_monthly',
+      currency: 'usd',
+    });
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan: 'max_15x', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockGetCheckoutPriceSelection).toHaveBeenCalledWith('max_15x', 'monthly', 'US');
+  });
+
+  it('derives the charged currency from trusted server geolocation', async () => {
+    mockGetCheckoutPriceSelection.mockResolvedValueOnce({
+      priceId: 'price_pro_monthly',
+      currency: 'inr',
+    });
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        headers: { 'x-vercel-ip-country': 'IN' },
+        body: JSON.stringify({ plan: 'pro', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockGetCheckoutPriceSelection).toHaveBeenCalledWith('pro', 'monthly', 'IN');
+    expect(mockCheckoutCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currency: 'inr',
+        line_items: [{ price: 'price_pro_monthly', quantity: 1 }],
+      }),
+    );
+  });
+
+  it('rejects a client-supplied currency instead of trusting a spoofable value', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        body: JSON.stringify({
+          plan: 'pro',
+          billingInterval: 'monthly',
+          currency: 'inr',
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockGetCheckoutPriceSelection).not.toHaveBeenCalled();
+  });
+
+  it('rejects annual checkout for monthly-only plans before selecting a price', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan: 'basic', billingInterval: 'yearly' }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockGetCheckoutPriceSelection).not.toHaveBeenCalled();
+  });
+
+  it('refuses to send an active subscriber through a portal plan-change bypass', async () => {
+    mockDbQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [
+          {
+            status: 'active',
+            plan_tier: 'pro',
+            stripe_customer_id: 'cus_test123',
+            stripe_subscription_id: 'sub_test123',
+          },
+        ];
+      }
+      return [{ stripe_customer_id: 'cus_test123' }];
+    });
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/checkout', {
+        method: 'POST',
+        body: JSON.stringify({ plan: 'max', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(mockCheckoutCreate).not.toHaveBeenCalled();
   });
 });
