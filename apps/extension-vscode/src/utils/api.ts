@@ -177,8 +177,11 @@ export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<
 
 /**
  * Resolve the auth token for cloud calls: prefer the AGI Cloud account token;
- * fall back to a legacy BYOK key if one is still stored (dormant during the
- * cloud-only transition — no UI sets it anymore).
+ * fall back to an AGI-issued API key (an `sk-agi-…` first-party key, NOT a
+ * third-party provider BYOK key) if stored. That key IS still settable via the
+ * `agi-workforce.setApiKey` command (commandSetup.ts). NOTE: true provider BYOK
+ * (your own Anthropic/OpenAI/… key) is handled by the `agi` app-server this
+ * extension delegates local chat to — configure it with `agi login <provider>`.
  */
 async function getAuthToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
   return (await getAccountToken(secrets)) ?? (await getApiKey(secrets));
