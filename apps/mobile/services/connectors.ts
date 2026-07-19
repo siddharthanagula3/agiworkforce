@@ -12,6 +12,17 @@
  */
 
 import { api } from './api';
+import { API_URL } from '@/lib/constants';
+
+/**
+ * URL of the web GitHub-App install flow. GitHub connection uses a GitHub App
+ * installation (not user_connectors), and the server flow is Clerk-cookie based;
+ * rather than reimplement OAuth state/CSRF on the client, mobile opens this vetted
+ * web flow in a browser and refreshes its connector list on return.
+ */
+export function getGitHubInstallWebUrl(): string {
+  return `${API_URL}/api/github/install/start`;
+}
 
 export interface ConnectedConnector {
   /** Row id. */
