@@ -122,3 +122,12 @@ jest.mock('expo-notifications', () => {
     getBadgeCountAsync: jest.fn().mockResolvedValue(0),
   };
 });
+
+// react-native-webview pulls in a native TurboModule (RNCWebViewModule) that is
+// not registered in the jest binary. Mock it to a plain View so components that
+// render a WebView (MathBlock, SafeArtifactPreview, ArtifactFullScreen) can be
+// imported and rendered in unit tests.
+jest.mock('react-native-webview', () => {
+  const WebView = require('react-native').View;
+  return { __esModule: true, WebView, default: WebView };
+});

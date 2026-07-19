@@ -6,6 +6,19 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Mobile live artifact preview (`MOBILE-ARTIFACT-PREVIEW-01`, Fixed in
+repo for html/svg): mobile previously showed only a placeholder for previewable
+artifacts (HTML/SVG/mermaid) — the prior SECURITY NOTE said no sandboxed WebView
+existed. Now `SafeArtifactPreview` renders HTML and SVG LIVE in a hardened
+WebView: `javaScriptEnabled={false}` (embedded scripts cannot run), no
+`onMessage`/`injectedJavaScript` (RN bridge not exposed), a strict CSP
+`default-src 'none'; style-src 'unsafe-inline'; img-src data:` (blocks all network
+egress), `originWhitelist={[]}` + navigation rejected. The security-critical
+document builder is a pure module (`sandboxedArtifactHtml.ts`) with 4 tests
+asserting the CSP + no script-src. RESIDUAL: mermaid and jsx/tsx need JS or
+compilation, which the JS-disabled sandbox intentionally omits, so they keep an
+honest "source only" note (a future isolated JS-enabled sandbox could add mermaid).
+
 2026-07-19 Mobile non-image attachments were reference stubs
 (`MOBILE-DOC-ATTACHMENT-STUB-01`, Fixed in repo): a non-image attachment reached
 the model as only a `[Attached file: name (mime)]` reference — its CONTENT was
