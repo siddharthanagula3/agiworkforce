@@ -68,8 +68,16 @@ web UI/UX (status per item; verified 2026-07-19 vs current code):
 - OPEN WEBUI-REGEN-DELETE-BEFORE-RESEND (HIGH): handleRegenerateMessage
   (WebChatPage.tsx ~1739) awaits deletePersistedMessages(rollbackIds) — server +
   local store delete — THEN sendMessage (~1742), with no try/catch or restore, so a
-  failed resend loses the user+assistant exchange permanently. Next: resend-first, or
-  optimistic-restore on resend failure.
+  failed resend (expired token at send time → sendMessage early-returns before
+  re-adding the user message; or a mid-loop throw in deletePersistedMessages' id-by-id
+  delete) loses the user+assistant exchange permanently. The EDIT send path shares the
+  SAME ordering bug: sendContent (~855) awaits deletePersistedMessagesRef BEFORE
+  sendMessage (~858). FIX (shared, ponytail — covers edit + regen in one change):
+  delete-AFTER-commit — server rows are the durable copy, so defer the server delete
+  until the new turn is committed; worst case then degrades from data-loss to
+  at-most-duplicate-rows-on-reload. Likely needs sendMessage to report commit (return
+  value or callback); confirm reuse before changing its signature. LEAD ITEM next
+  iteration.
 - DONE WEBUI-AUTH-SEND-SILENT-LOSS (HIGH): useChatStream.ts sendMessage now
   pre-flights the token in a try/catch (setError + return) BEFORE addMessage, so an
   expired/revoked session shows "Your session has expired" instead of silently eating
