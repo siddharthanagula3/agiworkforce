@@ -206,7 +206,12 @@ unified-chat chat renderer was audited separately). Concrete fixes + tracked ite
   server-only fn; source the plan `tokenCredits` from a shared/desktop-safe value or drop
   the field if vestigial. NOT guessed here — needs the intended per-plan token-credit
   numbers (founder/billing SSOT), not a hallucinated constant. Blocks all v3-shell render
-  tests until fixed.
+  tests until fixed. CONFIRMED intentional removal (not an accident to just re-add): the
+  budget data source is gone too — src/**tests**/billing-catalog.test.ts:29 asserts the
+  plan object does NOT have `monthlyUsageBudgetUsd`, and getPlanUsageBudgetCents now lives
+  server-authoritative in web's managed-usage-policy. So this is a client-side MIGRATION
+  decision (what should desktop plan.limits.tokenCredits be post-server-authoritative-
+  budget?), NOT a restore of the removed fn. Founder/billing call required.
 
 2026-07-19 cross-surface parity audit (desktop / CLI / VSCode / Chrome extension —
 3 read-only agents, findings verified at cited file:line). These 4 surfaces are NOT
