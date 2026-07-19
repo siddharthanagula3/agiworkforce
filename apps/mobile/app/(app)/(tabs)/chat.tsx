@@ -31,9 +31,7 @@ import {
   getDefaultCloudModelIdForTier,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
-import {
-  executionModeForSelection,
-} from '@/src/features/chat/utils/conversationMode';
+import { executionModeForSelection } from '@/src/features/chat/utils/conversationMode';
 import {
   imageAssetsToChatAttachments,
   pickImageAssetsFromLibrary,
@@ -47,6 +45,7 @@ import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
+import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 
 function getTimeOfDayGreeting(): string {
@@ -122,8 +121,7 @@ export default function ChatTabScreen() {
 
   // SendPreview disclosure data: Mobile supports Local and sign-in-gated AGI Cloud.
   const sendPreviewPresentation = useMemo(() => {
-    const providerMode: ProviderMode =
-      activeMode === 'cloud' ? 'ManagedGateway' : 'Local';
+    const providerMode: ProviderMode = activeMode === 'cloud' ? 'ManagedGateway' : 'Local';
     return summarizeSendPreview({
       providerMode,
       modelLabel: selectedModel,
@@ -243,8 +241,7 @@ export default function ChatTabScreen() {
             conversationId,
             displayText: trimmed,
             prompt,
-            model:
-              cloudDispatch?.status === 'selected' ? cloudDispatch.modelKey : modelForSend,
+            model: cloudDispatch?.status === 'selected' ? cloudDispatch.modelKey : modelForSend,
             begin: beginImageGeneration,
             complete: completeImageGeneration,
             fail: failImageGeneration,
@@ -279,20 +276,19 @@ export default function ChatTabScreen() {
         if (dispatchOptions?.awaitCompletion) {
           return await sendMessage(conversationId, trimmed, modelForSend, attachments, sendOptions);
         }
-        return await new Promise<boolean>((resolve) => {
-          sendMessage(conversationId, trimmed, modelForSend, attachments, {
-            ...(sendOptions ?? {}),
-            onAccepted: () => resolve(true),
-          })
-            .then((accepted) => resolve(accepted))
-            .catch((err: unknown) => {
-              // The user has already been routed to the conversation screen —
-              // surface the failure in its SendErrorBanner, never silently.
-              console.warn('[ChatTabScreen] sendMessage rejected:', err);
-              setSendError('Message could not be sent. Please try again.');
-              resolve(false);
-            });
-        });
+        return resolveOnAcceptedSend(
+          (onAccepted) =>
+            sendMessage(conversationId, trimmed, modelForSend, attachments, {
+              ...(sendOptions ?? {}),
+              onAccepted,
+            }),
+          (err) => {
+            // The user has already been routed to the conversation screen —
+            // surface the failure in its SendErrorBanner, never silently.
+            console.warn('[ChatTabScreen] sendMessage rejected:', err);
+            setSendError('Message could not be sent. Please try again.');
+          },
+        );
       } catch (err) {
         // Conversation creation failed — tell the user and keep the draft so
         // they can retry (the home tab has no error banner, so Alert here).
