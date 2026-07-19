@@ -106,10 +106,10 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
   team: [
     {
       planId: 'pro',
-      label: 'Pro',
-      price: '$20/mo',
-      billingInterval: 'Monthly or annual ($200/yr)',
-      usageCapacity: 'Higher hosted capacity per month',
+      label: BILLING_PLAN_PRICING.pro.label,
+      price: `$${BILLING_PLAN_PRICING.pro.monthlyPriceUsd}/mo`,
+      billingInterval: `Monthly or annual ($${BILLING_PLAN_PRICING.pro.yearlyPriceUsd}/yr)`,
+      usageCapacity: '5x Basic hosted capacity',
       bestFor: 'Professionals and small teams',
       ctaLabel: 'Get started',
       ctaHref: '/pricing',
@@ -117,20 +117,30 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
     },
     {
       planId: 'max',
-      label: 'Max',
-      price: '$100/mo',
+      label: BILLING_PLAN_PRICING.max.label,
+      price: `$${BILLING_PLAN_PRICING.max.monthlyPriceUsd}/mo`,
       billingInterval: 'Monthly only',
-      usageCapacity: 'Highest hosted capacity',
+      usageCapacity: '5x Pro hosted capacity',
       bestFor: 'Intensive multi-agent workloads',
       ctaLabel: 'Get started',
       ctaHref: '/pricing',
     },
     {
+      planId: 'max_15x',
+      label: BILLING_PLAN_PRICING.max_15x.label,
+      price: `$${BILLING_PLAN_PRICING.max_15x.monthlyPriceUsd}/mo`,
+      billingInterval: 'Monthly only',
+      usageCapacity: '15x Pro hosted capacity',
+      bestFor: 'The most intensive individual workflows and video generation',
+      ctaLabel: 'Get started',
+      ctaHref: '/pricing',
+    },
+    {
       planId: 'team',
-      label: 'Team',
-      price: '$30/seat/mo',
-      billingInterval: 'Monthly or annual ($299/seat/yr)',
-      usageCapacity: 'Shared capacity pool across seats',
+      label: BILLING_PLAN_PRICING.team.label,
+      price: `$${BILLING_PLAN_PRICING.team.monthlyPriceUsd}/seat/mo`,
+      billingInterval: `Monthly or annual ($${BILLING_PLAN_PRICING.team.yearlyPriceUsd}/seat/yr)`,
+      usageCapacity: 'Pro hosted capacity per seat with shared team controls',
       bestFor: 'Collaborative teams needing shared context',
       ctaLabel: 'Get started',
       ctaHref: '/pricing',
@@ -159,12 +169,12 @@ export const MARKETING = {
   skills: { count: 150, display: '150+', label: 'AI Skills' },
   categories: { count: 23, display: '23', label: 'Skill Categories' },
   tools: { count: 0, display: 'Tool-ready', label: 'Agent Tools' },
-  // 60 catalog entries in packages/contracts/types/src/models.json (2026-06-03) minus
-  // 4 Auto-routing presets and 4 "(via OpenRouter)" duplicates = 52 unique
-  // models. '50+' is the defensible floor; re-verify after pnpm sync:models.
+  // The generated catalog currently contains 56 compatibility models.
+  // '50+' is the conservative public floor; re-verify after pnpm sync:models.
   models: { count: 50, display: '50+', label: 'Models' },
   surfaces: { count: 6, display: '6', label: 'Platforms' },
   appSize: { value: 0, display: 'Native', label: 'Desktop Build' },
   tagline:
     'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled managed compute.',
 } as const;
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';

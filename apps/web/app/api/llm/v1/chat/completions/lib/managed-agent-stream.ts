@@ -6,7 +6,7 @@ import {
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
-import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import {
   appendCloudAgentEvent,
   transitionCloudAgentRun,
@@ -117,7 +117,7 @@ export function buildManagedAgentStream(
     lastTaskState = state;
   };
 
-  const settle = async (reason: string, cancelled: boolean) => {
+  const settle = async (reason: string, outcome: 'completed' | 'failed' | 'cancelled') => {
     if (settled) return;
     if (input.processed.managedUsage) {
       await finalizeObservedManagedUsage({
@@ -126,13 +126,24 @@ export function buildManagedAgentStream(
         model: input.processed.chatRequest.model,
         usage: input.usage,
         reason,
-        cancelled,
+        cancelled: outcome !== 'completed',
       });
     } else if (input.processed.freeTrial) {
-      await recordFreeTrialTokens({
-        userId: input.processed.freeTrial.userId,
-        requestId: input.processed.freeTrial.requestId,
-        tokens: input.usage.inputTokens + input.usage.outputTokens,
+      const inputTokens = input.usage.inputTokens;
+      const outputTokens = input.usage.outputTokens;
+      await settleFreeTrialRequest({
+        reservation: input.processed.freeTrial,
+        outcome,
+        provider: input.processed.provider,
+        model: input.processed.chatRequest.model,
+        usage: {
+          promptTokens: inputTokens,
+          completionTokens: outputTokens,
+          totalTokens: inputTokens + outputTokens,
+          cacheReadInputTokens: input.usage.cacheReadTokens,
+          cacheCreationInputTokens: input.usage.cacheWriteTokens,
+          cacheCreation1hInputTokens: input.usage.cacheWrite1hTokens,
+        },
       });
     }
     settled = true;
@@ -162,7 +173,7 @@ export function buildManagedAgentStream(
               reportedFailure
                 ? `${input.completionReason}_reported_failure`
                 : input.completionReason,
-              reportedFailure,
+              reportedFailure ? 'failed' : 'completed',
             );
             if (input.processed.managedUsage) {
               await markManagedUsageClientDelivered(input.processed.managedUsage).catch((error) => {
@@ -199,7 +210,7 @@ export function buildManagedAgentStream(
           // Preserve the original stream failure.
         }
         try {
-          await settle(`${input.completionReason}_stream_failed`, true);
+          await settle(`${input.completionReason}_stream_failed`, 'failed');
         } catch (settlementError) {
           logger.error(
             { settlementError, requestId: input.processed.requestId },
@@ -228,7 +239,7 @@ export function buildManagedAgentStream(
         await input.generator.return(undefined);
       } finally {
         try {
-          await settle(input.cancellationReason, true);
+          await settle(input.cancellationReason, 'cancelled');
         } finally {
           if (input.runJournal) {
             await transitionJournal(

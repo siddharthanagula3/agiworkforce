@@ -18,10 +18,13 @@ import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from '
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import type { WebChatMessageMetadata } from '../../types/message-metadata';
-import type { PaywallFeature, RequiredTier } from '../InlinePaywallCard';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 import { MessageBubble } from './MessageBubble';
-import { InlinePaywallCard } from '../InlinePaywallCard';
+import {
+  InlinePaywallCard,
+  normalizePaywallFeature,
+  normalizeRequiredTier,
+} from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
@@ -283,9 +286,9 @@ const MessageRow = ({
   if (paywall) {
     return (
       <InlinePaywallCard
-        feature={paywall.feature as PaywallFeature}
+        feature={normalizePaywallFeature(paywall.feature)}
         currentTier="free"
-        requiredTier={paywall.requiredTier as RequiredTier}
+        requiredTier={normalizeRequiredTier(paywall.requiredTier)}
         reason={paywall.reason}
         onUpgrade={handlePaywallUpgrade}
         onDismiss={handlePaywallDismiss}

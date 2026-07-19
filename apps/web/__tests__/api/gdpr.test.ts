@@ -59,6 +59,16 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
+const mockGetManagedUsageSummary = vi.fn();
+vi.mock('@/lib/services/managed-usage-summary-service', () => ({
+  getManagedUsageSummary: (...args: unknown[]) => mockGetManagedUsageSummary(...args),
+}));
+
+const mockListUserBillingInvoices = vi.fn();
+vi.mock('@/lib/services/billing-invoice-service', () => ({
+  listUserBillingInvoices: (...args: unknown[]) => mockListUserBillingInvoices(...args),
+}));
+
 // ── Neon DB mock ──────────────────────────────────────────────────────────────
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
@@ -348,15 +358,23 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
     // Default: authenticated user via Clerk
     mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
 
-    // Default: RPC returns export data
-    mockNeonQuery.mockResolvedValue([
-      {
-        profile: mockProfile,
-        subscription: mockSubscription,
-        token_credits: [],
-        credit_transactions: [],
-      },
-    ]);
+    mockNeonQuery.mockResolvedValue([]);
+    mockGetManagedUsageSummary.mockResolvedValue({
+      plan_tier: 'pro',
+      usage_percentage: 25,
+      usage_reset_at: '2024-02-01T00:00:00.000Z',
+      has_usage_remaining: true,
+      period_start: '2024-01-01T00:00:00.000Z',
+      period_end: '2024-02-01T00:00:00.000Z',
+      subscription_status: 'active',
+      session_usage_percentage: 10,
+      session_reset_at: '2024-01-01T05:00:00.000Z',
+      weekly_usage_percentage: 20,
+      weekly_reset_at: '2024-01-08T00:00:00.000Z',
+      flagship_weekly_usage_percentage: 5,
+      flagship_weekly_reset_at: '2024-01-08T00:00:00.000Z',
+    });
+    mockListUserBillingInvoices.mockResolvedValue([]);
     mockNeonExecute.mockResolvedValue(1);
   });
 
@@ -404,7 +422,76 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
   });
 
   describe('Data Export', () => {
-    it('should call export_user_data SQL function via Neon', async () => {
+    it('never exports private managed-usage ledgers or their internal amount fields', async () => {
+      mockNeonQuery.mockImplementation((sql: unknown) => {
+        const statement = String(sql);
+        if (statement.includes('from profiles')) {
+          return Promise.resolve([
+            {
+              id: mockUser.id,
+              email: mockUser.email,
+              display_name: 'Test User',
+              avatar_url: null,
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              stripe_customer_id: 'cus_private',
+              routing_preferences: { provider_cost_microusd: 45_600 },
+            },
+          ]);
+        }
+        if (statement.includes('from subscriptions')) {
+          return Promise.resolve([
+            {
+              ...mockSubscription,
+              cancel_at_period_end: false,
+              canceled_at: null,
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              credits_allocated_cents: 30_000,
+              provider_cost_microusd: 45_600,
+            },
+          ]);
+        }
+        if (statement.includes('from credit_transactions')) {
+          return Promise.resolve([
+            {
+              id: 'topup_123',
+              created_at: '2024-01-10T00:00:00Z',
+              amount_cents: 123,
+              metadata: { input_cost_usd: 0.01, output_cost_usd: 0.02 },
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const { GET } = await import('@/app/api/user/export/route');
+      const response = await GET(
+        new NextRequest('http://localhost/api/user/export', {
+          method: 'GET',
+          headers: { authorization: 'Bearer valid_token' },
+        }),
+      );
+      const serialized = JSON.stringify(await response.json());
+
+      expect(serialized).not.toMatch(
+        /token_credits|credit_transactions|credit_accounts|amount_cents|credits_(?:allocated|used|remaining)_cents|microusd|provider_cost|input_cost|output_cost/i,
+      );
+      expect(serialized).toContain('top_up_purchases');
+      expect(mockNeonQuery).not.toHaveBeenCalledWith(
+        expect.stringMatching(/export_user_data|token_credits/i),
+        expect.anything(),
+      );
+      const statements = mockNeonQuery.mock.calls.map(([sql]) => String(sql));
+      expect(statements).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/select\s+\*/i)]),
+      );
+      expect(statements.find((sql) => sql.includes('from credit_transactions'))).toMatch(
+        /select id, created_at[\s\S]*transaction_type = 'purchase'/,
+      );
+    });
+
+    it('builds the export without calling the broad export_user_data function', async () => {
       const { GET } = await import('@/app/api/user/export/route');
 
       const request = new NextRequest('http://localhost/api/user/export', {
@@ -416,10 +503,11 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
 
       await GET(request);
 
-      // Route calls: db.query('select * from export_user_data($1)', [userId])
-      expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('export_user_data'), [
-        mockUser.id,
-      ]);
+      expect(mockNeonQuery).not.toHaveBeenCalledWith(
+        expect.stringContaining('export_user_data'),
+        expect.anything(),
+      );
+      expect(mockGetManagedUsageSummary).toHaveBeenCalledWith(mockUser.id);
     });
 
     it('should return JSON response with export data', async () => {
@@ -440,6 +528,23 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       expect(data.user_id).toBe(mockUser.id);
       expect(data.export_timestamp).toBeDefined();
       expect(data.data).toBeDefined();
+    });
+
+    it('includes the user-owned billing invoice collection without internal usage ledgers', async () => {
+      const { GET } = await import('@/app/api/user/export/route');
+      const response = await GET(
+        new NextRequest('http://localhost/api/user/export', {
+          method: 'GET',
+          headers: { authorization: 'Bearer valid_token' },
+        }),
+      );
+      const data = await response.json();
+
+      expect(data.data.billing_invoices).toEqual([]);
+      expect(mockListUserBillingInvoices).toHaveBeenCalledWith(mockUser.id);
+      expect(JSON.stringify(data.data.billing_invoices)).not.toMatch(
+        /credits_|token_|microusd|provider_cost|usage_cost/i,
+      );
     });
 
     it('should return downloadable file when download param is true', async () => {
@@ -475,11 +580,8 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       expect(response.headers.get('Content-Disposition')).toContain('attachment');
     });
 
-    it('should use fallback when RPC function not found', async () => {
-      // RPC throws "function not found" error
-      mockNeonQuery.mockRejectedValueOnce(
-        Object.assign(new Error('export_user_data function does not exist'), { code: '42883' }),
-      );
+    it('continues when an optional export section is unavailable', async () => {
+      mockNeonQuery.mockRejectedValueOnce(new Error('profiles table unavailable'));
 
       const { GET } = await import('@/app/api/user/export/route');
 
@@ -498,11 +600,6 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
     });
 
     it('should include GDPR metadata in export', async () => {
-      // Force fallback path
-      mockNeonQuery.mockRejectedValueOnce(
-        Object.assign(new Error('function not found'), { code: '42883' }),
-      );
-
       const { GET } = await import('@/app/api/user/export/route');
 
       const request = new NextRequest('http://localhost/api/user/export', {
@@ -519,16 +616,39 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       expect(responseData.data.export_metadata.gdpr_article).toContain('Article 20');
     });
 
-    it('should redact sensitive information in export', async () => {
-      // Force fallback path that fetches from DB tables
-      mockNeonQuery.mockRejectedValueOnce(
-        Object.assign(new Error('function not found'), { code: '42883' }),
-      );
-      // collectUserData queries: profiles → subscriptions → ...
-      // 2nd call: profiles query returns empty (no profile)
-      mockNeonQuery.mockResolvedValueOnce([]);
-      // 3rd call: subscriptions query returns subscription with Stripe IDs
-      mockNeonQuery.mockResolvedValueOnce([mockSubscription]);
+    it('omits Stripe identifiers and secret device fields instead of redacting placeholders', async () => {
+      mockNeonQuery.mockImplementation((sql: unknown) => {
+        const statement = String(sql);
+        if (statement.includes('from subscriptions')) {
+          return Promise.resolve([
+            {
+              ...mockSubscription,
+              cancel_at_period_end: false,
+              canceled_at: null,
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+            },
+          ]);
+        }
+        if (statement.includes('from device_authorization_codes')) {
+          return Promise.resolve([
+            {
+              id: 'device_auth_1',
+              device_id: 'device_1',
+              device_name: 'MacBook',
+              device_type: 'desktop',
+              status: 'approved',
+              expires_at: '2024-02-01T00:00:00Z',
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              user_code: 'PRIVATE-CODE',
+              access_token: 'private-access-token',
+              refresh_token: 'private-refresh-token',
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
 
       const { GET } = await import('@/app/api/user/export/route');
 
@@ -542,11 +662,11 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       const response = await GET(request);
       const data = await response.json();
 
-      // Stripe IDs should be redacted
-      if (data.data.subscription) {
-        expect(data.data.subscription.stripe_customer_id).toBe('[REDACTED]');
-        expect(data.data.subscription.stripe_subscription_id).toBe('[REDACTED]');
-      }
+      expect(data.data.subscription).not.toHaveProperty('stripe_customer_id');
+      expect(data.data.subscription).not.toHaveProperty('stripe_subscription_id');
+      expect(data.data.device_authorizations[0]).not.toHaveProperty('user_code');
+      expect(data.data.device_authorizations[0]).not.toHaveProperty('access_token');
+      expect(data.data.device_authorizations[0]).not.toHaveProperty('refresh_token');
     });
   });
 

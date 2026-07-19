@@ -15,12 +15,7 @@ vi.mock('./tool-loop-anthropic', () => ({
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: { calculateCost: vi.fn(() => 7) },
 }));
-vi.mock('@/lib/assert-quota', () => ({
-  reconcileUsage: vi.fn(async () => undefined),
-}));
-
 import { buildToolLoopStream } from './tool-loop-anthropic';
-import { reconcileUsage } from '@/lib/assert-quota';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import {
   runResearchLoop,
@@ -468,9 +463,6 @@ describe('runResearchLoop', () => {
       inputTokens: 300,
       outputTokens: 130,
     });
-    expect(reconcileUsage).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', actualTokens: 430, feature: 'chat' }),
-    );
   });
 
   it('preserves observed usage when cancelled mid-stream (generator.return)', async () => {
@@ -493,9 +485,6 @@ describe('runResearchLoop', () => {
     }
     await gen.return(new Uint8Array());
     expect(usage).toMatchObject({ providerCalls: 1, inputTokens: 100, outputTokens: 50 });
-    expect(reconcileUsage).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', actualTokens: 150, feature: 'chat' }),
-    );
   });
 
   it('strips client-custom function tools but keeps provider-native search tools', async () => {

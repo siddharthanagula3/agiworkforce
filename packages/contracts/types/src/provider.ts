@@ -32,16 +32,8 @@
  *     ManagedCloud,
  *     Mistral,
  *     Groq,
- *     Together,
- *     Fireworks,
- *     Cerebras,
- *     DeepInfra,
  *     NvidiaNim,
  *     OpenRouter,
- *     Cohere,
- *     Ai21,
- *     Sambanova,
- *     Azure,
  *     Bedrock,
  *     OllamaCloud,
  *     Minimax,
@@ -88,16 +80,8 @@ export type Provider =
   | 'managed_cloud'
   | 'mistral'
   | 'groq'
-  | 'together'
-  | 'fireworks'
-  | 'cerebras'
-  | 'deepinfra'
   | 'nvidia_nim'
   | 'open_router'
-  | 'cohere'
-  | 'ai21'
-  | 'sambanova'
-  | 'azure'
   | 'bedrock'
   | 'ollama_cloud'
   | 'minimax'

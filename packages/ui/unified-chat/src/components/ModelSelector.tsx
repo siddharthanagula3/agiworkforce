@@ -143,7 +143,6 @@ function getProviderLabel(providerKey: string): string {
     managed_cloud: 'AGI Cloud',
     mistral: 'Mistral AI',
     groq: 'Groq',
-    cohere: 'Cohere',
     nvidia_nim: 'NVIDIA NIM',
     open_router: 'OpenRouter',
   };

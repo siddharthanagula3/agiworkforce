@@ -9,6 +9,7 @@ import {
   upgradeToBasicPlan,
   upgradeToProPlan,
   upgradeToMaxPlan,
+  upgradeToMax15xPlan,
   upgradePlanMidCycle,
   contactEnterpriseSales,
   openBillingPortal,
@@ -39,7 +40,11 @@ import {
   formatCurrency,
   formatDate,
 } from '@features/billing/components/Billing/types';
-import { getBillingPlanPricing, isPlanSelectableOnSurface } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  isPlanSelectableOnSurface,
+  type SelfServePaidPlanTier,
+} from '@agiworkforce/types';
 import { Subscription } from '@features/billing/components/Billing/Subscription';
 import { Usage } from '@features/billing/components/Billing/Usage';
 
@@ -125,7 +130,6 @@ const BillingPage: React.FC = () => {
       }
     : null;
 
-  const stripeCustomerId = billingData?.stripeCustomerId ?? null;
   const error = queryError ? 'Failed to load billing information. Please try again.' : null;
 
   const hasShownSuccessToast = useRef(false);
@@ -162,7 +166,7 @@ const BillingPage: React.FC = () => {
     !!billing && currentPlan !== 'free' && ['active', 'trialing'].includes(billing.status ?? '');
 
   const handleUpgrade = async (
-    plan: 'basic' | 'pro' | 'max' | 'enterprise',
+    plan: SelfServePaidPlanTier | 'enterprise',
     period: 'monthly' | 'yearly' = 'monthly',
   ) => {
     if (!user) {
@@ -170,11 +174,10 @@ const BillingPage: React.FC = () => {
       return;
     }
 
-    // Gate all paid-plan checkout behind the checkout env flag (early-access).
-    // When checkout is not enabled, redirect to /pricing#waitlist instead of
-    // hitting a live Stripe flow.
+    // The public flag is an incident-response checkout kill switch, not a
+    // managed-cloud waitlist. Keep the user's billing context intact.
     if (!CHECKOUT_ENABLED && plan !== 'enterprise') {
-      window.location.href = '/pricing#waitlist';
+      toast.error('Checkout is temporarily unavailable. Please try again later.');
       return;
     }
 
@@ -188,19 +191,18 @@ const BillingPage: React.FC = () => {
         return;
       }
 
-      // Mid-cycle upgrade: active subscriber upgrading to a higher tier.
-      // Uses credit-based proration — unused platform credits offset the next invoice.
+      // Active upgrades start a paid full cycle immediately. The server applies
+      // only unused-time value from the old subscription to that invoice.
       if (hasActivePaidPlan) {
         const toastId = toast.loading('Upgrading your plan...');
         try {
-          const result = await upgradePlanMidCycle({ plan, billingInterval: period });
+          await upgradePlanMidCycle({ plan, billingInterval: period });
           toast.dismiss(toastId);
-          const creditMsg =
-            parseFloat(result.creditAppliedUsd) > 0
-              ? ` $${result.creditAppliedUsd} credit applied to your next invoice.`
-              : '';
-          toast.success(`Upgraded to ${plan.charAt(0).toUpperCase() + plan.slice(1)}!${creditMsg}`);
+          toast.success(`Payment confirmed. Activating ${getBillingPlanPricing(plan).label} now.`);
           invalidateBillingQueries();
+          [1000, 3000, 8000].forEach((delay) => {
+            window.setTimeout(() => invalidateBillingQueries(), delay);
+          });
         } catch (err) {
           toast.dismiss(toastId);
           throw err;
@@ -229,6 +231,12 @@ const BillingPage: React.FC = () => {
           userEmail: user.email || '',
           billingPeriod: period,
         });
+      } else if (plan === 'max_15x') {
+        toast.loading('Redirecting to checkout...');
+        await upgradeToMax15xPlan({
+          userId: user.id,
+          userEmail: user.email || '',
+        });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to process upgrade');
@@ -236,11 +244,6 @@ const BillingPage: React.FC = () => {
   };
 
   const handleManageBilling = async () => {
-    if (!stripeCustomerId) {
-      toast.error('No billing information found. Please contact support.');
-      return;
-    }
-
     if (!isStripeConfigured()) {
       toast.error('Billing system is not configured. Please contact support.');
       return;
@@ -249,7 +252,7 @@ const BillingPage: React.FC = () => {
     try {
       setIsManagingBilling(true);
       toast.loading('Opening billing portal...');
-      await openBillingPortal(stripeCustomerId);
+      await openBillingPortal();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to open billing portal');
     } finally {
@@ -336,7 +339,7 @@ const BillingPage: React.FC = () => {
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
-            {billing?.plan !== 'free' && stripeCustomerId && (
+            {billing?.plan !== 'free' && (
               <Button
                 variant="outline"
                 size="sm"
@@ -352,21 +355,21 @@ const BillingPage: React.FC = () => {
                 <ExternalLink className="h-4 w-4" />
               </Button>
             )}
-            {normalizePlan(billing?.plan) !== 'max' &&
+            {normalizePlan(billing?.plan) !== 'max_15x' &&
+              normalizePlan(billing?.plan) !== 'team' &&
               normalizePlan(billing?.plan) !== 'enterprise' &&
               (() => {
-                // Basic is mobile-only on web (founder decision, 2026-07), so a
-                // free web user's next step skips Basic straight to Pro. Label is
-                // derived from the same tier the CTA upgrades to (no drift).
                 const current = normalizePlan(billing?.plan);
-                const nextTier: 'basic' | 'pro' | 'max' =
+                const nextTier: 'basic' | 'pro' | 'max' | 'max_15x' =
                   current === 'free'
                     ? isPlanSelectableOnSurface('basic', 'web')
                       ? 'basic'
                       : 'pro'
                     : current === 'basic'
                       ? 'pro'
-                      : 'max';
+                      : current === 'pro'
+                        ? 'max'
+                        : 'max_15x';
                 return (
                   <Button
                     onClick={() => handleUpgrade(nextTier)}
@@ -386,7 +389,6 @@ const BillingPage: React.FC = () => {
 
         <Subscription
           billing={billing}
-          stripeCustomerId={stripeCustomerId}
           isManagingBilling={isManagingBilling}
           billingPeriod={billingPeriod}
           onBillingPeriodChange={setBillingPeriod}
@@ -398,7 +400,6 @@ const BillingPage: React.FC = () => {
 
         <Usage
           billing={billing}
-          stripeCustomerId={stripeCustomerId}
           isManagingBilling={isManagingBilling}
           invoicesLoading={invoicesLoading}
           paymentMethodsLoading={paymentMethodsLoading}

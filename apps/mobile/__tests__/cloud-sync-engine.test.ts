@@ -109,7 +109,6 @@ function msgDelta(
     provider: null,
     input_tokens: 0,
     output_tokens: 0,
-    cost_cents: 0,
     metadata: null,
     created_at: T,
     updated_at: T,

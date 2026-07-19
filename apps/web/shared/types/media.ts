@@ -10,7 +10,6 @@ export type ImageProviderId =
   | 'stability'
   | 'replicate'
   | 'fal'
-  | 'ideogram'
   | 'google_imagen'
   | 'google_imagen_lite'
   | 'dalle'

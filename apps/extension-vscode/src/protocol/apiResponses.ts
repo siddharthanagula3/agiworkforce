@@ -2,27 +2,25 @@
  * apiResponses.ts — Zod schemas for upstream API responses.
  *
  * Validates server responses before they influence client state. Audit
- * finding F-23: tier info from /api/auth/me silently updates global
+ * finding F-23: usage/tier info from GET /api/usage silently updates global
  * settings; without schema validation a malformed response could
  * downgrade tier or stick the client in an unknown state.
  */
 
 import { z } from 'zod';
 
-// /api/auth/me tier info ----------------------------------------------
+// /api/usage percentage tier + usage info -----------------------------
 
 export const TierInfoSchema = z
   .object({
-    tier: z.string().min(1).max(64),
-    tokens_used: z.number().int().nonnegative().optional(),
-    token_cap: z.number().int().nonnegative().optional(),
-    resets_at: z.string().min(1).optional(),
-    quota_resets_at: z.string().min(1).optional(),
-    // Reserved for future signed tier responses. This schema only preserves the
-    // field; verification must happen in the API client before it is trusted.
-    signature: z.string().min(1).optional(),
+    // Canonical percentage-only usage summary from GET /api/usage
+    // (ManagedUsageSummaryResponse). No exact token/cent numerator/cap is
+    // exposed to clients — only the plan tier, a 0-100 percentage, and reset.
+    plan_tier: z.string().min(1).max(64),
+    usage_percentage: z.number().min(0).max(100).optional(),
+    usage_reset_at: z.string().min(1).nullable().optional(),
   })
-  .passthrough(); // tolerate unknown fields for forward-compat
+  .passthrough(); // tolerate the rest of the summary (session/weekly) fields
 
 export type TierInfoResponse = z.infer<typeof TierInfoSchema>;
 

@@ -5,18 +5,24 @@ export type BillingPlanTier =
   | 'basic'
   | 'pro'
   | 'max'
+  | 'max_15x'
   | 'team'
   | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
 
 /**
- * Fallback ratio for tiers that don't define an explicit usage budget
- * (`monthlyUsageBudgetUsd`/`dailyUsageBudgetUsd` below) — currently only
- * `team`/`enterprise`, whose per-seat/custom budgets haven't been fixed yet.
- * Founder-set explicit dollar budgets (free/basic/pro/max, 2026-07-02) take
- * priority over this ratio wherever both exist — see `getPlanUsageBudgetCents`.
+ * Plans that can be purchased without sales-assisted provisioning.
+ * Team remains a real catalog/entitlement tier for existing and manually
+ * provisioned customers, but it must not enter the personal checkout path
+ * until organization ownership, licensed seats, and member lifecycle exist.
  */
-export const INCLUDED_USAGE_BUDGET_RATIO = 0.35;
+export const SELF_SERVE_PAID_PLAN_TIERS = [
+  'basic',
+  'pro',
+  'max',
+  'max_15x',
+] as const satisfies readonly BillingPlanTier[];
+export type SelfServePaidPlanTier = (typeof SELF_SERVE_PAID_PLAN_TIERS)[number];
 
 export interface BillingPlanPricing {
   id: BillingPlanTier;
@@ -25,17 +31,6 @@ export interface BillingPlanPricing {
   yearlyPriceUsd: number;
   /** India-specific monthly price in INR, when it differs from a straight USD conversion. */
   monthlyPriceInr?: number;
-  /**
-   * Explicit monthly included-usage budget in USD (founder-set, 2026-07-02).
-   * When present, this is used instead of `INCLUDED_USAGE_BUDGET_RATIO`.
-   */
-  monthlyUsageBudgetUsd?: number;
-  /**
-   * Explicit DAILY included-usage budget in USD, for tiers billed with no
-   * monthly cycle to reset against (currently only `free`). When present,
-   * this takes priority over `monthlyUsageBudgetUsd` for daily-reset gating.
-   */
-  dailyUsageBudgetUsd?: number;
 }
 
 export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> = {
@@ -56,36 +51,40 @@ export const BILLING_PLAN_PRICING: Record<BillingPlanTier, BillingPlanPricing> =
     label: 'Free',
     monthlyPriceUsd: 0,
     yearlyPriceUsd: 0,
-    // $0.005/day, not a fixed prompt count — see free-trial-service.ts.
-    dailyUsageBudgetUsd: 0.005,
   },
   basic: {
     id: 'basic',
     label: 'Basic',
-    monthlyPriceUsd: 8,
+    monthlyPriceUsd: 7,
     yearlyPriceUsd: 0,
     monthlyPriceInr: 399,
-    monthlyUsageBudgetUsd: 2,
   },
   pro: {
     id: 'pro',
     label: 'Pro',
     monthlyPriceUsd: 20,
     yearlyPriceUsd: 200,
-    monthlyUsageBudgetUsd: 10,
+    monthlyPriceInr: 1999,
   },
   max: {
     id: 'max',
-    label: 'Max',
+    label: 'Max 5x',
     monthlyPriceUsd: 100,
     yearlyPriceUsd: 0,
-    monthlyUsageBudgetUsd: 75,
+    monthlyPriceInr: 9999,
+  },
+  max_15x: {
+    id: 'max_15x',
+    label: 'Max 15x',
+    monthlyPriceUsd: 200,
+    yearlyPriceUsd: 0,
+    monthlyPriceInr: 24999,
   },
   team: {
     id: 'team',
     label: 'Team',
-    monthlyPriceUsd: 30,
-    yearlyPriceUsd: 299,
+    monthlyPriceUsd: 25,
+    yearlyPriceUsd: 240,
   },
   enterprise: {
     id: 'enterprise',
@@ -107,18 +106,17 @@ export type BillingSurface = 'web' | 'desktop' | 'mobile';
  * in billing — it only governs whether a tier appears as a choosable option
  * on a given surface.
  *
- * Founder decision (2026-07): the `basic` tier is mobile-only — hidden from
- * the web and desktop pricing/upgrade UIs, shown on mobile. Every other tier
- * stays visible on every surface it already appeared on. Data-driven so a
- * future mobile-only (or web-only) tier is a one-line change here.
+ * Basic is selectable on every customer app surface. Managed developer
+ * surfaces are gated separately by `developer_surfaces` capability.
  */
 export const PLAN_SURFACE_VISIBILITY: Record<BillingPlanTier, readonly BillingSurface[]> = {
   'local-only': ['web', 'desktop', 'mobile'],
   byok: ['web', 'desktop', 'mobile'],
   free: ['web', 'desktop', 'mobile'],
-  basic: ['mobile'],
+  basic: ['web', 'desktop', 'mobile'],
   pro: ['web', 'desktop', 'mobile'],
   max: ['web', 'desktop', 'mobile'],
+  max_15x: ['web', 'desktop', 'mobile'],
   team: ['web', 'desktop', 'mobile'],
   enterprise: ['web', 'desktop', 'mobile'],
 };
@@ -139,6 +137,87 @@ export function isPlanSelectableOnSurface(
 export function isBillingPlanTier(value: string | null | undefined): value is BillingPlanTier {
   if (!value) return false;
   return value in BILLING_PLAN_PRICING;
+}
+
+/**
+ * Server-enforced product capabilities. Keep client comparison tables and API
+ * gates on this contract instead of copying tier-order checks into each route.
+ * Explicit sets are intentional: Team does not automatically inherit the
+ * individual Max 15x media allowance, and Enterprise can receive negotiated
+ * capabilities without pretending its price is a numeric tier rank.
+ */
+export type BillingPlanCapability =
+  | 'managed_chat'
+  | 'chat_tools'
+  | 'projects'
+  | 'memory_personalization'
+  | 'skills_connectors'
+  | 'cloud_sync'
+  | 'agi_work'
+  | 'image_generation'
+  | 'video_generation'
+  | 'managed_api'
+  | 'developer_surfaces'
+  | 'team_admin'
+  | 'enterprise_controls';
+
+const CLOUD_CHAT_TIERS = ['free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise'] as const;
+const PRO_TIERS = ['pro', 'max', 'max_15x', 'team', 'enterprise'] as const;
+
+export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
+  Record<BillingPlanCapability, readonly BillingPlanTier[]>
+> = Object.freeze({
+  managed_chat: CLOUD_CHAT_TIERS,
+  chat_tools: CLOUD_CHAT_TIERS,
+  projects: CLOUD_CHAT_TIERS,
+  memory_personalization: CLOUD_CHAT_TIERS,
+  skills_connectors: CLOUD_CHAT_TIERS,
+  cloud_sync: CLOUD_CHAT_TIERS,
+  agi_work: PRO_TIERS,
+  image_generation: PRO_TIERS,
+  video_generation: ['max_15x', 'enterprise'],
+  managed_api: PRO_TIERS,
+  developer_surfaces: PRO_TIERS,
+  team_admin: ['team', 'enterprise'],
+  enterprise_controls: ['enterprise'],
+});
+
+/** Fail-closed capability check for privileged/server boundaries. */
+export function canUseBillingPlanCapability(
+  plan: string | null | undefined,
+  capability: BillingPlanCapability,
+): boolean {
+  if (!isBillingPlanTier(plan)) return false;
+  return BILLING_PLAN_CAPABILITY_TIERS[capability].includes(plan);
+}
+
+export type BillingPlanLimit = number | 'unlimited' | 'custom';
+
+export interface BillingPlanProductLimits {
+  projects: BillingPlanLimit;
+  customMcpServers: BillingPlanLimit;
+}
+
+/** Public, enforceable product limits; private usage budgets live separately. */
+export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
+  Record<BillingPlanTier, BillingPlanProductLimits>
+> = Object.freeze({
+  'local-only': { projects: 'unlimited', customMcpServers: 'unlimited' },
+  byok: { projects: 'unlimited', customMcpServers: 'unlimited' },
+  free: { projects: 1, customMcpServers: 1 },
+  basic: { projects: 5, customMcpServers: 5 },
+  pro: { projects: 25, customMcpServers: 25 },
+  max: { projects: 'unlimited', customMcpServers: 'unlimited' },
+  max_15x: { projects: 'unlimited', customMcpServers: 'unlimited' },
+  team: { projects: 25, customMcpServers: 25 },
+  enterprise: { projects: 'custom', customMcpServers: 'custom' },
+});
+
+export function getBillingPlanProductLimits(
+  plan: string | null | undefined,
+): BillingPlanProductLimits | null {
+  if (!isBillingPlanTier(plan)) return null;
+  return BILLING_PLAN_PRODUCT_LIMITS[plan];
 }
 
 export function normalizeBillingPlanTier(value: string | null | undefined): BillingPlanTier {
@@ -166,115 +245,8 @@ export function getPlanPriceCents(
   return Math.round(getPlanPriceUsd(plan, interval) * 100);
 }
 
-export function getUsageBudgetCentsFromPriceCents(
-  priceCents: number,
-  ratio: number = INCLUDED_USAGE_BUDGET_RATIO,
-): number {
-  if (!Number.isFinite(priceCents) || priceCents <= 0) {
-    return 0;
-  }
-  return Math.round(priceCents * ratio);
-}
-
-/**
- * Monthly included-usage budget in cents for `plan`.
- *
- * Prefers the tier's explicit `monthlyUsageBudgetUsd` (founder-set dollar
- * amount) when defined. Falls back to `priceCents * ratio` only for tiers
- * that don't define one yet (`team`, `enterprise`) — this preserves the
- * pre-2026-07-02 behavior for those two tiers without guessing a number
- * nobody has confirmed.
- */
-export function getPlanUsageBudgetCents(
-  plan: string | null | undefined,
-  interval: BillingInterval = 'monthly',
-  ratio: number = INCLUDED_USAGE_BUDGET_RATIO,
-): number {
-  const pricing = getBillingPlanPricing(plan);
-  if (typeof pricing.monthlyUsageBudgetUsd === 'number') {
-    return Math.round(pricing.monthlyUsageBudgetUsd * 100);
-  }
-  return getUsageBudgetCentsFromPriceCents(getPlanPriceCents(plan, interval), ratio);
-}
-
-export function getPlanUsageBudgetUsd(
-  plan: string | null | undefined,
-  interval: BillingInterval = 'monthly',
-  ratio: number = INCLUDED_USAGE_BUDGET_RATIO,
-): number {
-  return getPlanUsageBudgetCents(plan, interval, ratio) / 100;
-}
-
-/**
- * Daily included-usage budget in cents for `plan` — only meaningful for
- * `free` today (`$0.005/day`, replacing the old fixed-3-prompts gate). Other
- * tiers reset monthly (via Stripe billing cycle), not daily, so this returns
- * 0 for them; callers should use `getPlanUsageBudgetCents` for those.
- */
-export function getPlanDailyUsageBudgetCents(plan: string | null | undefined): number {
-  const pricing = getBillingPlanPricing(plan);
-  if (typeof pricing.dailyUsageBudgetUsd === 'number') {
-    return Math.round(pricing.dailyUsageBudgetUsd * 100);
-  }
-  return 0;
-}
-
-export function getPlanDailyUsageBudgetUsd(plan: string | null | undefined): number {
-  return getPlanDailyUsageBudgetCents(plan) / 100;
-}
-
 /** India-specific monthly price in INR for `plan`, or null if not defined (USD-only tier). */
 export function getPlanPriceInr(plan: string | null | undefined): number | null {
   const pricing = getBillingPlanPricing(plan);
   return typeof pricing.monthlyPriceInr === 'number' ? pricing.monthlyPriceInr : null;
-}
-
-/**
- * Weekly included-usage budget in cents — a rolling-window pacing layer on
- * top of the monthly budget (founder decision, 2026-07-05), not a
- * replacement for it. Derived as monthly × 12/52 (an even weekly slice of
- * the monthly budget; 52 weeks ÷ 12 months ≈ 4.33 weeks/month). Monthly
- * credits remain the real billing-period cap enforced via `token_credits`;
- * this only paces spend within that same pool more evenly across the month.
- */
-export function getPlanWeeklyUsageBudgetCents(plan: string | null | undefined): number {
-  return Math.round((getPlanUsageBudgetCents(plan) * 12) / 52);
-}
-
-export function getPlanWeeklyUsageBudgetUsd(plan: string | null | undefined): number {
-  return getPlanWeeklyUsageBudgetCents(plan) / 100;
-}
-
-/**
- * Fraction of the weekly budget a single rolling 5-hour session may consume
- * (founder decision, 2026-07-05) — mirrors Claude's session-pacing pattern.
- */
-export const SESSION_OF_WEEKLY_BUDGET_RATIO = 0.2;
-
-/** Rolling 5-hour session budget in cents: `SESSION_OF_WEEKLY_BUDGET_RATIO` of the weekly budget. */
-export function getPlanSessionUsageBudgetCents(plan: string | null | undefined): number {
-  return Math.round(getPlanWeeklyUsageBudgetCents(plan) * SESSION_OF_WEEKLY_BUDGET_RATIO);
-}
-
-export function getPlanSessionUsageBudgetUsd(plan: string | null | undefined): number {
-  return getPlanSessionUsageBudgetCents(plan) / 100;
-}
-
-/**
- * Fraction of the weekly budget reserved for flagship-model usage
- * specifically (the "Fable only" style sub-bucket, distinct from the
- * "All models" weekly bucket). Matches the existing 30%-of-parent-budget
- * convention already used by `calculate_daily_limit` in 0020_functions.sql,
- * for consistency with the rest of the credit system rather than inventing
- * a new ratio.
- */
-export const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
-
-/** Rolling weekly budget in cents for flagship-model usage only. */
-export function getPlanFlagshipWeeklyUsageBudgetCents(plan: string | null | undefined): number {
-  return Math.round(getPlanWeeklyUsageBudgetCents(plan) * FLAGSHIP_OF_WEEKLY_BUDGET_RATIO);
-}
-
-export function getPlanFlagshipWeeklyUsageBudgetUsd(plan: string | null | undefined): number {
-  return getPlanFlagshipWeeklyUsageBudgetCents(plan) / 100;
 }

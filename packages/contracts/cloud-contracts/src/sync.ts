@@ -89,8 +89,6 @@ export const MessageWireDeltaSchema = z.object({
   provider: z.string().nullable(),
   input_tokens: z.number(),
   output_tokens: z.number(),
-  // numeric column — some pg drivers serialize numerics as strings.
-  cost_cents: z.union([z.number(), z.string()]),
   metadata: z.record(z.string(), z.unknown()).nullable(),
   created_at: z.string(),
   updated_at: z.string(),
@@ -148,7 +146,6 @@ export const MessageSyncPushItemSchema = z.object({
   provider: z.string().max(200).nullable().optional(),
   inputTokens: z.number().int().nonnegative().optional(),
   outputTokens: z.number().int().nonnegative().optional(),
-  costCents: z.number().nonnegative().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   /** Last server revision observed by this client; `0` creates. */
   baseVersion: ServerVersionSchema,

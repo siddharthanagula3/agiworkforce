@@ -587,25 +587,10 @@ pub struct SubscriptionInfo {
 /// Credits information from credits API
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreditsInfo {
-    pub monthly_allocated_cents: i32,
-    pub monthly_remaining_cents: i32,
-    pub monthly_used_cents: i32,
-    pub monthly_reset_at: String,
-    pub seconds_until_monthly_reset: i32,
-    pub daily_limit_cents: i32,
-    pub daily_used_cents: i32,
-    pub daily_remaining_cents: i32,
-    pub daily_reset_at: String,
-    pub seconds_until_daily_reset: i32,
-}
-
-/// Formatted credits for display
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FormattedCredits {
-    pub monthly_remaining: String,
-    pub monthly_allocated: String,
-    pub daily_remaining: String,
-    pub daily_limit: String,
+    pub usage_percentage: f64,
+    pub reset_at: Option<String>,
+    pub seconds_until_reset: u64,
+    pub has_usage_remaining: bool,
 }
 
 /// Credit balance response from the API
@@ -614,13 +599,12 @@ pub struct CreditBalanceResponse {
     pub object: String,
     pub subscription: SubscriptionInfo,
     pub credits: CreditsInfo,
-    pub formatted: FormattedCredits,
 }
 
 impl CreditBalanceResponse {
     /// Helper method to check if user has credits available
     pub fn has_credits(&self) -> bool {
-        self.credits.monthly_remaining_cents > 0
+        self.credits.has_usage_remaining
     }
 }
 
@@ -851,8 +835,8 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
 }
 
 #[cfg(test)]
-mod ssrf_allowlist_tests {
-    use super::validate_api_base_url;
+mod tests {
+    use super::{validate_api_base_url, CreditBalanceResponse};
 
     // Regression guard for the SSRF allowlist that BYOK-RUST-EGRESS-01 relies on
     // as the trust boundary for the only non-dormant Rust egress path. The
@@ -886,5 +870,25 @@ mod ssrf_allowlist_tests {
         assert!(validate_api_base_url("http://api.agiworkforce.com").is_err());
         // Non-http(s) schemes are rejected.
         assert!(validate_api_base_url("ftp://api.agiworkforce.com").is_err());
+    }
+
+    #[test]
+    fn parses_percentage_only_managed_usage_balance() {
+        let response: CreditBalanceResponse = serde_json::from_str(
+            r#"{
+                "object":"credit_balance",
+                "subscription":{"plan_tier":"pro","status":"active","current_period_end":null},
+                "credits":{
+                    "usage_percentage":42.5,
+                    "reset_at":"2026-08-01T00:00:00.000Z",
+                    "seconds_until_reset":86400,
+                    "has_usage_remaining":true
+                }
+            }"#,
+        )
+        .expect("public balance contract should deserialize");
+
+        assert!(response.has_credits());
+        assert_eq!(response.credits.usage_percentage, 42.5);
     }
 }

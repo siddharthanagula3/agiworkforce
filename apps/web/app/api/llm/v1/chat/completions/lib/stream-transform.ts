@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
@@ -10,10 +9,11 @@ import type { StreamChunk } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import type { ProcessedRequest } from './request-processor';
 import {
+  ManagedUsageRequestError,
   finalizeManagedUsageRequest,
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
-import { recordFreeTrialTokens } from '@/lib/services/free-trial-service';
+import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { withSseHeartbeat } from './sse-heartbeat';
 import {
@@ -46,10 +46,19 @@ async function settleStreamBilling(input: {
   const { processed, userId, provider, model, usage } = input;
   const totalTokens = usage.inputTokens + usage.outputTokens;
   if (processed.freeTrial) {
-    await recordFreeTrialTokens({
-      userId: processed.freeTrial.userId,
-      requestId: processed.freeTrial.requestId,
-      tokens: totalTokens,
+    await settleFreeTrialRequest({
+      reservation: processed.freeTrial,
+      outcome: input.outcome ?? 'completed',
+      provider,
+      model,
+      usage: {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens,
+        cacheReadInputTokens: usage.cacheReadInputTokens,
+        cacheCreationInputTokens: usage.cacheCreationInputTokens,
+        cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+      },
     });
     return;
   }
@@ -93,30 +102,11 @@ async function settleStreamBilling(input: {
     return;
   }
 
-  const costDifference = actualCostCents - processed.estimatedCostCents;
-  if (totalTokens <= 0 || costDifference === 0) return;
-  const reconciliationKey = CreditService.generateIdempotencyKey(
-    userId,
-    'reconciliation',
-    processed.requestId,
+  throw new ManagedUsageRequestError(
+    'Managed usage reservation is missing.',
+    503,
+    'billing_protocol_error',
   );
-  await CreditService.settleCreditsDurably({
-    userId,
-    amountCents: costDifference,
-    description: `Credit adjustment (streaming): ${provider}/${model}`,
-    metadata: {
-      provider,
-      model,
-      type: 'streaming_reconciliation',
-      estimatedCostCents: processed.estimatedCostCents,
-      actualCostCents,
-      promptTokens: usage.inputTokens,
-      completionTokens: usage.outputTokens,
-      totalTokens,
-      requestId: processed.requestId,
-    },
-    idempotencyKey: reconciliationKey,
-  });
 }
 
 export async function buildStreamResponse(
@@ -628,7 +618,7 @@ export async function buildStreamResponse(
  * legacy providers.
  *
  * Billing/TTFT/analytics logic is a straight port of `buildStreamResponse`'s
- * `flush()` -- same LLMCostCalculator/CreditService/recordModelUsage calls,
+ * `flush()` -- same LLMCostCalculator/managed-usage/recordModelUsage calls,
  * same TTFT-observed/breach/missing log events -- just reading accumulated
  * `StreamChunk` usage fields (via `adapter-usage.ts`, shared with the
  * non-streaming `drainToLlmResponse`) instead of re-parsing JSON event

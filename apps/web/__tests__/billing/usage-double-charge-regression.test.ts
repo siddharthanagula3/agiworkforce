@@ -20,19 +20,22 @@ const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
 
 describe('usage double-charge regression (call-path removal)', () => {
   const completionFiles = [
+    'app/api/llm/v1/chat/completions/lib/request-processor.ts',
+    'app/api/llm/v1/chat/completions/lib/research-loop.ts',
     'app/api/llm/v1/chat/completions/lib/response-builder.ts',
     'app/api/llm/v1/chat/completions/lib/stream-transform.ts',
   ];
 
-  it('the completion paths no longer invoke reconcileUsage (the redundant charge path)', () => {
+  it('the completion owners do not depend on the legacy quota or reconciliation path', () => {
     for (const f of completionFiles) {
       const src = read(f);
       // No call and no import — deduct_credits is the single source of truth for
       // credits_used_cents. A re-added call would re-introduce the double charge.
-      expect(src, `${f} must not call reconcileUsage`).not.toMatch(/reconcileUsage\s*\(/);
-      expect(src, `${f} must not import reconcileUsage`).not.toMatch(
-        /import\s*\{[^}]*reconcileUsage[^}]*\}/,
+      expect(src, `${f} must not depend on the legacy quota module`).not.toMatch(
+        /from\s+['"]@\/lib\/assert-quota['"]/,
       );
+      expect(src, `${f} must not call assertQuota`).not.toMatch(/assertQuota\s*\(/);
+      expect(src, `${f} must not call reconcileUsage`).not.toMatch(/reconcileUsage\s*\(/);
     }
   });
 

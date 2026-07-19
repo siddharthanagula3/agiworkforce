@@ -1,19 +1,45 @@
 import 'server-only';
 
-import { isFreePlanTier } from '@/lib/services/free-trial-service';
+import { getBillingPlanProductLimits, type BillingPlanLimit } from '@agiworkforce/types';
 
-export const FREE_PROJECT_LIMIT = 5;
-export const FREE_CUSTOM_REMOTE_MCP_LIMIT = 1;
-export const PAID_CUSTOM_REMOTE_MCP_LIMIT = 10;
-
-export function getProjectLimit(planTier: string | null | undefined): number | null {
-  return !planTier || isFreePlanTier(planTier) ? FREE_PROJECT_LIMIT : null;
+function toEnforceableLimit(limit: BillingPlanLimit | undefined): number | null {
+  if (limit === 'unlimited') return null;
+  return typeof limit === 'number' ? limit : 0;
 }
 
-export function getCustomRemoteMcpLimit(planTier: string | null | undefined): number {
-  return !planTier || isFreePlanTier(planTier)
-    ? FREE_CUSTOM_REMOTE_MCP_LIMIT
-    : PAID_CUSTOM_REMOTE_MCP_LIMIT;
+export function getProjectLimit(planTier: string | null | undefined): number | null {
+  return toEnforceableLimit(getBillingPlanProductLimits(planTier)?.projects);
+}
+
+export function getCustomRemoteMcpLimit(planTier: string | null | undefined): number | null {
+  return toEnforceableLimit(getBillingPlanProductLimits(planTier)?.customMcpServers);
+}
+
+const SAFE_PLAN_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  free: 'Free',
+  basic: 'Basic',
+  pro: 'Pro',
+  max: 'Max 5x',
+  max_15x: 'Max 15x',
+  team: 'Team',
+});
+
+export function getProjectLimitErrorMessage(planTier: string | null | undefined): string {
+  const limit = getProjectLimit(planTier);
+  const label = planTier ? SAFE_PLAN_LABELS[planTier.toLowerCase()] : undefined;
+  if (!label || limit === 0 || limit === null) {
+    return 'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.';
+  }
+  return `${label} accounts can have up to ${limit} ${limit === 1 ? 'Project' : 'Projects'}. Delete a Project or upgrade to add another.`;
+}
+
+export function getCustomRemoteMcpLimitErrorMessage(planTier: string | null | undefined): string {
+  const limit = getCustomRemoteMcpLimit(planTier);
+  const label = planTier ? SAFE_PLAN_LABELS[planTier.toLowerCase()] : undefined;
+  if (!label || limit === 0 || limit === null) {
+    return 'Your current subscription does not allow custom connectors. Choose an eligible plan and try again.';
+  }
+  return `${label} accounts can add up to ${limit} custom connector${limit === 1 ? '' : 's'}. Remove one or upgrade to add another.`;
 }
 
 export function isUserResourceLimitError(error: unknown): boolean {

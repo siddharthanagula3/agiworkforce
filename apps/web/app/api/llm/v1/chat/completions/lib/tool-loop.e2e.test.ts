@@ -38,6 +38,12 @@ vi.mock('@/lib/server/generated-file-persist', () => ({
   persistGeneratedFileBytes: (...args: unknown[]) => mockPersistGeneratedFileBytes(...args),
 }));
 
+const mockReserveManagedUsageProviderStep = vi.fn();
+vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  reserveManagedUsageProviderStep: (...args: unknown[]) =>
+    mockReserveManagedUsageProviderStep(...args),
+}));
+
 import { runToolLoop, type ToolLoopProviderExecutor } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import type { E2BExecutor } from '@/lib/e2b/types';
@@ -117,6 +123,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
     mockPersistGeneratedFileBytes.mockReset();
+    mockReserveManagedUsageProviderStep.mockReset();
   });
 
   it('executes an execute_code tool call via the E2B interception point and re-invokes the model', async () => {
@@ -234,6 +241,227 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       state: 'ready_for_review',
     });
     expect(activity[7]?.event).toEqual({ type: 'stop', reason: 'end-turn' });
+  });
+
+  it('re-fits every Free provider turn against cumulative observed usage', async () => {
+    const processed = makeProcessed();
+    processed.provider = 'qwen';
+    processed.chatRequest.model = 'qwen-3.5-flash';
+    processed.llmRequest.model = 'qwen-3.5-flash';
+    processed.llmRequest.max_tokens = 8_192;
+    processed.maxTokens = 8_192;
+    processed.freeTrial = {
+      kind: 'free_trial',
+      userId: 'free-user',
+      requestId: 'free-loop',
+      reservedMicrousd: 5_000,
+    };
+
+    const providerExecutor = vi.fn<ToolLoopProviderExecutor>(async (input) => {
+      if (input.step === 1) {
+        return {
+          lines: [],
+          finishReason: 'tool_calls',
+          pendingToolCalls: [{ id: 'call_1', qualifiedName: 'execute_code', args: {} }],
+          textContent: '',
+          publicTextTail: '',
+          thinkingBlocks: [],
+          canonicalText: '',
+          usage: {
+            providerCalls: 1,
+            inputTokens: 10_000,
+            outputTokens: 9_000,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            cacheWrite1hTokens: 0,
+            reasoningTokens: 0,
+          },
+        };
+      }
+      return {
+        lines: [],
+        finishReason: 'stop',
+        pendingToolCalls: [],
+        textContent: 'done',
+        publicTextTail: '',
+        thinkingBlocks: [],
+        canonicalText: 'done',
+        usage: {
+          providerCalls: 1,
+          inputTokens: 100,
+          outputTokens: 10,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
+          reasoningTokens: 0,
+        },
+      };
+    });
+
+    await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        providerExecutor,
+        toolExecutor: vi.fn().mockResolvedValue({ content: 'ok', isError: false }),
+      }),
+    );
+
+    expect(providerExecutor).toHaveBeenCalledTimes(2);
+    const firstMax = providerExecutor.mock.calls[0]?.[0].request.max_tokens;
+    const secondMax = providerExecutor.mock.calls[1]?.[0].request.max_tokens;
+    expect(secondMax).toBeLessThan(firstMax ?? 0);
+  });
+
+  it('stops a Free tool loop before a provider turn that cannot fit', async () => {
+    const processed = makeProcessed();
+    processed.chatRequest.model = 'gpt-5.4-nano';
+    processed.llmRequest.model = 'gpt-5.4-nano';
+    processed.llmRequest.max_tokens = 8_192;
+    processed.maxTokens = 8_192;
+    processed.freeTrial = {
+      kind: 'free_trial',
+      userId: 'free-user',
+      requestId: 'free-exhausted',
+      reservedMicrousd: 5_000,
+    };
+
+    const providerExecutor = vi.fn<ToolLoopProviderExecutor>(async (input) => ({
+      lines: [],
+      finishReason: 'tool_calls',
+      pendingToolCalls: [{ id: 'call_1', qualifiedName: 'execute_code', args: {} }],
+      textContent: '',
+      publicTextTail: '',
+      thinkingBlocks: [],
+      canonicalText: '',
+      usage: {
+        providerCalls: 1,
+        inputTokens: 100,
+        outputTokens: input.request.max_tokens,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+        reasoningTokens: 0,
+      },
+    }));
+
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        providerExecutor,
+        toolExecutor: vi.fn().mockResolvedValue({ content: 'ok', isError: false }),
+      }),
+    );
+
+    expect(providerExecutor).toHaveBeenCalledOnce();
+    expect(output).toContain('free_trial_token_budget_reached');
+    expect(output).not.toMatch(/microusd|reservedMicrousd|5000/i);
+    expect(output).toContain('data: [DONE]');
+  });
+
+  it('reserves every paid provider operation before egress and extends later steps', async () => {
+    const order: string[] = [];
+    const processed = makeProcessed();
+    processed.provider = 'openai';
+    processed.chatRequest.model = 'gpt-5.4-mini';
+    processed.llmRequest.model = 'gpt-5.4-mini';
+    processed.subscriptionTier = 'pro';
+    processed.managedUsage = {
+      db: {} as never,
+      userId: 'user-1',
+      idempotencyKey: 'managed-paid-turn-1',
+      requestHash: 'a'.repeat(64),
+      leaseToken: 'lease-paid-1',
+      estimatedCostCents: 7,
+    };
+    mockReserveManagedUsageProviderStep.mockImplementation(async (input) => {
+      const operationKey = input.operationKey as string;
+      order.push(`reserve:${operationKey}`);
+      const estimatedCostCents = operationKey === 'provider:1' ? 7 : 12;
+      input.reservation.estimatedCostCents = estimatedCostCents;
+      return {
+        operationResult: operationKey === 'provider:1' ? 'covered' : 'extended',
+        estimatedCostCents,
+      };
+    });
+    const providerExecutor = vi.fn<ToolLoopProviderExecutor>(async ({ step }) => {
+      order.push(`provider:${step}`);
+      return {
+        lines: [],
+        finishReason: step === 1 ? 'tool_calls' : 'stop',
+        pendingToolCalls:
+          step === 1 ? [{ id: 'call_paid', qualifiedName: 'execute_code', args: {} }] : [],
+        textContent: step === 1 ? '' : 'done',
+        publicTextTail: '',
+        thinkingBlocks: [],
+        canonicalText: step === 1 ? '' : 'done',
+        usage: {
+          providerCalls: 1,
+          inputTokens: 10,
+          outputTokens: 5,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
+          reasoningTokens: 0,
+        },
+      };
+    });
+
+    await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        providerExecutor,
+        toolExecutor: vi.fn().mockResolvedValue({ content: 'ok', isError: false }),
+      }),
+    );
+
+    expect(order).toEqual(['reserve:provider:1', 'provider:1', 'reserve:provider:2', 'provider:2']);
+    expect(processed.managedUsage.estimatedCostCents).toBe(12);
+  });
+
+  it('uses the stable global provider operation key on a durable continuation', async () => {
+    const processed = makeProcessed();
+    processed.subscriptionTier = 'pro';
+    processed.managedUsage = {
+      db: {} as never,
+      userId: 'user-1',
+      idempotencyKey: 'managed-paid-turn-2',
+      requestHash: 'b'.repeat(64),
+      leaseToken: 'lease-paid-2',
+      estimatedCostCents: 7,
+    };
+    mockReserveManagedUsageProviderStep.mockResolvedValue({
+      operationResult: 'covered',
+      estimatedCostCents: 7,
+    });
+
+    await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        initialCompletedSteps: 2,
+        providerExecutor: vi.fn().mockResolvedValue({
+          lines: [],
+          finishReason: 'stop',
+          pendingToolCalls: [],
+          textContent: 'done',
+          publicTextTail: '',
+          thinkingBlocks: [],
+          canonicalText: 'done',
+          usage: {
+            providerCalls: 1,
+            inputTokens: 10,
+            outputTokens: 5,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            cacheWrite1hTokens: 0,
+            reasoningTokens: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(mockReserveManagedUsageProviderStep).toHaveBeenCalledWith(
+      expect.objectContaining({ operationKey: 'provider:3' }),
+    );
   });
 
   it('fails closed with an explicit error when no E2B executor is available (no key configured)', async () => {

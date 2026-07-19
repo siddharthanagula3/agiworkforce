@@ -43,7 +43,6 @@ interface IapVerifyResponse {
   planTier: string;
   status: string;
   currentPeriodEnd: string | null;
-  usageBudgetCents: number;
 }
 
 /**

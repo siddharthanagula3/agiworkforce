@@ -4,8 +4,8 @@
  * Auth store for the web app (Clerk-backed).
  *
  * Provides:
- *  - useAuth()        — user + subscription + credits + auth helpers
- *  - useBillingStore  — Subscription plan + credit balance used by chat components
+ *  - useAuth()        — user + subscription + auth helpers
+ *  - useBillingStore  — Subscription plan used by chat components
  *
  * Components import `useBillingStore` from this file for subscription/credit data.
  * The store hydrates by calling /api/me once on mount.
@@ -14,6 +14,7 @@
 import React from 'react';
 import { create } from 'zustand';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import { normalizeBillingPlanTier, type BillingPlanTier } from '@agiworkforce/types';
 import { hasClerkSessionCookie } from '@/lib/clerk-session';
 
 // Minimal user shape retained for backward compatibility with components reading user.email/id.
@@ -28,7 +29,7 @@ export interface User {
 // ---------------------------------------------------------------------------
 
 export interface SubscriptionPlan {
-  tier: 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
+  tier: BillingPlanTier;
   /** Human-readable name e.g. "Pro" */
   display_name: string;
   /** Stripe subscription status */
@@ -42,12 +43,6 @@ export interface SubscriptionPlan {
   plan_name: string;
 }
 
-export interface CreditBalance {
-  balance_cents: number;
-  daily_limit_cents: number | null;
-  daily_usage_cents: number;
-}
-
 export interface FeatureFlags {
   beta_features: boolean;
   advanced_model_access: boolean;
@@ -56,9 +51,6 @@ export interface FeatureFlags {
   /** Deployment capability: the generic managed web-search backend is configured. */
   generic_web_search?: boolean;
 }
-
-// /api/me wire shape comes from the shared cloud contract (restructure Wave 4);
-// `credits` is contract-typed as unknown and narrowed to CreditBalance here.
 
 // ---------------------------------------------------------------------------
 // Auth + Billing store state shape
@@ -69,12 +61,6 @@ export interface AuthState {
   user: User | null;
   /** Subscription plan details fetched from /api/me */
   subscription: SubscriptionPlan | null;
-  /** Credit balance in cents (null = not yet fetched) */
-  creditBalance_cents: number | null;
-  /** Daily usage in cents */
-  dailyUsage_cents: number;
-  /** Daily limit in cents (null = no limit) */
-  dailyLimit_cents: number | null;
   /** Feature flags for the current user */
   featureFlags: FeatureFlags | null;
   /** True while the initial /api/me fetch is in-flight */
@@ -86,22 +72,15 @@ export interface AuthState {
 
   // Actions
   refreshUser: () => Promise<void>;
-  updateCredits: (credits: CreditBalance) => void;
   signOut: () => Promise<void>;
   /** Internal: updates user state after /api/me refresh */
   _setUser: (user: User | null) => void;
   _reset: () => void;
 }
 
-const INITIAL_STATE: Omit<
-  AuthState,
-  'refreshUser' | 'updateCredits' | 'signOut' | '_setUser' | '_reset'
-> = {
+const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_setUser' | '_reset'> = {
   user: null,
   subscription: null,
-  creditBalance_cents: null,
-  dailyUsage_cents: 0,
-  dailyLimit_cents: null,
   featureFlags: null,
   isLoading: true,
   error: null,
@@ -133,9 +112,6 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
             set({
               user: null,
               subscription: null,
-              creditBalance_cents: null,
-              dailyUsage_cents: 0,
-              dailyLimit_cents: null,
               featureFlags: null,
               isLoading: false,
               initialized: true,
@@ -146,9 +122,7 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
         }
 
         const data = parseMeResponse(await response.json());
-        const credits = (data.credits ?? null) as CreditBalance | null;
-
-        const tier = (data.plan.tier || 'free') as SubscriptionPlan['tier'];
+        const tier = normalizeBillingPlanTier(data.plan.tier);
         const plan: SubscriptionPlan = {
           tier,
           display_name: data.plan.display_name,
@@ -159,9 +133,6 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
 
         set({
           subscription: plan,
-          creditBalance_cents: credits?.balance_cents ?? null,
-          dailyUsage_cents: credits?.daily_usage_cents ?? 0,
-          dailyLimit_cents: credits?.daily_limit_cents ?? null,
           featureFlags: data.feature_flags,
           isLoading: false,
           error: null,
@@ -174,14 +145,6 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
     } finally {
       refreshInFlight = false;
     }
-  },
-
-  updateCredits: (credits: CreditBalance) => {
-    set({
-      creditBalance_cents: credits.balance_cents,
-      dailyUsage_cents: credits.daily_usage_cents,
-      dailyLimit_cents: credits.daily_limit_cents,
-    });
   },
 
   signOut: async () => {
@@ -225,9 +188,6 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
     } else {
       set({
         subscription: null,
-        creditBalance_cents: null,
-        dailyUsage_cents: 0,
-        dailyLimit_cents: null,
         featureFlags: null,
         initialized: true,
         isLoading: false,
@@ -270,7 +230,6 @@ if (typeof window !== 'undefined') {
 export interface UseAuthReturn {
   user: User | null;
   subscription: SubscriptionPlan | null;
-  credits: CreditBalance | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -281,27 +240,14 @@ export interface UseAuthReturn {
 export function useAuth(): UseAuthReturn {
   const user = useBillingStore((s) => s.user);
   const subscription = useBillingStore((s) => s.subscription);
-  const creditBalance_cents = useBillingStore((s) => s.creditBalance_cents);
-  const dailyUsage_cents = useBillingStore((s) => s.dailyUsage_cents);
-  const dailyLimit_cents = useBillingStore((s) => s.dailyLimit_cents);
   const isLoading = useBillingStore((s) => s.isLoading);
   const error = useBillingStore((s) => s.error);
   const signOut = useBillingStore((s) => s.signOut);
   const refreshUser = useBillingStore((s) => s.refreshUser);
 
-  const credits: CreditBalance | null =
-    creditBalance_cents !== null
-      ? {
-          balance_cents: creditBalance_cents,
-          daily_usage_cents: dailyUsage_cents,
-          daily_limit_cents: dailyLimit_cents,
-        }
-      : null;
-
   return {
     user,
     subscription,
-    credits,
     isAuthenticated: user !== null,
     isLoading,
     error,

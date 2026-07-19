@@ -41,7 +41,7 @@ export function buildFreeTrialPaywallSlot(
         : code === 'free_trial_model_only'
           ? 'model_access'
           : 'paid_capability',
-    requiredTier: 'hobby',
+    requiredTier: 'basic',
     reason: fallbackReason || defaultReason,
   };
 }

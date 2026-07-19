@@ -261,6 +261,7 @@ function makeRequest(message: string, stream = false): NextRequest {
       Authorization: 'Bearer test-pro-token',
       'Content-Type': 'application/json',
       'Idempotency-Key': 'test-managed-chat-request',
+      'x-agi-surface': 'web',
     },
     body: JSON.stringify({
       model: 'auto-balanced',
@@ -280,6 +281,7 @@ function makeRequestForModel(model: string, message: string, stream = false): Ne
       Authorization: 'Bearer test-pro-token',
       'Content-Type': 'application/json',
       'Idempotency-Key': 'test-managed-chat-request',
+      'x-agi-surface': 'web',
     },
     body: JSON.stringify({
       model,
@@ -509,6 +511,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
         Authorization: 'Bearer test-pro-token',
         'Content-Type': 'application/json',
         'Idempotency-Key': 'test-managed-chat-request',
+        'x-agi-surface': 'web',
       },
       body: JSON.stringify({
         model: 'auto-balanced',

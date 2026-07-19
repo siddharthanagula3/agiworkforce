@@ -6,13 +6,14 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import type { BillingPlanTier } from '@agiworkforce/types';
 
 export interface UserProfile {
   id: string;
   email: string;
   name: string;
   avatar?: string;
-  plan: 'free' | 'pro' | 'enterprise';
+  plan: BillingPlanTier;
   role: 'user' | 'admin' | 'moderator';
   permissions: string[];
   profile: {

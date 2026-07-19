@@ -2,10 +2,16 @@ import 'server-only';
 
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  getPlanFlagshipWeeklyUsageBudgetCents,
+  getPlanSessionUsageBudgetCents,
+  getPlanWeeklyUsageBudgetCents,
+} from '@/lib/server/managed-usage-policy';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
+const PROVIDER_OPERATION_KEY_PATTERN = /^provider:[1-9]\d{0,8}$/;
 
 export class ManagedUsageRequestError extends Error {
   constructor(
@@ -17,6 +23,20 @@ export class ManagedUsageRequestError extends Error {
     super(message);
     this.name = 'ManagedUsageRequestError';
   }
+}
+
+export function createManagedUsageErrorBody(
+  error: ManagedUsageRequestError,
+  type: 'invalid_request_error' | 'insufficient_quota',
+) {
+  return {
+    error: {
+      message: error.message,
+      type,
+      code: error.code,
+      contract_version: error.contractVersion,
+    },
+  };
 }
 
 export interface ManagedUsageRequestReservation {
@@ -33,6 +53,11 @@ export interface ManagedUsageFinalization {
   operationResult: 'finalized' | 'already_finalized';
   settlementStatus: 'succeeded' | 'pending' | 'terminal' | null;
   actualCostCents: number;
+}
+
+export interface ManagedUsageProviderStepReservation {
+  operationResult: 'covered' | 'extended' | 'already_extended';
+  estimatedCostCents: number;
 }
 
 function canonicalize(value: unknown): unknown {
@@ -120,6 +145,24 @@ function reservationError(decision: string): ManagedUsageRequestError {
         402,
         'insufficient_credits',
       );
+    case 'session_limit':
+      return new ManagedUsageRequestError(
+        'Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.',
+        429,
+        'rolling_five_hour_limit_reached',
+      );
+    case 'weekly_limit':
+      return new ManagedUsageRequestError(
+        'Your rolling weekly usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.',
+        429,
+        'rolling_weekly_limit_reached',
+      );
+    case 'flagship_weekly_limit':
+      return new ManagedUsageRequestError(
+        'Your rolling flagship weekly usage limit is reached. Choose a standard model, wait for earlier usage to leave the window, or upgrade for a higher limit.',
+        429,
+        'flagship_weekly_limit_reached',
+      );
     default:
       return new ManagedUsageRequestError(
         'Managed usage billing is temporarily unavailable.',
@@ -139,13 +182,19 @@ export async function reserveManagedUsageRequest(input: {
   estimatedCostCents: number;
   leaseToken?: string;
   leaseSeconds?: number;
+  planTier: string;
+  isFlagship: boolean;
 }): Promise<ManagedUsageRequestReservation> {
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
+  const sessionCapCents = getPlanSessionUsageBudgetCents(input.planTier);
+  const weeklyCapCents = getPlanWeeklyUsageBudgetCents(input.planTier);
+  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageBudgetCents(input.planTier);
   const row = await queryOne(
     input.db,
-    `select * from public.reserve_managed_usage_request(
-      $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer, $7::text, $8::integer
+    `select * from public.reserve_managed_usage_request_with_limits(
+      $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,
+      $7::text, $8::integer, $9::integer, $10::integer, $11::integer, $12::boolean
     )`,
     [
       input.userId,
@@ -156,6 +205,10 @@ export async function reserveManagedUsageRequest(input: {
       input.estimatedCostCents,
       leaseToken,
       input.leaseSeconds ?? 900,
+      sessionCapCents,
+      weeklyCapCents,
+      flagshipWeeklyCapCents,
+      input.isFlagship,
     ],
   );
 
@@ -180,6 +233,72 @@ export async function reserveManagedUsageRequest(input: {
     idempotencyKey,
     requestHash: input.requestHash,
     leaseToken: row['lease_token'],
+    estimatedCostCents: row['estimated_cost_cents'],
+  };
+}
+
+/** Reserve one stable provider operation before its external side effect. */
+export async function reserveManagedUsageProviderStep(input: {
+  reservation: ManagedUsageRequestReservation;
+  operationKey: string;
+  estimatedCostCents: number;
+  planTier: string;
+  isFlagship: boolean;
+}): Promise<ManagedUsageProviderStepReservation> {
+  if (
+    !PROVIDER_OPERATION_KEY_PATTERN.test(input.operationKey) ||
+    !Number.isInteger(input.estimatedCostCents) ||
+    input.estimatedCostCents < 0
+  ) {
+    throw new ManagedUsageRequestError(
+      'Managed usage provider-step reservation is invalid.',
+      503,
+      'billing_protocol_error',
+    );
+  }
+
+  const sessionCapCents = getPlanSessionUsageBudgetCents(input.planTier);
+  const weeklyCapCents = getPlanWeeklyUsageBudgetCents(input.planTier);
+  const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageBudgetCents(input.planTier);
+  const reservation = input.reservation;
+  const row = await queryOne(
+    reservation.db,
+    `select * from public.extend_managed_usage_request_provider_step(
+      $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,
+      $7::integer, $8::integer, $9::integer, $10::boolean
+    )`,
+    [
+      reservation.userId,
+      reservation.idempotencyKey,
+      reservation.requestHash,
+      reservation.leaseToken,
+      input.operationKey,
+      input.estimatedCostCents,
+      sessionCapCents,
+      weeklyCapCents,
+      flagshipWeeklyCapCents,
+      input.isFlagship,
+    ],
+  );
+
+  const decision = typeof row['extension_decision'] === 'string' ? row['extension_decision'] : '';
+  if (decision !== 'covered' && decision !== 'extended' && decision !== 'already_extended') {
+    throw reservationError(decision);
+  }
+  if (
+    row['request_status'] !== 'provider_started' ||
+    typeof row['estimated_cost_cents'] !== 'number'
+  ) {
+    throw new ManagedUsageRequestError(
+      'Managed usage billing returned an invalid provider-step reservation.',
+      503,
+      'billing_protocol_error',
+    );
+  }
+
+  reservation.estimatedCostCents = row['estimated_cost_cents'];
+  return {
+    operationResult: decision,
     estimatedCostCents: row['estimated_cost_cents'],
   };
 }

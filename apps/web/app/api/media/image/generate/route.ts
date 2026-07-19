@@ -11,16 +11,16 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
-import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
-import { randomUUID } from 'crypto';
 import {
+  canUseBillingPlanCapability,
   getModelMetadataById,
   getModelsForProvider,
   type ModelMetadata,
 } from '@agiworkforce/types';
+import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import {
   isMediaStorageConfigured,
   storeMedia,
@@ -28,6 +28,18 @@ import {
   bytesFromUrl,
 } from '@/lib/server/media-storage';
 import { insertMediaAsset } from '@/lib/server/media-assets';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import {
+  ManagedUsageRequestError,
+  createManagedUsageErrorBody,
+  finalizeManagedUsageRequest,
+  fingerprintManagedUsageRequest,
+  markManagedUsageClientDelivered,
+  markManagedUsageProviderStarted,
+  parseManagedUsageIdempotencyKey,
+  reserveManagedUsageRequest,
+  type ManagedUsageRequestReservation,
+} from '@/lib/services/managed-usage-request-service';
 
 /**
  * Image Generation API
@@ -57,7 +69,6 @@ interface ImageGenerationResponse {
   images: GeneratedImage[];
   provider: ImageProvider;
   model: string;
-  cost_estimate: number;
   latency_ms: number;
   error?: string;
 }
@@ -128,6 +139,37 @@ function resolveStabilityImageModel(requestedModelId?: string) {
 
   const requested = resolveRequestedCatalogModel(stabilityImageModels, requestedModelId);
   return requested ?? stabilityImageModels[0] ?? null;
+}
+
+function resolveImageCatalogModel(
+  provider: ImageProvider,
+  requestedModelId?: string,
+): ModelMetadata | null {
+  const selected =
+    provider === 'openai'
+      ? resolveOpenAIImageModel(requestedModelId)
+      : provider === 'google'
+        ? resolveGoogleImageModel(requestedModelId)
+        : resolveStabilityImageModel(requestedModelId);
+  if (!selected) return null;
+  if (!requestedModelId) return selected;
+  return getModelMetadataById(requestedModelId)?.id === selected.id ? selected : null;
+}
+
+function managedUsageErrorResponse(
+  request: NextRequest,
+  error: ManagedUsageRequestError,
+): NextResponse {
+  return NextResponse.json(
+    createManagedUsageErrorBody(
+      error,
+      error.status === 402 || error.status === 429 ? 'insufficient_quota' : 'invalid_request_error',
+    ),
+    {
+      status: error.status,
+      headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
+    },
+  );
 }
 
 function estimateImageCostCents(
@@ -422,7 +464,6 @@ async function generateWithGeminiImage(
  * Generate image using Stability AI Stable Image Core (v2beta)
  * Endpoint: POST https://api.stability.ai/v2beta/stable-image/generate/core
  *
- * The old v1 SDXL endpoint (stable-diffusion-xl-1024-v1-0) is deprecated.
  * The v2beta API uses multipart/form-data and returns binary image data.
  *
  * Valid aspect_ratio values: 16:9, 1:1, 21:9, 2:3, 3:2, 4:5, 5:4, 9:16, 9:21
@@ -614,19 +655,17 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Image generation requires Pro or higher tier
-  const allowedTiers = new Set(['pro', 'max', 'enterprise', 'team']);
   const userTier = subscription.plan_tier?.toLowerCase() || 'free';
-  if (!allowedTiers.has(userTier)) {
+  if (!canUseBillingPlanCapability(userTier, 'image_generation')) {
     return NextResponse.json(
       {
         error: {
           message:
-            'Image generation is available on Pro, Max, and Enterprise plans. Upgrade your plan to unlock AI-powered image creation.',
+            'Image generation is available on Pro, Max, Team, and Enterprise plans. Upgrade your plan to unlock AI-powered image creation.',
           type: 'invalid_request_error',
           code: 'plan_upgrade_required',
           current_plan: userTier,
-          required_plans: ['pro', 'max', 'enterprise'],
+          required_plans: ['pro', 'max', 'max_15x', 'team', 'enterprise'],
         },
       },
       {
@@ -738,33 +777,18 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Pre-calculate conservative cost estimate for credit pre-check.
-  // We use the per-image cost for the chosen provider * requested image count.
-  // The model isn't determined until after generation, so we use the most expensive
-  // model for the provider as the upper bound estimate.
-  const estimatedCostCents = estimateImageCostCents(provider, n, quality, requestedModel);
-
-  // Check credits BEFORE invoking the provider (402 if insufficient)
-  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
-  if (!hasCredits) {
-    const balance = await CreditService.getBalance(userId);
-    logger.warn(
-      { userId: userId, estimatedCostCents, balance },
-      'Insufficient credits for image generation',
-    );
+  const catalogModel = resolveImageCatalogModel(provider, requestedModel);
+  if (!catalogModel) {
     return NextResponse.json(
       {
         error: {
-          message:
-            'Insufficient credits for image generation. Please upgrade your plan or add credits.',
-          type: 'insufficient_quota',
-          code: 'insufficient_credits',
-          credits_required: estimatedCostCents,
-          credits_remaining: balance?.credits_remaining_cents ?? 0,
+          message: 'The requested image model is not available for this provider.',
+          type: 'invalid_request_error',
+          code: 'model_unavailable',
         },
       },
       {
-        status: 402,
+        status: 400,
         headers: {
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),
@@ -773,38 +797,45 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Reserve credits before generation to prevent race conditions
-  const requestId = randomUUID();
-  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
-  const reserveResult = await CreditService.deductCredits(
-    userId,
-    estimatedCostCents,
-    `Credit reservation: image generation (${provider})`,
-    { provider, type: 'reservation', requestId, imageCount: n },
-    reservationKey,
-  );
-
-  if (!reserveResult.success) {
-    logger.warn(
-      { userId: userId, estimatedCostCents, reserveResult },
-      'Failed to reserve image credits',
-    );
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Insufficient credits for image generation.',
-          type: 'insufficient_quota',
-          code: reserveResult.code ?? 'insufficient_credits',
-        },
-      },
-      {
-        status: 402,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
+  const estimatedCostCents = estimateImageCostCents(provider, n, quality, catalogModel.id);
+  let reservation: ManagedUsageRequestReservation;
+  let sourceSurface: 'web' | 'mobile' | 'desktop';
+  try {
+    const idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('Idempotency-Key'));
+    const mediaIdentity = parseManagedMediaIdempotencyKey(idempotencyKey);
+    if (!mediaIdentity || mediaIdentity.operation !== 'image') {
+      throw new ManagedUsageRequestError(
+        'Idempotency-Key must identify one Managed Cloud image operation.',
+        400,
+        'invalid_media_idempotency_key',
+      );
+    }
+    sourceSurface = mediaIdentity.surface;
+    const scoped = await getUserScopedDb(request);
+    if (scoped.userId !== userId) {
+      throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
+    }
+    reservation = await reserveManagedUsageRequest({
+      db: scoped.db,
+      userId,
+      idempotencyKey,
+      requestHash: fingerprintManagedUsageRequest(validationResult.data),
+      provider,
+      model: catalogModel.id,
+      estimatedCostCents,
+      planTier: subscription.plan_tier,
+      isFlagship: false,
+    });
+  } catch (error) {
+    const managedError =
+      error instanceof ManagedUsageRequestError
+        ? error
+        : new ManagedUsageRequestError(
+            'Managed usage billing is temporarily unavailable.',
+            503,
+            'billing_unavailable',
+          );
+    return managedUsageErrorResponse(request, managedError);
   }
 
   // Generate images
@@ -821,13 +852,14 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       },
       'Starting image generation',
     );
+    await markManagedUsageProviderStarted(reservation);
 
     switch (provider) {
       case 'openai':
-        result = await generateWithOpenAIImage(prompt, size, quality, n, requestedModel);
+        result = await generateWithOpenAIImage(prompt, size, quality, n, catalogModel.id);
         break;
       case 'google':
-        result = await generateWithImagen(prompt, size, style, n, negative_prompt, requestedModel);
+        result = await generateWithImagen(prompt, size, style, n, negative_prompt, catalogModel.id);
         break;
       case 'stability':
         result = await generateWithStability(
@@ -836,7 +868,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
           style,
           n,
           negative_prompt,
-          requestedModel,
+          catalogModel.id,
         );
         break;
     }
@@ -851,15 +883,18 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       'Image generation completed',
     );
   } catch (error) {
-    // Refund the reserved credits on generation failure
-    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     try {
-      await CreditService.settleCreditsDurably({
-        userId,
-        amountCents: -estimatedCostCents,
-        description: `Refund: image generation failed (${provider})`,
-        metadata: { provider, type: 'refund', reason: 'generation_failure', requestId },
-        idempotencyKey: refundKey,
+      await finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'failed',
+        actualCostCents: 0,
+        usage: {
+          operation: 'image',
+          sourceSurface,
+          provider,
+          model: catalogModel.id,
+          reason: 'provider_failed',
+        },
       });
     } catch (settlementError) {
       logger.error(
@@ -868,9 +903,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
           error: settlementError,
           userId,
           provider,
-          requestId,
+          idempotencyKey: reservation.idempotencyKey,
         },
-        'Image generation refund could not be persisted',
+        'Image generation failure settlement could not be persisted',
       );
     }
 
@@ -880,7 +915,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         userId: userId,
         provider,
       },
-      'Image generation failed - credits refunded',
+      'Image generation failed',
     );
 
     const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
@@ -912,7 +947,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         images: [],
         provider,
         model: 'unknown',
-        cost_estimate: 0,
         latency_ms: Date.now() - startTime,
       } satisfies ImageGenerationResponse,
       {
@@ -925,53 +959,25 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  // Calculate actual cost and reconcile with the reservation
+  // Settle the exact number of billable images returned by the provider.
   const costEstimate = estimateImageCostCents(
     provider,
     result.images.length,
     quality,
-    requestedModel,
+    catalogModel.id,
   );
-  const costDifference = costEstimate - estimatedCostCents;
-
-  if (costDifference !== 0) {
-    // Adjust credits: positive diff = additional charge, negative = refund
-    const reconciliationKey = CreditService.generateIdempotencyKey(
-      userId,
-      'reconciliation',
-      requestId,
-    );
-    try {
-      await CreditService.settleCreditsDurably({
-        userId,
-        amountCents: costDifference,
-        description:
-          costDifference > 0
-            ? `Additional charge: image generation (${provider}/${result.model})`
-            : `Credit adjustment: image generation (${provider}/${result.model})`,
-        metadata: {
-          provider,
-          model: result.model,
-          type: 'reconciliation',
-          estimatedCostCents,
-          actualCostCents: costEstimate,
-          requestId,
-        },
-        idempotencyKey: reconciliationKey,
-      });
-    } catch (settlementError) {
-      logger.error(
-        {
-          event: 'image_reconciliation_settlement_unrecorded',
-          error: settlementError,
-          userId,
-          provider,
-          requestId,
-        },
-        'Image generation reconciliation could not be persisted',
-      );
-    }
-  }
+  await finalizeManagedUsageRequest({
+    ...reservation,
+    outcome: 'completed',
+    actualCostCents: costEstimate,
+    usage: {
+      operation: 'image',
+      sourceSurface,
+      provider,
+      model: catalogModel.id,
+      outputCount: result.images.length,
+    },
+  });
 
   logger.info(
     { userId: userId, provider, model: result.model, costEstimate, estimatedCostCents },
@@ -1027,9 +1033,17 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     images: result.images,
     provider,
     model: result.model,
-    cost_estimate: costEstimate,
     latency_ms: Date.now() - startTime,
   };
+
+  try {
+    await markManagedUsageClientDelivered(reservation);
+  } catch (error) {
+    logger.warn(
+      { error, userId, idempotencyKey: reservation.idempotencyKey },
+      'Image delivery marker could not be persisted',
+    );
+  }
 
   return NextResponse.json(response, {
     headers: {

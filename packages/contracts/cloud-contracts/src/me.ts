@@ -70,12 +70,6 @@ export const MeResponseSchema = z.object({
   updated_at: z.number(),
   plan: MePlanSchema,
   feature_flags: MeFeatureFlagsSchema,
-  /**
-   * `CreditService.getBalance` passthrough — shape is owned by the credit
-   * service (and is null on lookup failure). Deliberately untyped here until
-   * a client actually consumes it.
-   */
-  credits: z.unknown(),
   routing_preferences: MeRoutingPreferencesSchema,
   /**
    * Server-authoritative effective-capability handshake (six-app finding A):

@@ -68,20 +68,19 @@ export const FEATURES = {
   usageDashboard: true,
 
   /**
-   * Native in-app purchase (StoreKit 2) for subscription upgrades.
-   * Enabled 2026-07-04 for iOS: real App Store Connect subscription products
-   * exist (iapProducts.ts), POST /api/mobile/iap/verify is live and reconciles
-   * into the same `subscriptions` table Stripe uses (migration 0046 applied to
-   * production), the client (useIapPurchaseFlow.ts) calls it before finalizing
-   * any purchase, and the App Store Server API credentials
-   * (APPLE_APP_STORE_KEY_ID/ISSUER_ID/BUNDLE_ID/PRIVATE_KEY) are set in
-   * production. `APPLE_APP_STORE_ENVIRONMENT=sandbox` for now — flip to
-   * production once real (non-TestFlight) purchases begin.
-   * Android/Play Billing is NOT wired (no Play Console yet) — `iapProducts.ts`
-   * android SKUs are still placeholders; this flag currently only gates real
-   * behavior on iOS.
+   * Native in-app purchase (StoreKit 2 / Play Billing) for subscription
+   * upgrades. Stays FALSE: every SKU in `iapProducts.ts` is a PLACEHOLDER — the
+   * products do not yet exist in App Store Connect or Google Play Console
+   * (creating them needs the founder's store-console access). Activating IAP
+   * against placeholder SKUs would present fake/broken purchase availability
+   * (fetchProducts returns nothing; a purchase attempt fails), which violates
+   * capability honesty. The server path is ready — POST /api/mobile/iap/verify
+   * reconciles into the same `subscriptions` table Stripe uses and the client
+   * (useIapPurchaseFlow.ts) verifies before finalizing — but do not flip this to
+   * true until the real self-serve products (basic, pro, max, max_15x; NOT the
+   * sales-assisted Team tier) are created and verified against a live console.
    */
-  iap: true,
+  iap: false,
 
   /** Auth (login, OAuth, password reset). Signing in IS the Managed Cloud entitlement
    *  in public alpha — Mobile keeps a real auth gate (no demo bypass; user must sign in).

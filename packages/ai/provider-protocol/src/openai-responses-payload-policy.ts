@@ -2,8 +2,7 @@
  * OpenAI Responses API payload policy resolver.
  *
  * Cross-vendor normalization for the `openai-responses` family of APIs
- * (api.openai.com, Azure OpenAI, Codex, plus the long tail of compatible
- * proxies). Decides:
+ * (api.openai.com, Codex, plus compatible proxies). Decides:
  *   - whether to send `service_tier`
  *   - whether to send / strip `store`
  *   - whether to strip `prompt_cache_key` / `prompt_cache_retention`
@@ -42,7 +41,6 @@ export type OpenAIResponsesPayloadPolicyOptions = {
 export type OpenAIResponsesEndpointClass =
   | 'default'
   | 'anthropic-public'
-  | 'cerebras-native'
   | 'chutes-native'
   | 'deepseek-native'
   | 'github-copilot-native'
@@ -53,7 +51,6 @@ export type OpenAIResponsesEndpointClass =
   | 'openai-public'
   | 'openai-codex'
   | 'opencode-native'
-  | 'azure-openai'
   | 'openrouter'
   | 'xai-native'
   | 'zai-native'
@@ -81,12 +78,8 @@ type OpenAIResponsesPayloadCapabilities = {
   usesKnownNativeOpenAIRoute: boolean;
 };
 
-const OPENAI_RESPONSES_APIS = new Set([
-  'openai-responses',
-  'azure-openai-responses',
-  'openai-codex-responses',
-]);
-const OPENAI_RESPONSES_PROVIDERS = new Set(['openai', 'azure-openai', 'azure-openai-responses']);
+const OPENAI_RESPONSES_APIS = new Set(['openai-responses', 'openai-codex-responses']);
+const OPENAI_RESPONSES_PROVIDERS = new Set(['openai']);
 const LOCAL_ENDPOINT_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 const MODELSTUDIO_NATIVE_BASE_URLS = new Set([
   'https://coding-intl.dashscope.aliyuncs.com/v1',
@@ -172,8 +165,6 @@ export function resolveBundledOpenAIResponsesEndpointClass(
   switch (host) {
     case 'api.anthropic.com':
       return 'anthropic-public';
-    case 'api.cerebras.ai':
-      return 'cerebras-native';
     case 'llm.chutes.ai':
       return 'chutes-native';
     case 'api.deepseek.com':
@@ -199,9 +190,6 @@ export function resolveBundledOpenAIResponsesEndpointClass(
 
   if (hostMatchesSuffix(host, '.githubcopilot.com')) {
     return 'github-copilot-native';
-  }
-  if (hostMatchesSuffix(host, '.openai.azure.com')) {
-    return 'azure-openai';
   }
   if (hostMatchesSuffix(host, 'openrouter.ai')) {
     return 'openrouter';
@@ -248,9 +236,7 @@ function resolveOpenAIResponsesPayloadCapabilities(
   const isResponsesApi = isOpenAIResponsesApi(api);
   const usesConfiguredBaseUrl = endpointClass !== 'default';
   const usesKnownNativeOpenAIEndpoint =
-    endpointClass === 'openai-public' ||
-    endpointClass === 'openai-codex' ||
-    endpointClass === 'azure-openai';
+    endpointClass === 'openai-public' || endpointClass === 'openai-codex';
   const usesKnownNativeOpenAIRoute =
     endpointClass === 'default' ? provider === 'openai' : usesKnownNativeOpenAIEndpoint;
   const usesExplicitProxyLikeEndpoint = usesConfiguredBaseUrl && !usesKnownNativeOpenAIEndpoint;

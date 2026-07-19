@@ -1,15 +1,13 @@
-/**
- * Type declarations for Stripe packages that are not installed as dependencies.
- * These provide minimal type stubs to satisfy TypeScript compilation.
- */
+/** Minimal declarations for the subset of installed Stripe.js used by Web. */
 
 declare module '@stripe/stripe-js' {
   export interface Stripe {
     confirmPayment(options: {
-      elements: StripeElements;
-      confirmParams: { return_url: string };
+      elements?: StripeElements;
+      clientSecret?: string;
+      confirmParams?: { return_url: string };
       redirect?: string;
-    }): Promise<{ error?: { message: string }; paymentIntent?: unknown }>;
+    }): Promise<{ error?: { message: string }; paymentIntent?: { status: string } }>;
     confirmSetup(options: {
       elements: StripeElements;
       confirmParams: { return_url: string };

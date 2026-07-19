@@ -52,17 +52,14 @@ function buildManagedMeter(tierInfo: TierInfo): UsageMeter | null {
   const tier = coercePlanTier(tierInfo.tier);
   if (tier === undefined || isFreePlan(tier)) return null;
 
-  if (
-    typeof tierInfo.tokensUsed === 'number' &&
-    typeof tierInfo.tokenCap === 'number' &&
-    tierInfo.tokenCap > 0
-  ) {
-    const remaining = Math.max(0, Math.min(1, 1 - tierInfo.tokensUsed / tierInfo.tokenCap));
+  // Percentage-only contract: the server never returns exact token/cent counts,
+  // so the meter carries a 0-1 remaining fraction derived from usage_percentage
+  // and no usedTokens/limitTokens.
+  if (typeof tierInfo.usagePercentage === 'number') {
+    const remaining = Math.max(0, Math.min(1, 1 - tierInfo.usagePercentage / 100));
     return {
       remaining,
       resetsAt: tierInfo.resetsAt ?? null,
-      usedTokens: tierInfo.tokensUsed,
-      limitTokens: tierInfo.tokenCap,
       source: 'managed-plan',
     };
   }

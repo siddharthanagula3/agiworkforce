@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { Check } from 'lucide-react';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { isPlanSelectableOnSurface } from '@agiworkforce/types';
 import {
   Dialog,
   DialogContent,
@@ -12,13 +12,18 @@ import {
   Button,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import {
+  formatCatalogPrice,
+  getBillingPlanDisplay,
+  type SelectablePaidPlan,
+} from '@features/billing/lib/plan-display';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 /** Paid tiers a user can purchase from this dialog (free is never a target). */
-type UpgradeTarget = 'pro' | 'max';
+export type UpgradeTarget = SelectablePaidPlan;
 
 interface UpgradePlanDialogProps {
   open: boolean;
@@ -36,66 +41,45 @@ interface UpgradePlanDialogProps {
 // Plan definitions (sourced from BILLING_PLAN_PRICING canonical catalog)
 // ---------------------------------------------------------------------------
 
-type PlanCardId = 'free' | 'pro' | 'max';
+type PlanCardId = 'free' | SelectablePaidPlan | 'team';
 
 interface PlanCard {
   id: PlanCardId;
   name: string;
   monthlyPrice: number;
   yearlyPrice: number;
+  annualAvailable: boolean;
   tagline: string;
   features: string[];
   popular?: boolean;
 }
 
-const PLAN_CARDS: PlanCard[] = [
-  {
-    id: 'free',
-    name: BILLING_PLAN_PRICING.free.label,
-    monthlyPrice: BILLING_PLAN_PRICING.free.monthlyPriceUsd,
-    yearlyPrice: BILLING_PLAN_PRICING.free.yearlyPriceUsd,
-    tagline: 'Core chat capabilities with a private, adaptive usage limit.',
-    features: [
-      'Auto Economy model routing',
-      'Web search, code execution, files, skills, and voice',
-      'Up to 5 Projects and 1 custom remote MCP',
-      'Chat on Web, Mobile, and Desktop',
-      'No credit card required',
-    ],
-  },
-  {
-    id: 'pro',
-    name: BILLING_PLAN_PRICING.pro.label,
-    monthlyPrice: BILLING_PLAN_PRICING.pro.monthlyPriceUsd,
-    yearlyPrice: BILLING_PLAN_PRICING.pro.yearlyPriceUsd,
-    tagline: 'Higher capacity and advanced routing for professionals.',
-    popular: true,
-    features: [
-      'Everything in Free',
-      'Higher hosted capacity',
-      'Unlimited Projects',
-      'Cowork and developer agent features',
-      'Chrome and IDE extensions',
-      'Advanced model routing controls',
-      'Conversation branching',
-    ],
-  },
-  {
-    id: 'max',
-    name: BILLING_PLAN_PRICING.max.label,
-    monthlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd,
-    yearlyPrice: BILLING_PLAN_PRICING.max.monthlyPriceUsd, // monthly-only
-    tagline: 'Highest capacity for intensive multi-agent workloads.',
-    features: [
-      'Everything in Pro',
-      'Highest hosted capacity',
-      'Multi-agent orchestration',
-      'Extended context windows',
-      'Custom system prompts per project',
-      'Priority support',
-    ],
-  },
-];
+const PLAN_TAGLINES: Record<PlanCardId, string> = {
+  free: 'Core managed chat with a private, adaptive usage limit.',
+  basic: 'The starting paid plan for light work across customer apps.',
+  pro: 'Higher capacity plus managed developer surfaces.',
+  max: 'High capacity for intensive multi-step work.',
+  max_15x: 'The highest-capacity individual plan, including video generation.',
+  team: 'Pro-level usage per seat with shared administration.',
+};
+
+const PLAN_CARD_IDS: readonly PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x', 'team'];
+
+const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.filter((id) =>
+  isPlanSelectableOnSurface(id, 'web'),
+).map((id) => {
+  const display = getBillingPlanDisplay(id);
+  return {
+    id,
+    name: display.pricing.label,
+    monthlyPrice: display.pricing.monthlyPriceUsd,
+    yearlyPrice: display.pricing.yearlyPriceUsd,
+    annualAvailable: display.annualAvailable,
+    tagline: PLAN_TAGLINES[id],
+    features: display.features,
+    popular: id === 'pro',
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -103,11 +87,11 @@ const PLAN_CARDS: PlanCard[] = [
 
 function formatPrice(usd: number): string {
   if (usd === 0) return 'Free';
-  return `$${usd.toFixed(2)}`;
+  return formatCatalogPrice(usd);
 }
 
 function annualPerMonth(yearlyUsd: number): string {
-  return `$${(yearlyUsd / 12).toFixed(2)}`;
+  return formatCatalogPrice(yearlyUsd / 12);
 }
 
 function annualSavingsPct(monthly: number, yearly: number): number {
@@ -116,7 +100,8 @@ function annualSavingsPct(monthly: number, yearly: number): number {
 }
 
 function isTierUpgrade(current: string, target: PlanCardId): boolean {
-  const order: PlanCardId[] = ['free', 'pro', 'max'];
+  if (target === 'team') return ['free', 'basic', 'pro'].includes(current);
+  const order: PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x'];
   return order.indexOf(target) > order.indexOf(current as PlanCardId);
 }
 
@@ -142,8 +127,9 @@ interface PlanCardProps {
 }
 
 function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) {
+  const usesAnnual = annual && plan.annualAvailable;
   const displayPrice =
-    annual && plan.monthlyPrice > 0
+    usesAnnual && plan.monthlyPrice > 0
       ? annualPerMonth(plan.yearlyPrice)
       : formatPrice(plan.monthlyPrice);
   const savingsPct = annualSavingsPct(plan.monthlyPrice, plan.yearlyPrice);
@@ -172,11 +158,16 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
             <span className="text-xs text-muted-foreground">USD / month</span>
           )}
         </div>
-        {annual && savingsPct > 0 && (
+        {usesAnnual && savingsPct > 0 && (
           <span className="mt-0.5 inline-block text-[11px] font-medium text-primary">
             save {String(savingsPct)}% annually
           </span>
         )}
+        {annual && plan.monthlyPrice > 0 && !plan.annualAvailable ? (
+          <span className="mt-0.5 inline-block text-[11px] text-muted-foreground">
+            Monthly only
+          </span>
+        ) : null}
         <p className="mt-2 text-xs leading-5 text-muted-foreground">{plan.tagline}</p>
       </div>
 
@@ -187,14 +178,21 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
       </ul>
 
       <div className="mt-auto">
-        {isCurrent ? (
+        {plan.id === 'team' ? (
+          <a
+            className="flex h-9 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground"
+            href="/contact-sales?plan=team"
+          >
+            Contact sales
+          </a>
+        ) : isCurrent ? (
           <Button className="h-9 w-full rounded-xl text-sm" variant="outline" disabled>
             Your current plan
           </Button>
         ) : isUpgrade ? (
           <Button
             className="h-9 w-full rounded-xl text-sm"
-            onClick={() => onUpgrade(plan.id as UpgradeTarget, annual)}
+            onClick={() => onUpgrade(plan.id as UpgradeTarget, usesAnnual)}
           >
             Upgrade to {plan.name}
           </Button>
@@ -237,7 +235,7 @@ export function UpgradePlanDialog({
 
   // Default view: show the current plan card + the next recommended tier.
   // Expanded: show all tiers.
-  const tierOrder: PlanCardId[] = ['free', 'pro', 'max'];
+  const tierOrder: PlanCardId[] = ['free', 'basic', 'pro', 'max', 'max_15x', 'team'];
   const currentIdx = tierOrder.indexOf(currentTier as PlanCardId);
   const safeIdx = currentIdx >= 0 ? currentIdx : 0;
 

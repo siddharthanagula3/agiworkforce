@@ -1,37 +1,57 @@
-// packages/contracts/types/src/design-system/user-identity.ts
+import { BILLING_PLAN_PRICING, type BillingPlanTier } from '../billing-catalog';
 
 /**
  * Pricing tiers per the current billing catalog (packages/contracts/types/src/billing-catalog.ts).
  * Named UIPlanTier to distinguish from the legacy Tauri PlanTier in tauri.ts.
  *
- * 2026-07-02: 'hobby' renamed to 'basic' (now $8/mo, ₹399/mo India — see
- * BILLING_PLAN_PRICING), 'pro_plus' removed with no successor (it was never
- * shipped as a real tier). `canSwitchProviderInThread` below, which used to
- * gate on `pro_plus`, now gates on `max` only — the most-restrictive choice
- * consistent with the removal, since no tier was designated to inherit that
- * gate. Sequence: Local + BYOK free forever, then Basic → Pro → Max.
+ * The UI uses `local` for the billing catalog's `local-only` identifier. All
+ * managed tiers remain distinct so an unknown value can never relabel a
+ * Managed Cloud session as BYOK.
  */
-export type UIPlanTier = 'local' | 'byok' | 'basic' | 'pro' | 'max';
+export type UIPlanTier = 'local' | Exclude<BillingPlanTier, 'local-only'>;
 
 export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
-  local: 'Local Mode',
-  byok: 'Local Mode + BYOK',
-  basic: 'Basic',
-  pro: 'Pro',
-  max: 'Max',
+  local: BILLING_PLAN_PRICING['local-only'].label,
+  byok: BILLING_PLAN_PRICING.byok.label,
+  free: BILLING_PLAN_PRICING.free.label,
+  basic: BILLING_PLAN_PRICING.basic.label,
+  pro: BILLING_PLAN_PRICING.pro.label,
+  max: BILLING_PLAN_PRICING.max.label,
+  max_15x: BILLING_PLAN_PRICING.max_15x.label,
+  team: BILLING_PLAN_PRICING.team.label,
+  enterprise: BILLING_PLAN_PRICING.enterprise.label,
 });
 
 export const PLAN_DESCRIPTION: Readonly<Record<UIPlanTier, string>> = Object.freeze({
   local: 'Local LLMs — Ollama / LM Studio',
   byok: 'Local app with your own provider keys',
+  free: 'Managed Cloud chat with free usage',
   basic: 'Cloud Managed, basic models',
   pro: 'Pro — balanced models, higher usage',
-  max: 'Max — flagship models, highest usage',
+  max: 'Max 5x — flagship models and higher usage',
+  max_15x: 'Max 15x — flagship models and the highest individual usage',
+  team: 'Pro capabilities with shared team administration',
+  enterprise: 'Managed controls and negotiated enterprise capabilities',
 });
+
+export function normalizeUIPlanTier(
+  value: string | null | undefined,
+  fallback: UIPlanTier = 'byok',
+): UIPlanTier {
+  if (!value) return fallback;
+  const normalized = value.toLowerCase();
+  if (normalized === 'local' || normalized === 'local-only') return 'local';
+  if (normalized === 'hobby') return 'basic';
+  if (normalized === 'pro_plus' || normalized === 'pro+') return 'max';
+  if (normalized in BILLING_PLAN_PRICING && normalized !== 'local-only') {
+    return normalized as Exclude<BillingPlanTier, 'local-only'>;
+  }
+  return fallback;
+}
 
 /** True for tiers that are free forever — never gate the tool on these. */
 export function isFreePlan(tier: UIPlanTier): boolean {
-  return tier === 'local' || tier === 'byok';
+  return tier === 'local' || tier === 'byok' || tier === 'free';
 }
 
 /**
@@ -40,16 +60,20 @@ export function isFreePlan(tier: UIPlanTier): boolean {
  * cross-provider continuity flow.
  */
 export function canSwitchProviderInThread(tier: UIPlanTier): boolean {
-  return tier === 'max';
+  return tier === 'max' || tier === 'max_15x' || tier === 'enterprise';
 }
 
 /** Strict tier ordering for upgrade-path comparisons. */
 const TIER_ORDER: Readonly<Record<UIPlanTier, number>> = Object.freeze({
   local: 0,
-  byok: 1,
-  basic: 2,
-  pro: 3,
-  max: 4,
+  byok: 0,
+  free: 0,
+  basic: 1,
+  pro: 2,
+  team: 2,
+  max: 3,
+  max_15x: 4,
+  enterprise: 5,
 });
 
 /** True iff `actual` meets or exceeds `required`. */
@@ -59,7 +83,7 @@ export function tierAtLeast(actual: UIPlanTier, required: UIPlanTier): boolean {
 
 /**
  * Usage meter shown in profile popover.
- * Hobby+ users see managed-plan limits; BYOK users see their own key's limits (when known);
+ * Managed-plan users see hosted usage; BYOK users see their own key's limits (when known);
  * Local users see no meter.
  */
 export interface UsageMeter {

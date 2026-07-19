@@ -15,10 +15,6 @@
     "beta_features": true,
     "advanced_model_access": true
   },
-  "credits": {
-    "account_id": "acct_golden",
-    "credits_remaining_cents": 1250
-  },
   "routing_preferences": {
     "us_only": false
   },

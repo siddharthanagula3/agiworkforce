@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
+import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { useMediaStore } from '@shared/stores/media-store';
 
 async function getAuthToken(): Promise<string> {
@@ -34,8 +35,6 @@ export class MediaGenerationApiError extends Error {
   code: string | undefined;
   type: string | undefined;
   isPaywall: boolean;
-  creditsRequired: number | undefined;
-  creditsRemaining: number | undefined;
 
   constructor(
     message: string,
@@ -43,8 +42,6 @@ export class MediaGenerationApiError extends Error {
       status?: number;
       code?: string;
       type?: string;
-      creditsRequired?: number;
-      creditsRemaining?: number;
     } = {},
   ) {
     super(message);
@@ -52,8 +49,6 @@ export class MediaGenerationApiError extends Error {
     this.status = options.status;
     this.code = options.code;
     this.type = options.type;
-    this.creditsRequired = options.creditsRequired;
-    this.creditsRemaining = options.creditsRemaining;
     this.isPaywall =
       options.status === 402 ||
       options.status === 403 ||
@@ -68,6 +63,11 @@ export function useMediaGeneration() {
   const generateImage = useCallback(
     async (prompt: string, options: GenerateImageOptions = {}) => {
       const jobId = crypto.randomUUID();
+      const idempotencyKey = createManagedMediaIdempotencyKey({
+        surface: 'web',
+        operation: 'image',
+        operationId: jobId,
+      });
       const authToken = await getAuthToken();
 
       addJob({
@@ -86,6 +86,7 @@ export function useMediaGeneration() {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${authToken}`,
+            'Idempotency-Key': idempotencyKey,
           },
           body: JSON.stringify({
             prompt,
@@ -104,16 +105,10 @@ export function useMediaGeneration() {
             `Request failed: ${response.status}`;
           const code = typeof errorField === 'object' ? errorField?.code : undefined;
           const type = typeof errorField === 'object' ? errorField?.type : undefined;
-          const creditsRequired =
-            typeof errorField === 'object' ? errorField?.credits_required : undefined;
-          const creditsRemaining =
-            typeof errorField === 'object' ? errorField?.credits_remaining : undefined;
           throw new MediaGenerationApiError(message, {
             status: response.status,
             code,
             type,
-            creditsRequired,
-            creditsRemaining,
           });
         }
 

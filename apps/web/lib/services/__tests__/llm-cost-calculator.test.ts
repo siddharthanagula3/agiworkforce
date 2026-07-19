@@ -2,29 +2,23 @@ import { describe, expect, it } from 'vitest';
 
 import { LLMCostCalculator } from '../llm-cost-calculator';
 
-/**
- * Regression coverage for Sonnet 5's promotional pricing boundary
- * (`promo_expires_at: '2026-08-31'` in packages/contracts/types/src/models.json).
- * Pinned dates straddle the exact cutoff instant (`isPromoExpired` treats
- * `now >= cutoff` as expired, so 2026-08-31T00:00:00.000Z itself is already
- * post-promo, not the last promo day).
- */
+/** Regression coverage for the founder-selected Sonnet 5 standard rates. */
 
 const PROMO_MODEL = 'claude-sonnet-5';
 const STILL_PROMO = new Date('2026-08-30T23:59:59.999Z');
 const AT_CUTOFF = new Date('2026-08-31T00:00:00.000Z');
 const WELL_PAST_CUTOFF = new Date('2026-09-01T00:00:00.000Z');
 
-describe('LLMCostCalculator — post_promo_prices date-aware pricing', () => {
-  it('uses promo rates for every field (input/output/cached) before the cutoff', () => {
+describe('LLMCostCalculator — Sonnet 5 standard pricing', () => {
+  it('uses standard rates for every field before the former promotion cutoff', () => {
     const pricing = LLMCostCalculator.getPricing('anthropic', PROMO_MODEL, STILL_PROMO);
-    expect(pricing.inputCostPer1MTokens).toBe(2);
-    expect(pricing.outputCostPer1MTokens).toBe(10);
-    expect(pricing.cachedInputCostPer1MTokens).toBe(0.2);
-    expect(pricing.cachedWriteCostPer1MTokens).toBe(2.5);
+    expect(pricing.inputCostPer1MTokens).toBe(3);
+    expect(pricing.outputCostPer1MTokens).toBe(15);
+    expect(pricing.cachedInputCostPer1MTokens).toBe(0.3);
+    expect(pricing.cachedWriteCostPer1MTokens).toBe(3.75);
   });
 
-  it('switches to post_promo rates for every field at the exact cutoff instant', () => {
+  it('keeps standard rates at the former cutoff instant', () => {
     const pricing = LLMCostCalculator.getPricing('anthropic', PROMO_MODEL, AT_CUTOFF);
     expect(pricing.inputCostPer1MTokens).toBe(3);
     expect(pricing.outputCostPer1MTokens).toBe(15);
@@ -32,7 +26,7 @@ describe('LLMCostCalculator — post_promo_prices date-aware pricing', () => {
     expect(pricing.cachedWriteCostPer1MTokens).toBe(3.75);
   });
 
-  it('stays on post_promo rates well past the cutoff', () => {
+  it('keeps standard rates well past the former cutoff', () => {
     const pricing = LLMCostCalculator.getPricing('anthropic', PROMO_MODEL, WELL_PAST_CUTOFF);
     expect(pricing.inputCostPer1MTokens).toBe(3);
     expect(pricing.outputCostPer1MTokens).toBe(15);
@@ -47,16 +41,11 @@ describe('LLMCostCalculator — post_promo_prices date-aware pricing', () => {
       cacheCreationInputTokens: 1_000_000,
     };
 
-    // Pre-promo: (1M*$2) input + (1M*$10) output + (1M*$0.2) cache-read +
-    // (1M*$2.5) cache-write(5m) = $14.70 -> 1470 cents.
+    // Standard: (1M*$3) + (1M*$15) + (1M*$0.3) + (1M*$3.75) = $22.05.
     const preCents = LLMCostCalculator.calculateCost('anthropic', PROMO_MODEL, usage, STILL_PROMO);
-    expect(preCents).toBe(1470);
+    expect(preCents).toBe(2205);
 
-    // Post-promo: (1M*$3) + (1M*$15) + (1M*$0.3) + (1M*$3.75) = $22.05 ->
-    // 2205 cents. A fix that only swaps input/output and leaves
-    // cached_input/cached_write on the promo rate would land here at 2120
-    // cents instead (undercharging cache by $0.85) -- this assertion is the
-    // one that catches that half-fixed version.
+    // Date never changes the founder-selected standard price.
     const postCents = LLMCostCalculator.calculateCost(
       'anthropic',
       PROMO_MODEL,
@@ -75,18 +64,14 @@ describe('LLMCostCalculator — post_promo_prices date-aware pricing', () => {
       cacheCreation1hInputTokens: 1_000_000,
     };
 
-    // Pre-promo: 1h rate = 2 * $2 = $4/M -> 400 cents (matches models.json's
-    // cached_write_1h: 4 for the promo period).
-    expect(LLMCostCalculator.calculateCost('anthropic', PROMO_MODEL, usage, STILL_PROMO)).toBe(400);
-    // Post-promo: 1h rate = 2 * $3 = $6/M -> 600 cents (matches
-    // post_promo_prices.cached_write_1h: 6).
+    expect(LLMCostCalculator.calculateCost('anthropic', PROMO_MODEL, usage, STILL_PROMO)).toBe(600);
     expect(LLMCostCalculator.calculateCost('anthropic', PROMO_MODEL, usage, WELL_PAST_CUTOFF)).toBe(
       600,
     );
   });
 
-  it('estimateCost and getInputCostPerMtok honor the same date-aware switch', () => {
-    expect(LLMCostCalculator.getInputCostPerMtok('anthropic', PROMO_MODEL, STILL_PROMO)).toBe(2);
+  it('estimateCost and getInputCostPerMtok use the same standard rate', () => {
+    expect(LLMCostCalculator.getInputCostPerMtok('anthropic', PROMO_MODEL, STILL_PROMO)).toBe(3);
     expect(LLMCostCalculator.getInputCostPerMtok('anthropic', PROMO_MODEL, WELL_PAST_CUTOFF)).toBe(
       3,
     );
@@ -105,15 +90,24 @@ describe('LLMCostCalculator — post_promo_prices date-aware pricing', () => {
       0,
       WELL_PAST_CUTOFF,
     );
-    expect(preEstimate).toBe(200); // 1M * $2/M = 200 cents
+    expect(preEstimate).toBe(300);
     expect(postEstimate).toBe(300); // 1M * $3/M = 300 cents
   });
 
-  it('leaves a model with no promo_expires_at unaffected by the date parameter', () => {
-    // claude-sonnet-4.6 has no promo_expires_at/post_promo_prices in the
-    // catalog -- getPricing must return the same rates regardless of `now`.
-    const before = LLMCostCalculator.getPricing('anthropic', 'claude-sonnet-4.6', STILL_PROMO);
-    const after = LLMCostCalculator.getPricing('anthropic', 'claude-sonnet-4.6', WELL_PAST_CUTOFF);
+  it('does not apply date-dependent promotional pricing', () => {
+    const before = LLMCostCalculator.getPricing('anthropic', PROMO_MODEL, STILL_PROMO);
+    const after = LLMCostCalculator.getPricing('anthropic', PROMO_MODEL, WELL_PAST_CUTOFF);
     expect(after).toEqual(before);
+  });
+
+  it('preserves sub-cent precision for private free-plan settlement', () => {
+    const usage = { promptTokens: 100, completionTokens: 0, totalTokens: 100 };
+
+    expect(LLMCostCalculator.calculateCost('anthropic', PROMO_MODEL, usage, WELL_PAST_CUTOFF)).toBe(
+      0,
+    );
+    expect(
+      LLMCostCalculator.calculateCostMicrousd('anthropic', PROMO_MODEL, usage, WELL_PAST_CUTOFF),
+    ).toBe(300);
   });
 });

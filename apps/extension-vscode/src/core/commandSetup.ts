@@ -983,19 +983,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         kind: vscode.QuickPickItemKind.Default,
       });
 
-      if (tierInfo?.tokensUsed !== undefined && tierInfo.tokenCap !== undefined) {
-        const pct = Math.round((tierInfo.tokensUsed / tierInfo.tokenCap) * 100);
-        const usedFmt = (tierInfo.tokensUsed / 1_000).toFixed(1);
-        const capFmt = (tierInfo.tokenCap / 1_000).toFixed(1);
+      if (tierInfo?.usagePercentage !== undefined) {
+        const pct = Math.round(tierInfo.usagePercentage);
         items.push({
-          label: `$(pulse) Token usage: ${usedFmt}K / ${capFmt}K (${pct}%)`,
-          description: 'Tokens used this billing period',
-        });
-      } else if (tierInfo?.tokensUsed !== undefined) {
-        const usedFmt = (tierInfo.tokensUsed / 1_000).toFixed(1);
-        items.push({
-          label: `$(pulse) Token usage: ${usedFmt}K used`,
-          description: 'Tokens used this billing period',
+          label: `$(pulse) Cloud usage: ${pct}% used`,
+          description: 'Plan usage this period',
         });
       }
 
@@ -1322,12 +1314,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
       ];
 
-      if (tierInfo?.tokensUsed !== undefined && tierInfo.tokenCap !== undefined) {
-        const pct = Math.round((tierInfo.tokensUsed / tierInfo.tokenCap) * 100);
+      if (tierInfo?.usagePercentage !== undefined) {
+        const pct = Math.round(tierInfo.usagePercentage);
         items.push(
           { label: 'Cloud quota', kind: vscode.QuickPickItemKind.Separator },
           {
-            label: `$(pulse) Cloud usage: ${formatK(tierInfo.tokensUsed)} / ${formatK(tierInfo.tokenCap)} (${pct}%)`,
+            label: `$(pulse) Cloud usage: ${pct}% used`,
             description: `Plan: ${tier}`,
           },
         );

@@ -125,11 +125,11 @@ describe('TIER_POLICIES — Pro tier compatibility policy', () => {
     expect(policy.allowMCP).toBe('unlimited');
   });
 
-  it('warns at 80%, downgrades at 100%, hard-caps at 150%', () => {
+  it('warns at 80% and hard-caps at 100% with no grace overage', () => {
     const cap = policy.capBehavior as TierCapBehavior;
     expect(cap.warnAt).toBe(0.8);
     expect(cap.downgradeAt).toBe(1.0);
-    expect(cap.hardCapAt).toBe(1.5);
+    expect(cap.hardCapAt).toBe(1.0);
   });
 
   it('exposes managed_cloud + BYOK provider surfaces (no local at Pro)', () => {
@@ -215,6 +215,11 @@ describe('getTierPolicy — public getter', () => {
 
   it('returns the same Pro policy reference on repeated calls', () => {
     expect(getTierPolicy('pro')).toBe(TIER_POLICIES.pro);
+  });
+
+  it('maps both Max subscription products to the capped Max policy', () => {
+    expect(getTierPolicy('max')).toBe(TIER_POLICIES.max);
+    expect(getTierPolicy('max_15x')).toBe(TIER_POLICIES.max);
   });
 
   it('falls back to Free when the tier is unknown', () => {

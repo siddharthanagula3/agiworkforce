@@ -11,10 +11,12 @@ import {
   getAllowedModelsForTier,
   getModelMetadataById,
   getModels,
+  normalizeSubscriptionAccessTier,
   type ModelMetadata,
   type ModelQualityTier,
   type ModelStatus,
   type Provider,
+  type SubscriptionAccessTier,
 } from '@agiworkforce/types';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
@@ -56,20 +58,40 @@ function getActiveCatalogModels(): CatalogModel[] {
   return getModels({ includeDeprecated: false }).filter(isActiveModel).map(toCatalogModel);
 }
 
-function parsePlanTier(raw: unknown): 'pro' | 'pro_plus' | 'max' | undefined | null {
+// Canonical subscription tiers + documented legacy aliases. `pro_plus` was
+// removed and has no successor; it is intentionally NOT accepted here. Every
+// value normalizes to a SubscriptionAccessTier via the shared catalog so the
+// gateway never keeps its own tier ladder.
+const KNOWN_PLAN_TIERS: ReadonlySet<string> = new Set([
+  'free',
+  'basic',
+  'hobby',
+  'pro',
+  'team',
+  'max',
+  'max_15x',
+  'max-15x',
+  'max15x',
+  'enterprise',
+]);
+
+function parsePlanTier(raw: unknown): SubscriptionAccessTier | undefined | null {
   if (raw === undefined) return undefined;
-  if (raw !== 'pro' && raw !== 'pro_plus' && raw !== 'max') return null;
-  return raw;
+  if (typeof raw !== 'string' || !KNOWN_PLAN_TIERS.has(raw.toLowerCase())) return null;
+  return normalizeSubscriptionAccessTier(raw);
 }
 
-function allowedIdsForPlanTier(planTier: 'pro' | 'pro_plus' | 'max'): Set<string> {
+function allowedIdsForPlanTier(planTier: SubscriptionAccessTier): Set<string> {
+  // Ladder derived from the canonical catalog tiers (matches
+  // getMinimumRequiredTier): economy is the base; pro-and-up add pro_additions;
+  // max-and-up add flagship_additions. Basic/Free = economy only.
   const ids = new Set<string>(getAllowedModelsForTier('economy'));
 
-  if (planTier === 'pro' || planTier === 'pro_plus' || planTier === 'max') {
+  if (planTier === 'pro' || planTier === 'max' || planTier === 'enterprise') {
     for (const id of getAllowedModelsForTier('pro_additions')) ids.add(id);
   }
 
-  if (planTier === 'pro_plus' || planTier === 'max') {
+  if (planTier === 'max' || planTier === 'enterprise') {
     for (const id of getAllowedModelsForTier('flagship_additions')) ids.add(id);
   }
 
@@ -211,7 +233,10 @@ router.get('/', createRateLimiter('default'), async (req: Request, res: Response
   const planTierFilter = parsePlanTier(req.query['planTier']);
 
   if (planTierFilter === null) {
-    res.status(400).json({ error: 'Invalid planTier value; must be "pro", "pro_plus", or "max"' });
+    res.status(400).json({
+      error:
+        'Invalid planTier value; must be a known plan tier (free, basic, pro, max, max_15x, team, enterprise)',
+    });
     return;
   }
 

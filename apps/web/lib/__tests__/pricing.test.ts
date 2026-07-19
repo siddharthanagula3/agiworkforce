@@ -56,10 +56,11 @@ async function importPricingWithEnv(
 // ---------------------------------------------------------------------------
 
 describe('STRIPE_PRICE_IDS structure', () => {
-  it('includes pro and max keys at the top level', async () => {
+  it('includes both Max usage tiers at the top level', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv();
     expect(STRIPE_PRICE_IDS).toHaveProperty('pro');
     expect(STRIPE_PRICE_IDS).toHaveProperty('max');
+    expect(STRIPE_PRICE_IDS).toHaveProperty('max_15x');
   });
 
   it('does not include hobby or pro_plus keys', async () => {
@@ -104,6 +105,7 @@ describe('STRIPE_PRICE_IDS structure', () => {
   it('max.yearly is always undefined (monthly-only plan)', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv();
     expect(STRIPE_PRICE_IDS.max.yearly).toBeUndefined();
+    expect(STRIPE_PRICE_IDS.max_15x.yearly).toBeUndefined();
   });
 });
 
@@ -136,18 +138,21 @@ describe('getPlanFromPriceId', () => {
     const { PRICING_CONFIG } = await importPricingWithEnv({
       STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly_abc',
       STRIPE_PRICE_MAX_MONTHLY: 'price_max_monthly_abc',
+      STRIPE_PRICE_MAX_15X_MONTHLY: 'price_max_15x_monthly_abc',
     });
     expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_monthly_abc')).toBe('pro');
     expect(PRICING_CONFIG.getPlanFromPriceId('price_max_monthly_abc')).toBe('max');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_max_15x_monthly_abc')).toBe('max_15x');
   });
 });
 
 describe('PRICING_CONFIG.plans', () => {
-  it('has plan entries for pro and max', async () => {
+  it('has plan entries for Pro and both Max capacities', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv();
     const ids = PRICING_CONFIG.plans.map((p) => p.id);
     expect(ids).toContain('pro');
     expect(ids).toContain('max');
+    expect(ids).toContain('max_15x');
   });
 
   it('does not have hobby or pro_plus plan entries', async () => {
@@ -160,7 +165,13 @@ describe('PRICING_CONFIG.plans', () => {
   it('max plan is not waitlisted (enabled for checkout)', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv();
     const max = PRICING_CONFIG.plans.find((p) => p.id === 'max');
-    expect(max?.waitlist).toBeFalsy();
+    expect(max).not.toHaveProperty('waitlist', true);
+  });
+
+  it('team is a purchasable plan rather than a waitlist entry', async () => {
+    const { PRICING_CONFIG } = await importPricingWithEnv();
+    const team = PRICING_CONFIG.plans.find((p) => p.id === 'team');
+    expect(team).not.toHaveProperty('waitlist', true);
   });
 
   it('plans are ordered pro, max', async () => {
@@ -189,5 +200,26 @@ describe('arePriceIdsConfigured', () => {
       STRIPE_PRICE_MAX_MONTHLY: undefined,
     });
     expect(arePriceIdsConfigured()).toBe(false);
+  });
+});
+
+describe('getConfiguredPriceId', () => {
+  it('uses the canonical price owner for every checkout plan', async () => {
+    const { getConfiguredPriceId } = await importPricingWithEnv({
+      STRIPE_PRICE_BASIC_MONTHLY_USD: 'price_basic_usd',
+      STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly',
+      STRIPE_PRICE_PRO_YEARLY: 'price_pro_yearly',
+      STRIPE_PRICE_MAX_MONTHLY: 'price_max_monthly',
+      STRIPE_PRICE_MAX_15X_MONTHLY: 'price_max_15x_monthly',
+      STRIPE_PRICE_TEAM_MONTHLY: 'price_team_monthly',
+      STRIPE_PRICE_TEAM_YEARLY: 'price_team_yearly',
+    });
+
+    expect(getConfiguredPriceId('basic', 'monthly')).toBe('price_basic_usd');
+    expect(getConfiguredPriceId('pro', 'yearly')).toBe('price_pro_yearly');
+    expect(getConfiguredPriceId('max', 'monthly')).toBe('price_max_monthly');
+    expect(getConfiguredPriceId('max_15x', 'monthly')).toBe('price_max_15x_monthly');
+    expect(getConfiguredPriceId('team', 'yearly')).toBe('price_team_yearly');
+    expect(getConfiguredPriceId('max', 'yearly')).toBeUndefined();
   });
 });

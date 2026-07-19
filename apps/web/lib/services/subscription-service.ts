@@ -20,15 +20,12 @@ import Stripe from 'stripe';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
 import type { SubscriptionRow, ProfileRow } from '@/lib/server/neon-types';
-import {
-  getBillingDetailsFromPriceId,
-  resolvePlanTier,
-  isValidPlanTier,
-} from '@/lib/price-tier-mapping';
+import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 // AUDIT-P3: Use shared Stripe type helpers for safer period access
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
-import { getPlanUsageBudgetCents, getUsageBudgetCentsFromPriceCents } from '@agiworkforce/types';
+import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
+import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 
 export interface SubscriptionInfo {
   id: string;
@@ -42,26 +39,8 @@ export interface SubscriptionInfo {
 }
 
 interface CreditAllocationOptions {
+  /** Compatibility-only audit context; allocation always comes from planTier. */
   stripePriceId?: string | null;
-  overrideCreditsCents?: number | null;
-}
-
-function resolveCreditsAllocationCents(
-  planTier: string,
-  options: CreditAllocationOptions = {},
-): number {
-  if (typeof options.overrideCreditsCents === 'number' && options.overrideCreditsCents >= 0) {
-    return Math.round(options.overrideCreditsCents);
-  }
-
-  if (options.stripePriceId) {
-    const billingDetails = getBillingDetailsFromPriceId(options.stripePriceId);
-    if (billingDetails) {
-      return billingDetails.usageBudgetCents;
-    }
-  }
-
-  return getPlanUsageBudgetCents(planTier, 'monthly');
 }
 
 export class SubscriptionService {
@@ -133,21 +112,26 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
-    options: CreditAllocationOptions = {},
+    _options: CreditAllocationOptions = {},
   ): Promise<string> {
-    const creditsCents = resolveCreditsAllocationCents(planTier, options);
+    const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
 
     if (creditsCents === 0) {
       logger.info({ userId, planTier }, 'No credits allocated for plan tier');
       return '';
     }
 
+    const usagePeriod = resolveManagedUsagePeriod({
+      subscriptionPeriodStart: periodStart,
+      subscriptionPeriodEnd: periodEnd,
+    });
+
     try {
       const accountId = await CreditService.getOrCreateAccount(
         userId,
         subscriptionId,
-        periodStart,
-        periodEnd,
+        usagePeriod.periodStart,
+        usagePeriod.periodEnd,
         creditsCents,
       );
 
@@ -179,21 +163,26 @@ export class SubscriptionService {
     planTier: string,
     periodStart: Date,
     periodEnd: Date,
-    options: CreditAllocationOptions = {},
+    _options: CreditAllocationOptions = {},
   ): Promise<string> {
-    const creditsCents = resolveCreditsAllocationCents(planTier, options);
+    const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
 
     if (creditsCents === 0) {
       logger.info({ userId, planTier }, 'No credits to reset for plan tier');
       return '';
     }
 
+    const usagePeriod = resolveManagedUsagePeriod({
+      subscriptionPeriodStart: periodStart,
+      subscriptionPeriodEnd: periodEnd,
+    });
+
     try {
       const accountId = await CreditService.resetForPeriod(
         userId,
         subscriptionId,
-        periodStart,
-        periodEnd,
+        usagePeriod.periodStart,
+        usagePeriod.periodEnd,
         creditsCents,
       );
 
@@ -216,10 +205,43 @@ export class SubscriptionService {
   }
 
   /**
+   * Move an active paid credit account into a replacement upgrade period.
+   * Existing usage counters and purchased top-ups stay on the account; only
+   * the included plan-allocation difference is added.
+   */
+  static async carryCreditsForUpgradePeriod(
+    userId: string,
+    subscriptionId: string,
+    previousPlanTier: string,
+    nextPlanTier: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<string> {
+    const previousBudgetCents = getPlanUsageBudgetCents(previousPlanTier, 'monthly');
+    const nextBudgetCents = getPlanUsageBudgetCents(nextPlanTier, 'monthly');
+    if (previousBudgetCents <= 0 || nextBudgetCents < previousBudgetCents) {
+      throw new Error('Usage carry-forward requires a paid plan upgrade');
+    }
+
+    const usagePeriod = resolveManagedUsagePeriod({
+      subscriptionPeriodStart: periodStart,
+      subscriptionPeriodEnd: periodEnd,
+    });
+
+    return CreditService.carryUsageIntoUpgradedPeriod(
+      userId,
+      subscriptionId,
+      usagePeriod.periodStart,
+      usagePeriod.periodEnd,
+      nextBudgetCents - previousBudgetCents,
+    );
+  }
+
+  /**
    * Get credit allocation for a plan tier
    */
   static getCreditAllocation(planTier: string): number {
-    return resolveCreditsAllocationCents(planTier);
+    return getPlanUsageBudgetCents(planTier, 'monthly');
   }
 
   /**
@@ -420,8 +442,6 @@ export class SubscriptionService {
       }
 
       const stripePriceId = stripeSubscription.items.data[0]?.price.id;
-      const stripeUnitAmountCents = stripeSubscription.items.data[0]?.price.unit_amount ?? null;
-
       if (!stripePriceId) {
         logger.warn(
           { subscriptionId: stripeSubscription.id },
@@ -438,7 +458,6 @@ export class SubscriptionService {
           status: stripeSubscription.status,
           planTier,
           stripePriceId,
-          stripeUnitAmountCents,
         },
         'Found valid subscription in Stripe',
       );
@@ -575,13 +594,6 @@ export class SubscriptionService {
         planTier,
         new Date(currentPeriodStart),
         new Date(currentPeriodEnd),
-        {
-          stripePriceId: stripePriceId ?? undefined,
-          overrideCreditsCents:
-            typeof stripeUnitAmountCents === 'number'
-              ? getUsageBudgetCentsFromPriceCents(stripeUnitAmountCents)
-              : undefined,
-        },
       );
 
       return {

@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { InlinePaywallCard } from '../InlinePaywallCard';
+import {
+  InlinePaywallCard,
+  normalizePaywallFeature,
+  normalizeRequiredTier,
+} from '../InlinePaywallCard';
 import type { PaywallFeature, RequiredTier, UserTier } from '../InlinePaywallCard';
 
 // ---------------------------------------------------------------------------
@@ -20,7 +24,7 @@ function makeProps(
   return {
     feature: 'web_search' as PaywallFeature,
     currentTier: 'free' as UserTier,
-    requiredTier: 'hobby' as RequiredTier,
+    requiredTier: 'basic' as RequiredTier,
     onUpgrade: vi.fn(),
     onDismiss: vi.fn(),
     ...overrides,
@@ -42,15 +46,15 @@ describe('InlinePaywallCard', () => {
 
   describe('headline copy', () => {
     const cases: Array<[PaywallFeature, RequiredTier, string]> = [
-      ['web_search', 'hobby', 'Upgrade to Hobby for web search'],
-      ['video_generation', 'max', 'Upgrade to Max for video generation'],
-      ['opus_4_7', 'max', 'Upgrade to Max for Opus 4.7 access'],
-      ['gpt_5_5', 'max', 'Upgrade to Max for GPT-5.5 access'],
+      ['web_search', 'basic', 'Upgrade to Basic for web search'],
+      ['video_generation', 'max_15x', 'Upgrade to Max 15x for video generation'],
+      ['opus_4_7', 'max', 'Upgrade to Max 5x for Opus 4.7 access'],
+      ['gpt_5_5', 'max', 'Upgrade to Max 5x for GPT-5.5 access'],
       ['computer_use', 'pro', 'Upgrade to Pro for computer use'],
-      ['deep_research', 'max', 'Upgrade to Max for deep research'],
-      ['image_quota', 'hobby', 'Upgrade to Hobby for more image generation'],
-      ['token_cap', 'hobby', 'Upgrade to Hobby for higher token limits'],
-      ['mcp', 'hobby', 'Upgrade to Hobby for MCP server support'],
+      ['deep_research', 'max', 'Upgrade to Max 5x for deep research'],
+      ['image_quota', 'pro', 'Upgrade to Pro for more image generation'],
+      ['token_cap', 'basic', 'Upgrade to Basic for higher token limits'],
+      ['mcp', 'basic', 'Upgrade to Basic for MCP server support'],
     ];
 
     it.each(cases)(
@@ -67,19 +71,19 @@ describe('InlinePaywallCard', () => {
   // -------------------------------------------------------------------------
 
   describe('tier badge', () => {
-    it('shows "Hobby" badge for hobby tier', () => {
-      render(<InlinePaywallCard {...makeProps({ requiredTier: 'hobby' })} />);
-      expect(screen.getByText('Hobby')).toBeInTheDocument();
+    it('shows "Basic" badge for basic tier', () => {
+      render(<InlinePaywallCard {...makeProps({ requiredTier: 'basic' })} />);
+      expect(screen.getByText('Basic')).toBeInTheDocument();
     });
 
-    it('shows "Max" badge for max tier (pro_plus removed)', () => {
+    it('shows "Max 5x" badge for max tier', () => {
       render(<InlinePaywallCard {...makeProps({ requiredTier: 'max' })} />);
-      expect(screen.getByText('Max')).toBeInTheDocument();
+      expect(screen.getByText('Max 5x')).toBeInTheDocument();
     });
 
-    it('shows "Max" badge for max tier', () => {
-      render(<InlinePaywallCard {...makeProps({ requiredTier: 'max' })} />);
-      expect(screen.getByText('Max')).toBeInTheDocument();
+    it('shows "Max 15x" badge for max_15x tier', () => {
+      render(<InlinePaywallCard {...makeProps({ requiredTier: 'max_15x' })} />);
+      expect(screen.getByText('Max 15x')).toBeInTheDocument();
     });
   });
 
@@ -92,7 +96,7 @@ describe('InlinePaywallCard', () => {
       const onUpgrade = vi.fn();
       render(<InlinePaywallCard {...makeProps({ onUpgrade })} />);
 
-      const upgradeButton = screen.getByRole('button', { name: /upgrade to hobby/i });
+      const upgradeButton = screen.getByRole('button', { name: /upgrade to basic/i });
       fireEvent.click(upgradeButton);
 
       expect(onUpgrade).toHaveBeenCalledTimes(1);
@@ -100,10 +104,23 @@ describe('InlinePaywallCard', () => {
 
     it('does not render a pricing navigation link for the upgrade action', () => {
       render(
-        <InlinePaywallCard {...makeProps({ feature: 'web_search', requiredTier: 'hobby' })} />,
+        <InlinePaywallCard {...makeProps({ feature: 'web_search', requiredTier: 'basic' })} />,
       );
 
       expect(screen.queryByRole('link', { name: /upgrade/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('untrusted paywall metadata', () => {
+    it('normalizes legacy and invalid required tiers to the shared Basic plan', () => {
+      expect(normalizeRequiredTier('hobby')).toBe('basic');
+      expect(normalizeRequiredTier('not-a-plan')).toBe('basic');
+      expect(normalizeRequiredTier('max_15x')).toBe('max_15x');
+    });
+
+    it('normalizes unknown feature identifiers to a safe generic capability', () => {
+      expect(normalizePaywallFeature('future_server_feature')).toBe('paid_capability');
+      expect(normalizePaywallFeature('web_search')).toBe('web_search');
     });
   });
 

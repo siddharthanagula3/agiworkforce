@@ -1,12 +1,12 @@
 # Unit Economics, Pricing, and Day-1 Profitability Model
 
-Status: Current
+Status: Research reference — superseded for live plan policy
 Owner: Founder + commercial/platform lead
-Last updated: 2026-07-11
+Last updated: 2026-07-18
 
-This is the definitive unit-economics + pricing + profitability model for AGI Workforce. It exists so every billable capability in Managed Cloud is priced to be gross-margin-positive from the first paid user. It supersets the per-token cost fix tracked separately (task #55): tokens are one line item among many.
+This is a dated cost-research workbook, not the live subscription or metering source of truth. Use `docs/current/source-of-truth.md` for the founder-locked public plans, `packages/contracts/types/src/billing-catalog.ts` for public prices/capabilities/product limits, `apps/web/lib/server/managed-usage-policy.ts` for private server-only allowances, and the generated model registry for current provider prices. Never copy a plan value from the historical tables below into production code.
 
-> **STALE-MODEL FLAG (2026-07-11):** the founder locked a new pricing/metering decision the same day this file's numbers were last touched (`docs/plans/tier-metering-reconciliation-wave2-2026-07-11.md`): Basic cut from $8 to $7/mo, **Team reinstated** as a real per-seat tier ($30/seat/mo, $15/seat/mo COGS budget) between Max and Enterprise, and **top-ups enabled** for paid tiers (capped, opt-in, per-tier payout parity) — superseding this doc's "no top-ups" framing. The headline tier list (§3.4) and the P1 task list (§5) below are corrected for this. The downstream COGS-ceiling/retail-value/credit/margin/break-even tables in §3.4–§4.6 and the Executive Summary were computed against the **old** $8/no-Team/no-top-up inputs and have **not** been recomputed here — the exact credit-conversion rate they'd need is itself pending "pricing-research round 3" sign-off per the wave-2 plan. Treat every number in those tables as needing a fresh pass once round 3 lands; do not treat them as current fact in the meantime.
+> **SUPERSEDED PLAN TABLES (2026-07-18):** every subscription-price, allowance, margin, break-even, top-up, and tier-entitlement table below predates the current Free, Basic, Pro, Max 5x, Max 15x, Team, and Enterprise lock. They remain only as research inputs. Public product surfaces show relative usage percentages and reset times; they must not expose the private allowance units or internal conversion used by the server ledger.
 
 ## How to read this doc
 
@@ -28,7 +28,7 @@ Consequence: **provider prices are only OUR COGS inside Managed Cloud.** In BYOK
 
 **BYOK revenue is $0 by design.** We do not charge a platform/hosting fee on BYOK — "Local + BYOK are free access modes, not plans" (`project-pricing`). BYOK's return is conversion to Managed Cloud, not a per-call fee. (If a thin BYOK platform fee is ever wanted, it is a GTM change, not a units change; flagged as an open decision in §6.)
 
-**No top-ups is a feature, not a limitation.** Top-ups are env-gated off (`project-pricing`). Combined with a hard included-usage budget per tier, this gives every paid tier a **COGS ceiling**: a user cannot consume more managed compute than their tier's budget, so our cost per user is bounded and day-1 gross margin is positive _by construction_ (proof in §4).
+Paid top-ups, where enabled, are a separate ledger balance. They do not reset, erase, or prorate subscription usage when a user changes plan. Current top-up policy belongs to the production billing service and the durable source of truth, not the historical calculations below.
 
 ---
 
@@ -83,12 +83,12 @@ Representative routing models (full list in `packages/contracts/types/src/models
 | gemini-3.5-flash                      | 1.50  | 9.00   | 0.15       | ai.google.dev pricing                                                                                 |
 | gpt-5.6-luna                          | 1.00  | 6.00   | 0.10       | models.json; developers.openai.com                                                                    |
 | gpt-5.6-terra                         | 2.50  | 15.00  | 0.25       | models.json                                                                                           |
-| claude-sonnet-4.6                     | 3.00  | 15.00  | 0.30       | platform.claude.com                                                                                   |
+| claude-sonnet-5                       | 3.00  | 15.00  | 0.30       | platform.claude.com                                                                                   |
 | gpt-5.5 / gpt-5.6-sol (flagship)      | 5.00  | 30.00  | 0.50       | models.json; developers.openai.com                                                                    |
 | claude-opus-4.8                       | 5.00  | 25.00  | 0.50       | platform.claude.com                                                                                   |
 | grok-4.3                              | 1.25  | 2.50   | —          | models.json                                                                                           |
 | glm-5.2                               | 1.40  | 4.40   | 0.26       | models.json                                                                                           |
-| kimi-k2.6                             | 0.95  | 4.00   | 0.16       | models.json                                                                                           |
+| qwen-3.7-plus                         | 0.40  | 1.60   | 0.08       | models.json; Alibaba Cloud Model Studio                                                               |
 
 **Cost-control levers:** prompt caching (cache read = 0.1× input on Anthropic/OpenAI/Google) and default routing to a cheap "Super Fast" model for normal chat, reserving flagships for reasoning/tool tasks (aligns with `feedback-qa-model-cost-tiering`). A typical managed chat turn (≈1.5k in / 0.5k out on gemini-flash-lite) costs **≈$0.0011**.
 

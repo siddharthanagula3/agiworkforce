@@ -1,170 +1,39 @@
 import 'server-only';
 
+import { parseManagedUsageSummaryResponse } from '@agiworkforce/types';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { handleCorsPreflightRequest } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { handleCorsPreflightRequest } from '@/lib/cors';
+import { withRateLimit } from '@/lib/rate-limit';
+import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 
-const TimeRangeSchema = z.enum(['7d', '30d', '90d', 'all']).default('30d');
-
-interface DailyUsageRow {
-  date: string;
-  total_tokens: string;
-  total_cost_cents: string;
-  session_count: string;
-}
-
-interface StatsRow {
-  total_tokens: string;
-  total_cost_cents: string;
-  session_count: string;
-  today_tokens: string;
-  today_cost_cents: string;
-  week_tokens: string;
-  week_cost_cents: string;
-  month_tokens: string;
-  month_cost_cents: string;
-}
-
-function rangeToDays(range: string): number | null {
-  if (range === '7d') return 7;
-  if (range === '30d') return 30;
-  if (range === '90d') return 90;
-  return null; // all time
-}
-
-function isMissingLedgerTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    ((error as Record<string, unknown>)['code'] === '42P01' ||
-      String((error as Record<string, unknown>)['message'] ?? '').includes('credit_transactions'))
-  );
-}
-
-/**
- * GET /api/usage/analytics?timeRange=30d
- * Return session analytics and daily usage trends for the current user.
- */
+/** Legacy alias for the canonical percentage/reset managed-usage summary. */
 async function handleGetAnalytics(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'usage-analytics');
   if (rateLimitResponse) return rateLimitResponse;
 
   let userId: string;
   try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
+    userId = (await getClerkAuthUser(request)).userId;
   } catch {
     throw createError.unauthorized('Authentication required');
   }
 
-  const { searchParams } = new URL(request.url);
-  const parsed = TimeRangeSchema.safeParse(searchParams.get('timeRange') ?? '30d');
-  if (!parsed.success) {
-    throw createError.validation('Invalid timeRange parameter');
-  }
-  const timeRange = parsed.data;
-  const days = rangeToDays(timeRange);
-
-  const db = getNeonDb();
-
   try {
-    // Build date filter clause depending on range.
-    const dateFilter = days !== null ? `and created_at >= now() - interval '${days} days'` : '';
-
-    const dailyRows = await db.query<DailyUsageRow>(
-      `select
-         date_trunc('day', created_at)::date::text as date,
-         coalesce(sum((metadata->>'totalTokens')::bigint), 0)::text as total_tokens,
-         sum(amount_cents)::text as total_cost_cents,
-         count(distinct coalesce(metadata->>'session_id', id::text))::text as session_count
-       from public.credit_transactions
-       where user_id = $1
-         and transaction_type = 'deduction'
-         ${dateFilter}
-       group by date_trunc('day', created_at)::date
-       order by date_trunc('day', created_at)::date asc`,
-      [userId],
+    return NextResponse.json(
+      parseManagedUsageSummaryResponse(await getManagedUsageSummary(userId)),
     );
-
-    const [stats] = await db.query<StatsRow>(
-      `select
-         coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as total_tokens,
-         coalesce(sum(case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then amount_cents else 0 end), 0)::text as total_cost_cents,
-         count(distinct case ${dateFilter !== '' ? `when created_at >= now() - interval '${days} days'` : 'when true'} then coalesce(metadata->>'session_id', id::text) else null end)::text as session_count,
-         coalesce(sum(case when created_at >= now() - interval '1 day' then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as today_tokens,
-         coalesce(sum(case when created_at >= now() - interval '1 day' then amount_cents else 0 end), 0)::text as today_cost_cents,
-         coalesce(sum(case when created_at >= now() - interval '7 days' then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as week_tokens,
-         coalesce(sum(case when created_at >= now() - interval '7 days' then amount_cents else 0 end), 0)::text as week_cost_cents,
-         coalesce(sum(case when created_at >= now() - interval '30 days' then (metadata->>'totalTokens')::bigint else 0 end), 0)::text as month_tokens,
-         coalesce(sum(case when created_at >= now() - interval '30 days' then amount_cents else 0 end), 0)::text as month_cost_cents
-       from public.credit_transactions
-       where user_id = $1
-         and transaction_type = 'deduction'`,
-      [userId],
-    );
-
-    const totalTokens = parseInt(stats?.total_tokens ?? '0', 10);
-    const sessionCount = parseInt(stats?.session_count ?? '0', 10);
-
-    // Costs are NET signed sums now (reservation + reconciliation = actual cost).
-    // Clamp to >= 0 so a retroactive correction landing inside a window can't show
-    // a negative cost. (BILLING FIX 0044: was sum(abs(...)), which counted
-    // reconciliation refunds as charges and inflated every figure.)
-    return NextResponse.json({
-      daily_usage: dailyRows.map((r) => ({
-        date: r.date,
-        tokens: parseInt(r.total_tokens, 10),
-        cost: Math.max(0, parseInt(r.total_cost_cents, 10)),
-        sessions: parseInt(r.session_count, 10),
-      })),
-      stats: {
-        total_tokens: totalTokens,
-        total_cost: Math.max(0, parseInt(stats?.total_cost_cents ?? '0', 10)),
-        avg_tokens_per_session: sessionCount > 0 ? Math.round(totalTokens / sessionCount) : 0,
-        sessions_count: sessionCount,
-        today_tokens: parseInt(stats?.today_tokens ?? '0', 10),
-        today_cost: Math.max(0, parseInt(stats?.today_cost_cents ?? '0', 10)),
-        week_tokens: parseInt(stats?.week_tokens ?? '0', 10),
-        week_cost: Math.max(0, parseInt(stats?.week_cost_cents ?? '0', 10)),
-        month_tokens: parseInt(stats?.month_tokens ?? '0', 10),
-        month_cost: Math.max(0, parseInt(stats?.month_cost_cents ?? '0', 10)),
-      },
-      time_range: timeRange,
-    });
   } catch (error) {
-    if (isMissingLedgerTable(error)) {
-      logger.warn({ userId }, 'credit_transactions table unavailable; returning empty analytics');
-      return NextResponse.json({
-        daily_usage: [],
-        stats: {
-          total_tokens: 0,
-          total_cost: 0,
-          avg_tokens_per_session: 0,
-          sessions_count: 0,
-          today_tokens: 0,
-          today_cost: 0,
-          week_tokens: 0,
-          week_cost: 0,
-          month_tokens: 0,
-          month_cost: 0,
-        },
-        time_range: timeRange,
-      });
-    }
-    logger.error({ error, userId }, 'Failed to fetch usage analytics');
-    throw createError.internal('Failed to fetch usage analytics');
+    logger.error({ error, userId }, 'Failed to fetch usage summary');
+    throw createError.internal('Failed to fetch usage summary');
   }
 }
 
 export const GET = withErrorHandler(handleGetAnalytics);
 
 export async function OPTIONS(request: NextRequest) {
-  const preflightResponse = handleCorsPreflightRequest(request);
-  return preflightResponse || new NextResponse(null, { status: 204 });
+  return handleCorsPreflightRequest(request) || new NextResponse(null, { status: 204 });
 }

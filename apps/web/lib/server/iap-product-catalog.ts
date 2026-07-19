@@ -12,13 +12,11 @@
  * All product ids below are the same placeholders as the mobile file: they
  * don't exist in App Store Connect / Google Play Console yet.
  */
-import {
-  BILLING_PLAN_PRICING,
-  type BillingInterval,
-  type BillingPlanTier,
-} from '@agiworkforce/types';
+import { SELF_SERVE_PAID_PLAN_TIERS, type BillingInterval } from '@agiworkforce/types';
 
-export type PurchasableTier = Extract<BillingPlanTier, 'basic' | 'pro' | 'max' | 'team'>;
+// Canonical self-serve set (basic, pro, max, max_15x). Team is EXCLUDED — it is
+// sales-assisted, so an IAP receipt must never self-activate it here.
+export type PurchasableTier = (typeof SELF_SERVE_PAID_PLAN_TIERS)[number];
 
 interface IapProductId {
   ios: string;
@@ -50,14 +48,10 @@ export const IAP_PRODUCTS: IapProductCatalog = {
       android: 'sub_max_monthly',
     },
   },
-  team: {
+  max_15x: {
     monthly: {
-      ios: 'com.agiworkforce.app.sub.team.monthly',
-      android: 'sub_team_monthly',
-    },
-    yearly: {
-      ios: 'com.agiworkforce.app.sub.team.yearly',
-      android: 'sub_team_yearly',
+      ios: 'com.agiworkforce.app.sub.max15x.monthly',
+      android: 'sub_max15x_monthly',
     },
   },
 };
@@ -81,10 +75,7 @@ export function resolveTierFromProductId(
   return null;
 }
 
-/** Sanity check that every purchasable tier in the shared catalog has an entry here. */
+/** Sanity check that a tier is a canonical self-serve tier with a catalog entry. */
 export function isKnownPurchasableTier(tier: string): tier is PurchasableTier {
-  return (
-    tier in IAP_PRODUCTS &&
-    Object.values(BILLING_PLAN_PRICING).some((p) => p.id === tier && p.monthlyPriceUsd > 0)
-  );
+  return (SELF_SERVE_PAID_PLAN_TIERS as readonly string[]).includes(tier) && tier in IAP_PRODUCTS;
 }

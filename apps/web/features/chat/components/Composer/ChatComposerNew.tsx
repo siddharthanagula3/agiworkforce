@@ -30,21 +30,26 @@ import { useSettingsModal } from '@features/settings/components/SettingsModalPro
 import { SendButton } from './SendButton';
 import { ComposerFooter } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
-import { GhostTextOverlay } from './GhostTextOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
-import { useApiPromptCompletion } from '../../hooks/useApiPromptCompletion';
 import { useChatStore } from '@shared/stores/chat-store';
 import { useModelStore } from '@shared/stores/model-store';
-import { getModelMetadata } from '@shared/config/llm';
+import {
+  getAllowedAutoModesForTier,
+  getModelMetadata,
+  getSelectableModels,
+  isModelAllowedForTier,
+  isAutoModeModelId,
+} from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useRouter } from 'next/navigation';
 import { EFFORT_LABEL, getModels, type CloudWorkMode } from '@agiworkforce/types';
 import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 
 /** Composer work mode — claude.ai Chat/Cowork parity ("AGI Work" here). */
 export type ComposerWorkMode = CloudWorkMode;
@@ -80,8 +85,6 @@ interface ChatComposerProps {
   isGenerating?: boolean;
   placeholder?: string;
   disabled?: boolean;
-  /** Whether to enable ghost-text prompt completion (default: true) */
-  promptCompletionEnabled?: boolean;
   /** Pre-fill the textarea with this text (e.g. from empty-state pills). */
   prefillText?: string;
   /** Callback fired after prefillText has been consumed and applied. */
@@ -185,7 +188,7 @@ export interface ImageModelOption {
 // Map the catalog's declarative `imageApi` backend → the provider enum the
 // /api/media/image/generate route accepts. This is the ONLY place the two
 // vocabularies meet; everything else is data. An image model with no imageApi
-// (no route adapter, e.g. managed-cloud-only ideogram) is excluded from the picker.
+// route adapter is excluded from the picker.
 const IMAGE_API_TO_PROVIDER: Record<string, ImageModelOption['provider']> = {
   gemini: 'google',
   imagen: 'google',
@@ -249,7 +252,6 @@ const ChatComposerNewComponent = ({
   isGenerating = false,
   placeholder = 'Ask anything. Type / for commands',
   disabled = false,
-  promptCompletionEnabled = true,
   prefillText,
   onPrefillConsumed,
   droppedFiles,
@@ -343,6 +345,7 @@ const ChatComposerNewComponent = ({
   const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
+  const [showCompatibleModels, setShowCompatibleModels] = useState(false);
 
   const trialExhausted = isFreeTrial && (freeTrial?.limitReached ?? false);
 
@@ -350,9 +353,21 @@ const ChatComposerNewComponent = ({
   // model's capabilities so a user never sends an input the model can't handle
   // (e.g. an image to a text-only model, or web search to a no-search model).
   const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
+  const setComposerSelectedModelId = useModelStore((s) => s.setSelectedModelId);
+  const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
   const selectedModelMeta = getModelMetadata(composerSelectedModelId);
   const selectedModelCaps = selectedModelMeta?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
+  const modelCanAcceptImages = isAutoModeModelId(composerSelectedModelId) || modelSupportsVision;
+  const hasImageAttachments = attachments.some((file) => file.type.startsWith('image/'));
+  const hasAttachmentConflict = hasImageAttachments && !modelCanAcceptImages;
+  const compatibleModels = getSelectableModels().filter(
+    (model) =>
+      model.capabilities.vision &&
+      (isFreeTrial || subscriptionTier === 'free'
+        ? FREE_TRIAL_MODELS.includes(model.id)
+        : isModelAllowedForTier(model.id, subscriptionTier)),
+  );
   // Plain search can use either a provider-native path or AGI's generic
   // function-tool fallback. `/api/me` exposes only whether that fallback is
   // configured; the shared helper combines it with the selected model's real
@@ -490,18 +505,6 @@ const ChatComposerNewComponent = ({
     };
   }, []);
 
-  // Ghost-text prompt completion
-  const {
-    suggestion,
-    isLoading: isSuggestionLoading,
-    accept: acceptSuggestion,
-    clear: clearSuggestion,
-  } = useApiPromptCompletion(message, {
-    // Ghost-text autocomplete hits /api/completion, which requires an active paid
-    // subscription — never call it for free-trial users (avoids 403 spam per keystroke).
-    enabled: promptCompletionEnabled && !isFreeTrial && !showSlashMenu && !showMentions,
-  });
-
   const clearComposerState = useCallback(() => {
     setMessage('');
     clearAttachments();
@@ -514,15 +517,15 @@ const ChatComposerNewComponent = ({
     setShowStyleSubmenu(false);
     setActiveTags([]);
     setLocalNotice(null);
-    clearSuggestion();
     setImageMode(false);
     setImageAspectRatio('auto');
     setImageModelId(IMAGE_MODEL_DEFAULT);
+    setShowCompatibleModels(false);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [clearAttachments, clearSuggestion]);
+  }, [clearAttachments]);
 
   useEffect(() => {
     if (!isFreeTrial) return;
@@ -580,15 +583,9 @@ const ChatComposerNewComponent = ({
         return;
       }
 
-      if (!modelSupportsVision) {
-        setLocalNotice(
-          "The selected model can't read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.",
-        );
-        return;
-      }
       addImageAttachments(files);
     },
-    [addImageAttachments, modelSupportsVision],
+    [addImageAttachments],
   );
 
   // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
@@ -739,26 +736,11 @@ const ChatComposerNewComponent = ({
     [projectPicker, clearFolder, closeProjectPicker],
   );
 
-  // Stable refs so handleInputChange never captures suggestion/clearSuggestion
-  // directly in its dep array. Previously, including them caused the callback
-  // to get a new identity on every streaming token (suggestion clears when the
-  // user types), which triggered React error #185 "Maximum update depth exceeded"
-  // via the controlled-textarea onChange → setMessage → re-render loop.
-  const suggestionRef = useRef(suggestion);
-  suggestionRef.current = suggestion;
-  const clearSuggestionRef = useRef(clearSuggestion);
-  clearSuggestionRef.current = clearSuggestion;
-
-  // Handle input change: detect @mention and /command; clear stale ghost-text
+  // Handle input change: detect @mention and /command.
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     const cursorPos = e.target.selectionStart || 0;
     setMessage(value);
-
-    // Clear ghost-text suggestion on new input (via ref to avoid dep instability)
-    if (suggestionRef.current) {
-      clearSuggestionRef.current();
-    }
 
     // Slash command detection: only when message starts with /
     if (value.startsWith('/') && !value.includes(' ')) {
@@ -833,6 +815,7 @@ const ChatComposerNewComponent = ({
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
     if (isLoading || disabled) return;
+    if (hasAttachmentConflict) return;
     if (trialExhausted) {
       onUpgradeRequest?.();
       return;
@@ -872,6 +855,7 @@ const ChatComposerNewComponent = ({
     selectedSkill,
     isLoading,
     disabled,
+    hasAttachmentConflict,
     trialExhausted,
     onUpgradeRequest,
     imageMode,
@@ -907,18 +891,6 @@ const ChatComposerNewComponent = ({
         }
       }
 
-      // Tab or ArrowRight at end of input accepts ghost-text suggestion
-      if ((e.key === 'Tab' || e.key === 'ArrowRight') && suggestion) {
-        const textarea = textareaRef.current;
-        const atEnd = textarea ? textarea.selectionStart === textarea.value.length : true;
-        if (atEnd) {
-          e.preventDefault();
-          const accepted = acceptSuggestion();
-          setMessage((prev) => prev + accepted);
-          return;
-        }
-      }
-
       // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
       // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
       // Enter (slash/mentions) or mid-IME-composition (e.g. CJK candidates).
@@ -937,10 +909,9 @@ const ChatComposerNewComponent = ({
         setShowMentions(false);
         setShowOverflowMenu(false);
         setShowSlashMenu(false);
-        clearSuggestion();
       }
     },
-    [handleSubmit, showMentions, showSlashMenu, suggestion, acceptSuggestion, clearSuggestion],
+    [handleSubmit, showMentions, showSlashMenu],
   );
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
@@ -965,7 +936,7 @@ const ChatComposerNewComponent = ({
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
-      {modelSupportsVision && <DragDropOverlay onDrop={handleFileDrop} />}
+      <DragDropOverlay onDrop={handleFileDrop} />
 
       {localNotice && (
         <div
@@ -1039,6 +1010,65 @@ const ChatComposerNewComponent = ({
         className="mb-2"
         privacyShortLabel={attachmentPrivacyShortLabel}
       />
+
+      {hasAttachmentConflict && (
+        <div
+          role="alert"
+          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm"
+        >
+          <p className="text-foreground">
+            The selected model can&apos;t read the attached image. Switch to Auto, choose an
+            image-capable model, or remove the image.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const autoModelId = getAllowedAutoModesForTier(subscriptionTier)[0];
+                if (autoModelId) setComposerSelectedModelId(autoModelId);
+              }}
+              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            >
+              Use Auto
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearAttachments();
+                setShowCompatibleModels(false);
+              }}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+            >
+              Remove attachments
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowCompatibleModels((open) => !open)}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+            >
+              Choose a compatible model
+            </button>
+          </div>
+          {showCompatibleModels && (
+            <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-popover p-1">
+              {compatibleModels.map((model) => (
+                <button
+                  key={model.id}
+                  type="button"
+                  aria-label={`Use ${model.name}`}
+                  onClick={() => {
+                    setComposerSelectedModelId(model.id);
+                    setShowCompatibleModels(false);
+                  }}
+                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+                >
+                  {model.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Input Container */}
       <div
@@ -1119,14 +1149,8 @@ const ChatComposerNewComponent = ({
             emptyState && 'px-4 py-3 sm:px-5',
           )}
         >
-          {/* Textarea + Ghost-text overlay wrapper — row 1, full width */}
+          {/* Textarea wrapper — row 1, full width */}
           <div className={cn('relative w-full', emptyState ? 'min-h-[40px]' : 'min-h-[52px]')}>
-            <GhostTextOverlay
-              inputText={message}
-              suggestion={suggestion}
-              isLoading={isSuggestionLoading}
-            />
-
             <textarea
               ref={textareaRef}
               data-composer-textarea
@@ -1145,14 +1169,7 @@ const ChatComposerNewComponent = ({
               )}
               rows={1}
               aria-label="Message input"
-              aria-describedby={suggestion ? 'ghost-text-hint' : undefined}
             />
-
-            {suggestion && (
-              <span id="ghost-text-hint" className="sr-only">
-                Suggestion available: {suggestion}. Press Tab to accept.
-              </span>
-            )}
           </div>
 
           {/* Control cluster — row 2, a single non-wrapping line (flex-nowrap). */}
@@ -1224,16 +1241,11 @@ const ChatComposerNewComponent = ({
                       {/* 1. Add photos */}
                       <button
                         type="button"
-                        disabled={!modelSupportsVision}
                         onClick={() => {
                           fileInputRef.current?.click();
                           closeMenu();
                         }}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          !modelSupportsVision && 'cursor-not-allowed opacity-50',
-                        )}
-                        title={modelSupportsVision ? undefined : "This model can't read images"}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                       >
                         <Paperclip className="h-4 w-4 text-muted-foreground" />
                         <span className="flex-1 text-left">Add photos &amp; files</span>
@@ -1756,7 +1768,7 @@ const ChatComposerNewComponent = ({
             <SendButton
               mode={sendButtonMode}
               hasContent={hasContent}
-              disabled={composerDisabled}
+              disabled={composerDisabled || (sendButtonMode !== 'stop' && hasAttachmentConflict)}
               onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
               className="shrink-0"
             />
@@ -1769,7 +1781,7 @@ const ChatComposerNewComponent = ({
           type="file"
           multiple
           accept="image/*"
-          disabled={!modelSupportsVision}
+          disabled={isLoading || composerDisabled}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -1946,7 +1958,6 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.isGenerating === next.isGenerating &&
     prev.placeholder === next.placeholder &&
     prev.disabled === next.disabled &&
-    prev.promptCompletionEnabled === next.promptCompletionEnabled &&
     prev.prefillText === next.prefillText &&
     prev.onPrefillConsumed === next.onPrefillConsumed &&
     prev.droppedFiles === next.droppedFiles &&

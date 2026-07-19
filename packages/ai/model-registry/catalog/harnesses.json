@@ -135,7 +135,16 @@
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-qwen",
       "trustModes": ["managed_cloud", "byok"],
-      "features": {}
+      "features": {
+        "webSearch": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        },
+        "codeExecution": {
+          "providerSupport": "native",
+          "implementation": "unwired"
+        }
+      }
     },
     "moonshot/chat-completions": {
       "provider": "moonshot",

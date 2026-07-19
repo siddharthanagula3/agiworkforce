@@ -549,7 +549,6 @@ export default function ProjectDetailPage() {
             <ChatComposerNew
               onSend={handleProjectSend}
               placeholder={`New chat in ${project.name}`}
-              promptCompletionEnabled={false}
             />
           </div>
 

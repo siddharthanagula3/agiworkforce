@@ -179,7 +179,11 @@ router.post('/token', createRateLimiter('device-register'), async (req: Request,
   // Tokens minted before 2026-07-09 lack `sub`. They remain signature-valid,
   // but database-backed user routes now fail closed and require reauth rather
   // than retrying with the privileged system connection.
-  const accessToken = jwt.sign({ userId, email, sub: userId }, JWT_SECRET, {
+  // `surface: 'developer'` marks this as a device-authorization credential
+  // (CLI/IDE). The managed plan gate reads it as the TRUSTED developer-surface
+  // class so managed developer access requires Pro or higher. Local/BYOK use of
+  // this identity token is unaffected because it never reaches a managed gate.
+  const accessToken = jwt.sign({ userId, email, sub: userId, surface: 'developer' }, JWT_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
     issuer: 'agiworkforce-api-gateway',
     audience: 'agiworkforce',

@@ -230,6 +230,7 @@ function makeRequest(model: string, stream: boolean): NextRequest {
       Authorization: 'Bearer test-token',
       'Content-Type': 'application/json',
       'Idempotency-Key': 'test-managed-failover',
+      'x-agi-surface': 'web',
     },
     body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], stream }),
   });

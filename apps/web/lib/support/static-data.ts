@@ -44,9 +44,9 @@ export const STATIC_FAQS: FAQ[] = [
   {
     id: 'faq-003',
     category: 'billing',
-    question: 'What is the difference between Hobby and Pro?',
+    question: 'What is the difference between Basic and Pro?',
     answer:
-      'Hobby and Pro have the same features. The difference is per-provider token caps - Hobby has a lower token cap per provider per month. Pro and Max are currently waitlisted.',
+      'Basic includes Managed Cloud chat on Web, Mobile, and Desktop. Pro adds higher usage, more projects and custom MCP connections, image generation, AGI Work, and managed Cloud access from CLI, Chrome, and VS Code. Current availability and regional prices are shown on the pricing page.',
     display_order: 3,
     is_published: true,
   },
@@ -107,7 +107,7 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     slug: 'web-search',
     excerpt: 'How to enable real-time web search for your conversations.',
     content:
-      '# Using web search\n\nEnable web search in the chat toolbar to let the AI fetch live information. Web search is available on Hobby and above with a lower token cap on Hobby.',
+      '# Using web search\n\nEnable web search in the chat toolbar to let the AI fetch current information. Managed Cloud search follows the chat and usage policy for your plan; Local and BYOK behavior depends on the selected runtime and provider.',
     views: 640,
   },
 ];

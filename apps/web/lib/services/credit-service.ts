@@ -399,6 +399,63 @@ export class CreditService {
     return `${userId}:${operationType}:${requestId}`;
   }
 
+  /**
+   * Carry paid usage into a replacement upgrade period without resetting any
+   * usage counter. Updating the existing account also preserves purchased
+   * top-ups, which are already included in credits_allocated_cents.
+   */
+  static async carryUsageIntoUpgradedPeriod(
+    userId: string,
+    subscriptionId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    allocationDeltaCents: number,
+  ): Promise<string> {
+    const db = getNeonDb();
+    const [row] = await db.query<{ account_id: string }>(
+      `with current_account as (
+         select id
+         from token_credits
+         where user_id = $1 and subscription_id = $2
+         order by period_end desc
+         limit 1
+         for update
+       ), carried as (
+         update token_credits
+         set period_start = $3,
+             period_end = $4,
+             credits_allocated_cents = token_credits.credits_allocated_cents + $5,
+             updated_at = now()
+         from current_account
+         where token_credits.id = current_account.id
+           and (token_credits.period_start, token_credits.period_end)
+             is distinct from ($3::timestamptz, $4::timestamptz)
+         returning token_credits.id as account_id
+       )
+       select account_id from carried
+       union all
+       select id as account_id
+       from token_credits
+       where user_id = $1
+         and subscription_id = $2
+         and period_start = $3
+         and period_end = $4
+       limit 1`,
+      [
+        userId,
+        subscriptionId,
+        periodStart.toISOString(),
+        periodEnd.toISOString(),
+        allocationDeltaCents,
+      ],
+    );
+
+    if (!row?.account_id) {
+      throw new Error('No credit account found for paid-plan upgrade');
+    }
+    return row.account_id;
+  }
+
   static async getOrCreateAccount(
     userId: string,
     subscriptionId: string,

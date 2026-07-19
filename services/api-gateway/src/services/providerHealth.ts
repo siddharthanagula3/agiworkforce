@@ -74,25 +74,14 @@ const DEFAULT_PROVIDERS: ProviderEntry[] = [
     family: 'inference',
   },
   {
-    id: 'together',
-    label: 'Together',
-    pingUrl: 'https://api.together.xyz/v1/models',
-    family: 'inference',
-  },
-  {
-    id: 'fireworks',
-    label: 'Fireworks',
-    pingUrl: 'https://api.fireworks.ai/inference/v1/models',
-    family: 'inference',
-  },
-  {
     id: 'perplexity',
     label: 'Perplexity',
     pingUrl: 'https://api.perplexity.ai/chat/completions',
     family: 'search',
   },
-  { id: 'cohere', label: 'Cohere', pingUrl: 'https://api.cohere.com/v2/models', family: 'cohere' },
 ];
+
+const SUPPORTED_PROVIDER_IDS = new Set(DEFAULT_PROVIDERS.map((provider) => provider.id));
 
 /**
  * Resolve the provider list. If PROVIDER_HEALTH_URLS is set (JSON array of
@@ -114,10 +103,7 @@ const PROVIDER_HEALTH_ALLOWED_HOSTS = new Set<string>([
   'api.mistral.ai',
   'api.groq.com',
   'api.deepseek.com',
-  'api.together.xyz',
   'api.perplexity.ai',
-  'api.cohere.com',
-  'api.fireworks.ai',
   // Operator-controlled internal endpoints.
   'api.agiworkforce.com',
   'staging-api.agiworkforce.com',
@@ -160,6 +146,7 @@ function resolveProviders(): ProviderEntry[] {
       const valid = (parsed as ProviderEntry[]).filter(
         (p) =>
           typeof p.id === 'string' &&
+          SUPPORTED_PROVIDER_IDS.has(p.id.toLowerCase()) &&
           typeof p.label === 'string' &&
           typeof p.pingUrl === 'string' &&
           typeof p.family === 'string' &&
@@ -195,11 +182,8 @@ const FALLBACK_MAP: Record<string, string[]> = {
   xai: ['openai', 'anthropic', 'deepseek'],
   deepseek: ['openai', 'mistral', 'groq'],
   mistral: ['openai', 'anthropic', 'groq'],
-  groq: ['together', 'fireworks', 'cerebras'],
-  together: ['groq', 'fireworks', 'deepinfra'],
-  fireworks: ['groq', 'together', 'deepinfra'],
+  groq: ['mistral', 'openai', 'deepseek'],
   perplexity: ['google', 'openai'],
-  cohere: ['openai', 'anthropic'],
 };
 
 // ---------------------------------------------------------------------------

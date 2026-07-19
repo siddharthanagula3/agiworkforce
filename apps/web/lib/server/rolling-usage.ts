@@ -13,16 +13,15 @@ export interface RollingUsage {
  * Sum of deducted cents in the trailing `windowHours` for `userId` (plus the
  * oldest transaction timestamp in that window, so callers can compute when
  * the rolling window will next clear), optionally scoped to flagship-model
- * transactions only (`metadata->>'is_flagship'`, written by increment_usage —
- * see 0020_functions.sql).
+ * transactions only (`metadata->>'is_flagship'`, written by the canonical
+ * managed-usage reservation and settlement lifecycle).
  *
  * Derived entirely from `credit_transactions` (`transaction_type =
  * 'deduction'`, `amount_cents`, `created_at`) — no dedicated session/weekly
  * table exists or is needed; every credit deduction already inserts a row
  * there, so this rolling sum is real spend, not an estimate.
  *
- * Shared by lib/assert-quota.ts (enforcement) and app/api/usage/route.ts
- * (display) so both read the exact same window/query.
+ * Used by managed-usage-summary-service.ts for the user-visible rolling meter.
  */
 export async function getRollingUsage(
   userId: string,
@@ -52,13 +51,4 @@ export async function getRollingUsage(
     );
     return { usedCents: 0, oldestAt: null };
   }
-}
-
-/** Convenience wrapper for callers (e.g. assertQuota) that only need the sum. */
-export async function getRollingUsageCents(
-  userId: string,
-  windowHours: number,
-  flagshipOnly: boolean,
-): Promise<number> {
-  return (await getRollingUsage(userId, windowHours, flagshipOnly)).usedCents;
 }

@@ -531,21 +531,13 @@ The long-term provider setup should group routes as:
    - Qwen/Alibaba Model Studio.
    - Kimi/Moonshot.
    - Z.ai/GLM.
-   - Cohere.
-   - AI21.
-   - Azure.
    - Bedrock.
 2. Hosted open-model APIs:
    - OpenRouter.
    - NVIDIA NIM.
-   - Together.
-   - Fireworks.
    - Groq.
-   - Cerebras.
-   - DeepInfra.
    - Hugging Face Inference Providers.
    - Replicate.
-   - SambaNova.
 3. Local runtimes:
    - Ollama.
    - LM Studio.

@@ -34,12 +34,12 @@
         "properties": {
           "plan": {
             "type": "string",
-            "enum": ["hobby", "pro", "max", "enterprise"],
+            "enum": ["basic", "pro", "max", "max_15x"],
             "description": "The subscription plan to checkout"
           },
           "billingInterval": {
             "type": "string",
-            "enum": ["monthly", "annual"],
+            "enum": ["monthly", "yearly"],
             "description": "Billing cycle interval"
           }
         }
@@ -117,7 +117,7 @@
             "properties": {
               "plan_tier": {
                 "type": "string",
-                "enum": ["hobby", "pro", "max", "enterprise"]
+                "enum": ["free", "basic", "pro", "max", "max_15x", "team", "enterprise"]
               },
               "status": {
                 "type": "string",

@@ -85,27 +85,10 @@ export const CODE_GENERATION_MAX_ATTEMPTS = 10;
 // NOTE: A `PLAN_HIERARCHY`/`getPlanLevel` pair lived here but was DEAD CODE
 // (zero consumers repo-wide) and drifted from the real tier model — it lacked
 // `basic` and predated the pricing update. The canonical tier ordering is
-// `TIER_ORDER`/`tierAtLeast` in `@agiworkforce/types` design-system/user-identity
-// (local|byok|basic|pro|max), and billing plan tiers are the SSOT in
+// `TIER_ORDER`/`tierAtLeast` in `@agiworkforce/types` design-system/user-identity,
+// and billing plan tiers are the SSOT in
 // `@agiworkforce/types` billing-catalog. Removed 2026-07-10 to avoid a stale,
 // misleading second hierarchy.
-
-// =============================================================================
-// Pricing Display Configuration
-// =============================================================================
-
-export const PRICING = {
-  pro: {
-    monthly: 20,
-    yearly: 17,
-    yearlyTotal: 204,
-  },
-  max: {
-    monthly: 100,
-    yearly: 100,
-    yearlyTotal: 1200,
-  },
-} as const;
 
 // =============================================================================
 // Subscription Status

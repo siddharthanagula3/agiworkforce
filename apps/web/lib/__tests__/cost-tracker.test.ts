@@ -10,12 +10,21 @@ vi.mock('@agiworkforce/types', () => ({
     // Gemini/DeepSeek report INCLUSIVE prompt counts where cache tokens are a
     // subset that must be subtracted before billing input).
     const catalog: Record<string, Record<string, unknown>> = {
-      'claude-sonnet-4-6': { provider: 'anthropic', inputCost: 3.0, outputCost: 15.0 },
+      'claude-sonnet-5': {
+        provider: 'anthropic',
+        inputCost: 3.0,
+        outputCost: 15.0,
+        cached_input: 0.3,
+        cached_write: 3.75,
+        cached_write_1h: 6.0,
+      },
       'claude-opus-4.8': {
         provider: 'anthropic',
         inputCost: 5.0,
         outputCost: 25.0,
-        cached_input: 0.3,
+        cached_input: 0.5,
+        cached_write: 6.25,
+        cached_write_1h: 10.0,
       },
       'gpt-5.5': { provider: 'openai', inputCost: 5.0, outputCost: 30.0 },
       'deepseek-v4-flash': {
@@ -48,28 +57,28 @@ beforeEach(() => {
 
 describe('recordModelUsage', () => {
   it('creates a new session entry on first record', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
       inputTokens: 1000,
       outputTokens: 500,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    expect(report.has('claude-sonnet-4-6')).toBe(true);
+    expect(report.has('claude-sonnet-5')).toBe(true);
   });
 
   it('accumulates tokens across multiple calls for the same model', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 1000, outputTokens: 500 });
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 1000, outputTokens: 500 });
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 200, outputTokens: 100 });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('claude-sonnet-4-6')!;
+    const usage = report.get('claude-sonnet-5')!;
     expect(usage.inputTokens).toBe(1200);
     expect(usage.outputTokens).toBe(600);
     expect(usage.requestCount).toBe(2);
   });
 
   it('accumulates cache tokens', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
       inputTokens: 1000,
       outputTokens: 500,
       cacheReadInputTokens: 200,
@@ -77,23 +86,23 @@ describe('recordModelUsage', () => {
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('claude-sonnet-4-6')!;
+    const usage = report.get('claude-sonnet-5')!;
     expect(usage.cacheReadInputTokens).toBe(200);
     expect(usage.cacheCreationInputTokens).toBe(800);
   });
 
   it('keeps sessions isolated', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
     recordModelUsage(SESSION_B, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
 
-    expect(getModelUsageReport(SESSION_A).has('claude-sonnet-4-6')).toBe(true);
+    expect(getModelUsageReport(SESSION_A).has('claude-sonnet-5')).toBe(true);
     expect(getModelUsageReport(SESSION_A).has('gpt-5.5')).toBe(false);
     expect(getModelUsageReport(SESSION_B).has('gpt-5.5')).toBe(true);
-    expect(getModelUsageReport(SESSION_B).has('claude-sonnet-4-6')).toBe(false);
+    expect(getModelUsageReport(SESSION_B).has('claude-sonnet-5')).toBe(false);
   });
 
   it('tracks multiple models within the same session', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
     recordModelUsage(SESSION_A, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
 
     const report = getModelUsageReport(SESSION_A);
@@ -103,21 +112,21 @@ describe('recordModelUsage', () => {
 
 describe('cost calculation', () => {
   it('calculates input/output cost from models.json pricing', () => {
-    // claude-sonnet-4-6: $3/M input, $15/M output
+    // claude-sonnet-5: $3/M input, $15/M output
     // 1M input + 1M output = $3 + $15 = $18
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-sonnet-4-6')!.costUsd;
+    const cost = report.get('claude-sonnet-5')!.costUsd;
     expect(cost).toBeCloseTo(18.0, 4);
   });
 
   it('uses catalog cached_input price when present', () => {
-    // claude-opus-4.8: inputCost=$5, cached_input=$0.3
-    // 1M input + 1M cache_read = $5 + $0.3 = $5.3
+    // claude-opus-4.8: inputCost=$5, cached_input=$0.5
+    // 1M input + 1M cache_read = $5 + $0.5 = $5.5
     recordModelUsage(SESSION_A, 'claude-opus-4.8', {
       inputTokens: 1_000_000,
       outputTokens: 0,
@@ -126,7 +135,7 @@ describe('cost calculation', () => {
 
     const report = getModelUsageReport(SESSION_A);
     const cost = report.get('claude-opus-4.8')!.costUsd;
-    expect(cost).toBeCloseTo(5.3, 4);
+    expect(cost).toBeCloseTo(5.5, 4);
   });
 
   it('does not double-count cache reads for inclusive-prompt providers (deepseek)', () => {
@@ -160,32 +169,31 @@ describe('cost calculation', () => {
     expect(cost).toBeCloseTo(3.2, 4);
   });
 
-  it('falls back to 10% of input rate for cache_read when cached_input absent', () => {
-    // claude-sonnet-4-6: inputCost=$3, no cached_input in catalog
-    // cache_read = 10% of $3 = $0.3/M
-    // 1M cache_read = $0.3
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+  it('falls back to 10% of input rate for cache_read when cached_input is absent', () => {
+    // gpt-5.5: inputCost=$5, no cached_input in this fixture.
+    // 1M cache_read = 10% of $5 = $0.5.
+    recordModelUsage(SESSION_A, 'gpt-5.5', {
       inputTokens: 0,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-sonnet-4-6')!.costUsd;
-    expect(cost).toBeCloseTo(0.3, 4);
+    const cost = report.get('gpt-5.5')!.costUsd;
+    expect(cost).toBeCloseTo(0.5, 4);
   });
 
   it('charges cache_creation at 125% of input rate', () => {
-    // claude-sonnet-4-6: inputCost=$3, cacheCreation = $3 * 1.25 = $3.75/M
+    // claude-sonnet-5: catalog cacheCreation = $3.75/M
     // 1M cache_creation = $3.75
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
       inputTokens: 0,
       outputTokens: 0,
       cacheCreationInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-sonnet-4-6')!.costUsd;
+    const cost = report.get('claude-sonnet-5')!.costUsd;
     expect(cost).toBeCloseTo(3.75, 4);
   });
 
@@ -207,58 +215,57 @@ describe('cost calculation', () => {
 // against the official prompt-caching pricing page (2026-07):
 //   https://platform.claude.com/docs/en/docs/build-with-claude/prompt-caching
 //   cache read = 0.1x base input · 5-minute cache write = 1.25x · 1-hour = 2x.
-// The pipeline exposes a single cacheCreationInputTokens bucket (no 5m/1h
-// split — StreamChunkUsage has only cacheReadTokens/cacheWriteTokens), so
-// writes bill at the 5m rate (1.25x); the 1h 2x premium is a documented gap.
+// The pipeline also carries the 1-hour cache-write subset so it can bill that
+// portion at 2x while billing the remainder at the 5-minute 1.25x rate.
 describe('worked cost examples — all token classes, per provider', () => {
-  it('anthropic (disjoint input): input + output + cache-read(0.1x fallback) + cache-write(1.25x)', () => {
-    // claude-sonnet-4-6: input=$3/M, output=$15/M, no catalog cached_input.
-    //   cache-read fallback = 0.1 * 3 = $0.3/M · cache-write fallback = 1.25 * 3 = $3.75/M
+  it('anthropic (disjoint input): applies Sonnet 5 catalog cache prices', () => {
+    // claude-sonnet-5: input=$3/M, output=$15/M, cache-read=$0.3/M,
+    // cache-write=$3.75/M.
     //   input      100k * 3    /1e6 = $0.30   (Anthropic input_tokens are disjoint → full, no subtraction)
     //   output      50k * 15   /1e6 = $0.75
     //   cache-read 200k * 0.30 /1e6 = $0.06
     //   cache-write800k * 3.75 /1e6 = $3.00
     //   total = $4.11
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
       inputTokens: 100_000,
       outputTokens: 50_000,
       cacheReadInputTokens: 200_000,
       cacheCreationInputTokens: 800_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-4-6')!.costUsd).toBeCloseTo(4.11, 6);
+    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(4.11, 6);
   });
 
   it('anthropic (catalog cached_input): read billed at explicit rate, write at 1.25x', () => {
-    // claude-opus-4.8: input=$5/M, output=$25/M, catalog cached_input=$0.3/M.
-    //   cache-write fallback = 1.25 * 5 = $6.25/M
+    // claude-opus-4.8: input=$5/M, output=$25/M, cache-read=$0.5/M,
+    // cache-write=$6.25/M.
     //   input       1M * 5    /1e6 = $5.00
     //   output      1M * 25   /1e6 = $25.00
-    //   cache-read  1M * 0.30 /1e6 = $0.30
+    //   cache-read  1M * 0.50 /1e6 = $0.50
     //   cache-write 1M * 6.25 /1e6 = $6.25
-    //   total = $36.55
+    //   total = $36.75
     recordModelUsage(SESSION_A, 'claude-opus-4.8', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
       cacheReadInputTokens: 1_000_000,
       cacheCreationInputTokens: 1_000_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('claude-opus-4.8')!.costUsd).toBeCloseTo(36.55, 6);
+    expect(getModelUsageReport(SESSION_A).get('claude-opus-4.8')!.costUsd).toBeCloseTo(36.75, 6);
   });
 
   it('anthropic 1h cache write bills at 2x input; the 5m remainder at 1.25x', () => {
-    // claude-sonnet-4-6: input=$3/M, no catalog cached_write.
+    // claude-sonnet-5: 5m cache-write=$3.75/M, 1h cache-write=$6/M.
     //   1h write 400k * (3 * 2.0  = $6.00/M) /1e6 = $2.40
     //   5m write 600k * (3 * 1.25 = $3.75/M) /1e6 = $2.25   (1M total − 400k @ 1h)
     //   total = $4.65
     // Exercises the 2x 1h premium explicitly — the other examples leave
     // cacheCreation1hInputTokens at 0, so only this case can fail on that rate.
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', {
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
       inputTokens: 0,
       outputTokens: 0,
       cacheCreationInputTokens: 1_000_000,
       cacheCreation1hInputTokens: 400_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-4-6')!.costUsd).toBeCloseTo(4.65, 6);
+    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(4.65, 6);
   });
 
   it('openai (inclusive prompt): cached subset subtracted from input, read at 0.1x fallback', () => {
@@ -298,8 +305,8 @@ describe('getSessionTotalCostUsd', () => {
   });
 
   it('sums cost across all models in a session', () => {
-    // claude-sonnet-4-6: $3/M input → 1M = $3
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 1_000_000, outputTokens: 0 });
+    // claude-sonnet-5: $3/M input → 1M = $3
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 1_000_000, outputTokens: 0 });
     // gpt-5.5: $5/M input → 1M = $5
     recordModelUsage(SESSION_A, 'gpt-5.5', { inputTokens: 1_000_000, outputTokens: 0 });
 
@@ -329,7 +336,7 @@ describe('getModelUsageReport', () => {
 
 describe('resetModelUsage', () => {
   it('removes only the specified session', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
     recordModelUsage(SESSION_B, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
 
     resetModelUsage(SESSION_A);
@@ -345,7 +352,7 @@ describe('resetModelUsage', () => {
 
 describe('resetAllSessions', () => {
   it('clears all sessions', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
     recordModelUsage(SESSION_B, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
 
     resetAllSessions();
@@ -374,10 +381,10 @@ describe('reasoningOutputTokens', () => {
   });
 
   it('initializes reasoningOutputTokens to 0 when absent', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-4-6', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('claude-sonnet-4-6')!;
+    const usage = report.get('claude-sonnet-5')!;
     expect(usage.reasoningOutputTokens).toBe(0);
   });
 
@@ -444,7 +451,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('includes cache_read attribute when cacheReadInputTokens is provided', () => {
-    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-4-6', {
+    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-5', {
       inputTokens: 2000,
       outputTokens: 300,
       cacheReadInputTokens: 800,
@@ -463,7 +470,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('includes codex.usage.cache_creation_input_tokens when provided', () => {
-    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-4-6', {
+    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-5', {
       inputTokens: 2000,
       outputTokens: 300,
       cacheCreationInputTokens: 1200,
@@ -504,7 +511,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('total_tokens excludes cache_read (reads are not net-new tokens)', () => {
-    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-4-6', {
+    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-5', {
       inputTokens: 1000,
       outputTokens: 500,
       cacheReadInputTokens: 800, // not counted in total

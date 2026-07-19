@@ -738,18 +738,17 @@ export async function chatCompletion(
 
 export interface TierInfo {
   tier: string;
-  /** Tokens used in the current billing period (may be undefined if not returned). */
-  tokensUsed?: number;
-  /** Total token cap for the current billing period (may be undefined). */
-  tokenCap?: number;
-  /** ISO reset timestamp for the current billing period when returned by the API. */
+  /** Plan usage this period as a 0-100 percentage (canonical /api/usage). */
+  usagePercentage?: number;
+  /** ISO reset timestamp for the current usage window, when returned. */
   resetsAt?: string;
 }
 
 /**
- * Fetch the current user's tier and usage from /api/auth/me.
- * Returns undefined if the request fails (e.g. no key, network error) — callers
- * should treat undefined as "unknown tier".
+ * Fetch the current user's tier and usage from the canonical percentage-only
+ * GET /api/usage (ManagedUsageSummaryResponse). Never exposes exact token or
+ * cent counts. Returns undefined if the request fails (e.g. no key, network
+ * error) — callers should treat undefined as "unknown tier".
  */
 export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
   const apiKey = await getAuthToken(secrets);
@@ -758,9 +757,9 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
   }
 
   const endpoint = getCloudApiEndpoint();
-  // Strip the /api/llm/v1 suffix to get the root origin, then append /api/auth/me
+  // Strip the /api/llm/v1 suffix to get the root origin, then append /api/usage
   const rootOrigin = endpoint.replace(/\/api\/llm\/v1$/, '').replace(/\/api\/llm$/, '');
-  const url = `${rootOrigin}/api/auth/me`;
+  const url = `${rootOrigin}/api/usage`;
 
   return new Promise((resolve) => {
     const parsed = new URL(url);
@@ -791,34 +790,20 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
         try {
           const body = Buffer.concat(chunks).toString('utf8');
           const raw = JSON.parse(body);
-          // PR-3C (F-23): runtime-validate the tier response. A malformed
-          // upstream response now resolves to undefined rather than
-          // silently overwriting global tier state with garbage.
-          // Accept both `tier` and legacy `plan_tier` field names.
-          const candidate =
-            typeof raw === 'object' && raw !== null && !('tier' in raw) && 'plan_tier' in raw
-              ? { ...raw, tier: raw.plan_tier }
-              : raw;
-          const parsed = TierInfoSchema.safeParse(candidate);
+          // Runtime-validate the percentage usage response. A malformed upstream
+          // response resolves to undefined rather than silently overwriting
+          // global tier state with garbage.
+          const parsed = TierInfoSchema.safeParse(raw);
           if (!parsed.success) {
             resolve(undefined);
             return;
           }
-          // Tier signatures are not enforced yet. The optional `signature`
-          // field is schema-preserved for forward compatibility, but this
-          // client must not treat a response as cryptographically verified
-          // until a signed-tier-response contract and key source are shipped.
-          const tierInfo: TierInfo = { tier: parsed.data.tier };
-          if (typeof parsed.data.tokens_used === 'number') {
-            tierInfo.tokensUsed = parsed.data.tokens_used;
+          const tierInfo: TierInfo = { tier: parsed.data.plan_tier };
+          if (typeof parsed.data.usage_percentage === 'number') {
+            tierInfo.usagePercentage = parsed.data.usage_percentage;
           }
-          if (typeof parsed.data.token_cap === 'number') {
-            tierInfo.tokenCap = parsed.data.token_cap;
-          }
-          if (typeof parsed.data.quota_resets_at === 'string') {
-            tierInfo.resetsAt = parsed.data.quota_resets_at;
-          } else if (typeof parsed.data.resets_at === 'string') {
-            tierInfo.resetsAt = parsed.data.resets_at;
+          if (typeof parsed.data.usage_reset_at === 'string') {
+            tierInfo.resetsAt = parsed.data.usage_reset_at;
           }
           resolve(tierInfo);
         } catch {

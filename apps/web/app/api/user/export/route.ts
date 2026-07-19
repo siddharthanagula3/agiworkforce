@@ -7,7 +7,10 @@ import { logger } from '@/lib/logger';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
+import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { z } from 'zod';
 
 /**
  * GET /api/user/export
@@ -20,7 +23,9 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
  * The export includes:
  * - User profile information
  * - Subscription details
- * - Credit balance and transaction history
+ * - User-owned billing invoices
+ * - Percentage-only managed usage and reset times
+ * - User-owned top-up purchase records without internal allowance units
  * - Email preferences
  * - Device authorizations
  * - Organization memberships
@@ -45,7 +50,7 @@ async function handleExportUserData(request: NextRequest) {
   }
 
   try {
-    const { userId } = await getClerkAuthUser(request);
+    const { userId, email } = await getClerkAuthUser(request);
     const db = getNeonDb();
 
     // Log the export request for audit purposes
@@ -57,33 +62,10 @@ async function handleExportUserData(request: NextRequest) {
       'User requested GDPR data export',
     );
 
-    // Try the export_user_data stored procedure first.
-    // If the function is defined as SECURITY DEFINER it runs with elevated
-    // privileges even through a regular connection.
-    let rpcSucceeded = false;
-    let rpcData: unknown = null;
-
-    try {
-      const rows = await db.query<Record<string, unknown>>('select * from export_user_data($1)', [
-        userId,
-      ]);
-      rpcData = rows[0] ?? null;
-      rpcSucceeded = true;
-    } catch (err: unknown) {
-      logger.warn(
-        { error: err, userId },
-        'export_user_data RPC failed, using fallback manual export',
-      );
-    }
-
-    if (rpcSucceeded && rpcData !== null) {
-      logger.info({ userId }, 'User data exported successfully via RPC');
-      return createExportResponse(request, userId, rpcData);
-    }
-
-    // Manual data collection using parameterized SQL.
-    const userShell = { id: userId, created_at: new Date().toISOString() };
-    return createExportResponse(request, userId, await collectUserData(userShell, db));
+    // The legacy export_user_data RPC serializes entire credit ledgers and
+    // must never be used for a user-facing export. Build a reviewed DTO from
+    // explicit, tenant-scoped selects instead.
+    return createExportResponse(request, userId, await collectUserData({ id: userId, email }, db));
   } catch (error) {
     logger.error(
       {
@@ -95,17 +77,145 @@ async function handleExportUserData(request: NextRequest) {
   }
 }
 
+const timestampSchema = z
+  .union([z.string().min(1), z.date()])
+  .transform((value) => (value instanceof Date ? value.toISOString() : value));
+const nullableTimestampSchema = timestampSchema.nullable();
+
+const profileExportSchema = z.object({
+  id: z.string(),
+  email: z.string().nullable(),
+  display_name: z.string().nullable(),
+  avatar_url: z.string().nullable(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const subscriptionExportSchema = z.object({
+  id: z.string(),
+  plan_tier: z.string(),
+  status: z.string(),
+  current_period_start: nullableTimestampSchema,
+  current_period_end: nullableTimestampSchema,
+  cancel_at_period_end: z.boolean().nullable(),
+  canceled_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const topUpPurchaseExportSchema = z.object({
+  id: z.string(),
+  created_at: timestampSchema,
+});
+
+const emailPreferencesExportSchema = z.object({
+  email: z.string(),
+  marketing_emails: z.boolean(),
+  product_updates: z.boolean(),
+  security_alerts: z.boolean(),
+  weekly_digest: z.boolean(),
+  unsubscribed_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const organizationMemberExportSchema = z.object({
+  organization_id: z.string(),
+  role: z.string(),
+  provisioning_source: z.string().nullable(),
+  provisioned_at: nullableTimestampSchema,
+  joined_at: timestampSchema,
+});
+
+const organizationExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const betaRedemptionExportSchema = z.object({
+  id: z.string(),
+  invite_id: z.string(),
+  redeemed_at: timestampSchema,
+  surface: z.string().nullable(),
+  source: z.string().nullable(),
+});
+
+const betaInviteExportSchema = z.object({
+  id: z.string(),
+  plan_tier: z.string().nullable(),
+  trial_days: z.number().int().nonnegative().nullable(),
+});
+
+const deviceAuthorizationExportSchema = z.object({
+  id: z.string(),
+  device_id: z.string(),
+  device_name: z.string().nullable(),
+  device_type: z.string().nullable(),
+  status: z.string(),
+  expires_at: timestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const desktopDeviceExportSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  platform: z.string().nullable(),
+  version: z.string().nullable(),
+  last_seen_at: nullableTimestampSchema,
+  registered_at: timestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const mobileDeviceExportSchema = z.object({
+  id: z.string(),
+  platform: z.string().nullable(),
+  name: z.string().nullable(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const syncDataExportSchema = z.object({
+  id: z.string(),
+  device_id: z.string(),
+  sync_type: z.string(),
+  data: z.unknown().nullable(),
+  created_at: timestampSchema,
+});
+
+async function queryExportRows<T>(params: {
+  db: DatabaseAdapter;
+  sql: string;
+  values: unknown[];
+  schema: z.ZodType<T>;
+  section: string;
+  userId: string;
+}): Promise<T[]> {
+  const { db, sql, values, schema, section, userId } = params;
+  try {
+    const rows = await db.query<unknown>(sql, values);
+    const parsedRows: T[] = [];
+    for (const row of rows) {
+      const parsed = schema.safeParse(row);
+      if (parsed.success) {
+        parsedRows.push(parsed.data);
+      } else {
+        logger.warn({ userId, section }, 'Skipping invalid row in user data export');
+      }
+    }
+    return parsedRows;
+  } catch (error) {
+    logger.warn({ error, userId, section }, 'User data export section unavailable');
+    return [];
+  }
+}
+
 async function collectUserData(
-  user: {
-    id: string;
-    email?: string;
-    created_at: string;
-    updated_at?: string;
-    email_confirmed_at?: string;
-    last_sign_in_at?: string;
-    app_metadata?: unknown;
-    user_metadata?: unknown;
-  },
+  user: { id: string; email?: string },
   db: DatabaseAdapter,
 ): Promise<Record<string, unknown>> {
   const exportData: Record<string, unknown> = {
@@ -118,151 +228,194 @@ async function collectUserData(
     account: {
       id: user.id,
       email: user.email,
-      created_at: user.created_at,
-      updated_at: user.updated_at,
-      email_confirmed_at: user.email_confirmed_at,
-      last_sign_in_at: user.last_sign_in_at,
-      app_metadata: user.app_metadata,
-      user_metadata: user.user_metadata,
     },
   };
 
-  // Profile
-  const profileRows = await db
-    .query<Record<string, unknown>>('select * from profiles where id = $1', [user.id])
-    .catch(() => []);
+  const profileRows = await queryExportRows({
+    db,
+    sql: `select id, email, display_name, avatar_url, created_at, updated_at
+          from profiles where id = $1 limit 1`,
+    values: [user.id],
+    schema: profileExportSchema,
+    section: 'profile',
+    userId: user.id,
+  });
   if (profileRows.length > 0) exportData['profile'] = profileRows[0];
 
-  // Subscription (redact Stripe IDs)
-  const subRows = await db
-    .query<
-      Record<string, unknown>
-    >('select * from subscriptions where user_id = $1 limit 1', [user.id])
-    .catch(() => []);
-  if (subRows.length > 0) {
-    const sub = subRows[0]!;
-    exportData['subscription'] = {
-      ...sub,
-      stripe_customer_id: sub['stripe_customer_id'] ? '[REDACTED]' : null,
-      stripe_subscription_id: sub['stripe_subscription_id'] ? '[REDACTED]' : null,
-    };
+  const subscriptionRows = await queryExportRows({
+    db,
+    sql: `select id, plan_tier, status, current_period_start, current_period_end,
+                 cancel_at_period_end, canceled_at, created_at, updated_at
+          from subscriptions where user_id = $1 limit 1`,
+    values: [user.id],
+    schema: subscriptionExportSchema,
+    section: 'subscription',
+    userId: user.id,
+  });
+  if (subscriptionRows.length > 0) exportData['subscription'] = subscriptionRows[0];
+
+  // A purchase timestamp is user-portable billing history. Its internal
+  // allowance amount, credit-account identity, and settlement metadata are not.
+  const topUpPurchases = await queryExportRows({
+    db,
+    sql: `select id, created_at
+          from credit_transactions
+          where user_id = $1 and transaction_type = 'purchase'
+          order by created_at desc
+          limit 1000`,
+    values: [user.id],
+    schema: topUpPurchaseExportSchema,
+    section: 'top_up_purchases',
+    userId: user.id,
+  });
+  if (topUpPurchases.length > 0) {
+    exportData['top_up_purchases'] = topUpPurchases.map((purchase) => ({
+      id: purchase.id,
+      purchased_at: purchase.created_at,
+    }));
   }
 
-  // Token credits
-  const tokenRows = await db
-    .query<
-      Record<string, unknown>
-    >('select * from token_credits where user_id = $1 order by created_at desc', [user.id])
-    .catch(() => []);
-  if (tokenRows.length > 0) exportData['token_credits'] = tokenRows;
-
-  // Credit transactions (cap at 1000)
-  const txRows = await db
-    .query<
-      Record<string, unknown>
-    >('select * from credit_transactions where user_id = $1 order by created_at desc limit 1000', [user.id])
-    .catch(() => []);
-  if (txRows.length > 0) exportData['credit_transactions'] = txRows;
-
-  // Email preferences (redact sensitive fields)
-  const emailRows = await db
-    .query<
-      Record<string, unknown>
-    >('select * from email_preferences where user_id = $1 limit 1', [user.id])
-    .catch(() => []);
-  if (emailRows.length > 0) {
-    const ep = emailRows[0]!;
-    exportData['email_preferences'] = {
-      ...ep,
-      unsubscribe_token: '[REDACTED]',
-      consent_ip_address: ep['consent_ip_address'] ? '[PARTIALLY_REDACTED]' : null,
-    };
-  }
+  const emailRows = await queryExportRows({
+    db,
+    sql: `select email, marketing_emails, product_updates, security_alerts,
+                 weekly_digest, unsubscribed_at, created_at, updated_at
+          from email_preferences where user_id = $1 limit 1`,
+    values: [user.id],
+    schema: emailPreferencesExportSchema,
+    section: 'email_preferences',
+    userId: user.id,
+  });
+  if (emailRows.length > 0) exportData['email_preferences'] = emailRows[0];
 
   // Organization memberships · two queries, joined in JS (PostgREST embedding not available)
-  const orgMemberRows = await db
-    .query<
-      Record<string, unknown>
-    >('select * from organization_members where user_id = $1', [user.id])
-    .catch(() => []);
+  const orgMemberRows = await queryExportRows({
+    db,
+    sql: `select organization_id, role, provisioning_source, provisioned_at, joined_at
+          from organization_members where user_id = $1`,
+    values: [user.id],
+    schema: organizationMemberExportSchema,
+    section: 'organization_memberships',
+    userId: user.id,
+  });
   if (orgMemberRows.length > 0) {
     const orgIds = orgMemberRows
-      .map((r) => r['organization_id'])
+      .map((row) => row.organization_id)
       .filter((id): id is string => typeof id === 'string');
-    let orgsById: Record<string, Record<string, unknown>> = {};
+    let orgsById: Record<string, z.infer<typeof organizationExportSchema>> = {};
     if (orgIds.length > 0) {
-      const orgRows = await db
-        .query<
-          Record<string, unknown>
-        >('select * from organizations where id = any($1::text[])', [orgIds])
-        .catch(() => []);
-      orgsById = Object.fromEntries(orgRows.map((o) => [o['id'] as string, o]));
+      const orgRows = await queryExportRows({
+        db,
+        sql: `select id, name, slug, created_at, updated_at
+              from organizations where id = any($1::uuid[])`,
+        values: [orgIds],
+        schema: organizationExportSchema,
+        section: 'organizations',
+        userId: user.id,
+      });
+      orgsById = Object.fromEntries(orgRows.map((organization) => [organization.id, organization]));
     }
-    exportData['organization_memberships'] = orgMemberRows.map((m) => ({
-      ...m,
-      organizations: orgsById[m['organization_id'] as string] ?? null,
+    exportData['organization_memberships'] = orgMemberRows.map((membership) => ({
+      ...membership,
+      organization: orgsById[membership.organization_id] ?? null,
     }));
   }
 
   // Beta redemptions · two queries, joined in JS
-  const betaRows = await db
-    .query<Record<string, unknown>>('select * from beta_redemptions where user_id = $1', [user.id])
-    .catch(() => []);
+  const betaRows = await queryExportRows({
+    db,
+    sql: `select id, invite_id, redeemed_at, surface, source
+          from beta_redemptions where user_id = $1`,
+    values: [user.id],
+    schema: betaRedemptionExportSchema,
+    section: 'beta_redemptions',
+    userId: user.id,
+  });
   if (betaRows.length > 0) {
     const inviteIds = betaRows
-      .map((r) => r['invite_id'])
+      .map((row) => row.invite_id)
       .filter((id): id is string => typeof id === 'string');
-    let invitesById: Record<string, Record<string, unknown>> = {};
+    let invitesById: Record<string, z.infer<typeof betaInviteExportSchema>> = {};
     if (inviteIds.length > 0) {
-      const inviteRows = await db
-        .query<
-          Record<string, unknown>
-        >('select id, code, plan_tier, trial_days from beta_invites where id = any($1::text[])', [inviteIds])
-        .catch(() => []);
-      invitesById = Object.fromEntries(inviteRows.map((i) => [i['id'] as string, i]));
+      const inviteRows = await queryExportRows({
+        db,
+        sql: `select id, plan_tier, trial_days
+              from beta_invites where id = any($1::uuid[])`,
+        values: [inviteIds],
+        schema: betaInviteExportSchema,
+        section: 'beta_invites',
+        userId: user.id,
+      });
+      invitesById = Object.fromEntries(inviteRows.map((invite) => [invite.id, invite]));
     }
-    exportData['beta_redemptions'] = betaRows.map((r) => ({
-      ...r,
-      beta_invites: invitesById[r['invite_id'] as string] ?? null,
+    exportData['beta_redemptions'] = betaRows.map((redemption) => ({
+      ...redemption,
+      beta_invite: invitesById[redemption.invite_id] ?? null,
     }));
   }
 
-  // Device authorization codes (redact tokens)
-  const deviceAuthRows = await db
-    .query<
-      Record<string, unknown>
-    >('select * from device_authorization_codes where user_id = $1 order by created_at desc', [user.id])
-    .catch(() => []);
-  if (deviceAuthRows.length > 0) {
-    exportData['device_authorizations'] = deviceAuthRows.map((auth) => ({
-      ...auth,
-      user_code: auth['user_code'] ? '[REDACTED]' : null,
-      access_token: auth['access_token'] ? '[REDACTED]' : null,
-      refresh_token: auth['refresh_token'] ? '[REDACTED]' : null,
-    }));
-  }
+  const deviceAuthRows = await queryExportRows({
+    db,
+    sql: `select id, device_id, device_name, device_type, status, expires_at,
+                 created_at, updated_at
+          from device_authorization_codes
+          where user_id = $1
+          order by created_at desc`,
+    values: [user.id],
+    schema: deviceAuthorizationExportSchema,
+    section: 'device_authorizations',
+    userId: user.id,
+  });
+  if (deviceAuthRows.length > 0) exportData['device_authorizations'] = deviceAuthRows;
 
-  // Desktop devices
-  const desktopRows = await db
-    .query<Record<string, unknown>>('select * from desktop_devices where user_id = $1', [user.id])
-    .catch(() => []);
+  const desktopRows = await queryExportRows({
+    db,
+    sql: `select id, name, platform, version, last_seen_at, registered_at, created_at, updated_at
+          from desktop_devices where user_id = $1`,
+    values: [user.id],
+    schema: desktopDeviceExportSchema,
+    section: 'desktop_devices',
+    userId: user.id,
+  });
   if (desktopRows.length > 0) exportData['desktop_devices'] = desktopRows;
 
-  // Mobile devices
-  const mobileRows = await db
-    .query<Record<string, unknown>>('select * from mobile_devices where user_id = $1', [user.id])
-    .catch(() => []);
+  const mobileRows = await queryExportRows({
+    db,
+    sql: `select id, platform, name, created_at, updated_at
+          from mobile_devices where user_id = $1`,
+    values: [user.id],
+    schema: mobileDeviceExportSchema,
+    section: 'mobile_devices',
+    userId: user.id,
+  });
   if (mobileRows.length > 0) exportData['mobile_devices'] = mobileRows;
 
-  // Sync data
-  const syncRows = await db
-    .query<Record<string, unknown>>('select * from sync_data where user_id = $1', [user.id])
-    .catch(() => []);
+  const syncRows = await queryExportRows({
+    db,
+    sql: `select id, device_id, sync_type, data, created_at
+          from sync_data where user_id = $1`,
+    values: [user.id],
+    schema: syncDataExportSchema,
+    section: 'sync_data',
+    userId: user.id,
+  });
   if (syncRows.length > 0) exportData['sync_data'] = syncRows;
+
+  try {
+    exportData['billing_invoices'] = await listUserBillingInvoices(user.id);
+  } catch (error) {
+    logger.warn({ error, userId: user.id }, 'Billing invoices unavailable for user export');
+    exportData['billing_invoices'] = [];
+  }
+
+  try {
+    exportData['managed_usage'] = await getManagedUsageSummary(user.id);
+  } catch (error) {
+    logger.warn({ error, userId: user.id }, 'Managed usage summary unavailable for user export');
+  }
 
   logger.info(
     { userId: user.id, dataSections: Object.keys(exportData).length },
-    'User data export completed via fallback method',
+    'User data export completed from reviewed export DTOs',
   );
 
   return exportData;

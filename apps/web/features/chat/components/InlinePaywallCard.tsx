@@ -31,6 +31,11 @@ import {
   Globe,
 } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@agiworkforce/ui';
+import {
+  getBillingPlanPricing,
+  isBillingPlanTier,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { Button } from '@shared/components/ui/button';
 import { Badge } from '@shared/components/ui/badge';
 import { cn } from '@shared/lib/utils';
@@ -52,8 +57,8 @@ export type PaywallFeature =
   | 'model_access'
   | 'paid_capability';
 
-export type UserTier = 'free' | 'hobby' | 'pro' | 'max';
-export type RequiredTier = 'hobby' | 'pro' | 'max';
+export type UserTier = BillingPlanTier;
+export type RequiredTier = Exclude<BillingPlanTier, 'local-only' | 'byok' | 'free'>;
 
 export interface InlinePaywallCardProps {
   feature: PaywallFeature;
@@ -76,12 +81,6 @@ const EMPTY_REASON = '';
 // Static lookup tables (rendered during module load, never recreated)
 // ---------------------------------------------------------------------------
 
-const TIER_LABELS: Record<RequiredTier, string> = {
-  hobby: 'Hobby',
-  pro: 'Pro',
-  max: 'Max',
-};
-
 const FEATURE_LABELS: Record<PaywallFeature, string> = {
   video_generation: 'video generation',
   opus_4_7: 'Opus 4.7 access',
@@ -95,6 +94,22 @@ const FEATURE_LABELS: Record<PaywallFeature, string> = {
   model_access: 'more models',
   paid_capability: 'this capability',
 };
+
+const PAYWALL_FEATURES = new Set<PaywallFeature>(Object.keys(FEATURE_LABELS) as PaywallFeature[]);
+
+export function normalizeRequiredTier(value: string): RequiredTier {
+  if (value === 'hobby') return 'basic';
+  if (!isBillingPlanTier(value) || value === 'local-only' || value === 'byok' || value === 'free') {
+    return 'basic';
+  }
+  return value;
+}
+
+export function normalizePaywallFeature(value: string): PaywallFeature {
+  return PAYWALL_FEATURES.has(value as PaywallFeature)
+    ? (value as PaywallFeature)
+    : 'paid_capability';
+}
 
 // ---------------------------------------------------------------------------
 // Sub-components · top-level to satisfy rerender-no-inline-components
@@ -143,7 +158,7 @@ interface TierBadgeProps {
 const TierBadge = memo(function TierBadge({ tier }: TierBadgeProps) {
   return (
     <Badge variant="secondary" className="ml-2 text-xs font-semibold tracking-wide uppercase">
-      {TIER_LABELS[tier]}
+      {getBillingPlanPricing(tier).label}
     </Badge>
   );
 });
@@ -167,7 +182,7 @@ const CtaButtons = memo(function CtaButtons({
   return (
     <div className="flex flex-wrap gap-2">
       <Button type="button" size="sm" className="font-semibold" onClick={onUpgrade}>
-        Upgrade to {TIER_LABELS[requiredTier]}
+        Upgrade to {getBillingPlanPricing(requiredTier).label}
       </Button>
 
       <Button variant="ghost" size="sm" onClick={onDismiss}>
@@ -190,7 +205,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   onUpgrade,
   onDismiss,
 }: InlinePaywallCardProps) {
-  const headline = `Upgrade to ${TIER_LABELS[requiredTier]} for ${FEATURE_LABELS[feature]}`;
+  const headline = `Upgrade to ${getBillingPlanPricing(requiredTier).label} for ${FEATURE_LABELS[feature]}`;
 
   return (
     <Card

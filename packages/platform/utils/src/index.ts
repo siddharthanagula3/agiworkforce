@@ -24,6 +24,18 @@ export type {
   ManagedChatSurface,
 } from './managedChatIdempotency';
 
+// Stable identity for retry-safe Managed Cloud image and video operations.
+export {
+  createManagedMediaIdempotencyKey,
+  isManagedMediaIdempotencyKey,
+  parseManagedMediaIdempotencyKey,
+} from './managedMediaIdempotency';
+export type {
+  ManagedMediaIdempotencyIdentity,
+  ManagedMediaOperation,
+  ManagedMediaSurface,
+} from './managedMediaIdempotency';
+
 // Secret-redacting logger facade (FIX-024)
 export { logger, redactSecrets, redactSecretsWithReport, scanSecrets } from './logger';
 export type { LogLevel, SecretScanOptions, SecretScanResult } from './logger';

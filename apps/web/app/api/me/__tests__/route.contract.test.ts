@@ -14,14 +14,11 @@ import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
 
-const { mockGetClerkAuthUser, mockNeonQuery, mockGetSubscription, mockGetBalance } = vi.hoisted(
-  () => ({
-    mockGetClerkAuthUser: vi.fn(),
-    mockNeonQuery: vi.fn(),
-    mockGetSubscription: vi.fn(),
-    mockGetBalance: vi.fn(),
-  }),
-);
+const { mockGetClerkAuthUser, mockNeonQuery, mockGetSubscription } = vi.hoisted(() => ({
+  mockGetClerkAuthUser: vi.fn(),
+  mockNeonQuery: vi.fn(),
+  mockGetSubscription: vi.fn(),
+}));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -67,10 +64,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mockGetSubscription },
 }));
 
-vi.mock('@/lib/services/credit-service', () => ({
-  CreditService: { getBalance: mockGetBalance },
-}));
-
 import { GET } from '../route';
 
 function makeGetRequest(query?: string) {
@@ -94,15 +87,11 @@ describe('GET /api/me — shared cloud contract', () => {
       status: 'active',
       current_period_end: '2026-08-05T00:00:00.000Z',
     });
-    mockGetBalance.mockResolvedValue({
-      account_id: 'acct_1',
-      credits_remaining_cents: 1250,
-    });
-
     const res = await GET(makeGetRequest());
     expect(res.status).toBe(200);
 
     const body = await res.json();
+    expect(body).not.toHaveProperty('credits');
     const parsed = MeResponseSchema.safeParse(body);
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
@@ -121,7 +110,6 @@ describe('GET /api/me — shared cloud contract', () => {
 
   it('response for a free user (no subscription, no credits) still parses', async () => {
     mockGetSubscription.mockResolvedValue(null);
-    mockGetBalance.mockResolvedValue(null);
     mockNeonQuery.mockResolvedValue([]);
 
     const res = await GET(makeGetRequest());
@@ -138,7 +126,6 @@ describe('GET /api/me — shared cloud contract', () => {
         status: 'none',
         current_period_end: null,
       });
-      expect(parsed.data.credits).toBeNull();
       expect(parsed.data.routing_preferences).toEqual({});
       // Tier-layer honesty at the full integration level (real route, real
       // getTierPolicy('free')): Claude-style free chat grants search, voice,
@@ -154,9 +141,8 @@ describe('GET /api/me — shared cloud contract', () => {
     }
   });
 
-  it('response survives subscription/credit service failures (degraded free shape)', async () => {
+  it('response survives subscription service failures (degraded free shape)', async () => {
     mockGetSubscription.mockRejectedValue(new Error('subscription backend down'));
-    mockGetBalance.mockRejectedValue(new Error('credit backend down'));
     mockNeonQuery.mockRejectedValue(new Error('db down'));
 
     const res = await GET(makeGetRequest());
@@ -180,7 +166,6 @@ describe('GET /api/me — capability_handshake surface parameter', () => {
       status: 'active',
       current_period_end: '2026-08-05T00:00:00.000Z',
     });
-    mockGetBalance.mockResolvedValue(null);
   });
 
   it('defaults to the web surface when no ?surface= is given (no behavior change for existing callers)', async () => {
