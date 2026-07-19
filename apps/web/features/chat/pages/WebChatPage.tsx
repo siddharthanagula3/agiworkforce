@@ -106,6 +106,7 @@ import {
   consumePendingEdit,
   type PendingEditRollback,
 } from '../lib/pendingEdit';
+import { runReplacingSend } from '../lib/replacingSend';
 import { isStaleActiveConversation } from '../lib/staleActiveConversation';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
@@ -348,12 +349,15 @@ export default function WebChatPage() {
 
   // Pending message edit (DATA-LOSS FIX). Clicking "Edit" on a user message
   // prefills the composer; the destructive rollback (delete that message + all
-  // later messages) is DEFERRED to the actual resubmission via sendContent.
-  // Deleting on edit-click lost the messages permanently if the user abandoned
-  // the edit. `deletePersistedMessagesRef` bridges the definition-order gap:
-  // sendContent is declared long before deletePersistedMessages.
+  // later messages) is DEFERRED to the actual resubmission via sendContent — and the
+  // delete itself is deferred to AFTER the resubmission commits (see
+  // sendReplacingMessages), so neither abandoning the edit nor a send that bails
+  // pre-commit can lose the original. `sendReplacingMessagesRef` bridges that helper to
+  // sendContent, which is declared long before it.
   const pendingEditRollbackRef = useRef<PendingEditRollback | null>(null);
-  const deletePersistedMessagesRef = useRef<((ids: string[]) => Promise<boolean>) | null>(null);
+  const sendReplacingMessagesRef = useRef<
+    ((rollbackIds: string[], send: () => Promise<boolean>) => Promise<void>) | null
+  >(null);
 
   // First-message send guard (DEMO-BLOCKER FIX). A brand-new-chat send runs
   // `createConversation` (which sets the store's `activeConversationId` +
@@ -844,34 +848,38 @@ export default function WebChatPage() {
             )
           : undefined;
 
-        // Deferred edit rollback: if this send is the resubmission of an edited
-        // message, delete the original message + everything after it NOW (not on
-        // edit-click) so the edited turn replaces the old one. Abandoning the
-        // edit never reaches here, so nothing is lost. Best-effort: a failed
-        // delete must not block the send.
-        const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
-        if (pendingEdit) {
-          pendingEditRollbackRef.current = null;
-          await deletePersistedMessagesRef.current?.(pendingEdit.rollbackIds);
-        }
+        const doSend = () =>
+          sendMessage(content, {
+            model: activeModelId,
+            conversationId: convId,
+            attachments: resolvedAttachments,
+            webSearch: options.meta?.webSearchEnabled,
+            // Search implies fetch (ChatGPT/Claude parity): with Search on, the model
+            // can also open URLs — Anthropic via its native web_fetch server tool,
+            // other providers via the platform url_fetch tool in the agentic loop.
+            webFetch: options.meta?.webSearchEnabled,
+            thinkingEnabled: options.meta?.thinkingEnabled,
+            codeExecution: options.meta?.codeExecutionEnabled,
+            officeCreation: options.meta?.officeCreationEnabled,
+            workMode: options.meta?.workMode,
+            research: options.meta?.researchEnabled,
+            styleMode: options.meta?.styleMode,
+            skillName: options.meta?.skillName,
+          });
 
-        await sendMessage(content, {
-          model: activeModelId,
-          conversationId: convId,
-          attachments: resolvedAttachments,
-          webSearch: options.meta?.webSearchEnabled,
-          // Search implies fetch (ChatGPT/Claude parity): with Search on, the model
-          // can also open URLs — Anthropic via its native web_fetch server tool,
-          // other providers via the platform url_fetch tool in the agentic loop.
-          webFetch: options.meta?.webSearchEnabled,
-          thinkingEnabled: options.meta?.thinkingEnabled,
-          codeExecution: options.meta?.codeExecutionEnabled,
-          officeCreation: options.meta?.officeCreationEnabled,
-          workMode: options.meta?.workMode,
-          research: options.meta?.researchEnabled,
-          styleMode: options.meta?.styleMode,
-          skillName: options.meta?.skillName,
-        });
+        // Deferred edit rollback: if this send is the resubmission of an edited
+        // message, replace the original message + everything after it. The delete is
+        // deferred to send time (not edit-click, so abandoning the edit loses nothing)
+        // AND to AFTER the resubmission commits (so a send that bails pre-commit does
+        // not lose the original) — see sendReplacingMessages.
+        const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
+        const replace = sendReplacingMessagesRef.current;
+        if (pendingEdit && replace) {
+          pendingEditRollbackRef.current = null;
+          await replace(pendingEdit.rollbackIds, doSend);
+        } else {
+          await doSend();
+        }
       } finally {
         // Release the guard once the send has fully settled (or bailed). By now
         // `bareChatSessionId`/`urlConversationId` reflect the real conversation,
@@ -1617,10 +1625,56 @@ export default function WebChatPage() {
     [deleteMessage, displayedConversationId, getToken, setChatError],
   );
 
-  // Bridge the latest deletePersistedMessages to the send path (sendContent is
-  // declared earlier and can't reference this const directly). Render-time ref
-  // assignment is idempotent and always reflects the current closure.
-  deletePersistedMessagesRef.current = deletePersistedMessages;
+  // Server-only delete (best-effort). Used by the data-loss-safe replace flow to drop
+  // the OLD turn's durable rows AFTER the replacement turn has committed. A stale or
+  // duplicate server row is strictly better than losing the exchange, so failures here
+  // are swallowed — the local transcript is already correct.
+  const deleteServerMessages = useCallback(
+    async (conversationId: string, ids: string[]): Promise<void> => {
+      if (ids.length === 0) return;
+      const authToken = await getToken();
+      if (!authToken) return;
+      for (const messageId of ids) {
+        try {
+          await deleteConversationMessage({ conversationId, messageId, authToken });
+        } catch {
+          // best-effort — see above.
+        }
+      }
+    },
+    [getToken],
+  );
+
+  // Data-loss-safe replace, shared by edit-resubmit and regenerate (DATA-LOSS FIX).
+  // Both used to delete the rolled-back turn (server + local) BEFORE the replacement
+  // send committed, so a send that bailed pre-commit (expired token, no conversation)
+  // lost the exchange permanently. Instead: snapshot the transcript, remove the old
+  // turn from the LOCAL store immediately (clean UI, no duplicate flash while the
+  // replacement streams), run the send, and only once it reports commit delete the old
+  // turn's durable SERVER rows. If the send never commits, restore the exact snapshot —
+  // the server rows were never touched, so nothing is lost. Worst case degrades from
+  // data-loss to at-most-a-duplicate-row-on-reload (reconciled by the server delete).
+  const sendReplacingMessages = useCallback(
+    async (rollbackIds: string[], send: () => Promise<boolean>): Promise<void> => {
+      const conversationId = displayedConversationId;
+      if (!conversationId || rollbackIds.length === 0) {
+        await send();
+        return;
+      }
+      await runReplacingSend(
+        {
+          snapshot: () => useChatStore.getState().messages,
+          removeLocal: (id) => deleteMessage(id),
+          restore: (messages) => useChatStore.getState().setMessages(messages),
+          deleteServer: (ids) => void deleteServerMessages(conversationId, ids),
+        },
+        rollbackIds,
+        send,
+      );
+    },
+    [displayedConversationId, deleteMessage, deleteServerMessages],
+  );
+  sendReplacingMessagesRef.current = sendReplacingMessages;
 
   const handleDeleteMessage = useCallback(
     (id: string) => {
@@ -1735,23 +1789,24 @@ export default function WebChatPage() {
         setChatError(replayDecision.message);
         return;
       }
-      const rollbackIds = plan.rollbackIds;
-      const deleted = await deletePersistedMessages(rollbackIds);
-      if (deleted) {
-        const replayOptions = replayToSendOptions(replayDecision.replay);
-        await sendMessage(userMsg.content, {
+      const replayOptions = replayToSendOptions(replayDecision.replay);
+      // Replace the regenerated turn data-loss-safely: the old rows are deleted only
+      // AFTER the resend commits, and the transcript is restored if it bails pre-commit
+      // (shared with the edit path — see sendReplacingMessages).
+      await sendReplacingMessages(plan.rollbackIds, () =>
+        sendMessage(userMsg.content, {
           model: activeModelId,
           conversationId: displayedConversationId,
           attachments: userMsg.attachments,
           ...replayOptions,
-        });
-      }
+        }),
+      );
     },
     [
       displayedConversationId,
       displayedMessages,
       isStreaming,
-      deletePersistedMessages,
+      sendReplacingMessages,
       sendMessage,
       activeModelId,
       isTrialExhausted,
