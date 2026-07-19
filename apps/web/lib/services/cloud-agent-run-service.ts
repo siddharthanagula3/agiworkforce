@@ -261,6 +261,37 @@ export async function createCloudAgentRun(
   return requireRun(rows);
 }
 
+/**
+ * Returns the run currently guarding a conversation, if one exists, so a new
+ * turn cannot silently spawn a second parallel paid run for the same
+ * conversation (the concurrency half of the follow-up/interrupt contract).
+ *
+ * "Active" means still doing billable work: state in ('running', 'queued') with
+ * no cancellation requested yet. A cooperatively-cancelling run (its
+ * `cancellation_requested_at` is set but the loop has not yet reached a terminal
+ * boundary) is treated as vacating, so an immediate stop-then-send follow-up is
+ * never rejected. The caller's own idempotent retry is excluded by
+ * `excludeRequestId`, so replays of the same turn still resolve to their run.
+ */
+export async function findActiveCloudAgentRunForConversation(
+  db: DatabaseAdapter,
+  input: { userId: string; conversationId: string; excludeRequestId?: string },
+): Promise<CloudAgentRun | null> {
+  const rows = await db.query<CloudAgentRunRow>(
+    `select * from public.cloud_agent_runs
+        where user_id = $1
+          and conversation_id = $2
+          and state in ('running', 'queued')
+          and cancellation_requested_at is null
+          and ($3::text is null or request_id <> $3)
+        order by created_at asc
+        limit 1`,
+    [input.userId, input.conversationId, input.excludeRequestId ?? null],
+  );
+  const row = rows[0];
+  return row ? mapRun(row) : null;
+}
+
 export async function appendCloudAgentEvent(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; envelope: AgentEventEnvelope },

@@ -6,6 +6,26 @@ Last updated: 2026-07-18
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-19 Conversation run concurrency guard (`WEB-RUN-CONCURRENCY-01`, Fixed in
+repo): a new managed completion turn for a conversation with a still-active
+(`running`/`queued`, not cancelling) run previously created a SECOND parallel
+`cloud_agent_runs` row and provider/tool loop — the schema's `conversation_id`
+index is non-unique and nothing coordinated it — so two paid runs could bill the
+same conversation at once. `beginCloudAgentRun`
+(`apps/web/app/api/llm/v1/chat/completions/route.ts`) now calls
+`findActiveCloudAgentRunForConversation` before creating a run and returns 409
+`conversation_run_in_progress` (refunding the just-made reservation) when the
+conversation already has an active run. The guard excludes the caller's own
+idempotent retry (`request_id`) and cooperatively-cancelling runs
+(`cancellation_requested_at is null`), so a stop-then-send follow-up is never
+rejected; approval-resume is unaffected (it re-enters the same run via a separate
+route, not `beginCloudAgentRun`). RESIDUAL: this is the SERVER half of the
+follow-up/interrupt contract only. The web composer still hard-disables input
+during streaming and the `'queue'` send-button state has no flush logic, so a true
+client-side stop-then-send/follow-up UX is not yet wired (tracked as slice a2);
+Work/Cowork background-run steering (redirect/steer into a live run) is deferred.
+No migration was added: the guard reuses existing `cloud_agent_runs` columns.
+
 2026-07-18 Website billing/metering truth (`WEB-BILLING-TRUTH-01`, Fixed in
 repo; production and founder gates remain): public prices, surface visibility,
 capabilities, project/MCP limits, and relative usage labels now come from the
