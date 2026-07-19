@@ -483,7 +483,7 @@ export function Sidebar({
       )}
 
       {/* Projects — ChatGPT-style folder section (expanded only) */}
-      {!collapsed && !showAccountMenu && (
+      {!collapsed && (
         <div style={{ padding: '4px 8px 0', flexShrink: 0 }}>
           <div
             style={{
@@ -548,22 +548,9 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Account menu replaces recents while open, so it never overlays footer content. */}
-      {!collapsed && showAccountMenu && (
-        <div
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '8px',
-            minHeight: 0,
-          }}
-        >
-          <AccountMenu onClose={() => onOpenAccountMenu?.()} showHeader={false} />
-        </div>
-      )}
-
-      {/* Recents (expanded only) */}
-      {!collapsed && !showAccountMenu && (
+      {/* Recents (expanded only). The account menu no longer replaces this — it floats
+          above the footer avatar (Claude/web behavior), so the list stays put. */}
+      {!collapsed && (
         <div
           style={{
             flex: 1,
@@ -688,11 +675,42 @@ export function Sidebar({
       {/* Footer: avatar + tier badge */}
       <div
         style={{
+          position: 'relative',
           flexShrink: 0,
           borderTop: '1px solid var(--chat-border)',
           padding: '8px',
         }}
       >
+        {/* Account menu floats above the avatar (Claude/web behavior) instead of
+            replacing the sidebar body. A full-window backdrop closes it on outside click. */}
+        {!collapsed && showAccountMenu && (
+          <>
+            <div
+              onClick={() => onOpenAccountMenu?.()}
+              style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+              aria-hidden="true"
+            />
+            <div
+              role="menu"
+              style={{
+                position: 'absolute',
+                bottom: 'calc(100% + 6px)',
+                left: 8,
+                right: 8,
+                zIndex: 41,
+                background: 'var(--chat-surface-elevated)',
+                border: '1px solid var(--chat-border)',
+                borderRadius: 12,
+                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.28)',
+                overflow: 'hidden',
+                maxHeight: 420,
+                overflowY: 'auto',
+              }}
+            >
+              <AccountMenu onClose={() => onOpenAccountMenu?.()} showHeader={false} />
+            </div>
+          </>
+        )}
         <div
           style={{
             width: '100%',
