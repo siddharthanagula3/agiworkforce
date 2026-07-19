@@ -176,3 +176,47 @@ describe('AgentActivityTimeline', () => {
     expect(screen.queryByRole('button', { name: /show .* earlier steps/i })).toBeNull();
   });
 });
+
+describe('AgentActivityTimeline connector badges', () => {
+  function connectorActivity(name: string): AgentActivityState {
+    // A single running connector tool so the live timeline auto-expands and
+    // renders the tool card (and therefore its badge).
+    return activity({
+      status: 'running',
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:conn-1',
+          toolCallId: 'conn-1',
+          name,
+          category: 'connector',
+          summary: 'Using connector',
+          status: 'running',
+          input: {},
+          startedAtMs: 1_100,
+        },
+      ],
+    });
+  }
+
+  it('badges a named connector with its own initial (Claude parity)', () => {
+    const { container } = render(
+      <AgentActivityTimeline activity={connectorActivity('mcp__github__get_pull_request_diff')} />,
+    );
+    const badge = container.querySelector('[data-badge-kind="letter"]');
+    expect(badge?.getAttribute('data-badge-letter')).toBe('G');
+  });
+
+  it('does not mislabel an opaque custom-<id> connector as "C"', () => {
+    // The serverId of a user's custom remote connector is an opaque `custom-<hex>`
+    // that carries no human name; its leading "c" must not become the badge letter
+    // (every custom connector would otherwise read "C"). It falls back to the
+    // generic connector badge instead.
+    const { container } = render(
+      <AgentActivityTimeline activity={connectorActivity('mcp__custom-a1b2c3d4e5__do_thing')} />,
+    );
+    const badge = container.querySelector('[data-badge-kind="letter"]');
+    expect(badge?.getAttribute('data-badge-letter')).not.toBe('C');
+    expect(badge?.getAttribute('data-badge-letter')).toBe('M');
+  });
+});

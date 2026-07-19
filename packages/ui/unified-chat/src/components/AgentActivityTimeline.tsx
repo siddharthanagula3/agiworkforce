@@ -109,12 +109,21 @@ function toToolStatus(entry: AgentActivityToolEntry): ToolCallStatus {
 
 /**
  * The connector's own initial for the badge (Claude parity — "F" for Filesystem,
- * "G" for GitHub) instead of the generic "M". Derived from an MCP tool name
- * (`mcp__<serverId>__<tool>`); undefined for non-connector tools.
+ * "G" for GitHub) instead of the generic "M". Derived from the serverId in an
+ * MCP tool name (`mcp__<serverId>__<tool>`); undefined for non-connector tools.
+ *
+ * A user's custom remote connector uses an opaque `custom-<hex>` serverId that
+ * carries no human name, so its leading letter would mislabel every custom
+ * connector as "C". Those fall back to the generic connector badge; only named
+ * servers (github, filesystem, notion, …) yield a truthful initial. Showing the
+ * real custom-connector initial needs the display name emitted on the event —
+ * tracked in known-flaws.md as CONNECTOR-BADGE-CUSTOM-NAME.
  */
 function connectorInitial(name: string): string | undefined {
-  const match = /^mcp__(.)/i.exec(name);
-  return match?.[1]?.toUpperCase();
+  if (!/^mcp__/i.test(name)) return undefined;
+  const serverId = name.slice('mcp__'.length).split('__')[0];
+  if (!serverId || /^custom-/i.test(serverId)) return undefined;
+  return serverId[0]?.toUpperCase();
 }
 
 function categoryToKind(category: AgentEventToolCategory): InlineToolKind {
