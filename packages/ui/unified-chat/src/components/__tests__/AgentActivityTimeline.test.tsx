@@ -40,19 +40,34 @@ function activity(overrides: Partial<AgentActivityState> = {}): AgentActivitySta
 }
 
 describe('AgentActivityTimeline', () => {
-  it('renders one collapsed inline summary and progressively reveals the run', () => {
+  it('auto-expands a running run live and collapses on a manual toggle', () => {
+    // Claude/ChatGPT behaviour: while the run is active the timeline streams its
+    // steps live (expanded), not a single collapsed summary line.
     render(<AgentActivityTimeline activity={activity()} nowMs={2_000} />);
 
-    const trigger = screen.getByRole('button', { name: /show agent activity/i });
-    expect(trigger.getAttribute('aria-expanded')).toBe('false');
-    expect(trigger.textContent).toContain('Searching official sources');
-    expect(screen.queryByText('Official agent documentation')).toBeNull();
-
-    fireEvent.click(trigger);
-
+    const trigger = screen.getByRole('button', { name: /hide agent activity/i });
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(trigger.textContent).toContain('Searching official sources');
     expect(screen.getByText('Official agent documentation')).toBeTruthy();
     expect(screen.getByText('example.com')).toBeTruthy();
+
+    // The user can still collapse it mid-run.
+    fireEvent.click(trigger);
+    const collapsed = screen.getByRole('button', { name: /show agent activity/i });
+    expect(collapsed.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Official agent documentation')).toBeNull();
+  });
+
+  it('collapses a completed run to its summary pill', () => {
+    render(
+      <AgentActivityTimeline
+        activity={activity({ status: 'completed', completedAtMs: 2_000 })}
+        nowMs={3_000}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByText('Official agent documentation')).toBeNull();
   });
 
   it('wires approval actions to the canonical tool call id', () => {
