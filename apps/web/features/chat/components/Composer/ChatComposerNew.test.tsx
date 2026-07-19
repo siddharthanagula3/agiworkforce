@@ -774,4 +774,52 @@ describe('ChatComposerNew', () => {
       expect(screen.getByText('Choose a different folder')).toBeInTheDocument();
     });
   });
+
+  describe('follow-up queue while streaming', () => {
+    it('queues a follow-up typed during streaming and auto-sends it when the turn finishes', async () => {
+      const onSendMock = vi.fn();
+      const { rerender } = render(<ChatComposerNew onSend={onSendMock} isLoading isGenerating />);
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      // Type-ahead: the textarea is enabled during streaming.
+      expect(textarea).not.toBeDisabled();
+      await userEvent.type(textarea, 'follow up question');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      // Not sent yet — it is queued and shown as pending.
+      expect(onSendMock).not.toHaveBeenCalled();
+      expect(screen.getByTestId('queued-followup')).toBeInTheDocument();
+
+      // The turn finishes (isLoading true -> false): the queued message flushes.
+      rerender(<ChatComposerNew onSend={onSendMock} isLoading={false} isGenerating={false} />);
+      await waitFor(() => {
+        expect(onSendMock).toHaveBeenCalledWith(
+          'follow up question',
+          undefined,
+          undefined,
+          expect.objectContaining({ workMode: expect.anything() }),
+        );
+      });
+      expect(screen.queryByTestId('queued-followup')).not.toBeInTheDocument();
+    });
+
+    it('cancels a queued follow-up so it is not sent when the turn finishes', async () => {
+      const onSendMock = vi.fn();
+      const { rerender } = render(<ChatComposerNew onSend={onSendMock} isLoading isGenerating />);
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'to cancel');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      expect(screen.getByTestId('queued-followup')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /cancel queued message/i }));
+      expect(screen.queryByTestId('queued-followup')).not.toBeInTheDocument();
+
+      rerender(<ChatComposerNew onSend={onSendMock} isLoading={false} isGenerating={false} />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(onSendMock).not.toHaveBeenCalled();
+    });
+  });
 });
