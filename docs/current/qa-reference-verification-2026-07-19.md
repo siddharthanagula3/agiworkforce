@@ -227,10 +227,18 @@ non-code action:
 
 **Device-gated:**
 
-- qwen3-vl-2b multimodal `shipsInV1` flip — code path complete and tested, but a
-  RAM-gated VLM cannot be validated on a simulator (host RAM, no Neural Engine);
-  flipping on a simulator pass would be a fake availability claim. Needs
-  real-device VLM QA (RAM/thermal/latency).
+- qwen3-vl-2b multimodal `shipsInV1` flip. The full software path is wired and
+  code-tested (gguf+mmproj install, picker selectability, tier-3
+  `initMultimodal` lifecycle, vision routing — `gguf-vision-chain` +
+  `gguf-picker-install` in the 31-test local-model suite, all passing with
+  mocked native layers). The gate is stated in the catalog itself
+  (`packages/platform/local-llm/src/catalog.ts`): "The ONLY remaining ship gate
+  is device QA: real on-device `initMultimodal` execution, vision output
+  quality, and the RAM/thermal matrix ... which no amount of mocked-native
+  testing can substitute for. Flip to true after device QA passes." A simulator
+  run is mocked-native by definition (host RAM, no Neural Engine), so it cannot
+  satisfy this gate and flipping on it would be a fake-availability claim the
+  code explicitly forbids. Needs a real device.
 
 **Provider/product-decision-gated:**
 
