@@ -11,6 +11,7 @@ import {
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
+import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import {
   cancelMobileCloudAgentRun,
   streamChat,
@@ -1039,10 +1040,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     let messageContent = content;
     if (fileUploads && fileUploads.length > 0) {
-      const fileRefs = fileUploads
-        .map((f) => `[Attached file: ${f.fileName} (${f.mimeType})]`)
-        .join('\n');
-      messageContent = fileRefs + (content ? '\n\n' + content : '');
+      const documentContext = await buildAttachedDocumentContext(fileUploads);
+      messageContent = [...documentContext, content].filter(Boolean).join('\n\n');
     }
 
     if (shouldUseLocalRuntime && imageUploads && imageUploads.length > 0) {
