@@ -29,7 +29,7 @@ describe('usageMeter', () => {
   beforeEach(() => {
     vi.mocked(fetchTierInfo).mockReset();
     vi.mocked(fetchTierInfo).mockResolvedValue(undefined);
-    setConfiguredModel('claude-sonnet-4.6');
+    setConfiguredModel('claude-sonnet-5');
   });
 
   it('treats local models as unbounded without fetching cloud usage', async () => {
@@ -44,11 +44,15 @@ describe('usageMeter', () => {
     expect(fetchTierInfo).not.toHaveBeenCalled();
   });
 
-  it('uses reported managed quota fields instead of stubbed quota values', async () => {
+  // The managed billing contract is percentage-only: TierInfoSchema never
+  // returns exact token/cent counts, so buildManagedMeter derives `remaining`
+  // as a 0-1 fraction from usagePercentage and never emits usedTokens/limitTokens
+  // (the exact token/cap client fields were intentionally dropped — see
+  // known-flaws.md VS Code usage rewire).
+  it('derives a remaining fraction from the percentage-only usage contract', async () => {
     vi.mocked(fetchTierInfo).mockResolvedValue({
       tier: 'max',
-      tokensUsed: 25_000,
-      tokenCap: 100_000,
+      usagePercentage: 25,
       resetsAt: '2026-06-01T00:00:00.000Z',
     });
 
@@ -56,8 +60,6 @@ describe('usageMeter', () => {
     await expect(resolveUsageMeter(secrets, 999)).resolves.toEqual({
       remaining: 0.75,
       resetsAt: '2026-06-01T00:00:00.000Z',
-      usedTokens: 25_000,
-      limitTokens: 100_000,
       source: 'managed-plan',
     });
   });
