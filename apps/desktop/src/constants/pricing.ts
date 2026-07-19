@@ -12,9 +12,16 @@ import { getPlanPriceUsd, getPlanPriceInr } from '@agiworkforce/types';
 // current 'basic' tier and its own dedicated Stripe prices (test-mode IDs
 // below; see the platform-lead handoff notes for the live-mode equivalents
 // pending explicit approval to create real production prices).
+// NOTE: these desktop IDs are reference metadata only — actual checkout runs on the
+// canonical WEB pricing page (the plan CTAs open it), so nothing here charges a card.
+// FOUNDER/STRIPE: the catalog price for Basic is now $7/mo (billing-catalog.ts), but the
+// basic_monthly_usd Stripe price OBJECT below was created at $8 — a display($7)/charge($8)
+// mismatch on whichever surface actually charges it. A $7 Stripe price (test + live) must
+// be created and swapped in here + in web's checkout config. Not done in code (creating
+// Stripe prices is a founder action). Tracked: BASIC-STRIPE-PRICE-7-VS-8 in known-flaws.
 export const STRIPE_PRICE_IDS = {
-  basic_monthly_usd: 'price_1ToutN0zEfO6BZMhHloQY5RM', // test mode — $8/mo
-  basic_monthly_inr: 'price_1ToutS0zEfO6BZMhdWLMNOd2', // test mode — ₹399/mo
+  basic_monthly_usd: 'price_1ToutN0zEfO6BZMhHloQY5RM', // test mode — $8/mo price OBJECT (catalog is $7; needs a $7 price)
+  basic_monthly_inr: 'price_1ToutS0zEfO6BZMhdWLMNOd2', // test mode — ₹399/mo (matches catalog)
   free: null,
   pro_monthly: 'price_1Sgwx20zEfO6BZMh3ix7hivi',
   pro_yearly: 'price_1Sgwx30zEfO6BZMhJXsduOyl',
