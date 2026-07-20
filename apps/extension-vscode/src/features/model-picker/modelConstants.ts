@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import {
+  canAccessModelForSubscriptionTier,
   getCoreManualModelOptions,
   getModelContextLimits,
   getModelCostRates,
@@ -79,6 +80,38 @@ function codiconForProvider(providerId: ProviderId): string {
   return '$(cloud)';
 }
 
+// ─── Tier reachability ────────────────────────────────────────────────────────
+//
+// VSCODE-PICKER-TIER-01. The picker previously rendered the entire managed-cloud
+// catalog unconditionally, so a signed-out user (or one in Local mode) saw every
+// cloud model as if it were selectable. That is a trust-boundary presentation
+// bug: it implies managed-cloud reachability that does not exist.
+//
+// The gate reuses the shared catalog rule rather than re-deriving one here:
+// `normalizeSubscriptionAccessTier` maps both 'local' and 'byok' to 'free', and
+// `canAccessModelForSubscriptionTier` denies every model under 'free'.
+//
+// Deliberately NOT filtered out of the list. models.json contains zero
+// ollama/lmstudio rows (local models arrive only via runtime discovery from the
+// app-server), so hiding unreachable rows would leave an EMPTY picker whenever a
+// local runtime is not already running. Unreachable models stay visible and are
+// marked, mirroring the existing `coming_soon` disabled-row treatment.
+
+/** The hint appended to a model the current tier cannot actually reach. */
+export const MODEL_LOCKED_HINT = 'Sign in or add a provider key';
+
+/**
+ * True when `tier` can actually route `modelId` today.
+ *
+ * `tier === undefined` means "caller did not resolve a tier" and preserves the
+ * pre-gate behaviour (everything reachable) so existing call sites and tests do
+ * not silently start locking rows.
+ */
+export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
+  if (tier === undefined) return true;
+  return canAccessModelForSubscriptionTier(modelId, tier);
+}
+
 function getPickerCapabilityLabel(modelId: string, catalogDetail: string): string {
   const tier = getPickerModelTier(modelId);
   const tierLabel = tier === 'premium' ? 'Premium' : tier === 'economy' ? 'Economy' : 'Balanced';
@@ -102,23 +135,37 @@ export interface GroupedQuickPickItem extends vscode.QuickPickItem {
  *      - Each model item: label = codicon + model name, description = capability
  *        sub-label (+ "· Thinking" when supportsEffort), detail = model ID
  */
-export function buildGroupedQuickPickItems(): GroupedQuickPickItem[] {
+export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[] {
+  // The auto-* routing modes resolve to managed-cloud models, so they are gated
+  // with them rather than treated as always-available.
+  const autoReachable = (autoId: string): boolean =>
+    isModelReachableForTier(resolveAutoModeModel(autoId, tier) ?? autoId, tier);
+
+  const withLockHint = (description: string, reachable: boolean): string =>
+    reachable ? description : `${description} · ${MODEL_LOCKED_HINT}`;
+
   const items: GroupedQuickPickItem[] = [
     {
       label: '$(sparkle) Best (auto)',
-      description: 'Auto-balanced — picks the right model per request',
+      description: withLockHint(
+        'Auto-balanced — picks the right model per request',
+        autoReachable('auto-balanced'),
+      ),
       detail: 'Recommended',
       modelId: 'auto-balanced',
     },
     {
       label: '$(zap) Auto (Economy)',
-      description: 'Smart routing — fastest and cheapest',
+      description: withLockHint(
+        'Smart routing — fastest and cheapest',
+        autoReachable('auto-economy'),
+      ),
       detail: 'Best for quick questions and simple tasks',
       modelId: 'auto-economy',
     },
     {
       label: '$(star-full) Auto (Premium)',
-      description: 'Smart routing — highest quality',
+      description: withLockHint('Smart routing — highest quality', autoReachable('auto-premium')),
       detail: 'Best for complex reasoning and long contexts',
       modelId: 'auto-premium',
     },
@@ -176,9 +223,20 @@ export function buildGroupedQuickPickItems(): GroupedQuickPickItem[] {
       if (modelHasThinking) {
         descriptionParts.push('Thinking');
       }
+      // VSCODE-PICKER-TIER-01: mark rows the active tier cannot route rather
+      // than dropping them (see isModelReachableForTier — dropping would empty
+      // the picker, because local models are not in the static catalog).
+      const reachable = isModelReachableForTier(opt.id, tier);
+      if (!reachable) {
+        descriptionParts.push(MODEL_LOCKED_HINT);
+      }
       const description = descriptionParts.join(' · ');
 
-      const codicon = providerId ? codiconForProvider(providerId) : '$(robot)';
+      const codicon = reachable
+        ? providerId
+          ? codiconForProvider(providerId)
+          : '$(robot)'
+        : '$(lock)';
 
       items.push({
         label: `${codicon} ${opt.label}`,
@@ -287,6 +345,25 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
     availability: getModelMetadataById(option.id)?.availability ?? ('live' as ModelAvailability),
   })),
 ];
+
+/**
+ * VSCODE-PICKER-TIER-01. Tier-aware view of {@link MODEL_PICKER_OPTIONS} for the
+ * sidebar webview `<select>`, which renders from the static array rather than
+ * through {@link buildGroupedQuickPickItems}. Without this the webview picker
+ * kept listing the whole managed-cloud catalog as selectable while signed out.
+ *
+ * `reachable: false` rows are rendered disabled (same treatment as non-live
+ * `coming_soon` rows) instead of being removed — see isModelReachableForTier for
+ * why removal would empty the picker.
+ */
+export function getModelPickerOptionsForTier(
+  tier?: string,
+): Array<ModelPickerOption & { reachable: boolean }> {
+  return MODEL_PICKER_OPTIONS.map((option) => ({
+    ...option,
+    reachable: isModelReachableForTier(resolveAutoModeModel(option.id, tier) ?? option.id, tier),
+  }));
+}
 
 /**
  * SELECTABLE picker ids — auto modes + live catalog models only. Non-live
