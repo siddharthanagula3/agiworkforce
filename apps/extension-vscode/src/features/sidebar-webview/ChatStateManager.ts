@@ -29,6 +29,7 @@ import {
   type LocalRuntimeEvent,
 } from '../../integrations/localRuntimeClient';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
+import { resolveTier } from '../../integrations/tierResolver';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn } from '../../integrations/routingTask';
@@ -403,7 +404,9 @@ export class ChatStateManager {
         const currentModel = normalizeConfiguredModelId(
           vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
         );
-        const allItems = buildGroupedQuickPickItems();
+        // VSCODE-PICKER-TIER-01: same tier gate as the QuickPick command, so the
+        // inline popover cannot present unreachable managed-cloud models.
+        const allItems = buildGroupedQuickPickItems(await resolveTier(this._context));
         const groups: Array<{
           label: string;
           models: Array<{ id: string; label: string; description: string }>;

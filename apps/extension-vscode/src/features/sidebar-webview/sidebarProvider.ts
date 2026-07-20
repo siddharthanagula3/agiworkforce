@@ -16,6 +16,7 @@ import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
 import { getWebviewContent, getNonce } from './webviewContent';
 import { parseWebviewMessage } from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
+import { resolveTierSync } from '../../integrations/tierResolver';
 
 // Re-export for chatEditorPanel.ts (imported from ./sidebarProvider)
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
@@ -37,7 +38,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly _extensionUri: vscode.Uri,
     secrets: vscode.SecretStorage,
-    context: vscode.ExtensionContext,
+    // Named `_extensionContext` (not `_context`) because `resolveWebviewView`
+    // takes an unrelated `_context: WebviewViewResolveContext` parameter.
+    private readonly _extensionContext: vscode.ExtensionContext,
     conversationTreeProvider?: ConversationTreeProvider,
     workspaceState?: vscode.Memento,
     localRuntimes?: LocalRuntimePool,
@@ -45,7 +48,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   ) {
     this._stateManager = new ChatStateManager(
       secrets,
-      context,
+      this._extensionContext,
       (msg: ExtToWebviewMessage) => this._view?.webview.postMessage(msg),
       conversationTreeProvider,
       workspaceState,
@@ -81,6 +84,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       initialEffort,
       supportsEffort,
       this._stateManager.meterCollapsed,
+      // VSCODE-PICKER-TIER-01: gate the <select> roster on the resolved tier.
+      resolveTierSync(this._extensionContext),
     );
 
     this._messageListener?.dispose();

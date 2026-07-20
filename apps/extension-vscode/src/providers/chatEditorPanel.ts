@@ -3,11 +3,15 @@
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
-import { ChatStateManager, type ExtToWebviewMessage } from '../features/sidebar-webview/ChatStateManager';
+import {
+  ChatStateManager,
+  type ExtToWebviewMessage,
+} from '../features/sidebar-webview/ChatStateManager';
 import { getNonce, getWebviewContent } from '../features/sidebar-webview/webviewContent';
 import { parseWebviewMessage } from '../protocol/webviewMessages';
 import { type ConversationTreeProvider } from '../features/trees';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
+import { resolveTierSync } from '../integrations/tierResolver';
 
 export class ChatEditorPanel {
   public static readonly viewType = 'agi-workforce.chatPanel';
@@ -73,6 +77,8 @@ export class ChatEditorPanel {
       Config.agentEffort(),
       this.stateManager.modelSupportsEffort(model),
       this.stateManager.meterCollapsed,
+      // VSCODE-PICKER-TIER-01: gate the <select> roster on the resolved tier.
+      resolveTierSync(context),
     );
     this.disposables.push(
       this.panel.webview.onDidReceiveMessage(async (message) => {

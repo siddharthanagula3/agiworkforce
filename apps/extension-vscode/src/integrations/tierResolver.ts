@@ -78,6 +78,28 @@ export async function fetchTierFromBridge(): Promise<Tier | undefined> {
 // ─── Main resolver ────────────────────────────────────────────────────────────
 
 /**
+ * Synchronous tier resolution for callers that cannot await — currently the
+ * webview HTML builders, which run inside `resolveWebviewView` / a constructor.
+ *
+ * Identical to {@link resolveTier} minus step 2 (the bridge fetch). That step is
+ * a no-op today: {@link fetchTierFromBridge} returns `undefined` unconditionally
+ * in Wave 1, so this returns the same value as the async resolver. If the bridge
+ * fetch is ever implemented, callers that can await should prefer `resolveTier`.
+ */
+export function resolveTierSync(context: vscode.ExtensionContext): Tier {
+  const settingRaw = vscode.workspace
+    .getConfiguration('agiWorkforce')
+    .inspect<string>('tier')?.globalValue;
+  const settingTier = coerceTier(settingRaw);
+  if (settingTier !== undefined && settingTier !== 'byok') return settingTier;
+
+  const cachedTier = coerceTier(context.globalState.get<string>('tierStatus.cachedTier'));
+  if (cachedTier !== undefined) return cachedTier;
+
+  return 'byok';
+}
+
+/**
  * Resolve the current subscription tier.
  *
  * @param context - ExtensionContext used to read cached globalState tier.
