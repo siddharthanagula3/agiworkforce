@@ -173,6 +173,44 @@ async function upgradeToPlan(data: {
 }
 
 /**
+ * Read-only preview of a mid-cycle upgrade's immediate prorated charge, so the
+ * UI can show "you'll be charged $X today" and get explicit confirmation BEFORE
+ * `upgradePlanMidCycle` actually charges the saved card. Returns the amount due
+ * now in the subscription's billing currency.
+ */
+export async function previewUpgrade(data: {
+  plan: SelfServePaidPlanTier;
+  billingInterval?: 'monthly' | 'yearly';
+}): Promise<{ amountDueNowCents: number; currency: string }> {
+  const authToken = await getAuthToken();
+  if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
+
+  const billingInterval = data.billingInterval ?? 'monthly';
+  const response = await fetch('/api/upgrade/preview', {
+    method: 'POST',
+    headers: await addCsrfHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    }),
+    body: JSON.stringify({ plan: data.plan, billingInterval }),
+  });
+
+  const result = (await response.json().catch(() => ({}))) as {
+    amountDueNowCents?: unknown;
+    currency?: unknown;
+    error?: unknown;
+  };
+
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(result, `Could not preview the ${data.plan} upgrade`));
+  }
+  if (typeof result.amountDueNowCents !== 'number' || typeof result.currency !== 'string') {
+    throw new Error('Upgrade preview returned an unexpected response.');
+  }
+  return { amountDueNowCents: result.amountDueNowCents, currency: result.currency };
+}
+
+/**
  * Upgrade an active subscription immediately. The server applies unused-time
  * value to the new full-cycle invoice and activates entitlements only after
  * successful payment.

@@ -1,0 +1,144 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Button,
+} from '@agiworkforce/ui';
+import { previewUpgrade, upgradePlanMidCycle } from '../services/stripe-payments';
+import {
+  getBillingPlanDisplay,
+  formatCatalogPrice,
+  type SelectablePaidPlan,
+} from '../lib/plan-display';
+
+export interface UpgradeConfirmRequest {
+  plan: SelectablePaidPlan;
+  billingInterval: 'monthly' | 'yearly';
+}
+
+interface UpgradeConfirmDialogProps {
+  /** When non-null, the dialog is open and previews this upgrade. */
+  request: UpgradeConfirmRequest | null;
+  onCancel: () => void;
+  /** Called after the upgrade charge succeeds. */
+  onConfirmed: () => void;
+}
+
+function formatMoney(cents: number, currency: string): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(cents / 100);
+}
+
+/**
+ * Mid-cycle upgrades charge the customer's already-saved card immediately (there
+ * is no Stripe Checkout screen because the card is on file). This dialog closes
+ * that UX gap: it fetches the exact prorated amount from `/api/upgrade/preview`
+ * and requires an explicit confirmation showing that amount BEFORE
+ * `upgradePlanMidCycle` performs the charge.
+ */
+export function UpgradeConfirmDialog({
+  request,
+  onCancel,
+  onConfirmed,
+}: UpgradeConfirmDialogProps) {
+  const [amountDue, setAmountDue] = useState<{ cents: number; currency: string } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!request) {
+      setAmountDue(null);
+      setError(null);
+      setConfirming(false);
+      return;
+    }
+    let cancelled = false;
+    setPreviewing(true);
+    setError(null);
+    setAmountDue(null);
+    previewUpgrade({ plan: request.plan, billingInterval: request.billingInterval })
+      .then((r) => {
+        if (!cancelled) setAmountDue({ cents: r.amountDueNowCents, currency: r.currency });
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Could not calculate the upgrade cost.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewing(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [request]);
+
+  if (!request) return null;
+
+  const display = getBillingPlanDisplay(request.plan);
+  const planLabel = display.pricing.label;
+  const recurringUsd =
+    request.billingInterval === 'yearly'
+      ? display.pricing.yearlyPriceUsd
+      : display.pricing.monthlyPriceUsd;
+  const intervalWord = request.billingInterval === 'yearly' ? 'year' : 'month';
+
+  async function handleConfirm() {
+    if (!request) return;
+    setConfirming(true);
+    setError(null);
+    try {
+      await upgradePlanMidCycle({ plan: request.plan, billingInterval: request.billingInterval });
+      onConfirmed();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upgrade failed. Your current plan is unchanged.');
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !confirming) onCancel();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Upgrade to {planLabel}</DialogTitle>
+          <DialogDescription>
+            {previewing
+              ? 'Calculating your prorated cost…'
+              : amountDue
+                ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, prorated for the rest of your billing period. Your plan then renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
+                : 'Review your upgrade before it is charged to your saved card.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {error ? <p className="text-sm text-[color:var(--state-danger,#ef4444)]">{error}</p> : null}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={confirming}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} disabled={previewing || confirming || !amountDue}>
+            {confirming
+              ? 'Upgrading…'
+              : amountDue
+                ? `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
+                : 'Confirm'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
