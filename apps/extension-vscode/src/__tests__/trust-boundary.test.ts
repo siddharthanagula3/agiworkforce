@@ -1,7 +1,7 @@
 /**
  * VSCode extension trust-boundary tests.
  *
- * The VSCode extension uses a tier-based model (local / byok / hobby / pro / max)
+ * The VSCode extension uses a tier-based model (local / byok / basic / pro / max)
  * rather than the binary local/cloud split. The trust boundary is enforced by:
  *   - tierResolver: resolves the active tier from bridge data, config, and fallback
  *   - HTTPS-only endpoint validation: rejects non-https endpoints except localhost
@@ -11,17 +11,21 @@
 import { describe, it, expect } from 'vitest';
 
 // ---------------------------------------------------------------------------
-// Tier ordering — mirrors apps/extension-vscode/src/integrations/tierResolver.ts
+// Tier ordering — imported from the REAL resolver, not re-declared.
+//
+// This file previously defined its own TIER_ORDER/tierAtLeast copies, so the
+// assertions below tested the copy rather than production code and would stay
+// green through any real-code change. The local copy had in fact already
+// drifted: it still listed the pre-2026-06-30 'hobby' and the never-shipped
+// 'pro_plus', neither of which exists in the shipping tier set
+// (local / byok / basic / pro / max — see billing-catalog.ts, where the paid
+// entry tier is Basic).
+//
+// `vitest.config.ts` aliases `vscode` to a mock, so importing the resolver
+// (which imports vscode) works here.
 // ---------------------------------------------------------------------------
 
-const TIER_ORDER: readonly string[] = ['local', 'byok', 'hobby', 'pro', 'pro_plus', 'max'];
-
-const tierAtLeast = (actual: string, required: string): boolean => {
-  const aIdx = TIER_ORDER.indexOf(actual);
-  const rIdx = TIER_ORDER.indexOf(required);
-  if (aIdx === -1 || rIdx === -1) return false;
-  return aIdx >= rIdx;
-};
+import { TIER_ORDER, tierAtLeast } from '../integrations/tierResolver';
 
 describe('tier resolver ordering', () => {
   it('local is the lowest tier', () => {
@@ -29,30 +33,44 @@ describe('tier resolver ordering', () => {
   });
 
   it('byok is the default fallback tier (safe under-gate)', () => {
-    // Mirrors tierResolver.ts line: return 'byok' as safe default
+    // Mirrors tierResolver.ts: `return 'byok'` as the safe default.
     const DEFAULT_TIER = 'byok';
     expect(TIER_ORDER.indexOf(DEFAULT_TIER)).toBeGreaterThan(TIER_ORDER.indexOf('local'));
-    expect(TIER_ORDER.indexOf(DEFAULT_TIER)).toBeLessThan(TIER_ORDER.indexOf('hobby'));
+    expect(TIER_ORDER.indexOf(DEFAULT_TIER)).toBeLessThan(TIER_ORDER.indexOf('basic'));
   });
 
   it('max is the highest tier', () => {
     expect(TIER_ORDER[TIER_ORDER.length - 1]).toBe('max');
   });
 
-  it('tierAtLeast — local does not meet byok requirement', () => {
-    expect(tierAtLeast('local', 'byok')).toBe(false);
+  it('tierAtLeast — local and byok are peers, not a ladder', () => {
+    // The canonical ordering (packages/contracts/types/src/design-system/
+    // user-identity.ts) ranks local / byok / free all at 0: they are three
+    // unpaid access modes, not ascending privilege levels. The previous local
+    // copy of this helper modelled them as a strict ladder and asserted
+    // local < byok — a false hierarchy that only survived because the test
+    // exercised the copy instead of the real comparator.
+    expect(tierAtLeast('local', 'byok')).toBe(true);
+    expect(tierAtLeast('byok', 'local')).toBe(true);
+  });
+
+  it('CRITICAL: no unpaid tier reaches the first paid tier', () => {
+    // This is the invariant that actually matters for the trust boundary.
+    for (const unpaid of ['local', 'byok', 'free'] as const) {
+      expect(tierAtLeast(unpaid, 'basic')).toBe(false);
+    }
   });
 
   it('tierAtLeast — byok meets byok requirement', () => {
     expect(tierAtLeast('byok', 'byok')).toBe(true);
   });
 
-  it('tierAtLeast — pro meets hobby requirement', () => {
-    expect(tierAtLeast('pro', 'hobby')).toBe(true);
+  it('tierAtLeast — pro meets basic requirement', () => {
+    expect(tierAtLeast('pro', 'basic')).toBe(true);
   });
 
-  it('tierAtLeast — hobby does not meet pro requirement', () => {
-    expect(tierAtLeast('hobby', 'pro')).toBe(false);
+  it('tierAtLeast — basic does not meet pro requirement', () => {
+    expect(tierAtLeast('basic', 'pro')).toBe(false);
   });
 
   it('tierAtLeast — unknown tier always returns false', () => {
@@ -123,25 +141,37 @@ describe('endpoint validation', () => {
 
 describe('vscode extension trust-boundary gates', () => {
   it('CRITICAL: byok default never over-grants to managed-cloud features', () => {
-    // byok tier < hobby; if the bridge provides no tier, fall to byok
-    // This ensures no accidental managed-cloud access for unauthenticated sessions
+    // byok tier < basic; if the bridge provides no tier, fall to byok.
+    // Ensures no accidental managed-cloud access for unauthenticated sessions.
     const defaultTier = 'byok';
-    expect(tierAtLeast(defaultTier, 'hobby')).toBe(false);
+    expect(tierAtLeast(defaultTier, 'basic')).toBe(false);
     expect(tierAtLeast(defaultTier, 'pro')).toBe(false);
     expect(tierAtLeast(defaultTier, 'max')).toBe(false);
   });
 
-  it('CRITICAL: local tier cannot access byok or higher features', () => {
-    expect(tierAtLeast('local', 'byok')).toBe(false);
-    expect(tierAtLeast('local', 'hobby')).toBe(false);
+  it('CRITICAL: local tier cannot access any paid feature', () => {
+    expect(tierAtLeast('local', 'basic')).toBe(false);
+    expect(tierAtLeast('local', 'pro')).toBe(false);
+    expect(tierAtLeast('local', 'max')).toBe(false);
   });
 
-  it('all tier transitions are monotonic', () => {
+  it('tier transitions are monotonic (non-decreasing — equal ranks are peers)', () => {
+    // TIER_ORDER is a strict array, but the canonical ranking has ties
+    // (local/byok are both rank 0), so the correct property is "a higher-listed
+    // tier always meets a lower-listed one", not strict two-way inequality.
     for (let i = 0; i < TIER_ORDER.length - 1; i++) {
       const lower = TIER_ORDER[i]!;
       const higher = TIER_ORDER[i + 1]!;
       expect(tierAtLeast(higher, lower)).toBe(true);
-      expect(tierAtLeast(lower, higher)).toBe(false);
+    }
+  });
+
+  it('every paid tier strictly exceeds every unpaid tier', () => {
+    for (const unpaid of ['local', 'byok', 'free'] as const) {
+      for (const paid of ['basic', 'pro', 'max'] as const) {
+        expect(tierAtLeast(paid, unpaid)).toBe(true);
+        expect(tierAtLeast(unpaid, paid)).toBe(false);
+      }
     }
   });
 });
