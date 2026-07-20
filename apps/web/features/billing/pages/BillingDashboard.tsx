@@ -10,11 +10,14 @@ import {
   upgradeToProPlan,
   upgradeToMaxPlan,
   upgradeToMax15xPlan,
-  upgradePlanMidCycle,
   contactEnterpriseSales,
   openBillingPortal,
   isStripeConfigured,
 } from '@features/billing/services/stripe-payments';
+import {
+  UpgradeConfirmDialog,
+  type UpgradeConfirmRequest,
+} from '@features/billing/components/UpgradeConfirmDialog';
 import { toast } from 'sonner';
 import {
   useBillingData,
@@ -69,6 +72,7 @@ const BillingPage: React.FC = () => {
   const searchParams = useSearchParams();
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('yearly');
   const [isManagingBilling, setIsManagingBilling] = useState(false);
+  const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
 
   const {
     data: billingData,
@@ -191,22 +195,11 @@ const BillingPage: React.FC = () => {
         return;
       }
 
-      // Active upgrades start a paid full cycle immediately. The server applies
-      // only unused-time value from the old subscription to that invoice.
+      // A mid-cycle upgrade charges the saved card immediately with no Stripe
+      // screen — confirm the exact prorated amount first via UpgradeConfirmDialog
+      // instead of charging silently. The dialog owns the preview + the charge.
       if (hasActivePaidPlan) {
-        const toastId = toast.loading('Upgrading your plan...');
-        try {
-          await upgradePlanMidCycle({ plan, billingInterval: period });
-          toast.dismiss(toastId);
-          toast.success(`Payment confirmed. Activating ${getBillingPlanPricing(plan).label} now.`);
-          invalidateBillingQueries();
-          [1000, 3000, 8000].forEach((delay) => {
-            window.setTimeout(() => invalidateBillingQueries(), delay);
-          });
-        } catch (err) {
-          toast.dismiss(toastId);
-          throw err;
-        }
+        setUpgradeConfirm({ plan, billingInterval: period });
         return;
       }
 
@@ -408,6 +401,18 @@ const BillingPage: React.FC = () => {
           onDownloadInvoice={handleDownloadInvoice}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
+        />
+        <UpgradeConfirmDialog
+          request={upgradeConfirm}
+          onCancel={() => setUpgradeConfirm(null)}
+          onConfirmed={() => {
+            setUpgradeConfirm(null);
+            toast.success('Your plan has been upgraded.');
+            invalidateBillingQueries();
+            [1000, 3000, 8000].forEach((delay) => {
+              window.setTimeout(() => invalidateBillingQueries(), delay);
+            });
+          }}
         />
       </div>
     </ErrorBoundary>

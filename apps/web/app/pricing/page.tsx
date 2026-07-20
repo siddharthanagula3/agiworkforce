@@ -23,8 +23,11 @@ import {
   upgradeToProPlan,
   upgradeToMaxPlan,
   upgradeToMax15xPlan,
-  upgradePlanMidCycle,
 } from '@features/billing/services/stripe-payments';
+import {
+  UpgradeConfirmDialog,
+  type UpgradeConfirmRequest,
+} from '@features/billing/components/UpgradeConfirmDialog';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -173,6 +176,7 @@ export default function PricingPage() {
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
+  const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
 
   // Display the exact same trusted country-derived Stripe prices that Checkout
   // validates server-side. A malformed/unavailable response falls back to the
@@ -300,21 +304,22 @@ export default function PricingPage() {
       return;
     }
 
+    // A mid-cycle upgrade charges the saved card immediately with no Stripe
+    // screen — confirm the exact prorated amount first via UpgradeConfirmDialog
+    // instead of charging silently.
+    if (hasActivePaidPlan) {
+      setUpgradeConfirm({
+        plan,
+        billingInterval: plan === 'pro' ? (annual ? 'yearly' : 'monthly') : 'monthly',
+      });
+      return;
+    }
+
     setPendingPlan(plan);
     const toastId = toast.loading(t('redirectingToCheckout'));
     try {
       const userId = user.id;
       const userEmail = user.email || '';
-      if (hasActivePaidPlan) {
-        await upgradePlanMidCycle({
-          plan,
-          billingInterval: plan === 'pro' ? (annual ? 'yearly' : 'monthly') : 'monthly',
-        });
-        toast.dismiss(toastId);
-        toast.success(`Payment confirmed. Activating ${BILLING_PLAN_PRICING[plan].label} now.`);
-        return;
-      }
-
       if (plan === 'basic') {
         await upgradeToBasicPlan({ userId, userEmail });
       } else if (plan === 'pro') {
@@ -965,6 +970,14 @@ export default function PricingPage() {
 
         <MarketingFooter />
       </main>
+      <UpgradeConfirmDialog
+        request={upgradeConfirm}
+        onCancel={() => setUpgradeConfirm(null)}
+        onConfirmed={() => {
+          setUpgradeConfirm(null);
+          toast.success('Your plan has been upgraded.');
+        }}
+      />
     </div>
   );
 }
