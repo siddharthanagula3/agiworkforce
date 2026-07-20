@@ -11,6 +11,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import { effectivePlanTier } from '@/lib/entitlement';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import {
   canAccessManualModelSelection,
@@ -90,9 +91,18 @@ async function handleGetMe(request: NextRequest) {
       })(),
     ]);
 
+    // Entitlement is a function of subscription STATUS, not raw plan_tier: a
+    // canceled/unpaid row can still carry a paid plan_tier (the tier is re-derived
+    // from the Stripe price on every webhook update), so unlocking capabilities off
+    // the raw tier would show paid features (model picker, AGI Work) as available to
+    // a user the server will refuse — a dead/false control. Gate features on the
+    // effective tier; keep the `plan` object below on the raw tier + real status so
+    // billing UI can honestly show "Pro — canceled".
+    const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+
     const feature_flags = {
       beta_features: true,
-      advanced_model_access: canAccessManualModelSelection(subscription?.plan_tier),
+      advanced_model_access: canAccessManualModelSelection(effectiveTier),
       // Deployment capability, not a user entitlement: whether this deployment
       // has the reachable E2B execution loop enabled (AGI_E2B_EXECUTION=1).
       // The composer gates the "Run code" toggle on this so it is never a
@@ -121,7 +131,9 @@ async function handleGetMe(request: NextRequest) {
     // four policy layers is sourced from real, already-resolved data.
     const capability_handshake = buildMeCapabilityHandshake({
       userId,
-      tier: subscription?.plan_tier,
+      // Effective (status-gated) tier so a canceled/unpaid row does not unlock
+      // paid capabilities. See effectiveTier note above.
+      tier: effectiveTier,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
     });

@@ -58,6 +58,10 @@ vi.mock('@shared/utils/env', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     execute: vi.fn().mockResolvedValue({}),
+    // assertAccountActive (getClerkAuthUser) reads account_status; an active row
+    // keeps the auth path passing. Without this the query would reject and auth
+    // now fails closed.
+    query: vi.fn().mockResolvedValue([{ account_status: 'active' }]),
   })),
 }));
 

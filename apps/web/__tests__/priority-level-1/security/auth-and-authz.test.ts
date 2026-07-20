@@ -29,6 +29,15 @@ vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
+// assertAccountActive (inside getClerkAuthUser) reads profiles.account_status and
+// now fails CLOSED on a lookup error. Provide an active row so the happy-path
+// auth tests exercise identity resolution, not the fail-closed branch.
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: () => ({
+    query: vi.fn().mockResolvedValue([{ account_status: 'active' }]),
+  }),
+}));
+
 import { getClerkAuthUser } from '@/lib/api-auth';
 
 function makeRequest(authHeader?: string): NextRequest {
