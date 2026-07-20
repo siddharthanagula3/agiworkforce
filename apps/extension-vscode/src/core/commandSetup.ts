@@ -378,7 +378,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.selectModel', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
 
-      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems().map(
+      // VSCODE-PICKER-TIER-01: gate the roster on the resolved tier so a
+      // signed-out / Local-mode user does not see managed-cloud models
+      // presented as selectable.
+      const pickerTier = await resolveTier(context);
+      const allItems: GroupedQuickPickItem[] = buildGroupedQuickPickItems(pickerTier).map(
         (item: GroupedQuickPickItem) => ({
           ...item,
           picked: item.modelId !== undefined && item.modelId === currentModel,

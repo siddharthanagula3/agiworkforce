@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import { MODEL_PICKER_OPTIONS } from '../model-picker/modelConstants';
+import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker/modelConstants';
 import { AGENT_MODE_LABEL, EFFORT_LABEL, type AgentMode, type Effort } from '@agiworkforce/types';
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 
@@ -45,17 +45,31 @@ export function getWebviewContent(
   initialEffort: Effort,
   supportsEffort: boolean,
   meterCollapsed: boolean,
+  /**
+   * Active subscription tier. Omitted ⇒ no tier resolved, and every model
+   * renders reachable (pre-VSCODE-PICKER-TIER-01 behaviour).
+   */
+  tier?: string,
 ): string {
   // Build CSP-safe URIs for any local assets we might need
   const cspSource = webview.cspSource;
   // Availability invariant: non-live catalog models (`coming_soon`/`unavailable`)
   // render as disabled "Coming soon" rows — visible but never selectable,
   // mirroring the web picker (getSelectableModels vs getDisplayModels).
-  const modelOptionsHtml = MODEL_PICKER_OPTIONS.map((option) =>
-    option.availability === 'live'
-      ? `<option value="${option.id}">${escapeHtml(option.label)}</option>`
-      : `<option value="${option.id}" disabled>${escapeHtml(option.label)} — Coming soon</option>`,
-  ).join('');
+  // VSCODE-PICKER-TIER-01: rows the active tier cannot route render disabled,
+  // the same treatment non-live `coming_soon` rows already get, so a signed-out
+  // or Local-mode user no longer sees the managed-cloud catalog as selectable.
+  const modelOptionsHtml = getModelPickerOptionsForTier(tier)
+    .map((option) => {
+      if (option.availability !== 'live') {
+        return `<option value="${option.id}" disabled>${escapeHtml(option.label)} — Coming soon</option>`;
+      }
+      if (!option.reachable) {
+        return `<option value="${option.id}" disabled>${escapeHtml(option.label)} — ${escapeHtml(MODEL_LOCKED_HINT)}</option>`;
+      }
+      return `<option value="${option.id}">${escapeHtml(option.label)}</option>`;
+    })
+    .join('');
   const modeLabel = escapeHtml(AGENT_MODE_LABEL[initialMode]);
   const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
   const effortHidden = supportsEffort ? '' : ' style="display:none"';
