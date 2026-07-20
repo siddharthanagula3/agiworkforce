@@ -75,6 +75,12 @@ pub struct ModelPickerState {
     pub effort: Effort,
     /// Computed rows; rebuilt on every search change.
     pub rows: Vec<PickerRow>,
+    /// Subscription tier resolved once per rebuild (CLI-PICKER-TIER-01).
+    ///
+    /// Held on the state rather than on each `ModelRow` for two reasons: it is
+    /// one global fact, not per-row data; and `read_tier_cache()` touches the
+    /// filesystem, so it must not run per render frame.
+    pub tier: crate::tier_cache::UserTier,
 }
 
 impl Default for ModelPickerState {
@@ -91,6 +97,7 @@ impl Default for ModelPickerState {
             search_focused: true,
             effort: Effort::Medium,
             rows: Vec::new(),
+            tier: crate::tier_cache::UserTier::Free,
         }
     }
 }
@@ -100,6 +107,16 @@ impl ModelPickerState {
     pub fn rebuild_rows(&mut self, all_models: &[Model]) {
         let query = self.search.to_lowercase();
         self.rows.clear();
+
+        // CLI-PICKER-TIER-01: the picker previously listed every managed-cloud
+        // model regardless of sign-in state, presenting cloud access the user
+        // did not have. Read the cached tier (sync, no network) and fall back to
+        // Free — the fail-closed default the tier cache itself uses for an
+        // unknown tier — so a signed-out user sees Cloud rows marked, not
+        // silently offered.
+        self.tier = crate::tier_cache::read_tier_cache()
+            .map(|cached| cached.tier)
+            .unwrap_or(crate::tier_cache::UserTier::Free);
 
         // Group by access mode (Local / BYOK / Cloud) first, then provider,
         // then models. An access mode with no matching models is skipped so the
@@ -156,6 +173,26 @@ impl ModelPickerState {
             }
             self.rows.push(PickerRow::AccessModeHeader { mode });
             self.rows.append(&mut mode_rows);
+        }
+    }
+
+    /// True when `row` is a managed-cloud model the active tier cannot route
+    /// (CLI-PICKER-TIER-01).
+    ///
+    /// Locked rows are still listed and still selectable — annotated, not
+    /// hidden. Hiding them would misrepresent the catalog, and with no local
+    /// runtime discovered the picker could end up empty. Selecting one surfaces
+    /// the real entitlement error from the request path instead of pretending
+    /// the model was reachable.
+    ///
+    /// Local and BYOK rows are user-provided access and are never gated here.
+    pub fn is_locked(&self, row: &PickerRow) -> bool {
+        match row {
+            PickerRow::ModelRow { provider_id, model } => {
+                provider_id.access_mode() == AccessMode::Cloud
+                    && !crate::model_catalog::can_access_model_for_tier(&model.id, &self.tier)
+            }
+            _ => false,
         }
     }
 
@@ -436,12 +473,20 @@ fn render_list(
                 ListItem::new(text).style(Style::default().add_modifier(Modifier::BOLD))
             }
             PickerRow::ModelRow { model, .. } => {
+                let locked = state.is_locked(row);
                 let is_cursor = i == state.cursor;
                 let is_current = model.id == current_model;
 
                 let bullet = if is_current { "●" } else { " " };
                 let tier = capability_for_model(&model.id);
-                let tier_label = capability_label(tier);
+                // CLI-PICKER-TIER-01: a row the active tier cannot route is
+                // labelled in place of its capability tier, so the reason it is
+                // unavailable is visible without selecting it.
+                let tier_label = if locked {
+                    "sign in"
+                } else {
+                    capability_label(tier)
+                };
                 let ctx_k = model.context_window / 1000;
 
                 let text = format_model_row(area.width, bullet, &model.id, tier_label, ctx_k);
@@ -454,6 +499,10 @@ fn render_list(
                     Style::default()
                         .fg(ui_accent())
                         .add_modifier(Modifier::BOLD)
+                } else if locked {
+                    // Dim unreachable rows — same visual language the TUI uses
+                    // elsewhere for unavailable affordances.
+                    Style::default().add_modifier(Modifier::DIM)
                 } else {
                     Style::default()
                 };
@@ -788,6 +837,7 @@ mod tests {
                 PickerRow::ModelRow {
                     provider_id: ProviderId::OpenRouter,
                     model,
+                    ..
                 } => Some(model.id.as_str()),
                 _ => None,
             })
@@ -893,6 +943,99 @@ mod tests {
             !model_ids.contains(&"claude-e2b"),
             "e2b-gated model claude-e2b must be hidden in Phase A (env unavailable)"
         );
+    }
+
+    /// CLI-PICKER-TIER-01. The picker listed every managed-cloud model
+    /// regardless of sign-in state. Cloud rows the active tier cannot route are
+    /// now marked `locked` — but still listed, and Local/BYOK rows are never
+    /// gated, so the picker cannot end up empty.
+    ///
+    /// These assert the invariants that hold for ANY cached tier, since the
+    /// tier is read from the user's real cache and a test cannot set it.
+    #[test]
+    fn local_and_byok_rows_are_never_tier_locked() {
+        let models = vec![model("llama-3", "ollama"), model("claude-x", "anthropic")];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        for row in &state.rows {
+            if let PickerRow::ModelRow {
+                provider_id, model, ..
+            } = row
+            {
+                if provider_id.access_mode() != AccessMode::Cloud {
+                    assert!(
+                        !state.is_locked(row),
+                        "{} is {:?}, not Cloud — subscription tier must never gate it",
+                        model.id,
+                        provider_id.access_mode()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tier_gate_marks_rows_without_removing_them() {
+        // Every model supplied must still be present as a row: the gate
+        // annotates, it does not filter. Removal could empty the picker when no
+        // local runtime is discovered.
+        let models = vec![model("llama-3", "ollama"), model("claude-x", "anthropic")];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        let model_ids: Vec<&str> = state
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                PickerRow::ModelRow { model, .. } => Some(model.id.as_str()),
+                _ => None,
+            })
+            .collect();
+
+        assert!(model_ids.contains(&"llama-3"));
+        assert!(model_ids.contains(&"claude-x"));
+        assert!(
+            !state.selectable_indices().is_empty(),
+            "picker must never be empty — locked rows stay selectable"
+        );
+    }
+
+    /// The Rust gate must agree with the TypeScript rule it mirrors: Free and
+    /// BYOK carry no managed-cloud entitlement.
+    #[test]
+    fn free_and_byok_tiers_reach_no_managed_cloud_model() {
+        use crate::model_catalog::can_access_model_for_tier;
+        use crate::tier_cache::UserTier;
+
+        for economy_id in crate::model_catalog::tier_allowed_models("economy") {
+            assert!(
+                !can_access_model_for_tier(&economy_id, &UserTier::Free),
+                "Free must not reach managed-cloud model {economy_id}"
+            );
+            assert!(
+                !can_access_model_for_tier(&economy_id, &UserTier::Byok),
+                "BYOK must not reach managed-cloud model {economy_id}"
+            );
+        }
+    }
+
+    /// Flagship models are Max/Enterprise-only; Pro must not reach them.
+    #[test]
+    fn pro_does_not_reach_flagship_additions() {
+        use crate::model_catalog::can_access_model_for_tier;
+        use crate::tier_cache::UserTier;
+
+        for flagship_id in crate::model_catalog::tier_allowed_models("flagship_additions") {
+            assert!(
+                !can_access_model_for_tier(&flagship_id, &UserTier::Pro),
+                "Pro must not reach flagship model {flagship_id}"
+            );
+            assert!(
+                can_access_model_for_tier(&flagship_id, &UserTier::Max),
+                "Max must reach flagship model {flagship_id}"
+            );
+        }
     }
 
     #[test]
