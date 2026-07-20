@@ -105,27 +105,22 @@ export async function dispatchStripeEvent(
           ? new Date(subscription.canceled_at * 1000).toISOString()
           : new Date().toISOString();
 
-        const existingSubs = await db
-          .query<{
-            id: string;
-            user_id: string;
-          }>('select id, user_id from subscriptions where stripe_subscription_id = $1 limit 1', [
-            stripeSubId,
-          ])
-          .catch((fetchError: unknown) => {
-            logger.error(
-              { error: fetchError, stripeSubId },
-              'Failed to fetch subscription for deletion',
-            );
-            return [] as { id: string; user_id: string }[];
-          });
-
         await db
           .execute(
             // Reset plan_tier to 'free' as well · a deleted subscription must
-            // revoke entitlement. Usage enforcement and advanced-model access
-            // key off plan_tier without a status check, so leaving a stale
-            // paid tier here lets a canceled user keep the full paid allowance.
+            // revoke entitlement. Entitlement reads gate on `status` (see
+            // lib/entitlement.ts) so this is belt-and-suspenders, but keeping the
+            // stored tier honest avoids a paid label on a canceled row.
+            //
+            // Cancellation policy (founder, 2026-07): cancellations run to the end
+            // of the paid billing period with NO mid-period cutoff and NO prorated
+            // adjustment. Stripe fires `customer.subscription.deleted` at period
+            // end (portal is configured to cancel at period end), so downgrading
+            // here does not cut the user off early. We deliberately do NOT claw
+            // back remaining credits on cancellation — the user keeps what they
+            // paid for (including any separately-purchased top-up balance) through
+            // the period. Credit clawback stays ONLY for refunds and disputes
+            // (money genuinely returned), handled in their own events below.
             "update subscriptions set status = 'canceled', plan_tier = 'free', canceled_at = $1 where stripe_subscription_id = $2",
             [canceledAt, stripeSubId],
           )
@@ -135,34 +130,6 @@ export async function dispatchStripeEvent(
               'Failed to update subscription for deleted event',
             );
           });
-
-        const existingSub = existingSubs[0];
-        if (existingSub?.user_id) {
-          try {
-            const balance = await CreditService.getBalance(existingSub.user_id);
-            if (balance && balance.credits_remaining_cents > 0) {
-              await CreditService.deductCredits(
-                existingSub.user_id,
-                balance.credits_remaining_cents,
-                'Credits revoked due to subscription cancellation',
-                { type: 'revocation', reason: 'subscription_canceled' },
-              );
-              logger.info(
-                {
-                  userId: existingSub.user_id,
-                  revokedCents: balance.credits_remaining_cents,
-                  stripeSubId,
-                },
-                'Credits revoked for canceled subscription',
-              );
-            }
-          } catch (creditError) {
-            logger.error(
-              { error: creditError, userId: existingSub.user_id, stripeSubId },
-              'Failed to revoke credits for canceled subscription',
-            );
-          }
-        }
       } catch (error) {
         logger.error({ error }, 'Error updating subscription for deleted event');
       }

@@ -734,9 +734,10 @@ export async function updateSubscriptionFromStripeSubscription(
         id: string;
         user_id: string;
         plan_tier: string | null;
+        status: string | null;
         current_period_start: string | null;
       }>(
-        'select id, user_id, plan_tier, current_period_start from subscriptions where stripe_subscription_id = $1 limit 1',
+        'select id, user_id, plan_tier, status, current_period_start from subscriptions where stripe_subscription_id = $1 limit 1',
         [stripeSubId],
       )
       .catch((fetchError: unknown) => {
@@ -752,6 +753,23 @@ export async function updateSubscriptionFromStripeSubscription(
 
     if (existingSub) {
       resolvedUserId = existingSub.user_id;
+
+      // Ordering guard: Stripe does not guarantee webhook delivery order, so a
+      // stale `customer.subscription.updated` (created before a cancel) can
+      // arrive AFTER `customer.subscription.deleted`. `canceled` is terminal —
+      // Stripe never reactivates a deleted subscription id (a resubscribe mints
+      // a NEW id) — so refuse to resurrect a locally-canceled row back to an
+      // active/paid state. Without this, the stale event would flip `status`
+      // (and re-derive `plan_tier` from the still-paid price) back to active and
+      // silently re-entitle a canceled user, since entitlement reads gate on the
+      // stored `status`.
+      if (existingSub.status === 'canceled' && updateData.status !== 'canceled') {
+        logger.warn(
+          { stripeSubId, incomingStatus: updateData.status },
+          'Ignoring out-of-order subscription update that would resurrect a canceled subscription',
+        );
+        return;
+      }
 
       const isNewPeriod = existingSub.current_period_start !== updateData.current_period_start;
 
