@@ -15,6 +15,11 @@
  *     the driver does NOT re-check — that is enforced by the agentLoop orchestrator.
  *   - DOM_SUMMARY_MAX_CHARS caps the text returned by getPageContent() to prevent
  *     runaway context windows.
+ *   - getPageContent() and getFieldValue() route text through `sanitizePageText`
+ *     (the same redactSecrets-backed helper content.ts/side_panel.ts use) before
+ *     it is handed back to agentLoop for the cloud call — see the HIGH finding
+ *     this closed: computer-use previously shipped raw page/field text to the
+ *     cloud gateway unredacted (audit 2026-07-19).
  *
  * SUPPORTED ACTIONS:
  *   screenshot()      → Page.captureScreenshot → base64 PNG
@@ -25,6 +30,16 @@
  *   navigate()        → Page.navigate
  *   waitForStable()   → polls DOM hash + readyState until quiet, capped by timeout
  */
+
+import { sanitizePageText } from '../../background/policy';
+
+/**
+ * Placeholder returned for password/hidden field values — both in-page (the
+ * Runtime.evaluate expression in getFieldValue) and here, so the raw value
+ * never crosses the CDP boundary into the extension process, let alone the
+ * cloud gateway. Kept as a named export so tests can assert on it.
+ */
+export const REDACTED_FIELD_PLACEHOLDER = '[redacted password]';
 
 /** How many characters of DOM summary text to return to the model (token budget). */
 const DOM_SUMMARY_MAX_CHARS = 8_000;
@@ -516,12 +531,21 @@ export async function getPageContent(tabId: number): Promise<string> {
       }
       setElementIndexMap(tabId, newMap);
 
-      // P2-6: Injection heuristic scan on the summary before returning
-      const injectionWarning = scanForInjection(parsed.summary);
+      // SECURITY (HIGH finding, audit 2026-07-19): this summary — element
+      // labels/names/hrefs plus the visible body text — is what agentLoop
+      // sends verbatim to the cloud gateway. Route it through the same
+      // sanitizePageText() every other content-egress path uses (content.ts,
+      // side_panel.ts, context-handoff) BEFORE the injection scan and BEFORE
+      // return, so on-page secrets (session tokens in the DOM, API keys on a
+      // dashboard) never leave the extension.
+      const sanitizedSummary = sanitizePageText(parsed.summary);
+
+      // P2-6: Injection heuristic scan on the (now-redacted) summary before returning
+      const injectionWarning = scanForInjection(sanitizedSummary);
       if (injectionWarning) {
-        return `SECURITY WARNING: Possible prompt injection detected in page content.\n${injectionWarning}\n\n${parsed.summary}`;
+        return `SECURITY WARNING: Possible prompt injection detected in page content.\n${injectionWarning}\n\n${sanitizedSummary}`;
       }
-      return parsed.summary;
+      return sanitizedSummary;
     } catch {
       return val; // fallback: return raw string
     }
@@ -650,6 +674,16 @@ export async function navigate(tabId: number, url: string): Promise<void> {
  * P1-3: Read back the current value of a form field by CSS selector.
  * Used by the type action to verify input was committed (React swallowed event?).
  * Returns null when the element is not found or is not a form field.
+ *
+ * SECURITY (MEDIUM finding, audit 2026-07-19): the result flows into the tool
+ * result the model sees and ships to the cloud gateway. Two layers guard it:
+ *   1. In-page: `type="password"` and `type="hidden"` inputs never surface
+ *      their real `.value` — the injected expression itself substitutes
+ *      REDACTED_FIELD_PLACEHOLDER, so the raw value never crosses the CDP
+ *      boundary.
+ *   2. In-extension: any other value (ordinary text/textarea/select fields)
+ *      is still run through sanitizePageText() so a token or API key typed
+ *      into a normal text box gets scrubbed before it reaches the model.
  */
 export async function getFieldValue(tabId: number, selector: string): Promise<string | null> {
   return withDebugger(tabId, async () => {
@@ -657,7 +691,12 @@ export async function getFieldValue(tabId: number, selector: string): Promise<st
       expression: `(() => {
         const el = document.querySelector(${JSON.stringify(selector)});
         if (!el) return null;
-        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.value;
+        if (el instanceof HTMLInputElement) {
+          const t = (el.type || '').toLowerCase();
+          if (t === 'password' || t === 'hidden') return ${JSON.stringify(REDACTED_FIELD_PLACEHOLDER)};
+          return el.value;
+        }
+        if (el instanceof HTMLTextAreaElement) return el.value;
         if (el instanceof HTMLSelectElement) return el.value;
         return el.textContent?.trim() ?? null;
       })()`,
@@ -665,7 +704,11 @@ export async function getFieldValue(tabId: number, selector: string): Promise<st
     });
     if (evalResult.exceptionDetails) return null;
     const val = evalResult.result.value;
-    return typeof val === 'string' ? val : null;
+    if (typeof val !== 'string') return null;
+    // Already redacted in-page (password/hidden) — don't double-process, and
+    // don't let redactSecrets' own patterns mangle the placeholder text.
+    if (val === REDACTED_FIELD_PLACEHOLDER) return val;
+    return sanitizePageText(val);
   });
 }
 
