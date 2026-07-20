@@ -85,12 +85,15 @@ import { UpgradePlanDialog, type UpgradeTarget } from '../components/dialogs/Upg
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import { toast } from 'sonner';
 import {
-  upgradePlanMidCycle,
   upgradeToBasicPlan,
   upgradeToProPlan,
   upgradeToMaxPlan,
   upgradeToMax15xPlan,
 } from '@features/billing/services/stripe-payments';
+import {
+  UpgradeConfirmDialog,
+  type UpgradeConfirmRequest,
+} from '@features/billing/components/UpgradeConfirmDialog';
 import {
   buildAcceptedHandoffSystemMessage,
   buildHandoffContextCandidates,
@@ -415,6 +418,7 @@ export default function WebChatPage() {
   // new project as chat scope) vs the sidebar (navigate to the project page).
   const [createProjectFromComposer, setCreateProjectFromComposer] = useState(false);
   const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
+  const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
 
   // Dialog state — lifted from ChatSidebar so they live at the page level and
   // work with the shared <Sidebar> component (which has no dialog state).
@@ -558,13 +562,16 @@ export default function WebChatPage() {
         subscription != null &&
         !['free', 'local-only', 'byok'].includes(subscription.tier) &&
         ['active', 'trialing'].includes(subscription.status);
-      const toastId = toast.loading(
-        hasActivePaidPlan ? 'Upgrading your plan...' : 'Redirecting to checkout...',
-      );
+      // A mid-cycle upgrade charges the saved card immediately with no Stripe
+      // screen, so confirm the exact prorated amount first instead of charging
+      // silently. UpgradeConfirmDialog owns the preview + the actual charge.
+      if (hasActivePaidPlan) {
+        setUpgradeConfirm({ plan, billingInterval: billingPeriod });
+        return;
+      }
+      const toastId = toast.loading('Redirecting to checkout...');
       try {
-        if (hasActivePaidPlan) {
-          await upgradePlanMidCycle({ plan, billingInterval: billingPeriod });
-        } else if (plan === 'basic') {
+        if (plan === 'basic') {
           await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
         } else if (plan === 'pro') {
           await upgradeToProPlan({
@@ -2378,6 +2385,14 @@ export default function WebChatPage() {
         onOpenChange={setUpgradePlanOpen}
         currentTier={currentTier}
         onUpgrade={(plan, annual) => void handleUpgradePlan(plan, annual)}
+      />
+      <UpgradeConfirmDialog
+        request={upgradeConfirm}
+        onCancel={() => setUpgradeConfirm(null)}
+        onConfirmed={() => {
+          setUpgradeConfirm(null);
+          toast.success('Your plan has been upgraded.');
+        }}
       />
       {/* Project settings dialog — opened from the sidebar project row context menu */}
       {projectForSettings && (
