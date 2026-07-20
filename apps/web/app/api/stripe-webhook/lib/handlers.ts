@@ -122,7 +122,11 @@ export async function dispatchStripeEvent(
 
         await db
           .execute(
-            "update subscriptions set status = 'canceled', canceled_at = $1 where stripe_subscription_id = $2",
+            // Reset plan_tier to 'free' as well · a deleted subscription must
+            // revoke entitlement. Usage enforcement and advanced-model access
+            // key off plan_tier without a status check, so leaving a stale
+            // paid tier here lets a canceled user keep the full paid allowance.
+            "update subscriptions set status = 'canceled', plan_tier = 'free', canceled_at = $1 where stripe_subscription_id = $2",
             [canceledAt, stripeSubId],
           )
           .catch((updateError: unknown) => {

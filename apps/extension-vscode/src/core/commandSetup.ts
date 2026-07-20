@@ -683,6 +683,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     // in dynamic args (commit messages) are passed as a single argv entry —
     // never interpreted by a shell.
     register('agi.git.status', async () => {
+      // EXTV-GIT-READ: `git status`/`git diff` execute repo-controlled code in
+      // an untrusted workspace (`core.fsmonitor`, `.gitattributes` textconv /
+      // `diff.external`). Gate them exactly like commit/test.run.
+      if (!vscode.workspace.isTrusted) {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: git is disabled in untrusted workspaces. Trust the workspace to run git.',
+        );
+        return;
+      }
       const folder = await getActiveWorkspaceFolder();
       if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
@@ -692,6 +701,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi.git.diff', async () => {
+      if (!vscode.workspace.isTrusted) {
+        vscode.window.showWarningMessage(
+          'AGI Workforce: git is disabled in untrusted workspaces. Trust the workspace to run git.',
+        );
+        return;
+      }
       const folder = await getActiveWorkspaceFolder();
       if (!folder) {
         vscode.window.showErrorMessage('No workspace open');
