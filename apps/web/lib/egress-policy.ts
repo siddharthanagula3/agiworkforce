@@ -40,6 +40,44 @@ const LOCALHOST_NAMES = new Set(['localhost', 'localhost.localdomain']);
 
 const IPV4_LITERAL = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
+/** True when the four octets fall in a loopback / link-local / private / reserved range. */
+function isInternalIpv4(oct: number[]): boolean {
+  if (oct.length !== 4) return true; // malformed -> block
+  if (oct.some((o) => o < 0 || o > 255 || Number.isNaN(o))) return true; // invalid -> block
+  const [a, b] = oct as [number, number, number, number];
+  if (a === 10) return true; // 10.0.0.0/8
+  if (a === 127) return true; // 127.0.0.0/8 loopback
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local + cloud metadata
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+  if (a === 0) return true; // 0.0.0.0/8
+  if (a >= 224) return true; // 224+ multicast / reserved
+  return false;
+}
+
+/**
+ * Decodes an IPv4 address embedded in an IPv6 literal, or null if none.
+ * Covers IPv4-mapped (`::ffff:1.2.3.4` / `::ffff:a9fe:a9fe`), IPv4-compatible
+ * (`::1.2.3.4`), NAT64 (`64:ff9b::1.2.3.4` / `64:ff9b::a9fe:a9fe`), and their
+ * fully-expanded equivalents. Without this, `::ffff:169.254.169.254` (cloud
+ * metadata) is misclassified as a public address and passes the egress guard.
+ */
+function extractEmbeddedIpv4(ipv6: string): number[] | null {
+  const lower = ipv6.toLowerCase();
+  // Any IPv6 literal ending in a dotted-quad embeds an IPv4 address.
+  const dotted = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(lower);
+  if (dotted) return dotted.slice(1, 5).map((s) => Number(s));
+  // Hex-encoded mapped (`…:ffff:a9fe:a9fe`) or NAT64 (`…:ff9b::a9fe:a9fe`) tail.
+  const hex = /(?:ffff|ff9b)(?:::|:)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(lower);
+  if (hex) {
+    const hi = parseInt(hex[1]!, 16);
+    const lo = parseInt(hex[2]!, 16);
+    return [(hi >> 8) & 0xff, hi & 0xff, (lo >> 8) & 0xff, lo & 0xff];
+  }
+  return null;
+}
+
 export class EgressPolicyError extends Error {
   constructor(url: string) {
     super(`Egress blocked: ${url} is not in the approved allowlist`);
@@ -64,27 +102,20 @@ export function isInternalHostname(hostname: string): boolean {
   // IPv4 literal · parse octets and reject loopback / link-local / private.
   const m = IPV4_LITERAL.exec(unbracketed);
   if (m) {
-    const oct = m.slice(1, 5).map((s) => Number(s));
-    if (oct.some((o) => o < 0 || o > 255 || Number.isNaN(o))) return true; // invalid -> block
-    const [a, b] = oct as [number, number, number, number];
-    if (a === 10) return true; // 10.0.0.0/8
-    if (a === 127) return true; // 127.0.0.0/8 loopback
-    if (a === 172 && b! >= 16 && b! <= 31) return true; // 172.16.0.0/12
-    if (a === 192 && b === 168) return true; // 192.168.0.0/16
-    if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local + AWS metadata
-    if (a === 100 && b! >= 64 && b! <= 127) return true; // 100.64.0.0/10 CGNAT
-    if (a === 0) return true; // 0.0.0.0/8
-    if (a >= 224) return true; // 224+ multicast / reserved
-    return false;
+    return isInternalIpv4(m.slice(1, 5).map((s) => Number(s)));
   }
 
-  // IPv6 literal · coarse but adequate: reject ::1, fc00::/7 (ULA), fe80::/10 (link-local).
+  // IPv6 literal · reject ::1, fc00::/7 (ULA), fe80::/10 (link-local), and —
+  // critically — any IPv4 embedded via mapped / compatible / NAT64 notation
+  // (e.g. `::ffff:169.254.169.254`), which would otherwise pass as public.
   if (unbracketed.includes(':')) {
     if (unbracketed === '::1' || unbracketed === '::' || unbracketed === '0:0:0:0:0:0:0:1')
       return true;
     if (/^fc[0-9a-f]{2}:/i.test(unbracketed)) return true; // ULA
     if (/^fd[0-9a-f]{2}:/i.test(unbracketed)) return true; // ULA
     if (/^fe[89ab][0-9a-f]:/i.test(unbracketed)) return true; // link-local
+    const embedded = extractEmbeddedIpv4(unbracketed);
+    if (embedded && isInternalIpv4(embedded)) return true;
     return false;
   }
 

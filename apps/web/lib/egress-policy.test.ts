@@ -100,6 +100,30 @@ describe('isInternalHostname', () => {
     expect(isInternalHostname(host)).toBe(true);
   });
 
+  // IPv4-mapped / IPv4-compatible / NAT64 IPv6 that embed an internal IPv4 —
+  // these previously bypassed the guard and could reach cloud metadata.
+  it.each([
+    '::ffff:169.254.169.254', // AWS/GCP metadata, mapped dotted
+    '::ffff:a9fe:a9fe', // same, mapped hex
+    '::ffff:127.0.0.1', // loopback, mapped
+    '::ffff:10.0.0.1', // private, mapped
+    '::ffff:192.168.1.1', // private, mapped
+    '0:0:0:0:0:ffff:169.254.169.254', // fully-expanded mapped
+    '::127.0.0.1', // IPv4-compatible (deprecated)
+    '64:ff9b::169.254.169.254', // NAT64 dotted
+    '64:ff9b::a9fe:a9fe', // NAT64 hex
+  ])('blocks IPv4-embedded IPv6 to internal target: %s', (host) => {
+    expect(isInternalHostname(host)).toBe(true);
+  });
+
+  // Mapped forms that embed a PUBLIC IPv4 stay public (no over-block).
+  it.each(['::ffff:8.8.8.8', '::ffff:0808:0808'])(
+    'allows IPv4-mapped IPv6 to public target: %s',
+    (host) => {
+      expect(isInternalHostname(host)).toBe(false);
+    },
+  );
+
   // Public addresses pass
   it.each([
     'example.com',
