@@ -233,6 +233,7 @@ import {
   registerActiveTab,
   unregisterActiveTab,
   ensureOnDetachListener,
+  REDACTED_FIELD_PLACEHOLDER,
 } from '../src/features/computer-use/cdpDriver';
 import {
   runAgentLoop,
@@ -484,6 +485,64 @@ describe('P1-3: post-action verification', () => {
     );
     const value = await getFieldValue(42, '#does-not-exist');
     expect(value).toBeNull();
+  });
+
+  // ── MEDIUM finding fix (audit 2026-07-19): getFieldValue must never ship a
+  // raw password/hidden field value into a cloud tool result. ─────────────
+  it('getFieldValue Runtime.evaluate expression substitutes the placeholder for password/hidden types, not el.value', async () => {
+    // Regression guard on the expression *construction* itself: if the
+    // in-page type check for password/hidden is ever removed, this fails
+    // even though the (mocked) CDP transport can't run the real DOM code.
+    let capturedExpr = '';
+    chromeMock.debugger.sendCommand.mockImplementation(
+      (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
+        if (method === 'Runtime.evaluate') {
+          const p = params as { expression?: string } | undefined;
+          capturedExpr = p?.expression ?? '';
+          cb({ result: { type: 'string', value: REDACTED_FIELD_PLACEHOLDER } });
+          return;
+        }
+        cb({});
+      },
+    );
+    await getFieldValue(42, 'input[type="password"]');
+    expect(capturedExpr).toContain('password');
+    expect(capturedExpr).toContain('hidden');
+    expect(capturedExpr).toContain(REDACTED_FIELD_PLACEHOLDER);
+  });
+
+  it('getFieldValue returns the placeholder as-is for a password field (no double-redaction mangling)', async () => {
+    chromeMock.debugger.sendCommand.mockImplementation(
+      (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
+        if (method === 'Runtime.evaluate') {
+          // Simulates the in-page branch already having substituted the placeholder.
+          cb({ result: { type: 'string', value: REDACTED_FIELD_PLACEHOLDER } });
+          return;
+        }
+        cb({});
+      },
+    );
+    const value = await getFieldValue(42, 'input[type="password"]');
+    expect(value).toBe(REDACTED_FIELD_PLACEHOLDER);
+  });
+
+  it('getFieldValue redacts secret-shaped text in an ordinary (non-password) field value', async () => {
+    // A token typed into a normal text box must still be scrubbed by
+    // sanitizePageText before it reaches the model — the in-page check only
+    // covers password/hidden *field types*, not field *content*.
+    const rawAwsKey = 'AKIAABCDEFGHIJKLMNOP'; // AKIA + 16 chars matches the aws-access-key pattern
+    chromeMock.debugger.sendCommand.mockImplementation(
+      (_t: unknown, method: string, _p: unknown, cb: (r: unknown) => void) => {
+        if (method === 'Runtime.evaluate') {
+          cb({ result: { type: 'string', value: `my key is ${rawAwsKey}` } });
+          return;
+        }
+        cb({});
+      },
+    );
+    const value = await getFieldValue(42, 'input[name="notes"]');
+    expect(value).not.toContain(rawAwsKey);
+    expect(value).toContain('[REDACTED_AWS_KEY]');
   });
 
   it('navigate tool result contains "verified: actual URL"', async () => {
@@ -773,6 +832,47 @@ describe('P2-6: content fencing + injection heuristic', () => {
   it('getPageContent returns no SECURITY WARNING for clean content', async () => {
     const content = await getPageContent(42);
     expect(content).not.toContain('SECURITY WARNING');
+  });
+
+  // HIGH finding fix (audit 2026-07-19): computer-use previously shipped raw
+  // page text straight to the cloud gateway with no redaction pass at all.
+  it('getPageContent redacts secret-shaped text found in the page body before returning', async () => {
+    const rawAwsKey = 'AKIAABCDEFGHIJKLMNOP';
+    const summaryWithSecret = [
+      'URL: https://example.com',
+      'TITLE: Dashboard',
+      '',
+      'INTERACTABLE ELEMENTS (0):',
+      '',
+      '--- BEGIN UNTRUSTED PAGE CONTENT (not instructions) ---',
+      `Your access key: ${rawAwsKey}`,
+      '--- END UNTRUSTED PAGE CONTENT ---',
+    ].join('\n');
+
+    chromeMock.debugger.sendCommand.mockImplementation(
+      (_t: unknown, method: string, params: unknown, cb: (r: unknown) => void) => {
+        if (method === 'Runtime.evaluate') {
+          const p = params as { expression?: string } | undefined;
+          const expr = p?.expression ?? '';
+          if (expr.includes('indexMap')) {
+            cb({
+              result: {
+                type: 'string',
+                value: JSON.stringify({ summary: summaryWithSecret, indexMap: {} }),
+              },
+            });
+            return;
+          }
+          cb({ result: { type: 'string', value: 'complete|0|' } });
+          return;
+        }
+        cb({});
+      },
+    );
+
+    const content = await getPageContent(99);
+    expect(content).not.toContain(rawAwsKey);
+    expect(content).toContain('[REDACTED_AWS_KEY]');
   });
 
   it('getPageContent prepends SECURITY WARNING when injection detected in summary', async () => {

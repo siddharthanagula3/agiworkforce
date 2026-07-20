@@ -18,6 +18,21 @@
  *     debugger per action.
  *   - All network egress goes to api.agiworkforce.com only (validated in
  *     cloudAgentClient.callCloud).
+ *   - Text egress (DOM summaries, field readbacks) is redacted by cdpDriver
+ *     (sanitizePageText / getFieldValue) before it reaches this file — see
+ *     cdpDriver.ts SECURITY notes.
+ *   - Screenshots are NOT and cannot be redacted — you can't regex-scrub
+ *     secrets out of a PNG. This is a residual, accepted risk, bounded by:
+ *     (a) the tab must already be on the user's site allowlist, (b) starting
+ *     a computer-use session at all is an explicit user action (typed goal +
+ *     click), which covers the one screenshot taken to orient the agent
+ *     before the loop's first turn (below), and (c) every screenshot taken
+ *     mid-loop is a tool call and therefore passes through the
+ *     onBeforeAction ask-gate by default (background.ts defaults
+ *     agi_cu_ask_before_acting to true — autopilot is an explicit opt-out).
+ *     If a page has secrets visibly rendered (e.g. a plaintext API key on a
+ *     dashboard), a screenshot of it still reaches the cloud gateway. Do not
+ *     claim screenshots are redacted anywhere in this codebase — they are not.
  *
  * ASK-BEFORE-ACTING:
  *   Pass an `onBeforeAction` callback to gate each tool call. The default
