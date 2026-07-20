@@ -608,6 +608,39 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
     }
 }
 
+/// True when `tier` can actually route the managed-cloud model `model_id`.
+///
+/// Rust mirror of `canAccessModelForSubscriptionTier`
+/// (`packages/contracts/types/src/model-catalog.ts`), reading the same
+/// `tierAllowedModels` slots from the same `models.json`, so the CLI and the
+/// TypeScript surfaces cannot drift on who may reach which model:
+///
+/// - Free / BYOK → no managed-cloud model (BYOK reaches providers with the
+///   user's own key, which is the picker's separate BYOK section, not this one)
+/// - Pro         → `economy` + `pro_additions`
+/// - Max / Enterprise → all three slots
+///
+/// Applies to the picker's **Cloud** section only. Local and BYOK models are
+/// user-provided access and are never gated by subscription tier.
+pub fn can_access_model_for_tier(model_id: &str, tier: &crate::tier_cache::UserTier) -> bool {
+    use crate::tier_cache::UserTier;
+
+    // Free and BYOK carry no managed-cloud entitlement.
+    if matches!(tier, UserTier::Free | UserTier::Byok) {
+        return false;
+    }
+
+    let in_slot = |slot: &str| tier_allowed_models(slot).iter().any(|id| id == model_id);
+
+    if in_slot("flagship_additions") {
+        return matches!(tier, UserTier::Max | UserTier::Enterprise);
+    }
+    if in_slot("pro_additions") {
+        return matches!(tier, UserTier::Pro | UserTier::Max | UserTier::Enterprise);
+    }
+    in_slot("economy")
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Tier 1 — BUNDLED DEFAULTS (compiled into binary, works offline)
 // ─────────────────────────────────────────────────────────────────────────────
