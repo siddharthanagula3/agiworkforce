@@ -110,7 +110,7 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   HIGH sibling (Personalization "Response Style") is FIXED (`16a4de4d9`, wired into
   TauriRuntime customInstructions). Remaining:
   • Execution-preference cluster — PARTIALLY FIXED 2026-07-21:
-  – max*timeout_minutes + enable_timeout_warnings → FIXED. The LIVE global
+  – max\*timeout_minutes + enable_timeout_warnings → FIXED. The LIVE global
   TimeoutConfig (timeout_set_config, read by the executor per tasks/types.rs:116
   "overrides the global TIMEOUT_CONFIG.max_duration_secs") is now synced from
   settingsStore.saveSettings + loadSettings via syncExecutionTimeoutToBackend
@@ -121,13 +121,25 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   – REMAINING [MED/LOW]: enable_checkpointing/checkpoint_interval (:209/:224) and
   auto_resume_on_restart (:247) are NOT covered by TimeoutConfig (semantic
   mismatch: TimeoutConfig.enable_checkpoint_on_timeout = checkpoint-ON-TIMEOUT,
-  not periodic-at-interval). These need the separate per-task TaskConfig path:
-  continuous_executor.rs reads task.config.{checkpoint_interval,auto_resume_on*
-  restart} with hardcoded TaskConfig defaults (DEFAULT_CHECKPOINT_INTERVAL=5,
-  auto_resume true). FIX = a Rust slice loading persisted execution_preferences
-  into TaskConfig at task creation. Deferred (trust/safety-sensitive executor
-  code). CONTRAST: terminal_sandbox IS wired (terminal_executor.rs:571 +
-  terminal.rs:265) — proves the pattern is fixable.
+  not periodic-at-interval). DEEPER ROOT CAUSE (traced 2026-07-21, supersedes the
+  original "load into TaskConfig" note): the `ContinuousExecutor`/
+  ContinuousExecutorConfig (checkpoint_interval, auto_resume_on_restart) is DORMANT
+  — `core/agent/mod.rs:41` only re-exports it; it is never instantiated or run by
+  any live command (`bg_submit_task` uses a different path; grep finds it only in
+  its own module + tests). The LIVE checkpoint system is instead
+  `core/agi/checkpoint.rs` (CheckpointConfig.checkpoint_interval_steps, default 5,
+  read by checkpoint_manager.rs:171) — which ALSO ignores the setting. So:
+  – checkpoint-interval FIX = configure the LIVE agi checkpoint_manager's
+  checkpoint_interval_steps from execution_preferences.checkpoint_interval
+  (find where CheckpointConfig is built + add a setter/command + frontend push,
+  like the timeout fix). A focused Rust slice, NOT the dormant executor.
+  – auto_resume_on_restart exists ONLY on the dormant executor → NO live consumer.
+  Honest fix = wire the continuous-executor feature live (big) OR remove the
+  setting (FOUNDER/product decision: is continuous autonomous execution a
+  shipping feature?). Do NOT rush at depth.
+  CONTRAST: terminal_sandbox IS wired (terminal_executor.rs:571 + terminal.rs:265)
+  and max-timeout/warnings ARE now wired (ff346b5e0) — the live-config-push pattern
+  is proven; checkpoint-interval should follow it against the agi checkpoint system.
   • [MED] Prompt Completion toggle (ModelsKeys/index.tsx:488) → hooks/
   useApiPromptCompletion.ts has zero callers and the LIVE composer is the shared
   @agiworkforce/unified-chat package, which never reads promptCompletionEnabled.
