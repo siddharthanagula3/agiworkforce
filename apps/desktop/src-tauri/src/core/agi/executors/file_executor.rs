@@ -744,6 +744,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
+                trust_mode: None,
             },
             current_state: HashMap::new(),
             available_resources: crate::core::agi::ResourceState {

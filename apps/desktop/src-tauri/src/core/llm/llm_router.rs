@@ -298,16 +298,36 @@ fn provider_matches_trust_mode(provider: Provider, trust_mode: TrustMode) -> boo
     }
 }
 
+/// TRUST BOUNDARY: resolves the canonical trust mode a candidate search must
+/// honor. This is the single chokepoint the router relies on to decide
+/// whether Byok/ManagedCloud providers are reachable at all.
+///
+/// SECURITY (desktop-trust-boundary-01): callers that omit `trust_mode` and
+/// leave both legacy booleans false used to fall through to an *unrestricted*
+/// `None`, which `provider_matches_trust_mode` / `candidates()` treated as
+/// "any provider matches" and which line ~1025 then defaulted to
+/// `TrustMode::Byok` for strategy selection. That let auxiliary call sites
+/// (intent detection, file-access/planner, computer-use, the background job
+/// runner, vision, etc.) silently egress a Local session's prompts/files to
+/// a BYOK or Managed Cloud provider with no fork/consent/redaction step.
+///
+/// Fail closed instead: an unresolved trust mode is treated as `Local`, the
+/// most restrictive boundary, so an unthreaded call site can never reach
+/// Byok/ManagedCloud by omission. Call sites that legitimately need
+/// Byok/ManagedCloud MUST set `trust_mode` (or `managed_cloud_only`)
+/// explicitly — that is the fix, not this default.
 fn effective_trust_mode(preferences: &RouterPreferences) -> Option<TrustMode> {
-    preferences.trust_mode.or_else(|| {
-        if preferences.managed_cloud_only {
-            Some(TrustMode::ManagedCloud)
-        } else if preferences.local_only {
-            Some(TrustMode::Local)
-        } else {
-            None
-        }
-    })
+    // `local_only` and "unset" both resolve to the same fail-closed
+    // boundary; only an explicit `managed_cloud_only` widens it.
+    Some(
+        preferences
+            .trust_mode
+            .unwrap_or(if preferences.managed_cloud_only {
+                TrustMode::ManagedCloud
+            } else {
+                TrustMode::Local
+            }),
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -484,7 +504,7 @@ impl LLMRouter {
         let mut provider = Provider::Google;
         let mut task_category = TaskCategory::Simple;
         let mut reason = if is_budget_plan {
-            "Budget plan detected - routing to current low-cost core models (Gemini Flash Lite / GPT-5.4 Mini)."
+            "Budget plan detected - routing to current low-cost core models (Gemini Flash Lite / GPT-5.6 Luna)."
                 .to_string()
         } else {
             "General developer chat - routing to balanced core models.".to_string()
@@ -515,7 +535,7 @@ impl LLMRouter {
                 provider = Provider::OpenAI;
                 task_category = TaskCategory::Complex;
                 reason =
-                    "Developer workflow + budget plan - routing to GPT-5.4 Mini for affordable coding."
+                    "Developer workflow + budget plan - routing to GPT-5.6 Luna for affordable coding."
                         .to_string();
             } else {
                 provider = Provider::Anthropic;
@@ -543,7 +563,7 @@ impl LLMRouter {
         } else if context.cost_priority == CostPriority::Low || is_budget_plan {
             provider = Provider::OpenAI;
             task_category = TaskCategory::Simple;
-            reason = "Cost priority is low - routing to GPT-5.4 Mini for efficient low-cost loops."
+            reason = "Cost priority is low - routing to GPT-5.6 Luna for efficient low-cost loops."
                 .to_string();
         }
 
@@ -1022,7 +1042,10 @@ impl LLMRouter {
         let task_type = classify_request(request);
         let registry_task = classify_registry_task(request, preferences.context.as_ref());
         let plan_tier = preferences.context.as_ref().map(|c| c.plan_tier.as_str());
-        let trust_mode = boundary.unwrap_or(TrustMode::Byok);
+        // `boundary` is always `Some` now (see `effective_trust_mode`'s fail-closed
+        // default), but keep the fallback fail-closed to `Local` rather than the
+        // old permissive `Byok` default in case that invariant ever changes.
+        let trust_mode = boundary.unwrap_or(TrustMode::Local);
         let mut strategy_set = self.strategy_order(
             task_type,
             registry_task,

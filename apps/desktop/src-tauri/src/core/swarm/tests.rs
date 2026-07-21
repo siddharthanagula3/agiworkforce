@@ -345,6 +345,7 @@ mod cache_invalidation_tests {
             deadline: None,
             constraints: Vec::new(),
             success_criteria: Vec::new(),
+            trust_mode: None,
         }
     }
 
@@ -485,5 +486,51 @@ mod integration_tests {
         };
         let display = format!("{}", timeout_error);
         assert!(display.contains("300"));
+    }
+}
+
+// desktop-trust-boundary-01 — swarm fan-out must inherit the parent goal's
+// trust boundary end-to-end: parent Goal → AgentTask → sub-agent mini-Goal.
+// These call the same production builders `execute_parallel` and
+// `execute_subtask` use, so a regression to `trust_mode: None` fails here.
+mod trust_boundary_tests {
+    use super::*;
+    use agent_spawner::AgentSpawner;
+    use agiworkforce_model_registry::TrustMode;
+    use orchestrator::SwarmOrchestrator;
+    use task_decomposer::{Subtask, SubtaskType};
+
+    #[test]
+    fn test_subtask_inherits_parent_managed_cloud_trust_mode() {
+        let parent = crate::core::agi::Goal {
+            id: "parent_goal".to_string(),
+            description: "Parent goal".to_string(),
+            priority: crate::core::agi::Priority::Medium,
+            deadline: None,
+            constraints: Vec::new(),
+            success_criteria: Vec::new(),
+            trust_mode: Some(TrustMode::ManagedCloud),
+        };
+        let subtask = Subtask::new(
+            "subtask_1",
+            "Sub work",
+            SubtaskType::Computation,
+            parent.id.clone(),
+        );
+
+        let (tx, _rx) = tokio::sync::oneshot::channel();
+        let task = SwarmOrchestrator::agent_task(&parent, subtask, tx);
+        assert_eq!(
+            task.trust_mode,
+            Some(TrustMode::ManagedCloud),
+            "AgentTask must carry the parent goal's boundary"
+        );
+
+        let mini_goal = AgentSpawner::subtask_goal(&task.subtask, task.trust_mode);
+        assert_eq!(
+            mini_goal.trust_mode,
+            Some(TrustMode::ManagedCloud),
+            "sub-goal must inherit the parent goal's boundary"
+        );
     }
 }

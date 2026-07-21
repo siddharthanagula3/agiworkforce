@@ -1260,8 +1260,12 @@ mod tests {
     fn byok_router_preferences_are_not_local_or_managed() {
         let mut req = minimal_request_with_mode(Some("local"), false);
         req.execution_mode = Some(ChatExecutionMode::Byok);
-        let preferences =
-            build_router_preferences(&req, Some(Provider::OpenAI), "gpt-5.5", "pro".to_string());
+        let preferences = build_router_preferences(
+            &req,
+            Some(Provider::OpenAI),
+            "gpt-5.6-sol",
+            "pro".to_string(),
+        );
 
         assert!(!preferences.local_only);
         assert!(!preferences.managed_cloud_only);
@@ -1286,7 +1290,7 @@ mod tests {
             RoutingStrategy::AutoPremium
         ));
         assert!(matches!(
-            resolve_routing_strategy("gpt-5.5"),
+            resolve_routing_strategy("gpt-5.6-sol"),
             RoutingStrategy::Auto
         ));
     }
@@ -1301,14 +1305,14 @@ mod tests {
     #[test]
     fn explicit_thinking_mode_true_returns_enabled() {
         let thinking =
-            resolve_thinking_parameter("claude-sonnet-4-6", Some(true), None, false, "write code");
+            resolve_thinking_parameter("claude-sonnet-5", Some(true), None, false, "write code");
         assert!(matches!(thinking, Some(ThinkingParameter::Enabled(true))));
     }
 
     #[test]
     fn explicit_thinking_mode_true_with_budget_returns_budget() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             Some(true),
             Some(32_000),
             false,
@@ -1331,7 +1335,7 @@ mod tests {
         // provider layer rather than being omitted (see resolve_thinking_parameter
         // §2). Either way thinking is disabled — the trigger never re-enables it.
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             Some(false),
             None,
             false,
@@ -1346,7 +1350,7 @@ mod tests {
     #[test]
     fn auto_detect_ultrathink_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             None,
             None,
             false,
@@ -1363,7 +1367,7 @@ mod tests {
     #[test]
     fn auto_detect_think_hard_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             None,
             None,
             false,
@@ -1380,7 +1384,7 @@ mod tests {
     #[test]
     fn auto_detect_think_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             None,
             None,
             false,
@@ -1405,7 +1409,7 @@ mod tests {
     #[test]
     fn no_trigger_no_thinking_on_non_opus_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             None,
             None,
             false,
@@ -1416,11 +1420,10 @@ mod tests {
 
     #[test]
     fn auto_detect_works_on_openai_reasoning_model() {
-        // Uses "gpt-5.5" (catalog reasoning model with capabilities.thinking=true).
-        // "o3" was removed from models.json as of 2026-05-29.
+        // Uses "gpt-5.6-sol" (catalog reasoning model with capabilities.thinking=true).
         // The "think about" trigger phrase produces ThinkingBudget::Low = 10K tokens.
         let thinking = resolve_thinking_parameter(
-            "gpt-5.5",
+            "gpt-5.6-sol",
             None,
             None,
             false,

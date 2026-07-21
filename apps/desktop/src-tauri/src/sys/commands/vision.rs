@@ -166,6 +166,12 @@ pub async fn vision_send_message(
         prefer_cloud_credits: false,
         local_only: false,
         managed_cloud_only: false,
+        // TRUST BOUNDARY (desktop-trust-boundary-01): `VisionRequest.provider`
+        // lets the caller name an explicit cloud provider (openai/anthropic/
+        // google) with no active-session trust context alongside it. Fails
+        // closed to Local via `effective_trust_mode`'s default — an explicit
+        // non-local `provider` here is now rejected until this command grows
+        // a real trust_mode field threaded from the active session.
         trust_mode: None,
     };
 

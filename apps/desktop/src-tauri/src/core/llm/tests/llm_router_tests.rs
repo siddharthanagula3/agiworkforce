@@ -287,8 +287,8 @@ mod route_with_retry_tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-4-6"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5.5"),
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-5"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5.6-sol"),
             ModelCandidate::new(Provider::Google, "gemini-3-pro-preview"),
         ];
 
@@ -331,16 +331,16 @@ mod route_with_retry_tests {
         // Pre-mark Anthropic as rate-limited
         chain.rate_limit_tracker().record_rate_limit(
             Provider::Anthropic,
-            Some("claude-sonnet-4-6"),
+            Some("claude-sonnet-5"),
             None,
         );
         chain
             .rate_limit_tracker()
-            .record_rate_limit(Provider::OpenAI, Some("gpt-5.5"), None);
+            .record_rate_limit(Provider::OpenAI, Some("gpt-5.6-sol"), None);
 
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-4-6"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5.5"),
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-5"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5.6-sol"),
             ModelCandidate::new(Provider::Google, "gemini-3-pro-preview"),
         ];
 
@@ -394,8 +394,8 @@ mod route_with_retry_tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-4-6"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5.5"),
+            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-5"),
+            ModelCandidate::new(Provider::OpenAI, "gpt-5.6-sol"),
         ];
 
         let result = chain

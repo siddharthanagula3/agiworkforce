@@ -39,6 +39,12 @@ pub struct VisualReasonerConfig {
     pub enable_caching: bool,
     /// Cache duration for screen analysis.
     pub cache_duration: Duration,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
+    /// execution boundary, threaded from `ComputerUseConfig` so the observe
+    /// step's vision calls route to the same boundary as the planning calls.
+    /// `None` (the default) fails closed to Local via
+    /// `llm_router::effective_trust_mode`.
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
 impl Default for VisualReasonerConfig {
@@ -51,6 +57,7 @@ impl Default for VisualReasonerConfig {
             element_confidence_threshold: 0.7,
             enable_caching: true,
             cache_duration: Duration::from_secs(2),
+            trust_mode: None,
         }
     }
 }
@@ -100,6 +107,13 @@ impl VisualReasoner {
     /// Creates a visual reasoner with default configuration.
     pub fn with_defaults(llm_router: Arc<RwLock<LLMRouter>>) -> Self {
         Self::new(llm_router, VisualReasonerConfig::default())
+    }
+
+    /// Test-only accessor so `observe_plan_act` can assert the constructors
+    /// thread the session's trust boundary into the observe step.
+    #[cfg(test)]
+    pub(crate) fn trust_mode(&self) -> Option<agiworkforce_model_registry::TrustMode> {
+        self.config.trust_mode
     }
 
     /// Captures and analyzes the current screen state.
@@ -467,7 +481,13 @@ If not found:
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
-            trust_mode: None,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): threaded from
+            // `ComputerUseConfig` by the `ComputerUseAgent` constructors so
+            // the observe step routes to the same boundary as the planning
+            // call — otherwise byok/cloud tasks dead-end at observe before
+            // planning ever runs. `None` fails closed to Local via
+            // `effective_trust_mode`'s default.
+            trust_mode: self.config.trust_mode,
         };
 
         let candidates = router.candidates(&request, &preferences);
@@ -676,6 +696,8 @@ mod tests {
         assert_eq!(config.vision_timeout, Duration::from_secs(30));
         assert_eq!(config.max_image_dimension, 1920);
         assert!(config.use_ocr);
+        // Fail-closed: an unthreaded reasoner must stay Local.
+        assert!(config.trust_mode.is_none());
     }
 
     #[test]

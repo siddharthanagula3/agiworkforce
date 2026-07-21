@@ -1812,6 +1812,7 @@ mod tests {
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         };
 
         assert_eq!(goal_iteration_limit(&goal), 1000);
@@ -1832,6 +1833,7 @@ mod tests {
                 },
             }],
             success_criteria: vec![],
+            trust_mode: None,
         };
 
         assert_eq!(goal_iteration_limit(&goal), 12);

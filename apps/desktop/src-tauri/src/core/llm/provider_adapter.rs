@@ -1170,8 +1170,8 @@ impl OpenAIAdapter {
         &self,
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        // Resolve the wire API model ID: catalog keys like "mistral-medium-3" must be
-        // translated to the actual API string ("mistral-medium-2508") before being sent
+        // Resolve the wire API model ID: catalog keys like "mistral-medium-3.5" must be
+        // translated to the actual API string ("mistral-medium-3-5") before being sent
         // to the provider.  get_api_model_id returns the apiModelId from models.json when
         // set, otherwise returns the model string unchanged.
         let wire_model = super::models_config::get_api_model_id(&request.model);

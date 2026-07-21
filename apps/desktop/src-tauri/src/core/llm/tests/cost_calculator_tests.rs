@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_zero_tokens_returns_zero() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.5", 0, 0);
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-sol", 0, 0);
         assert_eq!(cost, 0.0, "Zero tokens must produce zero cost");
     }
 
@@ -179,19 +179,14 @@ mod tests {
     }
 
     #[test]
-    fn test_anthropic_sonnet_4_6_cost() {
+    fn test_anthropic_sonnet_5_cost() {
         let calc = CostCalculator::new();
-        // claude-sonnet-4-6: $3.00/M input, $15.00/M output
+        // claude-sonnet-5: $3.00/M input, $15.00/M output
         // 1_000_000 input + 1_000_000 output = $3.00 + $15.00 = $18.00
-        let cost = calc.calculate(
-            Provider::Anthropic,
-            "claude-sonnet-4-6",
-            1_000_000,
-            1_000_000,
-        );
+        let cost = calc.calculate(Provider::Anthropic, "claude-sonnet-5", 1_000_000, 1_000_000);
         assert!(
             (cost - 18.0).abs() < 1e-9,
-            "Expected $18.00 for sonnet-4-6 1M+1M tokens, got ${}",
+            "Expected $18.00 for claude-sonnet-5 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -212,23 +207,23 @@ mod tests {
     #[test]
     fn test_openai_gpt5_cost() {
         let calc = CostCalculator::new();
-        // gpt-5.5: $5.00/M input, $30.00/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.5", 1_000_000, 1_000_000);
+        // gpt-5.6-sol: $5.00/M input, $30.00/M output = $35.00
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-sol", 1_000_000, 1_000_000);
         assert!(
             (cost - 35.00).abs() < 1e-9,
-            "Expected $35.00 for gpt-5.5 1M+1M tokens, got ${}",
+            "Expected $35.00 for gpt-5.6-sol 1M+1M tokens, got ${}",
             cost
         );
     }
 
     #[test]
-    fn test_openai_gpt5_mini_cost() {
+    fn test_openai_gpt56_luna_cost() {
         let calc = CostCalculator::new();
-        // gpt-5.4-mini: $0.75/M input, $4.50/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-mini", 1_000_000, 0);
+        // gpt-5.6-luna: $1.00/M input, $6.00/M output
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.6-luna", 1_000_000, 0);
         assert!(
-            (cost - 0.75).abs() < 1e-9,
-            "Expected $0.75 for gpt-5.4-mini 1M input only, got ${}",
+            (cost - 1.0).abs() < 1e-9,
+            "Expected $1.00 for gpt-5.6-luna 1M input only, got ${}",
             cost
         );
     }
@@ -270,13 +265,13 @@ mod tests {
     }
 
     #[test]
-    fn test_xai_grok43_cost() {
+    fn test_xai_grok45_cost() {
         let calc = CostCalculator::new();
-        // grok-4.3: $1.25/M input, $2.50/M output
-        let cost = calc.calculate(Provider::XAI, "grok-4.3", 1_000_000, 1_000_000);
+        // grok-4.5: $2.00/M input, $6.00/M output
+        let cost = calc.calculate(Provider::XAI, "grok-4.5", 1_000_000, 1_000_000);
         assert!(
-            (cost - 3.75).abs() < 1e-9,
-            "Expected $3.75 for grok-4.3 1M+1M tokens, got ${}",
+            (cost - 8.0).abs() < 1e-9,
+            "Expected $8.00 for grok-4.5 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -360,8 +355,8 @@ mod tests {
     #[test]
     fn test_cost_scales_linearly_with_token_count() {
         let calc = CostCalculator::new();
-        let cost_1m = calc.calculate(Provider::Anthropic, "claude-sonnet-4-6", 1_000_000, 0);
-        let cost_2m = calc.calculate(Provider::Anthropic, "claude-sonnet-4-6", 2_000_000, 0);
+        let cost_1m = calc.calculate(Provider::Anthropic, "claude-sonnet-5", 1_000_000, 0);
+        let cost_2m = calc.calculate(Provider::Anthropic, "claude-sonnet-5", 2_000_000, 0);
         assert!(
             (cost_2m - 2.0 * cost_1m).abs() < 1e-9,
             "Cost must scale linearly: 2M tokens (${cost_2m}) must be 2× 1M tokens (${cost_1m})"
@@ -395,13 +390,13 @@ mod tests {
     }
 
     #[test]
-    fn test_moonshot_kimi_k2_6_cost() {
+    fn test_moonshot_kimi_k3_cost() {
         let calc = CostCalculator::new();
-        // kimi-k2.6: $0.95/M input, $4.00/M output
-        let cost = calc.calculate(Provider::Moonshot, "kimi-k2.6", 1_000_000, 1_000_000);
+        // kimi-k3: $3.00/M input, $15.00/M output
+        let cost = calc.calculate(Provider::Moonshot, "kimi-k3", 1_000_000, 1_000_000);
         assert!(
-            (cost - 4.95).abs() < 1e-9,
-            "Expected $4.95 for kimi-k2.6 1M+1M tokens, got ${}",
+            (cost - 18.0).abs() < 1e-9,
+            "Expected $18.00 for kimi-k3 1M+1M tokens, got ${}",
             cost
         );
     }

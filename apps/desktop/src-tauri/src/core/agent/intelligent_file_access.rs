@@ -262,6 +262,14 @@ Provide a detailed analysis in a structured format."#
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): this is the
+            // file-access path named in the audit — `access_file` reads file
+            // contents and sends them to an LLM. No caller (code_generator.rs)
+            // threads an active-session trust mode through today. Fails
+            // closed to Local via `effective_trust_mode`'s default, which is
+            // the correct behavior here: file contents must not leave the
+            // device from a Local session. Thread a real trust_mode through
+            // once callers have one to restore BYOK/ManagedCloud reachability.
             trust_mode: None,
         };
 

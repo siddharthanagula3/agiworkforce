@@ -63,8 +63,8 @@ pub struct ComputerUseConfig {
     pub window: WindowManagerConfig,
     /// Stream 2: explicit model override for the planning vision LLM.
     /// `None` lets the router pick (typically the user's default vision
-    /// model). Setting this to e.g. `"claude-opus-4.8"`, `"gpt-5.5"`,
-    /// `"gemini-3.1-pro"`, or `"grok-4.3-vision"` lets the user choose
+    /// model). Setting this to e.g. `"claude-opus-4.8"`, `"gpt-5.6-sol"`,
+    /// `"gemini-3.1-pro"`, or `"grok-4.5"` lets the user choose
     /// any vision-capable model from the catalog — this is the multi-
     /// provider differentiator vs Claude Cowork's Anthropic-only computer use.
     pub model: Option<String>,
@@ -72,6 +72,12 @@ pub struct ComputerUseConfig {
     /// `Some`, the router targets this provider; when `None`, lets the
     /// router resolve from the model id.
     pub provider: Option<crate::core::llm::Provider>,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
+    /// execution boundary, so the planning LLM call below routes to the
+    /// correct trust boundary instead of the router's fail-closed
+    /// Local-only default. `None` (the default, and the case for any caller
+    /// that has not been updated to send this) stays Local-only.
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
 impl Default for ComputerUseConfig {
@@ -91,6 +97,7 @@ impl Default for ComputerUseConfig {
             window: WindowManagerConfig::default(),
             model: None,
             provider: None,
+            trust_mode: None,
         }
     }
 }
@@ -170,7 +177,12 @@ pub struct ComputerUseAgent {
 impl ComputerUseAgent {
     /// Creates a new Computer Use agent.
     pub fn new(llm_router: Arc<RwLock<LLMRouter>>, config: ComputerUseConfig) -> Result<Self> {
-        let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), config.visual.clone());
+        // TRUST BOUNDARY (desktop-trust-boundary-01): the observe step must
+        // route to the same execution boundary as the planning call, or
+        // byok/cloud tasks dead-end at the very first observation.
+        let mut visual_config = config.visual.clone();
+        visual_config.trust_mode = config.trust_mode;
+        let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), visual_config);
         let safety_layer = ComputerUseSafetyLayer::new(config.safety.clone());
         let window_coordinator = WindowCoordinator::new(config.window.clone());
 
@@ -193,7 +205,11 @@ impl ComputerUseAgent {
         config: ComputerUseConfig,
         app_permissions: Arc<AppPermissionManager>,
     ) -> Result<Self> {
-        let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), config.visual.clone());
+        // TRUST BOUNDARY (desktop-trust-boundary-01): same threading as
+        // `new` — observe and plan must share one execution boundary.
+        let mut visual_config = config.visual.clone();
+        visual_config.trust_mode = config.trust_mode;
+        let visual_reasoner = VisualReasoner::new(Arc::clone(&llm_router), visual_config);
         let safety_layer =
             ComputerUseSafetyLayer::with_app_permissions(config.safety.clone(), app_permissions);
         let window_coordinator = WindowCoordinator::new(config.window.clone());
@@ -627,7 +643,14 @@ Only include actions you're confident will make progress."#,
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
-            trust_mode: None,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): threaded from
+            // config so an explicit `self.config.provider` (a BYOK/
+            // ManagedCloud choice from `computer_use_execute_opa_task`) is
+            // not rejected by the router's fail-closed Local default when
+            // the caller has supplied a real trust_mode. Still fails closed
+            // to Local when the caller has not (see
+            // `sys/commands/computer_use.rs`).
+            trust_mode: self.config.trust_mode,
         };
 
         let candidates = router.candidates(&request, &preferences);
@@ -1225,6 +1248,32 @@ mod tests {
         assert_eq!(config.max_iterations, 100);
         assert_eq!(config.max_duration, Duration::from_secs(300));
         assert_eq!(config.max_consecutive_failures, 3);
+    }
+
+    #[test]
+    fn constructors_thread_trust_mode_into_visual_reasoner() {
+        let config = ComputerUseConfig {
+            trust_mode: Some(agiworkforce_model_registry::TrustMode::Byok),
+            ..Default::default()
+        };
+
+        let router = Arc::new(RwLock::new(LLMRouter::new()));
+        let agent = ComputerUseAgent::new(Arc::clone(&router), config.clone()).unwrap();
+        assert_eq!(
+            agent.visual_reasoner.trust_mode(),
+            Some(agiworkforce_model_registry::TrustMode::Byok)
+        );
+
+        let agent = ComputerUseAgent::with_app_permissions(
+            router,
+            config,
+            Arc::new(AppPermissionManager::default()),
+        )
+        .unwrap();
+        assert_eq!(
+            agent.visual_reasoner.trust_mode(),
+            Some(agiworkforce_model_registry::TrustMode::Byok)
+        );
     }
 
     #[test]

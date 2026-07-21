@@ -82,6 +82,7 @@ mod tests {
             deadline: Some(1234567890),
             constraints: vec![],
             success_criteria: vec!["Task completed".to_string()],
+            trust_mode: None,
         };
 
         assert_eq!(goal.id, "test-goal-1");
@@ -121,6 +122,7 @@ mod tests {
             deadline: None,
             constraints: vec![],
             success_criteria: vec!["Success".to_string()],
+            trust_mode: None,
         };
 
         let serialized = serde_json::to_string(&goal).unwrap();
@@ -182,6 +184,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
+                trust_mode: None,
             },
             Goal {
                 id: "2".to_string(),
@@ -190,6 +193,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
+                trust_mode: None,
             },
             Goal {
                 id: "3".to_string(),
@@ -198,6 +202,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
+                trust_mode: None,
             },
         ];
 

@@ -258,6 +258,12 @@ Only respond with the JSON object, no other text."#,
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): `intent_detect`
+            // (sys/commands/intent.rs) has no active-session trust context to
+            // pass in. Fails closed to Local via `effective_trust_mode`'s
+            // default; this is only the LLM fallback path (pattern-matching
+            // is tried first), so a rejected candidate here degrades to an
+            // error, not a crash.
             trust_mode: None,
         };
 

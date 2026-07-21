@@ -4,12 +4,22 @@ import { devtools, persist } from 'zustand/middleware';
 import { toast } from 'sonner';
 import { invoke, isTauri, listen } from '../lib/tauri-mock';
 import { ensureAgiInitialized } from '../api/agi';
+import { useAppModeStore, selectPrivacyMode } from './appModeStore';
 import type {
   AgentTaskState as CanonicalAgentTaskState,
   AgentTaskStateChanged,
 } from '@agiworkforce/types/protocol';
+import type { PrivacyMode } from '@agiworkforce/types';
 
 const MAX_LIVE_TASK_ENTRIES = 100;
+
+/**
+ * TRUST BOUNDARY (desktop-trust-boundary-01): every goal submission carries
+ * the active workspace's execution boundary so the Rust AGI subsystem routes
+ * LLM calls inside it. Mirrors `selectPrivacyMode` (`local`/`managed`);
+ * BYOK is a per-conversation fork in chat, never an ambient agent-task mode.
+ */
+const activeTrustMode = (): PrivacyMode => selectPrivacyMode(useAppModeStore.getState());
 
 /** Engine-authored lifecycle shared by every AGI surface. */
 export type AgentTaskStatus = CanonicalAgentTaskState;
@@ -213,6 +223,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                   description: goal,
                   priority: 'medium',
                   numAgents: options.maxIterations ?? 4,
+                  trustMode: activeTrustMode(),
                 },
               });
               const taskId = result.goalId;
@@ -234,6 +245,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
               request: {
                 description: goal,
                 priority: 'medium',
+                trustMode: activeTrustMode(),
               },
             });
 
@@ -267,6 +279,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                 priority: options.priority ?? 'medium',
                 deadline: options.deadline,
                 successCriteria: options.successCriteria,
+                trustMode: activeTrustMode(),
               },
             });
 
@@ -307,6 +320,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                 priority: options.priority ?? 'medium',
                 deadline: options.deadline,
                 successCriteria: options.successCriteria,
+                trustMode: activeTrustMode(),
               },
             });
 

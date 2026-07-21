@@ -104,7 +104,7 @@ pub struct SpeechRecognitionConfig {
     pub deepgram_api_key: Option<String>,
     /// Deepgram model (e.g., "nova-2", "nova-3")
     pub deepgram_model: String,
-    /// Whisper model (e.g., "whisper-1")
+    /// OpenAI transcription model (e.g., "gpt-4o-transcribe")
     pub whisper_model: String,
     /// Audio sample rate in Hz
     pub sample_rate: u32,
@@ -124,7 +124,7 @@ impl Default for SpeechRecognitionConfig {
             max_alternatives: 1,
             deepgram_api_key: None,
             deepgram_model: "nova-2".to_string(),
-            whisper_model: "whisper-1".to_string(),
+            whisper_model: "gpt-4o-transcribe".to_string(),
             sample_rate: 16000,
             smart_format: true,
             punctuate: true,

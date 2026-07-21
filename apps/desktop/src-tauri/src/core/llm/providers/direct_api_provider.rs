@@ -753,10 +753,15 @@ mod tests {
     fn request_endpoint_preserves_chat_completions_for_catalog_chat_models() {
         let p = DirectApiProvider::new(Provider::OpenAI, "key".to_string(), None)
             .expect("should create");
+        // Only OpenAI reasoning-tier models use the Responses API; every other
+        // OpenAI model type routes to Chat Completions. The catalog carries no
+        // `chat`-type OpenAI model since the latest-family-only sweep (the
+        // gpt-5.6 line is all reasoning), so exercise the non-Responses branch
+        // with any non-reasoning OpenAI model.
         let model = crate::core::llm::models_config::get_all_model_entries()
             .values()
-            .find(|entry| entry.provider == "openai" && entry.model_type == "chat")
-            .expect("catalog must contain an OpenAI chat model");
+            .find(|entry| entry.provider == "openai" && entry.model_type != "reasoning")
+            .expect("catalog must contain a non-reasoning OpenAI model");
 
         assert_eq!(
             p.request_endpoint(&model.id),

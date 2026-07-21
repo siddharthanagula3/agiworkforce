@@ -46,6 +46,7 @@ mod tests {
             deadline: None,
             constraints: vec![],
             success_criteria: vec!["Task completed".to_string()],
+            trust_mode: None,
         }
     }
 
@@ -1117,5 +1118,210 @@ mod tests {
         assert_eq!(high_cpu, 2.0);
         assert_eq!(mid_cpu, 1.5);
         assert_eq!(low_cpu, 1.0);
+    }
+}
+
+// desktop-trust-boundary-01 — e2e threading proof: `Goal.trust_mode` (not a
+// constant) must land in the `RouterPreferences` the AGI executor path builds
+// and gate `LLMRouter::candidates`/invocation. Drives the real seam
+// `ToolExecutor::execute` → `LlmExecutor::execute_reason` → router.
+#[cfg(test)]
+mod trust_mode_threading_tests {
+    use crate::core::agi::executors::{ExecutorContext, LlmExecutor, ToolExecutor};
+    use crate::core::agi::{ExecutionContext, Goal, Priority, ResourceState};
+    use crate::core::llm::{LLMProvider, LLMRequest, LLMResponse, LLMRouter, Provider};
+    use agiworkforce_model_registry::TrustMode;
+    use serde_json::{json, Value};
+    use std::collections::HashMap;
+    use std::error::Error;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+
+    /// Records every invocation so tests can prove a provider class was (or
+    /// was never) reached across the trust boundary.
+    struct RecordingProvider {
+        provider_name: &'static str,
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait::async_trait]
+    impl LLMProvider for RecordingProvider {
+        async fn send_message(
+            &self,
+            request: &LLMRequest,
+        ) -> Result<LLMResponse, Box<dyn Error + Send + Sync>> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(LLMResponse {
+                content: format!("mock response from {}", self.provider_name),
+                model: request.model.clone(),
+                ..Default::default()
+            })
+        }
+
+        fn is_configured(&self) -> bool {
+            true
+        }
+
+        fn name(&self) -> &str {
+            self.provider_name
+        }
+    }
+
+    struct TrustRouterFixture {
+        router: Arc<RwLock<LLMRouter>>,
+        managed_cloud_calls: Arc<AtomicUsize>,
+        byok_calls: Arc<AtomicUsize>,
+    }
+
+    /// Registers ManagedCloud plus direct BYOK providers (no local runtimes)
+    /// so any Local-boundary routing decision must come up empty.
+    fn router_with_cloud_providers() -> TrustRouterFixture {
+        let managed_cloud_calls = Arc::new(AtomicUsize::new(0));
+        let byok_calls = Arc::new(AtomicUsize::new(0));
+        let mut router = LLMRouter::new();
+        router.set_provider(
+            Provider::ManagedCloud,
+            Box::new(RecordingProvider {
+                provider_name: "managed_cloud",
+                calls: managed_cloud_calls.clone(),
+            }),
+        );
+        for (provider, name) in [
+            (Provider::OpenAI, "openai"),
+            (Provider::Anthropic, "anthropic"),
+            (Provider::Google, "google"),
+        ] {
+            router.set_provider(
+                provider,
+                Box::new(RecordingProvider {
+                    provider_name: name,
+                    calls: byok_calls.clone(),
+                }),
+            );
+        }
+        TrustRouterFixture {
+            router: Arc::new(RwLock::new(router)),
+            managed_cloud_calls,
+            byok_calls,
+        }
+    }
+
+    fn executor_context(router: Arc<RwLock<LLMRouter>>) -> ExecutorContext {
+        ExecutorContext {
+            app_handle: None,
+            automation: Arc::new(
+                crate::automation::AutomationService::new()
+                    .expect("Failed to create AutomationService for tests"),
+            ),
+            router,
+            tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
+            security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
+            change_tracker: None,
+            session_id: "trust_test_session".to_string(),
+            tool_id: "trust_test_tool".to_string(),
+        }
+    }
+
+    fn execution_context(trust_mode: Option<TrustMode>) -> ExecutionContext {
+        ExecutionContext {
+            goal: Goal {
+                id: "trust_goal".to_string(),
+                description: "trust threading goal".to_string(),
+                priority: Priority::Medium,
+                deadline: None,
+                constraints: vec![],
+                success_criteria: vec![],
+                trust_mode,
+            },
+            current_state: HashMap::new(),
+            available_resources: ResourceState {
+                cpu_usage_percent: 0.0,
+                memory_usage_mb: 0,
+                network_usage_mbps: 0.0,
+                storage_usage_mb: 0,
+                available_tools: vec![],
+            },
+            tool_results: vec![],
+            context_memory: vec![],
+        }
+    }
+
+    fn reason_params(provider: Option<&str>) -> HashMap<String, Value> {
+        let mut params = HashMap::new();
+        params.insert("prompt".to_string(), json!("Summarize the trust model"));
+        if let Some(provider) = provider {
+            params.insert("provider".to_string(), json!(provider));
+        }
+        params
+    }
+
+    #[tokio::test]
+    async fn managed_cloud_goal_reaches_managed_cloud_provider() {
+        let fixture = router_with_cloud_providers();
+        let executor = LlmExecutor::new(fixture.router.clone());
+        let context = executor_context(fixture.router.clone());
+        let execution = execution_context(Some(TrustMode::ManagedCloud));
+
+        let result = executor
+            .execute(
+                "llm_reason",
+                &reason_params(Some("managed")),
+                &context,
+                &execution,
+            )
+            .await
+            .expect("ManagedCloud goal must be able to invoke ManagedCloud");
+
+        assert_eq!(result["provider"], "managed_cloud");
+        assert_eq!(
+            fixture.managed_cloud_calls.load(Ordering::SeqCst),
+            1,
+            "invocation must land on the ManagedCloud side"
+        );
+        assert_eq!(fixture.byok_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn unset_goal_trust_mode_never_reaches_cloud_providers() {
+        let fixture = router_with_cloud_providers();
+        let executor = LlmExecutor::new(fixture.router.clone());
+        let context = executor_context(fixture.router.clone());
+        // Identical request to the ManagedCloud test above — only the goal's
+        // trust_mode differs. If the executor hardcoded the boundary instead
+        // of threading `goal.trust_mode`, one of these two tests would fail.
+        let execution = execution_context(None);
+
+        let explicit_cloud = executor
+            .execute(
+                "llm_reason",
+                &reason_params(Some("managed")),
+                &context,
+                &execution,
+            )
+            .await;
+        assert!(
+            explicit_cloud.is_err(),
+            "unset trust mode must fail closed to Local even for an explicit cloud provider request"
+        );
+
+        let default_route = executor
+            .execute("llm_reason", &reason_params(None), &context, &execution)
+            .await;
+        assert!(
+            default_route.is_err(),
+            "unset trust mode must not fall back to any cloud provider"
+        );
+
+        assert_eq!(
+            fixture.managed_cloud_calls.load(Ordering::SeqCst),
+            0,
+            "ManagedCloud must never be invoked without a ManagedCloud boundary"
+        );
+        assert_eq!(
+            fixture.byok_calls.load(Ordering::SeqCst),
+            0,
+            "BYOK providers must never be invoked without a BYOK boundary"
+        );
     }
 }

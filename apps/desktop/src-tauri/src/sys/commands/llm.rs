@@ -272,6 +272,15 @@ pub async fn llm_send_message(
         prefer_cloud_credits: request.prefer_cloud_credits,
         local_only: false,
         managed_cloud_only: false,
+        // TRUST BOUNDARY (desktop-trust-boundary-01): `llm_send_message` is a
+        // directly-exposed IPC command (voice cleanup, ghost-text-style
+        // helper calls per the doc comment on `LLMSendMessageRequest`), not
+        // routed through `chat_send_message`'s trust-mode resolution. It has
+        // no active_mode/execution_mode field and no way to know whether the
+        // caller is in a Local session. Fails closed to Local via
+        // `effective_trust_mode`'s default — a BYOK/ManagedCloud `provider`
+        // in `request.provider` will now be rejected unless
+        // `LLMSendMessageRequest` grows a real trust_mode field.
         trust_mode: None,
     };
 
@@ -1423,7 +1432,7 @@ mod tests {
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(LLMResponse {
                 content: format!("echo: {}", request.messages[0].content),
-                model: "gpt-5.4-mini".to_string(),
+                model: "gpt-5.6-luna".to_string(),
                 cached: false,
                 tokens: Some(12),
                 prompt_tokens: Some(7),
@@ -1466,7 +1475,7 @@ mod tests {
     #[tokio::test]
     async fn capability_probe_rejects_cloud_models_instead_of_inventing_defaults() {
         let result =
-            get_model_capabilities("openai".to_string(), "gpt-5.4-nano".to_string(), None).await;
+            get_model_capabilities("openai".to_string(), "gpt-5.6-luna".to_string(), None).await;
 
         assert!(
             result.is_err(),
@@ -1493,16 +1502,16 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: Some("gpt-5.4-mini".to_string()),
+            model: Some("gpt-5.6-luna".to_string()),
             provider: Some("openai".to_string()),
             temperature: Some(0.2),
             max_tokens: Some(500),
             prefer_cloud_credits: false,
         };
 
-        let llm_request = build_plain_llm_request(&request, "gpt-5.4-mini".to_string());
+        let llm_request = build_plain_llm_request(&request, "gpt-5.6-luna".to_string());
 
-        assert_eq!(llm_request.model, "gpt-5.4-mini");
+        assert_eq!(llm_request.model, "gpt-5.6-luna");
         assert_eq!(llm_request.messages.len(), 2);
         assert_eq!(llm_request.temperature, Some(0.2));
         assert_eq!(llm_request.max_tokens, Some(500));
@@ -1539,7 +1548,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4-mini".to_string(),
+            model: "gpt-5.6-luna".to_string(),
             temperature: Some(0.0),
             max_tokens: Some(32),
             stream: false,
@@ -1551,13 +1560,17 @@ mod tests {
 
         let preferences = RouterPreferences {
             provider: Some(Provider::OpenAI),
-            model: Some("gpt-5.4-mini".to_string()),
+            model: Some("gpt-5.6-luna".to_string()),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
-            trust_mode: None,
+            // Test exercises OpenAI (a Byok provider); `effective_trust_mode`
+            // now fails closed to Local when this is None, which would make
+            // `candidates()` reject OpenAI. Set explicitly so the cache test
+            // still exercises real candidate selection.
+            trust_mode: Some(agiworkforce_model_registry::TrustMode::Byok),
         };
 
         let candidate = {
@@ -1588,12 +1601,12 @@ mod tests {
     #[test]
     fn map_openrouter_entry_maps_id_and_name() {
         let entry = openrouter_entry(serde_json::json!({
-            "id": "meta-llama/llama-3.3-70b-instruct:free",
-            "name": "Llama 3.3 70B Instruct (Free)",
+            "id": "google/gemma-4-26b-a4b-it:free",
+            "name": "Gemma 4 26B A4B IT (Free)",
         }));
         let model = map_openrouter_entry(&entry).expect("should map");
-        assert_eq!(model.id, "meta-llama/llama-3.3-70b-instruct:free");
-        assert_eq!(model.name, "Llama 3.3 70B Instruct (Free)");
+        assert_eq!(model.id, "google/gemma-4-26b-a4b-it:free");
+        assert_eq!(model.name, "Gemma 4 26B A4B IT (Free)");
         assert_eq!(model.provider, "open_router");
         assert!(model.available);
     }
@@ -1637,8 +1650,8 @@ mod tests {
         let body = serde_json::json!({
             "data": [
                 {
-                    "id": "meta-llama/llama-3.3-70b-instruct:free",
-                    "name": "Llama 3.3 70B Instruct (Free)",
+                    "id": "google/gemma-4-26b-a4b-it:free",
+                    "name": "Gemma 4 26B A4B IT (Free)",
                     "context_length": 131072,
                     "pricing": { "prompt": "0", "completion": "0" },
                     "architecture": { "output_modalities": ["text"] }
@@ -1658,6 +1671,6 @@ mod tests {
             .filter_map(map_openrouter_entry)
             .collect();
         assert_eq!(models.len(), 1, "audio-output model should be filtered out");
-        assert_eq!(models[0].id, "meta-llama/llama-3.3-70b-instruct:free");
+        assert_eq!(models[0].id, "google/gemma-4-26b-a4b-it:free");
     }
 }

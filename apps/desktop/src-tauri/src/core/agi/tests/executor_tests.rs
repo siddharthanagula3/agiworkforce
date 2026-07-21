@@ -13,6 +13,7 @@ mod tests {
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         };
 
         let context = ExecutionContext {
@@ -86,6 +87,7 @@ mod tests {
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         };
 
         let mut context = ExecutionContext {
@@ -142,6 +144,7 @@ mod tests {
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         };
 
         let mut context = ExecutionContext {

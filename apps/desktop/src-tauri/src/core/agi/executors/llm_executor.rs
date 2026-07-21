@@ -13,7 +13,7 @@
 //!
 //! The executor supports model preferences through parameters:
 //! - `provider`: Override the default provider (anthropic, openai, google, etc.)
-//! - `model`: Specify a particular model (claude-haiku-4-5, gpt-5.4-mini, etc.)
+//! - `model`: Specify a particular model (claude-haiku-4-5, gpt-5.6-luna, etc.)
 //! - `temperature`: Control response randomness (0.0 - 1.0, default 0.7)
 //! - `max_tokens`: Limit response length (default 2000)
 //! - `stream`: Enable streaming responses (default false)
@@ -25,7 +25,7 @@
 //!     "prompt": "Analyze this code for potential security issues...",
 //!     "temperature": 0.3,
 //!     "max_tokens": 4000,
-//!     "model": "claude-sonnet-4-6"
+//!     "model": "claude-sonnet-5"
 //! }
 //! ```
 
@@ -102,6 +102,7 @@ impl LlmExecutor {
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     ) -> Result<Value> {
         let prompt = parameters
             .get("prompt")
@@ -182,37 +183,36 @@ impl LlmExecutor {
             multimodal_content: None,
         });
 
-        // Determine default provider and model based on overrides
+        // Determine provider and model from explicit overrides only. Without
+        // overrides, leave both unset so the trust-aware Auto strategy picks
+        // a boundary-appropriate provider — a hardcoded ManagedCloud default
+        // is rejected by the router for Local/BYOK goals.
         let (default_provider, default_model) = match (&provider_override, &model_override) {
-            (Some(p), Some(m)) => (*p, m.clone()),
-            (Some(p), None) => (*p, self.default_model_for_provider(*p)),
-            (None, Some(m)) => (self.infer_provider_from_model(m), m.clone()),
-            (None, None) => (
-                Provider::ManagedCloud,
-                crate::core::llm::models_config::get_task_model(
-                    &Provider::ManagedCloud,
-                    "fast_completion",
-                )
-                .to_string(),
-            ),
+            (Some(p), Some(m)) => (Some(*p), Some(m.clone())),
+            (Some(p), None) => (Some(*p), Some(self.default_model_for_provider(*p))),
+            (None, Some(m)) => (Some(self.infer_provider_from_model(m)), Some(m.clone())),
+            (None, None) => (None, None),
         };
 
         // Build router preferences
         let preferences = RouterPreferences {
-            provider: Some(default_provider),
-            model: Some(default_model.clone()),
+            provider: default_provider,
+            model: default_model.clone(),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
-            trust_mode: None,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): threaded from the
+            // executing goal (`ExecutionContext.goal.trust_mode`); absent,
+            // `llm_router::effective_trust_mode` fails closed to Local.
+            trust_mode,
         };
 
         // Build LLM request
-        let request = LLMRequest {
+        let mut request = LLMRequest {
             messages,
-            model: default_model,
+            model: default_model.unwrap_or_default(),
             temperature: Some(temperature),
             max_tokens: Some(max_tokens),
             stream,
@@ -231,6 +231,12 @@ impl LlmExecutor {
             drop(router);
             context.emit_error("No LLM providers available", start_time, true);
             return Err(anyhow!("No LLM candidates available for reasoning"));
+        }
+
+        if request.model.is_empty() {
+            // No explicit override: take the model from the trust-filtered
+            // winning candidate instead of a precomputed provider default.
+            request.model = candidates[0].model.clone();
         }
 
         context.emit_progress("Invoking LLM...", Some(0.3));
@@ -433,10 +439,13 @@ impl ToolExecutor for LlmExecutor {
         tool_name: &str,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
-        _execution_context: &ExecutionContext,
+        execution_context: &ExecutionContext,
     ) -> Result<Value> {
         match tool_name {
-            "llm_reason" => self.execute_reason(parameters, context).await,
+            "llm_reason" => {
+                self.execute_reason(parameters, context, execution_context.goal.trust_mode)
+                    .await
+            }
             _ => Err(anyhow!("Unknown LLM tool: {}", tool_name)),
         }
     }
@@ -478,6 +487,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
+                trust_mode: None,
             },
             current_state: HashMap::new(),
             available_resources: ResourceState {
@@ -560,11 +570,11 @@ mod tests {
         let executor = LlmExecutor::new(router);
 
         assert_eq!(
-            executor.infer_provider_from_model("claude-sonnet-4.6"),
+            executor.infer_provider_from_model("claude-sonnet-5"),
             Provider::Anthropic
         );
         assert_eq!(
-            executor.infer_provider_from_model("gpt-5.4-mini"),
+            executor.infer_provider_from_model("gpt-5.6-luna"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -576,7 +586,7 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("grok-4.3"),
+            executor.infer_provider_from_model("grok-4.5"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -584,7 +594,7 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("kimi-k2"),
+            executor.infer_provider_from_model("kimi-k3"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -608,7 +618,7 @@ mod tests {
     #[test]
     fn test_default_model_for_provider() {
         // DESK-MODEL-DEFAULT-WRONG (audit 2026-05-06): previous assertions
-        // incorrectly expected "gpt-5.4-mini" for every provider.
+        // incorrectly expected one hardcoded OpenAI model for every provider.
         // default_model_for_provider delegates to models_config::get_default_model
         // which reads per-provider defaultModel from models.json.
         let router = create_test_router();

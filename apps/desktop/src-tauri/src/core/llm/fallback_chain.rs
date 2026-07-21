@@ -24,8 +24,8 @@
 //!
 //! let chain = FallbackChain::new(FallbackConfig::default());
 //! let candidates = vec![
-//!     ModelCandidate::new(Provider::Anthropic, "claude-sonnet-4.6"),
-//!     ModelCandidate::new(Provider::OpenAI, "gpt-5.5"),
+//!     ModelCandidate::new(Provider::Anthropic, "claude-sonnet-5"),
+//!     ModelCandidate::new(Provider::OpenAI, "gpt-5.6-sol"),
 //!     ModelCandidate::new(Provider::Google, "gemini-3.1-pro-preview"),
 //! ];
 //!
@@ -1111,8 +1111,8 @@ mod tests {
     #[test]
     fn test_model_candidate_builder() {
         let candidates = CandidateBuilder::new()
-            .add(Provider::Anthropic, "claude-sonnet-4.6")
-            .add_with_priority(Provider::OpenAI, "gpt-5.5", 1)
+            .add(Provider::Anthropic, "claude-sonnet-5")
+            .add_with_priority(Provider::OpenAI, "gpt-5.6-sol", 1)
             .add_with_reason(Provider::Google, "gemini-3.1-pro-preview", "fallback")
             .build();
 
