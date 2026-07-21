@@ -659,11 +659,6 @@
           "maximum": 500,
           "description": "Number of surrounding lines to include as context"
         },
-        "agiWorkforce.fallbackToVscodeLm": {
-          "type": "boolean",
-          "default": false,
-          "description": "Reserved for a future VS Code Language Model API fallback. Not yet available — currently has no effect."
-        },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,
@@ -734,13 +729,6 @@
           "type": "boolean",
           "default": false,
           "description": "Enable extended thinking for providers that support it. When enabled, the model will show its reasoning before responding."
-        },
-        "agiWorkforce.agent.maxIterations": {
-          "type": "number",
-          "default": 25,
-          "minimum": 1,
-          "maximum": 200,
-          "description": "Intended cap on autonomous continuation iterations per agent session. Not yet enforced by the extension — the agent loop runs in the AGI CLI with its own built-in limit; this value is not passed through yet."
         },
         "agiWorkforce.mcp.enabled": {
           "type": "boolean",

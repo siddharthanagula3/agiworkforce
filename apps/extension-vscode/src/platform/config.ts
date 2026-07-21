@@ -24,7 +24,6 @@ import * as vscode from 'vscode';
 
 /** Default values mirror those declared in `package.json` `contributes.configuration`. */
 const DEFAULTS = {
-  agentMaxIterations: 25,
   agentPlanMode: false,
   agentMode: 'auto',
   agentEffort: 'medium',
@@ -38,9 +37,6 @@ const DEFAULTS = {
   model: 'auto-economy',
   streamingEnabled: true,
   contextLines: 50,
-  // Reserved: the VS Code Language Model API fallback is not built yet, so this
-  // defaults off (was true, which falsely promised a fallback that never ran).
-  fallbackToVscodeLm: false,
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
   useProviderStream: false,
@@ -59,9 +55,6 @@ function get<T>(key: string, fallback: T): T {
 /** Single-call helpers for the non-trust-sensitive settings. */
 export const Config = {
   // ── Agent mode ──────────────────────────────────────────────────────────
-  agentMaxIterations(): number {
-    return get<number>('agent.maxIterations', DEFAULTS.agentMaxIterations);
-  },
   agentPlanMode(): boolean {
     return get<boolean>('agent.planMode', DEFAULTS.agentPlanMode);
   },
@@ -114,9 +107,6 @@ export const Config = {
   },
   contextLines(): number {
     return get<number>('contextLines', DEFAULTS.contextLines);
-  },
-  fallbackToVscodeLm(): boolean {
-    return get<boolean>('fallbackToVscodeLm', DEFAULTS.fallbackToVscodeLm);
   },
   useProviderStream(): boolean {
     return get<boolean>('useProviderStream', DEFAULTS.useProviderStream);
