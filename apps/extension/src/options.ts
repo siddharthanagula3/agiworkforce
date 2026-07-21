@@ -10,6 +10,7 @@
  */
 
 import { getExtensionTokensCss } from './tokens';
+import { clearAuthToken } from './features/cloud-bridge/freeTrialClient';
 
 const SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 const API_KEY_STORAGE_KEY = 'agi_api_key';
@@ -583,19 +584,24 @@ async function buildPage(): Promise<void> {
     }
   }
 
-  // Populate current tab origin
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const url = tabs[0]?.url;
-    if (url) {
+  // Populate the "current site" origin. The options page opens in its OWN
+  // chrome-extension:// tab, so `{active, currentWindow}` would resolve to the
+  // options page itself and Add would pollute the allowlist with the extension's
+  // own origin. Query the active tab of every window and pick the first real
+  // http(s) site instead — the page the user actually came from.
+  chrome.tabs.query({ active: true }, (tabs) => {
+    const siteTab = tabs.find((t) => {
+      if (!t.url) return false;
       try {
-        const origin = new URL(url).origin;
-        if (origin !== 'null') {
-          currentOriginLabel.textContent = origin;
-          addBtn.disabled = false;
-        }
+        const proto = new URL(t.url).protocol;
+        return proto === 'http:' || proto === 'https:';
       } catch {
-        // non-parseable URL — leave disabled
+        return false;
       }
+    });
+    if (siteTab?.url) {
+      currentOriginLabel.textContent = new URL(siteTab.url).origin;
+      addBtn.disabled = false;
     }
     void refreshAllowlist();
   });
@@ -637,6 +643,11 @@ async function buildPage(): Promise<void> {
     logoutBtn.textContent = 'Logging out…';
     logoutBtn.disabled = true;
     try {
+      // Actually end the session: clearAuthToken() runs signOutClerk() and clears
+      // the session/dev tokens — the same real sign-out the side panel uses. The
+      // storage.remove below only purged legacy keys that nothing writes, so the
+      // Clerk session (the real auth) survived and the panel stayed signed in.
+      await clearAuthToken();
       await chrome.storage.local.remove([
         API_KEY_STORAGE_KEY,
         'agi_user_id',

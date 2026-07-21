@@ -45,6 +45,24 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
     expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has('REPLAY_SHORTCUT')).toBe(false);
   });
 
+  it('gates privileged tab / cookie / chat operations (no legitimate web-page sender)', () => {
+    // These have background handlers but no content-script sender in the
+    // extension; without gating, any allowlisted origin could enumerate/close/
+    // switch tabs, read/write cookies, or start paid CHAT_MESSAGE runs invisibly.
+    for (const t of [
+      'CHAT_MESSAGE',
+      'GET_ALL_TABS',
+      'CREATE_TAB',
+      'CLOSE_TAB',
+      'SWITCH_TAB',
+      'GET_COOKIES',
+      'SET_COOKIE',
+      'CLEAR_COOKIES',
+    ]) {
+      expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(t)).toBe(true);
+    }
+  });
+
   it('does NOT overlap with DOM_MUTATION_MESSAGE_TYPES', () => {
     for (const t of EXTENSION_PAGE_ONLY_MESSAGE_TYPES) {
       expect(DOM_MUTATION_MESSAGE_TYPES.has(t)).toBe(false);
