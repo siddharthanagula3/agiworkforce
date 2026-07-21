@@ -11,6 +11,7 @@ import { SettingsModalProvider } from '@/features/settings/components/SettingsMo
 import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { OfflineIndicator } from '@shared/components/OfflineIndicator';
+import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { seoService } from '@/lib/seo/seo-optimizer';
 
 // i18n is initialized synchronously at module import time (see app/i18n/index.ts).
@@ -39,6 +40,7 @@ export default function Providers({
               <SettingsModalProvider>{children}</SettingsModalProvider>
               <CommandPaletteProvider />
               <OfflineIndicator position="bottom" />
+              <SessionTimeoutGuard />
               <Toaster position="top-center" richColors closeButton />
             </WaitlistModalProvider>
           </I18nextProvider>
