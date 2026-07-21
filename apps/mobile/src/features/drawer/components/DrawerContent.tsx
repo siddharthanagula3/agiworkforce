@@ -26,20 +26,12 @@ import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { useModelStore } from '@/src/features/model-picker/store';
-import {
-  DEFAULT_CLOUD_MODEL_ID,
-  getDefaultCloudModelIdForTier,
-} from '@/src/features/model-picker/service';
-import { useTierStore } from '@/src/features/billing/store';
 import {
   executionModeForConversation,
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
-import { ModeSwitchModal } from '@/src/features/chat/components/ModeSwitchModal';
 
 type RoutePath =
   | '/(app)/(tabs)/projects'
@@ -55,7 +47,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key: 'projects' | 'artifacts' | 'library' | 'tasks' | 'schedules' | 'agi-agent';
+  key: 'projects' | 'artifacts' | 'library' | 'tasks' | 'schedules';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -93,12 +85,6 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'Schedules',
     icon: CalendarClock,
     route: '/(app)/schedules',
-    cloud: true,
-  },
-  {
-    key: 'agi-agent',
-    label: 'AGI Agent',
-    icon: Sparkles,
     cloud: true,
   },
 ];
@@ -304,16 +290,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   );
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
-  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
-  const subscriptionTier = useTierStore((s) => s.tier);
-  const setModel = useModelStore((s) => s.setModel);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
 
   const [searchQuery, setSearchQuery] = useState('');
-  // SILENT-SWITCH-FIX: mode switches to Cloud always require explicit user consent
-  // via ModeSwitchModal — never silently call setAppMode('cloud').
-  const [modeSwitchVisible, setModeSwitchVisible] = useState(false);
   const query = searchQuery.trim().toLowerCase();
   const isSearching = query.length > 0;
 
@@ -349,32 +328,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     closeDrawer();
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
-
-  // PUBLIC ALPHA (founder 2026-06-27, PA-2): managed cloud is open by default — the
-  // signed-in entitlement IS the gate, no invite/waitlist. Matches the sign-in route
-  // used by chat.tsx / chat/[id].tsx / models.tsx (fix 0fe0598c3).
-  const openAgiAgent = useCallback(() => {
-    if (!DEFAULT_CLOUD_MODEL_ID) return;
-    if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
-      return;
-    }
-    // SILENT-SWITCH-FIX: show the consent modal instead of silently switching mode.
-    // The actual setAppMode('cloud') call is deferred to the modal's onConfirm handler.
-    setModeSwitchVisible(true);
-  }, [cloudUnlocked, router]);
-
-  const handleModeSwitchConfirm = useCallback(() => {
-    setModeSwitchVisible(false);
-    if (!DEFAULT_CLOUD_MODEL_ID) return;
-    setAppMode('cloud');
-    setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
-    navigate('/(app)/(tabs)/chat');
-  }, [navigate, setAppMode, setModel, subscriptionTier]);
-
-  const handleModeSwitchCancel = useCallback(() => {
-    setModeSwitchVisible(false);
-  }, []);
 
   const displayedConversations = useMemo(() => {
     const source = isSearching
@@ -420,8 +373,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const visiblePrimaryItems = useMemo(
     () =>
       PRIMARY_ITEMS.filter((item) => {
-        // Cloud mode exposes the shared cloud surfaces, including Schedules and AGI Agent.
-        // Local mode keeps only on-device surfaces and hides every cloud-only item.
+        // Cloud mode exposes the shared cloud surfaces (Tasks, Schedules). Local
+        // mode keeps only on-device surfaces and hides every cloud-only item.
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
         if (item.key === 'tasks' && !FEATURES.cloudTasks) return false;
         if (appMode === 'cloud') return true;
@@ -489,8 +442,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 active={activeKey(item.key)}
                 tag={item.cloud ? 'Cloud' : undefined}
                 onPress={() => {
-                  if (item.key === 'agi-agent') openAgiAgent();
-                  else if (item.route) navigate(item.route);
+                  if (item.route) navigate(item.route);
                 }}
               />
             ))}
@@ -625,16 +577,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
-
-      {/* SILENT-SWITCH-FIX: consent modal for Local→Cloud mode switch from AGI Agent button */}
-      <ModeSwitchModal
-        visible={modeSwitchVisible}
-        fromMode="local"
-        toMode="cloud"
-        onConfirm={handleModeSwitchConfirm}
-        onCancel={handleModeSwitchCancel}
-        onClose={handleModeSwitchCancel}
-      />
     </SafeAreaView>
   );
 }
