@@ -107,6 +107,16 @@ describe('GET /api/library', () => {
     });
   });
 
+  it('lists the recently-deleted bin (30-day window) when deleted=true', async () => {
+    const res = await GET(makeRequest('?deleted=true'));
+    expect(res.status).toBe(200);
+    const [sql] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("deleted_at is not null and deleted_at > now() - interval '30 days'");
+    // The bin must NOT also carry the live-only "deleted_at is null" clause.
+    expect(sql).not.toContain('deleted_at is null');
+    expect(sql).toContain('order by deleted_at desc');
+  });
+
   it('passes kind and surface filters into the SQL with the legacy coalesce fallback', async () => {
     const res = await GET(makeRequest('?kind=image&surface=artifact'));
     expect(res.status).toBe(200);

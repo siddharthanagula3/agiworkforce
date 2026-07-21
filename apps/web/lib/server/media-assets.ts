@@ -162,6 +162,12 @@ export interface ListLibraryAssetsOptions {
   origin?: 'generated' | 'uploaded';
   /** Filename/prompt substring (ILIKE, wildcards escaped). */
   search?: string;
+  /**
+   * When true, list only soft-deleted assets within the 30-day recovery window
+   * ("Recently deleted" bin) instead of live ones. Assets past 30 days are
+   * treated as permanently purged and never listed.
+   */
+  deleted?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -232,13 +238,20 @@ export async function listLibraryAssets(
     );
   }
 
+  // Live library excludes soft-deleted rows; the Recently-deleted bin lists only
+  // soft-deleted rows still inside the 30-day recovery window (older = purged).
+  const lifecycleClause = opts.deleted
+    ? "and deleted_at is not null and deleted_at > now() - interval '30 days'"
+    : 'and deleted_at is null';
+  const orderColumn = opts.deleted ? 'deleted_at' : 'created_at';
+
   params.push(limit, offset);
   try {
     const rows = await db.query<Record<string, unknown>>(
-      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at
+      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, deleted_at
          from public.media_assets
-        where user_id = $1 and deleted_at is null ${clauses.join(' ')}
-        order by created_at desc, id desc
+        where user_id = $1 ${lifecycleClause} ${clauses.join(' ')}
+        order by ${orderColumn} desc, id desc
         limit $${params.length - 1} offset $${params.length}`,
       params,
     );
@@ -311,6 +324,32 @@ export async function softDeleteMediaAsset(userId: string, id: string): Promise<
       `update public.media_assets
          set deleted_at = now()
        where id = $1 and user_id = $2 and deleted_at is null
+       returning id`,
+      [id, userId],
+    );
+    return rows.length > 0;
+  } catch (error) {
+    if (isSchemaNotReady(error)) return false;
+    throw error;
+  }
+}
+
+/**
+ * Restore a soft-deleted asset from the Recently-deleted bin. Owner-scoped and
+ * bounded to the same 30-day recovery window the bin lists — an asset deleted
+ * longer ago is considered permanently purged and cannot be restored. Returns
+ * false if there is no matching restorable row (already live, not owned, or
+ * past the window).
+ */
+export async function restoreMediaAsset(userId: string, id: string): Promise<boolean> {
+  const db = getNeonDb();
+  try {
+    const rows = await db.query<{ id: string }>(
+      `update public.media_assets
+         set deleted_at = null
+       where id = $1 and user_id = $2
+         and deleted_at is not null
+         and deleted_at > now() - interval '30 days'
        returning id`,
       [id, userId],
     );
