@@ -279,13 +279,35 @@ describe('MessageBubble', () => {
   describe('pin indicator', () => {
     it('shows pin icon when message is pinned', () => {
       const msg = makeMessage({ metadata: { isPinned: true } });
-      render(<MessageBubble message={msg} />);
-      // The Pin icon has aria-hidden="true", so check for its container via title/role
-      // Best we can do without additional test-id is to verify the dom contains the pin svg
       const { container } = render(<MessageBubble message={msg} />);
-      // lucide icons render as <svg>, check for the amber text
-      const pinSvg = container.querySelector('.text-amber-500');
-      expect(pinSvg).toBeInTheDocument();
+      // lucide icons render as <svg>; the pinned badge carries the amber accent.
+      expect(container.querySelector('.text-amber-500')).toBeInTheDocument();
+    });
+  });
+
+  describe('pin toggle button', () => {
+    it('renders the pin action only when onPin is provided', () => {
+      const { rerender } = render(<MessageBubble message={makeMessage()} />);
+      expect(screen.queryByLabelText('Pin message')).not.toBeInTheDocument();
+
+      rerender(<MessageBubble message={makeMessage()} onPin={vi.fn()} />);
+      expect(screen.getByLabelText('Pin message')).toBeInTheDocument();
+    });
+
+    it('calls onPin with the message id when clicked', () => {
+      const onPin = vi.fn();
+      render(<MessageBubble message={makeMessage({ id: 'msg-42' })} onPin={onPin} />);
+
+      fireEvent.click(screen.getByLabelText('Pin message'));
+      expect(onPin).toHaveBeenCalledWith('msg-42');
+    });
+
+    it('reflects pinned state via aria-label and aria-pressed', () => {
+      render(
+        <MessageBubble message={makeMessage({ metadata: { isPinned: true } })} onPin={vi.fn()} />,
+      );
+      const btn = screen.getByLabelText('Unpin message');
+      expect(btn).toHaveAttribute('aria-pressed', 'true');
     });
   });
 

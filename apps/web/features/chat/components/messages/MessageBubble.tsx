@@ -267,7 +267,8 @@ const MessageBubbleComponent = function MessageBubble({
   onEdit,
   onRegenerate,
   onDelete,
-  // onPin and onBranch kept in interface for future wiring; not rendered until callbacks are connected
+  onPin,
+  // onBranch kept in interface for future wiring; not rendered until connected
   onReact,
   onReadAloud,
   isReadingAloud = false,
@@ -1215,6 +1216,30 @@ const MessageBubbleComponent = function MessageBubble({
                   </TooltipTrigger>
                   <TooltipContent>Copy</TooltipContent>
                 </Tooltip>
+
+                {onPin && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn('h-7 w-7', message.metadata?.isPinned && 'text-amber-500')}
+                        onClick={() => onPin(message.id)}
+                        aria-label={message.metadata?.isPinned ? 'Unpin message' : 'Pin message'}
+                        aria-pressed={Boolean(message.metadata?.isPinned)}
+                      >
+                        <Pin
+                          className={cn(
+                            'h-3.5 w-3.5',
+                            message.metadata?.isPinned && 'fill-current',
+                          )}
+                          aria-hidden="true"
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{message.metadata?.isPinned ? 'Unpin' : 'Pin'}</TooltipContent>
+                  </Tooltip>
+                )}
 
                 {!isUser && isReadAloudSupported && onReadAloud && (
                   <Tooltip>
