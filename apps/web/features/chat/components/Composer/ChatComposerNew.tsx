@@ -461,6 +461,7 @@ const ChatComposerNewComponent = ({
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const thinkingEffort = useThinkingStore((s) => s.effort);
   const setThinkingEffort = useThinkingStore((s) => s.setEffort);
+  const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
   const thinkingCycle = useThinkingStore((s) => s.cycleEffort);
   const handleThinkingClick = useCallback(() => {
     if (!thinkingEnabled) {
@@ -797,12 +798,30 @@ const ChatComposerNewComponent = ({
     [message, mentionStartIndex],
   );
 
-  const handleSlashSelect = useCallback((commandId: string) => {
-    setMessage('');
-    setShowSlashMenu(false);
-    if (commandId === 'search') setWebSearchEnabled(true);
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
+  const handleSlashSelect = useCallback(
+    (commandId: string) => {
+      setMessage('');
+      setShowSlashMenu(false);
+      switch (commandId) {
+        case 'search':
+          setWebSearchEnabled(true);
+          break;
+        case 'think':
+          setThinkingEnabled(true);
+          break;
+        case 'image':
+          setImageMode(true);
+          break;
+        case 'code':
+          setCodeExecutionEnabled(true);
+          break;
+        // browser/terminal/database are capability-gated to desktop and never
+        // reach the web menu (filterSlashCommandsByCapability), so no case here.
+      }
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+    [setThinkingEnabled],
+  );
 
   const handleSkillSelect = useCallback(
     (skillName: string) => {

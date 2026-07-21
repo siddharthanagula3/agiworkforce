@@ -16,10 +16,15 @@ describe('slash command capability filtering', () => {
     expect(ids).not.toContain('browser');
     expect(ids).not.toContain('terminal');
     expect(ids).not.toContain('database');
-    // universal commands stay
+    // universal (wired) commands stay
     expect(ids).toContain('search');
     expect(ids).toContain('code');
-    expect(ids).toContain('undo');
+    expect(ids).toContain('think');
+    expect(ids).toContain('image');
+    // unimplemented commands were removed from the registry
+    expect(ids).not.toContain('doc');
+    expect(ids).not.toContain('undo');
+    expect(ids).not.toContain('compact');
   });
 
   it('keeps desktop-only commands on DESKTOP', () => {
