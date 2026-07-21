@@ -582,20 +582,22 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   branch cloud chat on Config.useProviderStream() → the provider path (TRUST-SENSITIVE:
   routes chat through a gateway /api/v1/providers/:id/stream — verify carefully),
   OR remove the 3 settings + the dead impl. Not rushed at depth (security-adjacent).
-  • [MED] MITIGATED VSCODE-VSCODE-LM-FALLBACK-MISSING (2026-07-21, 7b41cd765): the
-  misleading aspect is resolved — agiWorkforce.fallbackToVscodeLm now defaults FALSE
-  with honest copy ("Reserved… Not yet available — currently has no effect"), so it
-  no longer promises a fallback that never ran. Still unread; BUILDING the actual
-  VS Code LM API fallback (vscode.lm/selectChatModels) remains an unbuilt feature =
-  founder decision. Config parity test (DEFAULTS↔package.json) stays green.
-  • [LOW] MITIGATED VSCODE-AGENT-MAXITERATIONS-UNAPPLIED (2026-07-21): the misleading
-  copy is fixed — the setting's description now honestly discloses it is "not yet
-  enforced by the extension… not passed through yet" instead of promising a cap
-  "before prompting for confirmation". COMPLETING it (pass through startTurn → CLI
-  agent loop) is a cross-lane extension-TS + shared-contract + CLI-Rust change =
-  deferred. Default (25) unchanged, so config parity stays green.
-  After the HIGH fix, VSCode has NO unresolved critical/high → meets the proceed-gate;
-  the 3 remaining are MED/LOW dead advanced-settings (complete-or-remove, tracked).
+  • [MED] RESOLVED-BY-REMOVAL VSCODE-VSCODE-LM-FALLBACK-MISSING (2026-07-21, 9041e65e4):
+  agiWorkforce.fallbackToVscodeLm was an unread no-op (no vscode.lm path exists) — REMOVED
+  from package.json contributes + config defaults/getter + parity key-map. A mature product
+  shouldn't ship a dead toggle. The vscode.lm fallback is a real unbuilt feature (founder
+  decision); the setting returns WITH its implementation. Suite 563 green.
+  • [LOW] RESOLVED-BY-REMOVAL VSCODE-AGENT-MAXITERATIONS-UNAPPLIED (2026-07-21, 9041e65e4):
+  agiWorkforce.agent.maxIterations was never threaded to the CLI agent loop (unread) —
+  REMOVED. Completing it is real cross-lane work (extension-TS + shared startTurn contract
+  - CLI-Rust agent-loop cap); tracked here, re-added with the wiring. Suite 563 green.
+    • [MED] OPEN VSCODE-PROVIDER-STREAM-UNWIRED: KEPT (not removed) — unlike the two above,
+    useProviderStream/providerStreamProvider/gatewayUrl back a real trust-sensitive impl
+    (streamChatCompletionViaProvider has callers); default-off + the description already
+    discloses "not wired… yet". Complete (wire the gateway auth path) vs remove (delete the
+    impl too) is a genuine founder security call — left as-is.
+    VSCode has NO unresolved critical/high → meets the proceed-gate; 2 of the 3 dead
+    advanced-settings are now REMOVED, the 3rd (provider-stream) is a founder decision.
 - RESOLVED EXT-SIDEPANEL-NO-RENDER-TESTS (2026-07-21, 763b2dd1e + 1c80ad676): DONE.
   Extracted the side-panel DOM helpers (el/formatTime → features/side-panel/dom.ts) and
   the whole message/tool-call/agent-activity render cluster (buildBubble, buildToolCallEl,
