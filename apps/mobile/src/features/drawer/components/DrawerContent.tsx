@@ -458,13 +458,14 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           <Text style={{ color: colors.textPrimary, fontSize: 18, fontWeight: '700', flex: 1 }}>
             AGI
           </Text>
+          {/* New-chat sits in the header beside the profile symbol (its original,
+              thumb-and-eye-level home) — not dropped to a bottom pill. */}
+          <HeaderIconButton label="New chat" icon={SquarePen} onPress={handleNewChat} />
           <HeaderIconButton
             label="Open profile"
             icon={UserCircle}
             onPress={() => navigate('/(app)/profile')}
           />
-          {/* New-chat lives in the bottom floating compose pill (ChatGPT parity) —
-              a single compose affordance, not a duplicate header icon. */}
         </View>
 
         <SearchBox
@@ -624,31 +625,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
       </View>
-
-      {/* Floating compose pill (ChatGPT-mobile parity): a thumb-reachable New-chat
-          affordance at the bottom of the drawer, above the footer nav. */}
-      <Pressable
-        onPress={handleNewChat}
-        accessibilityRole="button"
-        accessibilityLabel="New chat"
-        style={({ pressed }) => ({
-          position: 'absolute',
-          right: 18,
-          bottom: 78,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: pressed ? colors.border : colors.surfaceHover,
-        })}
-      >
-        <SquarePen size={16} color={colors.textPrimary} />
-        <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>Chat</Text>
-      </Pressable>
 
       {/* SILENT-SWITCH-FIX: consent modal for Local→Cloud mode switch from AGI Agent button */}
       <ModeSwitchModal
