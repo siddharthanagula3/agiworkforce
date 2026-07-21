@@ -191,6 +191,37 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   any suite whose module graph loads a SecureStore-backed store fails to run
   (src/lib/time.test.ts fails on this independently of any change). Fix = add an
   expo-secure-store mock to jest.setup.js (systemic, re-run all 200 suites to verify).
+- CLI (app #4) audit 2026-07-21 — 16 findings (7H/4M/5L). Most TUI keybindings,
+  REPL shortcuts, and the model/theme/effort/agent pickers are correctly WIRED; the
+  findings cluster on ONE root cause + a set of parity commands that don't act.
+  • [HIGH] OPEN CLI-TUI-OVERLAY-SUBMIT-DROP (root cause of 6 HIGHs): tui_app.rs:483
+  collapses `ViewAction::Submit(payload)` into the `Close` arm, so EVERY generic
+  `active_overlay` discards its save/decision payload. Affected overlays (all say
+  "Enter save"/"y approve" but persist nothing): /statusline (StatusLineSetupView),
+  /skills-toggle (SkillsToggleView), /memories (MemoriesSettingsView), /title
+  (TerminalTitleSetupView), /diff-review (DiffReviewView — real `git diff HEAD`
+  gathered but approvals dropped, no apply/stage), and /permissions (worse — the
+  TUI opens a FAKE hardcoded "Approve action?" prompt, not the real rules editor).
+  FIX = split the Submit arm to route each overlay to a real sink. NON-TRIVIAL: the
+  persistence sinks for skills-enablement / memory-settings / terminal-title /
+  statusline-config and the diff-apply/stage path DO NOT EXIST yet and must be
+  built; /permissions should instead call the EXISTING repl::registry::
+  handle_permissions (repl/registry.rs:228) the REPL uses. A dedicated CLI Rust
+  session — too much to do well at depth. (advisor-confirmed the 483 drop.)
+  • [HIGH] /background /bg fabricated "Current task moved to background context" (a
+  LIE — no backgrounding exists) → FIXED 2026-07-21: both surfaces (tui_app.rs:2948,
+  claude_parity.rs:123) now say honestly it isn't available yet + point to /tasks.
+  • [MED] OPEN, parity commands that overstate their verb (no infra): /focus (prints
+  "controlled via --no-status-bar at startup" — no runtime toggle), /color
+  (claude_parity.rs:187 "coming through shared settings" placeholder), /heapdump
+  ("not enabled in this build"), /voice in TUI (tui_app.rs:2743 lists in palette but
+  says run the REPL — voice::run_voice_mode exists, the sync TUI handler can't drive
+  the async loop). FIX = implement or make the "Toggle"/verb honest / hide in TUI.
+  • [LOW] OPEN: /stickers + /thinkback-play (honest "not installed" no-ops), /effort
+  in REPL (claude_parity.rs:788 acknowledges but never applies; TUI /effort DOES
+  apply), /vim (startup env only, no live toggle), /replay ships a "coming in v0.2"
+  string (tui_app.rs:2409; the `agi session` shell path works). Mostly honest-ish
+  unavailable-feature messages — lower priority than the overlay cluster.
 - NOTE DESKTOP-DOM-E2E-MODE-DEPENDENCY (2026-07-21, harness — NOT a product bug):
   the desktop Playwright DOM e2e (`test:e2e:dom`, specs in apps/desktop/e2e) has
   NO webServer config — you must start vite yourself on :5175, and the suites
