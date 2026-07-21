@@ -261,15 +261,28 @@ statement outside a module` and `initialize()` (which registers
     code; options shortcut row mislabels \_execute_action; + LOWs (disclosure banner
     wiped by response render, LinkedIn nth-of-type selector wrong, agi_recorded_actions
     write no reader, dead fillFields/collectResolvable\* exports).
-    AUDIT COVERAGE CAVEAT: audit-content hit its model usage limit mid-run and
-    audit-egress never delivered — the computer-use/native/cloud-bridge EGRESS
-    surface remains SELF-audited only. Genuinely-verified-correct (agents did not
-    contradict): manifest command/menu/alarm listeners all live; autofill filler.ts
-    production-grade (setNativeValue + full event sequence); egress redaction at the
-    SOURCE (cdpDriver.getPageContent/getFieldValue → sanitizePageText; password/hidden
-    inputs → placeholder), cloudAgentClient.callCloud forwards already-redacted text
-    to an allowlist-validated gateway with Bearer+CSRF+Idempotency; screenshots the
-    documented allowlist+ask-gated residual.
+    EGRESS FULL-READ (2026-07-21, closes the caveat — audit-egress never delivered
+    so I did the full read myself): the computer-use/native/cloud-bridge egress
+    surface is TRUST-SOUND, no critical/high. Every LIVE content-egress path
+    redacts: (1) computer-use — the cloud agent's read_dom/find tools and initial
+    context all route through cdp.getPageContent (sanitizePageText + redactSecrets)
+    and getFieldValue (password/hidden → placeholder), with a prompt-injection scan
+    on read_dom and an UNTRUSTED-content system instruction; agentLoop.ts's own
+    header documents that text is redacted upstream and screenshots are NOT (honest,
+    not a false claim). (2) in-page panel chat — panel.ts:275 captures
+    document.body.innerText through redactSensitiveText(=redactSecrets) + truncate
+    before the IN_PAGE_PROMPT, with a visible "sensitive fields redacted" disclosure;
+    handleInPagePrompt sends only that prompt + a URL-derived platform systemPrompt,
+    no extra raw content. (3) context-handoff — sanitizePageText + an explicit "Send
+    redacted context" consent gate + redactionsApplied flag. (4) pairing — localhost
+    ALLOWED_BRIDGE_HOSTS only, minimal {extensionId} payload, validated response
+    token. (5) managed cloud — cloudAgentClient.callCloud validateGatewayUrl +
+    Bearer+CSRF+Idempotency, forwards already-redacted text; screenshots the
+    documented allowlist+ask-gated image residual. FINDING (MED/LOW, not egress
+    risk): native-bridge providerStreamClient.streamFromProvider has ZERO callers —
+    an unwired dead export (re-exported via the barrel but never invoked), so it is
+    NOT a live egress path; delete-or-wire. Other verified-correct: manifest
+    command/menu/alarm listeners all live; autofill filler.ts production-grade.
 - MOBILE-IOS-BUILD-BLOCKED (2026-07-21): attempted the mobile real-UI path (Maestro
   flow scripts/qa/maestro-dev-smoke.yaml needs the app on an iOS sim). `expo
 run:ios` on the iPhone 17 Pro sim FAILED on a React Native codegen/build-order
