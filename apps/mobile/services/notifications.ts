@@ -6,6 +6,7 @@ import type { MobileAuthSession } from './authSession';
 import { api } from './api';
 import { getDeviceId } from '@/lib/deviceId';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
+import { notificationAllowed } from './notificationGate';
 
 // LOW-MOB-3 fix (red-team 2026-05): the notification handler used to
 // `safeNavigate` to `/(app)/*` regardless of auth state — a notification
@@ -123,6 +124,21 @@ const ANDROID_CHANNELS: Record<
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
+
+    // Honor the user's Notification Preferences (category toggles + quiet hours)
+    // for foreground presentation too — these settings were previously inert
+    // because no live notification path consulted them. Lazy require (not a top
+    // import) keeps this early, widely-imported module from pulling the store's
+    // secure-storage chain into every consumer's module graph; fail OPEN so a
+    // store load error never silently drops a notification.
+    if (data?.type && !notificationAllowed(data.type)) {
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      } as Notifications.NotificationBehavior;
+    }
+
     const priority = data?.priority ?? inferPriority(data?.type);
 
     switch (priority) {
