@@ -194,7 +194,7 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
 - CLI (app #4) audit 2026-07-21 — 16 findings (7H/4M/5L). Most TUI keybindings,
   REPL shortcuts, and the model/theme/effort/agent pickers are correctly WIRED; the
   findings cluster on ONE root cause + a set of parity commands that don't act.
-  • [HIGH] OPEN CLI-TUI-OVERLAY-SUBMIT-DROP (root cause of 6 HIGHs): tui_app.rs:483
+  • [HIGH] OPEN CLI-TUI-OVERLAY-SUBMIT-DROP (root cause of 6 HIGHs): tui*app.rs:483
   collapses `ViewAction::Submit(payload)` into the `Close` arm, so EVERY generic
   `active_overlay` discards its save/decision payload. Affected overlays (all say
   "Enter save"/"y approve" but persist nothing): /statusline (StatusLineSetupView),
@@ -206,30 +206,42 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   /permissions allow|deny|session|remove|reset commands (mirrors /voice's redirect).
   The real AGENT-driven approval overlay (tui_app.rs:555) is untouched. Inline TUI
   rule editing remains a nice-to-have, not a fake interface.]
-  REMAINING FIX (5 overlays) = split the Submit arm to route each to a real sink.
-  NON-TRIVIAL: the persistence sinks for skills-enablement / memory-settings /
-  terminal-title / statusline-config and the diff-apply/stage path DO NOT EXIST yet
-  and must be built. A dedicated CLI Rust session — too much to do well at depth.
-  (advisor-confirmed the 483 drop.)
-  • NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
-  tests::validate_workspace_path_allows_registered_additional_root passes in
-  isolation + within its module but intermittently FAILS under full-suite parallel
-  execution (shared process-global registered-roots state mutated by a sibling
-  test). Not a product bug, not caused by any 2026-07-21 change. Fix = serialize
-  the test (e.g. a shared mutex / serial_test) or isolate the global roots state.
-  • [HIGH] /background /bg fabricated "Current task moved to background context" (a
-  LIE — no backgrounding exists) → FIXED 2026-07-21: both surfaces (tui_app.rs:2948,
-  claude_parity.rs:123) now say honestly it isn't available yet + point to /tasks.
-  • [MED] OPEN, parity commands that overstate their verb (no infra): /focus (prints
-  "controlled via --no-status-bar at startup" — no runtime toggle), /color
-  (claude_parity.rs:187 "coming through shared settings" placeholder), /heapdump
-  ("not enabled in this build"), /voice in TUI (tui_app.rs:2743 lists in palette but
-  says run the REPL — voice::run_voice_mode exists, the sync TUI handler can't drive
-  the async loop). FIX = implement or make the "Toggle"/verb honest / hide in TUI.
-  • [LOW] OPEN: /stickers + /thinkback-play (honest "not installed" no-ops), /effort
-  in REPL (claude_parity.rs:788 acknowledges but never applies; TUI /effort DOES
-  apply), /vim (startup env only, no live toggle), /replay ships a "coming in v0.2"
-  string (tui_app.rs:2409; the `agi session` shell path works). Mostly honest-ish
+  REMAINING FIX (5 overlays) — ARCHITECTURE (traced 2026-07-21): ViewAction::Submit
+  carries only a `usize` cursor (interactive.rs:49), so each overlay's real state
+  lives in its concrete struct behind `active_overlay: Box<dyn InteractiveView>`.
+  Clean approach: add `fn commit(&mut self) {}` (default no-op) to the InteractiveView
+  trait (interactive.rs:57), override it per overlay to persist that overlay's state,
+  and change tui_app.rs:483 to `ViewAction::Submit(*) => { ov.commit(); self.
+  active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
+terminal-title save/load (small serde config home; read side = render_statusline
+claude_parity.rs:798 + an OSC-title emit) — cosmetic, lowest risk, do FIRST as the
+template; (b) memory-settings persistence (memory.rs home); (c) skills-enablement
+persistence + have skills::discover_skills honor it; (d) diff-review = git apply/
+stage the approved hunks (highest risk — real git mutation, gate carefully). Each
+is a mini-feature with its own test. Do NOT add the no-op trait method without at
+least one real override (ponytail: no scaffolding-for-later). A dedicated CLI Rust
+session; not rushed at extreme context. (advisor-confirmed the 483 drop.)
+STATUS: 2 of 7 CLI HIGH resolved (/background lie, /permissions fake overlay); 5
+overlay-persistence HIGH remain — CLI is NOT at the proceed-gate.
+• NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
+tests::validate_workspace_path_allows_registered_additional_root passes in
+isolation + within its module but intermittently FAILS under full-suite parallel
+execution (shared process-global registered-roots state mutated by a sibling
+test). Not a product bug, not caused by any 2026-07-21 change. Fix = serialize
+the test (e.g. a shared mutex / serial_test) or isolate the global roots state.
+• [HIGH] /background /bg fabricated "Current task moved to background context" (a
+LIE — no backgrounding exists) → FIXED 2026-07-21: both surfaces (tui_app.rs:2948,
+claude_parity.rs:123) now say honestly it isn't available yet + point to /tasks.
+• [MED] OPEN, parity commands that overstate their verb (no infra): /focus (prints
+"controlled via --no-status-bar at startup" — no runtime toggle), /color
+(claude_parity.rs:187 "coming through shared settings" placeholder), /heapdump
+("not enabled in this build"), /voice in TUI (tui_app.rs:2743 lists in palette but
+says run the REPL — voice::run_voice_mode exists, the sync TUI handler can't drive
+the async loop). FIX = implement or make the "Toggle"/verb honest / hide in TUI.
+• [LOW] OPEN: /stickers + /thinkback-play (honest "not installed" no-ops), /effort
+in REPL (claude_parity.rs:788 acknowledges but never applies; TUI /effort DOES
+apply), /vim (startup env only, no live toggle), /replay ships a "coming in v0.2"
+string (tui_app.rs:2409; the `agi session` shell path works). Mostly honest-ish
   unavailable-feature messages — lower priority than the overlay cluster.
 - NOTE DESKTOP-DOM-E2E-MODE-DEPENDENCY (2026-07-21, harness — NOT a product bug):
   the desktop Playwright DOM e2e (`test:e2e:dom`, specs in apps/desktop/e2e) has
