@@ -596,6 +596,23 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   deferred. Default (25) unchanged, so config parity stays green.
   After the HIGH fix, VSCode has NO unresolved critical/high → meets the proceed-gate;
   the 3 remaining are MED/LOW dead advanced-settings (complete-or-remove, tracked).
+- OPEN EXT-SIDEPANEL-NO-RENDER-TESTS (2026-07-21, real-UI coverage gap): the Chrome
+  extension's main UI, `apps/extension/src/side_panel.ts` (~8116 lines, imperative
+  DOM), has ZERO render/interaction tests — the 1130 vitest tests are all logic
+  (none touch the DOM). The module can't be imported in a test because it runs
+  `chrome.runtime.onMessage`/init at module scope (side_panel.ts:137 comment confirms
+  "runs at module scope"). The clean component builders `buildBubble`/`buildToolCallEl`/
+  `buildAgentActivityStep`/`buildAgentActivityEl`/`buildBubbleWithTools` (3002-3306) are
+  module-private + pure (msg→HTMLElement, no module state). PLAN: extract them into
+  `src/features/side-panel/bubbles.ts` (existing pattern — `./features/side-panel/markdown`
+  already holds sanitizeHtml/renderMarkdown, importable); the cascade also pulls the local
+  `el` (2973) + `formatTime` (2998) helpers + renderIcon/icons — move those to a
+  `features/side-panel/dom.ts`. Then add jsdom render tests (assert buildBubble renders
+  role/text/copy-button for a ChatMessage). Guard: typecheck + all 1130 tests green catch
+  mis-wiring, but VERIFY by loading the built extension (chat messages must still render)
+  before shipping — that manual step is why this is a dedicated slice, not a safe unattended
+  drive-by on a shipping surface. Mobile has the sibling device-gated real-UI gap
+  (Maestro/iOS build-blocked). See [[project-6app-sweep-status-2026-07-21]].
 - NOTE CLI-APPSERVER-INITIALIZE-PROTOCOLVERSION — RESOLVED 2026-07-21 (`87445c264`):
   app_server_stdio.rs:56 asserted the OLD protocol 3; the developer-session initialize
   correctly returns DEVELOPER_SESSION_PROTOCOL_VERSION=5 (numeric) and the extension
