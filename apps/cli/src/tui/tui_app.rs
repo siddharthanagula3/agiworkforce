@@ -227,6 +227,11 @@ struct TuiApp {
     model_picker: super::widgets::model_picker::ModelPickerState,
     // Effort picker popup
     effort_picker: super::widgets::effort_picker::EffortPickerState,
+    // Statusline field-visibility config, applied by render_status_bar. Seeded
+    // current-preserving (mode + cost shown, model/tokens/branch off) so wiring
+    // /statusline changes nothing until the user opts in; the /statusline overlay
+    // edits a copy and commits it here on save (the generic overlay path dropped it).
+    statusline_config: super::widgets::statusline_setup::StatusLineConfig,
     // Currently active effort level (persisted across model switches)
     effort: crate::design_system::Effort,
     // Theme picker popup
@@ -373,6 +378,13 @@ impl TuiApp {
             agent_picker: super::widgets::agent_picker::AgentPickerState::default(),
             model_picker: super::widgets::model_picker::ModelPickerState::default(),
             effort_picker: super::widgets::effort_picker::EffortPickerState::default(),
+            statusline_config: super::widgets::statusline_setup::StatusLineConfig {
+                show_model: false,
+                show_tokens: false,
+                show_cost: true,
+                show_branch: false,
+                show_mode: true,
+            },
             effort: crate::design_system::Effort::Medium,
             theme_picker: super::widgets::theme_picker::ThemePickerState::default(),
             theme_choice: super::widgets::theme_picker::ThemeChoice::Dark,
@@ -480,12 +492,33 @@ impl TuiApp {
                 self.overlay_scroll = 0;
                 self.active_overlay = None;
             }
-            ViewAction::Close | ViewAction::Submit(_) | ViewAction::SideAction(_) => {
+            ViewAction::Submit(_) => {
+                // Apply the overlay's committed result (was previously dropped —
+                // the root cause of every generic overlay "saving" nothing).
+                let result = ov.take_result();
+                self.overlay_scroll = 0;
+                self.active_overlay = None;
+                if let Some(r) = result {
+                    self.apply_overlay_result(r);
+                }
+            }
+            ViewAction::Close | ViewAction::SideAction(_) => {
                 self.overlay_scroll = 0;
                 self.active_overlay = None;
             }
         }
         true
+    }
+
+    /// Apply a committed overlay result to live app state. Central place so new
+    /// overlays wire their save here instead of dropping it at the Submit arm.
+    fn apply_overlay_result(&mut self, result: crate::tui::widgets::interactive::OverlayResult) {
+        use crate::tui::widgets::interactive::OverlayResult;
+        match result {
+            OverlayResult::StatusLine(config) => {
+                self.statusline_config = config;
+            }
+        }
     }
 }
 
@@ -890,12 +923,15 @@ struct FrameCtx<'a> {
     effort_label: &'a str,
     sandbox_type: Option<crate::sandbox::SandboxType>,
     cost_str: String,
+    /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
+    statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
 }
 
 impl<'a> FrameCtx<'a> {
     fn from_app(app: &'a TuiApp) -> Self {
         FrameCtx {
             model_name: &app.model_name,
+            statusline: &app.statusline_config,
             provider_name: &app.provider_name,
             git_branch: app.git_branch.as_deref(),
             total_input_tokens: app.total_input_tokens,
@@ -1493,33 +1529,59 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         "░".repeat(bar_w - filled),
     );
 
-    // Essential items, highest priority first — always shown.
-    let mut spans: Vec<Span> = vec![
-        mode_span,
-        Span::raw(" "),
-        access_span,
-        Span::raw("  "),
-        Span::styled(ctx_str, Style::default().fg(ctx_color)),
-        Span::raw("  "),
-    ];
+    // Essential items, highest priority first. The `mode` badge is toggled by the
+    // /statusline "mode" field (default on); access-tier and the context bar are
+    // always shown (not user-configurable).
+    let sl = ctx.statusline;
+    let mut spans: Vec<Span> = Vec::new();
+    if sl.show_mode {
+        spans.push(mode_span);
+        spans.push(Span::raw(" "));
+    }
+    spans.push(access_span);
+    spans.push(Span::raw("  "));
+    spans.push(Span::styled(ctx_str, Style::default().fg(ctx_color)));
+    spans.push(Span::raw("  "));
 
     // Optional items in descending priority — added only while they fit, so a
     // narrow terminal drops the low-priority hints instead of hard-clipping the
-    // important indicators on the right.
-    let optional: Vec<Span> = vec![
-        Span::styled(cost_str, Style::default().fg(ui_muted())),
-        Span::styled(
-            sandbox_label.to_string(),
-            Style::default().fg(sandbox_color),
-        ),
-        Span::styled(effort_str, Style::default().fg(ui_muted())),
-        Span::styled(
-            "Shift+Tab: mode".to_string(),
+    // important indicators on the right. The model/tokens/cost/branch fields are
+    // gated by /statusline (model/tokens/branch default off, cost default on).
+    let mut optional: Vec<Span> = Vec::new();
+    if sl.show_model {
+        optional.push(Span::styled(
+            format!("model:{}", ctx.model_name),
             Style::default().fg(ui_muted()),
-        ),
-        Span::styled("/: commands".to_string(), Style::default().fg(ui_muted())),
-        Span::styled("Esc: quit".to_string(), Style::default().fg(ui_muted())),
-    ];
+        ));
+    }
+    if sl.show_tokens {
+        optional.push(Span::styled(
+            format!("↑{} ↓{}", ctx.total_input_tokens, ctx.total_output_tokens),
+            Style::default().fg(ui_muted()),
+        ));
+    }
+    if sl.show_branch {
+        if let Some(branch) = ctx.git_branch {
+            optional.push(Span::styled(
+                format!("⎇ {branch}"),
+                Style::default().fg(ui_muted()),
+            ));
+        }
+    }
+    if sl.show_cost {
+        optional.push(Span::styled(cost_str, Style::default().fg(ui_muted())));
+    }
+    optional.push(Span::styled(
+        sandbox_label.to_string(),
+        Style::default().fg(sandbox_color),
+    ));
+    optional.push(Span::styled(effort_str, Style::default().fg(ui_muted())));
+    optional.push(Span::styled(
+        "Shift+Tab: mode".to_string(),
+        Style::default().fg(ui_muted()),
+    ));
+    optional.push(Span::styled("/: commands".to_string(), Style::default().fg(ui_muted())));
+    optional.push(Span::styled("Esc: quit".to_string(), Style::default().fg(ui_muted())));
     let avail = area.width as usize;
     let mut used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
     for opt in optional {
@@ -2877,8 +2939,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/statusline" => {
-            use crate::tui::widgets::statusline_setup::{StatusLineConfig, StatusLineSetupView};
-            let view = StatusLineSetupView::new(StatusLineConfig::default());
+            use crate::tui::widgets::statusline_setup::StatusLineSetupView;
+            // Seed from the LIVE config so the overlay reflects the current state,
+            // and its save commits back via take_result → apply_overlay_result.
+            let view = StatusLineSetupView::new(app.statusline_config.clone());
             app.open_overlay(Box::new(view));
             SlashResult::SystemMessage(
                 "Statusline setup (\u{2191}\u{2193} navigate \u{00b7} Space toggle \u{00b7} Enter save \u{00b7} Esc cancel)".into(),
@@ -3830,6 +3894,7 @@ async fn send_message(
                         // field-by-field rather than `FrameCtx::from_app(app)`.
                         let approval_ctx = FrameCtx {
                             model_name: &app.model_name,
+                            statusline: &app.statusline_config,
                             provider_name: &app.provider_name,
                             git_branch: app.git_branch.as_deref(),
                             total_input_tokens: app.total_input_tokens,
@@ -3900,6 +3965,7 @@ async fn send_message(
                     app.spinner_tick = app.spinner_tick.wrapping_add(1);
                     let ctx = FrameCtx {
                         model_name: &app.model_name,
+                        statusline: &app.statusline_config,
                         provider_name: &app.provider_name,
                         git_branch: app.git_branch.as_deref(),
                         total_input_tokens: app.total_input_tokens,
@@ -4664,6 +4730,40 @@ mod tests {
     }
 
     #[test]
+    fn statusline_overlay_save_applies_config_to_app() {
+        // Regression: the generic overlay Submit was DROPPED at dispatch, so
+        // /statusline's "Enter save" persisted nothing. It now applies via
+        // take_result → apply_overlay_result.
+        use crate::tui::widgets::statusline_setup::StatusLineSetupView;
+        let mut app = minimal_app();
+        assert!(!app.statusline_config.show_model, "model off by default");
+        app.open_overlay(Box::new(StatusLineSetupView::new(app.statusline_config.clone())));
+
+        // Space toggles the field under the cursor (index 0 = "model").
+        app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Char(' ')));
+        // Enter saves.
+        let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
+        assert!(consumed);
+        assert!(app.active_overlay.is_none(), "overlay cleared after save");
+        assert!(
+            app.statusline_config.show_model,
+            "toggled 'model' field persisted to the app on save"
+        );
+    }
+
+    #[test]
+    fn statusline_overlay_esc_discards_changes() {
+        use crate::tui::widgets::statusline_setup::StatusLineSetupView;
+        let mut app = minimal_app();
+        let before = app.statusline_config.clone();
+        app.open_overlay(Box::new(StatusLineSetupView::new(app.statusline_config.clone())));
+        app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Char(' ')));
+        app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Esc));
+        assert!(app.active_overlay.is_none());
+        assert_eq!(app.statusline_config, before, "Esc discards the toggle");
+    }
+
+    #[test]
     fn no_overlay_means_keys_fall_through() {
         let mut app = minimal_app();
         assert!(app.active_overlay.is_none());
@@ -4881,8 +4981,10 @@ mod tests {
             text: "UNIQUE_TRANSCRIPT_MARKER_314159".to_string(),
         }];
         let tool_cells: Vec<ToolCell> = Vec::new();
+        let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
             model_name: "gemma4:e4b",
+            statusline: &statusline_cfg,
             provider_name: "ollama",
             git_branch: None,
             total_input_tokens: 10,
