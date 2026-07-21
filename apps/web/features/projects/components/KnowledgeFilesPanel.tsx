@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { FilePreviewModal } from './FilePreviewModal';
 import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 interface Props {
   projectId: string;
@@ -52,6 +55,23 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       cancelled = true;
     };
   }, [projectId]);
+
+  async function handleDelete(file: ProjectKnowledgeFile) {
+    const previous = files;
+    // Optimistic removal; roll back if the server rejects.
+    setFiles((current) => current.filter((f) => f.id !== file.id));
+    try {
+      const csrfToken = await getCsrfToken();
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
+        { method: 'DELETE', headers: { 'x-csrf-token': csrfToken }, credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+    } catch {
+      setFiles(previous);
+      toast.error(`Couldn't remove ${file.fileName}. Try again.`);
+    }
+  }
 
   async function handleUpload(file: File) {
     setUploadState({ status: 'uploading', fileName: file.name, progress: 0 });
@@ -310,6 +330,28 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               <span style={{ fontSize: 11, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                 {(file.byteCount / 1024).toFixed(1)} KB
               </span>
+              <button
+                type="button"
+                data-testid="knowledge-files-delete"
+                aria-label={`Remove ${file.fileName}`}
+                title="Remove file"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleDelete(file);
+                }}
+                style={{
+                  flexShrink: 0,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--agi-ink-2)',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <Trash2 size={14} aria-hidden />
+              </button>
             </li>
           ))}
         </ul>
