@@ -251,11 +251,16 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   /permissions) only converts fake toggles into "not available" messages the goal also
   dislikes → the real resolution is to BUILD each feature. Dedicated CLI session,
   per-overlay feature + test.
-  STATUS: 3 of 7 CLI HIGH resolved (/background lie, /permissions fake overlay,
-  /statusline fully wired + root-cause Submit-drop fixed with reusable architecture);
-  4 overlay HIGH remain (/title, /skills-toggle, /memories, /diff-review — each a
-  bounded per-feature build on the now-proven take_result pattern) — CLI NOT yet at
-  the proceed-gate.
+  STATUS: 4 of 7 CLI HIGH resolved (/background lie, /permissions fake overlay,
+  /statusline fully wired + root-cause fixed `9ab279e7f`, /title window-title emit
+  `e6be74c91`); 3 overlay HIGH remain — CLI NOT yet at the proceed-gate. Remaining
+  each need a subsystem CONSUMER built (deeper than statusline's render-gate or
+  title's emit): /skills-toggle = a persistent enabled/disabled set that skills
+  discovery honors; /memories = the memory pipeline honoring MemorySettings
+  {auto_memory, max_facts} (no consumer today; memory_pipeline.rs); /diff-review =
+  git apply/stage the approved hunks (HIGHEST risk, do last). All on the proven
+  take_result pattern (add variant + override + apply arm) — the wiring is done,
+  each just needs its subsystem consumer.
   • NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
   tests::validate_workspace_path_allows_registered_additional_root passes in
   isolation + within its module but intermittently FAILS under full-suite parallel
