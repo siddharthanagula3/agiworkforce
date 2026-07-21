@@ -251,16 +251,21 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   /permissions) only converts fake toggles into "not available" messages the goal also
   dislikes → the real resolution is to BUILD each feature. Dedicated CLI session,
   per-overlay feature + test.
-  STATUS: 4 of 7 CLI HIGH resolved (/background lie, /permissions fake overlay,
-  /statusline fully wired + root-cause fixed `9ab279e7f`, /title window-title emit
-  `e6be74c91`); 3 overlay HIGH remain — CLI NOT yet at the proceed-gate. Remaining
-  each need a subsystem CONSUMER built (deeper than statusline's render-gate or
-  title's emit): /skills-toggle = a persistent enabled/disabled set that skills
-  discovery honors; /memories = the memory pipeline honoring MemorySettings
-  {auto_memory, max_facts} (no consumer today; memory_pipeline.rs); /diff-review =
-  git apply/stage the approved hunks (HIGHEST risk, do last). All on the proven
-  take_result pattern (add variant + override + apply arm) — the wiring is done,
-  each just needs its subsystem consumer.
+  STATUS: 5 of 7 CLI HIGH resolved (/background, /permissions, /statusline +
+  root-cause `9ab279e7f`, /title `e6be74c91`, /skills-toggle `e68822b1a`); 2 overlay
+  HIGH remain — CLI NOT yet at the proceed-gate. Both remaining are the HARDEST:
+  • /memories — MemorySettings {auto_memory, decay_threshold_days, max_facts} sprawl
+  across 3 subsystem points, memory-behavior-sensitive: auto_memory gates
+  finalize_memory's extract_session_summary (agent/mod.rs:972-988, has CliConfig);
+  decay_threshold_days maps to SUMMARY_MAX_AGE_SECS in prune_old_summaries
+  (memory_pipeline.rs:348/371); max_facts is a FACTS-storage cap whose application
+  point is NOT obvious (not in prune_old_summaries, which is summary-age only) —
+  find it before wiring or max_facts becomes a partial dead toggle. Persist like
+  skills (a JSON file) since these run without app state. Pattern proven; the work
+  is the 3-point wiring + finding max_facts.
+  • /diff-review — apply/stage the approved hunks via `git apply`/`git add`; HIGHEST
+  risk (real repo mutation). Do LAST, gate carefully, test against a temp git repo.
+  Both on the proven take_result pattern (add variant + override + apply arm).
   • NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
   tests::validate_workspace_path_allows_registered_additional_root passes in
   isolation + within its module but intermittently FAILS under full-suite parallel
