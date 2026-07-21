@@ -133,6 +133,15 @@ impl InteractiveView for MemoriesSettingsView {
         }
     }
 
+    fn take_result(&mut self) -> Option<super::interactive::OverlayResult> {
+        // Only when saved (Enter); Esc cancels and applies nothing.
+        if self.saved {
+            Some(super::interactive::OverlayResult::Memory(self.settings.clone()))
+        } else {
+            None
+        }
+    }
+
     fn is_done(&self) -> bool {
         self.done
     }
