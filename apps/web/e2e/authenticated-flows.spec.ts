@@ -113,6 +113,27 @@ test.describe('authenticated primary workflows', () => {
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
 
+    // 3b) AGI Work task history (new /tasks surface): the run-list consumer
+    //     renders for a real user (heading + Active/All filter, not a gate or an
+    //     app error boundary) and degrades gracefully. The underlying /runs API
+    //     depends on migrations 0061-0066 (cloud_agent_runs) being applied to the
+    //     target DB; when they are not, the page shows an honest error state —
+    //     which must never be an app error boundary. (See known-flaws
+    //     WEB-CLOUD-AGENT-RUNS-MIGRATION-UNAPPLIED-01.)
+    await page.goto('/tasks');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Active' })).toBeVisible();
+    await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
+
+    // 3c) Global search federates projects (env-independent: web_conversations
+    //     and user_projects both exist): the /api/search response carries the
+    //     projects array the search dialog now renders.
+    const searchRes = await page.request.get('/api/search?q=test&limit=5');
+    expect(searchRes.status()).toBe(200);
+    const searchBody = (await searchRes.json()) as { projects: unknown[] };
+    expect(Array.isArray(searchBody.projects)).toBe(true);
+
     // 4) Cross-device cloud sync (WEB-CHAT-SYNC-500 regression): the pull endpoint
     //    must return 200 for a user WITH data. node-postgres returns timestamptz as
     //    Date, which the wire schema (z.string()) rejected on any non-empty page —
