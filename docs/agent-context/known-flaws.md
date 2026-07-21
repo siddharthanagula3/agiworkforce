@@ -474,16 +474,17 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   read it. Both firing paths (backgroundFetch agent-approval push +
   notifications.ts foreground handler) now consult a shared notificationAllowed()
   gate (services/notificationGate.ts, lazy-require + fail-open). Regression test.
-  • [LOW] OPEN MOBILE-VOICE-CLOUD-TTS-DISABLED: voice/index.tsx:258 Cloud TTS
-  provider is hardcoded `disabled` + handleProviderSelect('cloud') early-returns,
-  while labeled "Requires AGI Cloud access" — misleading (cloud users still can't
-  pick it). Cloud TTS is not built on mobile (backendExists: NO). Fix = relabel to
-  an honest "not available yet" or remove the option (small).
-  • [LOW] OPEN MOBILE-MODELS-FAVORITES-INERT: app/(app)/models.tsx:183/207 Favorites
-  & Recent rows are plain non-interactive Views (no onPress) that read as tappable.
-  Fix = make them select the model via useModelStore, but selection is lock/tier-
-  gated (ModelPickerSheet enforces availability:'locked' + cloudUnlocked), so a
-  correct wire must route through the same gating — a small model-picker change.
+  • [LOW] FIXED MOBILE-VOICE-CLOUD-TTS-DISABLED (2026-07-21, ba53cefbe): the Cloud
+  TTS provider option (settings/voice/index.tsx) stays correctly `disabled` (not
+  built on mobile) but its copy was relabeled from the misleading "Requires AGI
+  Cloud access." to the honest "Cloud voice isn't available on mobile yet."
+  Regression test in voice-settings.test.tsx asserts the honest copy.
+  • [LOW] FIXED MOBILE-MODELS-FAVORITES-INERT (2026-07-21, 90592c388): the Favorites
+  & Recent rows in app/(app)/models.tsx were plain non-interactive Views that read
+  as tappable. Now each row is a Pressable that opens the model picker (same as the
+  Active Model row + Browse-all button), so selection routes through the picker's
+  existing lock/tier gating rather than a duplicated ungated path. Regression test
+  in models-page.test.tsx asserts the rows render as buttons.
   • [LOW] OPEN MOBILE-CONNECTORS-501: cloud-connectors/index.tsx:684 — ~19/21
   catalog providers' "Connect" shows an honest "coming soon" alert (server POST
   /api/connectors returns 501; only GitHub + custom-MCP work). Backend-truthful,
