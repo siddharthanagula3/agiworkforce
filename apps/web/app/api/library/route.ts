@@ -114,6 +114,10 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(parsed.error.issues[0]?.message ?? 'Invalid query parameters');
   }
   const { kind, surface, origin, q, limit, offset } = parsed.data;
+  // Recently-deleted bin: list soft-deleted assets (30-day window) instead of
+  // live ones. Read directly off the query string to avoid changing the shared
+  // LibraryListQuerySchema contract.
+  const deleted = sp.get('deleted') === 'true';
 
   // limit+1 probe: fetch one extra row to learn whether another page exists
   // without a COUNT(*) (matches /api/chat/conversations).
@@ -122,6 +126,7 @@ async function handleListLibrary(request: NextRequest): Promise<NextResponse> {
     surface,
     origin,
     search: q,
+    deleted,
     limit: limit + 1,
     offset,
   });

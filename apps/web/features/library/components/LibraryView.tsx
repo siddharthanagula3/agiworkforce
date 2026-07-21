@@ -33,6 +33,7 @@ import {
   type SourceSurface,
 } from '@agiworkforce/types';
 import { GeneratedFileCard } from '@agiworkforce/unified-chat';
+import { getCsrfToken } from '@/lib/client/csrf';
 import { Button } from '@agiworkforce/ui';
 
 type OriginFilter = 'all' | 'generated' | 'uploaded';
@@ -125,6 +126,8 @@ export function LibraryView() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+  const [viewDeleted, setViewDeleted] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const requestSeq = useRef(0);
 
   // Debounce the search box into the effective query.
@@ -141,9 +144,10 @@ export function LibraryView() {
       if (origin !== 'all') params.set('origin', origin);
       if (kind !== 'all') params.set('kind', kind);
       if (query) params.set('q', query);
+      if (viewDeleted) params.set('deleted', 'true');
       return params;
     },
-    [origin, kind, query],
+    [origin, kind, query, viewDeleted],
   );
 
   const loadPage = useCallback(
@@ -207,6 +211,26 @@ export function LibraryView() {
         ...prev,
         [item.id]: err instanceof Error ? err.message : String(err),
       }));
+    }
+  }, []);
+
+  // Restore a soft-deleted asset from the Recently-deleted bin. On success the
+  // row leaves the bin view immediately (it is live again). CSRF-guarded POST.
+  const handleRestore = useCallback(async (id: string) => {
+    setRestoringId(id);
+    try {
+      const csrf = await getCsrfToken();
+      const res = await fetch(`/api/media?id=${encodeURIComponent(id)}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'x-csrf-token': csrf },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
+    } catch {
+      // Non-fatal: leave the item in the bin so the user can retry.
+    } finally {
+      setRestoringId(null);
     }
   }, []);
 
@@ -274,6 +298,12 @@ export function LibraryView() {
               onClick={() => setKind(f.id)}
             />
           ))}
+          <span className="mx-1 h-4 w-px bg-[var(--chat-border)]" aria-hidden />
+          <FilterChip
+            label={viewDeleted ? 'Back to library' : 'Recently deleted'}
+            active={viewDeleted}
+            onClick={() => setViewDeleted((v) => !v)}
+          />
         </div>
       </div>
 
@@ -331,6 +361,16 @@ export function LibraryView() {
                 onDownload={() => void handleDownload(item)}
                 onPreview={item.previewable ? () => handlePreview(item) : undefined}
               />
+              {viewDeleted ? (
+                <button
+                  type="button"
+                  onClick={() => void handleRestore(item.id)}
+                  disabled={restoringId === item.id}
+                  className="self-start text-xs font-medium text-primary underline underline-offset-2 disabled:opacity-50"
+                >
+                  {restoringId === item.id ? 'Restoring…' : 'Restore'}
+                </button>
+              ) : null}
               {downloadErrors[item.id] ? (
                 <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive,#e5484d)]">
                   <span>Download failed ({downloadErrors[item.id]}).</span>
