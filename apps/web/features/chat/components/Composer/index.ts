@@ -1,6 +1,5 @@
 export { ChatComposerNew } from './ChatComposerNew';
 export { FocusModeButtons } from './FocusModeButtons';
-export { ActiveModeTags } from './ActiveModeTags';
 export { SlashCommandMenu } from './SlashCommandMenu';
 export { SendButton } from './SendButton';
 export { ComposerFooter } from './ComposerFooter';
@@ -10,5 +9,4 @@ export { AttachmentPreview } from './AttachmentPreview';
 export { VoiceInputButton as ComposerVoiceInput } from './VoiceInputButton';
 export { VoiceRecordingOverlay } from './VoiceRecordingOverlay';
 export type { FocusMode } from './FocusModeButtons';
-export type { ModeTag } from './ActiveModeTags';
 export type { SendButtonMode } from './SendButton';
