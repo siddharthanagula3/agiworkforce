@@ -118,18 +118,6 @@ async function cleanupAllStores(): Promise<void> {
       },
     },
     {
-      name: 'global-settings-store',
-      run: async () => {
-        const { useAppStore } = await import('./global-settings-store');
-        const settingsState = useAppStore.getState();
-        if (typeof settingsState.reset === 'function') {
-          settingsState.reset();
-        } else {
-          logger.auth('Warning: Global settings store has no reset method');
-        }
-      },
-    },
-    {
       name: 'user-profile-store',
       run: async () => {
         const { useUserProfileStore } = await import('./user-profile-store');

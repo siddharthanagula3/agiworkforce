@@ -7,16 +7,6 @@
 // Zustand Stores
 // ========================================
 
-// Global Settings Store - Global application settings and feature flags
-export {
-  useAppStore,
-  type AppStore,
-  type AppState,
-  type AppActions,
-  type AppSettings,
-  type AppEnvironment,
-} from './global-settings-store';
-
 // Auth Store - Authentication and user management (unified)
 export { useAuthStore, type AuthState, type AuthResult } from './authentication-store';
 
@@ -233,15 +223,6 @@ export {
   useDashboard,
   useNotifications as useUINotifications,
 } from './layout-store';
-
-// Global Settings Store Selectors
-export {
-  useAppLoading,
-  useAppError,
-  useAppSettings,
-  useAppFeatures,
-  useAppSession,
-} from './global-settings-store';
 
 // ========================================
 // React Query Configuration
