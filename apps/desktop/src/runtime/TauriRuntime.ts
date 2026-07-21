@@ -31,6 +31,8 @@ import { invoke } from '../lib/tauri-mock';
 import { listen } from '../lib/tauri-mock';
 import { useUnifiedAuthStore } from '../stores/auth';
 import { useAppModeStore, selectPrivacyMode } from '../stores/appModeStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import { personalizationToPrompt } from '../features/chat/personalizationToPrompt';
 import { triggerCloudSyncAfterTurn } from '../lib/cloudSyncTrigger';
 import { useChatStore as useDesktopChatStore, uuidToDbId } from '../stores/chat/chatStore';
 
@@ -769,6 +771,18 @@ export class TauriRuntime implements ChatRuntime {
       signal.addEventListener('abort', () => this.stopGeneration(conversationId), { once: true });
     }
 
+    // Personalization ("Response Style" settings) must apply to EVERY send in
+    // every mode (Local/BYOK/Managed), so merge the guidance block into the
+    // conversation's custom instructions here — the single point every send
+    // funnels through. personalizationToPrompt returns '' for neutral settings,
+    // so a default profile adds nothing. (This is the sole wiring of the settings
+    // panel into the model; the converter existed but had no caller.)
+    const personalizationBlock = personalizationToPrompt(
+      useSettingsStore.getState().personalization,
+    );
+    const mergedCustomInstructions =
+      [personalizationBlock, systemPrompt].filter((s) => s && s.trim()).join('\n\n') || undefined;
+
     // Kick off the Rust-side stream after listeners are ready.
     try {
       const activeMode = executionMode === 'cloud_managed' ? 'cloud' : 'local';
@@ -796,7 +810,7 @@ export class TauriRuntime implements ChatRuntime {
           // these camelCase aliases; they were previously dropped client-side.
           thinkingMode: thinkingEnabled,
           reasoningEffort: effort,
-          customInstructions: systemPrompt,
+          customInstructions: mergedCustomInstructions,
           // BUG (LOCAL-CHAT-NOINVOKE-01 root cause, found 2026-07-03): `agentMode`
           // here is the AgentControl composer chip's permission-style value —
           // 'ask' | 'auto' | 'plan' | 'bypass' (see SendMessageOptions.agentMode
