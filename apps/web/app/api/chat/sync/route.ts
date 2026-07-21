@@ -121,7 +121,13 @@ async function handlePull(request: NextRequest) {
     );
 
     return NextResponse.json(
-      ChatSyncPullResponseSchema.parse({ conversations, messages, artifacts, cursor, hasMore }),
+      ChatSyncPullResponseSchema.parse({
+        conversations: withIsoTimestamps(conversations),
+        messages: withIsoTimestamps(messages),
+        artifacts: withIsoTimestamps(artifacts),
+        cursor,
+        hasMore,
+      }),
     );
   } catch (error) {
     logger.error({ error, userId }, 'Cloud sync pull failed');
@@ -537,6 +543,24 @@ function syncProtocolUpgradeRequired(): NextResponse {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * node-postgres returns `timestamptz` columns as JS `Date`, but the wire schema
+ * (and the JSON the client receives) require ISO strings. A non-empty pull page
+ * therefore fails `ChatSyncPullResponseSchema.parse` with "expected string,
+ * received date" (empty pages have no Date to reject — hence the intermittency).
+ * Normalize the three timestamp columns before validating/serializing.
+ */
+function withIsoTimestamps<T>(rows: T[]): T[] {
+  return rows.map((row) => {
+    const out = { ...(row as Record<string, unknown>) };
+    for (const key of ['created_at', 'updated_at', 'deleted_at'] as const) {
+      const value = out[key];
+      if (value instanceof Date) out[key] = value.toISOString();
+    }
+    return out as T;
+  });
+}
 
 /**
  * Compute the SAFE next pull cursor.

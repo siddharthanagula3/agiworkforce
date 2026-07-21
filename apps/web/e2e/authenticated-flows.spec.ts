@@ -111,5 +111,20 @@ test.describe('authenticated primary workflows', () => {
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
+
+    // 4) Cross-device cloud sync (WEB-CHAT-SYNC-500 regression): the pull endpoint
+    //    must return 200 for a user WITH data. node-postgres returns timestamptz as
+    //    Date, which the wire schema (z.string()) rejected on any non-empty page —
+    //    500ing sync for every real account. page.request shares the signed-in
+    //    session cookie, so this exercises the live RLS + Date-serialization path.
+    const syncRes = await page.request.get('/api/chat/sync?since=0');
+    expect(syncRes.status()).toBe(200);
+    const syncBody = (await syncRes.json()) as {
+      conversations: unknown[];
+      messages: unknown[];
+      artifacts: unknown[];
+    };
+    expect(Array.isArray(syncBody.conversations)).toBe(true);
+    expect(Array.isArray(syncBody.messages)).toBe(true);
   });
 });
