@@ -128,6 +128,48 @@ describe('GET /api/chat/sync — shared cloud contract', () => {
     }
   });
 
+  it('parses a page whose timestamps arrive as Date objects (real node-postgres rows)', async () => {
+    // The live Pool returns `timestamptz` as JS Date, not the ISO strings the
+    // other cases mock. Before the withIsoTimestamps fix this threw
+    // "expected string, received date" and the route 500'd (WEB-CHAT-SYNC-500).
+    mockQuery
+      .mockResolvedValueOnce([
+        {
+          ...conversationRow,
+          created_at: new Date('2026-07-01T00:00:00.000Z'),
+          updated_at: new Date('2026-07-02T00:00:00.000Z'),
+          deleted_at: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...messageRow,
+          created_at: new Date('2026-07-02T00:00:01.000Z'),
+          updated_at: new Date('2026-07-02T00:00:01.000Z'),
+          deleted_at: new Date('2026-07-03T00:00:00.000Z'),
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...artifactRow,
+          created_at: new Date('2026-07-02T00:00:02.000Z'),
+          updated_at: new Date('2026-07-02T00:00:02.000Z'),
+          deleted_at: null,
+        },
+      ]);
+
+    const res = await GET(makeGet());
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    const parsed = ChatSyncPullResponseSchema.safeParse(body);
+    expect(parsed.success).toBe(true);
+    // Dates were serialized to ISO strings, including the nullable tombstone.
+    expect(body.conversations[0].created_at).toBe('2026-07-01T00:00:00.000Z');
+    expect(body.messages[0].deleted_at).toBe('2026-07-03T00:00:00.000Z');
+    expect(body.artifacts[0].updated_at).toBe('2026-07-02T00:00:02.000Z');
+  });
+
   it('empty pull page parses', async () => {
     mockQuery.mockResolvedValue([]);
 
