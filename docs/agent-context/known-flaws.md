@@ -582,15 +582,18 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   branch cloud chat on Config.useProviderStream() → the provider path (TRUST-SENSITIVE:
   routes chat through a gateway /api/v1/providers/:id/stream — verify carefully),
   OR remove the 3 settings + the dead impl. Not rushed at depth (security-adjacent).
-  • [MED] OPEN VSCODE-VSCODE-LM-FALLBACK-MISSING: agiWorkforce.fallbackToVscodeLm
-  (default TRUE) is never read and there is NO vscode.lm / selectChatModels usage
-  anywhere — a signed-out user gets a hard "Not signed in" instead of the promised
-  fallback. Complete = build the VS Code LM API fallback (feature), OR remove the
-  misleading default-on setting (config.ts:116).
-  • [LOW] OPEN VSCODE-AGENT-MAXITERATIONS-UNAPPLIED: agiWorkforce.agent.maxIterations
-  (config.ts:60) is never read; the agent loop runs in the CLI app-server and the
-  extension has no channel to pass it (not in startTurn). Add it to the developer-
-  session startTurn params (CLI + contracts lane) OR remove the setting.
+  • [MED] MITIGATED VSCODE-VSCODE-LM-FALLBACK-MISSING (2026-07-21, 7b41cd765): the
+  misleading aspect is resolved — agiWorkforce.fallbackToVscodeLm now defaults FALSE
+  with honest copy ("Reserved… Not yet available — currently has no effect"), so it
+  no longer promises a fallback that never ran. Still unread; BUILDING the actual
+  VS Code LM API fallback (vscode.lm/selectChatModels) remains an unbuilt feature =
+  founder decision. Config parity test (DEFAULTS↔package.json) stays green.
+  • [LOW] MITIGATED VSCODE-AGENT-MAXITERATIONS-UNAPPLIED (2026-07-21): the misleading
+  copy is fixed — the setting's description now honestly discloses it is "not yet
+  enforced by the extension… not passed through yet" instead of promising a cap
+  "before prompting for confirmation". COMPLETING it (pass through startTurn → CLI
+  agent loop) is a cross-lane extension-TS + shared-contract + CLI-Rust change =
+  deferred. Default (25) unchanged, so config parity stays green.
   After the HIGH fix, VSCode has NO unresolved critical/high → meets the proceed-gate;
   the 3 remaining are MED/LOW dead advanced-settings (complete-or-remove, tracked).
 - NOTE CLI-APPSERVER-INITIALIZE-PROTOCOLVERSION — RESOLVED 2026-07-21 (`87445c264`):
