@@ -141,3 +141,29 @@ byStatus: {'DEAD': 9, 'MOCK_ONLY': 3, 'PARTIAL': 9, 'COMING_SOON': 1}
   intended: Let a keyboard user collapse/expand the chat sidebar via the command palette while on a chat route.
   gap: The command only appears when `isChatRoute` (`pathname` starts with `/chat` or `/chats`), but CommandPaletteProvider's own ⌘K listener explicitly returns early (never opens the palette) on exactly `/chat` and `/chat/[id]` — the only routes where `isChatRoute` is true (there is no other `/chat*` rout
   backendExists: ?
+
+---
+
+## DoD test-dimension coverage (web, app #1) — 2026-07-21
+
+Per the production-readiness goal, each enumerated test dimension is covered by a
+real assertion or explicitly deferred with a rationale. "No known high-sev bug" is
+NOT the same claim as "DoD satisfied" — this is the DoD ledger.
+
+| Dimension                                 | Covered by                                                                                                                                                                                                                             | Status    |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| Happy paths                               | e2e authenticated-flows (projects hub, composer, customize, library) + signed-out public-auth/visual specs                                                                                                                             | ✅        |
+| Validation                                | SendButton.test.tsx (send disabled when empty / enabled with content / disabled prop) + route zod schemas + `*.contract.test.ts`                                                                                                       | ✅        |
+| Empty states                              | visual-verification (empty project detail, not-found) + signed-out gate                                                                                                                                                                | ✅        |
+| Failure recovery                          | e2e "chat UI degrades gracefully when background sync fails" (forced 500 → composer still renders, no error boundary) + route contract tests return typed error codes                                                                  | ✅        |
+| Authorization                             | RLS (`getUserScopedDb`) + route contract tests + signed-out sign-in-gate e2e                                                                                                                                                           | ✅        |
+| Persistence                               | round10-fields test (star persists via metadata jsonb) + chat-sync contract tests                                                                                                                                                      | ✅        |
+| Responsiveness                            | e2e phone viewport (390×844): composer reachable + no horizontal overflow                                                                                                                                                              | ✅        |
+| Accessibility                             | e2e axe scan: zero CRITICAL violations on /chat and /projects                                                                                                                                                                          | ✅        |
+| Concurrency                               | WEB-RUN-CONCURRENCY-01 server 409 guard (unit-tested)                                                                                                                                                                                  | ✅        |
+| Cancellation                              | SendButton.test.tsx stop-state (onStop wiring); stream abort path                                                                                                                                                                      | ✅        |
+| Production build                          | 295 routes / 0 err (verified)                                                                                                                                                                                                          | ✅        |
+| Clean install / env / migration / startup | frozen-lockfile install, env-validation HTTP 200, check:neon-migrations, `next start` HTTP 200 (verified)                                                                                                                              | ✅        |
+| Loading states                            | DEFERRED — implicitly guarded (every nav asserts final content renders, so a stuck-loading regression fails those); dedicated skeleton-visibility assertions omitted as high-flake / low-value. Revisit if a loading regression ships. | ⏸ tracked |
+
+Cross-device sync bug WEB-CHAT-SYNC-500 resolved (`ff2d63700`) — see known-flaws.md.
