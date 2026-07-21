@@ -11,6 +11,7 @@
  * is retried.
  */
 import { test, expect, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 const QA_USER = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v'; // max-tier QA account
 
@@ -126,5 +127,67 @@ test.describe('authenticated primary workflows', () => {
     };
     expect(Array.isArray(syncBody.conversations)).toBe(true);
     expect(Array.isArray(syncBody.messages)).toBe(true);
+  });
+
+  // DoD dimensions that only the real, signed-in UI can verify (validation,
+  // cancellation, authorization, concurrency, persistence are covered by
+  // SendButton.test.tsx, the RLS/route contract tests, and the run-concurrency
+  // guard). One sign-in, three checks, to respect Clerk dev usage limits.
+  // Failure recovery: a failing background sync must NOT take down the chat UI.
+  // Force /api/chat/sync to 500 and assert the composer still renders (graceful
+  // degradation — the exact class of WEB-CHAT-SYNC-500, now a guarded contract).
+  // The forced route is torn down with the page context (no manual unroute — the
+  // 500 triggers client retry traffic that unroute would block draining behind).
+  test('chat UI degrades gracefully when background sync fails', async ({ page }) => {
+    const ticket = await mintSignInTicket();
+    await signInWithTicket(page, ticket);
+
+    await page.route('**/api/chat/sync**', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"forced"}' }),
+    );
+    await page.goto('/chat', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
+  });
+
+  // Responsiveness + accessibility on the two primary signed-in surfaces. Waits on
+  // concrete elements (not networkidle) so background polling never stalls the wait.
+  test('signed-in surfaces are responsive and free of critical a11y violations', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const ticket = await mintSignInTicket();
+    await signInWithTicket(page, ticket);
+
+    async function expectNoCriticalA11y(label: string) {
+      const results = await new AxeBuilder({ page }).analyze();
+      const critical = results.violations.filter((v) => v.impact === 'critical');
+      expect(
+        critical,
+        `${label} critical a11y violations: ${critical.map((v) => v.id).join(', ')}`,
+      ).toEqual([]);
+    }
+
+    // Phone viewport: composer stays reachable, no horizontal overflow (a common
+    // broken-mobile-layout tell).
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/chat', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 20000 });
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1); // sub-pixel rounding tolerance
+
+    // Accessibility on the two primary surfaces — no CRITICAL axe violations
+    // (keyboard traps, unlabeled interactive controls, etc.). Scan /chat IN PLACE
+    // at desktop width (re-navigating to the same URL detaches the frame), then
+    // navigate once to /projects.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(page.getByRole('textbox').first()).toBeVisible();
+    await expectNoCriticalA11y('/chat');
+
+    await page.goto('/projects', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible({ timeout: 20000 });
+    await expectNoCriticalA11y('/projects');
   });
 });
