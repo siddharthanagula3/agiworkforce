@@ -15,6 +15,7 @@ import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { formatClock } from '@/src/lib/time';
 
 /**
  * Inline recording card shown IN PLACE of the composer rows while recording
@@ -34,14 +35,6 @@ interface RecordingOverlayProps {
   onCancel: () => void;
   /** Called when user taps send/confirm */
   onSend: () => void;
-}
-
-/** Format ms to MM:SS */
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function PulsingDot() {
@@ -120,7 +113,7 @@ export function RecordingOverlay({
       <View className="flex-row items-center justify-center gap-2 mb-3">
         <PulsingDot />
         <Text className="text-red-400 text-sm font-medium">Recording</Text>
-        <Text className="text-white/50 text-sm font-mono ml-2">{formatDuration(durationMs)}</Text>
+        <Text className="text-white/50 text-sm font-mono ml-2">{formatClock(durationMs)}</Text>
       </View>
 
       {/* Waveform preview */}

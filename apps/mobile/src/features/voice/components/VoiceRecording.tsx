@@ -22,6 +22,7 @@ import { Text } from '@/components/ui/text';
 import { Waveform } from './Waveform';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
+import { formatClock } from '@/src/lib/time';
 
 interface VoiceRecordingProps {
   /** Whether the recording panel is visible */
@@ -34,12 +35,6 @@ interface VoiceRecordingProps {
   onCancel: () => void;
   /** User confirmed — stop recording and proceed to review */
   onSend: () => void;
-}
-
-function formatMs(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  return `${m.toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 }
 
 function RecordingDot() {
@@ -108,7 +103,7 @@ export function VoiceRecording({
       <View style={styles.statusRow}>
         <RecordingDot />
         <Text style={styles.recordingLabel}>Recording</Text>
-        <Text style={styles.timer}>{formatMs(durationMs)}</Text>
+        <Text style={styles.timer}>{formatClock(durationMs)}</Text>
       </View>
 
       {/* Orb + waveform */}
