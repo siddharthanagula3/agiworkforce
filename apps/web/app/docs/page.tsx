@@ -25,9 +25,6 @@ const SIDEBAR: { heading: string; icon: string; links: { label: string; href: st
     icon: '$',
     links: [
       { label: 'Overview', href: '/cli' },
-      { label: 'Sessions', href: '/cli' },
-      { label: 'REPL', href: '/cli' },
-      { label: 'Hooks', href: '/cli' },
       { label: 'MCP Tools', href: '/integrations' },
     ],
   },
@@ -47,7 +44,6 @@ const SIDEBAR: { heading: string; icon: string; links: { label: string; href: st
     links: [
       { label: 'Overview', href: '/mobile' },
       { label: 'Local Mode', href: '/local' },
-      { label: 'App Setup', href: '/mobile' },
     ],
   },
   {
