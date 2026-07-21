@@ -293,7 +293,7 @@ describe('ChatComposerNew', () => {
     const moreBtn = screen.getByRole('button', { name: /more options/i });
     fireEvent.click(moreBtn);
 
-    expect(screen.getByText('Add photos & files')).toBeInTheDocument();
+    expect(screen.getByText('Add photos')).toBeInTheDocument();
   });
 
   it('rejects non-image attachments before send', () => {
