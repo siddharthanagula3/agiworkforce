@@ -128,6 +128,20 @@ statement outside a module` and `initialize()` (which registers
   Greenhouse form served at a mapped http://boards.greenhouse.io URL. Clean build +
   all 4 artifacts + 1119 unit tests still green. The smoke's autofill block is the
   regression guard.
+- CLI-REALUI-SMOKE (2026-07-21): built the production `agi` binary
+  (`cargo build --bin agi`, workspace target/debug/agi, 33s) and exercised its
+  real no-API-key command surface end to end via apps/cli/scripts/cli-smoke.mjs:
+  `--version` (agi 1.7.1), `--help` (all documented subcommands present:
+  exec/app-server/doctor/models/features/login/…), `doctor` (real preflight
+  diagnostics — git/sh/node/cargo deps, auth-provider status, macOS Seatbelt
+  sandbox, writable config dir; overall Warn only for optional rg + no provider
+  auth), `features` (real feature-flag output), and the `app-server` JSON-RPC
+  `initialize` handshake → protocolVersion 5 (the IDE/desktop developer-session
+  IPC surface, matching app_server_stdio.rs). CLI SMOKE: PASS. Verifies the CLI's
+  production build + startup + documented run commands from the shipped binary
+  (complements the 1665 lib tests, which don't run the built binary). Full
+  interactive TUI keystroke automation still needs a pty harness (deferred); a
+  live chat turn needs provider API keys.
 - DESKTOP-REALUI-E2E-RUN (2026-07-21): ran the desktop DOM Playwright e2e
   (test:e2e:dom) against a live Vite dev server in Local mode (port 5175,
   VITE_DESKTOP_UI_DEV_LOCAL=1, E2E_MOCK_CLOUD_API=1 E2E_MOCK_LLM=1 — no live
