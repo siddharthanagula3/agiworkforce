@@ -29,7 +29,6 @@ function readPkgConfigSettings(): Record<string, PkgConfigContrib> {
 
 /** Map from DEFAULTS key → package.json `agiWorkforce.<x>` setting key. */
 const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
-  agentMaxIterations: 'agiWorkforce.agent.maxIterations',
   agentPlanMode: 'agiWorkforce.agent.planMode',
   agentMode: 'agiWorkforce.agent.mode',
   agentEffort: 'agiWorkforce.agent.effort',
@@ -43,7 +42,6 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   model: 'agiWorkforce.model',
   streamingEnabled: 'agiWorkforce.streamingEnabled',
   contextLines: 'agiWorkforce.contextLines',
-  fallbackToVscodeLm: 'agiWorkforce.fallbackToVscodeLm',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
   useProviderStream: 'agiWorkforce.useProviderStream',
