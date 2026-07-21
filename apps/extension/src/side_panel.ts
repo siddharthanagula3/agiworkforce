@@ -4358,7 +4358,7 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   );
   const learnMoreBtn = el('button', { class: 'sp-ob-learn-more' }, 'Learn more');
   learnMoreBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://agi.build/safety' }).catch(() => {});
+    chrome.tabs.create({ url: 'https://agiworkforce.com/security' }).catch(() => {});
   });
   row0cText.appendChild(learnMoreBtn);
   row0c.appendChild(row0cIcon);
