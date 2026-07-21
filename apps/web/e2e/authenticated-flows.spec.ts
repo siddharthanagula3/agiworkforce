@@ -202,7 +202,9 @@ test.describe('authenticated primary workflows', () => {
     await signInWithTicket(page, ticket);
 
     async function expectNoCriticalA11y(label: string) {
-      const results = await new AxeBuilder({ page }).analyze();
+      // axe-core bundles its own playwright-core; Page is structurally identical but
+      // nominally distinct from @playwright/test's, so cast at this one boundary.
+      const results = await new AxeBuilder({ page: page as never }).analyze();
       const critical = results.violations.filter((v) => v.impact === 'critical');
       expect(
         critical,
