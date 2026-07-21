@@ -66,6 +66,60 @@ try {
     await page.close();
   }
 
+  // Primary workflows — backend-free side-panel interactions driven through the
+  // real UI: composer input, drawer navigation, and the model picker. These are
+  // pure DOM/state interactions (no gateway needed), so they verify a user can
+  // actually operate the panel's core controls in a real browser.
+  {
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000); // fail fast on a stuck control instead of 30s
+    await page.setViewportSize({ width: 400, height: 800 }); // realistic side-panel width
+    const errors = [];
+    page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+    await page.goto(`chrome-extension://${extId}/src/side_panel.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    // A returning user has completed onboarding; seed the flag and reload so the
+    // main panel UI (not the first-run onboarding overlay) is what we drive.
+    await page.evaluate(
+      () => new Promise((res) => chrome.storage.local.set({ agi_onboarding_completed: true }, res)),
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+
+    // Composer accepts typed input.
+    await page.fill('#sp-input', 'hello from the smoke');
+    const typed = await page.inputValue('#sp-input');
+    if (typed !== 'hello from the smoke')
+      fail(`composer: input did not accept text (got "${typed}")`);
+
+    // Drawer opens from the menu button, then closes via the overlay.
+    await page.click('#sp-menu-btn');
+    await page.waitForTimeout(300);
+    const drawerOpen = await page.evaluate(
+      () => document.getElementById('sp-drawer')?.classList.contains('open') === true,
+    );
+    if (!drawerOpen) fail('drawer: menu button did not open the navigation drawer');
+    await page.evaluate(() => document.getElementById('sp-drawer-overlay')?.click());
+    await page.waitForTimeout(200);
+
+    // Model picker opens and becomes visible.
+    await page.click('#sp-model-selector-btn');
+    await page.waitForTimeout(300);
+    const modelOpen = await page.evaluate(() => {
+      const d = document.getElementById('sp-model-dropdown');
+      return !!d && (d.classList.contains('open') || getComputedStyle(d).display !== 'none');
+    });
+    if (!modelOpen) fail('model picker: selector button did not open the model dropdown');
+
+    const pageExceptions = errors.filter((e) => e.startsWith('pageerror:'));
+    if (pageExceptions.length)
+      fail(`interactions: uncaught page exception(s): ${pageExceptions.join(' | ')}`);
+    console.log(`\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen}`);
+    await page.close();
+  }
+
   // Primary workflow — persistence -> UI render: seed an allowlisted origin into
   // chrome.storage, reload the options page, and assert the real refreshAllowlist
   // path reads it back and renders it (the site allowlist is the extension's core
