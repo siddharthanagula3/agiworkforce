@@ -232,6 +232,9 @@ struct TuiApp {
     // /statusline changes nothing until the user opts in; the /statusline overlay
     // edits a copy and commits it here on save (the generic overlay path dropped it).
     statusline_config: super::widgets::statusline_setup::StatusLineConfig,
+    // Terminal-title field config: which of session-id/model/cwd/branch appear in
+    // the OS window title. Applied (emitted via SetTitle) when /title saves.
+    terminal_title_config: super::widgets::terminal_title_setup::TerminalTitleConfig,
     // Currently active effort level (persisted across model switches)
     effort: crate::design_system::Effort,
     // Theme picker popup
@@ -385,6 +388,8 @@ impl TuiApp {
                 show_branch: false,
                 show_mode: true,
             },
+            terminal_title_config:
+                super::widgets::terminal_title_setup::TerminalTitleConfig::default(),
             effort: crate::design_system::Effort::Medium,
             theme_picker: super::widgets::theme_picker::ThemePickerState::default(),
             theme_choice: super::widgets::theme_picker::ThemeChoice::Dark,
@@ -518,7 +523,66 @@ impl TuiApp {
             OverlayResult::StatusLine(config) => {
                 self.statusline_config = config;
             }
+            OverlayResult::TerminalTitle(config) => {
+                self.terminal_title_config = config;
+                self.emit_terminal_title();
+            }
         }
+    }
+
+    /// Emit the OS window title from the current config + live session data. Called
+    /// on /title save (best-effort — a title-set escape never affects the screen).
+    fn emit_terminal_title(&self) {
+        let cwd = std::env::current_dir()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .unwrap_or_default();
+        let session_id: String = self
+            .session
+            .runtime_session_id
+            .chars()
+            .take(8)
+            .collect();
+        if let Some(title) = build_terminal_title(
+            &self.terminal_title_config,
+            &session_id,
+            &self.model_name,
+            &cwd,
+            self.git_branch.as_deref(),
+        ) {
+            let _ = std::io::stdout().execute(crossterm::terminal::SetTitle(title));
+        }
+    }
+}
+
+/// Build the OS window-title string from the enabled fields. `None` when no field
+/// is enabled (so the caller does not set an empty title). Pure — unit-tested.
+fn build_terminal_title(
+    cfg: &crate::tui::widgets::terminal_title_setup::TerminalTitleConfig,
+    session_id: &str,
+    model: &str,
+    cwd: &str,
+    branch: Option<&str>,
+) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    if cfg.show_session_id && !session_id.is_empty() {
+        parts.push(format!("#{session_id}"));
+    }
+    if cfg.show_model && !model.is_empty() {
+        parts.push(model.to_string());
+    }
+    if cfg.show_cwd && !cwd.is_empty() {
+        parts.push(cwd.to_string());
+    }
+    if cfg.show_branch {
+        if let Some(b) = branch {
+            parts.push(format!("⎇ {b}"));
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(format!("agi — {}", parts.join(" · ")))
     }
 }
 
@@ -2950,10 +3014,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/title" => {
-            use crate::tui::widgets::terminal_title_setup::{
-                TerminalTitleConfig, TerminalTitleSetupView,
-            };
-            let view = TerminalTitleSetupView::new(TerminalTitleConfig::default());
+            use crate::tui::widgets::terminal_title_setup::TerminalTitleSetupView;
+            // Seed from the LIVE config; save commits back via take_result →
+            // apply_overlay_result, which emits the new window title.
+            let view = TerminalTitleSetupView::new(app.terminal_title_config.clone());
             app.open_overlay(Box::new(view));
             SlashResult::SystemMessage(
                 "Terminal title setup (\u{2191}\u{2193} navigate \u{00b7} Space toggle \u{00b7} Enter save \u{00b7} Esc cancel)".into(),
@@ -4761,6 +4825,56 @@ mod tests {
         app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Esc));
         assert!(app.active_overlay.is_none());
         assert_eq!(app.statusline_config, before, "Esc discards the toggle");
+    }
+
+    #[test]
+    fn build_terminal_title_composes_only_enabled_fields() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleConfig;
+        let all = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: true,
+            show_cwd: true,
+            show_branch: true,
+        };
+        assert_eq!(
+            build_terminal_title(&all, "abcdef", "claude-sonnet-5", "myrepo", Some("main")),
+            Some("agi — claude-sonnet-5 · myrepo · ⎇ main".to_string())
+        );
+        let only_id = TerminalTitleConfig {
+            show_session_id: true,
+            show_model: false,
+            show_cwd: false,
+            show_branch: false,
+        };
+        assert_eq!(
+            build_terminal_title(&only_id, "abcdef12", "m", "c", Some("b")),
+            Some("agi — #abcdef12".to_string())
+        );
+        let none = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: false,
+            show_cwd: false,
+            show_branch: false,
+        };
+        assert_eq!(build_terminal_title(&none, "x", "m", "c", Some("b")), None);
+    }
+
+    #[test]
+    fn title_overlay_save_applies_config_to_app() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleSetupView;
+        let mut app = minimal_app();
+        assert!(!app.terminal_title_config.show_session_id, "session-id off by default");
+        app.open_overlay(Box::new(TerminalTitleSetupView::new(
+            app.terminal_title_config.clone(),
+        )));
+        // cursor 0 = "session-id"; Space toggles it, Enter saves.
+        app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Char(' ')));
+        app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
+        assert!(app.active_overlay.is_none());
+        assert!(
+            app.terminal_title_config.show_session_id,
+            "toggled 'session-id' field persisted to the app on save"
+        );
     }
 
     #[test]
