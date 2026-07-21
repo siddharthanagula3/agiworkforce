@@ -420,9 +420,15 @@ const ChatComposerNewComponent = ({
   const providerHasNativeCodeExecution = ['anthropic', 'google', 'openai'].includes(
     (selectedModelMeta?.provider ?? '').toLowerCase(),
   );
+  // Two honest paths (mirrors packages/ui/unified-chat isCodeExecutionAvailable):
+  // native-tier providers run code on their own interpreter (catalog codeExecution
+  // cap decides); everyone else uses the model-agnostic platform E2B sandbox, which
+  // only needs tool-calling + the E2B deployment flag — so a tools-capable
+  // open-weight model (kimi-k3/deepseek/qwen/glm, codeExecution:false) gets an honest
+  // Run-code toggle when E2B is live, never a cosmetic dead control.
   const modelSupportsCodeExecution =
-    (selectedModelCaps?.codeExecution ?? false) &&
-    (providerHasNativeCodeExecution || deploymentCodeExecution);
+    ((selectedModelCaps?.codeExecution ?? false) && providerHasNativeCodeExecution) ||
+    ((selectedModelCaps?.tools ?? false) && deploymentCodeExecution);
   const modelSupportsOfficeCreation = selectedModelCaps?.tools ?? false;
 
   // If the user switches to a model that can't search, clear the web-search
