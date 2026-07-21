@@ -68,18 +68,6 @@ async function cleanupAllStores(): Promise<void> {
       },
     },
     {
-      name: 'multi-agent-chat-store',
-      run: async () => {
-        const { useMultiAgentChatStore } = await import('./multi-agent-chat-store');
-        const multiAgentState = useMultiAgentChatStore.getState();
-        if (typeof multiAgentState.reset === 'function') {
-          multiAgentState.reset();
-        } else {
-          logger.auth('Warning: Multi-agent chat store has no reset method');
-        }
-      },
-    },
-    {
       name: 'usage-warning-store',
       run: async () => {
         const { useUsageWarningStore } = await import('./usage-warning-store');
