@@ -2013,6 +2013,9 @@ async function handleMessageAsync(
         onProgress: (step) => {
           void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
         },
+        onUsageUpdate: (usage) => {
+          void chrome.runtime.sendMessage({ type: 'AGI_CU_USAGE', usage });
+        },
       }).catch((err) => {
         const errMsg = err instanceof Error ? err.message : String(err);
         logger.error('Computer-use agent loop error', err);
