@@ -775,6 +775,20 @@ function showNotification(title: string, message: string, tabId?: number): void 
   }
 }
 
+// Single source of truth for the "Task notifications" options toggle. Previously
+// only the pre-run reminder honored it while Task Completed/Failed fired
+// regardless, so turning the toggle OFF still produced completion notifications.
+async function taskNotificationsEnabled(): Promise<boolean> {
+  try {
+    const { agi_task_notifications: enabled } = await chrome.storage.local.get({
+      agi_task_notifications: true,
+    });
+    return enabled !== false;
+  } catch {
+    return true; // fail-open to the default-on behavior
+  }
+}
+
 chrome.notifications?.onClicked?.addListener((notifId: string) => {
   // Open side panel when notification clicked
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -935,10 +949,14 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
 
     assertScheduledExecutionSucceeded(result);
     await recordScheduledTaskRun(task.id);
-    showNotification('Task Completed', `Scheduled task "${task.name}" finished`);
+    if (await taskNotificationsEnabled()) {
+      showNotification('Task Completed', `Scheduled task "${task.name}" finished`);
+    }
   } catch (error) {
     const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
-    showNotification('Task Failed', `Scheduled task "${task.name}" failed: ${detail}`);
+    if (await taskNotificationsEnabled()) {
+      showNotification('Task Failed', `Scheduled task "${task.name}" failed: ${detail}`);
+    }
     throw error;
   }
 }
@@ -3056,10 +3074,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         const task = tasks.find((t) => t.id === taskId);
         if (!task?.enabled) return;
         // Respect the user's "Task notifications" preference (Options page). Defaults to on.
-        const { agi_task_notifications: notificationsEnabled } = await chrome.storage.local.get({
-          agi_task_notifications: true,
-        });
-        if (notificationsEnabled !== false) {
+        if (await taskNotificationsEnabled()) {
           chrome.notifications.create(`agi_task_notif_${taskId}`, {
             type: 'basic',
             iconUrl: 'icons/icon48.png',
