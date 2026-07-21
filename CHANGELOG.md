@@ -6,6 +6,30 @@ Last updated: 2026-07-20
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — web app #1 prod-readiness: chat-sync 500 fix + DoD e2e spectrum] — 2026-07-21
+
+### Fixed
+
+- Cross-device cloud chat/artifact sync (`GET /api/chat/sync`) returned HTTP 500
+  for every account with data (WEB-CHAT-SYNC-500). The RLS Pool path
+  (node-postgres) returns `timestamptz` as JS `Date`, but the shared
+  `ChatSyncPullResponse` wire schema types the timestamp columns as `z.string()`,
+  and `handlePull` validated the RAW db rows before JSON serialization — so any
+  non-empty page threw "expected string, received date" (empty pages passed,
+  hence the intermittency). `withIsoTimestamps()` now normalizes created_at/
+  updated_at/deleted_at to ISO before the parse. Verified end-to-end against the
+  QA account's 259 real messages (live 200). Root cause was NOT a missing
+  migration — schema, `app_rls` role, and RLS were all confirmed present.
+
+### Added
+
+- Signed-in Playwright coverage for the DoD test dimensions only the real UI can
+  verify: graceful degradation when a background sync 500s (composer still
+  renders), phone-viewport responsiveness (no horizontal overflow), and zero
+  critical axe a11y violations on `/chat` and `/projects`. A Date-timestamp
+  regression case in the chat-sync contract test guards the fix above (proven to
+  500 without it). Full DoD coverage ledger recorded in the web punchlist.
+
 ## [Unreleased — model catalog: latest-family-only policy, kimi-k3, live-verified roster] — 2026-07-20
 
 ### Changed

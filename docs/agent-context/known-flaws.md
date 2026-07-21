@@ -134,10 +134,16 @@ tracked here, fixed in batches. DONE = fixed+tested; OPEN = tracked follow-up.
 web-search (DONE, commit 8775cf0ab): untrusted-snippet injection delimiters,
 result-count + snippet caps, non-http(s) URL rejection, query-truncation signal.
 
-- OPEN WEBSEARCH-GUARD-NATIVE-NOSEARCH: a native-provider model with
-  capabilities.search:false + tools:true accepts web_search:true but silently
-  drops it (422 honesty guard misses this native-no-search case). Extend the
-  guard in request-processor to reject when neither native nor generic tool attaches.
+- OPEN WEBSEARCH-GUARD-NATIVE-NOSEARCH (LOW / NOT CURRENTLY REPRODUCIBLE — verified
+  2026-07-21): a native-provider model with capabilities.search:false + tools:true
+  accepts web_search:true but silently drops it (the 422 honesty guard at
+  request-processor.ts:1557 only covers the generic-fallback + non-stream case, and
+  `webSearchNeedsGenericTool` is false for anthropic/google/openai). Scanned the
+  47-model catalog: ZERO native-provider models have tools:true + search:false, so
+  no current model triggers this — it is latent defense-in-depth, not a live web
+  blocker. Fix = extend the guard to reject when NEITHER the native NOR the generic
+  search tool will attach; do it in the cross-surface web-search hardening slice
+  (shared LLM-API code, not web-only), with a catalog-add regression. Not gating web #1.
 
 tool-loop (DONE, commit 5dc1bc40f): read-only classification prefix-only (was
 substring — budget_transfer/create_playlist/delete_query misclassified parallel-
