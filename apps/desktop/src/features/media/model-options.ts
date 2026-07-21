@@ -56,9 +56,7 @@ function toOption(
   };
 }
 
-const googleImageModels = liveImageModels('google').filter(
-  (model) => model.imageApi === 'imagen',
-);
+const googleImageModels = liveImageModels('google');
 const openAIImageModels = liveImageModels('openai');
 const managedImageModels = liveImageModels('managed_cloud');
 
@@ -91,7 +89,11 @@ const imageProviderOptions = [
     'Managed Cloud',
     newestModel(managedImageModels, (model) => model.imageApi === 'stability'),
   ),
-].filter((option): option is MediaImageProviderOption => option !== null);
+]
+  .filter((option): option is MediaImageProviderOption => option !== null)
+  // A provider line with a single live model collapses its quality/fast picks
+  // into one entry; keep the first (Recommended) and drop the duplicate.
+  .filter((option, index, options) => options.findIndex((o) => o.model === option.model) === index);
 
 if (imageProviderOptions.length === 0) {
   throw new Error('The model catalog has no live image model configured for Desktop Media Lab');

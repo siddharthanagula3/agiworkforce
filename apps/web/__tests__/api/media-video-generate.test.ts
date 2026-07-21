@@ -674,7 +674,7 @@ describe('POST /api/media/video/generate', () => {
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('google');
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'veo-3', estimatedCostCents: 240 }),
+        expect.objectContaining({ model: 'veo-3.1', estimatedCostCents: 240 }),
       );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
@@ -699,7 +699,7 @@ describe('POST /api/media/video/generate', () => {
 
       expect(response.status).toBe(200);
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: 'veo-3', estimatedCostCents: 480 }),
+        expect.objectContaining({ model: 'veo-3.1', estimatedCostCents: 480 }),
       );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({
@@ -711,7 +711,7 @@ describe('POST /api/media/video/generate', () => {
       process.env['RUNWAY_API_KEY'] = 'test-runway-key';
 
       const response = await POST(
-        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'runway', model: 'veo-3' }),
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'runway', model: 'veo-3.1' }),
       );
 
       expect(response.status).toBe(400);

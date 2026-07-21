@@ -166,7 +166,7 @@ describe('MessageBubble model label', () => {
       role: 'assistant',
       content: 'Verified answer.',
       createdAt: new Date().toISOString(),
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.6-luna',
       reasoning: 'private provider scratchpad',
       steps: [
         {

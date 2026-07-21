@@ -365,8 +365,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
 
   it('stops a Free tool loop before a provider turn that cannot fit', async () => {
     const processed = makeProcessed();
-    processed.chatRequest.model = 'gpt-5.4-nano';
-    processed.llmRequest.model = 'gpt-5.4-nano';
+    processed.chatRequest.model = 'gpt-5.6-luna';
+    processed.llmRequest.model = 'gpt-5.6-luna';
     processed.llmRequest.max_tokens = 8_192;
     processed.maxTokens = 8_192;
     processed.freeTrial = {
@@ -413,8 +413,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     const order: string[] = [];
     const processed = makeProcessed();
     processed.provider = 'openai';
-    processed.chatRequest.model = 'gpt-5.4-mini';
-    processed.llmRequest.model = 'gpt-5.4-mini';
+    processed.chatRequest.model = 'gpt-5.6-terra';
+    processed.llmRequest.model = 'gpt-5.6-terra';
     processed.subscriptionTier = 'pro';
     processed.managedUsage = {
       db: {} as never,

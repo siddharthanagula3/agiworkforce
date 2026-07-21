@@ -17,17 +17,40 @@ use uuid::Uuid;
 /// The specific action category that needs user approval.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApprovalRequestKind {
-    Exec { command: String },
-    FileWrite { path: PathBuf },
-    FileEdit { path: PathBuf },
-    Patch { files: Vec<PathBuf> },
-    LoopDetection { repeated_action: String },
-    McpTool { server_name: String, tool_name: String },
-    McpElicitation { server_name: String },
-    AskUser { question: String },
-    Hook { hook_name: String },
-    Subagent { name: String },
-    TrustDirectory { path: PathBuf },
+    Exec {
+        command: String,
+    },
+    FileWrite {
+        path: PathBuf,
+    },
+    FileEdit {
+        path: PathBuf,
+    },
+    Patch {
+        files: Vec<PathBuf>,
+    },
+    LoopDetection {
+        repeated_action: String,
+    },
+    McpTool {
+        server_name: String,
+        tool_name: String,
+    },
+    McpElicitation {
+        server_name: String,
+    },
+    AskUser {
+        question: String,
+    },
+    Hook {
+        hook_name: String,
+    },
+    Subagent {
+        name: String,
+    },
+    TrustDirectory {
+        path: PathBuf,
+    },
 }
 
 /// A single approval prompt waiting for the user.

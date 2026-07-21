@@ -12,9 +12,9 @@
 use futures_util::future::join_all;
 
 use crate::{
-    hash_tool_call, Completion, DispatchMode, LoopControl, Prepared, PreparedCall, ResultBlock,
-    RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost, TurnOutcome, TurnParams,
-    TurnPhase, UsageTotals,
+    Completion, DispatchMode, LoopControl, Prepared, PreparedCall, ResultBlock, RunawayTracker,
+    StreamEvent, ToolClass, TurnEvent, TurnHost, TurnOutcome, TurnParams, TurnPhase, UsageTotals,
+    hash_tool_call,
 };
 
 /// Zero-sized entry point matching the plan's `TurnEngine::run_turn(...)` sketch.

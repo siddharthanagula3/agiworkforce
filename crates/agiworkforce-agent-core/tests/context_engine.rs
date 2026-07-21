@@ -1,6 +1,6 @@
 use agiworkforce_agent_core::context::{
-    compact_context, context_budget, format_summary_input, ContextCompactionConfig,
-    ContextSummarizer, ContextUsageAnchor, SummaryRequest, SummarySource, UNTRUSTED_SUMMARY_MARKER,
+    ContextCompactionConfig, ContextSummarizer, ContextUsageAnchor, SummaryRequest, SummarySource,
+    UNTRUSTED_SUMMARY_MARKER, compact_context, context_budget, format_summary_input,
 };
 use agiworkforce_agent_core::{ContentBlock, Message};
 use anyhow::Result;
@@ -100,9 +100,11 @@ async fn shared_compactor_summarizes_untrusted_history_and_preserves_recent_turn
     let summary = result.messages.get(1).expect("summary message");
     assert_eq!(summary.role, "assistant");
     assert!(summary.text_content().contains(UNTRUSTED_SUMMARY_MARKER));
-    assert!(summary
-        .text_content()
-        .contains("keep the Local trust boundary"));
+    assert!(
+        summary
+            .text_content()
+            .contains("keep the Local trust boundary")
+    );
     let requests = summarizer.requests.lock().expect("request lock");
     assert_eq!(requests.len(), 1);
     assert!(requests[0].content_is_untrusted);

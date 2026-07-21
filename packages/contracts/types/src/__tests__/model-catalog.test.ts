@@ -124,8 +124,8 @@ describe('model catalog helpers', () => {
     expect(new Set(models.map((model) => model.provider)).size).toBeGreaterThan(3);
   });
 
-  it('returns selectable rows for Desktop Cloud and none for an unknown profile', () => {
-    expect(getPickerModelsForRuntimeProfile('desktop/cloud-chat').length).toBeGreaterThan(0);
+  it('returns no selectable rows for an unavailable runtime profile', () => {
+    expect(getPickerModelsForRuntimeProfile('desktop/cloud-chat')).toEqual([]);
     expect(getPickerModelsForRuntimeProfile('not-a-runtime-profile')).toEqual([]);
   });
 
@@ -135,20 +135,18 @@ describe('model catalog helpers', () => {
     const maxModels = getModelsForTierAndSurface('max', 'mobile/cloud-chat');
     const maxPlusModels = getModelsForTierAndSurface('max_plus', 'mobile/cloud-chat');
 
-    expect(basicModels.map((model) => model.id)).toContain('gpt-5.4-nano');
-    expect(basicModels.map((model) => model.id)).not.toContain('gpt-5.4-mini');
+    expect(basicModels.map((model) => model.id)).toContain('gpt-5.6-luna');
+    expect(basicModels.map((model) => model.id)).not.toContain('gpt-5.6-terra');
     expect(basicModels.map((model) => model.id)).not.toContain('claude-haiku-4.5');
     expect(proModels.map((model) => model.id)).toContain('claude-haiku-4.5');
     expect(maxPlusModels).toEqual(maxModels);
-    expect(
-      getModelsForTierAndSurface('basic', 'desktop/cloud-chat').map((model) => model.id),
-    ).toEqual(basicModels.map((model) => model.id));
+    expect(getModelsForTierAndSurface('basic', 'desktop/cloud-chat')).toEqual([]);
     expect(getModelsForTierAndSurface('basic', 'not-a-runtime-profile')).toEqual([]);
   });
 
   it('keeps Basic on the economy roster while preserving higher-tier inheritance', () => {
-    expect(canAccessModelForSubscriptionTier('gpt-5.4-nano', 'basic')).toBe(true);
-    expect(canAccessModelForSubscriptionTier('gpt-5.4-mini', 'basic')).toBe(false);
+    expect(canAccessModelForSubscriptionTier('gpt-5.6-luna', 'basic')).toBe(true);
+    expect(canAccessModelForSubscriptionTier('gpt-5.6-terra', 'basic')).toBe(false);
     expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'basic')).toBe(false);
     expect(canAccessModelForSubscriptionTier('claude-haiku-4.5', 'pro')).toBe(true);
     expect(canAccessModelForSubscriptionTier('claude-opus-4.8', 'max_plus')).toBe(true);
@@ -198,11 +196,11 @@ describe('model catalog helpers', () => {
 
     expect(openaiCatalog.map((model) => model.id)).toEqual(expectedKeys);
     expect(openaiCatalog.every((model) => model.provider === 'openai')).toBe(true);
-    expect(openaiCatalog.find((model) => model.id === 'gpt-5.4-nano')).toMatchObject({
-      contextWindow: 400_000,
+    expect(openaiCatalog.find((model) => model.id === 'gpt-5.6-luna')).toMatchObject({
+      contextWindow: 1_050_000,
       maxOutputTokens: 128_000,
-      inputCostPerMillion: 0.2,
-      outputCostPerMillion: 1.25,
+      inputCostPerMillion: 1,
+      outputCostPerMillion: 6,
       capabilities: { streaming: true, tools: true, vision: true },
     });
     expect(getProviderModelCatalog('not-a-provider')).toEqual([]);
@@ -243,7 +241,7 @@ describe('model catalog helpers', () => {
   it('detects providers and resolves auto modes from shared routing defaults', () => {
     expect(isAutoModeModelId('auto')).toBe(true);
     expect(isAutoModeModelId('AUTO-BALANCED')).toBe(false);
-    expect(isAutoModeModelId('gpt-5.4-mini')).toBe(false);
+    expect(isAutoModeModelId('gpt-5.6-terra')).toBe(false);
     expect(isAutoModeModelId(null)).toBe(false);
     expect(detectProviderFromModelId('claude-sonnet-5')).toBe('anthropic');
     expect(resolveAutoModeModel('auto-economy', 'free')).toBe('gemini-3.1-flash-lite');
@@ -260,7 +258,7 @@ describe('model catalog helpers', () => {
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
     // Variant partners must resolve to a real catalog model (no dangling partner),
     // without pinning the specific partner id.
-    expect(getModelMetadataById(getModelVariantPartner('gpt-5.4-mini'))).not.toBeNull();
+    expect(getModelMetadataById(getModelVariantPartner('deepseek-v4-flash'))).not.toBeNull();
     expect(getModelMetadataById(getModelVariantPartner('claude-sonnet-5'))).not.toBeNull();
     expect(getProviderProbeModel('openai')).toBe('gpt-5.6-luna');
     expect(getProviderProbeModel('anthropic')).toBe('claude-haiku-4.5');
@@ -268,8 +266,7 @@ describe('model catalog helpers', () => {
     const fallbackIds = getEconomyFallbackModels().map((entry) => entry.model);
     expect(fallbackIds.indexOf('qwen-3.7-plus')).toBeGreaterThanOrEqual(0);
     expect(fallbackIds).toContain('gpt-5.6-luna');
-    expect(fallbackIds).not.toContain('gpt-5.4-mini');
-    expect(fallbackIds).toContain('gpt-5.4-nano');
+    expect(fallbackIds).not.toContain('gpt-5.6-terra');
 
     const coreOptions = getCoreManualModelOptions();
     expect(coreOptions.some((entry) => entry.id === requireProviderDefaultModel('openai'))).toBe(
@@ -282,16 +279,18 @@ describe('model catalog helpers', () => {
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-sol')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-terra')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.6-luna')).toBe(true);
-    // Still-served compatibility models remain addressable even after leaving
-    // the current-provider presets and Auto routing slots.
-    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(true);
+    // Catalog carries only the latest generation per family (founder policy
+    // 2026-07-20): removed compatibility models must not resurface in pickers.
+    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
     expect(coreOptions.some((entry) => entry.id === 'sonar-pro')).toBe(false);
   });
 
   it('legacy removed aliases are not in catalog (canonicalization removed for fresh start)', () => {
     // Canonicalization was removed — unknown aliases return null from getModelMetadataById.
-    // gpt-5.4-nano is the verified current replacement for legacy gpt-5-nano.
-    expect(getModelMetadataById('gpt-5.4-nano')?.id).toBe('gpt-5.4-nano');
+    // gpt-5.6-luna is the current fast OpenAI model; older nano generations were
+    // removed from the catalog (founder policy 2026-07-20).
+    expect(getModelMetadataById('gpt-5.6-luna')?.id).toBe('gpt-5.6-luna');
+    expect(getModelMetadataById('gpt-5.4-nano')).toBeNull();
     expect(getModelMetadataById('gpt-5-nano')).toBeNull();
     expect(normalizeModelId('gpt-5.4-codex-high')).toBe('gpt-5.4-codex-high');
   });
@@ -389,12 +388,12 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   describe('explicit model selection is respected (not re-routed by task)', () => {
     it('concrete model + coding taskType returns the SAME model, not the coding slot', () => {
       // Regression: the task-aware path ignored the input model and returned the
-      // task slot model, silently swapping an explicit pick (gpt-5.4-mini ->
+      // task slot model, silently swapping an explicit pick (gpt-5.6-terra ->
       // Claude) and re-routing to a provider the user never chose.
-      expect(resolveAutoModeModel('gpt-5.4-mini', 'pro', 'coding')).toBe('gpt-5.4-mini');
+      expect(resolveAutoModeModel('gpt-5.6-terra', 'pro', 'coding')).toBe('gpt-5.6-terra');
     });
     it('concrete model + reasoning taskType returns the SAME model', () => {
-      expect(resolveAutoModeModel('gpt-5.4-mini', 'pro', 'reasoning')).toBe('gpt-5.4-mini');
+      expect(resolveAutoModeModel('gpt-5.6-terra', 'pro', 'reasoning')).toBe('gpt-5.6-terra');
     });
     it('auto alias still task-routes (control — task routing only applies to auto-*)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'coding')).toBe('claude-sonnet-5');
@@ -650,32 +649,34 @@ describe('R25-V2 model-id drift — known-good IDs resolve; removed IDs return n
     expect(meta?.apiModelId).toBe('mistral-large-2512');
   });
 
-  it('mistral-small-3 apiModelId is updated to mistral-small-2603 (Small 4, not deprecated 2506)', () => {
-    const meta = getModelMetadataById('mistral-small-3');
+  it('mistral-small-4 apiModelId is mistral-small-2603 (Small 4, not deprecated 2506)', () => {
+    const meta = getModelMetadataById('mistral-small-4');
     expect(meta).not.toBeNull();
     expect(meta?.apiModelId).toBe('mistral-small-2603');
     expect(meta?.apiModelId).not.toBe('mistral-small-2506');
   });
 
-  it('codestral-2 apiModelId is codestral-2508, not the invalid bare "codestral-2"', () => {
-    const meta = getModelMetadataById('codestral-2');
+  it('codestral-2508 apiModelId is codestral-2508, not the invalid bare "codestral-2"', () => {
+    const meta = getModelMetadataById('codestral-2508');
     expect(meta).not.toBeNull();
     expect(meta?.apiModelId).toBe('codestral-2508');
-    expect(meta?.apiModelId).not.toBe('codestral-2');
+    // The bare pre-rename id is fully removed, not aliased.
+    expect(getModelMetadataById('codestral-2')).toBeNull();
   });
 
-  it('openrouter nvidia model is the correct 49B nemotron ID, not the hallucinated 120B ID', () => {
-    const correct = getModelMetadataById('nvidia/llama-3.3-nemotron-super-49b-v1:free');
-    const hallucinated = getModelMetadataById('nvidia/nemotron-3-super-120b-a12b:free');
+  it('openrouter nvidia free model is the live-verified Nemotron 3 Super 120B (2026-07-20)', () => {
+    // The 49B Llama-Nemotron free slug was retired in the same catalog wave.
+    const correct = getModelMetadataById('nvidia/nemotron-3-super-120b-a12b:free');
+    const retired = getModelMetadataById('nvidia/llama-3.3-nemotron-super-49b-v1:free');
     expect(correct).not.toBeNull();
     expect(correct?.provider).toBe('open_router');
-    expect(hallucinated).toBeNull();
+    expect(retired).toBeNull();
   });
 
-  it('mistralai openrouter free model has 128K context (not the old 32K)', () => {
-    const meta = getModelMetadataById('mistralai/mistral-small-3.1-24b-instruct:free');
+  it('google openrouter free model (gemma-4) has 131K context', () => {
+    const meta = getModelMetadataById('google/gemma-4-26b-a4b-it:free');
     expect(meta).not.toBeNull();
-    expect(meta?.contextWindow).toBe(128000);
+    expect(meta?.contextWindow).toBe(131072);
   });
 
   it('unknown model ID returns null gracefully (no throw)', () => {

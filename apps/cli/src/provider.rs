@@ -472,17 +472,17 @@ mod tests {
         let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
         // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json
         assert!(ids.contains(&"claude-opus-4-8"));
-        assert!(ids.contains(&"claude-sonnet-4-6"));
-        // OpenAI flagship + mini entries are both sourced from models.json.
-        assert!(ids.contains(&"gpt-5.5"));
-        assert!(ids.contains(&"gpt-5.4-mini"));
+        assert!(ids.contains(&"claude-sonnet-5"));
+        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
+        assert!(ids.contains(&"gpt-5.6-sol"));
+        assert!(ids.contains(&"gpt-5.6-luna"));
         assert!(ids.contains(&"gemini-3.5-flash"));
         assert!(ids.contains(&"gemini-3.1-pro-preview"));
         assert!(ids.contains(&"gemini-3.1-flash-lite"));
         // xAI flagship is sourced from models.json.
-        assert!(ids.contains(&"grok-4.3"));
+        assert!(ids.contains(&"grok-4.5"));
         assert!(ids.contains(&"mistral-large-2512"));
-        assert!(ids.contains(&"mistral-medium-2508"));
+        assert!(ids.contains(&"mistral-medium-3-5"));
         assert!(ids.contains(&"deepseek-v4-flash"));
         assert!(ids.contains(&"deepseek-v4-pro"));
         assert!(ids.contains(&"glm-5.2"));
@@ -580,16 +580,16 @@ mod tests {
             .collect();
         // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json (thinking=true)
         assert!(reasoning_ids.contains(&"claude-opus-4-8"));
-        assert!(reasoning_ids.contains(&"claude-sonnet-4-6"));
+        assert!(reasoning_ids.contains(&"claude-sonnet-5"));
         // Haiku 4.5 supports extended thinking (models.json capabilities.thinking=true,
         // flipped in the effort-catalog wave).
         assert!(reasoning_ids.contains(&"claude-haiku-4-5"));
-        // OpenAI flagship + mini entries are both sourced from models.json.
-        assert!(reasoning_ids.contains(&"gpt-5.5"));
-        assert!(reasoning_ids.contains(&"gpt-5.4-mini"));
+        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
+        assert!(reasoning_ids.contains(&"gpt-5.6-sol"));
+        assert!(reasoning_ids.contains(&"gpt-5.6-luna"));
         assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
         // xAI flagship has reasoning enabled.
-        assert!(reasoning_ids.contains(&"grok-4.3"));
+        assert!(reasoning_ids.contains(&"grok-4.5"));
         assert!(reasoning_ids.contains(&"deepseek-v4-pro"));
     }
 
@@ -608,9 +608,10 @@ mod tests {
     /// must never leave this suite asserting stale values.
     #[test]
     fn test_reasoning_flags_match_ssot_thinking_capability() {
-        let ssot: serde_json::Value =
-            serde_json::from_str(include_str!("../../../packages/contracts/types/src/models.json"))
-                .expect("models.json must parse");
+        let ssot: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../packages/contracts/types/src/models.json"
+        ))
+        .expect("models.json must parse");
         let models = ssot
             .get("models")
             .and_then(|m| m.as_object())
@@ -647,10 +648,10 @@ mod tests {
 
     #[test]
     fn test_audio_capabilities() {
-        // gpt-5.5 is the current OpenAI flagship in models.json
-        let gpt55 = find_model("gpt-5.5").unwrap();
-        assert!(!gpt55.supports_audio_input);
-        assert!(!gpt55.supports_audio_output);
+        // gpt-5.6-sol is the current OpenAI flagship in models.json
+        let gpt56_sol = find_model("gpt-5.6-sol").unwrap();
+        assert!(!gpt56_sol.supports_audio_input);
+        assert!(!gpt56_sol.supports_audio_output);
 
         let gemini_flash = find_model("gemini-3.1-flash-lite").unwrap();
         assert!(!gemini_flash.supports_audio_input);
@@ -671,16 +672,16 @@ mod tests {
         let gemini = find_model("gemini-3.1-pro-preview").unwrap();
         assert!(!gemini.supports_pdf);
 
-        // gpt-5.5 is the current OpenAI flagship in models.json
-        let gpt55 = find_model("gpt-5.5").unwrap();
-        assert!(!gpt55.supports_pdf);
+        // gpt-5.6-sol is the current OpenAI flagship in models.json
+        let gpt56_sol = find_model("gpt-5.6-sol").unwrap();
+        assert!(!gpt56_sol.supports_pdf);
     }
 
     // ── find_model ─────────────────────────────────────────────
 
     #[test]
     fn test_find_model_exact() {
-        let model = find_model("gpt-5.5");
+        let model = find_model("gpt-5.6-sol");
         assert!(model.is_some());
         assert_eq!(model.unwrap().provider, "openai");
     }
@@ -701,15 +702,15 @@ mod tests {
     fn test_find_model_new_entries() {
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
         assert!(find_model("claude-opus-4-8").is_some());
-        assert!(find_model("claude-sonnet-4-6").is_some());
-        // OpenAI flagship + mini entries are both sourced from models.json.
-        assert!(find_model("gpt-5.5").is_some());
-        assert!(find_model("gpt-5.4-mini").is_some());
+        assert!(find_model("claude-sonnet-5").is_some());
+        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
+        assert!(find_model("gpt-5.6-sol").is_some());
+        assert!(find_model("gpt-5.6-luna").is_some());
         assert!(find_model("gemini-3.5-flash").is_some());
         assert!(find_model("gemini-3.1-pro-preview").is_some());
         assert!(find_model("gemini-3.1-flash-lite").is_some());
         // xAI flagship is sourced from models.json.
-        assert!(find_model("grok-4.3").is_some());
+        assert!(find_model("grok-4.5").is_some());
         assert!(find_model("mistral-large-2512").is_some());
         assert!(find_model("glm-5.2").is_some());
     }
@@ -812,11 +813,11 @@ mod tests {
     fn test_supports_tool_use_true() {
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json (tools=true)
         assert!(supports_tool_use("claude-opus-4-8"));
-        // gpt-5.5 is the current OpenAI flagship (tools=true)
-        assert!(supports_tool_use("gpt-5.5"));
+        // gpt-5.6-sol is the current OpenAI flagship (tools=true)
+        assert!(supports_tool_use("gpt-5.6-sol"));
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
-        // grok-4.3 is the live xAI flagship in models.json (supersedes grok-4).
-        assert!(supports_tool_use("grok-4.3"));
+        // grok-4.5 is the live xAI flagship in models.json (supersedes grok-4.3).
+        assert!(supports_tool_use("grok-4.5"));
         assert!(supports_tool_use("deepseek-v4-pro"));
     }
 
@@ -863,13 +864,13 @@ mod tests {
     #[test]
     fn test_default_temperature_claude_none() {
         assert_eq!(default_temperature("claude-opus-4-8"), None);
-        assert_eq!(default_temperature("claude-sonnet-4-6"), None);
+        assert_eq!(default_temperature("claude-sonnet-5"), None);
     }
 
     #[test]
     fn test_default_temperature_openai_non_reasoning_none() {
-        assert_eq!(default_temperature("gpt-5.5"), None);
-        assert_eq!(default_temperature("gpt-5.4-mini"), None);
+        assert_eq!(default_temperature("gpt-5.6-sol"), None);
+        assert_eq!(default_temperature("gpt-5.6-luna"), None);
     }
 
     #[test]
@@ -889,10 +890,10 @@ mod tests {
     fn test_supports_reasoning_true() {
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json (thinking=true)
         assert!(supports_reasoning("claude-opus-4-8"));
-        assert!(supports_reasoning("claude-sonnet-4-6"));
-        // OpenAI flagship + mini entries are both sourced from models.json.
-        assert!(supports_reasoning("gpt-5.5"));
-        assert!(supports_reasoning("gpt-5.4-mini"));
+        assert!(supports_reasoning("claude-sonnet-5"));
+        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
+        assert!(supports_reasoning("gpt-5.6-sol"));
+        assert!(supports_reasoning("gpt-5.6-luna"));
         assert!(supports_reasoning("gemini-3.1-pro-preview"));
         assert!(supports_reasoning("deepseek-v4-pro"));
     }
@@ -913,9 +914,9 @@ mod tests {
     #[test]
     fn test_is_deprecated_false() {
         assert!(!is_deprecated("claude-opus-4-8"));
-        assert!(!is_deprecated("gpt-5.5"));
+        assert!(!is_deprecated("gpt-5.6-sol"));
         assert!(!is_deprecated("gemini-3.1-pro-preview"));
-        assert!(!is_deprecated("grok-4.3"));
+        assert!(!is_deprecated("grok-4.5"));
         assert!(!is_deprecated("mistral-large-2512"));
     }
 
@@ -1001,14 +1002,14 @@ mod tests {
         let list = format_model_list();
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
         assert!(list.contains("claude-opus-4-8"));
-        // OpenAI flagship + mini entries are both sourced from models.json.
-        assert!(list.contains("gpt-5.5"));
-        assert!(list.contains("gpt-5.4-mini"));
+        // OpenAI flagship + fast (luna) entries are both sourced from models.json.
+        assert!(list.contains("gpt-5.6-sol"));
+        assert!(list.contains("gpt-5.6-luna"));
         assert!(list.contains("gemini-3.5-flash"));
         assert!(list.contains("gemini-3.1-pro-preview"));
         assert!(list.contains("gemini-3.1-flash-lite"));
         // xAI flagship is sourced from models.json.
-        assert!(list.contains("grok-4.3"));
+        assert!(list.contains("grok-4.5"));
         assert!(list.contains("mistral-large-2512"));
         assert!(list.contains("glm-5.2"));
     }

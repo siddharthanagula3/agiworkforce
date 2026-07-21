@@ -3001,10 +3001,10 @@ impl From<crate::openai_models::TruncationPolicyConfig> for TruncationPolicy {
 impl TruncationPolicy {
     pub fn token_budget(&self) -> usize {
         match self {
-            TruncationPolicy::Bytes(bytes) => usize::try_from(
-                crate::string_utils::approx_tokens_from_byte_count(*bytes),
-            )
-            .unwrap_or(usize::MAX),
+            TruncationPolicy::Bytes(bytes) => {
+                usize::try_from(crate::string_utils::approx_tokens_from_byte_count(*bytes))
+                    .unwrap_or(usize::MAX)
+            }
             TruncationPolicy::Tokens(tokens) => *tokens,
         }
     }

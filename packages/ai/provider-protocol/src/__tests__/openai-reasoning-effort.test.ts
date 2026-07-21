@@ -30,16 +30,17 @@ describe('resolveOpenAISupportedReasoningEfforts — golden snapshots', () => {
   });
 
   it('does not infer reasoning for a catalog non-reasoning model', () => {
-    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-4.1-nano' })).toEqual([]);
+    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-image-2' })).toEqual([]);
   });
 
-  it('uses the registry effort set for the current OpenAI flagship', () => {
-    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.5' })).toEqual([
+  it('uses the registry effort set for the current OpenAI chat model', () => {
+    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.6-terra' })).toEqual([
       'none',
       'low',
       'medium',
       'high',
       'xhigh',
+      'max',
     ]);
   });
 
@@ -63,7 +64,7 @@ describe('resolveOpenAISupportedReasoningEfforts — golden snapshots', () => {
   it('compat.supportedReasoningEfforts overrides the canonical registry', () => {
     expect(
       resolveOpenAISupportedReasoningEfforts({
-        id: 'gpt-5.5',
+        id: 'gpt-5.6-sol',
         compat: { supportedReasoningEfforts: ['low', 'high'] },
       }),
     ).toEqual(['low', 'high']);
@@ -72,10 +73,10 @@ describe('resolveOpenAISupportedReasoningEfforts — golden snapshots', () => {
 
 describe('supportsOpenAIReasoningEffort', () => {
   it('returns true for an effort the model supports', () => {
-    expect(supportsOpenAIReasoningEffort({ id: 'gpt-5.5' }, 'low')).toBe(true);
+    expect(supportsOpenAIReasoningEffort({ id: 'gpt-5.6-sol' }, 'low')).toBe(true);
   });
   it('returns false for an unsupported effort', () => {
-    expect(supportsOpenAIReasoningEffort({ id: 'gpt-5.5' }, 'max')).toBe(false);
+    expect(supportsOpenAIReasoningEffort({ id: 'gpt-5.6-sol' }, 'minimal')).toBe(false);
   });
 });
 
@@ -83,17 +84,17 @@ describe('resolveOpenAIReasoningEffortForModel — fallback ladder', () => {
   it('returns the requested effort when supported', () => {
     expect(
       resolveOpenAIReasoningEffortForModel({
-        model: { id: 'gpt-5.5' },
+        model: { id: 'gpt-5.6-sol' },
         effort: 'medium',
       }),
     ).toBe('medium');
   });
 
   it('upgrades minimal -> low when the model lacks minimal', () => {
-    // gpt-5.5 supports none/low/medium/high/xhigh but NOT minimal.
+    // gpt-5.6-sol supports none/low/medium/high/xhigh/max but NOT minimal.
     expect(
       resolveOpenAIReasoningEffortForModel({
-        model: { id: 'gpt-5.5' },
+        model: { id: 'gpt-5.6-sol' },
         effort: 'minimal',
       }),
     ).toBe('low');

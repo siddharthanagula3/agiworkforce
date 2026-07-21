@@ -22,7 +22,7 @@ import {
 describe('managed-cloud model classification (resolveAppMode root cause)', () => {
   it.each([
     'claude-opus-4.8', // Max flagship — the model in the bug report
-    'grok-4.3', // Max flagship
+    'grok-4.5', // Max flagship
     'gpt-5.6-terra', // current balanced OpenAI model
   ])('classifies non-preview managed-cloud model %s as cloud', (modelId) => {
     expect(isCloudManagedModelId(modelId)).toBe(true);

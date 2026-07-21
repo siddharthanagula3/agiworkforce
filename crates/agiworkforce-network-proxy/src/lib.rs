@@ -1,8 +1,8 @@
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
 mod certs;
-mod home_dir;
 mod config;
+mod home_dir;
 mod http_proxy;
 mod mitm;
 mod network_policy;

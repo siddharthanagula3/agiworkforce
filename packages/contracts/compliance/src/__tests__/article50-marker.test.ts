@@ -13,7 +13,7 @@ describe('Article50Marker — buildProvenanceClaim', () => {
     const claim = buildProvenanceClaim({
       kind: 'image',
       provider: 'google',
-      model: 'imagen-4-fast',
+      model: 'gemini-3.1-flash-image',
       generatedAt: '2026-05-17T12:00:00.000Z',
       contentHashSha256: 'a'.repeat(64),
     });
@@ -21,7 +21,7 @@ describe('Article50Marker — buildProvenanceClaim', () => {
     expect(claim.claim_generator).toBe('AGI');
     expect(claim.kind).toBe('image');
     expect(claim.provider).toBe('google');
-    expect(claim.model).toBe('imagen-4-fast');
+    expect(claim.model).toBe('gemini-3.1-flash-image');
     expect(claim.generated_at).toBe('2026-05-17T12:00:00.000Z');
     expect(claim.content_hash_sha256).toBe('a'.repeat(64));
     expect(claim.signature).toBeNull();

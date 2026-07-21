@@ -1655,7 +1655,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let session = AgentSession::new("claude-sonnet-4-6", &ctx, None);
+        let session = AgentSession::new("claude-sonnet-5", &ctx, None);
 
         assert_eq!(session.privacy_mode, PrivacyMode::Byok);
         assert!(session.validate_privacy_boundary().is_ok());
@@ -1678,12 +1678,8 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let session = AgentSession::new_with_provider(
-            "claude-sonnet-4-6",
-            &ctx,
-            None,
-            Provider::ManagedCloud,
-        );
+        let session =
+            AgentSession::new_with_provider("claude-sonnet-5", &ctx, None, Provider::ManagedCloud);
 
         assert_eq!(session.privacy_mode, PrivacyMode::Managed);
         assert_eq!(session.provider_privacy_mode(), PrivacyMode::Managed);
@@ -1707,12 +1703,8 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new_with_provider(
-            "claude-sonnet-4-6",
-            &ctx,
-            None,
-            Provider::ManagedCloud,
-        );
+        let mut session =
+            AgentSession::new_with_provider("claude-sonnet-5", &ctx, None, Provider::ManagedCloud);
         session.set_privacy_mode(PrivacyMode::Local);
         let draft = "You are continuing an AGI Local chat in Managed Cloud mode.\nPrivacy boundary: the user explicitly selected this handoff.";
 
@@ -1743,7 +1735,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-sonnet-4-6", &ctx, None);
+        let mut session = AgentSession::new("claude-sonnet-5", &ctx, None);
         let mut config = CliConfig::default();
         config.ui.output_style = Some("learning".to_string());
         config.ui.privacy_mode = Some("local".to_string());

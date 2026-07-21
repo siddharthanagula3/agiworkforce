@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-use crate::agent_events::{AgentEvent, AgentEventEnvelope, AGENT_EVENT_SCHEMA_VERSION};
+use crate::agent_events::{AGENT_EVENT_SCHEMA_VERSION, AgentEvent, AgentEventEnvelope};
 use crate::protocol::ReviewDecision;
 use crate::task_state::{AgentTaskState, AgentTaskStateChanged};
 use crate::user_input::UserInput;
@@ -486,8 +486,8 @@ pub struct AcknowledgedResponse {
 mod tests {
     use super::*;
     use crate::agent_events::{
-        AgentEvent, AgentEventToolCategory, AgentEventToolExecutionStart,
-        AGENT_EVENT_SCHEMA_VERSION,
+        AGENT_EVENT_SCHEMA_VERSION, AgentEvent, AgentEventToolCategory,
+        AgentEventToolExecutionStart,
     };
 
     #[test]
@@ -517,8 +517,10 @@ mod tests {
         assert_eq!(notification.params["turnId"], "turn-1");
         assert_eq!(notification.params["sequence"], 7);
         assert_eq!(notification.params["event"]["type"], "tool-execution-start");
-        assert!(notification.params["emittedAtMs"]
-            .as_i64()
-            .is_some_and(|value| value > 0));
+        assert!(
+            notification.params["emittedAtMs"]
+                .as_i64()
+                .is_some_and(|value| value > 0)
+        );
     }
 }

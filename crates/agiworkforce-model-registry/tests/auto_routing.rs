@@ -17,7 +17,7 @@ fn exposes_the_generated_provider_model_index() {
         .expect("generated registry should load")
         .expect("OpenAI should have a canonical provider index");
 
-    assert!(openai_models.iter().any(|model| model == "gpt-5.4-nano"));
+    assert!(openai_models.iter().any(|model| model == "gpt-5.6-luna"));
     assert_eq!(
         model_keys_for_provider("not-a-provider").expect("generated registry should load"),
         None
@@ -185,7 +185,7 @@ fn routes_image_generation_by_intrinsic_capability() {
 #[test]
 fn preserves_an_explicit_eligible_model() {
     let decision = resolve_auto_route(&request(
-        "gpt-5.4-nano",
+        "gpt-5.6-luna",
         RoutingTaskType::Coding,
         "max",
         TrustMode::ManagedCloud,
@@ -195,7 +195,7 @@ fn preserves_an_explicit_eligible_model() {
     let AutoRouteDecision::Selected(selected) = decision else {
         panic!("expected selected route");
     };
-    assert_eq!(selected.model_key, "gpt-5.4-nano");
+    assert_eq!(selected.model_key, "gpt-5.6-luna");
     assert_eq!(selected.reason, RouteReason::Explicit);
     assert!(selected.fallbacks.is_empty());
 }
@@ -385,7 +385,7 @@ fn reroutes_on_task_change_when_current_model_is_not_preferred() {
         "max",
         TrustMode::ManagedCloud,
     );
-    routing_request.current_model_key = Some("gpt-5.4-mini");
+    routing_request.current_model_key = Some("gpt-5.6-terra");
     routing_request.previous_task_type = Some(RoutingTaskType::General);
 
     let decision = resolve_auto_route(&routing_request).expect("generated registry should load");

@@ -180,14 +180,14 @@ jest.mock('../src/features/voice/services/voice', () => ({
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      selectedModel: 'claude-sonnet-4.6',
+      selectedModel: 'claude-sonnet-5',
       thinkingEnabledPerModel: {},
     }),
 }));
 
 jest.mock('../src/features/model-picker/service', () => ({
   getShortDisplayName: (id: string) => {
-    if (id === 'claude-sonnet-4.6') return 'Claude 4.6 Sonnet';
+    if (id === 'claude-sonnet-5') return 'Claude Sonnet 5';
     return id;
   },
 }));
@@ -322,7 +322,7 @@ describe('ChatInput', () => {
       const { getByLabelText } = renderInput({ isStreaming: true });
 
       const input = getByLabelText('Message input');
-      expect(input.props.placeholder).toBe('Reply to Claude 4.6 Sonnet...');
+      expect(input.props.placeholder).toBe('Reply to Claude Sonnet 5...');
     });
 
     it('shows stop button instead of send during streaming', () => {

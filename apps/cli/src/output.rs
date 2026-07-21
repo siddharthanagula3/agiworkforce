@@ -125,7 +125,7 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
 /// Model             Provider   Cost
 /// ─────────────────────────────────
 /// claude-opus-4-8   anthropic  $15.00
-/// gpt-5.5           openai     $1.25
+/// gpt-5.6-sol       openai     $5.00
 /// ```
 #[allow(dead_code)]
 pub fn format_table(headers: &[&str], rows: &[Vec<String>]) -> String {
@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn test_model_pricing_anthropic_sonnet() {
-        let (i, o) = model_pricing("claude-sonnet-4-6");
+        let (i, o) = model_pricing("claude-sonnet-5");
         assert_eq!(i, 3.0);
         assert_eq!(o, 15.0);
     }
@@ -517,16 +517,16 @@ mod tests {
     #[test]
     fn test_model_pricing_openai_flagship() {
         // Current OpenAI flagship pricing comes from models.json.
-        let (i, o) = model_pricing("gpt-5.5");
+        let (i, o) = model_pricing("gpt-5.6-sol");
         assert_eq!(i, 5.0);
         assert_eq!(o, 30.0);
     }
 
     #[test]
-    fn test_model_pricing_openai_gpt54_mini() {
-        let (i, o) = model_pricing("gpt-5.4-mini");
-        assert_eq!(i, 0.75);
-        assert_eq!(o, 4.50);
+    fn test_model_pricing_openai_luna() {
+        let (i, o) = model_pricing("gpt-5.6-luna");
+        assert_eq!(i, 1.0);
+        assert_eq!(o, 6.0);
     }
 
     #[test]
@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn test_format_cost_with_known_model() {
-        let result = format_cost("claude-sonnet-4-6", 1_000_000, 500_000);
+        let result = format_cost("claude-sonnet-5", 1_000_000, 500_000);
         // Input: 1M * $3.0/1M = $3.0000
         // Output: 500K * $15.0/1M = $7.5000
         // Total: $10.5000
@@ -622,15 +622,15 @@ mod tests {
     fn test_all_pricing_branches_non_negative() {
         let models = [
             "claude-opus-4-8",
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             "claude-haiku-4-5-20251001",
-            "gpt-5.4-mini",
-            "gpt-5.5",
+            "gpt-5.6-luna",
+            "gpt-5.6-sol",
             "gemini-3.1-flash-lite",
             "gemini-3.1-pro-preview",
             "mistral-large-2512",
-            "mistral-medium-2508",
-            "grok-4.3",
+            "mistral-medium-3-5",
+            "grok-4.5",
             "deepseek-v4-pro",
             "deepseek-v4-flash",
             "unknown-local-model",
@@ -862,7 +862,7 @@ mod tests {
     fn test_format_table_alignment() {
         let headers = &["Model", "Cost"];
         let rows = vec![
-            vec!["gpt-5.5".to_string(), "$2.50".to_string()],
+            vec!["gpt-5.6-sol".to_string(), "$2.50".to_string()],
             vec!["claude-opus-4".to_string(), "$15.00".to_string()],
         ];
         let result = format_table(headers, &rows);
@@ -872,7 +872,7 @@ mod tests {
         // Widest cell in col 0 is "claude-opus-4" (13 chars), so all rows
         // in col 0 should be padded to at least that width.
         assert!(lines[0].starts_with("Model"));
-        assert!(lines[2].starts_with("gpt-5.5"));
+        assert!(lines[2].starts_with("gpt-5.6-sol"));
         assert!(lines[3].starts_with("claude-opus-4"));
     }
 

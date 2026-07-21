@@ -23,7 +23,7 @@ pub struct AgentDefinition {
     pub name: String,
     /// Human-readable description from frontmatter.
     pub description: String,
-    /// Optional model override (e.g. "claude-sonnet-4-6").
+    /// Optional model override (e.g. "claude-sonnet-5").
     pub model: Option<String>,
     /// Allowed tools whitelist. When set, only these tools are available.
     pub tools: Option<Vec<String>>,
@@ -836,7 +836,7 @@ mod tests {
         let content = r#"---
 name: researcher
 description: "Research agent for deep web analysis"
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools: [read_file, search_files, web_search, web_fetch]
 disallowedTools: [write_file, run_command]
 maxTurns: 20
@@ -848,7 +848,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let fm = parse_agent_frontmatter(content).expect("parse should succeed");
         assert_eq!(fm.name, "researcher");
         assert_eq!(fm.description, "Research agent for deep web analysis");
-        assert_eq!(fm.model.as_deref(), Some("claude-sonnet-4-6"));
+        assert_eq!(fm.model.as_deref(), Some("claude-sonnet-5"));
         assert_eq!(
             fm.tools.as_deref(),
             Some(
@@ -942,7 +942,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let agents = vec![AgentDefinition {
             name: "researcher".to_string(),
             description: "Research agent".to_string(),
-            model: Some("claude-sonnet-4-6".to_string()),
+            model: Some("claude-sonnet-5".to_string()),
             tools: None,
             disallowed_tools: None,
             max_turns: Some(20),
@@ -953,7 +953,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let out = format_agent_list(&agents);
         assert!(out.contains("researcher"));
         assert!(out.contains("Research agent"));
-        assert!(out.contains("model=claude-sonnet-4-6"));
+        assert!(out.contains("model=claude-sonnet-5"));
         assert!(out.contains("max_turns=20"));
         assert!(out.contains("1 agent(s) available."));
     }
@@ -998,7 +998,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let agent = AgentDefinition {
             name: "reviewer".to_string(),
             description: "Review code".to_string(),
-            model: Some("claude-sonnet-4-6".to_string()),
+            model: Some("claude-sonnet-5".to_string()),
             tools: Some(vec!["read_file".to_string()]),
             disallowed_tools: Some(vec!["run_command".to_string()]),
             max_turns: Some(12),
@@ -1010,7 +1010,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let out = format_agent_detail(&agent);
 
         assert!(out.contains("Agent: reviewer"));
-        assert!(out.contains("model: claude-sonnet-4-6"));
+        assert!(out.contains("model: claude-sonnet-5"));
         assert!(out.contains("permission_mode: plan"));
         assert!(out.contains("disallowed_tools: run_command"));
         assert!(out.contains("You review code."));
@@ -1150,7 +1150,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
     #[test]
     fn test_apply_to_session_sets_model_and_tools() {
         let ctx = make_test_context();
-        let mut session = crate::agent::AgentSession::new("claude-sonnet-4-6", &ctx, None);
+        let mut session = crate::agent::AgentSession::new("claude-sonnet-5", &ctx, None);
         let agent = AgentDefinition {
             name: "test-agent".to_string(),
             description: "Test".to_string(),
@@ -1191,7 +1191,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
     #[test]
     fn test_apply_to_session_with_model_override() {
         let ctx = make_test_context();
-        let mut session = crate::agent::AgentSession::new("claude-sonnet-4-6", &ctx, None);
+        let mut session = crate::agent::AgentSession::new("claude-sonnet-5", &ctx, None);
         let initial_model = session.model.clone();
 
         let agent = AgentDefinition {

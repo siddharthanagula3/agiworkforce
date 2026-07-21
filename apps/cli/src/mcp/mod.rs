@@ -799,12 +799,8 @@ impl McpManager {
         configs: &HashMap<String, McpServerConfig>,
         privacy_mode: crate::agent::PrivacyMode,
     ) -> Result<()> {
-        self.connect_all_with_elicitation(
-            configs,
-            privacy_mode,
-            Arc::new(AutoDeclineHandler),
-        )
-        .await
+        self.connect_all_with_elicitation(configs, privacy_mode, Arc::new(AutoDeclineHandler))
+            .await
     }
 
     /// Connect all configured servers with a caller-owned elicitation surface.
@@ -832,12 +828,8 @@ impl McpManager {
                 }
                 continue;
             }
-            match McpConnection::connect_with_elicitation(
-                name,
-                config,
-                Arc::clone(&elicitation),
-            )
-            .await
+            match McpConnection::connect_with_elicitation(name, config, Arc::clone(&elicitation))
+                .await
             {
                 Ok(mut conn) => match conn.list_tools().await {
                     Ok(tools) => {

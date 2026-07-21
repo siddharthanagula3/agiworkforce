@@ -1180,7 +1180,7 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
     }
     // Provider-match: a slot's declared provider must equal the model's actual
     // provider in models.json. Otherwise the routing slot silently points at the
-    // wrong vendor (e.g. modelId 'gpt-5.4-mini' but provider 'google'), which the
+    // wrong vendor (e.g. modelId 'gpt-5.6-terra' but provider 'google'), which the
     // modelId-only check above would miss. Fail loudly at import, like the rest.
     if (slot.provider && meta.provider && slot.provider !== meta.provider) {
       throw new Error(
@@ -1770,7 +1770,7 @@ export function resolveAutoModeModel(
  *
  * Each kind maps to a tier-aware `RoutingSlot` lookup using the same
  * `TIER_POLICIES` registry the auto-router consults. Use this helper instead
- * of hardcoding model IDs (`'gpt-5.4-mini'`, `'claude-haiku-4.5'`, etc.) at
+ * of hardcoding model IDs (`'gpt-5.6-terra'`, `'claude-haiku-4.5'`, etc.) at
  * call sites — those literals trip the no-hardcoded-model-ids ESLint rule.
  *
  * @see resolveAutoModeModel for the legacy auto-mode picker.

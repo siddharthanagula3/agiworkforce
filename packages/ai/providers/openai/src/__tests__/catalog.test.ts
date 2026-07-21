@@ -1,8 +1,8 @@
 /**
  * Catalog SSOT regression: OPENAI_MODEL_CATALOG must derive from
  * `models.json` and surface every OpenAI-provider entry, including the
- * current default `gpt-5.5`. Earlier versions were hardcoded at GPT-5.5
- * while models.json declared `defaultModel: 'gpt-5.5'`.
+ * current default `gpt-5.6-sol`. Earlier versions were hardcoded at one
+ * model generation while models.json declared a newer defaultModel.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -14,9 +14,9 @@ describe('OPENAI_MODEL_CATALOG', () => {
     expect(OPENAI_MODEL_CATALOG.length).toBeGreaterThan(0);
   });
 
-  it('contains the current default model (gpt-5.5) per models.json', () => {
+  it('contains the current default model (gpt-5.6-sol) per models.json', () => {
     const ids = OPENAI_MODEL_CATALOG.map((m) => m.id);
-    expect(ids).toContain('gpt-5.5');
+    expect(ids).toContain('gpt-5.6-sol');
   });
 
   it('only contains models with provider === "openai"', () => {

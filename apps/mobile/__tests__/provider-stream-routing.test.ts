@@ -69,7 +69,7 @@ describe('managed mobile stream routing', () => {
 
     await streamChat(
       {
-        model: 'grok-4.3',
+        model: 'grok-4.5',
         messages: [{ role: 'user', content: 'hello' }],
         stream: true,
         operationId,

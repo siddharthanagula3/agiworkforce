@@ -55,7 +55,7 @@ describe('Chat Conversations API', () => {
     {
       id: 'conv-2',
       title: 'Test Conversation 2',
-      model: 'gpt-5.5',
+      model: 'gpt-5.6-sol',
       project_id: 'proj-1',
       created_at: '2026-01-24T00:00:00Z',
       updated_at: '2026-01-24T00:00:00Z',
@@ -252,7 +252,7 @@ describe('Chat Conversations API', () => {
       });
 
       it('should create conversation with specific model', async () => {
-        const newConv = { id: 'new-conv', title: 'New conversation', model: 'gpt-5.5' };
+        const newConv = { id: 'new-conv', title: 'New conversation', model: 'gpt-5.6-sol' };
         mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
@@ -261,14 +261,14 @@ describe('Chat Conversations API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: 'gpt-5.5' }),
+          body: JSON.stringify({ model: 'gpt-5.6-sol' }),
         });
         const response = await POST(request);
 
         expect(response.status).toBe(201);
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_conversations'),
-          expect.arrayContaining(['gpt-5.5']),
+          expect.arrayContaining(['gpt-5.6-sol']),
         );
       });
 

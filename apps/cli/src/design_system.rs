@@ -437,9 +437,9 @@ mod tests {
             capability_for_model("claude-haiku-4-5"),
             CapabilityTier::Fastest
         );
-        // sonnet-4.6 → apiModelId=claude-sonnet-4-6, qualityTier=balanced → Balanced
+        // sonnet-5 → apiModelId=claude-sonnet-5, qualityTier=balanced → Balanced
         assert_eq!(
-            capability_for_model("claude-sonnet-4-6"),
+            capability_for_model("claude-sonnet-5"),
             CapabilityTier::Balanced
         );
         // opus-4.8 → apiModelId=claude-opus-4-8, qualityTier=best → MostCapable

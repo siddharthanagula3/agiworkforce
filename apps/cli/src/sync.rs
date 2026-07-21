@@ -681,11 +681,11 @@ mod tests {
 
     #[test]
     fn test_merge_toml_adds_new_keys() {
-        let local = b"[default]\nmodel = \"gpt-5.5\"\n";
+        let local = b"[default]\nmodel = \"gpt-5.6-sol\"\n";
         let remote = "[default]\nmodel = \"claude-opus-4-8\"\nstream = true\n\n[providers.new]\napi_key_env = \"NEW_KEY\"\n";
         let merged = ConfigSync::merge_toml(local, remote).unwrap();
         // Local model should be preserved
-        assert!(merged.contains("gpt-5.5"));
+        assert!(merged.contains("gpt-5.6-sol"));
         // New key 'stream' should be added
         assert!(merged.contains("stream"));
         // New provider section should be added

@@ -776,10 +776,10 @@ mod tests {
     fn effort_bar_depends_on_model_reasoning_not_just_provider() {
         // The Anthropic provider exposes an effort knob, but the bar must follow
         // the highlighted MODEL's reasoning capability: non-reasoning
-        // claude-haiku-4-5 hides it, reasoning claude-sonnet-4-6 shows it.
+        // claude-haiku-4-5 hides it, reasoning claude-sonnet-5 shows it.
         let models = vec![
             model_with_reasoning("claude-haiku-4-5", "anthropic", false),
-            model_with_reasoning("claude-sonnet-4-6", "anthropic", true),
+            model_with_reasoning("claude-sonnet-5", "anthropic", true),
         ];
         let mut picker = ModelPickerState::default();
         picker.open(&models, "claude-haiku-4-5");
@@ -787,7 +787,7 @@ mod tests {
             !picker.show_effort_bar(),
             "non-reasoning haiku must not show the effort bar"
         );
-        picker.open(&models, "claude-sonnet-4-6");
+        picker.open(&models, "claude-sonnet-5");
         assert!(
             picker.show_effort_bar(),
             "reasoning sonnet must show the effort bar"

@@ -18,8 +18,8 @@ test('generated registry satisfies the canonical JSON schema', () => {
 
   assert.equal(validate(registry), true, JSON.stringify(validate.errors, null, 2));
 
-  const invalid = structuredClone(registry);
-  delete invalid.routes['openai/gpt-5.4-nano'].harnessId;
+  const invalid = JSON.parse(JSON.stringify(registry));
+  delete invalid.routes['openai/gpt-5.6-luna'].harnessId;
   assert.equal(validate(invalid), false, 'schema must reject a route without its harness binding');
   assert.ok(
     validate.errors?.some(
@@ -27,7 +27,7 @@ test('generated registry satisfies the canonical JSON schema', () => {
     ),
   );
 
-  const invalidRuntimeProfile = structuredClone(registry);
+  const invalidRuntimeProfile = JSON.parse(JSON.stringify(registry));
   delete invalidRuntimeProfile.runtimeProfiles['cli/byok-chat'].trustMode;
   assert.equal(
     validate(invalidRuntimeProfile),

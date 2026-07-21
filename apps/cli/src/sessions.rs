@@ -795,7 +795,7 @@ mod tests {
             7,
         )
         .unwrap();
-        save_session(&conn, "s4", "Python tutorial", "gpt-5.5", "/", "").unwrap();
+        save_session(&conn, "s4", "Python tutorial", "gpt-5.6-sol", "/", "").unwrap();
         save_message(&conn, "s4", &Message::text("user", "Teach me Python"), 4).unwrap();
 
         let results = search_sessions(&conn, "rust").unwrap();

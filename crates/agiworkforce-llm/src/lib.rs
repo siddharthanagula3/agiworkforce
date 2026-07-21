@@ -34,14 +34,13 @@ pub use assembler::{INVALID_TOOL_ARGS_MARKER, ToolCallAssembler, parse_tool_argu
 pub use decode::Utf8StreamDecoder;
 pub use error::{LlmError, PaywallNotice, classify_error_response, parse_paywall_body};
 pub use events::{ChatOutcome, StreamEvent, Usage};
-pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
 pub use serialize::OllamaRequestOpts;
+pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
 pub use stream::{
     AnthropicThinking, ChatRequest, ToolChoice, build_anthropic_request_body,
-    build_gemini_request_body,
-    build_ollama_request_body, build_openai_compat_request_body, build_openai_responses_body,
-    run_anthropic_stream, run_gemini_stream, run_ollama_stream, run_openai_compat_stream,
-    run_openai_responses_stream, stream_chat,
+    build_gemini_request_body, build_ollama_request_body, build_openai_compat_request_body,
+    build_openai_responses_body, run_anthropic_stream, run_gemini_stream, run_ollama_stream,
+    run_openai_compat_stream, run_openai_responses_stream, stream_chat,
 };
 pub use watchdog::IdleWatchdog;
 pub use wire::{ContentBlock, Message, MessageContent, ToolCall, ToolDefinition};

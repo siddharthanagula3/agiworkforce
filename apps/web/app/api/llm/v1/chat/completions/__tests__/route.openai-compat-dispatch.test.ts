@@ -301,7 +301,7 @@ const COMPAT_CASES: Array<{ provider: string; model: string; content: string }> 
   { provider: 'zhipu', model: 'glm-5.2', content: 'Zhipu says hi.' },
   { provider: 'qwen', model: 'qwen-max', content: 'Qwen says hi.' },
   { provider: 'deepseek', model: 'deepseek-v4-flash', content: 'DeepSeek says hi.' },
-  { provider: 'xai', model: 'grok-4.3', content: 'XAI says hi.' },
+  { provider: 'xai', model: 'grok-4.5', content: 'XAI says hi.' },
   { provider: 'perplexity', model: 'sonar', content: 'Perplexity says hi.' },
 ];
 
@@ -347,7 +347,7 @@ describe.each(COMPAT_CASES)(
 describe('Managed Web provider admission', () => {
   it.each([
     ['groq', 'groq-llama-3.3-70b'],
-    ['openrouter', 'meta-llama/llama-3.3-70b-instruct:free'],
+    ['openrouter', 'nvidia/nemotron-3-super-120b-a12b:free'],
   ])('rejects %s when it has no selectable Managed Web route', async (provider, model) => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });

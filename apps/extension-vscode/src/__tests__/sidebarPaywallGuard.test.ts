@@ -55,35 +55,35 @@ describe('sidebar sendMessage — paywall guard (P0-F)', () => {
 
   it('blocks cross-provider switch (claude→gpt) on free tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('byok');
-    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.5', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.6-sol', mockContext);
     expect(result.blocked).toBe(true);
     expect(result.activeModelAfter).toBe('claude-opus-4.8');
   });
 
   it('blocks cross-provider switch (gpt→gemini) on basic tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('basic');
-    const result = await simulateSendMessage('gpt-5.5', 'gemini-3.1-pro-preview', mockContext);
+    const result = await simulateSendMessage('gpt-5.6-sol', 'gemini-3.1-pro-preview', mockContext);
     expect(result.blocked).toBe(true);
-    expect(result.activeModelAfter).toBe('gpt-5.5');
+    expect(result.activeModelAfter).toBe('gpt-5.6-sol');
   });
 
   it('blocks cross-provider switch (claude→grok) on pro tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('pro');
-    const result = await simulateSendMessage('claude-opus-4.8', 'grok-4.3', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'grok-4.5', mockContext);
     expect(result.blocked).toBe(true);
     expect(result.activeModelAfter).toBe('claude-opus-4.8');
   });
 
   it('allows cross-provider switch (claude→gpt) on max tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('max');
-    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.5', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.6-sol', mockContext);
     expect(result.blocked).toBe(false);
-    expect(result.activeModelAfter).toBe('gpt-5.5');
+    expect(result.activeModelAfter).toBe('gpt-5.6-sol');
   });
 
   it('allows cross-provider switch (gpt→gemini) on max tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('max');
-    const result = await simulateSendMessage('gpt-5.5', 'gemini-3.1-pro-preview', mockContext);
+    const result = await simulateSendMessage('gpt-5.6-sol', 'gemini-3.1-pro-preview', mockContext);
     expect(result.blocked).toBe(false);
     expect(result.activeModelAfter).toBe('gemini-3.1-pro-preview');
   });
@@ -99,7 +99,7 @@ describe('sidebar sendMessage — paywall guard (P0-F)', () => {
     vi.mocked(resolveTier).mockResolvedValue('byok');
     let activeModel = 'claude-opus-4.8';
 
-    const r1 = await simulateSendMessage(activeModel, 'gpt-5.5', mockContext);
+    const r1 = await simulateSendMessage(activeModel, 'gpt-5.6-sol', mockContext);
     expect(r1.blocked).toBe(true);
     // activeModel must not advance
     activeModel = r1.activeModelAfter;
@@ -216,7 +216,7 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
-    const guardResult = guardProviderSwitch('claude-opus-4.8', 'gpt-5.5', tier);
+    const guardResult = guardProviderSwitch('claude-opus-4.8', 'gpt-5.6-sol', tier);
     expect(guardResult).toBe('upgrade-required');
   });
 });

@@ -134,7 +134,9 @@
           "balanced": ["general_balanced", "workhorse_general"],
           "premium": ["general_balanced", "flagship_general", "workhorse_general"]
         },
-        "benchmarkWeights": { "mmlu": 1 }
+        "benchmarkWeights": {
+          "mmlu": 1
+        }
       },
       "general": {
         "requiredCapabilities": ["textInput", "textOutput"],
@@ -144,7 +146,9 @@
           "balanced": ["general_balanced", "workhorse_general"],
           "premium": ["flagship_general", "general_balanced", "workhorse_general"]
         },
-        "benchmarkWeights": { "mmlu": 1 }
+        "benchmarkWeights": {
+          "mmlu": 1
+        }
       },
       "coding": {
         "requiredCapabilities": ["textInput", "textOutput", "functionCalling"],
@@ -154,7 +158,10 @@
           "balanced": ["coding_balanced", "escalation_coding", "workhorse_general"],
           "premium": ["flagship_coding", "coding_balanced", "escalation_coding"]
         },
-        "benchmarkWeights": { "swebench": 0.7, "humaneval": 0.3 }
+        "benchmarkWeights": {
+          "swebench": 0.7,
+          "humaneval": 0.3
+        }
       },
       "reasoning": {
         "requiredCapabilities": ["textInput", "textOutput", "reasoning"],
@@ -164,7 +171,10 @@
           "balanced": ["reasoning_balanced", "reasoning_economy"],
           "premium": ["reasoning_balanced", "flagship_general", "reasoning_economy"]
         },
-        "benchmarkWeights": { "gpqa": 0.55, "aime": 0.45 }
+        "benchmarkWeights": {
+          "gpqa": 0.55,
+          "aime": 0.45
+        }
       },
       "creative_writing": {
         "requiredCapabilities": ["textInput", "textOutput"],
@@ -215,7 +225,10 @@
           "balanced": ["general_balanced", "coding_balanced"],
           "premium": ["flagship_general", "flagship_coding"]
         },
-        "benchmarkWeights": { "swebench": 0.5, "mmlu": 0.5 }
+        "benchmarkWeights": {
+          "swebench": 0.5,
+          "mmlu": 0.5
+        }
       },
       "computer-use": {
         "requiredCapabilities": ["textInput", "imageInput", "textOutput", "functionCalling"],
@@ -225,7 +238,9 @@
           "balanced": ["computer_use_balanced"],
           "premium": ["computer_use_premium", "computer_use_balanced"]
         },
-        "benchmarkWeights": { "osWorldVerified": 1 }
+        "benchmarkWeights": {
+          "osWorldVerified": 1
+        }
       },
       "image_generation": {
         "requiredCapabilities": ["imageOutput"],
@@ -239,46 +254,126 @@
       }
     },
     "slots": {
-      "general_fast": { "modelKey": "gemini-3.1-flash-lite" },
-      "workhorse_general": { "modelKey": "gemini-3.1-flash-lite" },
-      "general_balanced": { "modelKey": "gpt-5.6-terra" },
-      "general_premium": { "modelKey": "gemini-3.5-flash" },
-      "flagship_general": { "modelKey": "gpt-5.6-sol" },
-      "coding_fast": { "modelKey": "deepseek-v4-flash" },
-      "coding_premium": { "modelKey": "gpt-5.6-sol" },
-      "escalation_coding": { "modelKey": "glm-5.2" },
-      "coding_balanced": { "modelKey": "claude-sonnet-5" },
-      "flagship_coding": { "modelKey": "claude-opus-4.8" },
-      "reasoning_premium": { "modelKey": "deepseek-v4-flash" },
-      "reasoning_economy": { "modelKey": "deepseek-v4-flash" },
-      "reasoning_balanced": { "modelKey": "qwen-3.7-plus" },
-      "creative_writing": { "modelKey": "claude-sonnet-5" },
-      "creative_writing_premium": { "modelKey": "claude-opus-4.8" },
-      "creative_balanced": { "modelKey": "claude-sonnet-5" },
-      "creative_premium": { "modelKey": "claude-opus-4.8" },
-      "vision_fast": { "modelKey": "gemini-3.1-flash-lite" },
-      "vision_premium": { "modelKey": "gemini-3.5-flash" },
-      "multimodal_balanced": { "modelKey": "gemini-3.5-flash" },
-      "long_context_balanced": { "modelKey": "gemini-3.1-pro-preview" },
-      "search_fast": { "modelKey": "sonar" },
-      "search_premium": { "modelKey": "sonar-deep-research" },
-      "browser_dom": { "modelKey": "claude-sonnet-5" },
-      "computer_use": { "modelKey": "claude-sonnet-5" },
-      "computer_use_balanced": { "modelKey": "claude-sonnet-5" },
-      "computer_use_premium": { "modelKey": "claude-opus-4.8" },
-      "image_generation": { "modelKey": "gemini-3.1-flash-image" },
-      "video_generation": { "modelKey": "veo-3" },
-      "embedding_default": { "modelKey": "gemini-embedding-2" },
-      "voice_transcription": { "modelKey": "whisper-1" },
-      "voice_rewrite": { "modelKey": "gemini-3.1-flash-lite" },
-      "general_balanced_pro": { "modelKey": "gpt-5.6-terra" },
-      "coding_premium_pro": { "modelKey": "claude-sonnet-5" },
-      "reasoning_premium_pro": { "modelKey": "qwen-3.7-plus" },
-      "multimodal_pro": { "modelKey": "gemini-3.5-flash" },
-      "long_context_pro": { "modelKey": "gemini-3.1-pro-preview" },
-      "flagship_coding_pro_plus": { "modelKey": "claude-opus-4.8" },
-      "flagship_general_pro_plus": { "modelKey": "gpt-5.6-sol" },
-      "video_generation_pro_plus": { "modelKey": "veo-3" }
+      "general_fast": {
+        "modelKey": "gemini-3.1-flash-lite"
+      },
+      "workhorse_general": {
+        "modelKey": "gemini-3.1-flash-lite"
+      },
+      "general_balanced": {
+        "modelKey": "gpt-5.6-terra"
+      },
+      "general_premium": {
+        "modelKey": "gemini-3.5-flash"
+      },
+      "flagship_general": {
+        "modelKey": "gpt-5.6-sol"
+      },
+      "coding_fast": {
+        "modelKey": "deepseek-v4-flash"
+      },
+      "coding_premium": {
+        "modelKey": "gpt-5.6-sol"
+      },
+      "escalation_coding": {
+        "modelKey": "glm-5.2"
+      },
+      "coding_balanced": {
+        "modelKey": "claude-sonnet-5"
+      },
+      "flagship_coding": {
+        "modelKey": "claude-opus-4.8"
+      },
+      "reasoning_premium": {
+        "modelKey": "deepseek-v4-flash"
+      },
+      "reasoning_economy": {
+        "modelKey": "deepseek-v4-flash"
+      },
+      "reasoning_balanced": {
+        "modelKey": "qwen-3.7-plus"
+      },
+      "creative_writing": {
+        "modelKey": "claude-sonnet-5"
+      },
+      "creative_writing_premium": {
+        "modelKey": "claude-opus-4.8"
+      },
+      "creative_balanced": {
+        "modelKey": "claude-sonnet-5"
+      },
+      "creative_premium": {
+        "modelKey": "claude-opus-4.8"
+      },
+      "vision_fast": {
+        "modelKey": "gemini-3.1-flash-lite"
+      },
+      "vision_premium": {
+        "modelKey": "gemini-3.5-flash"
+      },
+      "multimodal_balanced": {
+        "modelKey": "gemini-3.5-flash"
+      },
+      "long_context_balanced": {
+        "modelKey": "gemini-3.1-pro-preview"
+      },
+      "search_fast": {
+        "modelKey": "sonar"
+      },
+      "search_premium": {
+        "modelKey": "sonar-deep-research"
+      },
+      "browser_dom": {
+        "modelKey": "claude-sonnet-5"
+      },
+      "computer_use": {
+        "modelKey": "claude-sonnet-5"
+      },
+      "computer_use_balanced": {
+        "modelKey": "claude-sonnet-5"
+      },
+      "computer_use_premium": {
+        "modelKey": "claude-opus-4.8"
+      },
+      "image_generation": {
+        "modelKey": "gemini-3.1-flash-image"
+      },
+      "video_generation": {
+        "modelKey": "veo-3.1"
+      },
+      "embedding_default": {
+        "modelKey": "gemini-embedding-2"
+      },
+      "voice_transcription": {
+        "modelKey": "gpt-4o-transcribe"
+      },
+      "voice_rewrite": {
+        "modelKey": "gemini-3.1-flash-lite"
+      },
+      "general_balanced_pro": {
+        "modelKey": "gpt-5.6-terra"
+      },
+      "coding_premium_pro": {
+        "modelKey": "claude-sonnet-5"
+      },
+      "reasoning_premium_pro": {
+        "modelKey": "qwen-3.7-plus"
+      },
+      "multimodal_pro": {
+        "modelKey": "gemini-3.5-flash"
+      },
+      "long_context_pro": {
+        "modelKey": "gemini-3.1-pro-preview"
+      },
+      "flagship_coding_pro_plus": {
+        "modelKey": "claude-opus-4.8"
+      },
+      "flagship_general_pro_plus": {
+        "modelKey": "gpt-5.6-sol"
+      },
+      "video_generation_pro_plus": {
+        "modelKey": "veo-3.1"
+      }
     }
   }
 }

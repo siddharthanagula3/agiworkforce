@@ -11,8 +11,8 @@
  *   builds retain the explicit local test-token fallback owned by that module.
  *
  * MODEL:
- *   Read from packages/contracts/types/src/models.json managed_cloud.taskRouting.computer_use.
- *   Value at time of writing: "gpt-5.4-mini" (vision + function-calling capable).
+ *   Read from the canonical catalog's computer_use routing slot (SLOT_REGISTRY).
+ *   Value at time of writing: "claude-sonnet-5" (vision + function-calling capable).
  *   Not hardcoded here — the catalog value is embedded at build time via the
  *   COMPUTER_USE_MODEL constant exported below so callers can log or override it.
  *

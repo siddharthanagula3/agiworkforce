@@ -74,7 +74,7 @@ describe('buildThinkingConfig (Anthropic)', () => {
     expect(
       buildThinkingConfig({
         provider: 'openai',
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-sol',
         explicitThinking: undefined,
         thinkingMode: true,
         effort: 'high',
@@ -88,11 +88,11 @@ describe('resolveRequestEffort (catalog-driven)', () => {
     expect(resolveRequestEffort('openai', 'gpt-5.6-sol', 'max')).toBe('max');
   });
 
-  it('drops an effort not supported by the selected OpenAI model', () => {
-    expect(resolveRequestEffort('openai', 'gpt-5.5', 'max')).toBeUndefined();
+  it('drops an effort for a model without a registry entry (fail closed)', () => {
+    expect(resolveRequestEffort('openai', 'unregistered-openai-model', 'max')).toBeUndefined();
   });
 
   it('does not attach reasoning effort to a catalog non-reasoning model', () => {
-    expect(resolveRequestEffort('openai', 'gpt-4.1-nano', 'high')).toBeUndefined();
+    expect(resolveRequestEffort('openai', 'gpt-image-2', 'high')).toBeUndefined();
   });
 });

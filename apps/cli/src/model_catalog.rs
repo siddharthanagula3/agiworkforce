@@ -1491,10 +1491,10 @@ mod tests {
             "deepseek",
             "perplexity",
             "qwen",
-            "moonshot",
             "zhipu",
             "openrouter",
             "nvidia",
+            "moonshot",
         ] {
             assert!(!cat.models_for(p).is_empty(), "Missing: {}", p);
         }
@@ -1695,7 +1695,7 @@ mod tests {
         // tui_app.rs is the live ratatui implementation (~3K LOC). cost_hud.rs
         // renders token/cost metrics. Both were identified as likely violation sites
         // after the orphan tree removal in e3a316d39.
-        // Note: tui_app.rs contains a #[cfg(test)] fixture using "claude-sonnet-4-6"
+        // Note: tui_app.rs contains a #[cfg(test)] fixture using "claude-sonnet-5"
         // which is intentional and not in the forbidden list below.
         let tui_app_src = include_str!("tui/tui_app.rs");
         let cost_hud_src = include_str!("tui/cost_hud.rs");
@@ -1733,21 +1733,21 @@ mod tests {
             "claude-opus-4-8 should be qualityTier=best"
         );
         assert_eq!(
-            quality_tier_for_model("claude-sonnet-4-6").as_deref(),
+            quality_tier_for_model("claude-sonnet-5").as_deref(),
             Some("balanced"),
-            "claude-sonnet-4-6 should be qualityTier=balanced"
+            "claude-sonnet-5 should be qualityTier=balanced"
         );
-        // OpenAI: gpt-5.5 → best (per models.json)
+        // OpenAI: gpt-5.6-sol → best (per models.json)
         assert_eq!(
-            quality_tier_for_model("gpt-5.5").as_deref(),
+            quality_tier_for_model("gpt-5.6-sol").as_deref(),
             Some("best"),
-            "gpt-5.5 should be qualityTier=best"
+            "gpt-5.6-sol should be qualityTier=best"
         );
-        // xAI: grok-4.3 → best
+        // xAI: grok-4.5 → best
         assert_eq!(
-            quality_tier_for_model("grok-4.3").as_deref(),
+            quality_tier_for_model("grok-4.5").as_deref(),
             Some("best"),
-            "grok-4.3 should be qualityTier=best"
+            "grok-4.5 should be qualityTier=best"
         );
     }
 
@@ -1776,8 +1776,8 @@ mod tests {
             "claude-opus-4-8 should be in the bundled catalog"
         );
         assert!(
-            is_known_model("gpt-5.5"),
-            "gpt-5.5 should be in the bundled catalog"
+            is_known_model("gpt-5.6-sol"),
+            "gpt-5.6-sol should be in the bundled catalog"
         );
         assert!(
             is_known_model("gemini-3.1-pro-preview"),

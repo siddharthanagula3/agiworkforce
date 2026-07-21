@@ -33,12 +33,12 @@ const SAMPLE_RATE: u32 = 16_000;
 /// Maximum recording duration (seconds) to prevent runaway captures.
 const MAX_RECORDING_SECS: u64 = 120;
 
-/// OpenAI Whisper speech-to-text model id used for the transcription endpoint.
+/// OpenAI speech-to-text model id used for the transcription endpoint.
 /// This is an STT model on the `/v1/audio/transcriptions` endpoint, not a
 /// chat/completion model in `packages/contracts/types/src/models.json`, so it is owned
 /// here as a single named constant rather than routed through the model
-/// catalog. Update this in one place if OpenAI retires `whisper-1`.
-const OPENAI_STT_MODEL: &str = "whisper-1";
+/// catalog. Update this in one place if OpenAI retires `gpt-4o-transcribe`.
+const OPENAI_STT_MODEL: &str = "gpt-4o-transcribe";
 
 /// Minimum recording duration (milliseconds) to filter out accidental taps.
 const MIN_RECORDING_MS: u128 = 300;

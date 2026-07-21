@@ -262,7 +262,7 @@
       "surface": "desktop",
       "executionMode": "cloud",
       "trustMode": "managed_cloud",
-      "status": "implemented",
+      "status": "unwired",
       "allowedHarnessGroups": ["managed-text"]
     },
     "desktop/byok-chat": {

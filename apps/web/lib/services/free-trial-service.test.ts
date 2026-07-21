@@ -155,7 +155,7 @@ describe('free trial service', () => {
         reservedMicrousd: 5_000,
       },
       provider: 'openai',
-      model: 'gpt-5.4-nano',
+      model: 'gpt-5.6-luna',
       estimatedInputTokens: 1_000,
       requestedMaxOutputTokens: 8_192,
     });
@@ -172,7 +172,7 @@ describe('free trial service', () => {
           reservedMicrousd: 5_000,
         },
         provider: 'openai',
-        model: 'gpt-5.4-nano',
+        model: 'gpt-5.6-luna',
         estimatedInputTokens: 1_000,
         requestedMaxOutputTokens: result.maxOutputTokens + 1,
       }),
@@ -239,11 +239,11 @@ describe('free trial service', () => {
 
   it('uses a byte upper bound for text and the model input ceiling for images', () => {
     const textOnly = estimateConservativeFreeInputTokens({
-      model: 'gpt-5.4-nano',
+      model: 'gpt-5.6-luna',
       messages: [{ role: 'user', content: '🙂' }],
     });
     const withImage = estimateConservativeFreeInputTokens({
-      model: 'gpt-5.4-nano',
+      model: 'gpt-5.6-luna',
       messages: [
         {
           role: 'user',
@@ -256,12 +256,12 @@ describe('free trial service', () => {
     });
 
     expect(textOnly).toBeGreaterThanOrEqual(new TextEncoder().encode('🙂').byteLength);
-    expect(withImage).toBe(400_000);
+    expect(withImage).toBe(1_050_000);
   });
 
   it('applies the private cap to the actual provider request and disables cache writes', () => {
     const request = {
-      model: 'gpt-5.4-nano',
+      model: 'gpt-5.6-luna',
       messages: [{ role: 'user', content: 'Hello' }],
       tools: [{ type: 'function', function: { name: 'lookup', parameters: {} } }],
       max_tokens: 8_192,

@@ -57,7 +57,7 @@ describe('persistGeneratedFile', () => {
     const result = await persistGeneratedFile({
       userId: 'user_1',
       ref: { provider: 'openai', filename: 'report.pdf', containerId: 'cntr_1', fileId: 'file_1' },
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.6-terra',
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(
