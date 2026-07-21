@@ -56,6 +56,7 @@ import {
 } from '@agiworkforce/ui';
 import { useClerk } from '@clerk/nextjs';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -327,6 +328,14 @@ export default function WebChatPage() {
     return () => mql.removeEventListener('change', update);
   }, []);
   const effectiveSidebarCollapsed = sidebarCollapsed || isNarrowViewport;
+
+  // Hydrate server-persisted connector per-tool permission verdicts once when
+  // signed in, so a "block/allow this tool" choice follows the user across
+  // devices (the tool-approval timeline reads this store). Best-effort.
+  useEffect(() => {
+    if (!userId) return;
+    void useToolPermissionsStore.getState().hydrateFromServer();
+  }, [userId]);
 
   // Model from the model store · needed by the access gate below before the composer hooks.
   const availableModels = useModelStore((s) => s.availableModels);
