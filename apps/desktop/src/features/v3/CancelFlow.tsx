@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { XCircle } from 'lucide-react';
 import { openBillingPortal } from '../../lib/stripeCheckout';
+import { analytics } from '../../services/analytics';
 
 const CANCEL_REASONS = [
   { id: 'too_expensive', label: 'Too expensive' },
@@ -23,6 +24,13 @@ export function CancelFlow({ onClose, onError }: CancelFlowProps) {
 
   async function handleCancel() {
     setLoading(true);
+    // Capture the optional cancellation feedback before delegating to Stripe. The
+    // analytics service is consent-gated (no-op unless the user opted in), so this
+    // respects the privacy boundary while giving the "Quick feedback" step a real
+    // sink instead of discarding it.
+    if (reason) {
+      analytics.track('subscription_cancelled', { reason });
+    }
     const err = await openBillingPortal();
     setLoading(false);
     if (err) {

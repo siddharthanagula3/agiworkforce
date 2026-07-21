@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Laptop, Cloud, type LucideIcon } from 'lucide-react';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
+import { supportsLocalAppMode } from '../../lib/tauri-mock';
 
 /**
  * Bottom-of-sidebar Local↔Cloud toggle — the primary mode nav.
@@ -11,6 +12,11 @@ import { useAppModeStore, selectMode } from '../../stores/appModeStore';
  * Switching delegates to appModeStore.setMode, which enforces the trust-boundary
  * guards (Cloud requires a signed-in, eligible account; Local requires the
  * desktop runtime; neither switches mid-stream) and surfaces a toast on refusal.
+ *
+ * On the Tauri desktop target managed cloud is not implemented yet and setMode
+ * fails closed (locked trust rule + constants/cloudAvailability). So the Cloud
+ * segment must render as an HONEST, visibly-disabled "Soon" affordance here —
+ * never a fully-selectable tab that only reveals its dead state via a toast.
  */
 export interface LocalCloudToggleProps {
   collapsed?: boolean;
@@ -21,15 +27,28 @@ interface SegmentProps {
   icon: LucideIcon;
   label: string;
   onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+  badge?: string;
 }
 
-function Segment({ active, icon: Icon, label, onClick }: SegmentProps) {
+function Segment({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+  disabled = false,
+  title,
+  badge,
+}: SegmentProps) {
   return (
     <button
       type="button"
       role="tab"
       aria-selected={active}
-      onClick={onClick}
+      aria-disabled={disabled || undefined}
+      onClick={disabled ? undefined : onClick}
+      title={title}
       className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
       style={{
         flex: 1,
@@ -40,7 +59,8 @@ function Segment({ active, icon: Icon, label, onClick }: SegmentProps) {
         padding: '5px 8px',
         borderRadius: 7,
         border: 'none',
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
         background: active ? 'var(--chat-accent-primary)' : 'transparent',
         color: active ? 'var(--chat-accent-primary-contrast)' : 'var(--chat-text-secondary)',
         fontSize: 12,
@@ -50,6 +70,22 @@ function Segment({ active, icon: Icon, label, onClick }: SegmentProps) {
     >
       <Icon size={13} />
       <span>{label}</span>
+      {badge ? (
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+            textTransform: 'uppercase',
+            padding: '1px 5px',
+            borderRadius: 5,
+            background: 'var(--chat-border)',
+            color: 'var(--chat-text-secondary)',
+          }}
+        >
+          {badge}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -62,8 +98,41 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
 
   const localLabel = t('sidebar.mode.local');
   const cloudLabel = t('sidebar.mode.cloud');
+  // Cloud is not selectable on the desktop runtime yet (setMode fails closed).
+  const cloudUnavailable = supportsLocalAppMode;
+  const cloudSoonTitle = t('sidebar.mode.cloudUnavailable');
 
   if (collapsed) {
+    // Desktop: cloud can't be entered, so show a disabled cloud hint rather than a
+    // "switch to Cloud" affordance that only toasts on click.
+    if (cloudUnavailable) {
+      return (
+        <button
+          type="button"
+          disabled
+          aria-disabled
+          title={cloudSoonTitle}
+          aria-label={cloudSoonTitle}
+          className="focus-visible:outline-none"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 40,
+            height: 30,
+            margin: '0 auto',
+            borderRadius: 8,
+            border: '1px solid var(--chat-border)',
+            background: 'var(--chat-surface-elevated)',
+            cursor: 'not-allowed',
+            opacity: 0.55,
+            color: 'var(--chat-text-secondary)',
+          }}
+        >
+          <Cloud size={15} />
+        </button>
+      );
+    }
     const Icon = isLocal ? Laptop : Cloud;
     const destinationLabel = isLocal ? cloudLabel : localLabel;
     const switchLabel = t('sidebar.mode.switchTo', { mode: destinationLabel });
@@ -107,7 +176,15 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
       }}
     >
       <Segment active={isLocal} icon={Laptop} label={localLabel} onClick={() => setMode('local')} />
-      <Segment active={!isLocal} icon={Cloud} label={cloudLabel} onClick={() => setMode('cloud')} />
+      <Segment
+        active={!isLocal}
+        icon={Cloud}
+        label={cloudLabel}
+        onClick={() => setMode('cloud')}
+        disabled={cloudUnavailable}
+        title={cloudUnavailable ? cloudSoonTitle : undefined}
+        badge={cloudUnavailable ? t('sidebar.mode.soon') : undefined}
+      />
     </div>
   );
 }
