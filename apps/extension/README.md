@@ -50,6 +50,26 @@ Reusable browser automation contracts belong in `packages/tools/browser-tool`, `
 - `pnpm --filter @agiworkforce/extension build`
 - `pnpm lint:extension`
 
+## Install / Load In Chrome
+
+Run the extension locally without a Web Store listing:
+
+1. Install workspace dependencies from the repo root: `pnpm install`.
+2. Build the unpacked extension: `pnpm --filter @agiworkforce/extension build`.
+   Output lands in `apps/extension/dist/` (a complete MV3 bundle: `manifest.json`,
+   `src/background.js`, `src/content.js`, `src/side_panel.js`, `src/options.js`,
+   plus `assets/` and `icons/`).
+3. In Chrome (or any Chromium ≥ 132), open `chrome://extensions`, enable
+   **Developer mode** (top-right), click **Load unpacked**, and select the
+   `apps/extension/dist` folder.
+4. Open the side panel with **Ctrl+Shift+A** (macOS **⌘+Shift+A**) or the AGI
+   toolbar icon; **Ctrl+Shift+C** captures the current page. The options page is
+   reachable from the extension's "Details → Extension options".
+
+For a distributable/store build use `pnpm --filter @agiworkforce/extension package`
+(see Release / Deployment Notes) — it produces a validated `extension.zip` and
+requires the production environment values below.
+
 ## Environment / Secrets
 
 Do not commit extension store credentials, private keys, local native-host registration state, browsing captures, cookies, tokens, or user page content.
