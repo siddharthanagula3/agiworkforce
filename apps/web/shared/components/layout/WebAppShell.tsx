@@ -23,7 +23,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
-import { Settings, LogOut, ChevronUp, LibraryBig, CalendarClock, Menu } from 'lucide-react';
+import {
+  Settings,
+  LogOut,
+  ChevronUp,
+  LibraryBig,
+  CalendarClock,
+  ListChecks,
+  Menu,
+} from 'lucide-react';
 import {
   Sidebar,
   type SidebarSession,
@@ -221,6 +229,13 @@ export function WebAppShell({ children }: WebAppShellProps) {
         icon: LibraryBig,
         onClick: () => router.push('/library'),
         isActive: pathname.startsWith('/library'),
+      },
+      {
+        id: 'tasks',
+        label: 'Tasks',
+        icon: ListChecks,
+        onClick: () => router.push('/tasks'),
+        isActive: pathname.startsWith('/tasks'),
       },
       {
         id: 'schedules',
