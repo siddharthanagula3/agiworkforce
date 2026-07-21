@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -149,6 +150,18 @@ function stripComments(source) {
     }
   }
   return out;
+}
+
+// Self-check: guards the comment-stripper this whole check now depends on. Runs on
+// every `pnpm check:boundaries` (hence every push), so a regression that lets comment
+// text leak back in — or corrupts real imports/strings — fails loudly here instead of
+// silently letting cross-app imports through (false negative) or re-flagging prose.
+{
+  const s = stripComments;
+  assert(!/from ['"]x['"]/.test(s('// import a from "x"')), 'line-comment import leaked');
+  assert(!/from ['"]y['"]/.test(s('/* import b from "y" */')), 'block-comment import leaked');
+  assert(/from ['"]z['"]/.test(s('import c from "z"; // real')), 'real import was stripped');
+  assert(s("const u = 'a//b';").includes('a//b'), 'string content corrupted by stripper');
 }
 
 function importsFrom(rawSource) {
