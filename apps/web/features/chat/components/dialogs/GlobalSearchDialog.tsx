@@ -202,6 +202,12 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
       return;
     }
 
+    // File matches open the Library (no per-file deep link exists yet).
+    if (result.type === 'file') {
+      router.push('/library');
+      return;
+    }
+
     // Navigate to the chat session with optional message scroll target
     // The messageId is passed as a query parameter that the chat page can use
     // to scroll to and highlight the specific message after loading
@@ -473,8 +479,8 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
             <div className="border-b bg-muted/20 px-6 py-2 text-xs text-muted-foreground">
               Found {stats.totalResults} results ({stats.sessionMatches} conversations,{' '}
               {stats.messageMatches} messages
-              {stats.projectMatches > 0 ? `, ${stats.projectMatches} projects` : ''}) in{' '}
-              {stats.searchTime}ms
+              {stats.projectMatches > 0 ? `, ${stats.projectMatches} projects` : ''}
+              {stats.fileMatches > 0 ? `, ${stats.fileMatches} files` : ''}) in {stats.searchTime}ms
             </div>
           )}
 
@@ -599,6 +605,8 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         {result.type === 'project' ? (
                           <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+                        ) : result.type === 'file' ? (
+                          <FileText className="h-4 w-4 shrink-0 text-primary" />
                         ) : result.type === 'session' ? (
                           <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
                         ) : (
@@ -630,9 +638,11 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                       <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
                         {result.type === 'project'
                           ? 'Project'
-                          : result.type === 'session'
-                            ? 'Title'
-                            : result.role}
+                          : result.type === 'file'
+                            ? 'File'
+                            : result.type === 'session'
+                              ? 'Title'
+                              : result.role}
                       </Badge>
                     </div>
                   </button>

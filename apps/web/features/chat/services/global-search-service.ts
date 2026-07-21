@@ -9,10 +9,10 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 export interface SearchResult {
-  // 'project' results reuse `sessionId` as the primary entity id used for
-  // navigation (the click handler routes them to /projects/${sessionId}, not
-  // /chat/...), and `sessionTitle` as the project name.
-  type: 'session' | 'message' | 'project';
+  // Non-chat results reuse `sessionId` as the primary entity id and
+  // `sessionTitle` as the display name; the click handler routes by `type`
+  // ('project' → /projects/${id}, 'file' → /library, else → /chat/${id}).
+  type: 'session' | 'message' | 'project' | 'file';
   sessionId: string;
   sessionTitle: string;
   messageId?: string;
@@ -40,6 +40,7 @@ export interface SearchStats {
   sessionMatches: number;
   messageMatches: number;
   projectMatches: number;
+  fileMatches: number;
   searchTime: number; // in milliseconds
 }
 
@@ -80,15 +81,28 @@ interface APISearchStats {
   sessionMatches: number;
   messageMatches: number;
   projectMatches?: number;
+  fileMatches?: number;
 }
 
-// The /api/search route returns project matches in a separate `projects` array
-// (see the route's own comment): sessions/messages navigate to /chat, projects
-// to /projects, so they are queried together but shaped distinctly.
+// The /api/search route returns project and file matches in separate arrays
+// (see the route's own comments): sessions/messages navigate to /chat, projects
+// to /projects, files to /library — queried together but shaped distinctly.
 interface APIProjectResult {
   type: 'project';
   projectId: string;
   projectName: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  matchedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+}
+
+interface APIFileResult {
+  type: 'file';
+  fileId: string;
+  fileName: string;
   content: string;
   createdAt: string;
   updatedAt: string;
@@ -148,6 +162,7 @@ class GlobalSearchService {
     const data = (await res.json()) as {
       results: APISearchResult[];
       projects?: APIProjectResult[];
+      files?: APIFileResult[];
       stats: APISearchStats;
     };
 
@@ -180,14 +195,31 @@ class GlobalSearchService {
       contextAfter: p.contextAfter,
     }));
 
-    const results: SearchResult[] = [...conversationResults, ...projectResults];
+    // Library file matches — navigate to /library (there is no per-file deep
+    // link), so like projects they ride in `sessionId` but route by type.
+    const fileResults: SearchResult[] = (data.files || []).map((f) => ({
+      type: 'file' as const,
+      sessionId: f.fileId,
+      sessionTitle: f.fileName,
+      content: f.content,
+      createdAt: new Date(f.createdAt),
+      updatedAt: new Date(f.updatedAt),
+      matchedText: f.matchedText,
+      contextBefore: f.contextBefore,
+      contextAfter: f.contextAfter,
+    }));
+
+    const results: SearchResult[] = [...conversationResults, ...projectResults, ...fileResults];
 
     const projectMatches = data.stats?.projectMatches ?? projectResults.length;
+    const fileMatches = data.stats?.fileMatches ?? fileResults.length;
     const stats: SearchStats = {
-      totalResults: (data.stats?.totalResults ?? conversationResults.length) + projectMatches,
+      totalResults:
+        (data.stats?.totalResults ?? conversationResults.length) + projectMatches + fileMatches,
       sessionMatches: data.stats?.sessionMatches ?? 0,
       messageMatches: data.stats?.messageMatches ?? 0,
       projectMatches,
+      fileMatches,
       searchTime: Date.now() - startTime,
     };
 
