@@ -45,6 +45,7 @@ import {
   isAutoModeModelId,
 } from '@shared/config/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { useRouter } from 'next/navigation';
 import { EFFORT_LABEL, getModels, type CloudWorkMode } from '@agiworkforce/types';
 import { isWebSearchAvailable, providerSupportsWebSearch } from '@/lib/web-search-support';
@@ -73,6 +74,8 @@ interface ChatComposerProps {
       researchEnabled?: boolean;
       /** Output style hint forwarded to the LLM system prompt. undefined = 'normal'. */
       styleMode?: string;
+      /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
+      styleInstruction?: string;
       /** Exact server-catalog skill name; the server resolves and loads its body. */
       skillName?: string;
     },
@@ -458,6 +461,8 @@ const ChatComposerNewComponent = ({
   const canToggleIncognito = Boolean(activeConversationId) && !isLoading && !disabled;
 
   // Thinking / effort store
+  const responseStyle = useStyleStore((s) => s.style);
+  const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const thinkingEffort = useThinkingStore((s) => s.effort);
   const setThinkingEffort = useThinkingStore((s) => s.setEffort);
@@ -873,6 +878,7 @@ const ChatComposerNewComponent = ({
         officeCreationEnabled,
         researchEnabled,
         styleMode: styleMode !== 'normal' ? styleMode : undefined,
+        styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId) || undefined,
         skillName: selectedSkill?.name ?? undefined,
       },
     ];
@@ -917,6 +923,8 @@ const ChatComposerNewComponent = ({
     webSearchEnabled,
     researchEnabled,
     styleMode,
+    responseStyle,
+    activeCustomStyleId,
     thinkingEnabled,
     codeExecutionEnabled,
     officeCreationEnabled,

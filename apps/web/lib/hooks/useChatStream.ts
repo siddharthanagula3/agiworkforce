@@ -72,6 +72,8 @@ interface SendMessageOptions {
   thinkingEffort?: Effort;
   /** Output style hint. When set and not 'normal', a system message is prepended. */
   styleMode?: string;
+  /** Resolved Response-Style instruction (StyleSelector). Takes precedence over styleMode. */
+  styleInstruction?: string;
   /** Exact server-catalog skill name. The browser never loads or sends its body. */
   skillName?: string;
   /** Deep Research mode: forces web_search and injects a research system prompt. */
@@ -1687,7 +1689,11 @@ export function useChatStream(): UseChatStreamReturn {
             })),
         ];
 
-        if (options.styleMode && options.styleMode !== 'normal') {
+        // StyleSelector's resolved instruction (preset or custom) is
+        // authoritative; fall back to the '+' menu styleMode hint otherwise.
+        if (options.styleInstruction) {
+          apiMessages.unshift({ role: 'system', content: options.styleInstruction });
+        } else if (options.styleMode && options.styleMode !== 'normal') {
           const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
           if (styleInstruction) {
             apiMessages.unshift({ role: 'system', content: styleInstruction });

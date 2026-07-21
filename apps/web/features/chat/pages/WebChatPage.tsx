@@ -143,6 +143,8 @@ type SendMeta = {
   researchEnabled?: boolean;
   /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
   styleMode?: string;
+  /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
+  styleInstruction?: string;
   /** Exact server-catalog skill name. */
   skillName?: string;
 };
@@ -877,6 +879,7 @@ export default function WebChatPage() {
             workMode: options.meta?.workMode,
             research: options.meta?.researchEnabled,
             styleMode: options.meta?.styleMode,
+            styleInstruction: options.meta?.styleInstruction,
             skillName: options.meta?.skillName,
           });
 
