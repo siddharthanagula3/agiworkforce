@@ -1,7 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Cloud, Loader2, Shield } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { useAppModeStore } from '../../../../stores/appModeStore';
+import { Loader2, Shield } from 'lucide-react';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
 import { DESKTOP_CLOUD_COMING_SOON } from '../../../../constants/cloudAvailability';
 
@@ -48,15 +46,6 @@ export function AccountTab() {
                 are hidden. AGI Cloud is available on Web &amp; Mobile — desktop support is coming
                 soon.
               </p>
-              <Button
-                type="button"
-                size="sm"
-                className="mt-4"
-                onClick={() => useAppModeStore.getState().setMode('cloud')}
-              >
-                <Cloud className="mr-2 h-4 w-4" />
-                AGI Cloud — coming soon
-              </Button>
             </div>
           </div>
         </div>

@@ -7,8 +7,6 @@ export { CapModal } from './CapModal';
 export { AgiWorkProjects } from './AgiWorkProjects';
 export { AgiWorkScheduled } from './AgiWorkScheduled';
 export { AgiWorkArtifacts } from './AgiWorkArtifacts';
-export { Pricing } from './Pricing';
-export type { PricingProps } from './Pricing';
 export { AccountMenu } from './AccountMenu';
 export type { AccountMenuProps } from './AccountMenu';
 export { PauseFlow } from './PauseFlow';

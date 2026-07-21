@@ -89,6 +89,21 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   `packages/tools/skills` path-free tool pattern to the desktop harness; until
   then the exposure is bounded by user-authored/installed skills only. Surfaced
   by a peer audit agent during the wave-2 dedup sweep.
+- OPEN DESKTOP-BILLING-FLOW-INERT-SELECTORS (LOW, 2026-07-21, desktop V3 audit):
+  the retention flows PauseFlow.tsx (1/3/6-month duration radios) and
+  DowngradeFlow.tsx (target-tier picker) collect a selection that is never applied
+  — `handlePause`/`handleDowngrade` only call `openBillingPortal()` (a GENERIC
+  Stripe portal), so the chosen duration/tier has no effect on the outcome (the
+  user re-picks in the portal). Disclosed in copy ("continues in the Stripe
+  billing portal") but the selectors imply a pre-applied choice they don't make.
+  CancelFlow's "Quick feedback (optional)" reason was the sibling case and IS now
+  fixed — wired to the consent-gated `analytics.track('subscription_cancelled',
+{reason})`. Pause/Downgrade need a FOUNDER/Stripe decision: either preconfigure
+  the portal via Stripe billing-portal flow deep-link params (e.g.
+  `flow_data[subscription_cancel]` / a pause/downgrade flow) so the selection is
+  honored, OR remove the selectors and let the portal own the choice. Deferred to
+  the founder Stripe track (billing is founder-managed, test-mode restricted keys);
+  not gating desktop #1's non-billing surfaces.
 - RESOLVED WEB-CHAT-SYNC-500 (2026-07-21): GET /api/chat/sync?since=<cursor>
   returned HTTP 500 for any signed-in user WITH chat data, degrading cross-device
   artifact/chat sync (client threw "artifact sync pull failed with status 500",
