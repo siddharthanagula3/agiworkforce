@@ -34,7 +34,7 @@ impl ToolExecutor {
 
             let llm_state = app.state::<LLMState>();
 
-            let model_str = model.unwrap_or("gpt-5.4-mini");
+            let model_str = model.unwrap_or("gpt-5.6-luna");
             let preferences = Some(RouterPreferences {
                 provider: None,
                 model: Some(model_str.to_string()),
@@ -43,6 +43,10 @@ impl ToolExecutor {
                 prefer_cloud_credits: false,
                 local_only: false,
                 managed_cloud_only: false,
+                // TRUST BOUNDARY (desktop-trust-boundary-01): the "llm_reason"
+                // tool has no path back to the invoking session's trust mode.
+                // Fails closed to Local; the caller sees a graceful
+                // `ToolResult { success: false, .. }`, not a crash.
                 trust_mode: None,
             });
 

@@ -296,11 +296,15 @@ pub struct AppSettings {
 
 impl Default for AppSettings {
     fn default() -> Self {
+        let default_model = crate::core::llm::models_config::get_default_model(
+            &crate::core::llm::Provider::ManagedCloud,
+        )
+        .to_string();
         let mut model_configs = HashMap::new();
         model_configs.insert(
-            "gpt-5.4-mini".to_string(),
+            default_model.clone(),
             ModelConfig {
-                model_name: "gpt-5.4-mini".to_string(),
+                model_name: default_model.clone(),
                 ..Default::default()
             },
         );
@@ -331,7 +335,7 @@ impl Default for AppSettings {
 
         Self {
             default_provider: "managed_cloud".to_string(),
-            default_model: "gpt-5.4-mini".to_string(),
+            default_model,
             model_configs,
             provider_configs,
             ui_preferences: UIPreferences::default(),
@@ -388,26 +392,26 @@ mod tests {
     #[test]
     fn model_config_serializes_with_model_id() {
         let config = ModelConfig {
-            model_name: "gpt-5.5".to_string(),
+            model_name: "gpt-5.6-sol".to_string(),
             ..Default::default()
         };
 
         let value = serde_json::to_value(&config).expect("model config should serialize");
-        assert_eq!(value["modelId"], "gpt-5.5");
+        assert_eq!(value["modelId"], "gpt-5.6-sol");
         assert!(value.get("modelName").is_none());
     }
 
     #[test]
     fn model_config_deserializes_legacy_model_name() {
         let value = serde_json::json!({
-            "modelName": "claude-sonnet-4.6",
+            "modelName": "claude-sonnet-5",
             "temperature": 0.5,
             "maxTokens": 1024
         });
 
         let config: ModelConfig =
             serde_json::from_value(value).expect("legacy modelName payload should deserialize");
-        assert_eq!(config.model_name, "claude-sonnet-4.6");
+        assert_eq!(config.model_name, "claude-sonnet-5");
         assert_eq!(config.max_tokens, 1024);
     }
 }

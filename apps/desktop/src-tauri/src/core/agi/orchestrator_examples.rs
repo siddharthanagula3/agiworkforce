@@ -15,6 +15,7 @@ pub async fn example_parallel_code_analysis(
                 "Identify at least 10 potential issues".to_string(),
                 "Categorize by severity".to_string(),
             ],
+            trust_mode: None,
         },
         Goal {
             id: "goal_analysis_tests".to_string(),
@@ -23,6 +24,7 @@ pub async fn example_parallel_code_analysis(
             deadline: None,
             constraints: vec![],
             success_criteria: vec!["Generate test coverage report".to_string()],
+            trust_mode: None,
         },
         Goal {
             id: "goal_analysis_docs".to_string(),
@@ -31,6 +33,7 @@ pub async fn example_parallel_code_analysis(
             deadline: None,
             constraints: vec![],
             success_criteria: vec!["List undocumented functions".to_string()],
+            trust_mode: None,
         },
         Goal {
             id: "goal_analysis_perf".to_string(),
@@ -40,6 +43,7 @@ pub async fn example_parallel_code_analysis(
             deadline: None,
             constraints: vec![],
             success_criteria: vec!["Profile hot code paths".to_string()],
+            trust_mode: None,
         },
     ];
 
@@ -75,6 +79,7 @@ pub async fn example_sequential_workflow(
         deadline: None,
         constraints: vec![],
         success_criteria: vec!["Generate SQL migration files".to_string()],
+        trust_mode: None,
     };
 
     let agent1_id = orchestrator.spawn_agent(goal1).await?;
@@ -100,6 +105,7 @@ pub async fn example_sequential_workflow(
         deadline: None,
         constraints: vec![],
         success_criteria: vec!["Generate API handlers".to_string()],
+        trust_mode: None,
     };
 
     let agent2_id = orchestrator.spawn_agent(goal2).await?;
@@ -124,6 +130,7 @@ pub async fn example_sequential_workflow(
         deadline: None,
         constraints: vec![],
         success_criteria: vec!["Achieve 90% code coverage".to_string()],
+        trust_mode: None,
     };
 
     let agent3_id = orchestrator.spawn_agent(goal3).await?;
@@ -166,6 +173,7 @@ pub async fn example_supervisor_worker(
         deadline: None,
         constraints: vec![],
         success_criteria: vec!["Generate task list with dependencies".to_string()],
+        trust_mode: None,
     };
 
     let supervisor_id = orchestrator.spawn_agent(supervisor_goal).await?;
@@ -190,6 +198,7 @@ pub async fn example_supervisor_worker(
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         },
         Goal {
             id: "goal_worker_2".to_string(),
@@ -198,6 +207,7 @@ pub async fn example_supervisor_worker(
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         },
         Goal {
             id: "goal_worker_3".to_string(),
@@ -206,6 +216,7 @@ pub async fn example_supervisor_worker(
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         },
     ];
 
@@ -227,6 +238,7 @@ pub async fn example_monitoring(orchestrator: &AgentOrchestrator) -> anyhow::Res
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         },
         Goal {
             id: "goal_task_2".to_string(),
@@ -235,6 +247,7 @@ pub async fn example_monitoring(orchestrator: &AgentOrchestrator) -> anyhow::Res
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         },
     ];
 
@@ -278,6 +291,7 @@ pub async fn example_conditional_execution(
         deadline: None,
         constraints: vec![],
         success_criteria: vec!["Identify system health status".to_string()],
+        trust_mode: None,
     };
 
     let diagnostic_id = orchestrator.spawn_agent(diagnostic_goal).await?;
@@ -294,6 +308,7 @@ pub async fn example_conditional_execution(
                     deadline: None,
                     constraints: vec![],
                     success_criteria: vec![],
+                    trust_mode: None,
                 };
 
                 orchestrator.spawn_agent(optimization_goal).await?;
@@ -308,6 +323,7 @@ pub async fn example_conditional_execution(
                     deadline: None,
                     constraints: vec![],
                     success_criteria: vec![],
+                    trust_mode: None,
                 };
 
                 orchestrator.spawn_agent(repair_goal).await?;
@@ -330,6 +346,7 @@ pub async fn example_cleanup(orchestrator: &AgentOrchestrator) -> anyhow::Result
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         },
         Goal {
             id: "goal_cleanup_2".to_string(),
@@ -338,6 +355,7 @@ pub async fn example_cleanup(orchestrator: &AgentOrchestrator) -> anyhow::Result
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         },
     ];
 
@@ -366,63 +384,6 @@ pub async fn example_cleanup(orchestrator: &AgentOrchestrator) -> anyhow::Result
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    #[ignore] // Requires full orchestrator setup with agents
-    async fn test_parallel_execution() {
-        // This test validates that goals can be structured for parallel execution.
-        // In production, this would use a real AgentOrchestrator instance.
-
-        let goals = [
-            Goal {
-                id: "test_goal_1".to_string(),
-                description: "Test goal 1".to_string(),
-                priority: Priority::High,
-                deadline: None,
-                constraints: vec![],
-                success_criteria: vec!["Complete successfully".to_string()],
-            },
-            Goal {
-                id: "test_goal_2".to_string(),
-                description: "Test goal 2".to_string(),
-                priority: Priority::Medium,
-                deadline: None,
-                constraints: vec![],
-                success_criteria: vec!["Complete successfully".to_string()],
-            },
-        ];
-
-        // Verify goal structure is valid
-        assert_eq!(goals.len(), 2);
-        assert_eq!(goals[0].priority, Priority::High);
-        assert_eq!(goals[1].priority, Priority::Medium);
-
-        // In a real test, we would:
-        // let orchestrator = AgentOrchestrator::new(...);
-        // let agent_ids = orchestrator.spawn_parallel(goals).await?;
-        // assert_eq!(agent_ids.len(), 2);
-    }
-
-    #[tokio::test]
-    #[ignore] // Requires full orchestrator setup with resource lock
-    async fn test_resource_locking() {
-        // This test validates resource locking behavior.
-        // In production, this would use a real ResourceLock instance.
-
-        // Verify basic path handling
-        let file_path = std::path::PathBuf::from("/workspace/src/main.rs");
-        assert!(file_path.is_absolute() || file_path.starts_with("/"));
-
-        // Verify path display
-        let display = file_path.display().to_string();
-        assert!(display.contains("main.rs"));
-
-        // In a real test, we would:
-        // let orchestrator = AgentOrchestrator::new(...);
-        // let resource_lock = orchestrator.get_resource_lock();
-        // let _guard1 = resource_lock.try_acquire_file(&file_path)?;
-        // assert!(resource_lock.try_acquire_file(&file_path).is_err());
-    }
-
     #[test]
     fn test_goal_creation() {
         let goal = Goal {
@@ -432,6 +393,7 @@ mod tests {
             deadline: None,
             constraints: vec![],
             success_criteria: vec!["criteria1".to_string()],
+            trust_mode: None,
         };
 
         assert_eq!(goal.id, "test_goal");

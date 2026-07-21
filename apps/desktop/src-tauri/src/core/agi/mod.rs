@@ -171,6 +171,17 @@ pub struct Goal {
     pub deadline: Option<u64>,
     pub constraints: Vec<Constraint>,
     pub success_criteria: Vec<String>,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
+    /// execution boundary at goal-submission time. Threaded into every
+    /// `RouterPreferences` built while planning/executing this goal (see
+    /// `core/agi/planner.rs`, `process_reasoning.rs`, and the
+    /// `core/agi/executors/*` tool executors) so `LLMRouter::candidates`
+    /// enforces Local/BYOK/ManagedCloud instead of falling through to its
+    /// fail-closed Local default. `None` still fails closed to Local via
+    /// `llm_router::effective_trust_mode` — this field does not itself
+    /// default to `Local`; the router does that.
+    #[serde(default)]
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]

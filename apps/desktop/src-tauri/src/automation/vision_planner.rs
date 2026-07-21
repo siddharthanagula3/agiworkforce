@@ -165,6 +165,14 @@ impl ActionPlanner {
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): this sends a
+            // screenshot (multimodal image content) with no active-session
+            // trust context. Fails closed to Local via
+            // `effective_trust_mode`'s default — a good outcome here
+            // (screen content shouldn't silently leave a Local session), but
+            // means this now needs at least one local vision-capable
+            // provider configured, or it returns the empty-candidates error
+            // below, until a real trust_mode is threaded in.
             trust_mode: None,
         };
 

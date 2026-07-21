@@ -316,12 +316,32 @@ impl SwarmOrchestrator {
         Ok(result)
     }
 
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): builds the task handed to
+    /// a sub-agent, inheriting the parent goal's trust boundary so fan-out
+    /// cannot sever it.
+    pub(crate) fn agent_task(
+        goal: &Goal,
+        subtask: super::task_decomposer::Subtask,
+        result_sender: oneshot::Sender<AgentTaskResult>,
+    ) -> AgentTask {
+        AgentTask {
+            subtask,
+            trust_mode: goal.trust_mode,
+            result_sender,
+        }
+    }
+
     /// Executes a pre-built dependency graph without asking the LLM decomposer
     /// to create subtasks first.
+    ///
+    /// `trust_mode` is the submitting session's execution boundary; it is
+    /// threaded into every sub-agent's mini-goal. `None` fails closed to
+    /// Local at the router.
     pub async fn execute_with_graph(
         &self,
         goal_description: String,
         mut dependency_graph: DependencyGraph,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     ) -> SwarmResultType<SwarmResult> {
         let goal = Goal {
             id: format!("swarm_{}", uuid::Uuid::new_v4()),
@@ -330,6 +350,7 @@ impl SwarmOrchestrator {
             deadline: None,
             constraints: Vec::new(),
             success_criteria: Vec::new(),
+            trust_mode,
         };
 
         let start_time = Instant::now();
@@ -524,11 +545,9 @@ impl SwarmOrchestrator {
                 // Create result channel
                 let (tx, rx) = oneshot::channel();
 
-                // Send task to agent
-                let task = AgentTask {
-                    subtask: subtask.clone(),
-                    result_sender: tx,
-                };
+                // Send task to agent, carrying the parent goal's trust
+                // boundary into the sub-agent's mini-goal.
+                let task = Self::agent_task(goal, subtask.clone(), tx);
 
                 match agent.send_task(task).await {
                     Ok(_) => {

@@ -25,7 +25,7 @@ struct AgentFrontmatter {
 /// Format:
 /// ---
 /// name: my-agent
-/// model: claude-sonnet-4-6
+/// model: claude-sonnet-5
 /// description: Does things
 /// ---
 ///

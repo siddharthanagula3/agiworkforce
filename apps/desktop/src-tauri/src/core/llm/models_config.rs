@@ -181,10 +181,10 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
             | Provider::Vllm => "llama4-maverick",
             _ => {
                 debug_assert!(
-                    CONFIG.models.contains_key("gpt-5.4-mini"),
-                    "Fallback model 'gpt-5.4-mini' not found in models.json"
+                    CONFIG.models.contains_key("gpt-5.6-luna"),
+                    "Fallback model 'gpt-5.6-luna' not found in models.json"
                 );
-                "gpt-5.4-mini"
+                "gpt-5.6-luna"
             }
         })
 }
@@ -265,8 +265,8 @@ pub fn get_token_multiplier(provider: &Provider) -> f64 {
 
 /// Resolve the wire API model ID for a given catalog model ID.
 ///
-/// If the catalog entry has an `apiModelId` field set (e.g. `"mistral-medium-2508"` for
-/// the internal key `"mistral-medium-3"`), that wire string is returned so it can be sent
+/// If the catalog entry has an `apiModelId` field set (e.g. `"mistral-medium-3-5"` for
+/// the internal key `"mistral-medium-3.5"`), that wire string is returned so it can be sent
 /// directly in the HTTP request body.  Falls back to the input unchanged when no entry or
 /// no `apiModelId` is found.
 pub fn get_api_model_id(model_id: &str) -> String {
@@ -339,7 +339,7 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
 ///
 /// As of March 2026, the Responses API is used by:
 ///   - GPT-5+ series (gpt-5, gpt-5.1, gpt-5-turbo, gpt-6, gpt-7, ...)
-///   - GPT-4.1 series (gpt-4.1, gpt-4.1-mini, gpt-4.1-nano)
+///   - GPT-4.1 series (gpt-4.1, gpt-4.1-mini, ...)
 ///   - O-series reasoning (o3+, o4+, ...)
 ///   - GPT open-source (gpt-oss-120b, gpt-oss-20b)
 ///   - Codex models (codex-mini-latest)
@@ -519,8 +519,8 @@ mod tests {
     #[test]
     fn get_canonicalized_id_keeps_unlisted_aliases_unchanged() {
         assert_eq!(
-            get_canonicalized_id("claude-sonnet-4-6"),
-            "claude-sonnet-4.6"
+            get_canonicalized_id("claude-sonnet-9-9"),
+            "claude-sonnet-9-9"
         );
         assert_eq!(get_canonicalized_id("claude-opus-4.8"), "claude-opus-4.8");
         assert_eq!(get_canonicalized_id("claude-opus-4-8"), "claude-opus-4.8");
@@ -528,7 +528,7 @@ mod tests {
             get_canonicalized_id("gemini-3.1-pro-preview"),
             "gemini-3.1-pro-preview"
         );
-        assert_eq!(get_canonicalized_id("gpt-5.4-mini"), "gpt-5.4-mini");
+        assert_eq!(get_canonicalized_id("gpt-9.9-mini"), "gpt-9.9-mini");
         assert_eq!(
             get_canonicalized_id("unlisted-model-id"),
             "unlisted-model-id"
@@ -537,9 +537,19 @@ mod tests {
 
     #[test]
     fn get_provider_for_model_returns_some_for_known_prefix() {
-        // gpt- prefix maps to OpenAI
-        let provider = get_provider_for_model("gpt-5.5");
-        assert!(provider.is_some(), "gpt-5.5 should resolve to a provider");
+        // Catalog models resolve via their catalog entry.
+        let provider = get_provider_for_model("gpt-5.6-sol");
+        assert!(
+            provider.is_some(),
+            "gpt-5.6-sol should resolve to a provider"
+        );
+        assert_eq!(provider.unwrap(), Provider::OpenAI);
+        // Non-catalog ids fall back to the gpt- provider prefix.
+        let provider = get_provider_for_model("gpt-unlisted-future-model");
+        assert!(
+            provider.is_some(),
+            "gpt- prefixed ids should resolve via provider prefixes"
+        );
         assert_eq!(provider.unwrap(), Provider::OpenAI);
     }
 
@@ -552,8 +562,8 @@ mod tests {
     #[test]
     fn model_uses_responses_api_for_gpt5_models() {
         // GPT-5 series
-        assert!(model_uses_responses_api("gpt-5.5"));
-        assert!(model_uses_responses_api("gpt-5.4-mini"));
+        assert!(model_uses_responses_api("gpt-5.6-sol"));
+        assert!(model_uses_responses_api("gpt-5.6-luna"));
         assert!(model_uses_responses_api("gpt-5-turbo"));
         assert!(model_uses_responses_api("gpt-5"));
         // Future GPT versions
@@ -576,11 +586,11 @@ mod tests {
 
     #[test]
     fn catalog_openai_reasoning_models_use_responses() {
-        // Official OpenAI model documentation classifies gpt-5.4-nano as a
-        // reasoning model and lists both Responses and Chat Completions as
-        // supported endpoints. AGI deliberately selects Responses so reasoning
-        // effort and provider-native tools have one canonical request shape.
-        for id in ["gpt-5.4-nano"] {
+        // The catalog classifies the gpt-5.6 lineup as reasoning models that
+        // list both Responses and Chat Completions as supported endpoints.
+        // AGI deliberately selects Responses so reasoning effort and
+        // provider-native tools have one canonical request shape.
+        for id in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] {
             let entry = CONFIG
                 .models
                 .get(id)
@@ -596,8 +606,8 @@ mod tests {
             );
         }
         // Catalog reasoning-tier OpenAI models still use the Responses API.
-        assert!(model_uses_responses_api("gpt-5.5"));
-        assert!(model_uses_responses_api("gpt-5.4-mini"));
+        assert!(model_uses_responses_api("gpt-5.6-sol"));
+        assert!(model_uses_responses_api("gpt-5.6-luna"));
     }
 
     #[test]
@@ -665,7 +675,7 @@ mod tests {
         assert!(!models.is_empty(), "model entries must not be empty");
         // Spot-check a well-known model exists
         assert!(
-            models.contains_key("claude-opus-4.8") || models.contains_key("claude-sonnet-4.6"),
+            models.contains_key("claude-opus-4.8") || models.contains_key("claude-sonnet-5"),
             "At least one claude model must be in the catalog"
         );
     }

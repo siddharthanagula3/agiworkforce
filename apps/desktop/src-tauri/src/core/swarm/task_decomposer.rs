@@ -5,7 +5,7 @@
 
 use super::{constants, SubtaskPriority, SubtaskStatus, SwarmError, SwarmResultType};
 use crate::core::agi::{Goal, Priority};
-use crate::core::llm::LLMRouter;
+use crate::core::llm::{LLMRouter, RouterPreferences};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -618,11 +618,20 @@ impl TaskDecomposer {
     async fn analyze_and_decompose(&self, goal: &Goal) -> SwarmResultType<Vec<Subtask>> {
         let prompt = self.build_decomposition_prompt(goal);
 
+        // TRUST BOUNDARY (desktop-trust-boundary-01): the decomposition call
+        // itself must run inside the submitting goal's boundary; `None`
+        // preferences would fail closed to Local regardless of the goal.
         let response = self
             .router
             .read()
             .await
-            .send_message(&prompt, None)
+            .send_message(
+                &prompt,
+                Some(RouterPreferences {
+                    trust_mode: goal.trust_mode,
+                    ..Default::default()
+                }),
+            )
             .await
             .map_err(|e| SwarmError::DecompositionFailed(e.to_string()))?;
 

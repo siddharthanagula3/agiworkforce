@@ -126,6 +126,10 @@ Provide solutions in JSON format:
     };
 
     let router = router_state.lock().await;
+    // TRUST BOUNDARY (desktop-trust-boundary-01): no active-session trust
+    // context reaches this IPC command. `RouterPreferences::default()` fails
+    // closed to Local via `effective_trust_mode`'s default instead of
+    // silently reaching a configured BYOK/ManagedCloud provider.
     let preferences = RouterPreferences::default();
     let candidates = router.candidates(&llm_request, &preferences);
 
@@ -199,6 +203,10 @@ Provide analysis in JSON format:
     };
 
     let router = router_state.lock().await;
+    // TRUST BOUNDARY (desktop-trust-boundary-01): no active-session trust
+    // context reaches this IPC command. `RouterPreferences::default()` fails
+    // closed to Local via `effective_trust_mode`'s default instead of
+    // silently reaching a configured BYOK/ManagedCloud provider.
     let preferences = RouterPreferences::default();
     let candidates = router.candidates(&llm_request, &preferences);
 

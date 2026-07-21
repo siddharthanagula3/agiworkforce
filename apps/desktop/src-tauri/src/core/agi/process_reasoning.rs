@@ -342,7 +342,10 @@ Return ONLY the process type name (e.g., "code_review", "customer_support", etc.
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
-            trust_mode: None,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): the goal carries the
+            // submitting session's boundary (threaded from `agi_submit_goal*`);
+            // absent, `llm_router::effective_trust_mode` fails closed to Local.
+            trust_mode: goal.trust_mode,
         };
 
         let request = LLMRequest {

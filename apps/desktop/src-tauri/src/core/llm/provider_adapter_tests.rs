@@ -62,8 +62,7 @@ mod tests {
 
     #[test]
     fn test_openai_adapter_responses_api_gpt5() {
-        // Uses gpt-5.5 (catalog reasoning model with thinking support).
-        // gpt-5.5 was removed from models.json as of 2026-05-29.
+        // Uses gpt-5.6-sol (catalog reasoning model with thinking support).
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         let request = LLMRequest {
@@ -74,7 +73,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.5".to_string(),
+            model: "gpt-5.6-sol".to_string(),
             temperature: Some(0.3),
             max_tokens: Some(2000),
             stream: false,
@@ -101,7 +100,7 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.5");
+        assert_eq!(adapted["model"], "gpt-5.6-sol");
         // c3: the crate serializer sends a typed input item instead of the
         // legacy compact string — wire-equivalent per the Responses API
         // (pinned as CompactSingleTurnInput in the c2c oracle).
@@ -115,8 +114,7 @@ mod tests {
 
     #[test]
     fn test_openai_adapter_reasoning_model_with_budget() {
-        // Uses gpt-5.5 (catalog reasoning model with thinking support).
-        // "o3" was removed from models.json as of 2026-05-29.
+        // Uses gpt-5.6-sol (catalog reasoning model with thinking support).
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         let request = LLMRequest {
@@ -127,7 +125,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.5".to_string(),
+            model: "gpt-5.6-sol".to_string(),
             temperature: Some(1.0),
             max_tokens: Some(4000),
             stream: false,
@@ -157,7 +155,7 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.5");
+        assert_eq!(adapted["model"], "gpt-5.6-sol");
         assert_eq!(adapted["reasoning"]["effort"], "high"); // 8000 tokens = high effort
     }
 
@@ -293,7 +291,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4-mini".to_string(),
+            model: "gpt-5.6-luna".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -584,7 +582,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.5".to_string(),
+            model: "gpt-5.6-sol".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -757,7 +755,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_123",
             "status": "completed",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "output": [
                 {
                     "type": "function_call",
@@ -807,7 +805,7 @@ mod tests {
             "incomplete_details": {
                 "reason": "max_output_tokens"
             },
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "output": [
                 {
                     "type": "reasoning",
@@ -861,7 +859,7 @@ mod tests {
             "id": "resp_failed_1",
             "object": "response",
             "status": "failed",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "error": {
                 "code": "server_error",
                 "message": "The response could not be generated."
@@ -884,7 +882,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_456",
             "status": "in_progress",
-            "model": "gpt-5.5",
+            "model": "gpt-5.6-sol",
             "output": [
                 {
                     "type": "local_shell_call",
@@ -1124,7 +1122,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gpt-5.5".to_string(), // GPT-5.4 uses Responses API
+            model: "gpt-5.6-sol".to_string(), // catalog OpenAI reasoning model -> Responses API
             temperature: None,
             max_tokens: Some(200),
             stream: false,
@@ -1154,7 +1152,7 @@ mod tests {
         );
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.5");
+        assert_eq!(adapted["model"], "gpt-5.6-sol");
         assert_eq!(
             adapted["instructions"],
             "You are a helpful vision assistant"
@@ -1530,7 +1528,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1574,7 +1572,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1618,7 +1616,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1663,7 +1661,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1758,7 +1756,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1886,7 +1884,7 @@ mod tests {
             "id": "msg_123",
             "type": "message",
             "role": "assistant",
-            "model": "claude-sonnet-4-6",
+            "model": "claude-sonnet-5",
             "content": [
                 {"type": "text", "text": "Hello from Claude!"}
             ],
@@ -1907,7 +1905,7 @@ mod tests {
         assert_eq!(response.prompt_tokens, Some(15));
         assert_eq!(response.completion_tokens, Some(8));
         assert_eq!(response.tokens, Some(23));
-        assert_eq!(response.model, "claude-sonnet-4-6");
+        assert_eq!(response.model, "claude-sonnet-5");
         assert_eq!(response.finish_reason, Some("end_turn".to_string()));
     }
 
@@ -1919,7 +1917,7 @@ mod tests {
             "id": "msg_456",
             "type": "message",
             "role": "assistant",
-            "model": "claude-sonnet-4-6",
+            "model": "claude-sonnet-5",
             "content": [
                 {"type": "text", "text": "Let me check the weather."},
                 {
@@ -2236,7 +2234,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -2820,7 +2818,7 @@ mod tests {
                     }]),
                 },
             ],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -2886,7 +2884,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -2957,7 +2955,7 @@ mod tests {
                     }]),
                 },
             ],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3033,7 +3031,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3120,7 +3118,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3205,7 +3203,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3269,8 +3267,8 @@ mod tests {
     }
 
     #[test]
-    fn openai_gpt54_nano_body_uses_responses_shape() {
-        // Official OpenAI documentation classifies gpt-5.4-nano as reasoning.
+    fn openai_gpt56_luna_body_uses_responses_shape() {
+        // The catalog classifies gpt-5.6-luna as an OpenAI reasoning model.
         // It supports both endpoints, but AGI selects Responses so effort and
         // hosted-tool semantics do not split across two request shapes.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
@@ -3282,7 +3280,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4-nano".to_string(),
+            model: "gpt-5.6-luna".to_string(),
             max_tokens: Some(32),
             stream: true,
             ..Default::default()
@@ -3308,8 +3306,8 @@ mod tests {
                 "content": "Reply with a short one-sentence greeting."
             }])
         );
-        // apiModelId for gpt-5.4-nano equals its internal id.
-        assert_eq!(adapted["model"], "gpt-5.4-nano");
+        // apiModelId for gpt-5.6-luna equals its internal id.
+        assert_eq!(adapted["model"], "gpt-5.6-luna");
         assert_eq!(adapted["max_output_tokens"], 32);
         assert!(
             adapted.get("max_tokens").is_none(),
@@ -3335,7 +3333,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "grok-4.3".to_string(),
+            model: "grok-4.5".to_string(),
             max_tokens: Some(32),
             stream: true,
             ..Default::default()

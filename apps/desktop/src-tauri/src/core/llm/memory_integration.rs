@@ -213,12 +213,20 @@ impl MemoryInjector {
                 .push(memory);
         }
 
-        // Format in order of priority
-        let priority_order = vec!["Decision", "Preference", "Fact", "Context"];
+        // Format in order of priority; keys are the lowercase wire values from
+        // MemoryCategory::as_str, labels are the display headings.
+        let priority_order = [
+            ("decision", "Decision"),
+            ("preference", "Preference"),
+            ("fact", "Fact"),
+            ("skill", "Skill"),
+            ("summary", "Summary"),
+            ("context", "Context"),
+        ];
 
-        for category in priority_order {
-            if let Some(mems) = by_category.get(category) {
-                context.push_str(&format!("### {}\n\n", category));
+        for (category_key, category_label) in priority_order {
+            if let Some(mems) = by_category.get(category_key) {
+                context.push_str(&format!("### {}\n\n", category_label));
 
                 for memory in mems {
                     let importance_indicator = match memory.importance {
@@ -360,6 +368,17 @@ mod tests {
                 updated_at: "2025-01-01".to_string(),
                 last_accessed: None,
             },
+            MemoryEntry {
+                id: 3,
+                category: MemoryCategory::Skill,
+                topic: "cargo_workflows".to_string(),
+                content: "Knows cargo test filtering".to_string(),
+                importance: 6,
+                source: None,
+                created_at: "2025-01-01".to_string(),
+                updated_at: "2025-01-01".to_string(),
+                last_accessed: None,
+            },
         ];
 
         let formatted = injector.format_memories(&memories);
@@ -367,5 +386,7 @@ mod tests {
         assert!(formatted.contains("backend_lang"));
         assert!(formatted.contains("Preference"));
         assert!(formatted.contains("code_style"));
+        assert!(formatted.contains("### Skill"));
+        assert!(formatted.contains("cargo_workflows"));
     }
 }

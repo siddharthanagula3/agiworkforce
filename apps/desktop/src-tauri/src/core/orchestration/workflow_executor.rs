@@ -330,6 +330,7 @@ impl WorkflowExecutor {
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode: None,
         };
 
         let orchestrator = orchestrator_arc.lock().await;

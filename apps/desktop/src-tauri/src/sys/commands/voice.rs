@@ -135,7 +135,7 @@ impl VoiceState {
         Self {
             settings: Arc::new(Mutex::new(VoiceSettings {
                 provider: VoiceProvider::Cloud,
-                model: "whisper-1".to_string(),
+                model: "gpt-4o-transcribe".to_string(),
                 language: None,
             })),
             client: Client::new(),
@@ -528,7 +528,7 @@ async fn transcribe_with_openai_direct(
 
     let mut form = reqwest::multipart::Form::new()
         .part("file", file_part)
-        .text("model", "whisper-1");
+        .text("model", settings.model.clone());
 
     if let Some(ref lang) = settings.language {
         form = form.text("language", lang.clone());

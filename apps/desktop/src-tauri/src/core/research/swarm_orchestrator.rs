@@ -53,10 +53,11 @@ impl ResearchSwarmOrchestrator {
         // Build the goal string
         let goal = swarm_bridge::research_query_to_goal(query, mode);
 
-        // Execute via the swarm with the pre-built graph
+        // Execute via the swarm with the pre-built graph. Research swarms
+        // carry no session boundary yet, so sub-goals fail closed to Local.
         let swarm_result = self
             .swarm
-            .execute_with_graph(goal, graph)
+            .execute_with_graph(goal, graph, None)
             .await
             .map_err(|e| {
                 tracing::warn!("[ResearchSwarm] Swarm execution failed: {}", e);

@@ -37,16 +37,6 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
             Regex::new(r"(?:sk|pk|rk)_(?:test|live)_[a-zA-Z0-9]{24,}").expect("static regex"),
             "[REDACTED_STRIPE_KEY]",
         ),
-        // Generic bearer tokens
-        (
-            Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{20,}").expect("static regex"),
-            "Bearer [REDACTED_TOKEN]",
-        ),
-        // Generic API key patterns in key=value or key:value format
-        (
-            Regex::new(r#"(?i)(api[_-]?key|apikey|secret[_-]?key|access[_-]?token|auth[_-]?token)\s*[=:]\s*['"]?[a-zA-Z0-9_\-/.+=]{16,}['"]?"#).expect("static regex"),
-            "$1=[REDACTED]",
-        ),
         // AWS access keys
         (
             Regex::new(r"AKIA[A-Z0-9]{16}").expect("static regex"),
@@ -62,6 +52,40 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
             Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").expect("static regex"),
             "[REDACTED_GITHUB_TOKEN]",
         ),
+        // xAI API keys — ported from the TS redactor
+        // (packages/platform/utils/src/logger.ts) to close the pattern-drift
+        // gap flagged in the trust-boundary audit (desktop-trust-boundary-01).
+        (
+            Regex::new(r"xai-[a-zA-Z0-9]{20,}").expect("static regex"),
+            "[REDACTED_XAI_KEY]",
+        ),
+        // JWTs (header.payload.signature) — ported from the TS redactor.
+        (
+            Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
+                .expect("static regex"),
+            "[REDACTED_JWT]",
+        ),
+        // Generic bearer tokens. Deliberately placed *after* all
+        // vendor-specific formats above (sk-ant-/sk-/AIzaSy/gsk_/stripe/
+        // AKIA/gh[ps]_/github_pat_/xai-/JWT) — same ordering the TS redactor
+        // uses — so a vendor-specific label wins when a value happens to
+        // match both a specific format and this generic one.
+        (
+            Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{20,}").expect("static regex"),
+            "Bearer [REDACTED_TOKEN]",
+        ),
+        // Generic API key / bearer token patterns in key=value or key:value
+        // format. Also placed after the vendor-specific patterns for the
+        // same reason. Widened to also catch bare `secret`/`token` key names
+        // (not just `secret_key`/`auth_token`/`access_token`) per the
+        // trust-boundary audit (desktop-trust-boundary-01) — the existing
+        // alternatives are kept, this only adds coverage. Without the
+        // reordering above, this alone would swallow e.g. `GITHUB_TOKEN=...`
+        // or `XAI_API_KEY=...` before the more specific label got a chance.
+        (
+            Regex::new(r#"(?i)(api[_-]?key|apikey|secret[_-]?key|secret|access[_-]?token|auth[_-]?token|token)['"]?\s*[=:]\s*['"]?[a-zA-Z0-9_\-/.+=]{16,}['"]?"#).expect("static regex"),
+            "$1=[REDACTED]",
+        ),
         // Password patterns in commands
         (
             Regex::new(r"(?i)(-p|--password[= ])\s*\S+").expect("static regex"),
@@ -71,6 +95,33 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         (
             Regex::new(r"(?i)(postgres|mysql|mongodb|redis)://[^:]+:[^@]+@").expect("static regex"),
             "$1://[CREDENTIALS_REDACTED]@",
+        ),
+        // Payment-card-like digit runs: grouped 4-4-4-4, Amex 4-6-5, or a
+        // contiguous 13-19 digit run starting with a plausible IIN (3-6).
+        // Narrowed from a generic 13-19 digit run so epoch-millis timestamps
+        // (leading 1) and hyphenated dates next to numeric IDs survive.
+        (
+            Regex::new(r"\b(?:\d{4}[ \t-]){3}\d{4}\b|\b\d{4}[ \t-]\d{6}[ \t-]\d{5}\b|\b[3-6]\d{12,18}\b").expect("static regex"),
+            "[REDACTED]",
+        ),
+        // Password label at end-of-line with the value on the next line
+        // (e.g. pretty-printed JSON `"password":\n  "hunter2"`). Must run
+        // before the whole-line pattern below, which would otherwise redact
+        // only the label line and leave the value line intact.
+        (
+            Regex::new(r#"(?im)^.*\bpassw(?:or)?d\b["']?\s*[:=][ \t]*\n[ \t]*\S+"#)
+                .expect("static regex"),
+            "[REDACTED LINE]",
+        ),
+        // Whole lines that mention "password"/"passwd" — catches form-label
+        // style logging (e.g. `password: hunter2`) that the key=value
+        // pattern above doesn't parse. Ported from the TS redactor; mirrors
+        // its whole-line redaction rather than trying to isolate the value,
+        // since labels and values are not reliably separated by `=`/`:` in
+        // free-form command/log text.
+        (
+            Regex::new(r"(?im)^.*\bpassw(?:or)?d\b.*$").expect("static regex"),
+            "[REDACTED LINE]",
         ),
     ]
 });
@@ -151,5 +202,116 @@ mod tests {
         let result = redact_secrets(input);
         assert!(!result.contains("github_pat_"));
         assert!(result.contains("[REDACTED_GITHUB_TOKEN]"));
+    }
+
+    // --- desktop-trust-boundary-01: pattern-drift fixes below ---
+
+    #[test]
+    fn test_redact_xai_key() {
+        let input = "export XAI_API_KEY=xai-abcdefghijklmnopqrstuvwxyz012345";
+        let result = redact_secrets(input);
+        assert!(!result.contains("xai-abcdefghijklmnopqrstuvwxyz"));
+        assert!(result.contains("[REDACTED_XAI_KEY]"));
+    }
+
+    #[test]
+    fn test_redact_jwt() {
+        let input = "Authorization: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        let result = redact_secrets(input);
+        assert!(!result.contains("eyJhbGciOiJIUzI1NiJ9"));
+        assert!(result.contains("[REDACTED_JWT]"));
+    }
+
+    #[test]
+    fn test_redact_credit_card_digit_run() {
+        let input = "card on file: 4111 1111 1111 1111";
+        let result = redact_secrets(input);
+        assert!(!result.contains("4111 1111 1111 1111"));
+        assert!(result.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_redact_password_line() {
+        let input = "user: alice\npassword: hunter2\nhost: db.example.com";
+        let result = redact_secrets(input);
+        assert!(!result.contains("hunter2"));
+        assert!(result.contains("[REDACTED LINE]"));
+        // Unrelated lines are left alone.
+        assert!(result.contains("user: alice"));
+        assert!(result.contains("host: db.example.com"));
+    }
+
+    #[test]
+    fn test_redact_bare_secret_and_token_key_value() {
+        let secret_input = "secret: abcdefghijklmnopqrstuvwxyz";
+        let secret_result = redact_secrets(secret_input);
+        assert!(!secret_result.contains("abcdefghijklmnopqrstuvwxyz"));
+        assert!(secret_result.contains("[REDACTED]"));
+
+        let token_input = "token=abcdefghijklmnopqrstuvwxyz";
+        let token_result = redact_secrets(token_input);
+        assert!(!token_result.contains("abcdefghijklmnopqrstuvwxyz"));
+        assert!(token_result.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_bare_secret_widening_does_not_break_secret_key_capture() {
+        // Regression guard: adding a bare `secret` alternative must not
+        // change which branch matches `secret_key=...` (it should still be
+        // captured by the more specific `secret[_-]?key` alternative, not
+        // truncated at `secret`).
+        let input = "secret_key=abcdefghijklmnopqrstuvwxyz";
+        let result = redact_secrets(input);
+        assert!(!result.contains("abcdefghijklmnopqrstuvwxyz"));
+        assert!(result.contains("[REDACTED]"));
+        assert!(!result.contains("_key=abcdefghijklmnopqrstuvwxyz"));
+    }
+
+    #[test]
+    fn test_redact_password_next_line_value() {
+        let input = "{\"password\":\n  \"hunter2\"}";
+        let result = redact_secrets(input);
+        assert!(!result.contains("hunter2"));
+        assert!(result.contains("[REDACTED LINE]"));
+    }
+
+    #[test]
+    fn test_redact_quoted_json_token_key() {
+        let input = "curl -d '{\"token\": \"abcdefghijklmnopqrstuvwx\"}'";
+        let result = redact_secrets(input);
+        assert!(!result.contains("abcdefghijklmnopqrstuvwx"));
+        assert!(result.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_token_count_keys_survive() {
+        let quoted = "\"token_count\": 123456";
+        assert_eq!(redact_secrets(quoted), quoted);
+        let bare = "token_count=12345678";
+        assert_eq!(redact_secrets(bare), bare);
+        // Values long enough to trip the secret-value length threshold: only
+        // the `_count` key boundary keeps these out of the `token=` branch.
+        let quoted_long = "\"token_count\": 12345678901234567890";
+        assert_eq!(redact_secrets(quoted_long), quoted_long);
+        let bare_long = "token_count=12345678901234567890";
+        assert_eq!(redact_secrets(bare_long), bare_long);
+    }
+
+    #[test]
+    fn test_card_pattern_negatives_survive() {
+        let epoch_millis = "ts=1721469876543";
+        assert_eq!(redact_secrets(epoch_millis), epoch_millis);
+        let unix_ts = "started at 1721469876";
+        assert_eq!(redact_secrets(unix_ts), unix_ts);
+        let date_and_id = "2026-07-20 12345678";
+        assert_eq!(redact_secrets(date_and_id), date_and_id);
+    }
+
+    #[test]
+    fn test_contiguous_card_still_redacted() {
+        let input = "card 4111111111111111";
+        let result = redact_secrets(input);
+        assert!(!result.contains("4111111111111111"));
+        assert!(result.contains("[REDACTED]"));
     }
 }

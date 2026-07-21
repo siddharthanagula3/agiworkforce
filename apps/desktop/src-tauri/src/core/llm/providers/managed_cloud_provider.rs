@@ -837,7 +837,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4-mini".to_string(),
+            model: "gpt-5.6-luna".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,

@@ -451,6 +451,14 @@ impl AnthropicComputerUseAgent {
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): `AnthropicComputerUseAgent`
+            // is not constructed anywhere outside this module/its own tests
+            // today (the live OPA path uses `ComputerUseAgent` in
+            // observe_plan_act.rs, which is threaded). Fails closed to Local
+            // via `effective_trust_mode`'s default; since `provider` here is
+            // pinned to `Provider::Anthropic` (never local), `candidates()`
+            // will now always be empty until this agent is wired up with a
+            // real trust_mode. No live caller is affected today.
             trust_mode: None,
         };
 

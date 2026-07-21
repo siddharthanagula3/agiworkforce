@@ -85,6 +85,9 @@ mod tests {
             (Provider::Sambanova, "sambanova"),
             (Provider::Azure, "azure"),
             (Provider::Bedrock, "bedrock"),
+            (Provider::LmStudio, "lmstudio"),
+            (Provider::LlamaCpp, "llamacpp"),
+            (Provider::Vllm, "vllm"),
         ];
         for &(provider, name) in all_providers {
             router.set_provider(
@@ -121,10 +124,17 @@ mod tests {
             "Local mode must never produce a ManagedCloud candidate"
         );
 
-        // Sanity: with local_only=false, ManagedCloud is allowed to appear.
+        // Sanity: an explicit `managed_cloud_only` widens the boundary and
+        // allows ManagedCloud to appear. `local_only: false` alone is NOT
+        // sufficient post-desktop-trust-boundary-01 — the router now fails
+        // closed to Local when neither `trust_mode` nor `managed_cloud_only`
+        // positively resolves a wider boundary (see
+        // `llm_router::effective_trust_mode`), so an unset/ambiguous
+        // boundary can no longer reach ManagedCloud/BYOK by omission.
         let cloud_prefs = RouterPreferences {
             prefer_cloud_credits: true,
             local_only: false,
+            managed_cloud_only: true,
             strategy: RoutingStrategy::CostOptimized,
             ..Default::default()
         };
@@ -133,7 +143,7 @@ mod tests {
             cloud_candidates
                 .iter()
                 .any(|c| c.provider == Provider::ManagedCloud),
-            "Non-local mode should still allow a ManagedCloud candidate"
+            "Explicit managed_cloud_only should still allow a ManagedCloud candidate"
         );
     }
 
@@ -143,7 +153,7 @@ mod tests {
         let request = LLMRequest::default();
         let preferences = RouterPreferences {
             provider: Some(Provider::OpenAI),
-            model: Some("gpt-5.5".to_string()),
+            model: Some("gpt-5.6-sol".to_string()),
             trust_mode: Some(TrustMode::Local),
             ..Default::default()
         };
@@ -222,6 +232,68 @@ mod tests {
         assert!(
             candidates.is_empty(),
             "Desktop managed cloud must remain unavailable until desktop/cloud-chat is wired"
+        );
+    }
+
+    #[test]
+    fn unset_trust_mode_fails_closed_to_local() {
+        let router = router_with_all_providers();
+        let request = LLMRequest::default();
+
+        // No trust_mode, no legacy booleans: every strategy must fail closed
+        // to the Local provider class (see `llm_router::effective_trust_mode`).
+        let preference_sets = [
+            RouterPreferences::default(),
+            RouterPreferences {
+                prefer_cloud_credits: true,
+                strategy: RoutingStrategy::CostOptimized,
+                ..Default::default()
+            },
+            RouterPreferences {
+                strategy: RoutingStrategy::AutoPremium,
+                ..Default::default()
+            },
+        ];
+
+        let mut total_candidates = 0usize;
+        for preferences in preference_sets {
+            let candidates = router.candidates(&request, &preferences);
+            // Guard against vacuous passes. Auto-strategy sets may correctly
+            // return zero candidates today: the canonical auto policy fails
+            // closed to Unavailable because `desktop/local-chat` has no
+            // allowed harnesses yet (registry status "partial"). Non-auto
+            // strategies must produce Local candidates from the fallback
+            // chain, so an empty result there would mean the test proves
+            // nothing.
+            let is_auto = matches!(
+                preferences.strategy,
+                RoutingStrategy::Auto
+                    | RoutingStrategy::AutoEconomy
+                    | RoutingStrategy::AutoBalanced
+                    | RoutingStrategy::AutoPremium
+            );
+            if !is_auto {
+                assert!(
+                    !candidates.is_empty(),
+                    "Expected Local candidates for non-auto preferences {:?}",
+                    preferences
+                );
+            }
+            total_candidates += candidates.len();
+            for candidate in candidates {
+                assert!(
+                    matches!(
+                        candidate.provider,
+                        Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm
+                    ),
+                    "Unset trust mode must fail closed to Local, got {:?}",
+                    candidate.provider
+                );
+            }
+        }
+        assert!(
+            total_candidates > 0,
+            "Every preference set returned zero candidates — the boundary assertions never ran"
         );
     }
 
@@ -665,12 +737,7 @@ mod tests {
         // when selected_model="claude-..." and provider not registered, falls to legacy routing.
         // We check that the returned provider is sane (not panicking).
         let router = LLMRouter::new();
-        let ctx = intelligent_context(
-            "pro",
-            Some("coding"),
-            Some("chat"),
-            Some("claude-sonnet-4-6"),
-        );
+        let ctx = intelligent_context("pro", Some("coding"), Some("chat"), Some("claude-sonnet-5"));
         let suggestion = router.suggest_for_context(&ctx);
         // Without Anthropic registered, falls to legacy and may return a different provider.
         // At minimum it must not panic and must return a non-empty model.
@@ -680,7 +747,7 @@ mod tests {
     #[test]
     fn test_infer_provider_gpt_model_prefix() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.5"));
+        let ctx = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.6-sol"));
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -714,7 +781,7 @@ mod tests {
     #[test]
     fn test_infer_provider_grok_model_prefix() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.3"));
+        let ctx = intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.5"));
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -736,11 +803,11 @@ mod tests {
     fn test_infer_provider_openai_gpt_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("gpt-5.5"),
+            router.infer_provider_from_model("gpt-5.6-sol"),
             Provider::OpenAI
         );
         assert_eq!(
-            router.infer_provider_from_model("gpt-5.4-mini"),
+            router.infer_provider_from_model("gpt-5.6-luna"),
             Provider::OpenAI
         );
         assert_eq!(
@@ -775,7 +842,7 @@ mod tests {
             Provider::OpenAI
         );
         assert_eq!(
-            router.infer_provider_from_model("whisper-1"),
+            router.infer_provider_from_model("gpt-4o-transcribe"),
             Provider::OpenAI
         );
     }
@@ -784,7 +851,7 @@ mod tests {
     fn test_infer_provider_anthropic_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("claude-sonnet-4-6"),
+            router.infer_provider_from_model("claude-sonnet-5"),
             Provider::Anthropic
         );
         assert_eq!(
@@ -814,7 +881,7 @@ mod tests {
             Provider::Google
         );
         assert_eq!(
-            router.infer_provider_from_model("imagen-4-fast"),
+            router.infer_provider_from_model("gemini-3.1-flash-image"),
             Provider::Google
         );
     }
@@ -835,8 +902,8 @@ mod tests {
     #[test]
     fn test_infer_provider_xai_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("grok-4.3"), Provider::XAI);
-        assert_eq!(router.infer_provider_from_model("grok-4.3"), Provider::XAI);
+        assert_eq!(router.infer_provider_from_model("grok-4.5"), Provider::XAI);
+        assert_eq!(router.infer_provider_from_model("grok-4.5"), Provider::XAI);
         assert_eq!(router.infer_provider_from_model("GROK-4"), Provider::XAI);
     }
 
@@ -867,7 +934,7 @@ mod tests {
     fn test_infer_provider_moonshot_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("kimi-k2.6"),
+            router.infer_provider_from_model("kimi-k3"),
             Provider::Moonshot
         );
         assert_eq!(
@@ -1126,25 +1193,21 @@ mod tests {
     #[test]
     fn test_intelligent_routing_selected_model_priority() {
         let router = router_with_all_providers();
-        let context = intelligent_context(
-            "pro",
-            Some("coding"),
-            Some("chat"),
-            Some("claude-sonnet-4-6"),
-        );
+        let context =
+            intelligent_context("pro", Some("coding"), Some("chat"), Some("claude-opus-4-8"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        // claude-sonnet-4.6 is deprecated; canonicalization forwards to current Sonnet.
-        assert_eq!(suggestion.model, "claude-sonnet-4.6");
+        // The dashed apiModelId alias canonicalizes to the catalog id.
+        assert_eq!(suggestion.model, "claude-opus-4.8");
     }
 
     #[test]
     fn test_intelligent_routing_infer_openai_provider() {
         let router = router_with_all_providers();
-        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.5"));
+        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.6-sol"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.5");
+        assert_eq!(suggestion.model, "gpt-5.6-sol");
     }
 
     #[test]
@@ -1188,13 +1251,13 @@ mod tests {
     #[test]
     fn test_intelligent_routing_infer_xai_provider() {
         let router = router_with_all_providers();
-        // models.json canonicalization maps grok-4.3 + siblings
-        // → grok-4.3 (the deprecated families all sunset 2026-05-15).
+        // grok-4.5 is the current xAI catalog flagship; the grok- prefix
+        // resolves to the XAI provider.
         let context =
-            intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.3"));
+            intelligent_context("basic", Some("reasoning"), Some("chat"), Some("grok-4.5"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
-        assert_eq!(suggestion.model, "grok-4.3");
+        assert_eq!(suggestion.model, "grok-4.5");
     }
 
     // --- Intelligent routing: intent_type-based (no selected_model) ---
