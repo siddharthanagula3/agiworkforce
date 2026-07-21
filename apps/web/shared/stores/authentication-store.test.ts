@@ -57,12 +57,6 @@ vi.mock('./chat-store', () => ({
   },
 }));
 
-vi.mock('./multi-agent-chat-store', () => ({
-  useMultiAgentChatStore: {
-    getState: vi.fn(() => ({ reset: vi.fn() })),
-  },
-}));
-
 vi.mock('./usage-warning-store', () => ({
   useUsageWarningStore: {
     getState: vi.fn(() => ({ resetWarnings: vi.fn() })),

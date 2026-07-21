@@ -96,26 +96,6 @@ export {
   type SessionStatusType,
 } from './agent-metrics-store';
 
-// Multi-Agent Chat Store - Multi-participant chat management
-export {
-  useMultiAgentChatStore,
-  type MultiAgentChatStore,
-  type MultiAgentChatState,
-  type MultiAgentChatActions,
-  type MultiAgentConversation,
-  type ChatMessage as MultiAgentChatMessage,
-  type ConversationParticipant,
-  type MessageDeliveryStatus,
-  type ParticipantType,
-  type ToolCall as MultiAgentToolCall,
-  type ThinkingStep,
-  type Attachment as MultiAgentAttachment,
-  type MessageReaction as MultiAgentMessageReaction,
-  type TypingIndicator,
-  type AgentPresence,
-  type SyncConflict,
-} from './multi-agent-chat-store';
-
 // Company Hub Store - Workspace collaboration
 export {
   useCompanyHubStore,
@@ -157,20 +137,6 @@ export {
   type LogEntryType,
   type MissionModeType,
 } from './mission-control-store';
-
-// Multi-Agent Chat Store Selectors
-export {
-  useActiveConversation,
-  useConversationMessages,
-  useConversationParticipants,
-  useTypingIndicators,
-  useAgentPresence,
-  useSyncState,
-  useActiveConversationId,
-  useConversations,
-  useSearchAndFilters,
-  useChatLoadingState,
-} from './multi-agent-chat-store';
 
 // Company Hub Store Selectors
 export {
