@@ -74,6 +74,21 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   writing. Also NOT live-probed with real keys: kimi-k3, grok-4.5,
   mistral-medium-3.5, mistral-small-4, gpt-4o-transcribe (docs-verified only;
   live 200 probe is a founder/live-QA item per the models-policy lesson).
+- OPEN DESKTOP-SKILLS-EAGER-INJECTION-01 (2026-07-21, confirmed in source):
+  desktop chat still eagerly injects full skill bodies into the LLM context by
+  Jaccard-similarity auto-match, the exact pattern CLI remediated in
+  `CLI-SKILLS-TOOL-01`. `maybe_inject_matching_skills`
+  (apps/desktop/src-tauri/src/sys/commands/chat/send_message_setup.rs:918) scores
+  every skill's name+description against the user message, then pushes
+  `skill.to_context_string()` (full instruction body,
+  core/skills/manager.rs:701) straight into `llm_messages` for the top matches,
+  gated only by the default-on `auto_inject_skills` flag plus incognito. A skill
+  body carrying injected/untrusted instructions therefore reaches the model
+  unfenced. Desktop never received CLI's lazy, consent-gated, model-invoked
+  `Skill` tool with untrusted-body fencing. Fix = port the
+  `packages/tools/skills` path-free tool pattern to the desktop harness; until
+  then the exposure is bounded by user-authored/installed skills only. Surfaced
+  by a peer audit agent during the wave-2 dedup sweep.
 
 2026-07-19 STRENGTHEN pass (founder directive: harden web-search/E2B/tool-loop +
 app UI/UX so it "just works", no redo). 5 adversarial audits; confirmed findings
