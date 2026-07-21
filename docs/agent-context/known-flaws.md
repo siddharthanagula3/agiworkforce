@@ -93,8 +93,29 @@ test:e2e` (build + smoke): Playwright launches Chromium with
   page exceptions or CSP violations (tolerates expected bridge/gateway network
   noise). Playwright + full Chromium were already installed for the web app, so
   no new dependency. This harness is what surfaced EXT-OPTIONS-CSP-INLINE-STYLE.
-  Not yet CI-wired (needs the full `chromium` channel, not headless-shell); run
-  locally as the extension's real-UI check.
+  Now covers, deterministically across repeated runs: render + no page-exception
+  - no-CSP on both pages; side-panel interactions (composer input, drawer
+    navigation via the menu button, model-picker open — seeds
+    agi_onboarding_completed so the main UI is driven); and a persistence workflow
+    (seed agi_site_allowlist, reload, assert refreshAllowlist renders it). Not yet
+    CI-wired (needs the full `chromium` channel, not headless-shell); run locally
+    as the extension's real-UI check.
+- BOUNDARY EXT-AUTOFILL-REALUI-INJECTION (2026-07-21, investigated, not a defect):
+  attempted to extend the smoke to job autofill end-to-end by serving a synthetic
+  Greenhouse form at a real http://boards.greenhouse.io URL via a local server +
+  Chromium `--host-resolver-rules` (verified working: server hit, tab URL correct,
+  form rendered). The extension's MODULE content script (manifest content*scripts
+  `type:module`) does NOT inject into pages in the Playwright launchPersistentContext
+  --load-extension harness — chrome.tabs.sendMessage(AGI_RUN_AUTOFILL) returns
+  "Receiving end does not exist", and manual chrome.scripting.executeScript is
+  blocked because boards.greenhouse.io is not in host_permissions (content_scripts
+  matches http://*/\_ but executeScript needs host perms). This is a harness
+  limitation, not a product bug. The autofill FILL logic is already unit-tested
+  (**tests**/autofill-escalation-agent-integration.test.ts, jobAutofill.runtime.test.ts,
+  autofill-storage.test.ts) and the filler was audit-verified production-grade
+  (setNativeValue + focus/beforeinput/input/change/blur). Full real-browser autofill
+  needs a real ATS page (or a signed CI extension load) — a documented integration/
+  manual boundary, same class as managed-chat/computer-use which need a live gateway.
 - VERIFIED-CLEAN (2026-07-21 deep re-audit, self-audited surfaces): beyond the
   side panel, I independently checked the options-page + background-router,
   content/autofill, and computer-use/native/cloud-bridge egress surfaces for
