@@ -8,7 +8,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
   Bot,
@@ -18,8 +18,6 @@ import {
   MessageSquare,
   Monitor,
   Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
   PlusCircle,
   Search,
   Settings,
@@ -28,7 +26,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/utils/cn';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
-import { useChatStore } from '@shared/stores/web-chat-store';
 import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
 import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';
@@ -63,10 +60,8 @@ function useCommands(
   onOpenSubMenu: (menu: ActiveSubMenu) => void,
   currentModelId: string,
   setModelId: (id: string) => void,
-  isChatRoute: boolean,
 ): { top: CommandOption[]; modelCommands: CommandOption[] } {
   const router = useRouter();
-  const { sidebarCollapsed, toggleSidebar } = useChatStore();
   const { theme, setTheme } = useTheme();
 
   const mod =
@@ -77,19 +72,6 @@ function useCommands(
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
 
   const preferences: CommandOption[] = [
-    ...(isChatRoute
-      ? [
-          {
-            id: 'toggle-sidebar',
-            title: sidebarCollapsed ? 'Expand Chat Sidebar' : 'Collapse Chat Sidebar',
-            subtitle: 'Toggle the chat conversation list',
-            group: 'Preferences',
-            icon: sidebarCollapsed ? PanelLeftOpen : PanelLeftClose,
-            shortcut: `${mod}⇧S`,
-            action: toggleSidebar,
-          } satisfies CommandOption,
-        ]
-      : []),
     {
       id: 'toggle-theme',
       title: `Switch to ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)} Theme`,
@@ -208,8 +190,6 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeSubMenu, setActiveSubMenu] = useState<ActiveSubMenu>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const pathname = usePathname();
-  const isChatRoute = pathname?.startsWith('/chat') || pathname?.startsWith('/chats') || false;
   const currentModelId = useModelStore((state) => state.selectedModelId);
   const setSelectedModelId = useModelStore((state) => state.setSelectedModelId);
 
@@ -228,7 +208,6 @@ export function CommandPalette({ open, onOpenChange }: Props) {
       handleModelSwitch(modelId);
       onOpenChange(false);
     },
-    isChatRoute,
   );
 
   const activeCommands = activeSubMenu === 'model' ? modelCommands : topCommands;
