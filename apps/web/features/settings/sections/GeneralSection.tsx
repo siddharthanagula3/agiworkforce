@@ -183,10 +183,6 @@ export function GeneralSection() {
     workDescription,
   ]);
 
-  const updatePref = <K extends keyof PreferenceSettings>(key: K, value: PreferenceSettings[K]) => {
-    setPrefs((prev) => ({ ...prev, [key]: value }));
-  };
-
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
   // Derived: initials for avatar (up to 2 chars)
@@ -382,33 +378,6 @@ export function GeneralSection() {
                 );
               })}
             </div>
-          </Row>
-
-          {/* Chat font */}
-          <Row label="Chat font">
-            <select
-              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
-              value={prefs.chatFont}
-              onChange={(e) => updatePref('chatFont', e.target.value)}
-            >
-              <option value="serif">Instrument Serif</option>
-              <option value="sans">System Sans</option>
-              <option value="mono">JetBrains Mono</option>
-            </select>
-          </Row>
-
-          {/* Voice */}
-          <Row label="Voice">
-            <select
-              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring"
-              value={prefs.voice}
-              onChange={(e) => updatePref('voice', e.target.value)}
-            >
-              <option value="nova">Nova (clear, neutral)</option>
-              <option value="ember">Ember (warm, conversational)</option>
-              <option value="vale">Vale (calm, precise)</option>
-              <option value="echo">Echo (deep, measured)</option>
-            </select>
           </Row>
 
           {/* Display Language */}
