@@ -2,9 +2,78 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-07-18
+Last updated: 2026-07-20
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
+
+2026-07-20 desktop-trust-boundary-01 slice (uncommitted working tree at time of
+writing): desktop AGI trust_mode threaded end-to-end (IPC wire enum → Goal →
+planner/executors/swarm → router), router fail-closed to Local, redaction
+hardening, plus a fix wave. Findings from the fix wave tracked here:
+
+- FIXED DESKTOP-CLOUD-GATE-SILENT-REFLIP (HIGH, this slice, uncommitted): commit
+  551e4ab22 (2026-07-18 registry generator refactor) silently flipped the runtime
+  profile for desktop/cloud-chat in packages/ai/model-registry/catalog/harnesses.json
+  from "unwired" to "implemented" AND inverted the 3 guarding assertions
+  (registry-contract.test.mjs + model-catalog.test.ts) — so the desktop router was
+  free to offer ManagedCloud while the product still refuses desktop cloud mode
+  (DCL-1..4 unfinished; the "coming soon" gate is a founder decision, see the
+  2026-07-19 cross-surface audit entry below). Reverted to unwired, the 3 generated
+  registry JSONs regenerated, and the assertions restored to pin unwired. The
+  legitimate re-flip to "implemented" belongs to DCL-4 (desktop cloud launch), not
+  to any generator refactor — if a regen flips it again, treat it as this bug.
+- FIXED DESKTOP-MEMORY-INJECTION-EMPTY (this slice, uncommitted): format_memories
+  (memory_integration.rs) matched PascalCase category keys ("Preference", "Fact",
+  …) but commit 53d596b22 lowercased MemoryCategory::as_str, so EVERY category
+  section was dropped and desktop memory injection silently produced an empty
+  block. Now matches lowercase keys, renders PascalCase section labels, and covers
+  the skill/summary categories. Tested.
+- FIXED MODEL-RETIRE-DRIFT-SONNET46 (this slice, uncommitted): commit 7a78ecbd0
+  retired claude-sonnet-4.6 from models.json, leaving red tests plus dozens of
+  passing-but-stale references. All swept 2026-07-20 across all six surfaces
+  together with the latest-family-only catalog waves (see the model-catalog
+  CHANGELOG entry): remaining grep hits for any retired ID are exclusively
+  INTENTIONAL absence-guard literals (model_catalog.rs onboarding/tui/
+  design_system guards, catalog-policy exclusion lists, registry-absence
+  asserts) which must keep the historical spelling to do their job.
+- FIXED COMPUTERUSE-BYOK-SILENT-EGRESS (HIGH, this slice, uncommitted —
+  supersedes the earlier decision-note): the first cut of the OPA executionMode
+  wiring consulted the PERSISTED settings provider before the workspace privacy
+  mode, so a Local workspace with a stale localStorage provider silently sent
+  computer-use screenshots out as 'byok' — the exact silent Local-to-cloud
+  path the trust rules forbid. Confirmed by two independent adversarial
+  verifiers and fixed: privacy mode is now the outer gate (managed maps to
+  cloud_managed, local maps to local_only unconditionally; the byok branch is
+  removed), a Local-mode cloud pick nulls the provider and toasts instead of
+  egressing, the Rust command validates execution-mode/provider coherence
+  (chat's pattern), and the OPA OBSERVE step (which runs first each iteration
+  and still hardcoded trust None, dead-ending every non-Local task) threads
+  the boundary through VisualReasonerConfig. OPEN follow-up
+  COMPUTERUSE-BYOK-TASK-CONSENT: task-time BYOK consent flow (fork ceremony)
+  so cloud vision picks work from Local mode at all; until then Local-mode
+  computer use is local-models-only by design.
+- FIXED SWARM-SECOND-IPC-TRUST-GAP (this slice, uncommitted): swarm_execute_goal
+  (sys/commands/swarm.rs) was a second live swarm entry point whose request had
+  NO trust field — Goal built with trust_mode None regardless of session mode;
+  live callers AgentCollaborationPanel.tsx and handlers/commands/agents.ts.
+  Field added (same wire deserializer as agi.rs), callers send the privacy-mode
+  boundary. Two adjacent dead controls fixed in passing: the swarm slash-command
+  sent a bare goal that never matched the request envelope, and SwarmInitRequest
+  had snake_case-only fields so panel swarm_init always failed deserialization.
+- OPEN DESKTOP-LOCAL-CHAT-EMPTY-HARNESS (flagged during verification): registry
+  runtimeProfiles desktop/local-chat has allowedHarnessIds [] (status
+  "partial"), so Auto strategy under a Local boundary yields zero candidates at
+  the auto-policy step and relies entirely on non-auto fallbacks. Correct
+  fail-closed behavior, but worth wiring real local harnesses or documenting
+  the intended fallback order.
+- OPEN MODEL-CATALOG-HELD-VERIFICATIONS (2026-07-20): tts-1/tts-1-hd retained
+  because successor gpt-4o-mini-tts's pricing row was not verifiably
+  extractable; NIM llama-4 maverick/scout served but unpriced; Nano Banana 2
+  Lite (gemini-3.1-flash-lite-image) exists but unpriced-in-full; Qwen3.8-Max
+  previewed 2026-07-19 with no official API id. None added — verify before
+  writing. Also NOT live-probed with real keys: kimi-k3, grok-4.5,
+  mistral-medium-3.5, mistral-small-4, gpt-4o-transcribe (docs-verified only;
+  live 200 probe is a founder/live-QA item per the models-policy lesson).
 
 2026-07-19 STRENGTHEN pass (founder directive: harden web-search/E2B/tool-loop +
 app UI/UX so it "just works", no redo). 5 adversarial audits; confirmed findings

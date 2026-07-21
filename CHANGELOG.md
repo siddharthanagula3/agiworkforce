@@ -2,9 +2,99 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-16
+Last updated: 2026-07-20
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — model catalog: latest-family-only policy, kimi-k3, live-verified roster] — 2026-07-20
+
+### Changed
+
+- Adopted the founder policy that the model catalog carries ONLY the latest
+  version of each model family, and applied it in three live-verified waves
+  (every ID/price/context scraped from official provider docs on 2026-07-20;
+  full provenance in `packages/ai/model-registry/catalog/models.curation.json`
+  verificationLog). Catalog is now 47 models, all current-generation.
+  Added: kimi-k3 (Moonshot flagship, $3/$15, 1,048,576 ctx, thinking
+  always-on, pro tier — restores the moonshot provider after kimi-k2.6's
+  retirement left it with zero models). Renamed/updated: grok-4.3→grok-4.5,
+  mistral-medium-3→3.5 (absorbs retired pixtral-large), mistral-small-3→
+  Small 4 (its wire id was ALREADY the current model but catalog pricing
+  was stale-wrong: $0.10/$0.30 vs actual $0.15/$0.60), codestral-2→
+  codestral-2508 (catalog id was invented; wire id was already correct),
+  veo-3→veo-3.1. Removed: gpt-5.5, gpt-5.4-mini/nano, gpt-4.1-nano, all
+  kimi-k2\*, imagen-4 family (deprecated upstream; gemini-image line is the
+  successor), sonar-reasoning (gone from Perplexity's lineup), whisper-1
+  (→ gpt-4o-transcribe/-mini), and all four OpenRouter :free entries that
+  no longer exist upstream (→ verified gemma-4-26b / nemotron-3-super-120b
+  frees). Auto-routing slots repointed (video→veo-3.1, voice transcription
+  →gpt-4o-transcribe); ~70 repo files of test pins, fixtures, production
+  constants (CLI STT default, desktop voice pipeline) swept across all six
+  surfaces, suites green. Held pending verification: gpt-4o-mini-tts
+  pricing (tts-1/-hd retained), NIM llama-4 pricing, Qwen3.8-Max (no API
+  id yet). (this slice, uncommitted)
+
+## [Unreleased — desktop trust-boundary slice: AGI trust_mode end-to-end, fail-closed router, redaction] — 2026-07-20
+
+### Security
+
+- Threaded the user's trust mode end-to-end through the desktop AGI stack
+  instead of letting deep executors pick their own boundary: the IPC wire
+  enum (TrustModeWire, 'local' or 'managed') flows from the frontend goal
+  submits (agentTaskStore, all 4 paths) into Goal.trust_mode and on through
+  planner, process_reasoning, llm/code executors, agent spawner, swarm
+  fan-out (AgentTask.trust_mode inheritance), and the chat execution path
+  (ChatExecutionMode.trust_mode → orchestrator process_instruction).
+  Wire-contract, store, swarm-inheritance, and 2 e2e threading tests pin
+  the plumbing. (this slice, uncommitted)
+- Rewrote the desktop router's effective_trust_mode to FAIL CLOSED: an
+  unset/unknown trust mode now resolves to Local (no silent cloud egress)
+  instead of drifting to a cloud default; llm_executor's execute_reason
+  (None, None) branch no longer hardcodes ManagedCloud. New
+  unset_trust_mode_fails_closed_to_local test. (this slice, uncommitted)
+- Reverted a silent desktop ManagedCloud gate regression: the 2026-07-18
+  generator refactor (551e4ab22) had flipped the desktop/cloud-chat runtime
+  profile to "implemented" in catalog/harnesses.json and inverted 3 guard
+  assertions, letting the router offer ManagedCloud while desktop cloud
+  mode is still product-gated (DCL-1..4 unfinished). Status restored to
+  unwired, registry JSONs regenerated, assertions re-pinned; the real flip
+  belongs to DCL-4. (this slice, uncommitted)
+- Hardened desktop log redaction (3 fixes): password values on the line
+  AFTER a password prompt are now caught, quoted-JSON secret keys redact
+  correctly, and the card-number pattern is narrowed to IIN-anchored
+  alternatives (no longer over-redacts arbitrary long digit runs).
+  5 new tests. (this slice, uncommitted)
+- Computer-use OPA now declares its execution mode per run, with the
+  WORKSPACE privacy mode as the outer gate: managed → cloud_managed, local
+  → local_only unconditionally. An adversarial re-review caught the first
+  cut of this fix routing a persisted settings-picker provider to 'byok'
+  before the privacy check — a silent Local→BYOK screenshot egress via
+  stale localStorage — so the byok branch was removed entirely (task-time
+  BYOK consent is tracked future work; in Local mode a cloud pick now
+  nulls the provider and toasts instead of egressing). The Rust command
+  validates execution-mode/provider coherence (mirroring chat), and the
+  OPA observe step — which runs first every iteration and still hardcoded
+  trust None — now threads the boundary through VisualReasonerConfig.
+  The second live swarm IPC entry point (swarm_execute_goal) gained the
+  same trust field, and its two frontend callers send it; two adjacent
+  dead-control bugs fixed in passing (swarm slash-command sent a bare
+  goal that never matched the request envelope; swarm_init camelCase
+  fields never deserialized). New computerUseStore, coherence-validation,
+  observe-threading tests. (this slice, uncommitted)
+
+### Fixed
+
+- Desktop memory injection was silently EMPTY: format_memories still
+  matched PascalCase category keys after 53d596b22 lowercased
+  MemoryCategory::as_str, dropping every section. Now matches lowercase
+  keys, renders PascalCase labels, and covers skill/summary categories.
+  (this slice, uncommitted)
+- Repaired the red-test families left by the claude-sonnet-4.6 retirement
+  (7a78ecbd0): desktop send_message_setup (7 pins → claude-sonnet-5),
+  models_config + routing_logic repoints, and the ~10-file apps/cli pin
+  family (separate agent, in flight). Remaining passing-but-stale
+  references tracked as MODEL-RETIRE-DRIFT-SONNET46 in known-flaws.
+  (this slice, uncommitted)
 
 ## [Unreleased — post-landing hardening: tier ladder, live-flaw closures, dead-code sweeps] — 2026-07-16/17
 
