@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PersonalizationPreferences } from '../../stores/settingsStore';
 
 const invokeMock = vi.fn();
 const listenHandlers = new Map<string, (event: { payload: unknown }) => void>();
@@ -13,6 +14,20 @@ const uuidToDbIdMock = vi.fn();
 const linkConversationIdMock = vi.fn();
 const executionModeByConversationId = new Map<string, 'local_only' | 'byok' | 'cloud_managed'>();
 const projectIdByConversationId = new Map<string, string>();
+
+const neutralPersonalization = (): PersonalizationPreferences => ({
+  name: '',
+  occupation: '',
+  bio: '',
+  formality: 3,
+  warmth: 3,
+  detail: 3,
+  emojiUsage: 'sometimes',
+});
+// Mutable holder the mocked settingsStore reads; reset to neutral in beforeEach.
+const personalizationMock: { current: PersonalizationPreferences } = {
+  current: neutralPersonalization(),
+};
 
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: invokeMock,
@@ -54,6 +69,15 @@ vi.mock('../../stores/chat/chatStore', () => ({
   },
 }));
 
+// Mock the heavy settingsStore (its real import chain — voice.ts, plan
+// subscriptions — fails under this file's isolated mocks). TauriRuntime reads
+// only .personalization to inject the Response-Style block into the prompt.
+vi.mock('../../stores/settingsStore', () => ({
+  useSettingsStore: {
+    getState: () => ({ personalization: personalizationMock.current }),
+  },
+}));
+
 describe('TauriRuntime', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -61,6 +85,7 @@ describe('TauriRuntime', () => {
     listenHandlers.clear();
     executionModeByConversationId.clear();
     projectIdByConversationId.clear();
+    personalizationMock.current = neutralPersonalization();
     uuidToDbIdMock.mockReturnValue(undefined);
 
     invokeMock.mockImplementation(async (command: string, args?: Record<string, unknown>) => {
@@ -148,6 +173,44 @@ describe('TauriRuntime', () => {
 
     expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain('llm_send_message');
     expect(linkConversationIdMock).toHaveBeenCalledWith('frontend-conversation-id', 42);
+  });
+
+  it('injects the personalization "Response Style" settings into customInstructions', async () => {
+    // A non-neutral profile must reach the model; before this wiring
+    // personalizationToPrompt had zero callers.
+    personalizationMock.current = {
+      ...neutralPersonalization(),
+      formality: 5,
+      emojiUsage: 'never',
+    };
+
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
+      model: 'claude-sonnet-5',
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    const instructions = (sendCall?.[1] as { request: { customInstructions?: string } } | undefined)
+      ?.request.customInstructions;
+    expect(instructions).toContain('<personalization>');
+    expect(instructions).toContain('Use a formal, professional tone');
+    expect(instructions).toContain('Do not use emoji');
+  });
+
+  it('leaves customInstructions unset for a neutral (default) personalization', async () => {
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
+      model: 'claude-sonnet-5',
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    const instructions = (sendCall?.[1] as { request: { customInstructions?: string } } | undefined)
+      ?.request.customInstructions;
+    expect(instructions).toBeUndefined();
   });
 
   it('carries the conversation project scope into the backend create', async () => {
