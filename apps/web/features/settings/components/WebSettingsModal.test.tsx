@@ -47,6 +47,7 @@ function stubFetch({
   connectors = [] as Array<{ connectorId: string; connectedAt?: string }>,
   installations = [] as Array<{ installation_id: number; created_at?: string }>,
   skills = [] as Array<{ name: string; description: string; source: string }>,
+  available = [] as string[],
 } = {}) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input.toString();
@@ -57,7 +58,7 @@ function stubFetch({
       return { ok: true, json: async () => ({ installations }) } as Response;
     }
     if (url.includes('/api/connectors')) {
-      return { ok: true, json: async () => ({ connectors }) } as Response;
+      return { ok: true, json: async () => ({ connectors, available }) } as Response;
     }
     return { ok: false, status: 404, json: async () => ({}) } as Response;
   });
@@ -88,13 +89,12 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     await waitFor(() => expect(within(githubRow).getByText('Connected')).toBeTruthy());
   });
 
-  it('never renders Connect buttons (no working connect flow on web) and hides local-only connectors', async () => {
-    stubFetch();
+  it('renders no Connect buttons when the server reports nothing connectable, and hides local-only connectors', async () => {
+    stubFetch(); // available: [] — nothing connectable
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
     await screen.findByRole('table');
-    // POST /api/connectors 501s every non-local connector; a Connect button
-    // would be a dead control, so none renders.
+    // No connector is in `available`, so a Connect button would be dead.
     expect(screen.queryByRole('button', { name: /^Connect / })).toBeNull();
     // Honest status labels instead.
     expect(screen.getAllByText('Not yet available on web').length).toBeGreaterThan(0);
@@ -102,6 +102,18 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     // Local-only (exclusive) connectors cannot run on the cloud web server.
     expect(screen.queryByText('Local Filesystem')).toBeNull();
     expect(screen.queryByText('Terminal / Shell')).toBeNull();
+  });
+
+  it('renders a Connect button for GitHub when the server reports it available', async () => {
+    // GitHub App configured → GET /api/connectors reports github connectable.
+    stubFetch({ available: ['github'] });
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
+
+    const table = await screen.findByRole('table');
+    const githubRow = within(table).getByText('GitHub').closest('tr') as HTMLElement;
+    await waitFor(() =>
+      expect(within(githubRow).getByRole('button', { name: /^Connect/ })).toBeTruthy(),
+    );
   });
 
   it('persists custom connectors through the real custom MCP endpoint', async () => {
