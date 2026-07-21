@@ -15,6 +15,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
@@ -79,7 +80,12 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
     return NextResponse.json({
       conversation,
-      messages: messages.map((message) => ManagedCloudMessageWireSchema.parse(message)),
+      // The driver returns `created_at` as a JS Date; the wire schema requires an
+      // ISO string, so normalize before validating or the parse throws a ZodError
+      // ("expected string, received Date") -> 500 on every conversation open.
+      messages: withIsoTimestamps(messages).map((message) =>
+        ManagedCloudMessageWireSchema.parse(message),
+      ),
       total,
       hasMore,
     });
