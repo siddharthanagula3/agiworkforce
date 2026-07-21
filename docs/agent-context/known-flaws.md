@@ -251,23 +251,22 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   /permissions) only converts fake toggles into "not available" messages the goal also
   dislikes → the real resolution is to BUILD each feature. Dedicated CLI session,
   per-overlay feature + test.
-  STATUS: 5 of 7 CLI HIGH resolved (/background, /permissions, /statusline +
-  root-cause `9ab279e7f`, /title `e6be74c91`, /skills-toggle `e68822b1a`); 2 overlay
-  HIGH remain — CLI NOT yet at the proceed-gate. Both remaining are the HARDEST:
-  • /memories — FULLY TRACED 2026-07-21, all 3 apply points found (memory-behavior-
-  sensitive core code — a focused build, not a depth-rush): auto_memory → gate
-  finalize_memory's extract_session_summary (agent/mod.rs:972-988, has &CliConfig);
-  decay_threshold_days → prune_old_summaries `age > SUMMARY_MAX_AGE_SECS`
-  (memory_pipeline.rs:348/371) use days\*86400; max_facts → consolidate
-  (memory_pipeline.rs:174) writes merged `consolidated` fact list to raw_memories.md
-  at :244 — cap to max_facts fact lines there (the formerly-"unclear" point, FOUND).
-  Persist a small serde settings struct in CORE (memory_pipeline, NOT the tui widget
-  — avoid a core→UI dep) with load()/Default; widget MemorySettings maps to it in
-  apply_overlay_result; overlay seeds from load(); OverlayResult::Memory needs
-  PartialEq. ~7 pieces, all 3 wired (no dead sub-toggle). Test vs a temp memories dir.
-  • /diff-review — apply/stage the approved hunks via `git apply`/`git add`; HIGHEST
-  risk (real repo mutation). Do LAST, gate carefully, test against a temp git repo.
-  Both on the proven take_result pattern (add variant + override + apply arm).
+  STATUS: ALL 7 CLI HIGH RESOLVED 2026-07-21 — the overlay-Submit-drop cluster is
+  fully closed. /background, /permissions, /statusline (+ root-cause `9ab279e7f`),
+  /title `e6be74c91`, /skills-toggle `e68822b1a`, /memories `760e881fc`, /diff-review
+  `47681b9ec`. Each a real feature on the take_result/OverlayResult/apply_overlay_result
+  pattern with regression tests; CLI lib 1665/0. CLI has NO unresolved critical/high
+  → meets the proceed-gate. Remaining CLI items are MED/LOW only: the parity commands
+  that overstate their verb (/focus /color /heapdump /voice-in-TUI + /stickers
+  /thinkback-play /effort-REPL /vim /replay-v0.2 — mostly honest "not available"
+  messages) — tracked, non-blocking.
+- NOTE CLI-APPSERVER-INITIALIZE-PROTOCOLVERSION (PRE-EXISTING, app #5 VSCode domain):
+  apps/cli/tests/app_server_stdio.rs:56 asserts the initialize response
+  `result.protocolVersion == 3` (integer), but app_server.rs:71/161 returns the
+  STRING "2024-11-05" — they can never match. VERIFIED pre-existing via a worktree at
+  2eea9a3b1 (fails identically, same line) — NOT caused by the CLI overlay work. The
+  app-server IS the VSCode-extension backend, so triage this in app #5: either the
+  server should return numeric protocol 3, or the test asserts the wrong shape.
   • NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
   tests::validate_workspace_path_allows_registered_additional_root passes in
   isolation + within its module but intermittently FAILS under full-suite parallel
