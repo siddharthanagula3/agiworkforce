@@ -239,6 +239,7 @@ import {
 } from '../src/features/content/autofill/filler';
 import { detectJobApplication } from '../src/features/content/autofill/detector';
 import { makeEscalationDecision } from '../src/features/computer-use/escalationEngine';
+import { ASHBY_ALWAYS_ESCALATE_KEYS } from '../src/features/content/autofill/ashby';
 
 // Part 2: Background side (AGI_START_COMPUTER_USE handler internals)
 import { runAgentLoop } from '../src/features/computer-use/agentLoop';
@@ -360,6 +361,55 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
     expect(decision.agentGoal).toContain('files.resume');
     // Confirm the goal explicitly says NOT to re-submit
     expect(decision.agentGoal).toContain('NEVER click Submit');
+  });
+
+  it('escalates Ashby always-escalate fields only when the platform keys are passed', () => {
+    // Ashby marks its typeahead/file fields skipped with a reason the file_upload
+    // trigger does NOT match; escalation only fires via the alwaysEscalate set.
+    const fillResults = [
+      {
+        key: 'files.resume',
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: 'Requires computer-use escalation',
+      },
+      {
+        key: 'locationCity',
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: 'Requires computer-use escalation',
+      },
+    ];
+    const detectedFields = [
+      {
+        key: 'files.resume',
+        selector: '#resume',
+        label: 'Resume',
+        fieldType: 'file' as const,
+        required: false,
+      },
+    ];
+    const profileValues = {};
+
+    // Regression: 4-arg call (alwaysEscalate defaults empty) produces NO
+    // platform_always_escalate trigger — the resume was silently never attached
+    // on Ashby (the reason string doesn't match the file_upload trigger either).
+    const without = makeEscalationDecision(fillResults, detectedFields, profileValues, 'ashby');
+    expect(without.triggers.some((t) => t.reason === 'platform_always_escalate')).toBe(false);
+
+    // Fix: passing the platform's always-escalate keys triggers escalation for
+    // exactly the skipped Ashby fields.
+    const withKeys = makeEscalationDecision(
+      fillResults,
+      detectedFields,
+      profileValues,
+      'ashby',
+      ASHBY_ALWAYS_ESCALATE_KEYS,
+    );
+    expect(withKeys.shouldEscalate).toBe(true);
+    expect(withKeys.triggers.some((t) => t.reason === 'platform_always_escalate')).toBe(true);
   });
 
   it('full chain: autofill → escalation for a form with file upload', async () => {
