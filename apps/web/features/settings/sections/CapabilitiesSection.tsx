@@ -9,6 +9,7 @@ import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
+import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 
 type ToolAccessMode = 'always' | 'needed' | 'custom';
 
@@ -58,6 +59,8 @@ export function CapabilitiesSection() {
     setSaveError(null);
     try {
       await savePreferenceNamespace(NAMESPACE, next);
+      // Let the chat runtime pick up the new Memory toggle without a reload.
+      resetMemoryCapabilityCache();
       setSavedAt(Date.now());
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to save settings');

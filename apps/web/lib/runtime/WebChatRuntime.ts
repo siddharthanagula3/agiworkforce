@@ -18,6 +18,7 @@ import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { getAuthToken as getClerkToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { buildMemorySystemContent, withMemorySystemMessage } from './memory-context';
+import { isMemoryCapabilityEnabled } from './memory-capability';
 
 const DEFAULT_WEB_CHAT_MODEL = 'auto-economy';
 
@@ -123,10 +124,13 @@ export class WebChatRuntime implements ChatRuntime {
     history.push({ role: 'user', content });
 
     // Inject the user's saved memory facts (Settings → Memory) as a leading
-    // system message so they actually reach the model. Facts live client-side in
-    // the unified-chat memory store; reading them here is what makes the Memory
-    // settings section affect answers instead of being write-only local storage.
-    const memoryContent = buildMemorySystemContent(useMemoryStore.getState().facts);
+    // system message so they actually reach the model — but only when the
+    // Settings → Capabilities → Memory toggle is on. Facts live client-side in
+    // the unified-chat memory store; gating here is what makes both the Memory
+    // editor and its capability toggle actually affect answers.
+    const memoryContent = (await isMemoryCapabilityEnabled())
+      ? buildMemorySystemContent(useMemoryStore.getState().facts)
+      : null;
     history = withMemorySystemMessage(history, memoryContent);
 
     // Fail-closed: the client never requests auto-approval (that would let a
