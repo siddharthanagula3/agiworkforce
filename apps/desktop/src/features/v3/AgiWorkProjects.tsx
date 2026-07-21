@@ -1,9 +1,10 @@
-import { Plus } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { Plus, Settings } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { toast } from 'sonner';
 import { useProjectStore, type Project } from '../../stores/projectStore';
+import { ProjectSettingsDialog } from '../chat/ProjectSettingsDialog';
 
 const PROJECT_COLORS = [
   'var(--chat-accent-secondary)',
@@ -40,6 +41,7 @@ export function AgiWorkProjects() {
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const createProject = useProjectStore((s) => s.createProject);
   const projects = useMemo(() => allProjects.filter((p) => !p.isArchived), [allProjects]);
+  const [settingsProject, setSettingsProject] = useState<Project | null>(null);
 
   useEffect(() => {
     void loadProjects();
@@ -100,6 +102,15 @@ export function AgiWorkProjects() {
                     style={{ background: projectColor(p, i) }}
                   />
                   <span className="font-medium text-[var(--chat-text-primary)]">{p.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsProject(p)}
+                    aria-label={t('agiWork.projects.settings')}
+                    title={t('agiWork.projects.settings')}
+                    className="ml-auto flex-shrink-0 rounded-md p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                  >
+                    <Settings size={14} strokeWidth={2} />
+                  </button>
                 </div>
                 {p.description && (
                   <div className="text-xs leading-relaxed text-[var(--chat-text-secondary)] line-clamp-2">
@@ -120,6 +131,15 @@ export function AgiWorkProjects() {
           </div>
         )}
       </div>
+
+      <ProjectSettingsDialog
+        open={settingsProject !== null}
+        onOpenChange={(next) => {
+          if (!next) setSettingsProject(null);
+        }}
+        project={settingsProject}
+        mode="edit"
+      />
     </div>
   );
 }

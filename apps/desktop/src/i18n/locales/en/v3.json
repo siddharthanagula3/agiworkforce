@@ -329,7 +329,8 @@
       "untitled": "Untitled project",
       "empty": "No projects yet",
       "updated": "Updated {{when}}",
-      "sessions": "{{count}} sessions"
+      "sessions": "{{count}} sessions",
+      "settings": "Project settings"
     },
     "scheduled": {
       "title": "Scheduled tasks",
