@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 let lastModelPickerProps: { modelScope?: 'local' | 'cloud' | 'all' } | null = null;
 
@@ -92,6 +92,7 @@ jest.mock('../src/features/model-picker/installStore', () => ({
 import ModelsScreen from '../app/(app)/models';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
 
 describe('Models screen', () => {
   beforeEach(() => {
@@ -129,5 +130,18 @@ describe('Models screen', () => {
     render(<ModelsScreen />);
 
     expect(lastModelPickerProps?.modelScope).toBe('all');
+  });
+
+  it('renders favorite/recent models as tappable rows (regression: MOBILE-MODELS-FAVORITES-INERT)', () => {
+    const fav = LOCAL_MODEL_LIST[0];
+    // Previously these were plain non-interactive Views that read as tappable.
+    useModelStore.setState({ favorites: [fav.id], recentModels: [fav.id] });
+
+    const { getAllByLabelText } = render(<ModelsScreen />);
+    const rows = getAllByLabelText(`Select ${fav.name}`);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].props.accessibilityRole).toBe('button');
+    // Routes through the gated picker (openPicker); must not throw.
+    fireEvent.press(rows[0]);
   });
 });
