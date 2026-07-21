@@ -89,6 +89,24 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   `packages/tools/skills` path-free tool pattern to the desktop harness; until
   then the exposure is bounded by user-authored/installed skills only. Surfaced
   by a peer audit agent during the wave-2 dedup sweep.
+- OPEN WEB-PREEXISTING-TEST-FAILURES-01 (2026-07-21, found running the full
+  apps/web vitest suite during production-readiness verification: 4129 pass, 4
+  fail). All 4 predate the 2026-07-21 web UI-fix pass; one was that pass's own
+  label rename (fixed, e0b3fbc22). The other 3 are pre-existing debt, NOT
+  regressions (their source files were untouched this session), tracked for a
+  follow-up: (a) apps/web/app/pricing/page.test.tsx "payment-safe
+  replacement-cycle" — the mid-cycle upgrade added previewUpgrade (prior commit
+  ff567e07a, a preview then confirm then charge flow) but the test's
+  stripe-payments mock + assertions were never updated to that flow; (b)
+  features/chat/components/messages/MessageBubble.test.tsx "canonical inline
+  agent spine" — the agent-activity UI renders as a section aria-labelled
+  "Agent activity" while the test still queries a "show agent activity" button
+  (stale selector; the UI works); (c) **tests**/web-search-model-coverage.test.ts
+  "non-empty roster" — the desktop/cloud-chat surface returns 0 selectable
+  models for every tier while web/cloud-chat and mobile/cloud-chat pass, so it
+  is a desktop-surface catalog mapping gap (related to
+  DESKTOP-LOCAL-CHAT-EMPTY-HARNESS), not the latest-family-only retirement. Web
+  production build is clean (295 routes, 0 errors/warnings).
 
 2026-07-19 STRENGTHEN pass (founder directive: harden web-search/E2B/tool-loop +
 app UI/UX so it "just works", no redo). 5 adversarial audits; confirmed findings
