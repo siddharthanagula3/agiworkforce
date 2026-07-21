@@ -112,6 +112,18 @@ impl InteractiveView for StatusLineSetupView {
         }
     }
 
+    fn take_result(&mut self) -> Option<super::interactive::OverlayResult> {
+        // Only hand back the config when the user pressed Enter (saved); Esc
+        // cancels and applies nothing.
+        if self.saved {
+            Some(super::interactive::OverlayResult::StatusLine(
+                self.config.clone(),
+            ))
+        } else {
+            None
+        }
+    }
+
     fn is_done(&self) -> bool {
         self.done
     }
