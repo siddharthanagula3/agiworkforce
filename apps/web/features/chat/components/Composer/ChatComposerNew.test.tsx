@@ -81,10 +81,6 @@ vi.mock('./InputFooter', () => ({
   InputFooter: () => <div data-testid="input-footer" />,
 }));
 
-vi.mock('./ActiveModeTags', () => ({
-  ActiveModeTags: () => null,
-}));
-
 vi.mock('./VoiceInputButton', () => ({
   VoiceInputButton: ({ disabled }: { disabled?: boolean }) => (
     <button type="button" aria-label="Voice input" disabled={disabled}>

@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useBillingStore } from '@shared/stores/web-auth-store';
-import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import { SendButton } from './SendButton';
@@ -298,7 +297,6 @@ const ChatComposerNewComponent = ({
   const [isFocused, setIsFocused] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<SkillItem | null>(null);
   const { skills: availableSkills, loading: skillsLoading, error: skillsError } = useSkillsList();
-  const [activeTags, setActiveTags] = useState<ModeTag[]>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
   // Cowork folder — local-only; handle is never forwarded to any API route.
@@ -529,7 +527,6 @@ const ChatComposerNewComponent = ({
     // Web search a fire-once flag. They still auto-clear via the capability effects
     // above when the selected model can't support them.
     setShowStyleSubmenu(false);
-    setActiveTags([]);
     setLocalNotice(null);
     setImageMode(false);
     setImageAspectRatio('auto');
@@ -660,10 +657,6 @@ const ChatComposerNewComponent = ({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscapeKey);
     };
-  }, []);
-
-  const handleTagDismiss = useCallback((id: string) => {
-    setActiveTags((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const handleWebSearchToggle = useCallback(() => {
@@ -1053,9 +1046,6 @@ const ChatComposerNewComponent = ({
           </button>
         </div>
       )}
-
-      {/* Active Mode Tags */}
-      <ActiveModeTags tags={activeTags} onDismiss={handleTagDismiss} />
 
       {/* Selected Skill Badge */}
       {selectedSkill && (
