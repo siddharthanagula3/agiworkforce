@@ -52,6 +52,15 @@ pub enum ViewAction {
     SideAction(String),
 }
 
+/// A committed result an overlay hands back to the host on Submit so the host
+/// can APPLY it. The generic overlay path otherwise only closes and drops the
+/// user's choice; overlays that persist a choice override `take_result`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum OverlayResult {
+    /// Statusline field-visibility config chosen in `StatusLineSetupView`.
+    StatusLine(crate::tui::widgets::statusline_setup::StatusLineConfig),
+}
+
 /// Core trait. A view renders itself, reacts to keys, and signals
 /// completion. Implementations own their own state.
 pub trait InteractiveView: Send {
@@ -71,6 +80,14 @@ pub trait InteractiveView: Send {
 
     /// Handle a key event. Returns the next action for the event loop.
     fn handle_key(&mut self, key: KeyAction) -> ViewAction;
+
+    /// A committed result to APPLY when the view Submits (Enter), or `None`.
+    /// Default `None` keeps every non-persisting overlay unchanged; overlays
+    /// that capture a user choice override this so the host applies it instead
+    /// of silently dropping it on close.
+    fn take_result(&mut self) -> Option<OverlayResult> {
+        None
+    }
 
     /// True when the view has terminated and the event loop may drop it.
     /// Returns `false` by default; views that own their own lifecycle can
