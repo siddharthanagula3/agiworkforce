@@ -975,6 +975,12 @@ impl AgentSession {
             return Ok(());
         }
         let home = CliConfig::config_dir()?;
+        // Honor the user's /memories "auto memory" toggle (default on, so this is
+        // a no-op until they turn it off).
+        let (auto_memory, _, _) = crate::memory_pipeline::load_memory_settings(&home);
+        if !auto_memory {
+            return Ok(());
+        }
         crate::memory_pipeline::MemoryPipeline::extract_session_summary(
             &home,
             &self.runtime_session_id,
