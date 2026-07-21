@@ -13,6 +13,7 @@
  */
 import { invoke, isTauriContext } from '../lib/tauri-mock';
 import { McpClient } from '../api/mcp';
+import { getTimeoutConfig, setTimeoutConfig, minutesToSeconds } from '../api/timeout';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
@@ -438,6 +439,29 @@ export function isTaskRoutingModelAllowedForTier(
 
   const normalizedTier = normalizeSubscriptionTier(tier);
   return isModelAllowedForTier(modelId, normalizedTier);
+}
+
+/**
+ * Bridge the persisted "Max Task Timeout" + "Timeout Warnings" execution
+ * preferences into the LIVE global TimeoutConfig the task executor actually reads.
+ * `settings_save` only stores ExecutionPreferences to disk (unread by the
+ * executor); `timeout_set_config` updates the global TIMEOUT_CONFIG that governs
+ * task timeouts (per-task overrides aside). Runs on both save (change-time) and
+ * load (startup — the global config resets to its 72h default on each launch).
+ * Checkpointing/auto-resume need the separate per-task TaskConfig path (tracked as
+ * DESKTOP-SETTINGS-PERSISTED-BUT-UNREAD) and are deliberately left untouched here.
+ */
+async function syncExecutionTimeoutToBackend(prefs: ExecutionPreferences): Promise<void> {
+  try {
+    const current = await getTimeoutConfig();
+    await setTimeoutConfig({
+      ...current,
+      max_duration_secs: minutesToSeconds(prefs.maxTimeoutMinutes),
+      enable_warnings: prefs.enableTimeoutWarnings,
+    });
+  } catch (error) {
+    console.error('Failed to sync timeout config to backend:', error);
+  }
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -1443,6 +1467,10 @@ export const useSettingsStore = create<SettingsState>()(
             } catch (error) {
               console.error('Failed to sync allowed directories to backend:', error);
             }
+
+            // Push the loaded max-timeout / timeout-warning prefs into the live
+            // TimeoutConfig (resets to default on each launch, so sync on startup).
+            await syncExecutionTimeoutToBackend(get().executionPreferences);
           } catch (error) {
             console.error('Failed to load settings:', error);
 
@@ -1501,6 +1529,10 @@ export const useSettingsStore = create<SettingsState>()(
             } catch (error) {
               console.error('Failed to sync allowed directories to backend:', error);
             }
+
+            // Bridge max-timeout / timeout-warning prefs into the live TimeoutConfig
+            // the executor reads (settings_save only persists them to disk).
+            await syncExecutionTimeoutToBackend(executionPreferences);
 
             // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03):
             // deliberately do NOT push `chatPreferences.agentMode` /

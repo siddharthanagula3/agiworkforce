@@ -109,19 +109,25 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   ExecutionPreferences) but are NEVER read/applied — dead-interface controls. The
   HIGH sibling (Personalization "Response Style") is FIXED (`16a4de4d9`, wired into
   TauriRuntime customInstructions). Remaining:
-  • [MED] Execution-preference cluster — AgentsSettings.tsx sends
-  max_timeout_minutes (:183), enable_checkpointing/checkpoint_interval (:209/:224),
-  auto_resume_on_restart (:247), enable_timeout_warnings (:266) to Rust
-  (settings.rs ExecutionPreferences), but NO executor reads them: timeout_manager.rs
-  uses a fixed MAX_TIMEOUT_SECS; continuous_executor.rs reads task.config.\* with
-  hardcoded TaskConfig defaults (DEFAULT_CHECKPOINT_INTERVAL=5, auto_resume default
-  true); backgroundTaskStore shows timeout-warning toasts unconditionally. FIX =
-  a Rust slice: load persisted execution_preferences into TaskConfig at task
-  creation + gate the warning toast on enable_timeout_warnings. Deferred as a
-  dedicated Rust-engine slice (trust/safety-sensitive executor code; src-tauri has
-  pending uncommitted Rust — don't rush at depth). CONTRAST: terminal_sandbox IS
-  wired (terminal_executor.rs:571 + terminal.rs:265 read it) — proves the pattern
-  is fixable.
+  • Execution-preference cluster — PARTIALLY FIXED 2026-07-21:
+  – max*timeout_minutes + enable_timeout_warnings → FIXED. The LIVE global
+  TimeoutConfig (timeout_set_config, read by the executor per tasks/types.rs:116
+  "overrides the global TIMEOUT_CONFIG.max_duration_secs") is now synced from
+  settingsStore.saveSettings + loadSettings via syncExecutionTimeoutToBackend
+  (max_duration_secs, enable_warnings), preserving enable_checkpoint_on_timeout.
+  settings_save only persisted to disk (unread); this bridges to the live path.
+  Also gated the frontend timeout-warning toast (backgroundTaskStore) on the
+  setting. Regression test in settingsStore.test.ts.
+  – REMAINING [MED/LOW]: enable_checkpointing/checkpoint_interval (:209/:224) and
+  auto_resume_on_restart (:247) are NOT covered by TimeoutConfig (semantic
+  mismatch: TimeoutConfig.enable_checkpoint_on_timeout = checkpoint-ON-TIMEOUT,
+  not periodic-at-interval). These need the separate per-task TaskConfig path:
+  continuous_executor.rs reads task.config.{checkpoint_interval,auto_resume_on*
+  restart} with hardcoded TaskConfig defaults (DEFAULT_CHECKPOINT_INTERVAL=5,
+  auto_resume true). FIX = a Rust slice loading persisted execution_preferences
+  into TaskConfig at task creation. Deferred (trust/safety-sensitive executor
+  code). CONTRAST: terminal_sandbox IS wired (terminal_executor.rs:571 +
+  terminal.rs:265) — proves the pattern is fixable.
   • [MED] Prompt Completion toggle (ModelsKeys/index.tsx:488) → hooks/
   useApiPromptCompletion.ts has zero callers and the LIVE composer is the shared
   @agiworkforce/unified-chat package, which never reads promptCompletionEnabled.

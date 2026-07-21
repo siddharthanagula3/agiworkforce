@@ -37,6 +37,7 @@ import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { toast } from 'sonner';
+import { useSettingsStore, selectEnableTimeoutWarnings } from './settingsStore';
 
 // =============================================================================
 // Types (mirror Rust structs in features/tasks/types.rs + background_tasks.rs)
@@ -503,6 +504,8 @@ export function subscribeToTimeoutWarnings(): () => void {
       maxTimeoutMinutes: number;
     }>('agi:timeout_warning', (event) => {
       if (_generation !== myGeneration) return; // Guard against stale listeners from a previous generation
+      // Honor the "Timeout Warnings" setting (was shown unconditionally).
+      if (!selectEnableTimeoutWarnings(useSettingsStore.getState())) return;
       const { taskName, remainingSeconds } = event.payload;
       const mins = Math.ceil(remainingSeconds / 60);
       toast.warning(`Task "${taskName}" has ${mins}min remaining before timeout`, {
