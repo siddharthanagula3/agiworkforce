@@ -89,22 +89,23 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   `packages/tools/skills` path-free tool pattern to the desktop harness; until
   then the exposure is bounded by user-authored/installed skills only. Surfaced
   by a peer audit agent during the wave-2 dedup sweep.
-- OPEN WEB-CHAT-SYNC-500 (2026-07-21, found via the authenticated Playwright
-  run): GET /api/chat/sync?since=<cursor> returns HTTP 500 for a signed-in user
-  on /chat, so the client artifact-cloud-sync pull throws ("artifact sync pull
-  failed with status 500", features/chat/services/artifact-cloud-sync.ts:39).
-  It is a background sync error — the chat UI still renders and the e2e passes —
-  but cross-device artifact/chat sync is degraded. The 500 originates in the
-  route's try-block DB queries against web_conversations / web_messages /
-  web_artifacts (apps/web/app/api/chat/sync/route.ts:67+); server stack was not
-  captured at reporter=line. Pre-existing (this session did not touch the sync
-  route). MOST LIKELY a migration not applied to the connected Neon (the
-  `check:neon-migrations` gate verifies migration-FILE consistency, not applied
-  state) — e.g. web_artifacts columns or web_conversations.server_version/pinned
-  from a migration that hasn't run on this DB. Diagnose with the server error
-  first (run the dev server and read the /api/chat/sync stack), then apply the
-  missing migration (founder-gated, prod Neon) or fix the query. NOT a
-  regression from the 2026-07-21 web work.
+- RESOLVED WEB-CHAT-SYNC-500 (2026-07-21): GET /api/chat/sync?since=<cursor>
+  returned HTTP 500 for any signed-in user WITH chat data, degrading cross-device
+  artifact/chat sync (client threw "artifact sync pull failed with status 500",
+  features/chat/services/artifact-cloud-sync.ts:39). ROOT CAUSE (not a missing
+  migration — schema/RLS/role all verified present against the connected Neon):
+  the RLS Pool path (node-postgres) returns `timestamptz` columns as JS `Date`,
+  but the shared wire schema types created_at/updated_at/deleted_at as
+  `z.string()`. handlePull parsed the RAW db rows through
+  ChatSyncPullResponseSchema.parse BEFORE JSON serialization, so any non-empty
+  page threw "expected string, received date" → caught → 500. Empty pages (new
+  users) had no Date to reject, hence the intermittency. The existing contract
+  test masked it by mocking ISO-STRING timestamps the live Pool never returns.
+  FIX (apps/web/app/api/chat/sync/route.ts): `withIsoTimestamps()` normalizes the
+  three timestamp columns to ISO before the parse. Regression: a Date-timestamp
+  case added to route.contract.test.ts (proven to 500 without the fix) + a live
+  HTTP 200 assertion in e2e/authenticated-flows.spec.ts against the QA user's real
+  data (259 messages). Verified: contract 10/10; authenticated e2e green (sync 200).
 - RESOLVED WEB-PREEXISTING-TEST-FAILURES-01 (2026-07-21, fixed 15cad0219 — all
   3 were test drift, not product bugs; apps/web vitest suite now green). Found
   running the full
