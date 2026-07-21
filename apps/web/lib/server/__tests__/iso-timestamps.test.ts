@@ -9,15 +9,15 @@ describe('withIsoTimestamps', () => {
       { id: 'm1', created_at: d, updated_at: d, deleted_at: null, content: 'hi' },
     ]);
     const row = rows[0] as Record<string, unknown>;
-    expect(row.created_at).toBe('2026-07-21T22:00:00.000Z');
-    expect(row.updated_at).toBe('2026-07-21T22:00:00.000Z');
-    expect(row.deleted_at).toBeNull();
-    expect(row.content).toBe('hi'); // non-timestamp fields untouched
+    expect(row['created_at']).toBe('2026-07-21T22:00:00.000Z');
+    expect(row['updated_at']).toBe('2026-07-21T22:00:00.000Z');
+    expect(row['deleted_at']).toBeNull();
+    expect(row['content']).toBe('hi'); // non-timestamp fields untouched
   });
 
   it('leaves already-string timestamps and empty input untouched', () => {
     expect(withIsoTimestamps([])).toEqual([]);
     const rows = withIsoTimestamps([{ created_at: '2026-07-21T22:00:00.000Z' }]);
-    expect((rows[0] as Record<string, unknown>).created_at).toBe('2026-07-21T22:00:00.000Z');
+    expect((rows[0] as Record<string, unknown>)['created_at']).toBe('2026-07-21T22:00:00.000Z');
   });
 });

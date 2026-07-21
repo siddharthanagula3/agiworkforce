@@ -120,6 +120,12 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
 
       let res: Response;
       try {
+        // Bound the connect/headers wait: the chat route awaits these response
+        // headers before it can start streaming to the client, so a hung upstream
+        // (no first byte) would otherwise stall the whole turn ("stuck" composer).
+        // On timeout the fetch aborts and the catch below yields a classified error.
+        const HEADERS_TIMEOUT_MS = 30_000;
+        const combinedSignal = AbortSignal.any([signal, AbortSignal.timeout(HEADERS_TIMEOUT_MS)]);
         res = await fetchFn(url, {
           method: 'POST',
           headers: {
@@ -127,7 +133,7 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
             'x-goog-api-key': config.apiKey,
           },
           body: JSON.stringify(body),
-          signal,
+          signal: combinedSignal,
         });
       } catch (err) {
         const classified = classifyError(err);
