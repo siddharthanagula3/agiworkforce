@@ -18,6 +18,44 @@ export default defineConfig(({ mode }) => {
   ) as Record<string, unknown>;
   const configuredManifest = configureChromeManifest(sourceManifest, buildConfiguration);
 
+  // The content script runs in the page's world and is loaded by Chrome as a
+  // standalone script. If Rollup code-splits it (shared chunks imported by 2+
+  // entries), it emits `import ... from "../assets/*.js"` INTO content.js, which
+  // fails at runtime with "Cannot use import statement outside a module" (a
+  // content script cannot import non-web-accessible chunks) — silently breaking
+  // ALL content-script features (autofill, page capture, in-page panel) on every
+  // page. So the content script is built in its own pass as a single
+  // self-contained file (inlineDynamicImports, one input), while the module-
+  // context entries (background service worker, side panel + options extension
+  // pages) keep normal chunking in the main pass. BUILD_TARGET selects the pass;
+  // package.json `build` runs main then content (emptyOutDir only on main).
+  const target = process.env['BUILD_TARGET'] === 'content' ? 'content' : 'main';
+
+  if (target === 'content') {
+    return {
+      root: __dirname,
+      define: {
+        'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(clerkPublishableKey),
+        'process.env.CLERK_SYNC_HOST': JSON.stringify(clerkSyncHost),
+      },
+      publicDir: false,
+      build: {
+        outDir: 'dist',
+        emptyOutDir: false, // preserve the main pass's output
+        minify: 'terser',
+        sourcemap: mode !== 'production',
+        rollupOptions: {
+          input: { content: resolve(__dirname, 'src/content.ts') },
+          output: {
+            format: 'iife', // self-contained classic script: no import/export
+            entryFileNames: 'src/content.js',
+            inlineDynamicImports: true,
+          },
+        },
+      },
+    };
+  }
+
   return {
     root: __dirname,
     define: {
@@ -33,14 +71,12 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           background: resolve(__dirname, 'src/background.ts'),
-          content: resolve(__dirname, 'src/content.ts'),
           side_panel: resolve(__dirname, 'src/side_panel.ts'),
           options: resolve(__dirname, 'src/options.ts'),
         },
         output: {
           entryFileNames: (chunk) => {
             if (chunk.name === 'background') return 'src/background.js';
-            if (chunk.name === 'content') return 'src/content.js';
             if (chunk.name === 'side_panel') return 'src/side_panel.js';
             if (chunk.name === 'options') return 'src/options.js';
             return 'assets/[name]-[hash].js';

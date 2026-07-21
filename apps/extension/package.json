@@ -21,8 +21,8 @@
     "manifest-v3"
   ],
   "scripts": {
-    "dev": "vite build --watch",
-    "build": "vite build",
+    "dev": "BUILD_TARGET=content vite build && vite build --watch",
+    "build": "vite build && BUILD_TARGET=content vite build",
     "typecheck": "tsc --noEmit",
     "pretest": "bash scripts/check-conflict-markers.sh",
     "test": "vitest run",
