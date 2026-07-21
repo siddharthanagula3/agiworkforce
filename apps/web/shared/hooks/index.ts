@@ -21,9 +21,6 @@ export { useAutoScroll } from './useAutoScroll';
 // Chat state management
 export { useChatState, type ChatMessage, type ChatTab, type ChatState } from './useChatState';
 
-// Realtime subscriptions
-export { useRealtime, type RealtimeCallbacks } from './useRealtime';
-
 // Theme context
 export { useThemeContext } from './useThemeContext';
 
