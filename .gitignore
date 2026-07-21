@@ -250,3 +250,6 @@ tasks/release-hardening/
 
 # Recycle-bin archive (files staged for founder review before deletion; recoverable)
 _archive/
+
+# Founder demo-prep working notes (root-level scratch, not repo truth)
+/investor_demo_prep.md
