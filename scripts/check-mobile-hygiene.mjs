@@ -84,6 +84,11 @@ const serviceStoreImportBaseline = new Set([
   'apps/mobile/services/desktopStatus.ts',
   'apps/mobile/services/dispatchRealtime.ts',
   'apps/mobile/services/realtime.ts',
+  // The notification gate's job IS to read the user's notification preferences before
+  // delivering a push. It already keeps the coupling out of the early notification
+  // module's load graph by lazy-`require`ing the prefs store at call time and failing
+  // open, which is the hygienic shape this rule wants — baseline it explicitly.
+  'apps/mobile/services/notificationGate.ts',
 ]);
 
 function absolute(relativePath) {
