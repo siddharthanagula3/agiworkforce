@@ -37,7 +37,7 @@ export interface VoiceConfig {
   provider: VoiceProvider;
   /** BCP 47 language code (e.g., 'en-US', 'es', 'fr') */
   language?: string;
-  /** Provider-specific model identifier (e.g., 'nova-3', 'whisper-1') */
+  /** Provider-specific model identifier (e.g., 'nova-3', 'gpt-4o-transcribe') */
   model?: string;
   /** Audio sample rate in Hz */
   sampleRate?: number;

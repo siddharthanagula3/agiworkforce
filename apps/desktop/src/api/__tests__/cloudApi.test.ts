@@ -246,7 +246,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_research',
       'Investigate',
-      'claude-sonnet-4.6',
+      'claude-sonnet-5',
       vi.fn(),
       vi.fn(),
       vi.fn(),

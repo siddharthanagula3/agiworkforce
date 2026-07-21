@@ -1,8 +1,4 @@
-import {
-  getModelMetadataById,
-  getRoutingSlotModel,
-  normalizeModelId,
-} from '@agiworkforce/types';
+import { getModelMetadataById, getRoutingSlotModel, normalizeModelId } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -29,10 +25,16 @@ describe('desktop media model options', () => {
   });
 
   it('keeps provider adapter ids separate from catalog model ids', () => {
-    const byAdapter = Object.fromEntries(IMAGE_PROVIDER_OPTIONS.map((option) => [option.id, option]));
+    const byAdapter = Object.fromEntries(
+      IMAGE_PROVIDER_OPTIONS.map((option) => [option.id, option]),
+    );
 
-    expect(getModelMetadataById(byAdapter['google_imagen']!.model)?.imageApi).toBe('imagen');
-    expect(getModelMetadataById(byAdapter['google_imagen_lite']!.model)?.imageApi).toBe('imagen');
+    // Google's image line is the gemini-image family since the imagen-4
+    // retirement (2026-07-20); with a single live model the lite slot dedups away.
+    expect(getModelMetadataById(byAdapter['google_imagen']!.model)?.imageApi).toBe('gemini');
+    if (byAdapter['google_imagen_lite']) {
+      expect(getModelMetadataById(byAdapter['google_imagen_lite'].model)?.imageApi).toBe('gemini');
+    }
     expect(getModelMetadataById(byAdapter['dalle']!.model)?.imageApi).toBe('openai');
     const stabilityModel = getModelMetadataById(byAdapter['stable_diffusion']!.model);
     expect(stabilityModel?.imageApi).toBe('stability');

@@ -119,7 +119,7 @@ describe('modelStore', () => {
       useUnifiedAuthStore.setState({ plan: 'basic' });
 
       const store = useModelStore.getState();
-      await store.selectModel('gpt-5.5', 'openai');
+      await store.selectModel('gpt-5.6-sol', 'openai');
 
       const state = useModelStore.getState();
       expect(state.selectedModel).toBe('auto-economy');
@@ -155,7 +155,7 @@ describe('modelStore', () => {
 
       useUIStore.setState({ mode: 'advanced' });
       useModelStore.setState({
-        selectedModel: 'gpt-5.5',
+        selectedModel: 'gpt-5.6-sol',
         selectedProvider: 'openai',
       });
 
@@ -173,21 +173,21 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      store.toggleFavorite('gpt-5.5');
+      store.toggleFavorite('gpt-5.6-sol');
 
       const state = useModelStore.getState();
-      expect(state.favorites).toContain('gpt-5.5');
+      expect(state.favorites).toContain('gpt-5.6-sol');
     });
 
     it('should remove a model from favorites if already favorited', async () => {
       const { useModelStore } = await import('../stores/modelStore');
-      useModelStore.setState({ favorites: ['gpt-5.5', 'claude-opus-4.8'] });
+      useModelStore.setState({ favorites: ['gpt-5.6-sol', 'claude-opus-4.8'] });
 
       const store = useModelStore.getState();
-      store.toggleFavorite('gpt-5.5');
+      store.toggleFavorite('gpt-5.6-sol');
 
       const state = useModelStore.getState();
-      expect(state.favorites).not.toContain('gpt-5.5');
+      expect(state.favorites).not.toContain('gpt-5.6-sol');
       expect(state.favorites).toContain('claude-opus-4.8');
     });
 
@@ -195,13 +195,13 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      store.toggleFavorite('gpt-5.5');
+      store.toggleFavorite('gpt-5.6-sol');
       store.toggleFavorite('claude-opus-4.8');
       store.toggleFavorite('gemini-3.1-pro-preview');
 
       const state = useModelStore.getState();
       expect(state.favorites).toHaveLength(3);
-      expect(state.favorites).toEqual(['gpt-5.5', 'claude-opus-4.8', 'gemini-3.1-pro-preview']);
+      expect(state.favorites).toEqual(['gpt-5.6-sol', 'claude-opus-4.8', 'gemini-3.1-pro-preview']);
     });
   });
 
@@ -234,12 +234,12 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      store.addToRecent('gpt-5.5');
+      store.addToRecent('gpt-5.6-sol');
       store.addToRecent('claude-opus-4.8');
 
       const state = useModelStore.getState();
       expect(state.recentModels[0]).toBe('claude-opus-4.8');
-      expect(state.recentModels[1]).toBe('gpt-5.5');
+      expect(state.recentModels[1]).toBe('gpt-5.6-sol');
     });
 
     it('should move existing model to beginning if already in recent', async () => {
@@ -308,7 +308,7 @@ describe('modelStore', () => {
   describe('getAvailableModels', () => {
     it('should return models from backend', async () => {
       const mockModels = [
-        { id: 'gpt-5.5', name: 'GPT-5.5', provider: 'openai', available: true },
+        { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', provider: 'openai', available: true },
         { id: 'claude-opus-4.8', name: 'Claude Opus 4.8', provider: 'anthropic', available: true },
       ];
 
@@ -320,7 +320,7 @@ describe('modelStore', () => {
       const result = await store.getAvailableModels();
 
       expect(result).toHaveLength(2);
-      expect(result[0]?.id).toBe('gpt-5.5');
+      expect(result[0]?.id).toBe('gpt-5.6-sol');
     });
 
     it('should fallback to static models on error', async () => {
@@ -340,7 +340,7 @@ describe('modelStore', () => {
     it('should reset store to initial state', async () => {
       const { useModelStore } = await import('../stores/modelStore');
       useModelStore.setState({
-        selectedModel: 'gpt-5.5',
+        selectedModel: 'gpt-5.6-sol',
         selectedProvider: 'openai',
         favorites: ['model-a', 'model-b'],
         recentModels: ['model-c'],
@@ -866,7 +866,7 @@ describe('unifiedChatStore - Extended Tests', () => {
         role: 'assistant',
         content: 'Hello! How can I help you?',
         metadata: {
-          model: 'gpt-5.5',
+          model: 'gpt-5.6-sol',
           provider: 'openai',
           tokenCount: 50,
           cost: 0.001,
@@ -874,7 +874,7 @@ describe('unifiedChatStore - Extended Tests', () => {
       });
 
       const state = useUnifiedChatStore.getState();
-      expect(state.messages[0]?.metadata?.model).toBe('gpt-5.5');
+      expect(state.messages[0]?.metadata?.model).toBe('gpt-5.6-sol');
       expect(state.messages[0]?.metadata?.provider).toBe('openai');
     });
 
@@ -904,7 +904,7 @@ describe('unifiedChatStore - Extended Tests', () => {
       store.addMessage({
         role: 'assistant',
         content: 'Test',
-        metadata: { model: 'gpt-5.5', tokenCount: 10 },
+        metadata: { model: 'gpt-5.6-sol', tokenCount: 10 },
       });
 
       const state = useUnifiedChatStore.getState();
@@ -913,7 +913,7 @@ describe('unifiedChatStore - Extended Tests', () => {
       store.updateMessage(messageId!, { metadata: { cost: 0.01 } });
 
       const updatedState = useUnifiedChatStore.getState();
-      expect(updatedState.messages[0]?.metadata?.model).toBe('gpt-5.5');
+      expect(updatedState.messages[0]?.metadata?.model).toBe('gpt-5.6-sol');
       expect(updatedState.messages[0]?.metadata?.tokenCount).toBe(10);
       expect(updatedState.messages[0]?.metadata?.cost).toBe(0.01);
     });

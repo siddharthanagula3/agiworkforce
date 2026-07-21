@@ -26,7 +26,7 @@ vi.mock('@agiworkforce/types', () => ({
         cached_write: 6.25,
         cached_write_1h: 10.0,
       },
-      'gpt-5.5': { provider: 'openai', inputCost: 5.0, outputCost: 30.0 },
+      'gpt-5.6-sol': { provider: 'openai', inputCost: 5.0, outputCost: 30.0 },
       'deepseek-v4-flash': {
         provider: 'deepseek',
         inputCost: 0.14,
@@ -93,17 +93,17 @@ describe('recordModelUsage', () => {
 
   it('keeps sessions isolated', () => {
     recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_B, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_B, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
 
     expect(getModelUsageReport(SESSION_A).has('claude-sonnet-5')).toBe(true);
-    expect(getModelUsageReport(SESSION_A).has('gpt-5.5')).toBe(false);
-    expect(getModelUsageReport(SESSION_B).has('gpt-5.5')).toBe(true);
+    expect(getModelUsageReport(SESSION_A).has('gpt-5.6-sol')).toBe(false);
+    expect(getModelUsageReport(SESSION_B).has('gpt-5.6-sol')).toBe(true);
     expect(getModelUsageReport(SESSION_B).has('claude-sonnet-5')).toBe(false);
   });
 
   it('tracks multiple models within the same session', () => {
     recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_A, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
 
     const report = getModelUsageReport(SESSION_A);
     expect(report.size).toBe(2);
@@ -155,31 +155,31 @@ describe('cost calculation', () => {
   });
 
   it('bills only the uncached remainder at input rate for inclusive providers (openai)', () => {
-    // gpt-5.5: input=$5/M, no catalog cached_input → cache_read falls back to 10%
+    // gpt-5.6-sol: input=$5/M, no catalog cached_input → cache_read falls back to 10%
     // of input = $0.5/M. 1M prompt with 400k cache hits: 600k billed at $5/M +
     // 400k at $0.5/M = $3.0 + $0.2 = $3.2 (NOT $5 + $0.2 = $5.2).
-    recordModelUsage(SESSION_A, 'gpt-5.5', {
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 400_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.5')!.costUsd;
+    const cost = report.get('gpt-5.6-sol')!.costUsd;
     expect(cost).toBeCloseTo(3.2, 4);
   });
 
   it('falls back to 10% of input rate for cache_read when cached_input is absent', () => {
-    // gpt-5.5: inputCost=$5, no cached_input in this fixture.
+    // gpt-5.6-sol: inputCost=$5, no cached_input in this fixture.
     // 1M cache_read = 10% of $5 = $0.5.
-    recordModelUsage(SESSION_A, 'gpt-5.5', {
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
       inputTokens: 0,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.5')!.costUsd;
+    const cost = report.get('gpt-5.6-sol')!.costUsd;
     expect(cost).toBeCloseTo(0.5, 4);
   });
 
@@ -269,19 +269,19 @@ describe('worked cost examples — all token classes, per provider', () => {
   });
 
   it('openai (inclusive prompt): cached subset subtracted from input, read at 0.1x fallback', () => {
-    // gpt-5.5: input=$5/M, output=$30/M, no catalog cached_input → read = 0.1*5 = $0.5/M.
+    // gpt-5.6-sol: input=$5/M, output=$30/M, no catalog cached_input → read = 0.1*5 = $0.5/M.
     // OpenAI prompt_tokens INCLUDE the cached hits, so the cached subset is
     // subtracted from the billable-input bucket (billed once, at the read rate).
     //   billable input (1M - 400k) 600k * 5   /1e6 = $3.00
     //   cache-read                 400k * 0.5 /1e6 = $0.20
     //   output                      1M  * 30  /1e6 = $30.00
     //   total = $33.20
-    recordModelUsage(SESSION_A, 'gpt-5.5', {
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
       cacheReadInputTokens: 400_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('gpt-5.5')!.costUsd).toBeCloseTo(33.2, 6);
+    expect(getModelUsageReport(SESSION_A).get('gpt-5.6-sol')!.costUsd).toBeCloseTo(33.2, 6);
   });
 
   it('deepseek (inclusive prompt): fully-cached prompt bills only the discounted read rate', () => {
@@ -307,8 +307,8 @@ describe('getSessionTotalCostUsd', () => {
   it('sums cost across all models in a session', () => {
     // claude-sonnet-5: $3/M input → 1M = $3
     recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 1_000_000, outputTokens: 0 });
-    // gpt-5.5: $5/M input → 1M = $5
-    recordModelUsage(SESSION_A, 'gpt-5.5', { inputTokens: 1_000_000, outputTokens: 0 });
+    // gpt-5.6-sol: $5/M input → 1M = $5
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', { inputTokens: 1_000_000, outputTokens: 0 });
 
     const total = getSessionTotalCostUsd(SESSION_A);
     expect(total).toBeCloseTo(8.0, 4);
@@ -322,22 +322,22 @@ describe('getModelUsageReport', () => {
   });
 
   it('returns a snapshot (mutations do not affect store)', () => {
-    recordModelUsage(SESSION_A, 'gpt-5.5', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', { inputTokens: 100, outputTokens: 50 });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('gpt-5.5')!;
+    const usage = report.get('gpt-5.6-sol')!;
     usage.inputTokens = 9999; // mutate snapshot
 
     // Store should be unaffected
     const report2 = getModelUsageReport(SESSION_A);
-    expect(report2.get('gpt-5.5')!.inputTokens).toBe(100);
+    expect(report2.get('gpt-5.6-sol')!.inputTokens).toBe(100);
   });
 });
 
 describe('resetModelUsage', () => {
   it('removes only the specified session', () => {
     recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_B, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_B, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
 
     resetModelUsage(SESSION_A);
 
@@ -353,7 +353,7 @@ describe('resetModelUsage', () => {
 describe('resetAllSessions', () => {
   it('clears all sessions', () => {
     recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_B, 'gpt-5.5', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_B, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
 
     resetAllSessions();
 
@@ -364,19 +364,19 @@ describe('resetAllSessions', () => {
 
 describe('reasoningOutputTokens', () => {
   it('accumulates reasoningOutputTokens across calls', () => {
-    recordModelUsage(SESSION_A, 'gpt-5.5', {
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
       inputTokens: 1000,
       outputTokens: 500,
       reasoningOutputTokens: 200,
     });
-    recordModelUsage(SESSION_A, 'gpt-5.5', {
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
       inputTokens: 100,
       outputTokens: 50,
       reasoningOutputTokens: 80,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('gpt-5.5')!;
+    const usage = report.get('gpt-5.6-sol')!;
     expect(usage.reasoningOutputTokens).toBe(280);
   });
 
@@ -389,30 +389,30 @@ describe('reasoningOutputTokens', () => {
   });
 
   it('charges reasoning tokens at the output token rate', () => {
-    // gpt-5.5: outputCost=$30/M
+    // gpt-5.6-sol: outputCost=$30/M
     // 1M reasoning tokens = $30
-    recordModelUsage(SESSION_A, 'gpt-5.5', {
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
       inputTokens: 0,
       outputTokens: 0,
       reasoningOutputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.5')!.costUsd;
+    const cost = report.get('gpt-5.6-sol')!.costUsd;
     expect(cost).toBeCloseTo(30.0, 4);
   });
 
   it('adds reasoning cost on top of input + output cost', () => {
-    // gpt-5.5: input=$5/M, output=$30/M
+    // gpt-5.6-sol: input=$5/M, output=$30/M
     // 1M input + 1M output + 500k reasoning = $5 + $30 + $15 = $50
-    recordModelUsage(SESSION_A, 'gpt-5.5', {
+    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
       reasoningOutputTokens: 500_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.5')!.costUsd;
+    const cost = report.get('gpt-5.6-sol')!.costUsd;
     expect(cost).toBeCloseTo(50.0, 4);
   });
 });
@@ -439,13 +439,13 @@ describe('inferGenAiSystem', () => {
 
 describe('toOtelAttributes', () => {
   it('includes standard GenAI semantic convention fields', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
       inputTokens: 1000,
       outputTokens: 500,
     });
 
     expect(attrs['gen_ai.system']).toBe('openai');
-    expect(attrs['gen_ai.request.model']).toBe('gpt-5.5');
+    expect(attrs['gen_ai.request.model']).toBe('gpt-5.6-sol');
     expect(attrs['gen_ai.usage.input_tokens']).toBe(1000);
     expect(attrs['gen_ai.usage.output_tokens']).toBe(500);
   });
@@ -461,7 +461,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('omits cache_read attribute when cacheReadInputTokens is absent', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
       inputTokens: 100,
       outputTokens: 50,
     });
@@ -480,7 +480,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('includes codex.usage.reasoning_output_tokens when provided', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
       inputTokens: 1000,
       outputTokens: 500,
       reasoningOutputTokens: 256,
@@ -490,7 +490,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('omits codex.usage.reasoning_output_tokens when absent', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
       inputTokens: 1000,
       outputTokens: 500,
     });
@@ -499,7 +499,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('computes total_tokens as input + output + reasoning + cache_creation', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.5', {
+    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
       inputTokens: 1000,
       outputTokens: 500,
       reasoningOutputTokens: 200,

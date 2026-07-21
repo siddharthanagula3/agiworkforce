@@ -81,7 +81,7 @@ export interface ModelVote {
  *   context: 'We have a PostgreSQL database with 50M rows...',
  *   models: [
  *     { modelId: 'claude-opus-4.8', provider: 'anthropic' },
- *     { modelId: 'gpt-5.5', provider: 'openai' },
+ *     { modelId: 'gpt-5.6-sol', provider: 'openai' },
  *     { modelId: 'gemini-3.1-pro-preview', provider: 'google' },
  *   ],
  *   consensusThreshold: 0.7,

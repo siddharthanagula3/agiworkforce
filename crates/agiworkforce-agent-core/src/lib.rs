@@ -46,11 +46,11 @@ pub mod engine;
 pub mod memory;
 pub mod runaway;
 
-pub use engine::{run_turn, TurnEngine};
+pub use engine::{TurnEngine, run_turn};
 pub use runaway::{
-    detect_content_loop, hash_tool_call, RunawayTracker, CONTENT_CHUNK_SIZE,
-    CONTENT_LOOP_CHUNK_THRESHOLD, CONTENT_LOOP_DISTANCE, LOOP_DETECTION_THRESHOLD,
-    MAX_AGENTIC_ITERATIONS,
+    CONTENT_CHUNK_SIZE, CONTENT_LOOP_CHUNK_THRESHOLD, CONTENT_LOOP_DISTANCE,
+    LOOP_DETECTION_THRESHOLD, MAX_AGENTIC_ITERATIONS, RunawayTracker, detect_content_loop,
+    hash_tool_call,
 };
 
 // Re-export the shared LLM surface the engine speaks in. (The plan's sketched

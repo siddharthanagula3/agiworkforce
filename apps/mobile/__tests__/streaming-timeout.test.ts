@@ -109,7 +109,7 @@ describe('completions stream response timeout', () => {
     const { callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [{ role: 'user', content: 'hi' }],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000021',
@@ -164,7 +164,7 @@ describe('completions stream response timeout', () => {
     const { deltas, callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000022',
@@ -200,7 +200,7 @@ describe('completions stream response timeout', () => {
     const { deltas, callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000023',

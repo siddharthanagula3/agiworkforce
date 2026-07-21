@@ -1,7 +1,25 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-18",
+  "lastUpdated": "2026-07-20",
   "verificationLog": [
+    {
+      "date": "2026-07-20",
+      "verifiedBy": "live-provider-docs-sweep-2026-07-20",
+      "status": "CORRECTION",
+      "notes": "Latest-family-only wave 3, every fact live-verified today against official provider docs (docs.x.ai, docs.mistral.ai, ai.google.dev, developers.openai.com, docs.perplexity.ai, openrouter.ai/api/v1/models). RENAMED+UPDATED: grok-4.3 to grok-4.5 ($2/$6, 500k ctx, reasoning_effort low-medium-high default high, cannot disable); mistral-medium-3 to mistral-medium-3.5 (mistral-medium-3-5, $1.5/$7.5, 256k, multimodal - designated upstream replacement for Pixtral/Devstral/Magistral); mistral-small-3 to mistral-small-4 (wire id mistral-small-2603 was ALREADY current but catalog pricing/ctx were stale-wrong: now $0.15/$0.60, 256k); codestral-2 to codestral-2508 (catalog id was invented, wire id was already correct; $0.30/$0.90, 128k, July 2025 - still latest Codestral); veo-3 to veo-3.1 (wire id was already veo-3.1-generate-preview). REMOVED (dead or deprecated upstream): pixtral-large (retired 5/30/26), sonar-reasoning (gone from Perplexity lineup; -pro remains), imagen-4/-fast/-ultra (deprecated by Google; gemini-3.1-flash-image is the successor line), whisper-1 (replaced by gpt-4o-transcribe $2.50/$10 and gpt-4o-mini-transcribe $1.25/$5), and all four OpenRouter :free entries (verified gone via live models API; replaced with verified nvidia/nemotron-3-super-120b-a12b:free 1M ctx and google/gemma-4-26b-a4b-it:free 262k ctx). KEPT with note: tts-1/tts-1-hd (successor gpt-4o-mini-tts pricing row not yet verifiable - follow-up), groq llama entries (host serves no newer llama), NIM llama-3.3 (llama-4 on NIM available but unpriced - follow-up), gemini-3.1 pro/flash-lite/flash-image (still latest of their lines; flash-lite now stable), stable-image-core (lineup unchanged). Qwen3.8-Max previewed 2026-07-19 but has NO official API id/pricing - deliberately NOT added. ADDENDUM: kimi-k3 added to tierAllowedModels.pro_additions (was registered but absent from every tier bucket = unselectable despite minTier pro — caught by sweep-web-packages). Auto-routing slots deliberately unchanged: no slot routed to kimi at HEAD either; giving kimi an auto slot is a product decision, picker-selectable + BYOK is the shipped state."
+    },
+    {
+      "date": "2026-07-20",
+      "verifiedBy": "founder-directive-latest-family-versions-only",
+      "status": "CORRECTION",
+      "notes": "Founder policy: catalog carries ONLY the latest version of each model family. Removed gpt-5.4-mini, gpt-5.4-nano, gpt-4.1-nano (older GPT generations; the gpt-5.6 sol/terra/luna family covers flagship/chat/fast slots and provider taskRouting already targets it). tierAllowedModels economy list dropped gpt-5.4-nano (gpt-5.6-luna remains the economy OpenAI slot). Families needing LIVE lineup verification before further action (older entries retained pending verified replacements, tracked follow-up): gemini-3.1-pro-preview/flash-lite/flash-image vs any 3.5-generation pro/lite lines; mistral-large-3/medium-3/small-3/pixtral-large vs current Mistral lineup; groq + nvidia_nim + open_router Llama 3.x vintages vs Llama 4 availability; tts-1/tts-1-hd (2023) and whisper-1 (2022) vs current OpenAI audio models; managed_cloud stable-image-core (2024) vs current Stability lineup."
+    },
+    {
+      "date": "2026-07-20",
+      "verifiedBy": "founder-directive-and-official-moonshot-platform-docs",
+      "status": "CORRECTION",
+      "notes": "Founder directive: removed ALL legacy kimi models (kimi-k2.6 lingered in models.synced.json after 7a78ecbd0 removed it from curation, leaving moonshot with zero models) and the entire gpt-5.5 entry (gpt-5.6 sol/terra/luna family is the current OpenAI lineup; provider defaultModel/taskRouting already point at 5.6). Added kimi-k3, verified 2026-07-20 against platform.moonshot.ai (quickstart + pricing/chat-k3 + api/chat docs): id kimi-k3, context 1,048,576 tokens, $3.00/M input ($0.30 cache hit), $15.00/M output, tool calling + vision confirmed, thinking ALWAYS-ON (Preserved Thinking; reasoning_effort field exists but only value 'max' is accepted for k3, cannot disable). Released 2026-07-16 via API; open weights announced for 2026-07-27. Benchmarks omitted pending official verifiable numbers; codeExecution/search capabilities left false pending explicit platform-tool verification for k3."
+    },
     {
       "date": "2026-07-18",
       "verifiedBy": "founder-provider-policy-and-official-qwen-anthropic-docs",
@@ -200,14 +218,14 @@
       },
       "modelPrefixes": ["grok"],
       "aliases": ["xai", "grok"],
-      "defaultModel": "grok-4.3",
+      "defaultModel": "grok-4.5",
       "taskRouting": {
-        "fast_completion": "grok-4.3",
-        "code_generation": "grok-4.3",
-        "complex_reasoning": "grok-4.3",
-        "chat": "grok-4.3",
-        "vision": "grok-4.3",
-        "long_context": "grok-4.3"
+        "fast_completion": "grok-4.5",
+        "code_generation": "grok-4.5",
+        "complex_reasoning": "grok-4.5",
+        "chat": "grok-4.5",
+        "vision": "grok-4.5",
+        "long_context": "grok-4.5"
       },
       "canonicalization": {}
     },
@@ -267,13 +285,14 @@
         "completion": 1
       },
       "defaultPricing": {
-        "inputPerMillion": 0.95,
-        "outputPerMillion": 4
+        "inputPerMillion": 3.0,
+        "outputPerMillion": 15.0
       },
       "modelPrefixes": ["kimi", "moonshot"],
       "aliases": ["moonshot", "kimi"],
       "taskRouting": {},
-      "canonicalization": {}
+      "canonicalization": {},
+      "defaultModel": "kimi-k3"
     },
     "perplexity": {
       "label": "Perplexity",
@@ -338,12 +357,12 @@
       "aliases": ["mistral", "mistral-ai", "mistral_ai"],
       "defaultModel": "mistral-large-3",
       "taskRouting": {
-        "fast_completion": "mistral-medium-3",
-        "code_generation": "codestral-2",
+        "fast_completion": "mistral-small-4",
+        "code_generation": "codestral-2508",
         "complex_reasoning": "mistral-large-3",
         "chat": "mistral-large-3",
-        "vision": "mistral-large-3",
-        "long_context": "mistral-large-3"
+        "vision": "mistral-medium-3.5",
+        "long_context": "mistral-medium-3.5"
       },
       "canonicalization": {}
     },
@@ -416,14 +435,14 @@
       },
       "modelPrefixes": ["meta-llama/", "mistralai/", "nvidia/", "qwen/", "google/", "openrouter/"],
       "aliases": ["open_router", "openrouter", "open-router"],
-      "defaultModel": "meta-llama/llama-3.3-70b-instruct:free",
+      "defaultModel": "google/gemma-4-26b-a4b-it:free",
       "taskRouting": {
-        "fast_completion": "meta-llama/llama-3.3-70b-instruct:free",
-        "code_generation": "qwen/qwen3-coder:free",
-        "complex_reasoning": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
-        "chat": "meta-llama/llama-3.3-70b-instruct:free",
-        "vision": "mistralai/mistral-small-3.1-24b-instruct:free",
-        "long_context": "meta-llama/llama-3.3-70b-instruct:free"
+        "fast_completion": "google/gemma-4-26b-a4b-it:free",
+        "chat": "google/gemma-4-26b-a4b-it:free",
+        "code_generation": "nvidia/nemotron-3-super-120b-a12b:free",
+        "complex_reasoning": "nvidia/nemotron-3-super-120b-a12b:free",
+        "vision": "nvidia/nemotron-3-super-120b-a12b:free",
+        "long_context": "nvidia/nemotron-3-super-120b-a12b:free"
       },
       "canonicalization": {}
     },
@@ -514,48 +533,6 @@
     }
   },
   "models": {
-    "gpt-5.5": {
-      "id": "gpt-5.5",
-      "apiModelId": "gpt-5.5",
-      "name": "GPT-5.5",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Frontier Reasoning", "Complex Coding", "Agentic Tasks", "Research"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      }
-    },
     "gpt-5.6-sol": {
       "id": "gpt-5.6-sol",
       "apiModelId": "gpt-5.6-sol",
@@ -1220,48 +1197,6 @@
       "speedOverride": "fast",
       "releasedOverride": "March 2026"
     },
-    "grok-4.3": {
-      "id": "grok-4.3",
-      "apiModelId": "grok-4.3",
-      "name": "Grok 4.3",
-      "provider": "xai",
-      "modelType": "reasoning",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "always_on",
-        "supportedEfforts": ["low", "medium", "high"],
-        "defaultEffort": "high",
-        "canDisableThinking": false,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "max"
-      },
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": true,
-        "search": false,
-        "research": true,
-        "codeExecution": true,
-        "caching": false
-      }
-    },
     "deepseek-v4-flash": {
       "id": "deepseek-v4-flash",
       "apiModelId": "deepseek-v4-flash",
@@ -1498,111 +1433,6 @@
         "control": "none"
       }
     },
-    "mistral-medium-3": {
-      "id": "mistral-medium-3",
-      "apiModelId": "mistral-medium-2508",
-      "name": "Mistral Medium 3.1",
-      "provider": "mistral",
-      "modelType": "chat",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["General Chat", "Multilingual", "Cost-Effective"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "high"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      }
-    },
-    "mistral-small-3": {
-      "id": "mistral-small-3",
-      "apiModelId": "mistral-small-2603",
-      "name": "Mistral Small 4",
-      "provider": "mistral",
-      "modelType": "chat",
-      "quality": "fair",
-      "qualityTier": "fast",
-      "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "high"],
-        "defaultEffort": "high",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      }
-    },
-    "codestral-2": {
-      "id": "codestral-2",
-      "apiModelId": "codestral-2508",
-      "name": "Codestral 2",
-      "provider": "mistral",
-      "modelType": "code",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Code Generation", "FIM Completion", "Budget Coding"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0.3,
-        "outputCost": 0.9
-      },
-      "contextOverride": 256000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "benchmarkOverride": {
-        "swebench": 48,
-        "humaneval": 90,
-        "mmlu": 72
-      },
-      "speedOverride": "very-fast",
-      "releasedOverride": "January 2026"
-    },
-    "pixtral-large": {
-      "id": "pixtral-large",
-      "apiModelId": "pixtral-large-latest",
-      "name": "Pixtral Large",
-      "provider": "mistral",
-      "modelType": "multimodal",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Vision", "Image Analysis", "Multimodal"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      }
-    },
     "sonar": {
       "id": "sonar",
       "apiModelId": "sonar",
@@ -1620,56 +1450,6 @@
       "tierPolicy": {
         "minTier": "free"
       }
-    },
-    "sonar-reasoning": {
-      "id": "sonar-reasoning",
-      "apiModelId": "sonar-reasoning",
-      "name": "Sonar Reasoning",
-      "provider": "perplexity",
-      "modelType": "search",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["Search + Reasoning", "Analysis", "Citations"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["minimal", "low", "medium", "high"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "costOverride": {
-        "inputCost": 1,
-        "outputCost": 5
-      },
-      "contextOverride": 128000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "benchmarkOverride": {
-        "mmlu": 82,
-        "gpqa": 55
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "January 2026"
     },
     "sonar-reasoning-pro": {
       "id": "sonar-reasoning-pro",
@@ -1737,86 +1517,6 @@
         "minTier": "pro"
       }
     },
-    "imagen-4": {
-      "id": "imagen-4",
-      "apiModelId": "imagen-4.0-generate-001",
-      "name": "Imagen 4",
-      "provider": "google",
-      "modelType": "image",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Photorealistic Images", "Creative Content"],
-      "deprecation_date": "2026-08-17",
-      "imagePerImageCost": 0.04,
-      "imageApi": "imagen",
-      "pricingNote": "Imagen 4 standard costs $0.04 per generated image. Google marks the Imagen 4 family deprecated with shutdown scheduled for 2026-08-17.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 40
-      },
-      "contextOverride": 4000,
-      "capabilitiesOverride": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": true,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "January 2026"
-    },
-    "imagen-4-fast": {
-      "id": "imagen-4-fast",
-      "apiModelId": "imagen-4.0-fast-generate-001",
-      "name": "Imagen 4 Fast",
-      "provider": "google",
-      "modelType": "image",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Quick Images", "High Volume"],
-      "deprecation_date": "2026-08-17",
-      "imagePerImageCost": 0.02,
-      "imageApi": "imagen",
-      "pricingNote": "Imagen 4 Fast costs $0.02 per generated image. Google marks the Imagen 4 family deprecated with shutdown scheduled for 2026-08-17.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 20
-      },
-      "contextOverride": 4000,
-      "capabilitiesOverride": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": true,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "2026"
-    },
     "runway-gen-4": {
       "id": "runway-gen-4",
       "apiModelId": "gen4_turbo",
@@ -1828,7 +1528,9 @@
       "bestFor": ["AI Video Generation", "Max 15x and Enterprise"],
       "deprecation_date": null,
       "videoPerSecondCost": 0.05,
-      "videoPerSecondCostByResolution": { "720p": 0.05 },
+      "videoPerSecondCostByResolution": {
+        "720p": 0.05
+      },
       "pricingNote": "Runway Gen-4 remains an alternate third-party video provider entry. Default AGI video routing uses the verified current Google Veo route unless product policy explicitly chooses Runway.",
       "reasoning": {
         "capable": false,
@@ -1856,86 +1558,6 @@
       },
       "speedOverride": "medium",
       "releasedOverride": "2025"
-    },
-    "imagen-4-ultra": {
-      "id": "imagen-4-ultra",
-      "apiModelId": "imagen-4.0-ultra-generate-001",
-      "name": "Imagen 4 Ultra",
-      "provider": "google",
-      "modelType": "image",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Ultra HD Images", "Professional Quality"],
-      "deprecation_date": "2026-08-17",
-      "imagePerImageCost": 0.06,
-      "imageApi": "imagen",
-      "pricingNote": "Imagen 4 Ultra costs $0.06 per generated image. Google marks the Imagen 4 family deprecated with shutdown scheduled for 2026-08-17.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 80
-      },
-      "contextOverride": 4000,
-      "capabilitiesOverride": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": true,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "slow",
-      "releasedOverride": "January 2026"
-    },
-    "veo-3": {
-      "id": "veo-3",
-      "apiModelId": "veo-3.1-generate-preview",
-      "name": "Veo 3.1",
-      "provider": "google",
-      "modelType": "video",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Professional Video", "High Quality Clips"],
-      "deprecation_date": null,
-      "videoPerSecondCost": 0.4,
-      "videoPerSecondCostByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 },
-      "pricingNote": "Veo 3.1 Standard with audio: $0.40/second at 720p or 1080p; $0.60/second at 4k. 1080p and 4k require 8-second generations.",
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 750
-      },
-      "contextOverride": 4000,
-      "capabilitiesOverride": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": true,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "slow",
-      "releasedOverride": "January 2026"
     },
     "stable-image-core": {
       "id": "stable-image-core",
@@ -2068,43 +1690,6 @@
       "speedOverride": "medium",
       "releasedOverride": "November 2023"
     },
-    "whisper-1": {
-      "id": "whisper-1",
-      "apiModelId": "whisper-1",
-      "name": "Whisper",
-      "provider": "openai",
-      "modelType": "stt",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0.006,
-        "outputCost": 0
-      },
-      "contextOverride": 0,
-      "capabilitiesOverride": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "September 2022"
-    },
     "nvidia/llama-3.3-70b-instruct": {
       "id": "nvidia/llama-3.3-70b-instruct",
       "apiModelId": "nvidia/llama-3.3-70b-instruct",
@@ -2176,269 +1761,6 @@
       "reasoning": {
         "capable": false,
         "control": "none"
-      }
-    },
-    "meta-llama/llama-3.3-70b-instruct:free": {
-      "id": "meta-llama/llama-3.3-70b-instruct:free",
-      "apiModelId": "meta-llama/llama-3.3-70b-instruct:free",
-      "name": "Llama 3.3 70B Instruct (Free)",
-      "provider": "open_router",
-      "modelType": "chat",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["General Chat", "Agentic Tasks", "Free Tier"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 0
-      },
-      "contextOverride": 131072,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "2024"
-    },
-    "mistralai/mistral-small-3.1-24b-instruct:free": {
-      "id": "mistralai/mistral-small-3.1-24b-instruct:free",
-      "apiModelId": "mistralai/mistral-small-3.1-24b-instruct:free",
-      "name": "Mistral Small 3.1 24B (Free)",
-      "provider": "open_router",
-      "modelType": "chat",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["Vision Tasks", "Tool Use", "Free Tier"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 0
-      },
-      "contextOverride": 128000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "2025"
-    },
-    "qwen/qwen3-coder:free": {
-      "id": "qwen/qwen3-coder:free",
-      "apiModelId": "qwen/qwen3-coder:free",
-      "name": "Qwen3 Coder (Free)",
-      "provider": "open_router",
-      "modelType": "code",
-      "quality": "good",
-      "qualityTier": "balanced",
-      "bestFor": ["Coding", "Tool Use", "Free Tier"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 0
-      },
-      "contextOverride": 262144,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "2025"
-    },
-    "nvidia/llama-3.3-nemotron-super-49b-v1:free": {
-      "id": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
-      "apiModelId": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
-      "name": "Nemotron Super 49B (Free)",
-      "provider": "open_router",
-      "modelType": "chat",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Complex Reasoning", "Research", "Free Tier"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "costOverride": {
-        "inputCost": 0,
-        "outputCost": 0
-      },
-      "contextOverride": 131072,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": true,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speedOverride": "medium",
-      "releasedOverride": "2025"
-    },
-    "gpt-5.4-mini": {
-      "id": "gpt-5.4-mini",
-      "apiModelId": "gpt-5.4-mini",
-      "name": "GPT-5.4 Mini",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "variantPartner": "gpt-5.5",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Coding", "Computer Use", "Agent Workflows", "High-Volume Tasks"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "chat",
-          "effortPath": "reasoning_effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "pro"
-      },
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true,
-        "caching": true
-      }
-    },
-    "gpt-5.4-nano": {
-      "id": "gpt-5.4-nano",
-      "apiModelId": "gpt-5.4-nano",
-      "name": "GPT-5.4 Nano",
-      "provider": "openai",
-      "modelType": "reasoning",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Classification", "Data Extraction", "Ranking", "Sub-Agents"],
-      "deprecation_date": null,
-      "maxInputTokens": 272000,
-      "maxOutputTokens": 128000,
-      "knowledgeCutoff": "2025-08-31",
-      "endpoints": ["v1/responses", "v1/chat/completions", "v1/batch"],
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["none", "low", "medium", "high", "xhigh"],
-        "defaultEffort": "none",
-        "canDisableThinking": true,
-        "request": {
-          "api": "responses",
-          "effortPath": "reasoning.effort",
-          "togglePath": null,
-          "budgetPath": null
-        }
-      },
-      "tierPolicy": {
-        "minTier": "basic"
-      },
-      "costOverride": {
-        "inputCost": 0.2,
-        "outputCost": 1.25,
-        "cached_input": 0.02
-      },
-      "contextOverride": 400000,
-      "capabilitiesOverride": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false,
-        "caching": true
-      },
-      "speedOverride": "fast",
-      "releasedOverride": "March 2026"
-    },
-    "gpt-4.1-nano": {
-      "id": "gpt-4.1-nano",
-      "apiModelId": "gpt-4.1-nano",
-      "name": "GPT-4.1 Nano",
-      "provider": "openai",
-      "modelType": "chat",
-      "quality": "good",
-      "qualityTier": "fast",
-      "bestFor": ["Light Chat", "Long Context", "Classification", "Cost-Efficient"],
-      "deprecation_date": null,
-      "reasoning": {
-        "capable": false,
-        "control": "none"
-      },
-      "tierPolicy": {
-        "minTier": "free"
       }
     },
     "gemini-3.5-flash": {
@@ -2684,12 +2006,366 @@
       },
       "speedOverride": "very-fast",
       "releasedOverride": "June 2026"
+    },
+    "kimi-k3": {
+      "id": "kimi-k3",
+      "apiModelId": "kimi-k3",
+      "name": "Kimi K3",
+      "provider": "moonshot",
+      "modelType": "multimodal",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": [
+        "Long-Horizon Coding",
+        "Agentic Workflows",
+        "Long Context",
+        "Vision",
+        "Open-Weight Deployment"
+      ],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "always_on",
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "pro"
+      }
+    },
+    "grok-4.5": {
+      "id": "grok-4.5",
+      "apiModelId": "grok-4.5",
+      "name": "Grok 4.5",
+      "provider": "xai",
+      "modelType": "reasoning",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Real-time Info", "Video Input", "Long Context (1M)", "Reasoning"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "always_on",
+        "supportedEfforts": ["low", "medium", "high"],
+        "defaultEffort": "high",
+        "canDisableThinking": false,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "tierPolicy": {
+        "minTier": "max"
+      },
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": true,
+        "codeExecution": true,
+        "caching": false
+      }
+    },
+    "mistral-medium-3.5": {
+      "id": "mistral-medium-3.5",
+      "apiModelId": "mistral-medium-3-5",
+      "name": "Mistral Medium 3.5",
+      "provider": "mistral",
+      "modelType": "multimodal",
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["General Chat", "Multilingual", "Cost-Effective"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "high"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
+    },
+    "mistral-small-4": {
+      "id": "mistral-small-4",
+      "apiModelId": "mistral-small-2603",
+      "name": "Mistral Small 4",
+      "provider": "mistral",
+      "modelType": "chat",
+      "quality": "fair",
+      "qualityTier": "fast",
+      "bestFor": ["Quick Tasks", "Budget Usage", "Multilingual"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "high"],
+        "defaultEffort": "high",
+        "canDisableThinking": true,
+        "request": {
+          "api": "chat",
+          "effortPath": "reasoning_effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      }
+    },
+    "codestral-2508": {
+      "id": "codestral-2508",
+      "apiModelId": "codestral-2508",
+      "name": "Codestral 25.08",
+      "provider": "mistral",
+      "modelType": "code",
+      "quality": "good",
+      "qualityTier": "fast",
+      "bestFor": ["Code Generation", "FIM Completion", "Budget Coding"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0.3,
+        "outputCost": 0.9
+      },
+      "contextOverride": 256000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "benchmarkOverride": {
+        "swebench": 48,
+        "humaneval": 90,
+        "mmlu": 72
+      },
+      "speedOverride": "very-fast",
+      "releasedOverride": "January 2026"
+    },
+    "veo-3.1": {
+      "id": "veo-3.1",
+      "apiModelId": "veo-3.1-generate-preview",
+      "name": "Veo 3.1",
+      "provider": "google",
+      "modelType": "video",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Professional Video", "High Quality Clips"],
+      "deprecation_date": null,
+      "videoPerSecondCost": 0.4,
+      "videoPerSecondCostByResolution": {
+        "720p": 0.4,
+        "1080p": 0.4,
+        "4k": 0.6
+      },
+      "pricingNote": "Veo 3.1 Standard with audio: $0.40/second at 720p or 1080p; $0.60/second at 4k. 1080p and 4k require 8-second generations.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 750
+      },
+      "contextOverride": 4000,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "slow",
+      "releasedOverride": "January 2026"
+    },
+    "gpt-4o-transcribe": {
+      "id": "gpt-4o-transcribe",
+      "apiModelId": "gpt-4o-transcribe",
+      "name": "GPT-4o Transcribe",
+      "provider": "openai",
+      "modelType": "stt",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0.006,
+        "outputCost": 0
+      },
+      "contextOverride": 0,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "September 2022"
+    },
+    "gpt-4o-mini-transcribe": {
+      "id": "gpt-4o-mini-transcribe",
+      "apiModelId": "gpt-4o-mini-transcribe",
+      "name": "GPT-4o Mini Transcribe",
+      "provider": "openai",
+      "modelType": "stt",
+      "quality": "excellent",
+      "qualityTier": "fast",
+      "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0.006,
+        "outputCost": 0
+      },
+      "contextOverride": 0,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "September 2022"
+    },
+    "nvidia/nemotron-3-super-120b-a12b:free": {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "apiModelId": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "Nemotron 3 Super 120B (Free)",
+      "provider": "open_router",
+      "modelType": "chat",
+      "quality": "excellent",
+      "qualityTier": "best",
+      "bestFor": ["Complex Reasoning", "Research", "Free Tier"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "medium",
+      "releasedOverride": "2025"
+    },
+    "google/gemma-4-26b-a4b-it:free": {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "apiModelId": "google/gemma-4-26b-a4b-it:free",
+      "name": "Gemma 4 26B (Free)",
+      "provider": "open_router",
+      "modelType": "chat",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Complex Reasoning", "Research", "Free Tier"],
+      "deprecation_date": null,
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": true,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "medium",
+      "releasedOverride": "2025"
     }
   },
   "tierAllowedModels": {
     "economy": [
       "gpt-5.6-luna",
-      "gpt-5.4-nano",
       "gemini-3.1-flash-lite",
       "deepseek-v4-flash",
       "qwen-3.7-plus",
@@ -2705,9 +2381,10 @@
       "gemini-3.1-pro-preview",
       "deepseek-v4-pro",
       "qwen-max",
-      "sonar-deep-research"
+      "sonar-deep-research",
+      "kimi-k3"
     ],
-    "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-4.8", "grok-4.3"]
+    "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-4.8", "grok-4.5"]
   },
   "providersInOrder": [
     "managed_cloud",

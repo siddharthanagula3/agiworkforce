@@ -24,7 +24,7 @@ pub struct AgentCard {
     pub version: String,
     /// List of capabilities this agent supports (e.g., "code", "research", "web_search").
     pub capabilities: Vec<String>,
-    /// Models this agent can use (e.g., "claude-opus-4-8", "gpt-5.5").
+    /// Models this agent can use (e.g., "claude-opus-4-8", "gpt-5.6-sol").
     pub supported_models: Vec<String>,
     /// Network endpoint where this agent's A2A server is listening.
     pub endpoint: String,

@@ -1,4 +1,5 @@
 use crate::ThreadId;
+use crate::async_utils::CancelErr;
 use crate::auth::KnownPlan;
 use crate::auth::PlanType;
 pub use crate::auth::RefreshTokenFailedError;
@@ -9,7 +10,6 @@ use crate::protocol::AgiworkforceErrorInfo;
 use crate::protocol::ErrorEvent;
 use crate::protocol::RateLimitSnapshot;
 use crate::protocol::TruncationPolicy;
-use crate::async_utils::CancelErr;
 use crate::string_utils::truncate_middle_chars;
 use crate::string_utils::truncate_middle_with_token_budget;
 use chrono::DateTime;

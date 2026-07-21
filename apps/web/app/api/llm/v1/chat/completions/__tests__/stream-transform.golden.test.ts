@@ -413,13 +413,13 @@ describe('buildStreamResponse golden fixture · OpenAI-shape passthrough', () =>
       'data: ' +
         JSON.stringify({
           choices: [{ delta: { content: 'Hello' }, index: 0 }],
-          model: 'gpt-5.5-upstream-id',
+          model: 'gpt-5.6-sol-upstream-id',
         }),
       '',
       'data: ' +
         JSON.stringify({
           choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
-          model: 'gpt-5.5-upstream-id',
+          model: 'gpt-5.6-sol-upstream-id',
           usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
         }),
       '',
@@ -431,8 +431,8 @@ describe('buildStreamResponse golden fixture · OpenAI-shape passthrough', () =>
       upstream,
       makeProcessed({
         provider: 'openai',
-        requestedModel: 'gpt-5.5',
-        chatRequest: { model: 'gpt-5.5', messages: [], stream: true } as any,
+        requestedModel: 'gpt-5.6-sol',
+        chatRequest: { model: 'gpt-5.6-sol', messages: [], stream: true } as any,
       }),
       'user-003',
       'token-003',
@@ -442,10 +442,10 @@ describe('buildStreamResponse golden fixture · OpenAI-shape passthrough', () =>
     const events = parseDataLines(body);
 
     expect(events).toEqual([
-      { choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'gpt-5.5' },
+      { choices: [{ delta: { content: 'Hello' }, index: 0 }], model: 'gpt-5.6-sol' },
       {
         choices: [{ delta: {}, finish_reason: 'stop', index: 0 }],
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-sol',
         usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
       },
       '[DONE]',

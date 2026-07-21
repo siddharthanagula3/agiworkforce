@@ -100,7 +100,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const { deltas, callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [{ role: 'user', content: 'hi' }],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000001',
@@ -132,7 +132,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const { callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000002',
@@ -199,7 +199,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const { deltas, callbacks } = makeCallbacks();
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000003',
@@ -244,7 +244,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const callbacks = { onDelta, onDone: jest.fn(), onError: jest.fn() };
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000006',
@@ -334,7 +334,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     const onDelta = jest.fn();
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000007',
@@ -364,7 +364,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       const operationId = '0190a000-0000-7000-8000-000000000004';
       const completion = streamChat(
         {
-          model: 'gpt-5.4-mini',
+          model: 'gpt-5.6-luna',
           messages: [{ role: 'user', content: 'retry me safely' }],
           stream: true,
           operationId,
@@ -459,7 +459,7 @@ describe('completions stream fallback (RN null response.body)', () => {
               workMode: 'chat',
               state: 'completed',
               provider: 'openai',
-              model: 'gpt-5.4-mini',
+              model: 'gpt-5.6-luna',
               lastEventSequence: 2,
               cancellationRequestedAt: null,
               completedAt: now,
@@ -482,7 +482,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     };
     await streamChat(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [{ role: 'user', content: 'resume this run' }],
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000008',

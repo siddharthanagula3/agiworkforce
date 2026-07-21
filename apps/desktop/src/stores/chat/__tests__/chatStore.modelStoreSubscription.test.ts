@@ -33,7 +33,7 @@ describe('chatStore modelStore subscription', () => {
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.5' }),
+        getState: () => ({ selectedModel: 'gpt-5.6-sol' }),
       },
     }));
 
@@ -52,14 +52,14 @@ describe('chatStore modelStore subscription', () => {
         _selector: (state: { selectedModel: string | null }) => string | null,
         listener: (selectedModel: string | null) => void,
       ) => {
-        listener('gpt-5.5');
+        listener('gpt-5.6-sol');
         return unsubscribe;
       },
     );
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.5' }),
+        getState: () => ({ selectedModel: 'gpt-5.6-sol' }),
         subscribe,
       },
     }));
@@ -70,7 +70,7 @@ describe('chatStore modelStore subscription', () => {
 
     expect(subscribe).toHaveBeenCalled();
     expect(unsubscribe).not.toHaveBeenCalled();
-    expect(useChatStore.getState().tokenUsage.max).toBe(getModelContextWindow('gpt-5.5'));
+    expect(useChatStore.getState().tokenUsage.max).toBe(getModelContextWindow('gpt-5.6-sol'));
   });
 
   it('does not auto-initialize the subscription on import in test mode', async () => {
@@ -78,7 +78,7 @@ describe('chatStore modelStore subscription', () => {
 
     vi.doMock('../../modelStore', () => ({
       useModelStore: {
-        getState: () => ({ selectedModel: 'gpt-5.5' }),
+        getState: () => ({ selectedModel: 'gpt-5.6-sol' }),
         subscribe,
       },
     }));

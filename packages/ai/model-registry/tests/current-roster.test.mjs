@@ -168,11 +168,11 @@ test('selects only the founder-approved current-generation roster', () => {
     assert.equal(selectableRoster.has(modelKey), true, `${modelKey} must remain selectable`);
   }
   const basicRoster = new Set(compatibility.tierAllowedModels.economy);
-  assert.equal(basicRoster.has('gpt-5.4-nano'), true);
-  assert.equal(basicRoster.has('gpt-5.4-mini'), false);
+  assert.equal(basicRoster.has('gpt-5.6-luna'), true);
+  assert.equal(basicRoster.has('gpt-5.6-terra'), false);
   assert.equal(basicRoster.has('claude-haiku-4.5'), false);
   assert.equal(compatibility.tierAllowedModels.pro_additions.includes('claude-haiku-4.5'), true);
-  assert.equal(selectableRoster.has('gpt-5.4-mini'), false);
+  assert.equal(selectableRoster.has('sonar-pro'), false);
 
   const openAIRoutes = Object.values(compatibility.providers.openai.taskRouting);
   assert.equal(
@@ -191,9 +191,10 @@ test('selects only the founder-approved current-generation roster', () => {
   assert.equal(slotModels.includes('claude-sonnet-4.6'), false);
 
   assert.ok(
-    registry.models['gpt-5.5'],
+    registry.models['sonar-pro'],
     'a still-served model may remain addressable even after leaving current-generation pickers',
   );
+  assert.equal(registry.models['gpt-5.5'], undefined);
   assert.equal(registry.models['claude-sonnet-4.6'], undefined);
   assert.equal(registry.models['kimi-k2.6'], undefined);
   assert.equal(registry.models['qwen-3.5-plus'], undefined);

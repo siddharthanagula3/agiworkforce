@@ -33,7 +33,7 @@
  *   name: 'Rust Expert',
  *   version: '1.0.0',
  *   capabilities: ['code_review', 'refactor', 'explain_error'],
- *   supportedModels: ['claude-opus-4.8', 'gpt-5.5'],
+ *   supportedModels: ['claude-opus-4.8', 'gpt-5.6-sol'],
  *   endpoint: 'local://swarm/agent-rust-expert',
  *   authRequired: false,
  *   metadata: { maxContextTokens: 200000 },

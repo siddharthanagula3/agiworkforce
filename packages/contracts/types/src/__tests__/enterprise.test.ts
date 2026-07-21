@@ -60,7 +60,7 @@ describe('enterprise contracts', () => {
       userId: 'user-1',
       privacyMode: 'managed',
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: 'gpt-5.6-sol',
       accountStatus: 'waitlisted',
       denialCode: 'public_launch_blocked',
       denialMessage: 'Managed compute is private beta only.',

@@ -79,7 +79,7 @@ import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000002'; // a valid UUIDv7 conversation id
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 
 beforeEach(() => {
   jest.clearAllMocks();

@@ -20,10 +20,9 @@ import type { AgentControlState, AgentMode, Effort } from '@agiworkforce/types';
  * `reasoning.supportedEfforts` (docs/research/reasoning-effort-capability-matrix-2026-07-10.md).
  * A superset of the shared `Effort` (packages/contracts/types/design-system/effort.ts,
  * locked vocabulary D5, used by web/desktop's request-wire path): some models
- * legitimately expose `'none'` (e.g. gpt-5.4-mini) as a selectable level.
- * `'minimal'` is kept in the union too for any model that exposes it — no
- * current OpenAI catalog model does after the 2026-07-11 gpt-5-nano ->
- * gpt-5.4-nano rename (gpt-5-nano was the last one), but BYOK/future catalog
+ * legitimately expose `'none'` (e.g. gpt-5.6-terra) as a selectable level.
+ * `'minimal'` is kept in the union too for any model that exposes it —
+ * current Gemini/Sonar catalog entries do, and BYOK/future catalog
  * entries may. Widened here rather than in the shared
  * `Effort` union because that union backs non-partial `Record<Effort, …>`
  * maps in web/desktop-shared files (e.g. packages/ui/unified-chat's

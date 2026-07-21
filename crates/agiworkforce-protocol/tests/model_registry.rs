@@ -7,7 +7,7 @@ fn generated_model_registry_is_available_to_rust_consumers() {
 
     assert_eq!(registry["schemaVersion"], 1);
     assert_eq!(
-        registry["models"]["gpt-5.4-nano"]["identity"]["provider"],
+        registry["models"]["gpt-5.6-luna"]["identity"]["provider"],
         "openai"
     );
     assert!(registry["models"].get("auto").is_none());

@@ -16,7 +16,7 @@ const compat: OpenAICompletionsCompatDefaults = {
 };
 
 const request: ChatRequest = {
-  model: 'gpt-5.5',
+  model: 'gpt-5.6-sol',
   messages: [{ role: 'user', content: 'Hello' }],
 };
 
@@ -56,7 +56,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-sol',
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
       { compat },
@@ -84,7 +84,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-sol',
         effort: 'medium',
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
@@ -109,7 +109,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-sol',
         effort: 'high',
         // thinking deliberately omitted entirely.
       },
@@ -125,7 +125,7 @@ describe('translateChatRequest', () => {
     const params = translateChatRequest(
       {
         ...request,
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-sol',
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
       { compat, provider: 'openai' },
@@ -138,7 +138,7 @@ describe('translateChatRequest', () => {
     const params = translateChatRequest(
       {
         ...request,
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-sol',
         thinking: { type: 'enabled', budgetTokens: Number.MAX_SAFE_INTEGER },
       },
       { compat, provider: 'openai' },

@@ -84,16 +84,16 @@ function fakeAdapterStream(chunks: unknown[]) {
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-openai-1',
-    chatRequest: { model: 'gpt-5.5', messages: [], stream: true } as never,
+    chatRequest: { model: 'gpt-5.6-sol', messages: [], stream: true } as never,
     conversationId: undefined,
-    requestedModel: 'gpt-5.5',
+    requestedModel: 'gpt-5.6-sol',
     provider: 'openai',
     estimatedCostCents: 0,
     estimatedPromptTokens: 0,
     maxTokens: 1000,
     usedFallback: false,
     fallbackReason: undefined,
-    originalModel: 'gpt-5.5',
+    originalModel: 'gpt-5.6-sol',
     resolvedTaskType: 'general' as never,
     classifierConfidence: 1,
     resolvedSlot: null,
@@ -102,7 +102,7 @@ function makeProcessed(): ProcessedRequest {
     isFlagshipRequest: false,
     indicResult: undefined as never,
     llmRequest: {
-      model: 'gpt-5.5',
+      model: 'gpt-5.6-sol',
       messages: [{ role: 'user', content: 'list the files in this repo' }],
       max_tokens: 1000,
       stream: true,

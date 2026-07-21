@@ -55,7 +55,7 @@ describe('streamChatCompletionViaProvider', () => {
         [{ role: 'user', content: 'hi' }],
         { onToken: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
         cts.token,
-        'grok-4.3', // xai — not in the anthropic/openai/ollama/google allowlist
+        'grok-4.5', // xai — not in the anthropic/openai/ollama/google allowlist
       ),
     ).rejects.toThrow(/does not yet support/i);
   });

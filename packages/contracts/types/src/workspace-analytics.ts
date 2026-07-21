@@ -94,7 +94,7 @@ export interface WorkspaceAnalyticsEvent {
  *   activeUsers: 18,
  *   topModels: [
  *     { model: 'claude-opus-4.8', count: 3100 },
- *     { model: 'gpt-5.5',          count: 1200 },
+ *     { model: 'gpt-5.6-sol',          count: 1200 },
  *   ],
  *   topTools: [
  *     { tool: 'bash',               count: 9200 },

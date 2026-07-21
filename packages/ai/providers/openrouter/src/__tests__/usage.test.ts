@@ -64,7 +64,7 @@ describe('createOpenRouterUsageNormalizer — non-Anthropic-routed usage shape',
   it('normalizes the alternate input_tokens_details.cached_tokens nesting', async () => {
     const chunks: OpenAIChatCompletionChunk[] = [
       baseChunk({
-        model: 'meta-llama/llama-3.3-70b-instruct:free',
+        model: 'nvidia/nemotron-3-super-120b-a12b:free',
         choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
         usage: {
           prompt_tokens: 200,

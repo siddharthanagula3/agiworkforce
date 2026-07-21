@@ -262,7 +262,10 @@ mod tests {
         );
         // Oversized single input trips the long-context guard.
         let huge = "a".repeat(200_000);
-        assert_eq!(classify_turn_task(&huge, false), RoutingTaskType::LongContext);
+        assert_eq!(
+            classify_turn_task(&huge, false),
+            RoutingTaskType::LongContext
+        );
         // Long prose without signals falls through to general.
         let prose = "please summarize the following meeting notes and highlight decisions, \
                      owners, risks, and follow-ups in a structured way for the whole team"

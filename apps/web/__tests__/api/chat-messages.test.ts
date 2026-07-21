@@ -79,7 +79,7 @@ describe('Chat Messages API', () => {
     conversation_id: 'conv-1',
     role: 'assistant',
     content: 'Hello! How can I help you?',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
     provider: 'openai',
     input_tokens: 10,
     output_tokens: 8,
@@ -113,7 +113,7 @@ describe('Chat Messages API', () => {
         Promise.resolve({
           choices: [{ message: { content: 'Hello! How can I help you?' } }],
           usage: { prompt_tokens: 10, completion_tokens: 8, total_tokens: 18 },
-          model: 'gpt-5.5',
+          model: 'gpt-5.6-sol',
           provider: 'openai',
           cost_cents: 0.001,
         }),
@@ -276,7 +276,7 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello', model: 'gpt-5.5', skipLlm: true }),
+          body: JSON.stringify({ content: 'Hello', model: 'gpt-5.6-sol', skipLlm: true }),
         });
         await POST(request, mockContext);
 
@@ -400,7 +400,7 @@ describe('Chat Messages API', () => {
           body: JSON.stringify({
             content: 'I can help!',
             role: 'assistant',
-            model: 'gpt-5.5',
+            model: 'gpt-5.6-sol',
             skipLlm: true,
           }),
         });
@@ -412,7 +412,7 @@ describe('Chat Messages API', () => {
         // Verify the insert includes the model parameter
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_messages'),
-          expect.arrayContaining(['gpt-5.5']),
+          expect.arrayContaining(['gpt-5.6-sol']),
         );
       });
     });

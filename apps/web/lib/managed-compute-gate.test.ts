@@ -59,7 +59,7 @@ describe('web managed compute gate', () => {
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.6-terra',
       isFreeTrial: true,
     });
 

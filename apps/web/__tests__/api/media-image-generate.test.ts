@@ -11,6 +11,32 @@ vi.mock('server-only', () => ({}));
 // ---------------------------------------------------------------------------
 vi.mock('@agiworkforce/types', async () => {
   const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  // Synthetic Google catalog exercising the imageApi:'imagen' (:predict) wire
+  // branch, which stays production code even though the live catalog's Google
+  // image model (gemini-3.1-flash-image) uses the 'gemini' branch. The mocked
+  // getModelMetadataById below must resolve these entries (by id AND
+  // apiModelId, like the real lookup) so the double is self-consistent and
+  // independent of live-catalog churn.
+  const syntheticGoogleImageModels = [
+    {
+      id: 'imagen-4',
+      apiModelId: 'imagen-4.0-generate-001',
+      imageApi: 'imagen',
+      name: 'Imagen 4',
+      provider: 'google',
+      modelType: 'image',
+      imagePerImageCost: 0.04,
+    },
+    {
+      id: 'imagen-4-fast',
+      apiModelId: 'imagen-4.0-fast-generate-001',
+      imageApi: 'imagen',
+      name: 'Imagen 4 Fast',
+      provider: 'google',
+      modelType: 'image',
+      imagePerImageCost: 0.02,
+    },
+  ];
   return {
     ...actual,
     getRoutingSlotModel: vi.fn((slot: any) => {
@@ -19,26 +45,7 @@ vi.mock('@agiworkforce/types', async () => {
     }),
     getModelsForProvider: vi.fn((provider: any, options?: any) => {
       if (provider === 'google') {
-        return [
-          {
-            id: 'imagen-4',
-            apiModelId: 'imagen-4.0-generate-001',
-            imageApi: 'imagen',
-            name: 'Imagen 4',
-            provider: 'google',
-            modelType: 'image',
-            imagePerImageCost: 0.04,
-          },
-          {
-            id: 'imagen-4-fast',
-            apiModelId: 'imagen-4.0-fast-generate-001',
-            imageApi: 'imagen',
-            name: 'Imagen 4 Fast',
-            provider: 'google',
-            modelType: 'image',
-            imagePerImageCost: 0.02,
-          },
-        ];
+        return syntheticGoogleImageModels;
       }
       return actual.getModelsForProvider(provider, options);
     }),
@@ -49,6 +56,10 @@ vi.mock('@agiworkforce/types', async () => {
           apiModelId: 'gpt-image-2',
         };
       }
+      const synthetic = syntheticGoogleImageModels.find(
+        (model) => model.id === id || model.apiModelId === id,
+      );
+      if (synthetic) return synthetic;
       return actual.getModelMetadataById(id);
     }),
   };

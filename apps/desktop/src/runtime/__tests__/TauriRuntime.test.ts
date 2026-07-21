@@ -123,7 +123,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from runtime', {
-      model: 'claude-sonnet-4.6',
+      model: 'claude-sonnet-5',
     });
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'chat_create_conversation', {
@@ -140,7 +140,7 @@ describe('TauriRuntime', () => {
         content: 'Hello from runtime',
         userId: 'user-123',
         conversationId: 42,
-        modelOverride: 'claude-sonnet-4.6',
+        modelOverride: 'claude-sonnet-5',
         stream: true,
         frontendMessageId: expect.any(String),
       }),
@@ -158,7 +158,7 @@ describe('TauriRuntime', () => {
     const runtime = new TauriRuntime();
 
     await runtime.sendMessage('frontend-conversation-id', 'Hello from a project chat', {
-      model: 'claude-sonnet-4.6',
+      model: 'claude-sonnet-5',
     });
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, 'chat_create_conversation', {
@@ -231,7 +231,7 @@ describe('TauriRuntime', () => {
 
     await runtime.sendMessage('byok-fork', 'Use my OpenAI key', {
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: 'gpt-5.6-sol',
     });
 
     expect(invokeMock).toHaveBeenCalledWith('chat_send_message', {

@@ -85,14 +85,14 @@ function notesTurn(notes: string): ReadableStream {
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-1',
-    requestedModel: 'gpt-5.4-mini',
+    requestedModel: 'gpt-5.6-terra',
     provider: 'openai',
     estimatedCostCents: 2,
     quotaFeature: 'chat',
     isFlagshipRequest: false,
-    chatRequest: { model: 'gpt-5.4-mini' },
+    chatRequest: { model: 'gpt-5.6-terra' },
     llmRequest: {
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.6-terra',
       messages: [{ role: 'user', content: 'research https://example.com/ in depth' }],
       max_tokens: 2048,
       tools: [{ type: 'web_search_preview' }, urlFetchToolDef()],

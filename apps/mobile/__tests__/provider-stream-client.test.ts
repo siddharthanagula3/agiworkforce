@@ -48,7 +48,7 @@ describe('provider stream client', () => {
       body: makeBody('data: [DONE]\n\n'),
     } as Response);
 
-    await collectStream({ providerId: 'moonshot', request: { model: 'kimi-k2.6', messages: [] } });
+    await collectStream({ providerId: 'moonshot', request: { model: 'kimi-k3', messages: [] } });
 
     expect(secureFetchMock).toHaveBeenCalledWith(
       'https://api.agi.test/api/v1/providers/moonshot/stream',
@@ -59,7 +59,7 @@ describe('provider stream client', () => {
           'content-type': 'application/json',
           'x-requested-with': 'agiworkforce-mobile',
         }),
-        body: JSON.stringify({ model: 'kimi-k2.6', messages: [] }),
+        body: JSON.stringify({ model: 'kimi-k3', messages: [] }),
         signal: expect.any(AbortSignal),
       }),
       // Streaming requests opt into expo/fetch so `res.body` is a real
