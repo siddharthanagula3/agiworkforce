@@ -219,6 +219,11 @@ export function WebSettingsModal({
   const [githubInstallations, setGithubInstallations] = useState<
     { installation_id: number; created_at?: string }[]
   >([]);
+  // Connector ids the server reports as actually connectable on web (GET
+  // /api/connectors `available`): github when the GitHub App is configured, plus
+  // operator-mapped remote MCP connectors. Drives canConnect instead of a
+  // build-time hardcoded false.
+  const [availableIds, setAvailableIds] = useState<string[]>([]);
   const [customConnectors, setCustomConnectors] = useState<
     { id: string; name: string; url: string; createdAt: string }[]
   >([]);
@@ -245,8 +250,12 @@ export function WebSettingsModal({
         if (!res.ok || cancelled) return;
         const json = (await res.json()) as {
           connectors: Array<{ connectorId: string; connectedAt?: string }>;
+          available?: string[];
         };
-        if (!cancelled) setConnectedConnectors(json.connectors ?? []);
+        if (!cancelled) {
+          setConnectedConnectors(json.connectors ?? []);
+          setAvailableIds(json.available ?? []);
+        }
       })
       .catch(() => {
         // degrade gracefully
@@ -286,8 +295,14 @@ export function WebSettingsModal({
   );
 
   const mergedSettingsConnectors = useMemo(
-    () => [...SETTINGS_CONNECTORS, ...customSettingsConnectors],
-    [customSettingsConnectors],
+    () =>
+      [
+        ...SETTINGS_CONNECTORS.map((c) =>
+          availableIds.includes(c.id) ? { ...c, canConnect: true, statusLabel: undefined } : c,
+        ),
+        ...customSettingsConnectors,
+      ] as typeof SETTINGS_CONNECTORS,
+    [availableIds, customSettingsConnectors],
   );
 
   const mergedConnectedConnectors = useMemo(() => {
@@ -322,7 +337,16 @@ export function WebSettingsModal({
       body: JSON.stringify({ connectorId: id, authType: connector.authType }),
     });
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      // GitHub connects through the App install flow: the server answers POST
+      // with 409 + installStartPath. Follow it instead of surfacing an error.
+      const body = (await res
+        .clone()
+        .json()
+        .catch(() => null)) as { error?: string; installStartPath?: string } | null;
+      if (res.status === 409 && body?.installStartPath && typeof window !== 'undefined') {
+        window.location.href = body.installStartPath;
+        return;
+      }
       throw new Error(body?.error ?? `Could not connect ${connector.name}.`);
     }
     const json = (await res.json()) as {
