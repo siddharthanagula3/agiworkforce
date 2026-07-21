@@ -59,6 +59,51 @@ re-audit in progress.
   real default maxSteps). Regression: 2 source-level wiring assertions in
   computer-use-usage-meter.test.ts (established static-invariant pattern for
   cross-context message wiring).
+- FIXED EXT-ONBOARDING-NONPRODUCT-DOMAIN (MED, 2026-07-21, uncommitted): the
+  onboarding step-0 "Learn more" (prompt-injection safety) opened
+  https://agi.build/safety — a non-product domain shown to every new user at the
+  exact moment the UI warns about malicious sites; every other product link uses
+  agiworkforce.com. Repointed to the real https://agiworkforce.com/security page
+  (verified route apps/web/app/security). The other agi.build link
+  (agi.build/download at side_panel.ts ~6447) sits inside the dead
+  #sp-offline-onboarding block (see tracked residual below) and is never
+  clickable, so it is not user-facing.
+- VERIFIED-CLEAN (2026-07-21 deep re-audit, self-audited surfaces): beyond the
+  side panel, I independently checked the options-page + background-router,
+  content/autofill, and computer-use/native/cloud-bridge egress surfaces for
+  new HIGH/CRITICAL and found none. Options: every persisted setting
+  (agi_api_key, agi_autofill_profile, agi_dev_bearer_token, agi_site_allowlist,
+  agi_task_notifications, agi_user_tier) has a live consumer; the only
+  zero-consumer keys (agi_session, agi_user_id) appear solely in the logout
+  storage.remove list (legacy-key clears, not dead settings). Manifest surfaces
+  all wired: capture_page has a commands.onCommand case, contextMenus are
+  created + have onClicked, alarms have onAlarm (scheduled-task firing).
+  Autofill is production-grade (filler.ts setNativeValue bypasses React value
+  tracking + dispatches focus/beforeinput/input/change/blur; per-site
+  ashby/greenhouse/lever/linkedin selector maps are real). Egress redaction is
+  applied at the SOURCE (cdpDriver.getPageContent/getFieldValue route through
+  sanitizePageText; password/hidden inputs return a placeholder), so
+  cloudAgentClient.callCloud forwards already-redacted text to an
+  allowlist-validated gateway (validateGatewayUrl) with Bearer+CSRF+Idempotency;
+  screenshots remain the documented, allowlist+ask-gated accepted residual.
+- TRACKED (extension MED/LOW residuals from the 2026-07-21 side-panel audit, none
+  gating the no-critical/high proceed-gate; complete-or-remove dispositions):
+  (1) EXT-SHORTCUT-MODAL-DEAD-INPUTS (MED) — the "+ Create shortcut" modal's
+  "Start from" URL field and "Schedule" toggle are persisted (startUrl/scheduled)
+  but have no replay consumer; scheduled is only a cosmetic label. Fix = on
+  save-with-scheduled create a real CREATE_SCHEDULED_TASK, use startUrl in replay,
+  or remove both fields (needs a product call on shortcut-scheduling).
+  (2) EXT-ONBOARDING-SLASH-FINDER-UNBUILT (MED) — onboarding step 3 teaches "Type
+  / in the chat to find and create shortcuts" with a mock hero, but the composer
+  has no slash menu (expandSlashCommand only matches 6 hardcoded built-ins). Fix =
+  build a "/" autocomplete over saved shortcuts, or rewrite the copy to point at
+  Workflows. (3) EXT-DEAD-OFFLINE-ONBOARDING (LOW) — #sp-offline-onboarding block
+  (side_panel.ts ~6422) + its CSS + hideLegacyOfflineOnboarding() are dead (never
+  gets .visible); safe deletion is blocked only by the function's message-display
+  reset side-effect, so it needs a dedicated cleanup pass. (4) EXT-CU-METER /
+  voice-mic emoji, tab-group-label desync across the 3 duplicate group controls,
+  and drawer-History restore dropping agentEvents/cloudRun fidelity vs loadMessages
+  (all LOW polish).
 
 2026-07-20 desktop-trust-boundary-01 slice (uncommitted working tree at time of
 writing): desktop AGI trust_mode threaded end-to-end (IPC wire enum → Goal →
