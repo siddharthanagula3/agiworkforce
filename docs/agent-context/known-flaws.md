@@ -254,15 +254,17 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   STATUS: 5 of 7 CLI HIGH resolved (/background, /permissions, /statusline +
   root-cause `9ab279e7f`, /title `e6be74c91`, /skills-toggle `e68822b1a`); 2 overlay
   HIGH remain — CLI NOT yet at the proceed-gate. Both remaining are the HARDEST:
-  • /memories — MemorySettings {auto_memory, decay_threshold_days, max_facts} sprawl
-  across 3 subsystem points, memory-behavior-sensitive: auto_memory gates
-  finalize_memory's extract_session_summary (agent/mod.rs:972-988, has CliConfig);
-  decay_threshold_days maps to SUMMARY_MAX_AGE_SECS in prune_old_summaries
-  (memory_pipeline.rs:348/371); max_facts is a FACTS-storage cap whose application
-  point is NOT obvious (not in prune_old_summaries, which is summary-age only) —
-  find it before wiring or max_facts becomes a partial dead toggle. Persist like
-  skills (a JSON file) since these run without app state. Pattern proven; the work
-  is the 3-point wiring + finding max_facts.
+  • /memories — FULLY TRACED 2026-07-21, all 3 apply points found (memory-behavior-
+  sensitive core code — a focused build, not a depth-rush): auto_memory → gate
+  finalize_memory's extract_session_summary (agent/mod.rs:972-988, has &CliConfig);
+  decay_threshold_days → prune_old_summaries `age > SUMMARY_MAX_AGE_SECS`
+  (memory_pipeline.rs:348/371) use days\*86400; max_facts → consolidate
+  (memory_pipeline.rs:174) writes merged `consolidated` fact list to raw_memories.md
+  at :244 — cap to max_facts fact lines there (the formerly-"unclear" point, FOUND).
+  Persist a small serde settings struct in CORE (memory_pipeline, NOT the tui widget
+  — avoid a core→UI dep) with load()/Default; widget MemorySettings maps to it in
+  apply_overlay_result; overlay seeds from load(); OverlayResult::Memory needs
+  PartialEq. ~7 pieces, all 3 wired (no dead sub-toggle). Test vs a temp memories dir.
   • /diff-review — apply/stage the approved hunks via `git apply`/`git add`; HIGHEST
   risk (real repo mutation). Do LAST, gate carefully, test against a temp git repo.
   Both on the proven take_result pattern (add variant + override + apply arm).
