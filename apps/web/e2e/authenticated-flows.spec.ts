@@ -101,5 +101,15 @@ test.describe('authenticated primary workflows', () => {
     const composer = page.getByRole('textbox').first();
     await expect(composer).toBeVisible({ timeout: 20000 });
     await expect(composer).toBeEditable();
+
+    // 3) Other primary signed-in surfaces render for a real user (not a gate or
+    //    an error boundary): Customize (settings) and Library.
+    await page.goto('/customize');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
+
+    await page.goto('/library');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
   });
 });
