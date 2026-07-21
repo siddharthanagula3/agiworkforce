@@ -37,7 +37,6 @@ import {
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
 import { useConversations } from '@/lib/hooks/useConversations';
-import { useChatStore } from '@shared/stores/web-chat-store';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
@@ -100,7 +99,6 @@ export function WebAppShell({ children }: WebAppShellProps) {
 
   // ---- Conversations (recents). useConversations auto-fetches, auth-gated. ----
   const { conversations, deleteConversation, updateConversation } = useConversations();
-  const updateConversationInStore = useChatStore((s) => s.updateConversation);
 
   // ---- Projects ----
   const { projects: storeProjects } = useManagedCloudProjects();
@@ -169,16 +167,16 @@ export function WebAppShell({ children }: WebAppShellProps) {
   const handleStarSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      if (convo) updateConversationInStore(id, { isStarred: !convo.isStarred });
+      if (convo) void updateConversation(id, { starred: !convo.isStarred });
     },
-    [conversations, updateConversationInStore],
+    [conversations, updateConversation],
   );
   const handleArchiveSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      if (convo) updateConversationInStore(id, { isArchived: !convo.isArchived });
+      if (convo) void updateConversation(id, { archived: !convo.isArchived });
     },
-    [conversations, updateConversationInStore],
+    [conversations, updateConversation],
   );
   const handleMoveToProjectSession = useCallback(
     (sessionId: string, projectId: string) => void updateConversation(sessionId, { projectId }),
