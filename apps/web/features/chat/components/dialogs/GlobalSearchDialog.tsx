@@ -26,6 +26,7 @@ import {
   Search,
   X,
   MessageSquare,
+  FolderOpen,
   Calendar as CalendarIcon,
   Filter,
   Loader2,
@@ -193,6 +194,13 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   const handleResultClick = (result: SearchResult) => {
     // Close dialog first
     onOpenChange(false);
+
+    // Project matches carry the project id in `sessionId` and navigate to the
+    // project page, not a chat session.
+    if (result.type === 'project') {
+      router.push(`/projects/${result.sessionId}`);
+      return;
+    }
 
     // Navigate to the chat session with optional message scroll target
     // The messageId is passed as a query parameter that the chat page can use
@@ -464,7 +472,9 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
           {stats && (
             <div className="border-b bg-muted/20 px-6 py-2 text-xs text-muted-foreground">
               Found {stats.totalResults} results ({stats.sessionMatches} conversations,{' '}
-              {stats.messageMatches} messages) in {stats.searchTime}ms
+              {stats.messageMatches} messages
+              {stats.projectMatches > 0 ? `, ${stats.projectMatches} projects` : ''}) in{' '}
+              {stats.searchTime}ms
             </div>
           )}
 
@@ -587,7 +597,9 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                     {/* Header */}
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div className="flex min-w-0 flex-1 items-center gap-2">
-                        {result.type === 'session' ? (
+                        {result.type === 'project' ? (
+                          <FolderOpen className="h-4 w-4 shrink-0 text-primary" />
+                        ) : result.type === 'session' ? (
                           <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
                         ) : (
                           getRoleIcon(result.role || 'assistant')
@@ -616,7 +628,11 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                     {/* Badges */}
                     <div className="mt-2 flex items-center gap-2">
                       <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                        {result.type === 'session' ? 'Title' : result.role}
+                        {result.type === 'project'
+                          ? 'Project'
+                          : result.type === 'session'
+                            ? 'Title'
+                            : result.role}
                       </Badge>
                     </div>
                   </button>

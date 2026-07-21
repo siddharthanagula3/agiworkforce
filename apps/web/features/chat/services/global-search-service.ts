@@ -9,7 +9,10 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 export interface SearchResult {
-  type: 'session' | 'message';
+  // 'project' results reuse `sessionId` as the primary entity id used for
+  // navigation (the click handler routes them to /projects/${sessionId}, not
+  // /chat/...), and `sessionTitle` as the project name.
+  type: 'session' | 'message' | 'project';
   sessionId: string;
   sessionTitle: string;
   messageId?: string;
@@ -36,6 +39,7 @@ export interface SearchStats {
   totalResults: number;
   sessionMatches: number;
   messageMatches: number;
+  projectMatches: number;
   searchTime: number; // in milliseconds
 }
 
@@ -75,6 +79,22 @@ interface APISearchStats {
   totalResults: number;
   sessionMatches: number;
   messageMatches: number;
+  projectMatches?: number;
+}
+
+// The /api/search route returns project matches in a separate `projects` array
+// (see the route's own comment): sessions/messages navigate to /chat, projects
+// to /projects, so they are queried together but shaped distinctly.
+interface APIProjectResult {
+  type: 'project';
+  projectId: string;
+  projectName: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  matchedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
 }
 
 async function buildMutateHeaders(): Promise<HeadersInit> {
@@ -127,10 +147,11 @@ class GlobalSearchService {
 
     const data = (await res.json()) as {
       results: APISearchResult[];
+      projects?: APIProjectResult[];
       stats: APISearchStats;
     };
 
-    const results: SearchResult[] = (data.results || []).map((r) => ({
+    const conversationResults: SearchResult[] = (data.results || []).map((r) => ({
       type: r.type,
       sessionId: r.sessionId,
       sessionTitle: r.sessionTitle,
@@ -144,10 +165,29 @@ class GlobalSearchService {
       contextAfter: r.contextAfter,
     }));
 
+    // Surface project matches alongside conversations. The route already
+    // queries them (owner-scoped, soft-delete-aware) but keeps them separate
+    // because they navigate to /projects/${id} rather than /chat/${id}.
+    const projectResults: SearchResult[] = (data.projects || []).map((p) => ({
+      type: 'project' as const,
+      sessionId: p.projectId,
+      sessionTitle: p.projectName,
+      content: p.content,
+      createdAt: new Date(p.createdAt),
+      updatedAt: new Date(p.updatedAt),
+      matchedText: p.matchedText,
+      contextBefore: p.contextBefore,
+      contextAfter: p.contextAfter,
+    }));
+
+    const results: SearchResult[] = [...conversationResults, ...projectResults];
+
+    const projectMatches = data.stats?.projectMatches ?? projectResults.length;
     const stats: SearchStats = {
-      totalResults: data.stats?.totalResults ?? results.length,
+      totalResults: (data.stats?.totalResults ?? conversationResults.length) + projectMatches,
       sessionMatches: data.stats?.sessionMatches ?? 0,
       messageMatches: data.stats?.messageMatches ?? 0,
+      projectMatches,
       searchTime: Date.now() - startTime,
     };
 
