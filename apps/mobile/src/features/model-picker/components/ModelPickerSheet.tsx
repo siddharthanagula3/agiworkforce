@@ -588,9 +588,7 @@ export function ModelPickerSheet({
               gap: 10,
             }}
           >
-            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
-              Reasoning effort
-            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>Effort</Text>
             {selectedRequiresReasoning ? (
               <Text style={{ color: colors.textMuted, fontSize: 11 }}>Always on</Text>
             ) : null}
@@ -626,6 +624,7 @@ export function ModelPickerSheet({
                     }}
                   >
                     <Text
+                      numberOfLines={1}
                       style={{
                         color: selected ? colors.teal : colors.textSecondary,
                         fontSize: 13,
