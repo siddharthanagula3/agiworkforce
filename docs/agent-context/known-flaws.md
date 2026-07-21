@@ -89,7 +89,9 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   `packages/tools/skills` path-free tool pattern to the desktop harness; until
   then the exposure is bounded by user-authored/installed skills only. Surfaced
   by a peer audit agent during the wave-2 dedup sweep.
-- OPEN WEB-PREEXISTING-TEST-FAILURES-01 (2026-07-21, found running the full
+- RESOLVED WEB-PREEXISTING-TEST-FAILURES-01 (2026-07-21, fixed 15cad0219 — all
+  3 were test drift, not product bugs; apps/web vitest suite now green). Found
+  running the full
   apps/web vitest suite during production-readiness verification: 4129 pass, 4
   fail). All 4 predate the 2026-07-21 web UI-fix pass; one was that pass's own
   label rename (fixed, e0b3fbc22). The other 3 are pre-existing debt, NOT
