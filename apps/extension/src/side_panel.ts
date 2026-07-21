@@ -6923,6 +6923,18 @@ function buildUI(): void {
       cuPanel.appendStep(step);
       // Auto-switch to Computer Use tab when the agent starts
       switchTab('computer-use');
+    } else if (m['type'] === 'AGI_CU_USAGE') {
+      // Live step/token counts from the background agent loop. Guard the shape so
+      // a malformed message can never render NaN into the usage meter.
+      const usage = m['usage'] as Parameters<ComputerUsePanelAPI['updateUsageMeter']>[0];
+      if (
+        usage &&
+        typeof usage.stepsUsed === 'number' &&
+        typeof usage.maxSteps === 'number' &&
+        typeof usage.totalTokens === 'number'
+      ) {
+        cuPanel.updateUsageMeter(usage);
+      }
     } else if (m['type'] === 'AGI_CU_ESCALATE') {
       const reason = typeof m['reason'] === 'string' ? m['reason'] : 'Fast-path autofill stalled.';
       cuPanel.showHandoffBanner(reason);
