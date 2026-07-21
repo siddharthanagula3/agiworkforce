@@ -188,24 +188,79 @@ statement outside a module` and `initialize()` (which registers
     non-blocking (no product persistence bug). Lesson from
     EXT-CONTENT-SCRIPT-BROKEN-BY-CODE-SPLIT applied: pushed to runtime root-cause
     before classifying, rather than assuming harness.
-- VERIFIED-CLEAN (2026-07-21 deep re-audit, self-audited surfaces): beyond the
-  side panel, I independently checked the options-page + background-router,
-  content/autofill, and computer-use/native/cloud-bridge egress surfaces for
-  new HIGH/CRITICAL and found none. Options: every persisted setting
-  (agi_api_key, agi_autofill_profile, agi_dev_bearer_token, agi_site_allowlist,
-  agi_task_notifications, agi_user_tier) has a live consumer; the only
-  zero-consumer keys (agi_session, agi_user_id) appear solely in the logout
-  storage.remove list (legacy-key clears, not dead settings). Manifest surfaces
-  all wired: capture_page has a commands.onCommand case, contextMenus are
-  created + have onClicked, alarms have onAlarm (scheduled-task firing).
-  Autofill is production-grade (filler.ts setNativeValue bypasses React value
-  tracking + dispatches focus/beforeinput/input/change/blur; per-site
-  ashby/greenhouse/lever/linkedin selector maps are real). Egress redaction is
-  applied at the SOURCE (cdpDriver.getPageContent/getFieldValue route through
-  sanitizePageText; password/hidden inputs return a placeholder), so
-  cloudAgentClient.callCloud forwards already-redacted text to an
-  allowlist-validated gateway (validateGatewayUrl) with Bearer+CSRF+Idempotency;
-  screenshots remain the documented, allowlist+ask-gated accepted residual.
+- CORRECTION — full-read audit found HIGH the self-audit MISSED (2026-07-21): my
+  earlier claim that the options-page/background-router and content/autofill
+  surfaces had "no new HIGH" was WRONG — it relied on targeted greps. Two full-read
+  audit agents (options-bg, content) later delivered reports finding 5 HIGH + many
+  MED I missed. LESSON: targeted greps catch dead settings but miss BEHAVIORAL bugs
+  that only a full read of a handler + its actual consumers reveals (a logout that
+  clears the wrong keys; a picker that resolves the wrong tab). FIXED 4 of 5 HIGH:
+  - FIXED EXT-OPTIONS-LOGOUT-NOOP (HIGH, security, 601a26562): options "Log out"
+    removed legacy keys nothing writes but never called clearAuthToken()/
+    signOutClerk() — the Clerk session survived, panel stayed signed in on a shared
+    device. Now calls the real clearAuthToken(). (Self-audit wrongly called
+    agi_session/agi_user_id "legacy clears, not dead settings" — missing that the
+    BUTTON never logs out.)
+  - FIXED EXT-OPTIONS-ALLOWLIST-SELF-ORIGIN (HIGH, 601a26562): "add current site"
+    resolved to the options page's own chrome-extension:// origin (options opens as
+    its own tab), so Add polluted the allowlist and never captured the real site.
+    Now queries active tabs across windows for the first http(s) site.
+  - FIXED EXT-POLICY-PRIVILEGED-MSG-WEB-REACHABLE (HIGH-ish security; agent MED;
+    601a26562): GET_ALL_TABS/CREATE/CLOSE/SWITCH_TAB, GET/SET/CLEAR_COOKIES,
+    CHAT_MESSAGE fell to DEFAULT_POLICY (allowlisted-tab) so any allowlisted web
+    page's content script could enumerate/close/switch tabs, read/write cookies, or
+    start paid chat runs invisibly. Zero senders outside the extension UI → gated
+    extension-page-only + regression test. (REPLAY_SHORTCUT left allowlisted-tab —
+    "web-allowlisted replay" is a deliberate design per policy.test.ts; tightening
+    it is a security-review call, TRACKED.)
+  - FIXED EXT-ASHBY-ESCALATION-DROPPED (HIGH, 3c3851ba3): Ashby resume/typeahead
+    fields are marked skipped with a reason the engine's file_upload trigger doesn't
+    match, and makeEscalationDecision was called 4-arg (empty alwaysEscalate) → zero
+    triggers → "no escalation needed", resume never attached. Now passes
+    ASHBY_ALWAYS_ESCALATE_KEYS for ashby + regression test.
+    OPEN — 2 content HIGH not yet fixed:
+  - OPEN EXT-OPENSIDEPANEL-GESTURE-LOST (HIGH): background.ts ~1339 "Open in side
+    panel" calls chrome.sidePanel.open() AFTER `await tabs.query`, consuming the
+    user gesture → the in-page footer button closes the overlay and nothing opens;
+    failure swallowed both layers. Fix = use sender.tab?.id + call sidePanel.open()
+    synchronously before any await (Chrome's documented onMessage pattern).
+  - OPEN EXT-RECORDING-VALUE-CAPTURE-DEAD (HIGH): content.ts captureValues flag is
+    flipped only by SET_RECORDING_VALUE_CAPTURE, which has ZERO senders → recorded
+    workflows replay clicks/scrolls but type '' for every input; form record/replay
+    is dead. Fix = add the value-capture toggle to the side-panel Record UI
+    (extension-page sender per policy) or record redacted values by default.
+    TRACKED MED/LOW (from both full-read agents; complete-or-remove): task-notif
+    toggle only gates the pre-run notice (Completed/Failed fire regardless);
+    scheduled prompt-task Managed-Cloud output is dropped (burns a paid turn, no
+    consumer); OPEN_IN_DESKTOP + capture_page report/inflate success with no desktop;
+    in-page Console panel permanently empty (dead Refresh/Clear); scroll-hidden FAB
+    stays clickable (opacity not visibility); in-page provider pill reads
+    never-written agi_default_provider/model (fake label); page-metadata.ts dead
+    module (+ SYNC_PAGE_CONTEXT allowlist entry that errors); awaitAshbyFormReady
+    never called (Ashby flaky on slow render); pushState hook runs in the isolated
+    world (SPA chips stale); jobAutofill.runtime double-click (double-submit risk);
+    cookie handlers dead; notif-click ignores source tab; offline message-queue dead
+    code; options shortcut row mislabels \_execute_action; + LOWs (disclosure banner
+    wiped by response render, LinkedIn nth-of-type selector wrong, agi_recorded_actions
+    write no reader, dead fillFields/collectResolvable\* exports).
+    AUDIT COVERAGE CAVEAT: audit-content hit its model usage limit mid-run and
+    audit-egress never delivered — the computer-use/native/cloud-bridge EGRESS
+    surface remains SELF-audited only. Genuinely-verified-correct (agents did not
+    contradict): manifest command/menu/alarm listeners all live; autofill filler.ts
+    production-grade (setNativeValue + full event sequence); egress redaction at the
+    SOURCE (cdpDriver.getPageContent/getFieldValue → sanitizePageText; password/hidden
+    inputs → placeholder), cloudAgentClient.callCloud forwards already-redacted text
+    to an allowlist-validated gateway with Bearer+CSRF+Idempotency; screenshots the
+    documented allowlist+ask-gated residual.
+- MOBILE-IOS-BUILD-BLOCKED (2026-07-21): attempted the mobile real-UI path (Maestro
+  flow scripts/qa/maestro-dev-smoke.yaml needs the app on an iOS sim). `expo
+run:ios` on the iPhone 17 Pro sim FAILED on a React Native codegen/build-order
+  issue — "Build input file cannot be found: .../ReactCodegen/safeareacontext/
+  safeareacontext-generated.mm" (+ rnworklets) → xcodebuild exit 65; the retry
+  stalled. Environmental (needs `expo prebuild --clean` / DerivedData reset), not a
+  product bug. Maestro 2.6.1 + Pods + Xcode 26.3 + generated ios/ workspace all
+  present, so once the build succeeds the Maestro real-UI smoke is runnable.
+  Deferred to a focused mobile session.
 - TRACKED (extension MED/LOW residuals from the 2026-07-21 side-panel audit, none
   gating the no-critical/high proceed-gate; complete-or-remove dispositions):
   (1) EXT-SHORTCUT-MODAL-DEAD-INPUTS (MED) — the "+ Create shortcut" modal's
