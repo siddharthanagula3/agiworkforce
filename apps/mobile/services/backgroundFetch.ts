@@ -3,6 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { api } from './api';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { notificationAllowed } from './notificationGate';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
@@ -65,6 +66,14 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
       if (result.pendingApprovals.length > 0) {
         const notificationKey = approvalNotificationKey(result.pendingApprovals);
         if (notificationKey && notificationKey === lastApprovalNotificationKey) {
+          return BackgroundFetch.BackgroundFetchResult.NoData;
+        }
+
+        // Honor the user's Notification Preferences (Approvals category + quiet
+        // hours). Previously these settings were inert — no live notification path
+        // consulted them. We do NOT record lastApprovalNotificationKey here, so
+        // re-enabling the category (or leaving quiet hours) re-evaluates this batch.
+        if (!notificationAllowed('agent_approval_needed')) {
           return BackgroundFetch.BackgroundFetchResult.NoData;
         }
 
