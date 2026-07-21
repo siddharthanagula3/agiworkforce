@@ -78,13 +78,6 @@ export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
     iconName: 'Image',
   },
   {
-    id: 'doc',
-    label: '/doc',
-    description: 'Create a document',
-    example: '/doc meeting notes template',
-    iconName: 'FileText',
-  },
-  {
     id: 'code',
     label: '/code',
     description: 'Write or explain code',
@@ -114,20 +107,6 @@ export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
     example: '/database SELECT * FROM users',
     iconName: 'Database',
     requiredCapability: 'canUseLocalDatabase',
-  },
-  {
-    id: 'undo',
-    label: '/undo',
-    description: 'Undo recent AI actions',
-    example: '/undo or /undo list',
-    iconName: 'Undo2',
-  },
-  {
-    id: 'compact',
-    label: '/compact',
-    description: 'Summarize and compress conversation context',
-    example: '/compact',
-    iconName: 'Minimize2',
   },
 ];
 
