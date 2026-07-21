@@ -1110,6 +1110,20 @@ function handleMessage(
     }
   }
 
+  // chrome.sidePanel.open() requires a live user gesture and must be called
+  // SYNCHRONOUSLY inside this onMessage listener — deferring it through
+  // handleMessageAsync's .then() continuation drops the activation, so the
+  // in-page panel's "Open side panel" button did nothing. Handle it here, after
+  // the security gates above, for a content-script sender that carries its tab.
+  // Extension-page senders (no sender.tab) fall through to the async handler.
+  if (msg.type === 'OPEN_SIDE_PANEL' && sender.tab?.id != null && chrome.sidePanel?.open) {
+    chrome.sidePanel.open({ tabId: sender.tab.id }).catch((err) => {
+      logger.warn('OPEN_SIDE_PANEL synchronous open failed', err);
+    });
+    sendResponse({ success: true } as ExtensionResponse);
+    return false;
+  }
+
   handleMessageAsync(msg, sender)
     .then((response) => {
       sendResponse(response);
