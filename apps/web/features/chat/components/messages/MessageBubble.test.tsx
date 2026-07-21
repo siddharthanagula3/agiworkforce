@@ -166,9 +166,14 @@ describe('MessageBubble', () => {
 
       render(<MessageBubble message={msg} />);
 
-      const activityTrigger = screen.getByRole('button', { name: /show agent activity/i });
+      // The canonical agent-activity spine renders as a "…agent activity" toggle
+      // (Show when collapsed, Hide when the run is live/open) inside a section.
+      const activityTrigger = screen.getByRole('button', { name: /agent activity/i });
       expect(activityTrigger).toBeInTheDocument();
-      expect(activityTrigger.textContent).toContain('Searching official sources');
+      // A running activity is open, so its tool entry is visible in the spine
+      // (shown both in the toggle summary and the expanded entry body).
+      expect(screen.getAllByText('Searching official sources').length).toBeGreaterThan(0);
+      // The duplicate legacy tool timeline must NOT also render.
       expect(screen.queryByRole('button', { name: /toggle tool timeline/i })).toBeNull();
     });
 
