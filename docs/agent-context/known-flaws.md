@@ -46,6 +46,19 @@ re-audit in progress.
   shared TASK_PROMPT_MAX_CHARS), the empty branch returns an honest error instead
   of a success notification. Regression: 5 tests in shortcut-replay-plan.test.ts
   against the live decision helper.
+- FIXED EXT-CU-USAGE-METER-FAKE-DATA (MED, 2026-07-21, uncommitted): the
+  Computer-Use panel usage meter rendered a hardcoded "Steps: 0/20" / 0% bar and
+  never moved during a run (features/side-panel/computerUsePanel.ts:591). The
+  agent loop already emits usage (agentLoop.ts:444 onUsageUpdate with stepsUsed,
+  maxSteps, totalTokens) and the panel already exposes updateUsageMeter, but the
+  background runAgentLoop call omitted the onUsageUpdate callback, so live counts
+  were never broadcast — the widget presented a placeholder as live data.
+  Completed the wiring (not hidden): the background now broadcasts AGI_CU_USAGE
+  and the side-panel listener feeds cuPanel.updateUsageMeter (shape-guarded
+  against NaN). Initial "0/20" is an honest empty state (0 steps taken; 20 is the
+  real default maxSteps). Regression: 2 source-level wiring assertions in
+  computer-use-usage-meter.test.ts (established static-invariant pattern for
+  cross-context message wiring).
 
 2026-07-20 desktop-trust-boundary-01 slice (uncommitted working tree at time of
 writing): desktop AGI trust_mode threaded end-to-end (IPC wire enum → Goal →
