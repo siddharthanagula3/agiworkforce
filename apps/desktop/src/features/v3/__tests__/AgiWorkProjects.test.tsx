@@ -49,7 +49,7 @@ describe('AgiWorkProjects settings wiring', () => {
       isLoading: false,
       loadProjects: vi.fn(async () => undefined),
       createProject: vi.fn(async () => undefined),
-    } as Partial<ReturnType<typeof useProjectStore.getState>> as never);
+    } as unknown as Partial<ReturnType<typeof useProjectStore.getState>>);
   });
 
   afterEach(() => {
