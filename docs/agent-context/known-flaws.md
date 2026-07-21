@@ -596,7 +596,18 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   deferred. Default (25) unchanged, so config parity stays green.
   After the HIGH fix, VSCode has NO unresolved critical/high → meets the proceed-gate;
   the 3 remaining are MED/LOW dead advanced-settings (complete-or-remove, tracked).
-- OPEN EXT-SIDEPANEL-NO-RENDER-TESTS (2026-07-21, real-UI coverage gap): the Chrome
+- RESOLVED EXT-SIDEPANEL-NO-RENDER-TESTS (2026-07-21, 763b2dd1e + 1c80ad676): DONE.
+  Extracted the side-panel DOM helpers (el/formatTime → features/side-panel/dom.ts) and
+  the whole message/tool-call/agent-activity render cluster (buildBubble, buildToolCallEl,
+  parseToolCalls, buildAgentActivity\*, + the internal helpers + ToolCallBlock, ~377 lines
+  → features/side-panel/bubbles.ts) VERBATIM out of the chrome-bootstrapping entry file, so
+  the render path is now importable + unit-testable. Added real jsdom render tests
+  (side-panel-dom.test.ts: el CSP style→cssText routing + children; side-panel-bubbles.test.ts:
+  user/assistant bubbles render + [TOOL:...] fence parses into a tool element, not raw text).
+  side_panel.ts dropped ~530 lines; typecheck clean, full suite 1138 passed (zero regressions),
+  production build green. Only buildBubbleWithTools + buildToolCallEl are exported/consumed by
+  side_panel.ts. Original assessment (kept for history):
+  the Chrome
   extension's main UI, `apps/extension/src/side_panel.ts` (~8116 lines, imperative
   DOM), has ZERO render/interaction tests — the 1130 vitest tests are all logic
   (none touch the DOM). The module can't be imported in a test because it runs
