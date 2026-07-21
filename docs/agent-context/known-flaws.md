@@ -104,6 +104,28 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   honored, OR remove the selectors and let the portal own the choice. Deferred to
   the founder Stripe track (billing is founder-managed, test-mode restricted keys);
   not gating desktop #1's non-billing surfaces.
+- NOTE DESKTOP-DOM-E2E-MODE-DEPENDENCY (2026-07-21, harness — NOT a product bug):
+  the desktop Playwright DOM e2e (`test:e2e:dom`, specs in apps/desktop/e2e) has
+  NO webServer config — you must start vite yourself on :5175, and the suites
+  split by runtime mode, which CANNOT both pass under one server config:
+  • DESKTOP-LOCAL suites (v3-smoke, v3-folder-selection, v3-locks, settings, smoke)
+  need `VITE_BUILD_TARGET=web VITE_DESKTOP_UI_DEV_LOCAL=1 VITE_DEV_PORT=5175
+E2E_MOCK_LLM=1 E2E_MOCK_CLOUD_API=1 vite --port 5175 --strictPort`
+  (supportsLocalAppMode=true → folder-selection etc. render). Verified GREEN
+  2026-07-21 (v3-smoke 5/5, folder-selection 2/2, settings, smoke).
+  • CLOUD suites (chat.spec, v3-agent-activity "Desktop Cloud") need the SAME
+  server WITHOUT `VITE_DESKTOP_UI_DEV_LOCAL=1` (supportsLocalAppMode=false →
+  initial mode='cloud'); chat.spec passes there (verified GREEN in cloud mode)
+  but fails in local mode, and vice-versa for folder-selection. This is a real
+  e2e-harness gap: add a `webServer` block (or two projects with per-mode env)
+  so a single `playwright test` runs each suite in its correct mode. Attribution
+  proven: the 2026-07-21 v3-shell commit (6fa712d7d) touched only toggle/pricing/
+  account/cancel — zero overlap with chat-send or the activity spine.
+  • REMAINING TRUE OUTLIER: v3-agent-activity.spec.ts:100 ("Desktop Cloud …
+  activity spine") fails in BOTH modes (send-message click times out after
+  mockCloudChat) — it exercises the desktop-cloud path that is INTENTIONALLY
+  not-implemented (fail-closed seam). Triage separately; likely needs the cloud
+  e2e config + a working mockCloudChat, or is blocked by desktop-cloud-not-impl.
 - RESOLVED WEB-CHAT-SYNC-500 (2026-07-21): GET /api/chat/sync?since=<cursor>
   returned HTTP 500 for any signed-in user WITH chat data, degrading cross-device
   artifact/chat sync (client threw "artifact sync pull failed with status 500",
