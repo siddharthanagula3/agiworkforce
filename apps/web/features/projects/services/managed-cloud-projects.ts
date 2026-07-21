@@ -26,6 +26,7 @@ function toWebProject(project: ManagedCloudProject): Project {
     instructions: project.instructions ?? undefined,
     color: project.color ?? undefined,
     isArchived: project.isArchived,
+    starred: Boolean((project.metadata as Record<string, unknown> | null)?.['starred']),
     iconEmoji: project.iconEmoji ?? undefined,
     accentColor: project.accentColor ?? undefined,
     defaultPrivacyMode: project.defaultPrivacyMode,

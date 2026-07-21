@@ -85,6 +85,8 @@ export interface ProjectGalleryProps {
    * a backend here.
    */
   onDeleteProject?: (project: Project) => void;
+  /** Persist a star toggle (the card flips the store optimistically first). */
+  onStarProject?: (projectId: string, starred: boolean) => void;
   /** Optional title — defaults to "Projects". Pass null to hide. */
   title?: string | null;
   /** Optional description copy under the title. */
@@ -116,6 +118,7 @@ export function ProjectGallery({
   onEditProject,
   onArchiveProject,
   onDeleteProject,
+  onStarProject,
   title = 'Projects',
   description = 'Group conversations, attach files, and define shared instructions per project.',
   limit,
@@ -438,6 +441,7 @@ export function ProjectGallery({
                 onEdit={onEditProject}
                 onArchive={onArchiveProject ? handleArchive : undefined}
                 onDelete={onDeleteProject ? handleDelete : undefined}
+                onStarChange={onStarProject}
               />
             ))}
           </div>
