@@ -57,12 +57,6 @@ vi.mock('./chat-store', () => ({
   },
 }));
 
-vi.mock('./usage-warning-store', () => ({
-  useUsageWarningStore: {
-    getState: vi.fn(() => ({ resetWarnings: vi.fn() })),
-  },
-}));
-
 vi.mock('./artifact-store', () => ({
   useArtifactStore: {
     getState: vi.fn(() => ({ clearAllArtifacts: vi.fn() })),

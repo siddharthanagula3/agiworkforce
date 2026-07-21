@@ -68,20 +68,6 @@ async function cleanupAllStores(): Promise<void> {
       },
     },
     {
-      name: 'usage-warning-store',
-      run: async () => {
-        const { useUsageWarningStore } = await import('./usage-warning-store');
-        const usageState = useUsageWarningStore.getState();
-        if (typeof usageState.resetWarnings === 'function') {
-          usageState.resetWarnings();
-        } else if (typeof usageState.reset === 'function') {
-          usageState.reset();
-        } else {
-          logger.auth('Warning: Usage warning store has no reset method');
-        }
-      },
-    },
-    {
       name: 'artifact-store',
       run: async () => {
         const { useArtifactStore } = await import('./artifact-store');
