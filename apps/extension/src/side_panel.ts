@@ -1845,6 +1845,8 @@ function injectStyles(): void {
     .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse 1s infinite; }
     .sp-wf-action-counter { font-size: 11px; color: var(--agi-ext-text-muted); flex: 1; }
     .sp-wf-action-counter strong { color: var(--agi-ext-text); }
+    .sp-wf-capture-values { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--agi-ext-text-muted); cursor: pointer; }
+    .sp-wf-capture-values input { cursor: pointer; }
     .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 8px; }
     .sp-wf-save-dialog.open { display: flex; }
     .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent); }
@@ -6477,6 +6479,29 @@ function buildUI(): void {
   recordBar.appendChild(actionCounter);
   recordSection.appendChild(recordBar);
 
+  // Value-capture opt-in. The content script fully supports recording typed
+  // values (password/cc/OTP fields redacted, API-key-shaped tokens scrubbed —
+  // C-05), but the toggle to enable it was never built, so recordings were
+  // selector-only and replayed shortcuts typed nothing into forms. This wires
+  // the extension-page-only SET_RECORDING_VALUE_CAPTURE message.
+  const captureRow = el('label', { class: 'sp-wf-capture-values' });
+  const captureToggle = el('input', {
+    type: 'checkbox',
+    id: 'sp-wf-capture-values',
+  }) as HTMLInputElement;
+  captureRow.appendChild(captureToggle);
+  captureRow.appendChild(
+    el('span', {}, 'Capture typed values (passwords & sensitive fields redacted)'),
+  );
+  function syncCaptureValues(): void {
+    chrome.runtime.sendMessage(
+      { type: 'SET_RECORDING_VALUE_CAPTURE', enabled: captureToggle.checked },
+      () => void chrome.runtime.lastError,
+    );
+  }
+  captureToggle.addEventListener('change', syncCaptureValues);
+  recordSection.appendChild(captureRow);
+
   const saveDialog = el('div', { class: 'sp-wf-save-dialog', id: 'sp-wf-save-dialog' });
   saveDialog.appendChild(el('div', { class: 'sp-wf-save-dialog-title' }, 'Save this recording'));
   const saveNameInput = el('input', {
@@ -6531,6 +6556,9 @@ function buildUI(): void {
         saveNameInput.focus();
       });
     } else {
+      // Sync the value-capture choice to the active tab's content script before
+      // recording begins (the toggle may have been set on a different tab).
+      syncCaptureValues();
       chrome.runtime.sendMessage({ type: 'START_RECORDING' }, () => {
         if (chrome.runtime.lastError) {
           setRecordBtnLabel('Error');
