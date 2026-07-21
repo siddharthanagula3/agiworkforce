@@ -100,22 +100,34 @@ test:e2e` (build + smoke): Playwright launches Chromium with
     (seed agi_site_allowlist, reload, assert refreshAllowlist renders it). Not yet
     CI-wired (needs the full `chromium` channel, not headless-shell); run locally
     as the extension's real-UI check.
-- BOUNDARY EXT-AUTOFILL-REALUI-INJECTION (2026-07-21, investigated, not a defect):
-  attempted to extend the smoke to job autofill end-to-end by serving a synthetic
-  Greenhouse form at a real http://boards.greenhouse.io URL via a local server +
-  Chromium `--host-resolver-rules` (verified working: server hit, tab URL correct,
-  form rendered). The extension's MODULE content script (manifest content*scripts
-  `type:module`) does NOT inject into pages in the Playwright launchPersistentContext
-  --load-extension harness — chrome.tabs.sendMessage(AGI_RUN_AUTOFILL) returns
-  "Receiving end does not exist", and manual chrome.scripting.executeScript is
-  blocked because boards.greenhouse.io is not in host_permissions (content_scripts
-  matches http://*/\_ but executeScript needs host perms). This is a harness
-  limitation, not a product bug. The autofill FILL logic is already unit-tested
-  (**tests**/autofill-escalation-agent-integration.test.ts, jobAutofill.runtime.test.ts,
-  autofill-storage.test.ts) and the filler was audit-verified production-grade
-  (setNativeValue + focus/beforeinput/input/change/blur). Full real-browser autofill
-  needs a real ATS page (or a signed CI extension load) — a documented integration/
-  manual boundary, same class as managed-chat/computer-use which need a live gateway.
+- FIXED EXT-CONTENT-SCRIPT-BROKEN-BY-CODE-SPLIT (CRITICAL, 2026-07-21 — surfaced
+  by the real-UI smoke; initially MIS-diagnosed as a harness limitation, then
+  confirmed a real product bug). The built content script (dist/src/content.js)
+  began with `import ... from "../assets/filler-*.js"` (also policy/tokens/icons):
+  vite.config.ts fed 4 shared entries (background/content/side*panel/options) to one
+  Rollup build, which code-splits shared modules into assets/*.js chunks and leaves
+  `import` statements in each entry. The manifest declared the content script
+  `type:module`, but a page-world content script cannot import non-web-accessible
+  chunks (assets/\_ were NOT in web_accessible_resources), so the script fails at
+  runtime — the real Chromium load errored `Uncaught SyntaxError: Cannot use import
+statement outside a module` and `initialize()` (which registers
+  chrome.runtime.onMessage at content.ts:154) never ran. Net effect: EVERY
+  content-script feature — job autofill, page-context capture, the in-page panel,
+  action recording, NLWeb detection — was DEAD on every page in production. All 1119
+  jsdom unit tests missed it because they never load the built module in a browser;
+  the well-known Vite-extension pitfall (chromium-extensions group; Jonghakseo/
+  fell-lucas boilerplate issues). FIX: build the content script in its own pass as a
+  single self-contained IIFE (BUILD_TARGET=content → rollup input:{content},
+  format:'iife', inlineDynamicImports, emptyOutDir:false), keep the module-context
+  entries (background SW, side-panel/options pages) on normal chunking, and drop
+  `type:module` from the content_scripts manifest entry (now classic). `build` runs
+  main then content; `dev` builds content once then watches main. VERIFIED in real
+  Chromium via e2e/smoke.mjs: content.js has 0 import statements, the content script
+  now boots (AGI-Workforce logs + NLWeb detection fire, no import error), and job
+  autofill works END TO END — AGI_RUN_AUTOFILL fills first_name="Ada"/email into a
+  Greenhouse form served at a mapped http://boards.greenhouse.io URL. Clean build +
+  all 4 artifacts + 1119 unit tests still green. The smoke's autofill block is the
+  regression guard.
 - VERIFIED-CLEAN (2026-07-21 deep re-audit, self-audited surfaces): beyond the
   side panel, I independently checked the options-page + background-router,
   content/autofill, and computer-use/native/cloud-bridge egress surfaces for
