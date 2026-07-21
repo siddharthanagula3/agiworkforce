@@ -200,14 +200,23 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   "Enter save"/"y approve" but persist nothing): /statusline (StatusLineSetupView),
   /skills-toggle (SkillsToggleView), /memories (MemoriesSettingsView), /title
   (TerminalTitleSetupView), /diff-review (DiffReviewView — real `git diff HEAD`
-  gathered but approvals dropped, no apply/stage), and /permissions (worse — the
-  TUI opens a FAKE hardcoded "Approve action?" prompt, not the real rules editor).
-  FIX = split the Submit arm to route each overlay to a real sink. NON-TRIVIAL: the
-  persistence sinks for skills-enablement / memory-settings / terminal-title /
-  statusline-config and the diff-apply/stage path DO NOT EXIST yet and must be
-  built; /permissions should instead call the EXISTING repl::registry::
-  handle_permissions (repl/registry.rs:228) the REPL uses. A dedicated CLI Rust
-  session — too much to do well at depth. (advisor-confirmed the 483 drop.)
+  gathered but approvals dropped, no apply/stage). [/permissions was in this list —
+  RESOLVED 2026-07-21: the TUI opened a FAKE hardcoded "Approve action?" prompt that
+  managed nothing; now removed → honest SystemMessage listing the real, working REPL
+  /permissions allow|deny|session|remove|reset commands (mirrors /voice's redirect).
+  The real AGENT-driven approval overlay (tui_app.rs:555) is untouched. Inline TUI
+  rule editing remains a nice-to-have, not a fake interface.]
+  REMAINING FIX (5 overlays) = split the Submit arm to route each to a real sink.
+  NON-TRIVIAL: the persistence sinks for skills-enablement / memory-settings /
+  terminal-title / statusline-config and the diff-apply/stage path DO NOT EXIST yet
+  and must be built. A dedicated CLI Rust session — too much to do well at depth.
+  (advisor-confirmed the 483 drop.)
+  • NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
+  tests::validate_workspace_path_allows_registered_additional_root passes in
+  isolation + within its module but intermittently FAILS under full-suite parallel
+  execution (shared process-global registered-roots state mutated by a sibling
+  test). Not a product bug, not caused by any 2026-07-21 change. Fix = serialize
+  the test (e.g. a shared mutex / serial_test) or isolate the global roots state.
   • [HIGH] /background /bg fabricated "Current task moved to background context" (a
   LIE — no backgrounding exists) → FIXED 2026-07-21: both surfaces (tui_app.rs:2948,
   claude_parity.rs:123) now say honestly it isn't available yet + point to /tasks.
