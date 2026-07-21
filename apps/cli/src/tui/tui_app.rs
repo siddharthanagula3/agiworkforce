@@ -2628,15 +2628,20 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/permissions" | "/perms" | "/approvals" => {
-            use crate::tui::widgets::approval_overlay::ApprovalOverlayState;
-            let mut overlay = ApprovalOverlayState::default();
-            overlay.open(
-                String::from("Approve action?"),
-                vec![String::from("The agent wants to run a tool.")],
-            );
-            app.open_overlay(Box::new(overlay));
+            // The TUI previously opened a FAKE hardcoded "Approve action?" overlay
+            // with no real pending tool call, and its choice was dropped — a dead
+            // interface. Real allow/deny/session rule management lives in the REPL
+            // (repl::registry::handle_permissions). Point the user at the working
+            // commands instead of showing a fake prompt. (Inline TUI rule editing
+            // is tracked as CLI-TUI-OVERLAY-SUBMIT-DROP.)
             SlashResult::SystemMessage(
-                "Approval overlay opened (\u{2190}/\u{2192} navigate, Enter select, Esc dismiss)"
+                "Manage tool permissions with these commands (run in the REPL — `agi --no-tui`):\n  \
+                 /permissions                      show current allow/deny/session rules\n  \
+                 /permissions allow <prefix>       always allow a command prefix\n  \
+                 /permissions deny <prefix>        always deny a command prefix\n  \
+                 /permissions session <prefix>     allow for this session only\n  \
+                 /permissions remove <allow|deny|session> <prefix>\n  \
+                 /permissions reset                clear all rules"
                     .into(),
             )
         }
