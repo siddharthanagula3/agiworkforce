@@ -47,6 +47,9 @@ Reusable browser automation contracts belong in `packages/tools/browser-tool`, `
 
 - `pnpm --filter @agiworkforce/extension typecheck`
 - `pnpm --filter @agiworkforce/extension test`
+- `pnpm --filter @agiworkforce/extension test:e2e` — real-UI smoke: builds, loads
+  the unpacked extension into Chromium (Playwright `--load-extension`), and asserts
+  the side panel + options pages render without page exceptions or CSP violations.
 - `pnpm --filter @agiworkforce/extension build`
 - `pnpm lint:extension`
 
