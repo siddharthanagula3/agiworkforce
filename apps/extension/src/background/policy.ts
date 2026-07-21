@@ -109,6 +109,26 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   // Cloud gateway. A content script on any allowlisted site must NOT be able
   // to trigger this — only the trusted extension UI can.
   AGI_START_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+
+  // ── Privileged tab / cookie / chat operations — side panel / popup / options
+  // only. These have background handlers but NO content-script or side-panel-DOM
+  // sender in the extension; under DEFAULT_POLICY (allowlisted-tab) any content
+  // script on an allowlisted origin could invoke them — enumerate every open
+  // tab's URL/title, open/close/switch arbitrary tabs, read/write cookies, or
+  // start paid CHAT_MESSAGE runs invisibly (quota burn). None of that is a
+  // legitimate web-page capability, and none has a sender outside the extension
+  // UI, so gating them fail-closed breaks nothing. (REPLAY_SHORTCUT is
+  // deliberately left allowlisted-tab — "web-allowlisted replay" is an explicit
+  // current design decision, see the policy.test.ts carve-out; tightening it is a
+  // separate security-review call, tracked in known-flaws.)
+  CHAT_MESSAGE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  GET_ALL_TABS: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CREATE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CLOSE_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  SWITCH_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  GET_COOKIES: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  SET_COOKIE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CLEAR_COOKIES: { senderClass: 'extension-page-only', allowsCrossTab: true },
 };
 
 /**
