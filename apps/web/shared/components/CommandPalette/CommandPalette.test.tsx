@@ -246,15 +246,13 @@ describe('CommandPalette', () => {
       expect(screen.getByText('Go to Settings')).toBeInTheDocument();
     });
 
-    it('does not render chat sidebar command outside chat routes', () => {
-      renderPalette();
-      expect(screen.queryByText('Collapse Chat Sidebar')).not.toBeInTheDocument();
-    });
-
-    it('renders chat sidebar command on chat routes', () => {
+    it('never renders the chat sidebar command (removed: unreachable + wrong state)', () => {
+      // The palette can't open on /chat routes (chat owns Cmd+K for search), so a
+      // chat-route-only sidebar command was unreachable; the sidebar has visible
+      // Collapse/Expand buttons instead.
       navigationState.pathname = '/chat';
       renderPalette();
-      expect(screen.getByText('Collapse Chat Sidebar')).toBeInTheDocument();
+      expect(screen.queryByText('Collapse Chat Sidebar')).not.toBeInTheDocument();
     });
 
     it('renders toggle theme command when theme is dark', () => {
@@ -301,15 +299,6 @@ describe('CommandPalette', () => {
   // ============================================================
 
   describe('preferences commands', () => {
-    it('calls toggleSidebar when sidebar toggle is clicked', () => {
-      const onOpenChange = vi.fn();
-      navigationState.pathname = '/chat';
-      renderPalette(true, onOpenChange);
-
-      fireEvent.click(screen.getByText('Collapse Chat Sidebar'));
-      expect(mockToggleSidebar).toHaveBeenCalled();
-    });
-
     it('calls setTheme with next theme when theme toggle is clicked', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
