@@ -213,9 +213,15 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   trait (interactive.rs:57), override it per overlay to persist that overlay's state,
   and change tui_app.rs:483 to `ViewAction::Submit(*) => { ov.commit(); self.
   active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
-terminal-title save/load (small serde config home; read side = render_statusline
-claude_parity.rs:798 + an OSC-title emit) — cosmetic, lowest risk, do FIRST as the
-template; (b) memory-settings persistence (memory.rs home); (c) skills-enablement
+terminal-title — persist into the EXISTING crate::config::CliConfig (config.rs
+already has serde + load_merged():495 + save():569; NO statusline section yet).
+CORRECTION: the statusline read side is NOT render_statusline (claude_parity.rs:798,
+a REPL redirect string) — it is render_status_bar (tui_app.rs:1413, a ~120-line
+ALWAYS-VISIBLE chrome fn); gate its model/tokens/cost/branch/mode on the config +
+open the overlay with the LOADED config (not ::default() at tui_app.rs:2881) +
+commit() saves. Cosmetic/low-risk but touches core chrome — test render_status_bar
+carefully. terminal-title adds an OSC-title emit. Do these FIRST as the template;
+(b) memory-settings persistence (memory.rs home); (c) skills-enablement
 persistence + have skills::discover_skills honor it; (d) diff-review = git apply/
 stage the approved hunks (highest risk — real git mutation, gate carefully). Each
 is a mini-feature with its own test. Do NOT add the no-op trait method without at
