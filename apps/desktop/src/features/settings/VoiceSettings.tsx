@@ -29,8 +29,7 @@ import {
   type PiperVoiceInfo,
 } from '../../stores/settingsStore';
 import { VoicePersonaSelector } from './VoicePersonaSelector';
-
-const VOICE_PERSONA_STORAGE_KEY = 'agiworkforce-voice-persona';
+import { VOICE_PERSONA_STORAGE_KEY } from './voicePersonaParams';
 
 const HOTKEY_OPTIONS = [
   { value: 'option', label: 'Option / Alt (hold to dictate)' },

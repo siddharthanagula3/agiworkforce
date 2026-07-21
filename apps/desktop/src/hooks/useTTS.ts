@@ -15,6 +15,7 @@ import {
   voiceTtsStop,
   voiceTtsIsPlaying,
 } from '../api/voice';
+import { getPersistedVoicePersonaParams } from '../features/settings/voicePersonaParams';
 
 function stripMarkdown(text: string): string {
   return (
@@ -85,9 +86,12 @@ export function useTTS(): UseTTSReturn {
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.rate = 1.05;
-      utterance.pitch = 1;
-      utterance.volume = 1;
+      // Honor the user's selected voice persona (was hardcoded, so the persona
+      // picker in Settings > Voice had no effect on real responses).
+      const personaParams = getPersistedVoicePersonaParams();
+      utterance.rate = personaParams.rate;
+      utterance.pitch = personaParams.pitch;
+      utterance.volume = personaParams.volume;
 
       utterance.onstart = () => setIsSpeaking(true);
       utterance.onend = () => {
