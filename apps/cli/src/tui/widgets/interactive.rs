@@ -63,6 +63,8 @@ pub enum OverlayResult {
     TerminalTitle(crate::tui::widgets::terminal_title_setup::TerminalTitleConfig),
     /// Skill names DISABLED in `SkillsToggleView` (persisted so discovery skips them).
     SkillsDisabled(Vec<String>),
+    /// Memory settings chosen in `MemoriesSettingsView`.
+    Memory(crate::tui::widgets::memories_settings::MemorySettings),
 }
 
 /// Core trait. A view renders itself, reacts to keys, and signals

@@ -533,6 +533,17 @@ impl TuiApp {
                 let set: std::collections::HashSet<String> = names.into_iter().collect();
                 let _ = crate::skills::save_disabled_skills(&set);
             }
+            OverlayResult::Memory(settings) => {
+                // Persist; the memory pipeline (extract/prune/consolidate) reads it.
+                if let Ok(home) = crate::config::CliConfig::config_dir() {
+                    let _ = crate::memory_pipeline::save_memory_settings(
+                        &home,
+                        settings.auto_memory,
+                        settings.decay_threshold_days,
+                        settings.max_facts,
+                    );
+                }
+            }
         }
     }
 
@@ -2987,7 +2998,16 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/memories" => {
             use crate::tui::widgets::memories_settings::{MemoriesSettingsView, MemorySettings};
-            let view = MemoriesSettingsView::new(MemorySettings::default());
+            // Seed from the persisted settings; save commits back via take_result.
+            let (auto_memory, decay_threshold_days, max_facts) =
+                crate::config::CliConfig::config_dir()
+                    .map(|home| crate::memory_pipeline::load_memory_settings(&home))
+                    .unwrap_or((true, 30, 500));
+            let view = MemoriesSettingsView::new(MemorySettings {
+                auto_memory,
+                decay_threshold_days,
+                max_facts,
+            });
             app.open_overlay(Box::new(view));
             SlashResult::SystemMessage(
                 "Memory settings (\u{2191}\u{2193} navigate \u{00b7} Enter toggle \u{00b7} Esc close)".into(),

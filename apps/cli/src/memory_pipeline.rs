@@ -31,6 +31,84 @@ const SUMMARY_MAX_AGE_SECS: u64 = 30 * 24 * 3_600; // 30 days
 /// Timeout for LLM extraction calls (seconds).
 const LLM_TIMEOUT_SECS: u64 = 30;
 
+/// Path to the persisted /memories settings (auto-memory + decay + fact cap).
+fn memory_settings_path(home: &std::path::Path) -> std::path::PathBuf {
+    home.join("memories").join("settings.json")
+}
+
+/// `(auto_memory, decay_threshold_days, max_facts)` from the persisted /memories
+/// settings. Defaults MATCH the historical constants so an absent file changes
+/// nothing: auto-memory on, 30-day summary decay, 500-fact cap.
+pub fn load_memory_settings(home: &std::path::Path) -> (bool, u32, u32) {
+    let default = (true, (SUMMARY_MAX_AGE_SECS / (24 * 3_600)) as u32, 500u32);
+    let Ok(raw) = std::fs::read_to_string(memory_settings_path(home)) else {
+        return default;
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return default;
+    };
+    (
+        v.get("auto_memory")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(default.0),
+        v.get("decay_threshold_days")
+            .and_then(|x| x.as_u64())
+            .map(|x| x as u32)
+            .unwrap_or(default.1),
+        v.get("max_facts")
+            .and_then(|x| x.as_u64())
+            .map(|x| x as u32)
+            .unwrap_or(default.2),
+    )
+}
+
+/// Persist the /memories settings (written by the /memories overlay on save).
+pub fn save_memory_settings(
+    home: &std::path::Path,
+    auto_memory: bool,
+    decay_threshold_days: u32,
+    max_facts: u32,
+) -> std::io::Result<()> {
+    let path = memory_settings_path(home);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::json!({
+        "auto_memory": auto_memory,
+        "decay_threshold_days": decay_threshold_days,
+        "max_facts": max_facts,
+    });
+    std::fs::write(
+        path,
+        serde_json::to_string_pretty(&json).unwrap_or_else(|_| "{}".into()),
+    )
+}
+
+/// Cap consolidated memory to at most `max_facts` non-empty lines, keeping the
+/// most recent (the merged list is newest-last). Returns the input unchanged when
+/// already within the cap — with the default 500 cap this is a no-op in practice.
+fn cap_consolidated_facts(consolidated: &str, max_facts: usize) -> String {
+    let lines: Vec<&str> = consolidated.lines().collect();
+    let content_count = lines.iter().filter(|l| !l.trim().is_empty()).count();
+    if content_count <= max_facts {
+        return consolidated.to_string();
+    }
+    let mut kept: Vec<&str> = Vec::new();
+    let mut seen = 0usize;
+    for line in lines.iter().rev() {
+        let is_content = !line.trim().is_empty();
+        if is_content && seen >= max_facts {
+            continue;
+        }
+        if is_content {
+            seen += 1;
+        }
+        kept.push(line);
+    }
+    kept.reverse();
+    kept.join("\n")
+}
+
 pub struct MemoryPipeline;
 
 impl MemoryPipeline {
@@ -241,6 +319,10 @@ impl MemoryPipeline {
             count,
         );
 
+        // Honor the user's /memories max_facts cap (default 500 = no-op in practice).
+        let (_, _, max_facts) = load_memory_settings(home);
+        let consolidated = cap_consolidated_facts(&consolidated, max_facts as usize);
+
         fs::write(&raw_path, format!("{}{}\n", header, consolidated))?;
 
         // Prune old summaries
@@ -351,6 +433,11 @@ impl MemoryPipeline {
             return Ok(());
         }
 
+        // Honor the user's /memories decay_threshold_days (default 30, = the old
+        // SUMMARY_MAX_AGE_SECS, so behavior is unchanged until reconfigured).
+        let (_, decay_days, _) = load_memory_settings(home);
+        let max_age_secs = decay_days as u64 * 24 * 3_600;
+
         let now = std::time::SystemTime::now();
         let entries = fs::read_dir(&summaries_dir)?;
 
@@ -368,7 +455,7 @@ impl MemoryPipeline {
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
 
-            if age > SUMMARY_MAX_AGE_SECS {
+            if age > max_age_secs {
                 let _ = fs::remove_file(&path);
             }
         }
@@ -524,6 +611,25 @@ fn deduplicate_lines(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_settings_defaults_when_absent_and_roundtrips() {
+        let dir = tempfile::tempdir().unwrap();
+        // No file yet → safe defaults that match the historical constants.
+        assert_eq!(load_memory_settings(dir.path()), (true, 30, 500));
+        // Save then reload the exact values the /memories overlay would persist.
+        save_memory_settings(dir.path(), false, 7, 100).unwrap();
+        assert_eq!(load_memory_settings(dir.path()), (false, 7, 100));
+    }
+
+    #[test]
+    fn cap_consolidated_facts_keeps_most_recent_within_cap() {
+        let input = "a\nb\nc\nd\ne";
+        // Under the cap → unchanged.
+        assert_eq!(cap_consolidated_facts(input, 10), input);
+        // Over the cap → keep the last N (newest-last) facts.
+        assert_eq!(cap_consolidated_facts(input, 2), "d\ne");
+    }
 
     #[test]
     fn test_collect_recent_messages_empty() {
