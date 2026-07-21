@@ -65,6 +65,42 @@ try {
       fail(`${name}: CSP violation(s): ${cspViolations.map((e) => e.slice(0, 120)).join(' | ')}`);
     await page.close();
   }
+
+  // Primary workflow — persistence -> UI render: seed an allowlisted origin into
+  // chrome.storage, reload the options page, and assert the real refreshAllowlist
+  // path reads it back and renders it (the site allowlist is the extension's core
+  // trust control, so its persisted state must survive a reload and show up).
+  {
+    const ORIGIN = 'https://persist-smoke.example.com';
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extId}/src/options.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    await page.evaluate(
+      (origin) =>
+        new Promise((res) => chrome.storage.local.set({ agi_site_allowlist: [origin] }, res)),
+      ORIGIN,
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+    const rendered = await page.evaluate(
+      (origin) => document.body.innerHTML.includes(origin),
+      ORIGIN,
+    );
+    const stored = await page.evaluate(
+      () =>
+        new Promise((res) =>
+          chrome.storage.local.get('agi_site_allowlist', (r) => res(r.agi_site_allowlist)),
+        ),
+    );
+    console.log(`\n[persistence] stored=${JSON.stringify(stored)} renderedInDom=${rendered}`);
+    if (!Array.isArray(stored) || !stored.includes(ORIGIN))
+      fail('persistence: allowlist origin did not round-trip through chrome.storage');
+    if (!rendered) fail('persistence: persisted allowlist origin did not render after reload');
+    await page.close();
+  }
+
   console.log('\nSMOKE RESULT:', process.exitCode ? 'FAIL' : 'PASS');
 } catch (e) {
   fail('exception: ' + (e && e.stack ? e.stack : String(e)));
