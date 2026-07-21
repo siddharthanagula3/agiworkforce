@@ -52,6 +52,14 @@ type MessageRow = {
   session_title: string | null;
 };
 
+type FileRow = {
+  id: string;
+  kind: string;
+  prompt: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
 type RecentSearchRow = {
   query: string;
   result_count: number;
@@ -218,6 +226,32 @@ async function handleGet(request: NextRequest) {
     [...projectParams, limit],
   );
 
+  // Search the user's cataloged files (media_assets — the Library) by display
+  // filename or generation prompt. Owner-scoped, soft-delete-aware. Kept in a
+  // separate `files` array because file results navigate to /library, not /chat.
+  const fileParams: unknown[] = [userId, `%${q}%`];
+  const fileClauses: string[] = [
+    'user_id = $1',
+    "(coalesce(metadata->>'filename','') ilike $2 or coalesce(prompt,'') ilike $2)",
+    'deleted_at is null',
+  ];
+  if (startDate) {
+    fileClauses.push(`created_at >= $${fileParams.length + 1}`);
+    fileParams.push(startDate);
+  }
+  if (endDate) {
+    fileClauses.push(`created_at <= $${fileParams.length + 1}`);
+    fileParams.push(endDate);
+  }
+  const fileRows = await db.query<FileRow>(
+    `select id, kind, prompt, metadata, created_at
+     from media_assets
+     where ${fileClauses.join(' and ')}
+     order by created_at desc
+     limit $${fileParams.length + 1}`,
+    [...fileParams, limit],
+  );
+
   // Get user's session IDs for message search
   let sessionIdQuery = 'select id from web_conversations where user_id = $1';
   const sidParams: unknown[] = [userId];
@@ -308,6 +342,25 @@ async function handleGet(request: NextRequest) {
     };
   });
 
+  const fileResults = fileRows.map((f) => {
+    const rawName =
+      f.metadata && typeof f.metadata['filename'] === 'string' ? f.metadata['filename'] : '';
+    const fileName = rawName.trim() ? rawName : f.kind;
+    const matchText = fileName + (f.prompt ? ` ${f.prompt}` : '');
+    const match = extractMatch(matchText, q);
+    return {
+      type: 'file' as const,
+      fileId: f.id,
+      fileName,
+      content: f.prompt ?? '',
+      createdAt: f.created_at,
+      updatedAt: f.created_at,
+      matchedText: match.matched,
+      contextBefore: match.before,
+      contextAfter: match.after,
+    };
+  });
+
   const allResults = [...sessionResults, ...messageResults]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, limit);
@@ -322,6 +375,7 @@ async function handleGet(request: NextRequest) {
     sessionMatches: sessionResults.length,
     messageMatches: messageResults.length,
     projectMatches: projectResults.length,
+    fileMatches: fileResults.length,
   };
 
   // Fire-and-forget search tracking
@@ -331,7 +385,12 @@ async function handleGet(request: NextRequest) {
     });
   }
 
-  return NextResponse.json({ results: allResults, projects: projectResults, stats });
+  return NextResponse.json({
+    results: allResults,
+    projects: projectResults,
+    files: fileResults,
+    stats,
+  });
 }
 
 async function handlePost(request: NextRequest) {

@@ -45,7 +45,24 @@ describe('globalSearchService.search — project surfacing', () => {
             matchedText: 'Launch Plan',
           },
         ],
-        stats: { totalResults: 1, sessionMatches: 1, messageMatches: 0, projectMatches: 1 },
+        files: [
+          {
+            type: 'file',
+            fileId: 'file-7',
+            fileName: 'launch-deck.pdf',
+            content: 'a slide deck',
+            createdAt: '2026-07-05T00:00:00Z',
+            updatedAt: '2026-07-05T00:00:00Z',
+            matchedText: 'launch-deck.pdf',
+          },
+        ],
+        stats: {
+          totalResults: 1,
+          sessionMatches: 1,
+          messageMatches: 0,
+          projectMatches: 1,
+          fileMatches: 1,
+        },
       }),
     );
 
@@ -57,12 +74,18 @@ describe('globalSearchService.search — project surfacing', () => {
     expect(project?.sessionId).toBe('proj-42');
     expect(project?.sessionTitle).toBe('Launch Plan');
 
-    // Conversation results are preserved alongside projects.
+    // File matches surface too, keyed for /library navigation.
+    const file = results.find((r) => r.type === 'file');
+    expect(file?.sessionId).toBe('file-7');
+    expect(file?.sessionTitle).toBe('launch-deck.pdf');
+
+    // Conversation results are preserved alongside projects + files.
     expect(results.some((r) => r.type === 'session' && r.sessionId === 'sess-1')).toBe(true);
 
-    // Stats fold projects into the visible total so the "Found N" count matches rendered rows.
+    // Stats fold projects + files into the visible total so "Found N" matches rendered rows.
     expect(stats.projectMatches).toBe(1);
-    expect(stats.totalResults).toBe(2);
+    expect(stats.fileMatches).toBe(1);
+    expect(stats.totalResults).toBe(3);
   });
 
   it('is unaffected when the route returns no projects array', async () => {
