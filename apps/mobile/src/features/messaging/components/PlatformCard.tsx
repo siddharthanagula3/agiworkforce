@@ -4,6 +4,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ConnectedBadge } from './ConnectedBadge';
+import { formatRelativeTime } from '@/src/lib/time';
 import type { MessagingPlatform } from '@/src/features/messaging/store';
 
 interface PlatformCardProps {
@@ -84,23 +85,4 @@ export function PlatformCard({ platform, onConnect, onDisconnect }: PlatformCard
       )}
     </Card>
   );
-}
-
-/** Format an ISO date string as a relative time (e.g., "2h ago"). */
-function formatRelativeTime(isoDate: string): string {
-  const now = Date.now();
-  const then = new Date(isoDate).getTime();
-  const diffMs = now - then;
-
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-
-  return new Date(isoDate).toLocaleDateString();
 }

@@ -30,19 +30,12 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { getDraft, setDraft, clearDraft } from '@/src/features/chat/draftStore';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
+import { formatClock } from '@/src/lib/time';
 
 /** A single text insertion at least this large (a paste, never typing) is
  *  converted into a compact "Pasted text" attachment instead of flooding the
  *  composer — matching ChatGPT/Claude mobile. */
 const LARGE_PASTE_THRESHOLD = 10_000;
-
-/** Format ms to MM:SS for the inline recording timer. */
-function formatRecordingDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-}
 
 interface ChatInputProps {
   /**
@@ -612,7 +605,7 @@ export function ChatInput({
                   fontVariant: ['tabular-nums'],
                 }}
               >
-                {formatRecordingDuration(recordingDurationMs)}
+                {formatClock(recordingDurationMs)}
               </Text>
             </View>
           ) : null}
