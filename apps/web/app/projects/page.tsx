@@ -65,6 +65,15 @@ export default function ProjectsPage() {
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
   const sortedProjects = useMemo(() => sortProjects(projects, sortMode), [projects, sortMode]);
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedProjects = useMemo(
+    () =>
+      projects
+        .filter((p) => p.isArchived)
+        .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')),
+    [projects],
+  );
+  const displayProjects = showArchived ? archivedProjects : sortedProjects;
 
   // Server-backed create: persist to Neon (user_projects) and return the saved
   // row so ProjectGallery inserts the canonical server id into the view model.
@@ -85,6 +94,19 @@ export default function ProjectsPage() {
       } catch (error) {
         updateProject(project.id, { isArchived: false });
         toast.error(error instanceof Error ? error.message : 'Failed to archive project');
+      }
+    },
+    [updateProject],
+  );
+
+  const handleUnarchiveProjectServer = useCallback(
+    async (project: Project) => {
+      updateProject(project.id, { isArchived: false });
+      try {
+        await webManagedCloudProjects.updateProject(project.id, { isArchived: false });
+      } catch (error) {
+        updateProject(project.id, { isArchived: true });
+        toast.error(error instanceof Error ? error.message : 'Failed to restore project');
       }
     },
     [updateProject],
@@ -112,7 +134,7 @@ export default function ProjectsPage() {
 
   // For the default mode, delegate to ProjectGallery (keeps search + create form).
   // For other modes, render our own sorted grid below the sort toolbar.
-  const useGallery = sortMode === 'updated';
+  const useGallery = sortMode === 'updated' && !showArchived;
 
   return (
     <WebAppShell>
@@ -169,6 +191,33 @@ export default function ProjectsPage() {
                 Mobile, and Desktop cloud sessions.
               </p>
             </div>
+
+            {/* Show archived toggle */}
+            {archivedProjects.length > 0 && (
+              <button
+                type="button"
+                data-testid="projects-show-archived-btn"
+                onClick={() => setShowArchived((v) => !v)}
+                aria-pressed={showArchived}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 14px',
+                  border: '1px solid var(--agi-rule-strong)',
+                  borderRadius: 9999,
+                  background: showArchived ? 'var(--agi-rule)' : 'transparent',
+                  color: 'var(--agi-ink-2)',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {showArchived ? 'Active projects' : `Archived (${archivedProjects.length})`}
+              </button>
+            )}
 
             {/* Sort menu */}
             <div ref={sortMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
@@ -315,7 +364,7 @@ export default function ProjectsPage() {
             ) : (
               /* Custom sort: render sorted ProjectCard grid */
               <div>
-                {sortedProjects.length === 0 ? (
+                {displayProjects.length === 0 ? (
                   <div
                     style={{
                       display: 'flex',
@@ -328,11 +377,15 @@ export default function ProjectsPage() {
                     }}
                   >
                     <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
-                      No projects yet.
+                      {showArchived ? 'No archived projects.' : 'No projects yet.'}
                     </p>
-                    <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0, opacity: 0.7 }}>
-                      Switch to &ldquo;Updated (newest)&rdquo; sort to create one.
-                    </p>
+                    {!showArchived && (
+                      <p
+                        style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0, opacity: 0.7 }}
+                      >
+                        Switch to &ldquo;Updated (newest)&rdquo; sort to create one.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div
@@ -342,7 +395,7 @@ export default function ProjectsPage() {
                       gap: 12,
                     }}
                   >
-                    {sortedProjects.map((project) => (
+                    {displayProjects.map((project) => (
                       <ProjectCard
                         key={project.id}
                         project={project}
@@ -352,6 +405,7 @@ export default function ProjectsPage() {
                         }}
                         onEdit={(p) => setEditProject(p)}
                         onArchive={(p) => void handleArchiveProjectServer(p, false)}
+                        onUnarchive={(p) => void handleUnarchiveProjectServer(p)}
                         onDelete={(p) => void handleDeleteProjectServer(p, false)}
                       />
                     ))}

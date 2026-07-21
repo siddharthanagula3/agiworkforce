@@ -27,6 +27,8 @@ export interface ProjectCardProps {
   onEdit?: (project: Project) => void;
   /** Called when the user chooses "Archive" from the context menu. */
   onArchive?: (project: Project) => void;
+  /** Called when the user chooses "Unarchive" (shown when the project is archived). */
+  onUnarchive?: (project: Project) => void;
   /** Called when the user confirms "Delete" from the context menu. */
   onDelete?: (project: Project) => void;
   /** Override the default time formatter — useful for i18n. */
@@ -54,6 +56,7 @@ export function ProjectCard({
   onSelect,
   onEdit,
   onArchive,
+  onUnarchive,
   onDelete,
   formatRelativeDate = defaultFormatRelativeDate,
   className,
@@ -89,7 +92,8 @@ export function ProjectCard({
   const menuItemCls =
     'flex w-full items-center gap-2 px-3 py-1.5 text-sm text-left text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] transition-colors';
 
-  const hasMenu = !!(onEdit || onArchive || onDelete);
+  const archiveAction = project.isArchived ? onUnarchive : onArchive;
+  const hasMenu = !!(onEdit || archiveAction || onDelete);
 
   return (
     // Rendered as a role="button" div (not a native <button>) so the nested
@@ -215,14 +219,14 @@ export function ProjectCard({
                     </button>
                   )}
 
-                  {onArchive && (
+                  {archiveAction && (
                     <button
                       type="button"
                       role="menuitem"
                       className={menuItemCls}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onArchive(project);
+                        archiveAction(project);
                         setMenuOpen(false);
                       }}
                     >
@@ -241,7 +245,7 @@ export function ProjectCard({
                         <rect x="1" y="3" width="22" height="5" />
                         <line x1="10" y1="12" x2="14" y2="12" />
                       </svg>
-                      Archive
+                      {project.isArchived ? 'Unarchive' : 'Archive'}
                     </button>
                   )}
 
