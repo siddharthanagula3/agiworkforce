@@ -6,6 +6,47 @@ Last updated: 2026-07-20
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
 
+2026-07-21 Chrome extension (apps/extension) DEEP re-audit (4 scoped agents over
+the 303KB side_panel.ts / 112KB background.ts / 75KB content.ts that the earlier
+"VERIFIED-CLEAN" pass at line ~675 could not read whole). Baseline green
+(typecheck, 1109 tests, production build). The deep read surfaced two HIGH
+side-panel defects the prior pass missed — both fixed with live-module regression
+tests (full suite 71 files / 1117 tests). This SUPERSEDES the unqualified
+"VERIFIED-CLEAN" note below for the side-panel surface; options/content/egress
+re-audit in progress.
+
+- FIXED EXT-AGENTIC-REPLY-NEVER-RENDERS (HIGH, 2026-07-21, uncommitted): for a
+  Managed-Cloud agentic (tool-using) run, the assistant message is created from a
+  tool/agent event with empty content + `streaming:true`
+  (features/side-panel/chat-state.ts applyCanonicalAgentEvent), and
+  `buildBubbleWithTools` (side_panel.ts:3303) only built the `sp-bubble-<id>`
+  element `if (textParts.join('').trim())` — so no bubble existed. The answer then
+  streamed via the delta else-branch (side_panel.ts:7859) into
+  `updateStreamingBubble`, which starts `getElementById(sp-bubble-<id>); if
+(!bubble) return;` — a SILENT no-op. The model's reply accumulated in
+  msg.content but never painted; the user saw the activity timeline and no answer
+  (plain no-tool chats create the message from the first text chunk so a bubble
+  exists — which is why casual testing missed it). Root-cause fix: the bubble gate
+  is now `shouldRenderTextBubble({text, streaming})` (new pure export in
+  chat-state.ts) — a streaming message builds its bubble up-front even with
+  momentarily-empty text, so the in-place updater always has a target and no
+  mid-stream rebuild is needed. Regression: 3 tests in side-panel-chat-state.test.ts
+  against the live helper.
+- FIXED EXT-PROMPT-SHORTCUT-FAKE-SUCCESS (HIGH, 2026-07-21, uncommitted): a
+  shortcut created from the "+ Create shortcut" prompt modal is stored with
+  `actions: []` + a `prompt`, but `handleReplayShortcut` (background.ts) forwarded
+  only `RUN_PAGE_ACTIONS` with `shortcut.actions` — zero actions ran,
+  `result.success` was true, and it showed `showNotification('Shortcut Replayed',
+'"…" completed')`. Clicking ▶ Play on a prompt shortcut did nothing on the page
+  or in chat yet reported success (fake success on a primary Workflows control);
+  `shortcut.prompt`/`startUrl` had no replay consumer. Fix: extracted
+  `planShortcutReplay(shortcut)` (pure export in features/background/shortcuts.ts)
+  → actions | prompt | empty; the prompt branch runs the saved prompt through the
+  chat path (same route executeScheduledTask uses for prompt tasks, capped at the
+  shared TASK_PROMPT_MAX_CHARS), the empty branch returns an honest error instead
+  of a success notification. Regression: 5 tests in shortcut-replay-plan.test.ts
+  against the live decision helper.
+
 2026-07-20 desktop-trust-boundary-01 slice (uncommitted working tree at time of
 writing): desktop AGI trust_mode threaded end-to-end (IPC wire enum → Goal →
 planner/executors/swarm → router), router fail-closed to Local, redaction
