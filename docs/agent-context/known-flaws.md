@@ -194,7 +194,8 @@ statement outside a module` and `initialize()` (which registers
   audit agents (options-bg, content) later delivered reports finding 5 HIGH + many
   MED I missed. LESSON: targeted greps catch dead settings but miss BEHAVIORAL bugs
   that only a full read of a handler + its actual consumers reveals (a logout that
-  clears the wrong keys; a picker that resolves the wrong tab). FIXED 4 of 5 HIGH:
+  clears the wrong keys; a picker that resolves the wrong tab). ALL of these HIGH
+  are now FIXED (the 2 content HIGH were fixed in a later pass — see below):
   - FIXED EXT-OPTIONS-LOGOUT-NOOP (HIGH, security, 601a26562): options "Log out"
     removed legacy keys nothing writes but never called clearAuthToken()/
     signOutClerk() — the Clerk session survived, panel stayed signed in on a shared
@@ -218,29 +219,34 @@ statement outside a module` and `initialize()` (which registers
     match, and makeEscalationDecision was called 4-arg (empty alwaysEscalate) → zero
     triggers → "no escalation needed", resume never attached. Now passes
     ASHBY_ALWAYS_ESCALATE_KEYS for ashby + regression test.
-    OPEN — 2 content HIGH not yet fixed:
-  - OPEN EXT-OPENSIDEPANEL-GESTURE-LOST (HIGH, mechanism corrected on verify):
-    the in-page panel footer "Open side panel" (panel.ts:373) sends OPEN_SIDE_PANEL
-    and the button appears to do nothing. The content agent blamed an internal
-    `await tabs.query`, but that's INACCURATE — background.ts:1134 sets
-    `tabId = sender.tab?.id ?? message.tabId`, and the in-page panel runs in the
-    content-script context (Shadow DOM, not iframe), so sender.tab.id IS set and
-    the OPEN_SIDE_PANEL handler (background.ts:1373) takes the synchronous branch
-    (no await). The REAL residual: sidePanel.open() runs inside handleMessageAsync's
-    `.then()` continuation (background.ts:1113), one microtask past the synchronous
-    onMessage gesture window Chrome requires for sidePanel.open — so the activation
-    may be lost. Correct fix = a SYNCHRONOUS OPEN_SIDE_PANEL fast-path in the
-    onMessage listener (handleMessage) that calls sidePanel.open({tabId:
-    sender.tab.id}) before the async dispatch, still behind isAllowlistedSender.
-    NOT applied yet: unverifiable without a real-browser gesture test and the
-    fast-path must not bypass the sender gate — needs a focused real-Chromium pass
-    (the e2e/smoke.mjs harness can load it, but driving a genuine user-gesture
-    sidePanel.open through Playwright is itself nontrivial).
-  - OPEN EXT-RECORDING-VALUE-CAPTURE-DEAD (HIGH): content.ts captureValues flag is
-    flipped only by SET_RECORDING_VALUE_CAPTURE, which has ZERO senders → recorded
-    workflows replay clicks/scrolls but type '' for every input; form record/replay
-    is dead. Fix = add the value-capture toggle to the side-panel Record UI
-    (extension-page sender per policy) or record redacted values by default.
+    Both content HIGH now FIXED (2012ae96f, 4e3a7f156):
+  - FIXED EXT-OPENSIDEPANEL-GESTURE-LOST (HIGH, 4e3a7f156): the in-page panel
+    footer "Open side panel" (panel.ts:373) sends OPEN_SIDE_PANEL and the button
+    did nothing. The content agent blamed an internal `await tabs.query`, but that
+    was INACCURATE — background.ts:1134 sets `tabId = sender.tab?.id`, and the
+    in-page panel runs in the content-script context (Shadow DOM, not iframe), so
+    the OPEN_SIDE_PANEL handler already took the synchronous branch. The REAL cause
+    was that sidePanel.open() ran inside handleMessageAsync's `.then()` continuation
+    (background.ts:1113), one microtask past the synchronous onMessage gesture
+    window Chrome requires. FIX: a synchronous OPEN_SIDE_PANEL fast-path in the
+    handleMessage onMessage listener, placed AFTER the allowlist/extension-page/
+    DOM-mutation gates and BEFORE the async dispatch, calling sidePanel.open({tabId:
+    sender.tab.id}) for a content-script sender (extension-page senders fall through
+    to async). Source-level regression test asserts the fast-path exists + is
+    correctly ordered (gated, synchronous). CAVEAT: the gesture propagation itself
+    is not automatically verified (driving a genuine user-gesture sidePanel.open
+    through Playwright is nontrivial); this applies Chrome's documented synchronous
+    pattern, which is the root-cause fix — a manual load-unpacked click confirms.
+  - FIXED EXT-RECORDING-VALUE-CAPTURE-DEAD (HIGH, 2012ae96f): content.ts
+    captureValues was flipped only by SET_RECORDING_VALUE_CAPTURE, which had ZERO
+    senders → recorded workflows replayed clicks/scrolls but typed '' for every
+    input. The content script's value capture is fully built AND privacy-safe
+    (sanitizeRecordedValue redacts password/cc/OTP + scrubs API-key tokens, C-05);
+    only the UI toggle was missing. FIX: added a "Capture typed values" toggle to
+    the side-panel Recording UI that sends the extension-page-only
+    SET_RECORDING_VALUE_CAPTURE (background already forwards it to the content
+    script) and syncs the choice to the active tab before recording starts.
+    Source-level wiring regression test.
     TRACKED MED/LOW (from both full-read agents; complete-or-remove): task-notif
     toggle only gates the pre-run notice (Completed/Failed fire regardless);
     scheduled prompt-task Managed-Cloud output is dropped (burns a paid turn, no
