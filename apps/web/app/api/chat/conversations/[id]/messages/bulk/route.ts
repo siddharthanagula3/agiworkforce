@@ -23,6 +23,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import {
   getNeonChatDb,
   requireCurrentUserId,
@@ -140,7 +141,9 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       saved: saved.length,
-      messages: saved.map((message) => ManagedCloudMessageWireSchema.parse(message)),
+      messages: withIsoTimestamps(saved).map((message) =>
+        ManagedCloudMessageWireSchema.parse(message),
+      ),
     });
   } catch (error) {
     // Re-throw typed AppErrors (e.g. the cross-conversation rejection above).
