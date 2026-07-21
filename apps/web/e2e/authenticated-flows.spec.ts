@@ -112,6 +112,13 @@ test.describe('authenticated primary workflows', () => {
     await page.goto('/library');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
+    // Recently-deleted bin (new): toggling into the bin and back must render
+    // without an app error boundary, exercising the ?deleted=true list path.
+    await page.getByRole('button', { name: 'Recently deleted' }).click();
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
+    await expect(page.getByRole('button', { name: 'Back to library' })).toBeVisible();
+    await page.getByRole('button', { name: 'Back to library' }).click();
 
     // 3b) AGI Work task history (new /tasks surface): the run-list consumer
     //     renders for a real user (heading + Active/All filter, not a gate or an
@@ -125,14 +132,28 @@ test.describe('authenticated primary workflows', () => {
     await expect(page.getByRole('heading', { name: 'Tasks' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Active' })).toBeVisible();
     await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
+    // Switching the Active/All filter reloads the list without an error boundary.
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
 
-    // 3c) Global search federates projects (env-independent: web_conversations
-    //     and user_projects both exist): the /api/search response carries the
-    //     projects array the search dialog now renders.
+    // 3c) Global search federates projects + files (env-independent:
+    //     web_conversations, user_projects, media_assets all exist): the
+    //     /api/search response carries the projects and files arrays the search
+    //     dialog now renders.
     const searchRes = await page.request.get('/api/search?q=test&limit=5');
     expect(searchRes.status()).toBe(200);
-    const searchBody = (await searchRes.json()) as { projects: unknown[] };
+    const searchBody = (await searchRes.json()) as { projects: unknown[]; files: unknown[] };
     expect(Array.isArray(searchBody.projects)).toBe(true);
+    expect(Array.isArray(searchBody.files)).toBe(true);
+
+    // 3d) The global-search dialog opens from the chat shell (real UI, not just
+    //     the API) via the ?search=true deep link and renders without error.
+    //     NB: /chat holds persistent connections, so we wait for the dialog
+    //     directly rather than networkidle (which may never settle here).
+    await page.goto('/chat?search=true', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 20000 });
+    await expect(page.locator('body')).not.toContainText(/something went wrong|application error/i);
 
     // 4) Cross-device cloud sync (WEB-CHAT-SYNC-500 regression): the pull endpoint
     //    must return 200 for a user WITH data. node-postgres returns timestamptz as
