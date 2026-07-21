@@ -19,24 +19,6 @@ export {
   type CoworkFolderActions,
 } from './cowork-folder-store';
 
-// Chat Store - Chat conversations and messages
-export {
-  useChatStore,
-  type ChatStore,
-  type ChatState,
-  type ChatActions,
-  type Conversation,
-  type Message,
-  type ChatModel,
-  type ToolCall,
-  type Citation,
-  type Attachment,
-  type MessageReaction,
-  type WorkingProcess,
-  type ProcessStep,
-  type Checkpoint,
-} from './chat-store';
-
 // Workforce Store - AI workforce and job management
 export {
   useWorkforceStore,
@@ -151,21 +133,6 @@ export {
   useUpsellQueue,
   useLastUpdate,
 } from './company-hub-store';
-
-// Chat Store Selectors
-export {
-  useConversationsRecord,
-  useActiveChatConversation,
-  useActiveChatConversationId,
-  useChatStreamingState,
-  useSelectedChatModel,
-  useAvailableChatModels,
-  useChatSearchAndFilters,
-  useWorkingProcesses,
-  useChatActiveEmployees,
-  useCheckpointState,
-  useChatSidebarOpen,
-} from './chat-store';
 
 // Notification Store Selectors
 export {

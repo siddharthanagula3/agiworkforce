@@ -52,22 +52,6 @@ async function cleanupAllStores(): Promise<void> {
       },
     },
     {
-      name: 'chat-store',
-      run: async () => {
-        const { useChatStore } = await import('./chat-store');
-        const chatState = useChatStore.getState();
-        if (typeof chatState.clearHistory === 'function') {
-          chatState.clearHistory();
-        } else if (
-          typeof (chatState as unknown as Record<string, unknown>)['reset'] === 'function'
-        ) {
-          (chatState as unknown as Record<string, unknown> & { reset: () => void }).reset();
-        } else {
-          logger.auth('Warning: Chat store has no clearHistory or reset method');
-        }
-      },
-    },
-    {
       name: 'artifact-store',
       run: async () => {
         const { useArtifactStore } = await import('./artifact-store');

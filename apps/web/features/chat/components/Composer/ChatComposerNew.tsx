@@ -35,7 +35,7 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
-import { useChatStore } from '@shared/stores/chat-store';
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { useModelStore } from '@shared/stores/model-store';
 import {
   getAllowedAutoModesForTier,
@@ -444,17 +444,17 @@ const ChatComposerNewComponent = ({
     if (officeCreationEnabled && !modelSupportsOfficeCreation) setOfficeCreationEnabled(false);
   }, [officeCreationEnabled, modelSupportsOfficeCreation]);
 
-  // Incognito / temporary chat
+  // Incognito / temporary chat — wired to the live web-chat-store
   const activeConversationId = useChatStore((s) => s.activeConversationId);
-  const isIncognito = useChatStore((s) =>
-    s.activeConversationId
-      ? (s.conversations[s.activeConversationId]?.isTemporary ?? false)
-      : false,
-  );
-  const toggleTemporary = useChatStore((s) => s.toggleTemporaryConversation);
+  const isIncognito = useChatStore((s) => {
+    const id = s.activeConversationId;
+    return id ? (s.conversations.find((c) => c.id === id)?.isTemporary ?? false) : false;
+  });
+  const updateConversation = useChatStore((s) => s.updateConversation);
   const handleIncognitoToggle = useCallback(() => {
-    if (activeConversationId) toggleTemporary(activeConversationId);
-  }, [activeConversationId, toggleTemporary]);
+    if (activeConversationId)
+      updateConversation(activeConversationId, { isTemporary: !isIncognito });
+  }, [activeConversationId, isIncognito, updateConversation]);
   const canToggleIncognito = Boolean(activeConversationId) && !isLoading && !disabled;
 
   // Thinking / effort store
