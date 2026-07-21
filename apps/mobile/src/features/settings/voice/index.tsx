@@ -257,7 +257,7 @@ export default function VoiceSettingsScreen() {
               />
               <ProviderOption
                 label="Cloud"
-                description="Requires AGI Cloud access."
+                description="Cloud voice isn't available on mobile yet."
                 selected={ttsProvider === 'cloud'}
                 disabled
                 onPress={() => handleProviderSelect('cloud')}
