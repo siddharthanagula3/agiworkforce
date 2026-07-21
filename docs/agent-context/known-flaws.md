@@ -128,6 +128,19 @@ statement outside a module` and `initialize()` (which registers
   Greenhouse form served at a mapped http://boards.greenhouse.io URL. Clean build +
   all 4 artifacts + 1119 unit tests still green. The smoke's autofill block is the
   regression guard.
+- VSCODE-REALUI-INTEGRATION (2026-07-21): ran the VS Code extension's real
+  integration suite in a REAL VS Code Extension Host via @vscode/test-electron
+  (`pnpm --filter agi-workforce test:integration` → tsc + esbuild + downloaded
+  VS Code 1.129.1 → src/test/suite/extension.smoke.test.ts). 4/4 PASS, host exit
+  0: extension activates + is found by id (agiworkforce.agi-workforce), package
+  version matches getExtensionVersion(), ALL package.json contributes.commands are
+  actually registered (the real "every declared command is wired" check — no dead
+  commands), and the newConversation command resolves without throwing. This is
+  genuine real-UI verification (real editor host, not the vitest mock) — no new
+  findings; VSCode #5 already had its attachment-chip HIGH fixed prior session
+  (3841bbf09) and 565 unit tests green. Deeper webview/chat-participant flows still
+  need a running `agi app-server` (CLI binary on PATH) per
+  VSCODE-CHAT-REQUIRES-CLI-BINARY.
 - CLI-REALUI-SMOKE (2026-07-21): built the production `agi` binary
   (`cargo build --bin agi`, workspace target/debug/agi, 33s) and exercised its
   real no-API-key command surface end to end via apps/cli/scripts/cli-smoke.mjs:
