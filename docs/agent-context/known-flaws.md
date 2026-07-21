@@ -260,13 +260,39 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
   that overstate their verb (/focus /color /heapdump /voice-in-TUI + /stickers
   /thinkback-play /effort-REPL /vim /replay-v0.2 — mostly honest "not available"
   messages) — tracked, non-blocking.
-- NOTE CLI-APPSERVER-INITIALIZE-PROTOCOLVERSION (PRE-EXISTING, app #5 VSCode domain):
-  apps/cli/tests/app_server_stdio.rs:56 asserts the initialize response
-  `result.protocolVersion == 3` (integer), but app_server.rs:71/161 returns the
-  STRING "2024-11-05" — they can never match. VERIFIED pre-existing via a worktree at
-  2eea9a3b1 (fails identically, same line) — NOT caused by the CLI overlay work. The
-  app-server IS the VSCode-extension backend, so triage this in app #5: either the
-  server should return numeric protocol 3, or the test asserts the wrong shape.
+- VSCODE (app #5) audit 2026-07-21 — extension is overwhelmingly wired (67 commands,
+  sidebar webview, @agi chat participant, 27 settings all cross-checked); 4 findings
+  (1H/2M/1L):
+  • [HIGH] attachment-chip "X" removal was silently dropped → FIXED (`3841bbf09`):
+  the webview posted removePendingAttachment to a real ChatStateManager handler,
+  but the Zod gate (WebviewToExtSchema) omitted it, so parseWebviewMessage dropped
+  it — the chip vanished client-side while the host kept the file and RE-SENT it
+  next turn (silent data-inclusion). Added the schema to the union; regression
+  tests now go THROUGH the gate (the prior test bypassed it, fake-green).
+  • [MED] OPEN VSCODE-PROVIDER-STREAM-UNWIRED: agiWorkforce.{useProviderStream,
+  providerStreamProvider,gatewayUrl} settings do nothing — streamChatCompletionViaProvider
+  (api.ts:845) + providerStreamClient are implemented but have ZERO callers (the
+  intended branch at the chat-completion call site was never added). Complete =
+  branch cloud chat on Config.useProviderStream() → the provider path (TRUST-SENSITIVE:
+  routes chat through a gateway /api/v1/providers/:id/stream — verify carefully),
+  OR remove the 3 settings + the dead impl. Not rushed at depth (security-adjacent).
+  • [MED] OPEN VSCODE-VSCODE-LM-FALLBACK-MISSING: agiWorkforce.fallbackToVscodeLm
+  (default TRUE) is never read and there is NO vscode.lm / selectChatModels usage
+  anywhere — a signed-out user gets a hard "Not signed in" instead of the promised
+  fallback. Complete = build the VS Code LM API fallback (feature), OR remove the
+  misleading default-on setting (config.ts:116).
+  • [LOW] OPEN VSCODE-AGENT-MAXITERATIONS-UNAPPLIED: agiWorkforce.agent.maxIterations
+  (config.ts:60) is never read; the agent loop runs in the CLI app-server and the
+  extension has no channel to pass it (not in startTurn). Add it to the developer-
+  session startTurn params (CLI + contracts lane) OR remove the setting.
+  After the HIGH fix, VSCode has NO unresolved critical/high → meets the proceed-gate;
+  the 3 remaining are MED/LOW dead advanced-settings (complete-or-remove, tracked).
+- NOTE CLI-APPSERVER-INITIALIZE-PROTOCOLVERSION — RESOLVED 2026-07-21 (`87445c264`):
+  app_server_stdio.rs:56 asserted the OLD protocol 3; the developer-session initialize
+  correctly returns DEVELOPER_SESSION_PROTOCOL_VERSION=5 (numeric) and the extension
+  requires >=5, so the VSCode↔CLI handshake is HEALTHY. Was a stale test (protocol
+  bumped 3→5). Updated to 5; the full CLI cargo test suite is now green. (The "2024-11-05"
+  string is the SEPARATE MCP-server path — run_mcp_server — not the app-server.)
   • NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
   tests::validate_workspace_path_allows_registered_additional_root passes in
   isolation + within its module but intermittently FAILS under full-suite parallel
