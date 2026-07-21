@@ -1489,17 +1489,6 @@ export default function WebChatPage() {
   }, []);
 
   /**
-   * Share project: there is no dedicated project-share API yet, so route to the
-   * project page where the share affordance lives. Tracked as a follow-up gap.
-   */
-  const handleProjectShare = useCallback(
-    (projectId: string) => {
-      router.push(`/projects/${projectId}`);
-    },
-    [router],
-  );
-
-  /**
    * Pin/unpin: toggle the starred field on the project (starred is the pinned proxy).
    */
   const handleProjectPin = useCallback(
@@ -2197,7 +2186,6 @@ export default function WebChatPage() {
         onProjectNewChat={handleProjectNewChat}
         onProjectRename={handleProjectRename}
         onProjectSettings={handleProjectSettings}
-        onProjectShare={handleProjectShare}
         onProjectPin={handleProjectPin}
         onProjectDelete={handleProjectDelete}
         onProjectCreate={handleProjectCreate}
