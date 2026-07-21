@@ -1338,7 +1338,7 @@ const ChatComposerNewComponent = ({
                         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                       >
                         <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <span className="flex-1 text-left">Add photos &amp; files</span>
+                        <span className="flex-1 text-left">Add photos</span>
                       </button>
 
                       {/* 2. Create image */}
