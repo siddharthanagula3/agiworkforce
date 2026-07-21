@@ -4,7 +4,7 @@
  * POST /api/chat/conversations/[id]/messages/bulk
  *   Upserts an array of messages into a conversation. Uses INSERT ... ON CONFLICT
  *   so the same message ID can be sent multiple times safely (idempotent).
- *   Used by use-chat-persistence.ts saveMessages() for batch persistence.
+ *   Used by mobile localCloudSyncService (data-controls) for batch persistence.
  *
  * Request body: { messages: Array<{ id?, role, content, model?, metadata? }> }
  * Response:     { saved: number, messages: ChatMessageRow[] }
