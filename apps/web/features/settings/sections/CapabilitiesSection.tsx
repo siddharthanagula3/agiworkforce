@@ -4,33 +4,22 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Switch } from '@agiworkforce/ui';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@agiworkforce/ui';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 
-type ToolAccessMode = 'always' | 'needed' | 'custom';
-
 type CapabilitiesSettings = {
   memory: boolean;
-  searchChats: boolean;
   generateFromHistory: boolean;
-  toolAccessMode: ToolAccessMode;
-  connectorDiscovery: boolean;
-  artifacts: boolean;
 };
 
 const NAMESPACE = 'capabilities';
 
 const DEFAULT_SETTINGS: CapabilitiesSettings = {
   memory: true,
-  searchChats: true,
   generateFromHistory: true,
-  toolAccessMode: 'needed',
-  connectorDiscovery: true,
-  artifacts: true,
 };
 
 export function CapabilitiesSection() {
@@ -69,12 +58,8 @@ export function CapabilitiesSection() {
     }
   }, []);
 
-  const setBoolean = (key: keyof Omit<CapabilitiesSettings, 'toolAccessMode'>, value: boolean) => {
+  const setBoolean = (key: keyof CapabilitiesSettings, value: boolean) => {
     void persist({ ...settings, [key]: value });
-  };
-
-  const setToolAccessMode = (value: ToolAccessMode) => {
-    void persist({ ...settings, toolAccessMode: value });
   };
 
   const row = (title: string, description: string, control: ReactNode) => (
@@ -120,15 +105,6 @@ export function CapabilitiesSection() {
         )}
 
         {row(
-          'Search and reference chats',
-          'Let AGI search your past conversations for context',
-          <Switch
-            checked={settings.searchChats}
-            onCheckedChange={(value) => setBoolean('searchChats', value)}
-          />,
-        )}
-
-        {row(
           'Generate from past chats',
           'Use conversation history to generate better responses',
           <Switch
@@ -151,51 +127,6 @@ export function CapabilitiesSection() {
             return here once the import backend ships.
           */}
         </div>
-      </section>
-
-      <section className="space-y-4">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          General
-        </h3>
-
-        {row(
-          'Tool access mode',
-          'How AGI loads and uses tools from connectors',
-          <Select value={settings.toolAccessMode} onValueChange={setToolAccessMode}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="always">Always allow</SelectItem>
-              <SelectItem value="needed">Load tools when needed</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>,
-        )}
-
-        {row(
-          'Connector discovery',
-          'Suggest relevant connectors during conversations',
-          <Switch
-            checked={settings.connectorDiscovery}
-            onCheckedChange={(value) => setBoolean('connectorDiscovery', value)}
-          />,
-        )}
-      </section>
-
-      <section className="space-y-4">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          Visuals
-        </h3>
-
-        {row(
-          'Artifacts',
-          'Allow AGI to generate interactive content: code previews, charts, and documents rendered inline',
-          <Switch
-            checked={settings.artifacts}
-            onCheckedChange={(value) => setBoolean('artifacts', value)}
-          />,
-        )}
       </section>
 
       <p className="text-xs text-muted-foreground">
