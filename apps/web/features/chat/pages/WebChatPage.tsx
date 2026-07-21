@@ -271,10 +271,12 @@ async function deleteConversationMessage(params: {
   }
 }
 
-async function patchConversationMessageReaction(params: {
+// Generic message-metadata patch (the route merges the body into
+// messages.metadata and syncs it cross-device). Backs reactions and pins.
+async function patchConversationMessageMetadata(params: {
   conversationId: string;
   messageId: string;
-  reaction: 'thumbsUp' | 'thumbsDown' | null;
+  patch: Record<string, unknown>;
   authToken: string;
 }): Promise<void> {
   const headers = await addCsrfHeaders({
@@ -286,12 +288,12 @@ async function patchConversationMessageReaction(params: {
     {
       method: 'PATCH',
       headers,
-      body: JSON.stringify({ reaction: params.reaction }),
+      body: JSON.stringify(params.patch),
     },
   );
 
   if (!response.ok) {
-    throw new Error(await readChatMutationError(response, 'Failed to update reaction'));
+    throw new Error(await readChatMutationError(response, 'Failed to update message'));
   }
 }
 
@@ -1885,10 +1887,10 @@ export default function WebChatPage() {
         reactionType === 'up' ? 'thumbsUp' : reactionType === 'down' ? 'thumbsDown' : null;
 
       try {
-        await patchConversationMessageReaction({
+        await patchConversationMessageMetadata({
           conversationId: displayedConversationId,
           messageId: id,
-          reaction,
+          patch: { reaction },
           authToken,
         });
         const current = useChatStore.getState().messages.find((message) => message.id === id);
@@ -1900,6 +1902,38 @@ export default function WebChatPage() {
         });
       } catch (error) {
         setChatError(error instanceof Error ? error.message : 'Failed to update reaction');
+      }
+    },
+    [displayedConversationId, getToken, setChatError, updateMessage],
+  );
+
+  // Pin/unpin a message (persists messages.metadata.isPinned; renders as the
+  // pin badge and syncs cross-device). Completes the previously-stubbed onPin.
+  const handlePinMessage = useCallback(
+    async (id: string) => {
+      if (!displayedConversationId) return;
+      const authToken = await getToken();
+      if (!authToken) {
+        setChatError('Not authenticated');
+        return;
+      }
+      const current = useChatStore.getState().messages.find((message) => message.id === id);
+      const nextPinned = !(current?.metadata as { isPinned?: boolean } | undefined)?.isPinned;
+      try {
+        await patchConversationMessageMetadata({
+          conversationId: displayedConversationId,
+          messageId: id,
+          patch: { isPinned: nextPinned },
+          authToken,
+        });
+        updateMessage(id, {
+          metadata: {
+            ...current?.metadata,
+            isPinned: nextPinned,
+          },
+        });
+      } catch (error) {
+        setChatError(error instanceof Error ? error.message : 'Failed to pin message');
       }
     },
     [displayedConversationId, getToken, setChatError, updateMessage],
@@ -2348,6 +2382,7 @@ export default function WebChatPage() {
                     onEdit={handleEditMessage}
                     onDelete={handleDeleteMessage}
                     onReact={handleReactMessage}
+                    onPin={handlePinMessage}
                     onRegenerateImage={handleRegenerateImageInPlace}
                     onSendMessage={setComposerPrefill}
                     onPaywallUpgrade={handleOpenUpgradeDialog}
