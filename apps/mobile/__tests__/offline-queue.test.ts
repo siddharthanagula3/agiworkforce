@@ -98,8 +98,8 @@ describe('enqueue', () => {
   });
 
   it('allows same content in different conversations', () => {
-    offlineQueue.enqueue({ conversationId: 'conv-a', content: 'hello', model: 'gpt-5.5' });
-    offlineQueue.enqueue({ conversationId: 'conv-b', content: 'hello', model: 'gpt-5.5' });
+    offlineQueue.enqueue({ conversationId: 'conv-a', content: 'hello', model: 'gpt-5.6-sol' });
+    offlineQueue.enqueue({ conversationId: 'conv-b', content: 'hello', model: 'gpt-5.6-sol' });
 
     expect(offlineQueue.getQueueSize()).toBe(2);
   });

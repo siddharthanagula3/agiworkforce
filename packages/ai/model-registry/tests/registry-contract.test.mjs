@@ -42,7 +42,7 @@ test('emits separated registry records and cross-language artifacts', () => {
   const registry = JSON.parse(fs.readFileSync(REGISTRY_JSON, 'utf8'));
   assert.equal(registry.schemaVersion, 1);
 
-  const key = 'gpt-5.4-nano';
+  const key = 'gpt-5.6-luna';
   assert.equal(registry.models[key].identity.provider, 'openai');
   assert.equal(registry.models[key].identity.providerModelId, key);
   assert.equal(registry.models[key].lifecycle.availability, 'live');
@@ -70,22 +70,22 @@ test('emits separated registry records and cross-language artifacts', () => {
       );
     }
   }
-  assert.equal(registry.pricing[key].inputPerMillion, 0.2);
-  assert.equal(registry.pricing[key].cacheReadPerMillion, 0.02);
-  assert.equal(registry.limits[key].contextTokens, 400000);
+  assert.equal(registry.pricing[key].inputPerMillion, 1);
+  assert.equal(registry.pricing[key].cacheReadPerMillion, 0.1);
+  assert.equal(registry.limits[key].contextTokens, 1050000);
   assert.equal(registry.limits[key].maxOutputTokens, 128000);
   assert.equal(registry.capabilities[key].imageInput, true);
   assert.equal('webSearch' in registry.capabilities[key], false);
 
   assert.equal(registry.capabilities['gpt-image-2'].imageOutput, true);
   assert.equal(registry.capabilities['gpt-image-2'].textOutput, false);
-  assert.equal(registry.capabilities['veo-3'].videoOutput, true);
-  assert.equal(registry.capabilities['whisper-1'].audioInput, true);
-  assert.equal(registry.capabilities['whisper-1'].textOutput, true);
+  assert.equal(registry.capabilities['veo-3.1'].videoOutput, true);
+  assert.equal(registry.capabilities['gpt-4o-transcribe'].audioInput, true);
+  assert.equal(registry.capabilities['gpt-4o-transcribe'].textOutput, true);
   assert.equal(registry.capabilities['tts-1'].textInput, true);
   assert.equal(registry.capabilities['tts-1'].audioOutput, true);
 
-  const route = registry.routes['openai/gpt-5.4-nano'];
+  const route = registry.routes['openai/gpt-5.6-luna'];
   assert.equal(route.modelKey, key);
   assert.equal(route.harnessId, 'openai/responses');
   assert.equal(registry.harnesses['openai/responses'].features.webSearch.providerSupport, 'native');
@@ -164,11 +164,7 @@ test('emits separated registry records and cross-language artifacts', () => {
     'CLI and Desktop BYOK chat must consume one generated developer-harness admission set',
   );
   assert.equal(registry.runtimeProfiles['cli/byok-chat'].status, 'implemented');
-  assert.equal(
-    registry.runtimeProfiles['desktop/cloud-chat'].status,
-    'implemented',
-    'Desktop Cloud uses the shared managed runtime and must expose its canonical picker rows',
-  );
+  assert.equal(registry.runtimeProfiles['desktop/cloud-chat'].status, 'unwired');
   assert.equal(registry.runtimeProfiles['mobile/local-chat'].trustMode, 'on_device');
   assert.equal(
     registry.runtimeProfiles['mobile/cloud-chat'].features.imageGeneration.implementation,

@@ -574,7 +574,7 @@ describe('settingsStore migrate() boundaries (H16)', () => {
 
     it('resets favoriteModels to empty array', () => {
       const old = {
-        llmConfig: { favoriteModels: ['gpt-5.5', 'claude-sonnet-4-6'], defaultModels: {} },
+        llmConfig: { favoriteModels: ['gpt-5.6-sol', 'claude-sonnet-5'], defaultModels: {} },
       };
       const result = migrateSettings(old, 1);
       expect(result.llmConfig?.favoriteModels).toEqual([]);
@@ -585,8 +585,8 @@ describe('settingsStore migrate() boundaries (H16)', () => {
         llmConfig: {
           defaultModels: {},
           taskRouting: {
-            code: { provider: 'openai', model: 'gpt-5.5' },
-            chat: { provider: 'anthropic', model: 'claude-sonnet-4-6' },
+            code: { provider: 'openai', model: 'gpt-5.6-sol' },
+            chat: { provider: 'anthropic', model: 'claude-sonnet-5' },
           },
         },
       };
@@ -667,7 +667,7 @@ describe('settingsStore migrate() boundaries (H16)', () => {
       const v1State = {
         llmConfig: {
           defaultProvider: 'openai',
-          defaultModels: { openai: 'gpt-5.5' },
+          defaultModels: { openai: 'gpt-5.6-sol' },
         },
       };
       const result = migrateSettings(v1State, 1);

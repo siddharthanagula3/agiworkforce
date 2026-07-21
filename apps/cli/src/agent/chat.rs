@@ -2372,8 +2372,15 @@ mod tests {
         assert!(session.validate_privacy_boundary().is_ok());
 
         // Simulate the pre-fix fallback loop mutation: set provider to cloud.
-        let cloud_provider = crate::models::detect_provider("claude-sonnet-4-6");
-        session.model = "claude-sonnet-4-6".to_string();
+        let cloud_provider = crate::models::detect_provider("claude-sonnet-5");
+        assert_eq!(
+            crate::models::provider_name(&cloud_provider),
+            "anthropic",
+            "fixture model must resolve to the anthropic cloud provider — if it leaves \
+             the catalog, detect_provider silently falls back to OpenAI and this test \
+             stops exercising the intended cloud provider"
+        );
+        session.model = "claude-sonnet-5".to_string();
         session.provider = cloud_provider;
 
         // The guard must catch this — stream_completion must never be reached.
@@ -2390,7 +2397,7 @@ mod tests {
             "error must identify the boundary violation; got: {err_msg}"
         );
         assert!(
-            err_msg.contains("claude-sonnet-4-6"),
+            err_msg.contains("claude-sonnet-5"),
             "error must name the offending model; got: {err_msg}"
         );
     }
@@ -2418,7 +2425,7 @@ mod tests {
             pre_tool_hook_config("printf '%s' '{\"decision\":\"block\",\"reason\":\"policy\"}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
         .await;
@@ -2431,7 +2438,7 @@ mod tests {
         let config = pre_tool_hook_config("printf '%s' '{\"continue\":false}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
         .await;
@@ -2445,7 +2452,7 @@ mod tests {
             pre_tool_hook_config("printf '%s' '{\"updated_input\":{\"path\":\"TODO.md\"}}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
-            "claude-sonnet-4-6",
+            "claude-sonnet-5",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
         .await;

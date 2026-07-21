@@ -168,8 +168,8 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'kimi-k2.6',
-      provider: 'moonshot',
+      modelKey: 'qwen-3.7-plus',
+      provider: 'qwen',
     });
   });
 
@@ -190,7 +190,7 @@ describe('resolveAutoRoute', () => {
 
   it('falls back from an explicit text model to Auto for a specialist capability when authorized', () => {
     const result = resolveAutoRoute({
-      selection: 'gpt-5.4-nano',
+      selection: 'gpt-5.6-luna',
       taskType: 'image_generation',
       subscriptionTier: 'pro',
       trustMode: 'managed_cloud',
@@ -200,7 +200,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      requestedSelection: 'gpt-5.4-nano',
+      requestedSelection: 'gpt-5.6-luna',
       modelKey: 'gemini-3.1-flash-image',
       harnessId: 'google/media',
       reason: 'capability_fallback',
@@ -209,7 +209,7 @@ describe('resolveAutoRoute', () => {
 
   it('does not silently replace an explicit model unless capability fallback is authorized', () => {
     const result = resolveAutoRoute({
-      selection: 'gpt-5.4-nano',
+      selection: 'gpt-5.6-luna',
       taskType: 'image_generation',
       subscriptionTier: 'pro',
       trustMode: 'managed_cloud',
@@ -224,7 +224,7 @@ describe('resolveAutoRoute', () => {
 
   it('preserves an explicit eligible model instead of silently switching providers', () => {
     const result = resolveAutoRoute({
-      selection: 'gpt-5.4-nano',
+      selection: 'gpt-5.6-luna',
       taskType: 'coding',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
@@ -232,7 +232,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gpt-5.4-nano',
+      modelKey: 'gpt-5.6-luna',
       harnessId: 'openai/responses',
       reason: 'explicit',
       fallbacks: [],
@@ -418,7 +418,7 @@ describe('resolveAutoRoute', () => {
       selection: 'auto-premium',
       taskType: 'research',
       previousTaskType: 'general',
-      currentModelKey: 'gpt-5.4-mini',
+      currentModelKey: 'gpt-5.6-terra',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
     });

@@ -8,7 +8,7 @@ const largeSystemRequest = {
 
 describe('shouldEnablePromptCache model ownership', () => {
   it('uses canonical catalog capability metadata for a known caching model', () => {
-    expect(shouldEnablePromptCache(largeSystemRequest, 'gpt-5.5')).toBe(true);
+    expect(shouldEnablePromptCache(largeSystemRequest, 'gpt-5.6-sol')).toBe(true);
   });
 
   it('does not infer caching from the name of an unregistered model', () => {

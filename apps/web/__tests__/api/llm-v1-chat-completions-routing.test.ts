@@ -598,7 +598,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
   // Google's mocked streams or the legacy LLMProviderFactory fallback.
   // -------------------------------------------------------------------------
   it('routes an explicit gpt model through the OpenAI adapter path', async () => {
-    const request = makeRequestForModel('gpt-5.5', 'hello');
+    const request = makeRequestForModel('gpt-5.6-sol', 'hello');
     const response = await POST(request);
 
     expect(response.status).toBe(200);

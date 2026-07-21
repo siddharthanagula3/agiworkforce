@@ -94,7 +94,7 @@ const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000001'; // a valid UUIDv7 conversation id
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 const LOCAL_MODEL = 'qwen3-4b-instruct-2507';
 
 /** Drive streamChat to emit one content delta then complete. */

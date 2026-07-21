@@ -727,12 +727,12 @@ mod tests {
             Provider::Ollama(OllamaMode::Local)
         );
         assert_eq!(
-            provider_name(&detect_provider(&sample_model_for("moonshot"))),
-            "moonshot"
-        );
-        assert_eq!(
             provider_name(&detect_provider(&sample_model_for("zhipu"))),
             "zhipu"
+        );
+        assert_eq!(
+            provider_name(&detect_provider(&sample_model_for("moonshot"))),
+            "moonshot"
         );
         assert!(try_detect_provider("claude-definitely-fake").is_none());
         assert!(try_detect_provider("gemini-definitely-fake").is_none());

@@ -1003,7 +1003,7 @@ mod tests {
         let agents = vec![
             AgentSummary {
                 name: "researcher".into(),
-                model: "claude-sonnet-4-6".into(),
+                model: "claude-sonnet-5".into(),
                 source_label: "project".into(),
             },
             AgentSummary {
@@ -1019,7 +1019,7 @@ mod tests {
             Some(Path::new("/home/me/project")),
         );
         assert!(s.contains("Project agents (/home/me/project/.agiworkforce/agents)"));
-        assert!(s.contains("researcher · claude-sonnet-4-6"));
+        assert!(s.contains("researcher · claude-sonnet-5"));
         assert!(s.contains("Built-in agents (always available)"));
         assert!(s.contains("explorer · haiku"));
         assert!(s.contains("Create new agent"));
@@ -1249,7 +1249,7 @@ mod tests {
             cache_write_tokens: 1_234,
             estimated_cost_usd: 0.2347,
             turn_count: 15,
-            model: "claude-sonnet-4-6".into(),
+            model: "claude-sonnet-5".into(),
         };
         let s = render_usage(&usage);
         assert!(s.contains("Usage"));
@@ -1262,7 +1262,7 @@ mod tests {
         assert!(s.contains("$0.2347"));
         assert!(s.contains("Turn count:"));
         assert!(s.contains("15"));
-        assert!(s.contains("claude-sonnet-4-6"));
+        assert!(s.contains("claude-sonnet-5"));
         assert!(s.contains("agiworkforce.com/pricing"));
     }
 

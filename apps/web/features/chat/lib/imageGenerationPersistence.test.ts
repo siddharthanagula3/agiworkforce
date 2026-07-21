@@ -120,7 +120,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     imageUrl: 'https://blob.example/generated/fox.png',
     imageGenPrompt: 'a watercolor fox in a forest',
     imageGenAspect: 'square',
-    imageGenModel: 'imagen-4-ultra',
+    imageGenModel: 'gemini-3.1-flash-image',
   };
 
   it('persists the image card with the zero-width placeholder content (not empty string)', async () => {
@@ -133,7 +133,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     await persistImageGenerationAssistantMessage({
       conversationId: 'conv-1',
       messageId: ASSISTANT_MESSAGE_ID,
-      model: 'imagen-4-ultra',
+      model: 'gemini-3.1-flash-image',
       metadata,
       getAuthToken: TOK,
       updateMessage,
@@ -159,7 +159,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     // the saved payload must carry that same shape verbatim.
     expect(body['metadata']).toEqual(metadata);
     expect(body['role']).toBe('assistant');
-    expect(body['model']).toBe('imagen-4-ultra');
+    expect(body['model']).toBe('gemini-3.1-flash-image');
 
     expect(updateMessage).toHaveBeenCalledWith(ASSISTANT_MESSAGE_ID, {
       id: SAVED_ASSISTANT_MESSAGE_ID,
@@ -179,7 +179,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     await persistImageGenerationAssistantMessage({
       conversationId: 'conv-1',
       messageId: ASSISTANT_MESSAGE_ID,
-      model: 'imagen-4-ultra',
+      model: 'gemini-3.1-flash-image',
       metadata: { ...metadata, imageUrl: 'https://blob.example/generated/fox-v2.png' },
       getAuthToken: TOK,
       updateMessage,
@@ -202,7 +202,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
       persistImageGenerationAssistantMessage({
         conversationId: 'conv-1',
         messageId: '00000000-0000-4000-8000-000000000203',
-        model: 'imagen-4-ultra',
+        model: 'gemini-3.1-flash-image',
         metadata,
         getAuthToken: TOK,
         updateMessage,

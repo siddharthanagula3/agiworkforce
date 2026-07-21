@@ -52,8 +52,8 @@ describe('applyOpenRouterAnthropicCacheControl', () => {
     expect(JSON.stringify(params.messages)).toBe(before);
   });
 
-  it('does not mutate non-anthropic routes (e.g. meta-llama/*)', () => {
-    const params = buildParams('meta-llama/llama-3.3-70b-instruct:free');
+  it('does not mutate non-anthropic routes (e.g. nvidia/*)', () => {
+    const params = buildParams('nvidia/nemotron-3-super-120b-a12b:free');
     const before = JSON.stringify(params.messages);
     applyOpenRouterAnthropicCacheControl(params, 'short');
     expect(JSON.stringify(params.messages)).toBe(before);

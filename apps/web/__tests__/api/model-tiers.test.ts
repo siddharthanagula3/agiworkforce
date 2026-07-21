@@ -25,8 +25,8 @@ describe('shared subscription model gate', () => {
       expect(canAccessModel(model, 'basic')).toBe(false);
     }
 
-    expect(canAccessModel('gpt-5.4-nano', 'basic')).toBe(true);
-    expect(canAccessModel('gpt-5.4-mini', 'basic')).toBe(false);
+    expect(canAccessModel('gpt-5.6-luna', 'basic')).toBe(true);
+    expect(canAccessModel('gpt-5.6-terra', 'basic')).toBe(false);
     expect(canAccessModel('claude-haiku-4.5', 'basic')).toBe(false);
   });
 

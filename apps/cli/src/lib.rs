@@ -2702,17 +2702,18 @@ pub async fn run_main() -> Result<()> {
     // Seed interactive sessions with the Auto launch state so per-turn
     // re-classification has full continuity (selection, model_key, task,
     // trust, tier) — see AgentSession::re_resolve_auto_route_for_turn.
-    let auto_route_seed = auto_route
-        .as_ref()
-        .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
-            state: crate::runtime::session::ManagedSessionAutoRouting {
-                selection: "auto-economy".to_string(),
-                model_key: route.model_key.clone(),
-                task_type: routing::classify::developer_task_type(*task),
-                trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
-            },
-            tier: tier.clone(),
-        });
+    let auto_route_seed =
+        auto_route
+            .as_ref()
+            .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
+                state: crate::runtime::session::ManagedSessionAutoRouting {
+                    selection: "auto-economy".to_string(),
+                    model_key: route.model_key.clone(),
+                    task_type: routing::classify::developer_task_type(*task),
+                    trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
+                },
+                tier: tier.clone(),
+            });
 
     // Interactive mode: TUI (default) or classic REPL (--no-tui)
     if cli.no_tui {

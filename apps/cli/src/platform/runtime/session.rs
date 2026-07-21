@@ -458,7 +458,7 @@ mod tests {
         let mut session = ManagedSession::new("auto-session", Utc::now());
         session.auto_routing = Some(ManagedSessionAutoRouting {
             selection: "auto-balanced".to_string(),
-            model_key: "claude-sonnet-4.6".to_string(),
+            model_key: "claude-sonnet-5".to_string(),
             task_type: agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
         });

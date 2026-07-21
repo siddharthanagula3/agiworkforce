@@ -21,8 +21,8 @@ describe('extractProvider', () => {
   });
 
   it('identifies OpenAI models by gpt- prefix', () => {
-    expect(extractProvider('gpt-5.5')).toBe('openai');
-    expect(extractProvider('gpt-5.5-mini')).toBe('openai');
+    expect(extractProvider('gpt-5.6-sol')).toBe('openai');
+    expect(extractProvider('gpt-5.6-luna')).toBe('openai');
     expect(extractProvider('gpt-4o')).toBe('openai');
   });
 
@@ -38,7 +38,7 @@ describe('extractProvider', () => {
   });
 
   it('identifies xAI models by grok- prefix', () => {
-    expect(extractProvider('grok-4.3')).toBe('xai');
+    expect(extractProvider('grok-4.5')).toBe('xai');
   });
 
   it('identifies DeepSeek models by deepseek- prefix', () => {
@@ -51,7 +51,7 @@ describe('extractProvider', () => {
   });
 
   it('identifies Moonshot/Kimi models', () => {
-    expect(extractProvider('kimi-k2.5-thinking')).toBe('moonshot');
+    expect(extractProvider('kimi-k3')).toBe('moonshot');
     expect(extractProvider('moonshot-v1')).toBe('moonshot');
   });
 
@@ -84,7 +84,7 @@ describe('guardProviderSwitch — same-provider switches are always allowed', ()
     });
 
     it(`allows gpt→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('gpt-5.5', 'gpt-5.5-mini', tier)).toBe('allow');
+      expect(guardProviderSwitch('gpt-5.6-sol', 'gpt-5.6-luna', tier)).toBe('allow');
     });
   }
 });
@@ -98,7 +98,7 @@ describe('guardProviderSwitch — auto-mode switches are always allowed', () => 
     });
 
     it(`allows auto-balanced→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('auto-balanced', 'gpt-5.5', tier)).toBe('allow');
+      expect(guardProviderSwitch('auto-balanced', 'gpt-5.6-sol', tier)).toBe('allow');
     });
   }
 });
@@ -109,27 +109,27 @@ describe('guardProviderSwitch — cross-provider switch gating', () => {
 
   for (const tier of BLOCKED_TIERS) {
     it(`blocks claude→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4.8', 'gpt-5.5', tier)).toBe('upgrade-required');
+      expect(guardProviderSwitch('claude-opus-4.8', 'gpt-5.6-sol', tier)).toBe('upgrade-required');
     });
 
     it(`blocks gpt→gemini on tier=${tier}`, () => {
-      expect(guardProviderSwitch('gpt-5.5', 'gemini-3.1-pro-preview', tier)).toBe(
+      expect(guardProviderSwitch('gpt-5.6-sol', 'gemini-3.1-pro-preview', tier)).toBe(
         'upgrade-required',
       );
     });
 
     it(`blocks claude→grok on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4.8', 'grok-4.3', tier)).toBe('upgrade-required');
+      expect(guardProviderSwitch('claude-opus-4.8', 'grok-4.5', tier)).toBe('upgrade-required');
     });
   }
 
   for (const tier of ALLOWED_TIERS) {
     it(`allows claude→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4.8', 'gpt-5.5', tier)).toBe('allow');
+      expect(guardProviderSwitch('claude-opus-4.8', 'gpt-5.6-sol', tier)).toBe('allow');
     });
 
     it(`allows gpt→gemini on tier=${tier}`, () => {
-      expect(guardProviderSwitch('gpt-5.5', 'gemini-3.1-pro-preview', tier)).toBe('allow');
+      expect(guardProviderSwitch('gpt-5.6-sol', 'gemini-3.1-pro-preview', tier)).toBe('allow');
     });
   }
 });

@@ -226,7 +226,8 @@ describe('toCanonicalEffort', () => {
 describe('resolveWebOpenAIReasoningEffort', () => {
   it('passes max through only when the canonical model metadata supports it', () => {
     expect(resolveWebOpenAIReasoningEffort('openai', 'max', 'gpt-5.6-sol')).toBe('max');
-    expect(resolveWebOpenAIReasoningEffort('openai', 'max', 'gpt-5.5')).toBeUndefined();
+    // gpt-image-2 is a live catalog OpenAI model with no reasoning-effort support.
+    expect(resolveWebOpenAIReasoningEffort('openai', 'max', 'gpt-image-2')).toBeUndefined();
   });
 });
 

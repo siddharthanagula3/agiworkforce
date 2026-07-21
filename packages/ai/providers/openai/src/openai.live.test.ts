@@ -28,7 +28,7 @@ describe.skipIf(skip)('OpenAI adapter live', () => {
     const chunks: StreamChunk[] = [];
     for await (const chunk of adapter.stream(
       {
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [{ role: 'user', content: 'Say "ok" and nothing else.' }],
         maxOutputTokens: 32,
       },

@@ -518,7 +518,7 @@ mod tests {
         let dir = tmp.path();
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("gpt-5.5", &ctx, None);
+        let mut session = AgentSession::new("gpt-5.6-sol", &ctx, None);
         session.messages.push(Message::text("user", "Hello world"));
         session.messages.push(Message::text("assistant", "Hi!"));
 
@@ -527,7 +527,7 @@ mod tests {
 
         assert_eq!(summaries.len(), 1);
         assert_eq!(summaries[0].id, id);
-        assert_eq!(summaries[0].model, "gpt-5.5");
+        assert_eq!(summaries[0].model, "gpt-5.6-sol");
         assert_eq!(summaries[0].title, "Hello world");
         // system + user + assistant = 3 messages
         assert_eq!(summaries[0].message_count, 3);
@@ -735,7 +735,7 @@ mod tests {
         let conv = SavedConversation {
             id: "20260317_120000".to_string(),
             title: "Test restore".to_string(),
-            model: "claude-sonnet-4-6".to_string(),
+            model: "claude-sonnet-5".to_string(),
             created_at: "2026-03-17T12:00:00Z".to_string(),
             updated_at: "2026-03-17T12:00:00Z".to_string(),
             messages: vec![
@@ -765,10 +765,10 @@ mod tests {
         };
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("gpt-5.5", &ctx, None);
+        let mut session = AgentSession::new("gpt-5.6-sol", &ctx, None);
         restore_into_session(&mut session, &conv);
 
-        assert_eq!(session.model, "claude-sonnet-4-6");
+        assert_eq!(session.model, "claude-sonnet-5");
         assert_eq!(session.total_input_tokens, 100);
         assert_eq!(session.total_output_tokens, 200);
         // 2 user messages = 2 turns

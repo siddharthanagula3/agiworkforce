@@ -86,7 +86,7 @@ describe('L1 Security - Privacy Boundaries (Managed Cloud gate)', () => {
 
     const res = buildManagedComputeGateResponse(makeRequest(), {
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: 'gpt-5.6-sol',
     });
     expect(res).not.toBeNull();
     expect(res!.status).toBe(403);

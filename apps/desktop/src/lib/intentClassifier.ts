@@ -16,8 +16,8 @@
  *
  * Recommended classifier models (in order of preference):
  * 1. gemini-3.1-flash-lite - extremely fast, recent, strong structured output
- * 2. gpt-5.4-mini - reliable tool-aware OpenAI classifier
- * 3. claude-sonnet-4.6 - high-accuracy fallback for ambiguous tasks
+ * 2. gpt-5.6-luna - reliable tool-aware OpenAI classifier
+ * 3. claude-sonnet-5 - high-accuracy fallback for ambiguous tasks
  *
  * Intent Types:
  * - Chat: Regular conversation, Q&A, explanations

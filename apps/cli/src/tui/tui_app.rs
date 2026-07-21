@@ -4624,7 +4624,7 @@ mod tests {
             os: "linux".into(),
             shell: "bash".into(),
         };
-        let session = crate::agent::AgentSession::new("claude-sonnet-4-6", &sys_ctx, None);
+        let session = crate::agent::AgentSession::new("claude-sonnet-5", &sys_ctx, None);
         let config = crate::config::CliConfig::default();
         TuiApp::new(session, config, true /* sandbox_disabled */)
     }

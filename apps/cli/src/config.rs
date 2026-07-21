@@ -1065,7 +1065,7 @@ mod tests {
     #[test]
     fn test_roundtrip_toml_all_fields() {
         let mut config = CliConfig::default();
-        config.default.model = "gpt-5.5".to_string();
+        config.default.model = "gpt-5.6-sol".to_string();
         config.default.provider = "openai".to_string();
         config.default.stream = false;
         config.default.max_tokens = 4096;
@@ -1081,7 +1081,7 @@ mod tests {
         let serialized = toml::to_string_pretty(&config).unwrap();
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
 
-        assert_eq!(deserialized.default.model, "gpt-5.5");
+        assert_eq!(deserialized.default.model, "gpt-5.6-sol");
         assert_eq!(deserialized.default.provider, "openai");
         assert!(!deserialized.default.stream);
         assert_eq!(deserialized.default.max_tokens, 4096);
@@ -1174,9 +1174,9 @@ mod tests {
     fn test_merge_env_model_override() {
         let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
-        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.5");
+        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.6-sol");
         config.merge_env_overrides();
-        assert_eq!(config.default.model, "gpt-5.5");
+        assert_eq!(config.default.model, "gpt-5.6-sol");
         std::env::remove_var("AGIWORKFORCE_MODEL");
     }
 
@@ -1256,7 +1256,7 @@ mod tests {
             &config_file,
             r#"
 [default]
-model = "gpt-5.5"
+model = "gpt-5.6-sol"
 provider = "openai"
 max_tokens = 2048
 "#,
@@ -1264,7 +1264,7 @@ max_tokens = 2048
         .unwrap();
 
         let project = CliConfig::load_project_config_from(tmp.path()).unwrap();
-        assert_eq!(project.default.model, "gpt-5.5");
+        assert_eq!(project.default.model, "gpt-5.6-sol");
         assert_eq!(project.default.provider, "openai");
         assert_eq!(project.default.max_tokens, 2048);
         assert!(project.source.project_path.is_some());
@@ -1316,10 +1316,10 @@ privacy_mode = "local"
     fn test_merge_from_overrides_non_default_model() {
         let mut base = CliConfig::default();
         let mut other = CliConfig::default();
-        other.default.model = "gpt-5.5".to_string();
+        other.default.model = "gpt-5.6-sol".to_string();
 
         base.merge_from(&other);
-        assert_eq!(base.default.model, "gpt-5.5");
+        assert_eq!(base.default.model, "gpt-5.6-sol");
     }
 
     #[test]
@@ -1442,7 +1442,7 @@ privacy_mode = "local"
     fn test_env_overrides_tracked_in_source() {
         let _guard = ENV_MUTEX.lock().unwrap();
         let mut config = CliConfig::default();
-        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.5");
+        std::env::set_var("AGIWORKFORCE_MODEL", "gpt-5.6-sol");
         std::env::set_var("AGIWORKFORCE_PROVIDER", "openai");
         config.merge_env_overrides();
 
@@ -1488,7 +1488,7 @@ privacy_mode = "local"
         base.source.global_path = Some(PathBuf::from("/home/user/.agiworkforce/config.toml"));
 
         let mut other = CliConfig::default();
-        other.default.model = "gpt-5.5".to_string();
+        other.default.model = "gpt-5.6-sol".to_string();
         other.source.project_path = Some(PathBuf::from("/project/.agiworkforce/config.toml"));
 
         base.merge_from(&other);
@@ -1650,8 +1650,8 @@ base_url = "http://localhost:11434"
     #[test]
     fn test_set_value_model() {
         let mut config = CliConfig::default();
-        config.set_value("model", "gpt-5.5").unwrap();
-        assert_eq!(config.default.model, "gpt-5.5");
+        config.set_value("model", "gpt-5.6-sol").unwrap();
+        assert_eq!(config.default.model, "gpt-5.6-sol");
     }
 
     #[test]
@@ -1680,15 +1680,15 @@ base_url = "http://localhost:11434"
     fn test_set_get_fallback_chain() {
         let mut config = CliConfig::default();
         config
-            .set_value("fallback-chain", "gpt-5.5, gemini-3.1-flash-lite")
+            .set_value("fallback-chain", "gpt-5.6-sol, gemini-3.1-flash-lite")
             .unwrap();
         assert_eq!(
             config.default.fallback_chain,
-            vec!["gpt-5.5", "gemini-3.1-flash-lite"]
+            vec!["gpt-5.6-sol", "gemini-3.1-flash-lite"]
         );
         assert_eq!(
             config.get_value("fallback-chain"),
-            Some("gpt-5.5,gemini-3.1-flash-lite".to_string())
+            Some("gpt-5.6-sol,gemini-3.1-flash-lite".to_string())
         );
     }
 
@@ -1734,7 +1734,7 @@ base_url = "http://localhost:11434"
             &config_file,
             r#"
 [default]
-model = "gpt-5.5"
+model = "gpt-5.6-sol"
 "#,
         )
         .unwrap();
@@ -1748,7 +1748,7 @@ model = "gpt-5.5"
         let contents = std::fs::read_to_string(&saved).unwrap();
 
         assert_eq!(saved, config_file);
-        assert!(contents.contains("model = \"gpt-5.5\""));
+        assert!(contents.contains("model = \"gpt-5.6-sol\""));
         assert!(contents.contains("[ui]"));
         assert!(contents.contains("output_style = \"explanatory\""));
         assert!(contents.contains("privacy_mode = \"byok\""));
@@ -1757,14 +1757,16 @@ model = "gpt-5.5"
     #[test]
     fn test_fallback_chain_serialization() {
         let mut config = CliConfig::default();
-        config.default.fallback_chain =
-            vec!["gpt-5.5".to_string(), "gemini-3.1-flash-lite".to_string()];
+        config.default.fallback_chain = vec![
+            "gpt-5.6-sol".to_string(),
+            "gemini-3.1-flash-lite".to_string(),
+        ];
         let serialized = toml::to_string_pretty(&config).unwrap();
         assert!(serialized.contains("fallback_chain"));
         let deserialized: CliConfig = toml::from_str(&serialized).unwrap();
         assert_eq!(
             deserialized.default.fallback_chain,
-            vec!["gpt-5.5", "gemini-3.1-flash-lite"]
+            vec!["gpt-5.6-sol", "gemini-3.1-flash-lite"]
         );
     }
 
@@ -1803,7 +1805,7 @@ model = "gpt-5.5"
     #[test]
     fn project_config_model_only_not_sensitive() {
         let mut project = CliConfig::default();
-        project.default.model = "claude-sonnet-4-6".to_string();
+        project.default.model = "claude-sonnet-5".to_string();
         // Remove any base_url entries so this is truly just a model override.
         for v in project.providers.values_mut() {
             v.base_url = None;

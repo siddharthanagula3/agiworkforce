@@ -82,7 +82,7 @@ const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
 const CONV_ID = '0190a000-0000-7000-8000-000000000003'; // a valid UUIDv7 conversation id
 const RUN_ID = '0190a000-0000-7000-8000-000000000013';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 
 beforeEach(() => {
   jest.clearAllMocks();

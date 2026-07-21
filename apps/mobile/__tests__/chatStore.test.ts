@@ -184,7 +184,7 @@ function resetStore() {
 const CONV_ID = 'test-conv-123';
 const MODEL = 'claude-3-5-sonnet';
 const LOCAL_MODEL = 'qwen3-4b-instruct-2507';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
 
 function seedCloudConversation(model = CLOUD_MODEL) {
   const existing = getState().conversations.find((conversation) => conversation.id === CONV_ID);

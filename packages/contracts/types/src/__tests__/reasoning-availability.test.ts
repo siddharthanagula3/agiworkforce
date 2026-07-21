@@ -24,12 +24,11 @@ describe('per-model reasoning capability', () => {
     expect(r.control).toBe('none');
   });
 
-  it('exposes the OpenAI GPT-5.5 effort set (none/low/medium/high/xhigh; no minimal, no max)', () => {
-    const r = getModelReasoning('gpt-5.5');
+  it('exposes the OpenAI GPT-5.6 Terra effort set (none/low/medium/high/xhigh/max; no minimal)', () => {
+    const r = getModelReasoning('gpt-5.6-terra');
     expect(r.control).toBe('effort_levels');
-    expect(r.supportedEfforts).toEqual(['none', 'low', 'medium', 'high', 'xhigh']);
+    expect(r.supportedEfforts).toEqual(['none', 'low', 'medium', 'high', 'xhigh', 'max']);
     expect(r.supportedEfforts).not.toContain('minimal');
-    expect(r.supportedEfforts).not.toContain('max');
   });
 
   it('exposes the Anthropic Opus 4.8 effort set (adds max) via adaptive+output_config.effort', () => {
@@ -52,8 +51,8 @@ describe('per-model reasoning capability', () => {
     expect(r.thinkingBudget?.max).toBe(32768);
   });
 
-  it('marks grok-4.3 as an always-on reasoner that cannot disable thinking', () => {
-    const r = getModelReasoning('grok-4.3');
+  it('marks grok-4.5 as an always-on reasoner that cannot disable thinking', () => {
+    const r = getModelReasoning('grok-4.5');
     expect(r.control).toBe('always_on');
     expect(r.canDisableThinking).toBe(false);
   });

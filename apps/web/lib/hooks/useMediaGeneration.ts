@@ -12,7 +12,7 @@ async function getAuthToken(): Promise<string> {
 export interface GenerateImageOptions {
   size?: '1024x1024' | '1792x1024' | '1024x1792';
   provider?: 'google' | 'openai' | 'stability';
-  /** Catalog model id (e.g. 'imagen-4-ultra'). The route resolves it to the real API id. */
+  /** Catalog model id (e.g. 'gemini-3.1-flash-image'). The route resolves it to the real API id. */
   model?: string;
 }
 

@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn dollars_zero_when_empty() {
         let hud = CostHud::default();
-        assert_eq!(hud.dollars("claude-sonnet-4-6"), 0.0);
+        assert_eq!(hud.dollars("claude-sonnet-5"), 0.0);
     }
 
     #[test]
@@ -167,13 +167,13 @@ mod tests {
             out_tokens: 0,
             ..Default::default()
         };
-        let (price_in, _) = model_catalog::pricing("claude-sonnet-4-6");
-        assert!((hud.dollars("claude-sonnet-4-6") - price_in).abs() < 1e-6);
+        let (price_in, _) = model_catalog::pricing("claude-sonnet-5");
+        assert!((hud.dollars("claude-sonnet-5") - price_in).abs() < 1e-6);
     }
 
     #[test]
     fn cache_creation_uses_catalog_write_rate() {
-        let model_id = "claude-sonnet-4-6";
+        let model_id = "claude-sonnet-5";
         let expected = model_catalog::find(model_id)
             .map(|model| model.cache_write_price_per_1m)
             .unwrap_or(0.0);
@@ -208,7 +208,7 @@ mod tests {
             context_used: 2_100,
             context_window: 200_000,
         };
-        let line = build_line(&hud, "claude-sonnet-4-6");
+        let line = build_line(&hud, "claude-sonnet-5");
         let text = line
             .spans
             .iter()
@@ -239,7 +239,7 @@ mod tests {
             reasoning_tokens: 0,
             ..Default::default()
         };
-        let line = build_line(&hud, "gpt-5.5-mini");
+        let line = build_line(&hud, "plain-chat-model");
         let text = line
             .spans
             .iter()
@@ -260,7 +260,7 @@ mod tests {
             reasoning_tokens: 150,
             ..Default::default()
         };
-        let line = build_line(&hud, "claude-sonnet-4-6");
+        let line = build_line(&hud, "claude-sonnet-5");
         let text = line
             .spans
             .iter()
@@ -291,7 +291,7 @@ mod tests {
             context_used: 2_100,
             context_window: 200_000,
         };
-        let line = build_line(&hud, "claude-sonnet-4-6");
+        let line = build_line(&hud, "claude-sonnet-5");
         let text = line
             .spans
             .iter()

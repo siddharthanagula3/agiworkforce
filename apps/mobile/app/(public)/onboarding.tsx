@@ -265,7 +265,7 @@ export default function OnboardingScreen() {
 
   // Cloud path from first run: Managed Cloud is public alpha (no invite, no
   // waitlist — signing in IS the entitlement, ClerkTokenBridge flips cloudUnlocked
-  // on success). Let a new user reach hosted models (gpt-5.4-mini etc.) + cloud
+  // on success). Let a new user reach hosted models (gpt-5.6-luna etc.) + cloud
   // tools/web-search without first downloading a local model. Marks onboarding
   // done so they never bounce back here, records the cloud preference, and routes
   // to the same Clerk sign-in the in-app cloud gate uses.
@@ -692,7 +692,7 @@ function DeviceTierScreen({
         </Text>
       </Pressable>
 
-      {/* Cloud path — reach hosted models (gpt-5.4-mini etc.) + cloud tools/web
+      {/* Cloud path — reach hosted models (gpt-5.6-luna etc.) + cloud tools/web
           search without downloading a local model. Sign-in is the entitlement. */}
       <Pressable
         testID="device-tier-cloud-btn"

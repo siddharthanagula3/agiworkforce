@@ -55,7 +55,7 @@ import { POST } from '@/app/api/llm/v1/audio/transcriptions/route';
 function makeRequest(file: File): NextRequest {
   const fd = new FormData();
   fd.append('file', file);
-  fd.append('model', 'whisper-1');
+  fd.append('model', 'gpt-4o-transcribe');
   return new NextRequest('http://localhost/api/llm/v1/audio/transcriptions', {
     method: 'POST',
     headers: { authorization: 'Bearer fake-jwt' },

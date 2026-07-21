@@ -1920,7 +1920,7 @@ mod tests {
         .expect("managed host");
         let previous = ManagedSessionAutoRouting {
             selection: "auto-premium".to_string(),
-            model_key: "gpt-5.4-mini".to_string(),
+            model_key: "gpt-5.6-luna".to_string(),
             task_type: DeveloperRoutingTaskType::General,
             trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,
         };
