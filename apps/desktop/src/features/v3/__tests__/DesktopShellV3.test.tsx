@@ -81,6 +81,8 @@ vi.mock('react-i18next', () => ({
         'sidebar.mode.cloud': 'Cloud',
         'sidebar.mode.aria': 'Switch between Local and Cloud',
         'sidebar.mode.switchTo': `Switch to ${params?.['mode'] ?? ''}`,
+        'sidebar.mode.soon': 'Soon',
+        'sidebar.mode.cloudUnavailable': 'Cloud coming soon to desktop',
         'common.search': 'Search',
         'common.settings': 'Settings',
         'common.beta': 'Beta',
@@ -313,8 +315,30 @@ describe('DesktopShellV3 duplication ownership', () => {
 
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
-    expect(screen.getByRole('button', { name: 'Switch to Cloud' })).toBeInTheDocument();
+    // Desktop (supportsLocalAppMode: true) cannot enter Cloud yet, so the collapsed
+    // toggle is an honest disabled "coming soon" control, never a "Switch to Cloud"
+    // affordance that only toasts on click.
+    const cloudHint = screen.getByRole('button', { name: 'Cloud coming soon to desktop' });
+    expect(cloudHint).toBeInTheDocument();
+    expect(cloudHint).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+  });
+
+  it('shows the expanded Cloud mode as an honest disabled "Soon" tab on desktop', () => {
+    render(<DesktopShellV3 runtime={null} hostBridge={null} />);
+
+    // Local tab is the live, selected mode; Cloud is a visibly-disabled Soon tab
+    // (desktop managed cloud is not implemented — no fake-selectable affordance).
+    const localTab = screen.getByRole('tab', { name: 'Local' });
+    expect(localTab).toHaveAttribute('aria-selected', 'true');
+
+    const cloudTab = screen.getByRole('tab', { name: /Cloud/ });
+    expect(cloudTab).toHaveAttribute('aria-disabled', 'true');
+    expect(cloudTab).toHaveTextContent('Soon');
+
+    // Clicking the disabled Cloud tab must not flip the selected mode.
+    fireEvent.click(cloudTab);
+    expect(screen.getByRole('tab', { name: 'Local' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('treats a local storage owner as signed out in the sidebar', () => {
