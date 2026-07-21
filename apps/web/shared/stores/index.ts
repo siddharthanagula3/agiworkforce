@@ -112,7 +112,6 @@ export {
 export { useArtifactStore, type ArtifactState } from './artifact-store';
 
 // Usage Warning Store - Token usage warnings and limits
-export { useUsageWarningStore, type UsageWarningState } from './usage-warning-store';
 
 // Mission Control Store - Mission orchestration state
 export {
