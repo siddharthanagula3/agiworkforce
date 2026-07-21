@@ -133,22 +133,34 @@ statement outside a module` and `initialize()` (which registers
   VITE_DESKTOP_UI_DEV_LOCAL=1, E2E_MOCK_CLOUD_API=1 E2E_MOCK_LLM=1 — no live
   backend/prod DB; IPC-check clean, 515 invoke()s all resolve). smoke project 3/3
   PASS (app launches + renders, nav present, safety landmarks present). settings +
-  onboarding + gdpr + integration: 14 passed / 14 skipped / 1 FAILED. OPEN
-  DESKTOP-GDPR-PRIVACY-PERSIST-01: gdpr.spec.ts:188 "should persist privacy
-  preferences across sessions" fails — after toggling the first `[role="switch"]`
-  in the privacy section and page.reload(), aria-checked reverts (expected the
-  changed state, got the original). Needs root-cause classification before a fix:
-  settingsStore uses zustand persist + createJSONStorage (localStorage) and DOM-
-  local mode explicitly "uses persisted localStorage state" (settingsStore.ts:1187),
-  so persistence SHOULD survive reload here — which points at a real bug (the
-  specific privacy toggle not wired to the persisted store, or excluded by
-  partialize). Competing hypothesis: the first privacy switch is a native-only
-  setting (e.g. master-password/keychain per DesktopCloudSettingsModal privacy tab)
-  that is intentionally skipped in DOM-local mode, making it a test/harness mismatch
-  (the test should skip it). Deferred to a dedicated desktop session to trace the
-  exact toggle → onChange → store field → persist partialize; recorded with evidence
-  rather than dismissed (lesson from EXT-CONTENT-SCRIPT-BROKEN-BY-CODE-SPLIT: do not
-  assume harness). Desktop cargo suite + smoke otherwise green.
+  onboarding + gdpr + integration: 14 passed / 14 skipped / 1 FAILED, then
+  root-caused (below). Desktop cargo suite + smoke otherwise green.
+- ROOT-CAUSED DESKTOP-GDPR-PRIVACY-PERSIST-01 (2026-07-21 — NOT a product bug;
+  DOM-mode mock-fidelity + loose test): gdpr.spec.ts:188 "should persist privacy
+  preferences across sessions" failed because the DOM-local tauri-mock
+  (src/lib/tauri-mock.ts) was STATELESS for every Tauri-IPC-backed setting —
+  `set_user_preference` returned undefined (stored nothing) and
+  `get_user_preference` returned null unconditionally — so NO native-backed
+  setting can survive a page.reload() in DOM-local mode, though the real Tauri app
+  persists them via the native SQLite preference store. Traced at runtime: the test
+  uses a PAGE-WIDE `[role="switch"]` selector (the Privacy tab itself has zero
+  role="switch" elements — its crash-reporting control is `<input type=checkbox>`),
+  so `.first()` actually toggles a Capabilities switch (Always-use-Agent-Mode /
+  Auto-approve, DesktopCloudSettingsModal.tsx:156/184) that persists via
+  set_agent_mode / set_auto_approve_all — also stateless stubs in the mock. So the
+  failure is a mock-fidelity limitation plus a mis-scoped test (named "privacy" but
+  toggling a capabilities switch and reading aria-checked), NOT a persistence
+  defect. PARTIAL FIX applied: made the mock's user_preference commands stateful
+  (localStorage-backed, namespaced `agi_mock_pref:<key>`) so preference-backed
+  settings (crash-reporting, research mode, instruction files) now survive reload
+  in DOM-local mode as they do natively — a genuine fidelity improvement (tauriMock
+  - Privacy + InstructionFiles + SettingsPanel unit suites still green). NOT
+    chased: making set_agent_mode/set_auto_approve_all stateful (risks other e2e
+    default-state assumptions) and rewriting the mis-scoped gdpr test to target the
+    real privacy toggle + assert via .checked — a separate desktop test-quality task,
+    non-blocking (no product persistence bug). Lesson from
+    EXT-CONTENT-SCRIPT-BROKEN-BY-CODE-SPLIT applied: pushed to runtime root-cause
+    before classifying, rather than assuming harness.
 - VERIFIED-CLEAN (2026-07-21 deep re-audit, self-audited surfaces): beyond the
   side panel, I independently checked the options-page + background-router,
   content/autofill, and computer-use/native/cloud-bridge egress surfaces for
