@@ -2211,11 +2211,35 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return undefined as T;
 
     // ── User preference commands ─────────────────────────────────
-    case 'set_user_preference':
+    // Back these with localStorage so a preference survives a page reload the
+    // way the real native preference store (SQLite) does. Without this the mock
+    // was stateless (set = no-op, get = null), so no DOM-local preference could
+    // persist across a reload — which made the cross-session e2e assertions
+    // (e.g. GDPR privacy toggles) fail against a working feature.
+    case 'set_user_preference': {
+      const prefKey = args?.['key'];
+      if (typeof prefKey === 'string') {
+        try {
+          localStorage.setItem(`agi_mock_pref:${prefKey}`, String(args?.['value'] ?? ''));
+        } catch {
+          /* storage unavailable — treat as no-op */
+        }
+      }
       return undefined as T;
+    }
 
-    case 'get_user_preference':
+    case 'get_user_preference': {
+      const prefKey = args?.['key'];
+      if (typeof prefKey === 'string') {
+        try {
+          const stored = localStorage.getItem(`agi_mock_pref:${prefKey}`);
+          if (stored !== null) return { value: stored } as T;
+        } catch {
+          /* storage unavailable */
+        }
+      }
       return null as T;
+    }
 
     // ── Misc/catch-all for remaining newly registered commands ──────
     case 'auth_store_session':
