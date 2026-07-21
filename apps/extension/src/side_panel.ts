@@ -37,6 +37,7 @@ import {
   resolveBrowserConversationScope,
 } from './features/background/conversation-session';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
+import { el, formatTime } from './features/side-panel/dom';
 import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
@@ -2970,33 +2971,9 @@ function injectStyles(): void {
   }
 }
 
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs: Record<string, string> = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    // CSP (style-src 'self'): setAttribute('style', …) is an inline-style
-    // *attribute* and is blocked by style-src-attr on extension pages. Route
-    // style through the CSSOM (element.style.cssText), which CSP exempts.
-    if (k === 'style') e.style.cssText = v;
-    else e.setAttribute(k, v);
-  }
-  for (const c of children) {
-    if (typeof c === 'string') e.appendChild(document.createTextNode(c));
-    else e.appendChild(c);
-  }
-  return e;
-}
-
 function scrollToBottom(): void {
   const msgs = document.getElementById('sp-messages');
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
-}
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function buildBubble(msg: ChatMessage): HTMLElement {
