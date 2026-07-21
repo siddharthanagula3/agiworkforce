@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@clerk/nextjs';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
 import { useChatStream, ToolApprovalProvider } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
@@ -306,8 +306,10 @@ export default function WebChatPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const urlConversationId = params?.['sessionId'] as string | undefined;
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
+  const openSearchParam = searchParams?.get('search') ?? null;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Auto-collapse the sidebar below the mobile breakpoint so the composer
@@ -479,6 +481,18 @@ export default function WebChatPage() {
       })),
     [storeProjects],
   );
+
+  // Open the conversation-search dialog when arriving with ?search=true (the
+  // command-palette "Search Conversations" action navigates here), then strip
+  // the param so it isn't sticky on close/reload.
+  useEffect(() => {
+    if (openSearchParam !== 'true') return;
+    setSearchDialogOpen(true);
+    const next = new URLSearchParams(Array.from(searchParams?.entries() ?? []));
+    next.delete('search');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? '/chat'), { scroll: false });
+  }, [openSearchParam, searchParams, router, pathname]);
 
   // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
   // regardless of which component dispatches them.
