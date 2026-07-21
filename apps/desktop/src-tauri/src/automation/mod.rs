@@ -16,7 +16,6 @@ pub mod screen_watcher;
 pub mod types;
 #[cfg(target_os = "windows")]
 pub mod uia;
-pub mod vision_planner;
 
 #[cfg(target_os = "windows")]
 use uia::inspector_impl as platform_impl;
