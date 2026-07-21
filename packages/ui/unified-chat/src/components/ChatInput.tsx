@@ -319,6 +319,7 @@ export function ChatInput({
     supportsCodeExecution &&
     isCodeExecutionAvailable(
       getModelMetadataById(selectedModelId)?.capabilities.codeExecution,
+      getModelMetadataById(selectedModelId)?.capabilities.tools,
       modelProviderId,
       codeExecutionDeploymentEnabled,
     );

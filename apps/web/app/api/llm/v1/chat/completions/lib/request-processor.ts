@@ -1028,6 +1028,17 @@ export async function processRequest(
     // action the selected model can't perform (e.g. images to a no-vision model).
     // Aggregate usage is gated by private server policy after this capability check.
     const trialCaps = getModelMetadataById(requestedModel)?.capabilities;
+    const trialProviderLower =
+      getModelMetadataById(requestedModel)?.provider?.toLowerCase() ?? null;
+    // Model-agnostic web search: a tools-capable model WITHOUT a native search path
+    // (kimi-k3, deepseek, qwen, glm, groq, minimax…) still gets platform web search
+    // via the generic Perplexity fallback tool. The composer lights the Web-search
+    // toggle for these on `tools`, not `search`, so the trial capability gate must
+    // match — do not 403 them just because the model's intrinsic `search` cap is
+    // false. Whether the tool actually fires is still decided downstream by
+    // shouldOfferGenericWebSearchTool (backend + streaming).
+    const hasGenericWebSearchFallback =
+      webSearchNeedsGenericTool(trialProviderLower) && trialCaps?.tools === true;
     const hasImagePart = chatRequest.messages.some((msg) =>
       Array.isArray(msg.content)
         ? msg.content.some((part) => part.type === 'image_url' && part.image_url)
@@ -1035,7 +1046,10 @@ export async function processRequest(
     );
 
     const unsupportedFeature =
-      ((chatRequest.web_search || chatRequest.web_fetch) && !trialCaps?.search && 'web search') ||
+      ((chatRequest.web_search || chatRequest.web_fetch) &&
+        !trialCaps?.search &&
+        !hasGenericWebSearchFallback &&
+        'web search') ||
       (chatRequest.code_execution && !trialCaps?.codeExecution && 'code execution') ||
       ((chatRequest.thinking_mode || chatRequest.thinking || chatRequest.effort) &&
         !trialCaps?.thinking &&
@@ -1821,7 +1835,7 @@ export async function processRequest(
     resolvedTools = [...(resolvedTools ?? []), urlFetchToolDef()];
   }
 
-  if (chatRequest.code_execution && (resolvedModelCaps?.codeExecution ?? true)) {
+  if (chatRequest.code_execution) {
     // Code-execution router: tiered by provider when AGI_E2B_EXECUTION=1; native-always otherwise.
     //
     // E2B CUT-OVER (flag ON, streaming):
@@ -1830,16 +1844,29 @@ export async function processRequest(
     //   - OpenAI + everyone else: E2B-credit tier — routes to the platform-executed E2B sandbox
     //     (avoids OpenAI per-session fees; provides a sandbox for providers with no native exec).
     //
+    // Model-agnostic: the E2B sandbox is platform-executed — it only needs the model to emit
+    // tool calls, exactly like the url_fetch tool above — so it is gated on the `tools`
+    // capability, NOT the per-model `codeExecution` cap. That lets tools-capable open-weight
+    // models (kimi-k3, deepseek, qwen, glm…) that carry `codeExecution:false` (meaning "no
+    // *native* interpreter", which stays truthful in the catalog) still run code in the shared
+    // sandbox. The AGI_E2B_EXECUTION flag remains the single operator gate protecting
+    // managed-compute billing/abuse. The NATIVE fallback path keeps the `codeExecution` cap:
+    // only providers with a real native interpreter (anthropic/google/openai) resolve a tool;
+    // everyone else fails closed.
+    //
     // The offer is guarded to streaming only (offer⊆run constraint): E2B tools
     // are platform-executed and require the agentic loop to actually run them. That loop is only
     // entered on the streaming path in route.ts. Offering E2B tools on a non-streaming
     // request would inject a tool_call that nothing executes and stall the turn.
     //
-    // FLAG OFF (default): byte-for-byte the pre-P3 behavior regardless of E2B configuration.
-    // See docs/plans/e2b-universal-execution-design-* for the full design rationale.
+    // FLAG OFF (default): byte-for-byte the pre-P3 behavior — the native path keyed on the
+    // model's own `codeExecution` cap. See docs/plans/e2b-universal-execution-design-* for the
+    // full design rationale.
     if (e2bCutoverEnabled() && providerRoutesToE2B(providerLower) && chatRequest.stream) {
-      resolvedTools = [...(resolvedTools ?? []), ...e2bExecutionToolDefs()];
-    } else {
+      if (resolvedModelCaps?.tools ?? true) {
+        resolvedTools = [...(resolvedTools ?? []), ...e2bExecutionToolDefs()];
+      }
+    } else if (resolvedModelCaps?.codeExecution ?? true) {
       resolvedTools = [...(resolvedTools ?? []), ...resolveCodeExecutionTools(providerLower)];
     }
   }

@@ -163,6 +163,86 @@ describe('getWorkModeEntitlementError', () => {
   });
 });
 
+describe('free-trial capability gate — model-agnostic web search', () => {
+  // deepseek-v4-flash / qwen / glm are free-trial-eligible (economy tier) with
+  // tools:true, search:false. The shared composer lights the Web-search toggle on
+  // `tools`, so a free-trial user CAN enable it — and gets the generic Perplexity
+  // fallback tool. The free-trial capability gate must therefore NOT hard-reject
+  // these as "doesn't support web search" (the pre-fix bug), or the toggle lit a
+  // checkmark that the server 400'd.
+  const freeSubscription = {
+    id: 'sub-free',
+    user_id: 'user-free',
+    plan_tier: 'free',
+    status: 'active' as const,
+    current_period_start: new Date('2026-07-01T00:00:00Z'),
+    current_period_end: new Date('2026-08-01T00:00:00Z'),
+    stripe_subscription_id: 'stripe-sub-free',
+    stripe_price_id: 'stripe-price-free',
+  };
+
+  const freeTrialRequest = (body: Record<string, unknown>, key: string) =>
+    new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': key,
+        'x-agi-surface': 'web',
+      },
+      body: JSON.stringify(body),
+    });
+
+  it('does not reject a generic-fallback model on the web-search toggle it lit', async () => {
+    // stream:false falls through to the honest web_search_stream_required (422),
+    // exactly like a paid user — NOT the old free_trial_model_capability 400.
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: 'deepseek-v4-flash',
+          messages: [{ role: 'user', content: 'What is the latest news today?' }],
+          web_search: true,
+          stream: false,
+        },
+        'free-ws-1',
+      ),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(422);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: { code: 'web_search_stream_required' },
+      });
+    }
+  });
+
+  it('still rejects a genuine capability mismatch (code execution on a no-code model)', async () => {
+    // Proves the fix is scoped to web search: deepseek-v4-flash has codeExecution:false,
+    // so the free-trial capability gate still fails closed here.
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: 'deepseek-v4-flash',
+          messages: [{ role: 'user', content: 'Run some code.' }],
+          code_execution: true,
+          stream: true,
+        },
+        'free-ce-1',
+      ),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(400);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: { code: 'free_trial_model_capability' },
+      });
+    }
+  });
+});
+
 describe('resolveManagedUsageLeaseSeconds', () => {
   it('keeps ordinary chat leases short and protects long AGI Work workflows from recovery', () => {
     expect(resolveManagedUsageLeaseSeconds(undefined)).toBe(900);
