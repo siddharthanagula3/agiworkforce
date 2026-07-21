@@ -685,9 +685,6 @@ function AddCustomConnectorForm({
 }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [oauthClientId, setOauthClientId] = useState('');
-  const [oauthClientSecret, setOauthClientSecret] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -706,8 +703,6 @@ function AddCustomConnectorForm({
       await adapter.addCustomConnector({
         name: name.trim(),
         url: trimmedUrl,
-        oauthClientId: oauthClientId.trim() || undefined,
-        oauthClientSecret: oauthClientSecret.trim() || undefined,
       });
       onBack();
     } catch (err) {
@@ -770,48 +765,6 @@ function AddCustomConnectorForm({
           <span className="text-[11px] text-red-500">Enter a valid https:// URL.</span>
         )}
       </label>
-
-      {/* Advanced settings (collapsible) */}
-      <div className="rounded-lg border border-border/80">
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          aria-expanded={showAdvanced}
-          className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-foreground"
-        >
-          Advanced settings
-          <ChevronDown
-            className={cn('h-3.5 w-3.5 transition-transform', showAdvanced && 'rotate-180')}
-            aria-hidden="true"
-          />
-        </button>
-        {showAdvanced && (
-          <div className="flex flex-col gap-3 border-t border-border/60 p-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-foreground">
-                OAuth Client ID (optional)
-              </span>
-              <input
-                type="text"
-                value={oauthClientId}
-                onChange={(e) => setOauthClientId(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-foreground">
-                OAuth Client Secret (optional)
-              </span>
-              <input
-                type="password"
-                value={oauthClientSecret}
-                onChange={(e) => setOauthClientSecret(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-          </div>
-        )}
-      </div>
 
       <p className="flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
