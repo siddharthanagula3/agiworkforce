@@ -594,8 +594,15 @@ active_overlay = None; }`. Then per overlay BUILD: (a) statusline-config +
     • [MED] OPEN VSCODE-PROVIDER-STREAM-UNWIRED: KEPT (not removed) — unlike the two above,
     useProviderStream/providerStreamProvider/gatewayUrl back a real trust-sensitive impl
     (streamChatCompletionViaProvider has callers); default-off + the description already
-    discloses "not wired… yet". Complete (wire the gateway auth path) vs remove (delete the
-    impl too) is a genuine founder security call — left as-is.
+    discloses "not wired… yet". CONFIRMED 2026-07-21: streamChatCompletionViaProvider
+    (utils/api.ts:845) is fully BUILT + unit-tested (providerStreamWiring.test.ts) but has NO
+    production call site — the chat-completion path never branches on Config.useProviderStream().
+    Two things needed to COMPLETE: (a) add the branch at the chat-completion call site
+    (`if (Config.useProviderStream()) return streamChatCompletionViaProvider(...)`), AND (b) wire
+    the AGI Cloud web-auth the gateway requires (api.ts:855 errors "Sign in to AGI Cloud…" — that
+    auth is not wired in the extension). (b) is real trust-sensitive feature work. REMOVE = delete
+    the tested impl + client + 3 settings (destroys intended work). Genuine founder security call;
+    current state (default-off + honest disclosure) is acceptable, NOT misleading — left as-is.
     VSCode has NO unresolved critical/high → meets the proceed-gate; 2 of the 3 dead
     advanced-settings are now REMOVED, the 3rd (provider-stream) is a founder decision.
 - RESOLVED EXT-SIDEPANEL-NO-RENDER-TESTS (2026-07-21, 763b2dd1e + 1c80ad676): DONE.
