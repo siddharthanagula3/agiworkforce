@@ -120,6 +120,14 @@ const proposeDiff = z.object({
   }),
 });
 
+// Attachment-chip removal — the webview "X" deletes the host-side pending file so
+// it is NOT sent on the next turn. This was omitted from the gate, so every such
+// message was dropped as malformed and the file kept getting attached.
+const removePendingAttachment = z.object({
+  type: z.literal('removePendingAttachment'),
+  payload: z.object({ id: z.string().min(1).max(200) }),
+});
+
 export const WebviewToExtSchema = z.discriminatedUnion('type', [
   sendMessage,
   ready,
@@ -144,6 +152,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openHistory,
   newChat,
   attachFiles,
+  removePendingAttachment,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;
