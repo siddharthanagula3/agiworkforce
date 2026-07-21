@@ -11,6 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { CreateMessageSchema } from '@/lib/validations/chat';
 import {
   getNeonChatDb,
@@ -122,7 +123,12 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   }
 
   return NextResponse.json({
-    message: message ? ManagedCloudMessageWireSchema.parse(message) : undefined,
+    // Normalize the RETURNING row's Date timestamps to ISO before validating, or
+    // the wire schema throws a ZodError (created_at "expected string, received
+    // Date") -> 400 -> the client's "Couldn't save your message" toast.
+    message: message
+      ? ManagedCloudMessageWireSchema.parse(withIsoTimestamps([message])[0])
+      : undefined,
   });
 }
 
