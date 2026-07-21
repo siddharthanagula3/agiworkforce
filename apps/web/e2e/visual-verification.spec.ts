@@ -17,7 +17,7 @@
  * Round-10 autonomous suite-transformation slice, 2026-05-21.
  */
 
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { resolve } from 'path';
 import { writeFileSync, mkdirSync } from 'fs';
 
@@ -73,19 +73,20 @@ test.describe('visual verification — web shared primitives', () => {
     );
   });
 
-  test('projects route captures the enhanced create form', async ({ page }) => {
+  test('projects route gates cloud projects behind sign-in when signed out', async ({ page }) => {
+    // These e2e specs run signed-out. Cloud projects (and the create form) are
+    // auth-gated, so /projects must show a sign-in prompt rather than the
+    // create form — the correct, non-misleading empty state for a logged-out
+    // visitor. (The create-form flow itself is covered by unit/component tests;
+    // exercising it end-to-end requires the authenticated Clerk harness.)
     await page.goto('/projects');
     await page.waitForLoadState('networkidle');
-    // Click "New" to open the enhanced create form (Round 10 emoji + presets).
-    const newButton = page.getByRole('button', { name: /^new$/i }).first();
-    if (await newButton.count()) {
-      await newButton.click();
-    }
-    // Wait for the form to mount.
-    await page.waitForSelector('[data-testid="project-create-form"]', { timeout: 5000 });
+    await expect(page.getByText(/sign in to view your cloud projects/i)).toBeVisible();
+    // The create form must NOT render for a signed-out user.
+    await expect(page.locator('[data-testid="project-create-form"]')).toHaveCount(0);
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
     await page.screenshot({
-      path: `${SCREENSHOT_DIR}/projects-create-form-viewport.png`,
+      path: `${SCREENSHOT_DIR}/projects-signed-out-viewport.png`,
       fullPage: false,
     });
   });
