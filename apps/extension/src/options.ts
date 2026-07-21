@@ -423,7 +423,24 @@ function el<K extends keyof HTMLElementTagNameMap>(
   text?: string,
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'style') {
+      // The extension CSP is `style-src 'self'` (no 'unsafe-inline'), so a
+      // `style="..."` ATTRIBUTE is blocked and the declaration silently never
+      // applies (plus a console CSP violation on every render). Apply each
+      // declaration through the CSSOM property setter instead, which CSP does
+      // not gate. Caught by the real-UI load-extension smoke (e2e/smoke.mjs).
+      for (const decl of v.split(';')) {
+        const idx = decl.indexOf(':');
+        if (idx === -1) continue;
+        const prop = decl.slice(0, idx).trim();
+        const val = decl.slice(idx + 1).trim();
+        if (prop && val) node.style.setProperty(prop, val);
+      }
+    } else {
+      node.setAttribute(k, v);
+    }
+  }
   if (text !== undefined) node.textContent = text;
   return node;
 }
@@ -758,69 +775,71 @@ async function buildPage(): Promise<void> {
   // user to copy a session cookie out of DevTools.
   if (import.meta.env.DEV) {
     const bearerSection = el('div', { class: 'opt-section' });
-  const bearerHeader = el('div', { class: 'opt-section-header' });
-  bearerHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Computer Use — Cloud Auth'));
-  bearerSection.appendChild(bearerHeader);
+    const bearerHeader = el('div', { class: 'opt-section-header' });
+    bearerHeader.appendChild(
+      el('div', { class: 'opt-section-title' }, 'Computer Use — Cloud Auth'),
+    );
+    bearerSection.appendChild(bearerHeader);
 
-  const bearerBody = el('div', { class: 'opt-bearer-body' });
-  bearerBody.appendChild(
-    el(
-      'p',
-      { class: 'opt-bearer-help' },
-      'Local-development fallback only. Production builds use the Clerk Chrome Extension SDK. ' +
-        'Use a short-lived test token issued by your local gateway; never copy a browser session cookie.',
-    ),
-  );
+    const bearerBody = el('div', { class: 'opt-bearer-body' });
+    bearerBody.appendChild(
+      el(
+        'p',
+        { class: 'opt-bearer-help' },
+        'Local-development fallback only. Production builds use the Clerk Chrome Extension SDK. ' +
+          'Use a short-lived test token issued by your local gateway; never copy a browser session cookie.',
+      ),
+    );
 
-  const bearerRow = el('div', { class: 'opt-bearer-row' });
-  const bearerInput = el('input', {
-    class: 'opt-bearer-input',
-    type: 'password',
-    placeholder: 'Paste Clerk JWT here…',
-    id: 'opt-bearer-input',
-    autocomplete: 'off',
-  }) as HTMLInputElement;
-  const saveBearerBtn = el('button', { class: 'opt-btn-primary' }, 'Save') as HTMLButtonElement;
-  const clearBearerBtn = el(
-    'button',
-    { class: 'opt-btn-danger', style: 'margin-left:4px' },
-    'Clear',
-  ) as HTMLButtonElement;
-  const bearerStatus = el('span', { class: 'opt-save-status' }, '');
+    const bearerRow = el('div', { class: 'opt-bearer-row' });
+    const bearerInput = el('input', {
+      class: 'opt-bearer-input',
+      type: 'password',
+      placeholder: 'Paste Clerk JWT here…',
+      id: 'opt-bearer-input',
+      autocomplete: 'off',
+    }) as HTMLInputElement;
+    const saveBearerBtn = el('button', { class: 'opt-btn-primary' }, 'Save') as HTMLButtonElement;
+    const clearBearerBtn = el(
+      'button',
+      { class: 'opt-btn-danger', style: 'margin-left:4px' },
+      'Clear',
+    ) as HTMLButtonElement;
+    const bearerStatus = el('span', { class: 'opt-save-status' }, '');
 
-  bearerRow.appendChild(bearerInput);
-  bearerRow.appendChild(saveBearerBtn);
-  bearerRow.appendChild(clearBearerBtn);
-  bearerBody.appendChild(bearerRow);
-  bearerBody.appendChild(bearerStatus);
-  bearerSection.appendChild(bearerBody);
+    bearerRow.appendChild(bearerInput);
+    bearerRow.appendChild(saveBearerBtn);
+    bearerRow.appendChild(clearBearerBtn);
+    bearerBody.appendChild(bearerRow);
+    bearerBody.appendChild(bearerStatus);
+    bearerSection.appendChild(bearerBody);
 
-  // Load existing token (show masked)
-  chrome.storage.local.get([DEV_BEARER_KEY], (result) => {
-    if (result[DEV_BEARER_KEY]) {
-      bearerStatus.textContent = 'Token stored';
+    // Load existing token (show masked)
+    chrome.storage.local.get([DEV_BEARER_KEY], (result) => {
+      if (result[DEV_BEARER_KEY]) {
+        bearerStatus.textContent = 'Token stored';
+        bearerStatus.className = 'opt-save-status saved';
+      }
+    });
+
+    saveBearerBtn.addEventListener('click', async () => {
+      const val = bearerInput.value.trim();
+      if (!val) return;
+      await chrome.storage.local.set({ [DEV_BEARER_KEY]: val });
+      bearerInput.value = '';
+      bearerStatus.textContent = 'Token saved';
       bearerStatus.className = 'opt-save-status saved';
-    }
-  });
+    });
 
-  saveBearerBtn.addEventListener('click', async () => {
-    const val = bearerInput.value.trim();
-    if (!val) return;
-    await chrome.storage.local.set({ [DEV_BEARER_KEY]: val });
-    bearerInput.value = '';
-    bearerStatus.textContent = 'Token saved';
-    bearerStatus.className = 'opt-save-status saved';
-  });
-
-  clearBearerBtn.addEventListener('click', async () => {
-    await chrome.storage.local.remove([DEV_BEARER_KEY]);
-    bearerInput.value = '';
-    bearerStatus.textContent = 'Cleared';
-    bearerStatus.className = 'opt-save-status';
-    setTimeout(() => {
-      bearerStatus.textContent = '';
-    }, 1500);
-  });
+    clearBearerBtn.addEventListener('click', async () => {
+      await chrome.storage.local.remove([DEV_BEARER_KEY]);
+      bearerInput.value = '';
+      bearerStatus.textContent = 'Cleared';
+      bearerStatus.className = 'opt-save-status';
+      setTimeout(() => {
+        bearerStatus.textContent = '';
+      }, 1500);
+    });
 
     page.appendChild(bearerSection);
   }
