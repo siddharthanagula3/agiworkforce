@@ -183,14 +183,22 @@ export default function ModelsScreen() {
             {favoriteModels.map((m, idx) => (
               <View key={m.id}>
                 {idx > 0 && <View style={{ height: 1, backgroundColor: c.border }} />}
-                <View className="flex-row items-center justify-between py-2.5">
+                <Pressable
+                  onPress={openPicker}
+                  className="flex-row items-center justify-between py-2.5 -mx-1 px-1 rounded-lg"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? c.surfaceHover : c.transparent,
+                  })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${m.name}`}
+                >
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
                     {statusLabelFor(m)}
                   </Text>
-                </View>
+                </Pressable>
               </View>
             ))}
           </Card>
@@ -207,14 +215,22 @@ export default function ModelsScreen() {
             {recentModelDefs.map((m, idx) => (
               <View key={m.id}>
                 {idx > 0 && <View style={{ height: 1, backgroundColor: c.border }} />}
-                <View className="flex-row items-center justify-between py-2.5">
+                <Pressable
+                  onPress={openPicker}
+                  className="flex-row items-center justify-between py-2.5 -mx-1 px-1 rounded-lg"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? c.surfaceHover : c.transparent,
+                  })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${m.name}`}
+                >
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}
                   </Text>
                   <Text className="text-xs" style={{ color: c.textMuted }}>
                     {statusLabelFor(m)}
                   </Text>
-                </View>
+                </Pressable>
               </View>
             ))}
           </Card>
