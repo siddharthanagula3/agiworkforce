@@ -740,7 +740,7 @@
           "default": 25,
           "minimum": 1,
           "maximum": 200,
-          "description": "Maximum number of autonomous continuation iterations per agent session before prompting for confirmation (default: 25)"
+          "description": "Intended cap on autonomous continuation iterations per agent session. Not yet enforced by the extension — the agent loop runs in the AGI CLI with its own built-in limit; this value is not passed through yet."
         },
         "agiWorkforce.mcp.enabled": {
           "type": "boolean",
