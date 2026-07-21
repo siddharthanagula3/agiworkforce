@@ -84,7 +84,75 @@ function exportedSubpaths(exportsField) {
   );
 }
 
-function importsFrom(source) {
+// Blank out comment bodies (keeping newlines) without touching string/template
+// contents, so a comment that documents an import path — e.g. `import ... from
+// "../assets/*.js"` in a code-splitting note — is not mistaken for a real import.
+// Only comments are removed, never code or string literals, so this can never
+// hide a genuine cross-boundary import (no false negatives).
+function stripComments(source) {
+  let out = '';
+  let state = 'code'; // code | line | block | sq | dq | tpl
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    const next = source[i + 1];
+    if (state === 'code') {
+      if (c === '/' && next === '/') {
+        state = 'line';
+        out += '  ';
+        i++;
+      } else if (c === '/' && next === '*') {
+        state = 'block';
+        out += '  ';
+        i++;
+      } else if (c === "'") {
+        state = 'sq';
+        out += c;
+      } else if (c === '"') {
+        state = 'dq';
+        out += c;
+      } else if (c === '`') {
+        state = 'tpl';
+        out += c;
+      } else {
+        out += c;
+      }
+    } else if (state === 'line') {
+      if (c === '\n') {
+        state = 'code';
+        out += c;
+      } else {
+        out += ' ';
+      }
+    } else if (state === 'block') {
+      if (c === '*' && next === '/') {
+        state = 'code';
+        out += '  ';
+        i++;
+      } else {
+        out += c === '\n' ? '\n' : ' ';
+      }
+    } else {
+      // inside a string/template literal
+      if (c === '\\') {
+        out += c + (next ?? '');
+        i++;
+      } else if (
+        (state === 'sq' && c === "'") ||
+        (state === 'dq' && c === '"') ||
+        (state === 'tpl' && c === '`')
+      ) {
+        state = 'code';
+        out += c;
+      } else {
+        out += c;
+      }
+    }
+  }
+  return out;
+}
+
+function importsFrom(rawSource) {
+  const source = stripComments(rawSource);
   const imports = [];
   const patterns = [
     /\bimport\s+(?:type\s+)?(?:[^'"]+?\s+from\s+)?['"]([^'"]+)['"]/g,
