@@ -15,7 +15,7 @@ import {
 const TASKS_STORAGE_KEY = 'agi_scheduled_tasks';
 const MAX_TASKS = 50;
 const TASK_ALARM_PREFIX = 'agi_task_';
-const TASK_PROMPT_MAX_CHARS = 10_000;
+export const TASK_PROMPT_MAX_CHARS = 10_000;
 let taskMutationQueue: Promise<void> = Promise.resolve();
 
 export { TASK_ALARM_PREFIX };

@@ -44,6 +44,7 @@ import {
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
+  shouldRenderTextBubble,
   trimChatMessages,
   type SidePanelChatMessage,
 } from './features/side-panel/chat-state';
@@ -3323,7 +3324,7 @@ function buildBubbleWithTools(msg: ChatMessage): HTMLElement {
 
   if (msg.agentActivity) wrapper.appendChild(buildAgentActivityEl(msg.agentActivity));
 
-  if (textParts.join('').trim()) {
+  if (shouldRenderTextBubble({ text: textParts.join(''), streaming: Boolean(msg.streaming) })) {
     const bubble = document.createElement('div');
     bubble.className = `sp-bubble sp-bubble-${msg.role}${msg.error ? ' sp-bubble-error' : ''}${msg.streaming ? ' sp-cursor' : ''}`;
     bubble.id = `sp-bubble-${msg.id}`;

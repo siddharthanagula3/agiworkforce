@@ -6,6 +6,7 @@ import {
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
+  shouldRenderTextBubble,
   trimChatMessages,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
@@ -177,5 +178,25 @@ describe('side-panel chat state', () => {
     expect(
       shouldRebuildMessageDom({ forceRebuild: false, renderedCount: 50, messageCount: 51 }),
     ).toBe(false);
+  });
+
+  describe('shouldRenderTextBubble', () => {
+    it('renders a bubble for a completed message that has text', () => {
+      expect(shouldRenderTextBubble({ text: 'the answer', streaming: false })).toBe(true);
+    });
+
+    it('renders a bubble for a still-streaming message even when its text is empty', () => {
+      // Regression: an agentic run creates the assistant message from a
+      // tool/agent event with empty content but streaming:true, then streams the
+      // answer in. The bubble MUST exist up-front so the in-place streaming
+      // updater has an `sp-bubble-<id>` target — otherwise the reply never paints.
+      expect(shouldRenderTextBubble({ text: '', streaming: true })).toBe(true);
+      expect(shouldRenderTextBubble({ text: '   ', streaming: true })).toBe(true);
+    });
+
+    it('does not render a bubble for a completed message with no text (tool-activity-only)', () => {
+      expect(shouldRenderTextBubble({ text: '', streaming: false })).toBe(false);
+      expect(shouldRenderTextBubble({ text: '   \n ', streaming: false })).toBe(false);
+    });
   });
 });
