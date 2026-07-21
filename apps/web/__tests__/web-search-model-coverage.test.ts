@@ -30,7 +30,19 @@ function selectableCloudChatModelIds(profile: string): string[] {
 
 describe.each(CLOUD_CHAT_PROFILES)('Cloud chat web-search coverage — %s', (profile) => {
   it('enumerates a non-empty selectable model roster', () => {
-    expect(selectableCloudChatModelIds(profile).length).toBeGreaterThan(0);
+    const ids = selectableCloudChatModelIds(profile);
+    if (profile === 'desktop/cloud-chat') {
+      // desktop/cloud-chat is registry status "unwired" (12 harnesses declared
+      // but the desktop managed-cloud chat harness is not wired yet — tracked
+      // as DESKTOP-LOCAL-CHAT-EMPTY-HARNESS). It is legitimately empty until
+      // desktop wires it; asserting that here is the forcing function (this
+      // flips and fails the moment the roster becomes non-empty, prompting an
+      // update). Do NOT flip the registry status to "implemented" to make this
+      // pass — that would fake wiring.
+      expect(ids.length).toBe(0);
+      return;
+    }
+    expect(ids.length).toBeGreaterThan(0);
   });
 
   it('gives every selectable model a web-search path when the backend is configured', () => {
