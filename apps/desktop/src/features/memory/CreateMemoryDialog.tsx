@@ -29,8 +29,8 @@ import {
 } from '@/components/ui/Select';
 import { Slider } from '@/components/ui/Slider';
 import { cn } from '@/lib/utils';
-import type { MemoryCategory } from '@/stores/memoryStore';
-import { useMemory } from '@/hooks/useMemory';
+import { useMemoryStore, type MemoryCategory } from '@/stores/memoryStore';
+import { toast } from 'sonner';
 
 const CATEGORY_OPTIONS: { value: MemoryCategory; label: string; description: string }[] = [
   {
@@ -76,7 +76,8 @@ export const CreateMemoryDialog = memo(function CreateMemoryDialog({
   const [importance, setImportance] = useState(5);
   const [source, setSource] = useState('');
 
-  const { store, isStoring } = useMemory({ autoLoad: false });
+  const storeMemory = useMemoryStore((s) => s.storeMemory);
+  const [isStoring, setIsStoring] = useState(false);
 
   const resetForm = useCallback(() => {
     setCategory('fact');
@@ -94,23 +95,27 @@ export const CreateMemoryDialog = memo(function CreateMemoryDialog({
         return;
       }
 
+      setIsStoring(true);
       try {
-        const id = await store({
+        const id = await storeMemory(
           category,
-          topic: topic.trim(),
-          content: content.trim(),
+          topic.trim(),
+          content.trim(),
           importance,
-          source: source.trim() || undefined,
-        });
+          source.trim() || undefined,
+        );
 
+        toast.success('Memory saved successfully');
         onCreated?.(id);
         resetForm();
         setOpen(false);
-      } catch {
-        // Error is already handled by the hook with toast
+      } catch (err) {
+        toast.error(`Failed to save memory: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setIsStoring(false);
       }
     },
-    [category, topic, content, importance, source, store, onCreated, resetForm],
+    [category, topic, content, importance, source, storeMemory, onCreated, resetForm],
   );
 
   const handleOpenChange = useCallback(
