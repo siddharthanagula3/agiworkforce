@@ -26,6 +26,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "bash scripts/check-conflict-markers.sh",
     "test": "vitest run",
+    "test:e2e": "pnpm build && node e2e/smoke.mjs",
     "clean": "rm -rf dist",
     "package": "pnpm build && node scripts/prepare-package.mjs && cd dist && zip -r ../extension.zip . -x '*.map'",
     "lint": "eslint src --ext .ts,.js --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",

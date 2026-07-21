@@ -68,6 +68,33 @@ re-audit in progress.
   (agi.build/download at side_panel.ts ~6447) sits inside the dead
   #sp-offline-onboarding block (see tracked residual below) and is never
   clickable, so it is not user-facing.
+- FIXED EXT-OPTIONS-CSP-INLINE-STYLE (MED, 2026-07-21, uncommitted — caught by
+  the new real-UI smoke): the options-page element helper el() (options.ts:426)
+  applied EVERY attribute via setAttribute, including style, so callers passing
+  `{ style: 'padding-top:4px' }` (opt-row-hint) / `{ style: 'margin-left:4px' }`
+  (danger button) set a style ATTRIBUTE — which the extension CSP `style-src
+'self'` (no unsafe-inline) BLOCKS, so the declaration silently never applied
+  AND a "CSP directive violated" console error fired on every options render. All
+  1119 jsdom unit tests missed it (jsdom does not enforce CSP). Root fix: el()
+  now routes style through the CSSOM per-declaration `node.style.setProperty`,
+  which CSP does not gate. Empirically settled which technique is safe via a
+  per-technique probe in real Chromium: only setAttribute('style') emits a CSP
+  error; style.cssText and style.setProperty both emit ZERO. (side_panel.ts's
+  own el() already used style.cssText and was therefore safe — no change needed;
+  createElementWith has no style callers.) Guarded by e2e/smoke.mjs failing on
+  any CSP violation.
+- ADDED EXT-REALUI-SMOKE-HARNESS (2026-07-21): the extension had unit/jsdom
+  coverage (1119 tests) but no test through the REAL browser UI. Added
+  `apps/extension/e2e/smoke.mjs` + `pnpm --filter @agiworkforce/extension
+test:e2e` (build + smoke): Playwright launches Chromium with
+  --load-extension=dist, waits for the MV3 service worker, opens the side panel
+  and options pages at their chrome-extension:// URLs, asserts primary UI markers
+  render (sp-messages/sp-composer/sp-input/sp-send; opt-\*), and FAILS on uncaught
+  page exceptions or CSP violations (tolerates expected bridge/gateway network
+  noise). Playwright + full Chromium were already installed for the web app, so
+  no new dependency. This harness is what surfaced EXT-OPTIONS-CSP-INLINE-STYLE.
+  Not yet CI-wired (needs the full `chromium` channel, not headless-shell); run
+  locally as the extension's real-UI check.
 - VERIFIED-CLEAN (2026-07-21 deep re-audit, self-audited surfaces): beyond the
   side panel, I independently checked the options-page + background-router,
   content/autofill, and computer-use/native/cloud-bridge egress surfaces for
