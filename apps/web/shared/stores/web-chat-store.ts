@@ -77,6 +77,8 @@ export interface GeneratedFileMetadataEntry {
 }
 
 export interface MessageMetadata {
+  /** User-pinned message flag; persisted to messages.metadata and synced cross-device. */
+  isPinned?: boolean;
   /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
   privacyMode?: 'local' | 'byok' | 'managed';
   providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';

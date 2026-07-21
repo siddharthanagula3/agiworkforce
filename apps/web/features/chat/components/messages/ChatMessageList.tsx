@@ -76,6 +76,7 @@ export interface ChatMessageListProps {
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
   onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
+  onPin?: (messageId: string) => void;
   /** Called by ImageGenerationCard to re-generate in-place (aspect-ratio change / edit). */
   onRegenerateImage?: (
     messageId: string,
@@ -209,6 +210,7 @@ interface MessageGroupRowProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
+  onPin?: (id: string) => void;
   /** Called when a paywall Upgrade button is clicked. */
   onPaywallUpgrade?: (messageId: string) => void;
   /** Called when a paywall Try-later button is clicked. */
@@ -228,6 +230,7 @@ interface MessageRowProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
+  onPin?: (id: string) => void;
   onPaywallUpgrade?: (messageId: string) => void;
   onPaywallDismiss?: (messageId: string) => void;
   onRegenerateImage?: (
@@ -253,6 +256,7 @@ const MessageRow = ({
   onEdit,
   onDelete,
   onReact,
+  onPin,
   onPaywallUpgrade,
   onPaywallDismiss,
   onRegenerateImage,
@@ -312,6 +316,7 @@ const MessageRow = ({
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
       onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
+      onPin={onPin}
       onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
       onReadAloud={displayRole === 'assistant' ? onReadAloud : undefined}
       isReadingAloud={speakingMessageId === message.id}
@@ -328,6 +333,7 @@ const MessageGroupRow = memo(
     onEdit,
     onDelete,
     onReact,
+    onPin,
     onPaywallUpgrade,
     onPaywallDismiss,
     onRegenerateImage,
@@ -347,6 +353,7 @@ const MessageGroupRow = memo(
             onEdit={onEdit}
             onDelete={onDelete}
             onReact={onReact}
+            onPin={onPin}
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
             onRegenerateImage={onRegenerateImage}
@@ -413,6 +420,7 @@ const ChatMessageListComponent = ({
   onEdit,
   onDelete,
   onReact,
+  onPin,
   onRegenerateImage,
   onSendMessage,
   isUserTyping = false,
@@ -621,6 +629,7 @@ const ChatMessageListComponent = ({
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onReact={handleReact}
+                  onPin={onPin}
                   onPaywallUpgrade={handlePaywallUpgrade}
                   onPaywallDismiss={handlePaywallDismiss}
                   onRegenerateImage={onRegenerateImage ? handleRegenerateImage : undefined}
