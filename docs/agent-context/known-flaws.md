@@ -227,8 +227,19 @@ stage the approved hunks (highest risk — real git mutation, gate carefully). E
 is a mini-feature with its own test. Do NOT add the no-op trait method without at
 least one real override (ponytail: no scaffolding-for-later). A dedicated CLI Rust
 session; not rushed at extreme context. (advisor-confirmed the 483 drop.)
+MATERIAL FINDING (2026-07-21, read render_status_bar in full): the 5 overlays are UI
+MOCKUPS for features never built, NOT features with a merely-dropped save.
+render_status_bar (tui_app.rs:1496-1522) shows mode/access/context%/cost/sandbox/
+effort — NOT model, tokens, or branch — so 3 of statusline's 5 fields (show_model/
+tokens/branch) have NO status-bar content to gate; "completing" = ADDING new gated
+spans with defaults that preserve current chrome (a design task), not wiring a save.
+Same shape: /title needs an OSC-title emit, /memories' MemorySettings has no consumer,
+/skills-toggle is ignored by discover_skills. So "honest-remove" (as done for
+/permissions) only converts fake toggles into "not available" messages the goal also
+dislikes → the real resolution is to BUILD each feature. Dedicated CLI session,
+per-overlay feature + test.
 STATUS: 2 of 7 CLI HIGH resolved (/background lie, /permissions fake overlay); 5
-overlay-persistence HIGH remain — CLI is NOT at the proceed-gate.
+overlay HIGH remain (feature-BUILDS, not wires) — CLI is NOT at the proceed-gate.
 • NOTE CLI-FLAKY-PATH-SECURITY-TEST (test-infra, PRE-EXISTING): path_security::
 tests::validate_workspace_path_allows_registered_additional_root passes in
 isolation + within its module but intermittently FAILS under full-suite parallel
