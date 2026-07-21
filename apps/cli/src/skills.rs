@@ -85,7 +85,52 @@ impl Skill {
 /// 2. Global: `~/.agiworkforce/skills/`
 /// 3. Plugins: every path declared in any installed plugin's manifest under
 ///    `skills:` (Sprint B6) — both files and dirs are accepted.
+/// Path to the persisted disabled-skill set (names the user turned off via
+/// /skills-toggle). Lives beside the global skills dir.
+fn disabled_skills_path() -> Option<std::path::PathBuf> {
+    crate::config::CliConfig::config_dir()
+        .ok()
+        .map(|d| d.join("disabled-skills.json"))
+}
+
+/// Load the set of skill names the user has disabled. Empty (all enabled) when
+/// the file is absent or unreadable — a safe default that changes nothing.
+pub fn load_disabled_skills() -> std::collections::HashSet<String> {
+    disabled_skills_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
+        .map(|v| v.into_iter().collect())
+        .unwrap_or_default()
+}
+
+/// Persist the disabled-skill set (sorted for a stable file).
+pub fn save_disabled_skills(disabled: &std::collections::HashSet<String>) -> std::io::Result<()> {
+    let Some(path) = disabled_skills_path() else {
+        return Ok(());
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut names: Vec<&String> = disabled.iter().collect();
+    names.sort();
+    let json = serde_json::to_string_pretty(&names).unwrap_or_else(|_| "[]".to_string());
+    std::fs::write(path, json)
+}
+
+/// Discovered skills, MINUS any the user disabled via /skills-toggle. This is the
+/// list every consumer (agent prompt, registry, tools) should use. The disabled
+/// set is empty by default, so this is identical to `discover_skills_all` until a
+/// skill is turned off.
 pub fn discover_skills() -> Vec<Skill> {
+    let disabled = load_disabled_skills();
+    let mut skills = discover_skills_all();
+    skills.retain(|s| !disabled.contains(&s.name));
+    skills
+}
+
+/// ALL discovered skills regardless of the disable set — used by the
+/// /skills-toggle overlay so it can list + re-enable disabled skills.
+pub fn discover_skills_all() -> Vec<Skill> {
     let mut skills = Vec::new();
 
     // Project-level skills: .agiworkforce/skills/

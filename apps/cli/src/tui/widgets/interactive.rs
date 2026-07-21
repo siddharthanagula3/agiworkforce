@@ -61,6 +61,8 @@ pub enum OverlayResult {
     StatusLine(crate::tui::widgets::statusline_setup::StatusLineConfig),
     /// Terminal-title field config chosen in `TerminalTitleSetupView`.
     TerminalTitle(crate::tui::widgets::terminal_title_setup::TerminalTitleConfig),
+    /// Skill names DISABLED in `SkillsToggleView` (persisted so discovery skips them).
+    SkillsDisabled(Vec<String>),
 }
 
 /// Core trait. A view renders itself, reacts to keys, and signals

@@ -527,6 +527,12 @@ impl TuiApp {
                 self.terminal_title_config = config;
                 self.emit_terminal_title();
             }
+            OverlayResult::SkillsDisabled(names) => {
+                // Persist the disabled set; discover_skills() then skips them for
+                // every consumer (prompt injection, registry, tools).
+                let set: std::collections::HashSet<String> = names.into_iter().collect();
+                let _ = crate::skills::save_disabled_skills(&set);
+            }
         }
     }
 
@@ -2990,10 +2996,16 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/skills-toggle" => {
             use crate::tui::widgets::skills_toggle::{Skill as ToggleSkill, SkillsToggleView};
-            let discovered = crate::skills::discover_skills();
-            let skills: Vec<ToggleSkill> = discovered
+            // List ALL skills with their real enabled state (from the persisted
+            // disable set), so the overlay can turn skills off AND back on. Save
+            // commits the disabled set via take_result → apply_overlay_result.
+            let disabled = crate::skills::load_disabled_skills();
+            let skills: Vec<ToggleSkill> = crate::skills::discover_skills_all()
                 .into_iter()
-                .map(|s| ToggleSkill::new(s.name, s.description, true))
+                .map(|s| {
+                    let enabled = !disabled.contains(&s.name);
+                    ToggleSkill::new(s.name, s.description, enabled)
+                })
                 .collect();
             let view = SkillsToggleView::new(skills);
             app.open_overlay(Box::new(view));

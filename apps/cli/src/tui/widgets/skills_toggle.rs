@@ -107,6 +107,22 @@ impl InteractiveView for SkillsToggleView {
         }
     }
 
+    fn take_result(&mut self) -> Option<super::interactive::OverlayResult> {
+        // On save, hand back the names of skills the user turned OFF so discovery
+        // can persist + skip them. Esc cancels and applies nothing.
+        if self.saved {
+            let disabled: Vec<String> = self
+                .skills
+                .iter()
+                .filter(|s| !s.enabled)
+                .map(|s| s.name.clone())
+                .collect();
+            Some(super::interactive::OverlayResult::SkillsDisabled(disabled))
+        } else {
+            None
+        }
+    }
+
     fn is_done(&self) -> bool {
         self.done
     }
@@ -160,6 +176,24 @@ mod tests {
         view.handle_key(KeyAction::Down); // code-review (disabled)
         view.handle_key(KeyAction::Char(' ')); // enable it
         assert!(view.skills[1].enabled);
+    }
+
+    #[test]
+    fn take_result_reports_disabled_skills_only_after_save() {
+        let mut view = make_view();
+        // web-search starts enabled at cursor 0; disable it.
+        view.handle_key(KeyAction::Char(' '));
+        assert!(!view.skills[0].enabled);
+        // Nothing committed until Enter.
+        assert!(view.take_result().is_none());
+        view.handle_key(KeyAction::Enter);
+        match view.take_result() {
+            Some(crate::tui::widgets::interactive::OverlayResult::SkillsDisabled(names)) => {
+                assert!(names.contains(&"web-search".to_string()), "just-disabled skill included");
+                assert!(names.contains(&"code-review".to_string()), "already-disabled skill included");
+            }
+            other => panic!("expected SkillsDisabled after save, got {other:?}"),
+        }
     }
 
     #[test]
