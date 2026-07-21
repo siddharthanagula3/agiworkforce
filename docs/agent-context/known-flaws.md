@@ -219,11 +219,23 @@ statement outside a module` and `initialize()` (which registers
     triggers → "no escalation needed", resume never attached. Now passes
     ASHBY_ALWAYS_ESCALATE_KEYS for ashby + regression test.
     OPEN — 2 content HIGH not yet fixed:
-  - OPEN EXT-OPENSIDEPANEL-GESTURE-LOST (HIGH): background.ts ~1339 "Open in side
-    panel" calls chrome.sidePanel.open() AFTER `await tabs.query`, consuming the
-    user gesture → the in-page footer button closes the overlay and nothing opens;
-    failure swallowed both layers. Fix = use sender.tab?.id + call sidePanel.open()
-    synchronously before any await (Chrome's documented onMessage pattern).
+  - OPEN EXT-OPENSIDEPANEL-GESTURE-LOST (HIGH, mechanism corrected on verify):
+    the in-page panel footer "Open side panel" (panel.ts:373) sends OPEN_SIDE_PANEL
+    and the button appears to do nothing. The content agent blamed an internal
+    `await tabs.query`, but that's INACCURATE — background.ts:1134 sets
+    `tabId = sender.tab?.id ?? message.tabId`, and the in-page panel runs in the
+    content-script context (Shadow DOM, not iframe), so sender.tab.id IS set and
+    the OPEN_SIDE_PANEL handler (background.ts:1373) takes the synchronous branch
+    (no await). The REAL residual: sidePanel.open() runs inside handleMessageAsync's
+    `.then()` continuation (background.ts:1113), one microtask past the synchronous
+    onMessage gesture window Chrome requires for sidePanel.open — so the activation
+    may be lost. Correct fix = a SYNCHRONOUS OPEN_SIDE_PANEL fast-path in the
+    onMessage listener (handleMessage) that calls sidePanel.open({tabId:
+    sender.tab.id}) before the async dispatch, still behind isAllowlistedSender.
+    NOT applied yet: unverifiable without a real-browser gesture test and the
+    fast-path must not bypass the sender gate — needs a focused real-Chromium pass
+    (the e2e/smoke.mjs harness can load it, but driving a genuine user-gesture
+    sidePanel.open through Playwright is itself nontrivial).
   - OPEN EXT-RECORDING-VALUE-CAPTURE-DEAD (HIGH): content.ts captureValues flag is
     flipped only by SET_RECORDING_VALUE_CAPTURE, which has ZERO senders → recorded
     workflows replay clicks/scrolls but type '' for every input; form record/replay
