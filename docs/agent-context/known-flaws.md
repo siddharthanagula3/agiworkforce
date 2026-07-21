@@ -128,6 +128,27 @@ statement outside a module` and `initialize()` (which registers
   Greenhouse form served at a mapped http://boards.greenhouse.io URL. Clean build +
   all 4 artifacts + 1119 unit tests still green. The smoke's autofill block is the
   regression guard.
+- DESKTOP-REALUI-E2E-RUN (2026-07-21): ran the desktop DOM Playwright e2e
+  (test:e2e:dom) against a live Vite dev server in Local mode (port 5175,
+  VITE_DESKTOP_UI_DEV_LOCAL=1, E2E_MOCK_CLOUD_API=1 E2E_MOCK_LLM=1 — no live
+  backend/prod DB; IPC-check clean, 515 invoke()s all resolve). smoke project 3/3
+  PASS (app launches + renders, nav present, safety landmarks present). settings +
+  onboarding + gdpr + integration: 14 passed / 14 skipped / 1 FAILED. OPEN
+  DESKTOP-GDPR-PRIVACY-PERSIST-01: gdpr.spec.ts:188 "should persist privacy
+  preferences across sessions" fails — after toggling the first `[role="switch"]`
+  in the privacy section and page.reload(), aria-checked reverts (expected the
+  changed state, got the original). Needs root-cause classification before a fix:
+  settingsStore uses zustand persist + createJSONStorage (localStorage) and DOM-
+  local mode explicitly "uses persisted localStorage state" (settingsStore.ts:1187),
+  so persistence SHOULD survive reload here — which points at a real bug (the
+  specific privacy toggle not wired to the persisted store, or excluded by
+  partialize). Competing hypothesis: the first privacy switch is a native-only
+  setting (e.g. master-password/keychain per DesktopCloudSettingsModal privacy tab)
+  that is intentionally skipped in DOM-local mode, making it a test/harness mismatch
+  (the test should skip it). Deferred to a dedicated desktop session to trace the
+  exact toggle → onChange → store field → persist partialize; recorded with evidence
+  rather than dismissed (lesson from EXT-CONTENT-SCRIPT-BROKEN-BY-CODE-SPLIT: do not
+  assume harness). Desktop cargo suite + smoke otherwise green.
 - VERIFIED-CLEAN (2026-07-21 deep re-audit, self-audited surfaces): beyond the
   side panel, I independently checked the options-page + background-router,
   content/autofill, and computer-use/native/cloud-bridge egress surfaces for
