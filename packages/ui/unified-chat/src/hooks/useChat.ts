@@ -924,6 +924,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         settingsState.codeExecutionEnabled &&
         isCodeExecutionAvailable(
           modelCapabilities?.codeExecution,
+          modelCapabilities?.tools,
           resolvedProvider,
           settingsState.codeExecutionDeploymentEnabled,
         );
