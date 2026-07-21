@@ -53,7 +53,9 @@ async fn thread_start_does_not_wait_for_a_stalled_mcp_server() {
     )
     .await;
     let initialized = next_response(&mut lines).await;
-    assert_eq!(initialized["result"]["protocolVersion"], 3);
+    // Must match DEVELOPER_SESSION_PROTOCOL_VERSION (crates/agiworkforce-protocol);
+    // it was bumped 3→5 but this assertion wasn't updated, so the test stalled.
+    assert_eq!(initialized["result"]["protocolVersion"], 5);
 
     send(
         &mut stdin,
