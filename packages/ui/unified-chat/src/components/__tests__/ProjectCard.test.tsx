@@ -76,3 +76,23 @@ describe('ProjectCard — independent click handlers', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
+
+describe('ProjectCard — archive/unarchive menu', () => {
+  it('shows Archive for an active project and calls onArchive', () => {
+    const onArchive = vi.fn();
+    render(<ProjectCard project={PROJECT} onArchive={onArchive} onUnarchive={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Project options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Archive' }));
+    expect(onArchive).toHaveBeenCalledWith(PROJECT);
+  });
+
+  it('shows Unarchive for an archived project and calls onUnarchive', () => {
+    const archived = { ...PROJECT, isArchived: true };
+    const onUnarchive = vi.fn();
+    render(<ProjectCard project={archived} onArchive={vi.fn()} onUnarchive={onUnarchive} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Project options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unarchive' }));
+    expect(onUnarchive).toHaveBeenCalledWith(archived);
+  });
+});
