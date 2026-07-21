@@ -771,11 +771,52 @@ pub fn computer_use_suggest_zoom_level(width: u32, height: u32) -> f32 {
     crate::automation::computer_use::suggest_zoom_level(width, height).scale_factor()
 }
 
+/// TRUST BOUNDARY (desktop-trust-boundary-01): rejects OPA submissions whose
+/// declared execution boundary contradicts the provider they name — the same
+/// coherence validation the chat layer applies in
+/// `sys/commands/chat/types.rs` (`ChatSendMessageRequest::validate`).
+///
+/// Absent `execution_mode` stays fail-closed Local in the router; absent
+/// `provider` lets the router pick within the declared boundary — both pass.
+/// `CloudManaged` + a direct vendor provider string is deliberately allowed:
+/// it is a model-family hint from the managed-mode picker, and the router's
+/// `ManagedCloud` trust filter only admits managed-cloud candidates, so the
+/// hint can never cause direct vendor egress.
+fn validate_opa_execution_boundary(
+    execution_mode: Option<crate::sys::commands::chat::types::ChatExecutionMode>,
+    provider: Option<Provider>,
+) -> Result<(), String> {
+    use crate::sys::commands::chat::types::ChatExecutionMode;
+
+    let (Some(mode), Some(provider)) = (execution_mode, provider) else {
+        return Ok(());
+    };
+    let is_local = matches!(
+        provider,
+        Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm
+    );
+    match mode {
+        ChatExecutionMode::LocalOnly if !is_local => Err(format!(
+            "execution_mode 'local_only' cannot use non-local provider '{}'; omit the provider or fork the task to BYOK",
+            provider.as_string()
+        )),
+        ChatExecutionMode::Byok if is_local || provider == Provider::ManagedCloud => Err(format!(
+            "execution_mode 'byok' requires a direct vendor provider, got '{}'",
+            provider.as_string()
+        )),
+        ChatExecutionMode::CloudManaged if is_local => Err(format!(
+            "execution_mode 'cloud_managed' cannot run on local provider '{}'",
+            provider.as_string()
+        )),
+        _ => Ok(()),
+    }
+}
+
 /// Executes an OPA (Observe-Plan-Act) computer use task.
 ///
 /// Stream 2 params:
 /// - `model`: explicit model id from the catalog (e.g. `claude-opus-4.8`,
-///   `gpt-5.5`, `gemini-3.1-pro`, `grok-4.3-vision`). `None` lets the
+///   `gpt-5.6-sol`, `gemini-3.1-pro`, `grok-4.5`). `None` lets the
 ///   router pick the user's default vision model.
 /// - `provider`: explicit provider name (`anthropic`, `openai`, `google`,
 ///   `xai`, etc). `None` resolves from the model id.
@@ -789,6 +830,11 @@ pub async fn computer_use_execute_opa_task(
     success_indicators: Option<Vec<String>>,
     model: Option<String>,
     provider: Option<String>,
+    // TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
+    // execution boundary. Optional so existing callers keep compiling; when
+    // omitted the router's fail-closed default keeps this Local-only rather
+    // than silently reaching whatever `provider` above names.
+    execution_mode: Option<crate::sys::commands::chat::types::ChatExecutionMode>,
     app: tauri::AppHandle,
     _state: State<'_, Arc<Mutex<ComputerUseState>>>,
     llm_state: State<'_, LLMState>,
@@ -801,11 +847,14 @@ pub async fn computer_use_execute_opa_task(
 
     let resolved_provider = provider.as_deref().and_then(Provider::from_string);
 
+    validate_opa_execution_boundary(execution_mode, resolved_provider)?;
+
     let config = ComputerUseConfig {
         max_iterations: iterations,
         max_duration: timeout_duration,
         model,
         provider: resolved_provider,
+        trust_mode: execution_mode.map(|mode| mode.trust_mode()),
         ..ComputerUseConfig::default()
     };
 
@@ -963,4 +1012,73 @@ pub async fn computer_use_stop_session(
         tracing::info!("Stopped computer use session: {}", session_id);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sys::commands::chat::types::ChatExecutionMode;
+
+    #[test]
+    fn absent_execution_mode_or_provider_passes() {
+        assert!(validate_opa_execution_boundary(None, None).is_ok());
+        assert!(validate_opa_execution_boundary(None, Some(Provider::Anthropic)).is_ok());
+        assert!(validate_opa_execution_boundary(Some(ChatExecutionMode::LocalOnly), None).is_ok());
+    }
+
+    #[test]
+    fn local_only_rejects_non_local_providers() {
+        for provider in [
+            Provider::Anthropic,
+            Provider::OpenAI,
+            Provider::ManagedCloud,
+        ] {
+            let err =
+                validate_opa_execution_boundary(Some(ChatExecutionMode::LocalOnly), Some(provider))
+                    .unwrap_err();
+            assert!(err.contains("local_only"), "unexpected error: {err}");
+        }
+        assert!(validate_opa_execution_boundary(
+            Some(ChatExecutionMode::LocalOnly),
+            Some(Provider::Ollama)
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn byok_rejects_managed_cloud_and_local_providers() {
+        for provider in [Provider::ManagedCloud, Provider::Ollama, Provider::LmStudio] {
+            let err =
+                validate_opa_execution_boundary(Some(ChatExecutionMode::Byok), Some(provider))
+                    .unwrap_err();
+            assert!(err.contains("byok"), "unexpected error: {err}");
+        }
+        assert!(validate_opa_execution_boundary(
+            Some(ChatExecutionMode::Byok),
+            Some(Provider::Anthropic)
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn cloud_managed_rejects_local_providers_but_allows_vendor_hints() {
+        let err = validate_opa_execution_boundary(
+            Some(ChatExecutionMode::CloudManaged),
+            Some(Provider::Vllm),
+        )
+        .unwrap_err();
+        assert!(err.contains("cloud_managed"), "unexpected error: {err}");
+        // Vendor strings under the managed boundary are model-family hints;
+        // the router's ManagedCloud trust filter prevents direct egress.
+        assert!(validate_opa_execution_boundary(
+            Some(ChatExecutionMode::CloudManaged),
+            Some(Provider::Anthropic)
+        )
+        .is_ok());
+        assert!(validate_opa_execution_boundary(
+            Some(ChatExecutionMode::CloudManaged),
+            Some(Provider::ManagedCloud)
+        )
+        .is_ok());
+    }
 }

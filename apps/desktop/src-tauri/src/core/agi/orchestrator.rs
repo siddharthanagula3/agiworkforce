@@ -591,10 +591,14 @@ impl AgentOrchestrator {
         Ok(removed)
     }
 
+    /// `trust_mode` is the chat session's execution boundary at send time;
+    /// it is set on the spawned goal so every planner/executor LLM call is
+    /// gated by it. `None` fails closed to Local at the router.
     pub async fn process_instruction(
         &self,
         instruction: &str,
         attachments: Option<Vec<ChatAttachment>>,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     ) -> Result<OrchestratorResult> {
         tracing::info!("[Orchestrator] Processing instruction: {}", instruction);
 
@@ -657,6 +661,7 @@ impl AgentOrchestrator {
             deadline: None,
             constraints: vec![],
             success_criteria: vec![],
+            trust_mode,
         };
 
         let agent_id = self.spawn_agent(goal.clone()).await?;

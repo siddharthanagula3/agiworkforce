@@ -215,6 +215,11 @@ impl SpawnedAgent {
 pub struct AgentTask {
     /// Subtask to execute.
     pub subtask: Subtask,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): the parent goal's
+    /// execution boundary. Threaded into the mini-`Goal` each sub-agent
+    /// submits so fan-out cannot silently widen (or lose) the boundary the
+    /// user selected; absent, the router fails closed to Local.
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     /// Channel to send result back.
     pub result_sender: oneshot::Sender<AgentTaskResult>,
 }
@@ -390,6 +395,7 @@ impl AgentSpawner {
                 let result = Self::execute_subtask(
                     &agent_id,
                     &task.subtask,
+                    task.trust_mode,
                     router.clone(),
                     automation.clone(),
                     app_handle.clone(),
@@ -441,9 +447,33 @@ impl AgentSpawner {
         })
     }
 
+    /// Builds the mini-`Goal` a sub-agent submits for a subtask, carrying the
+    /// parent goal's trust boundary so every sub-goal LLM call is gated the
+    /// same way the originating goal was.
+    pub(crate) fn subtask_goal(
+        subtask: &Subtask,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+    ) -> Goal {
+        Goal {
+            id: subtask.id.clone(),
+            description: subtask.description.clone(),
+            priority: match subtask.priority {
+                super::SubtaskPriority::Low => Priority::Low,
+                super::SubtaskPriority::Normal => Priority::Medium,
+                super::SubtaskPriority::High => Priority::High,
+                super::SubtaskPriority::Critical => Priority::Critical,
+            },
+            deadline: None,
+            constraints: Vec::new(),
+            success_criteria: vec![format!("Complete: {}", subtask.description)],
+            trust_mode,
+        }
+    }
+
     async fn execute_subtask(
         agent_id: &str,
         subtask: &Subtask,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
         router: Arc<tokio::sync::RwLock<LLMRouter>>,
         automation: Arc<AutomationService>,
         app_handle: Option<tauri::AppHandle>,
@@ -457,19 +487,7 @@ impl AgentSpawner {
         );
 
         // Create a mini-goal for this subtask
-        let goal = Goal {
-            id: subtask.id.clone(),
-            description: subtask.description.clone(),
-            priority: match subtask.priority {
-                super::SubtaskPriority::Low => Priority::Low,
-                super::SubtaskPriority::Normal => Priority::Medium,
-                super::SubtaskPriority::High => Priority::High,
-                super::SubtaskPriority::Critical => Priority::Critical,
-            },
-            deadline: None,
-            constraints: Vec::new(),
-            success_criteria: vec![format!("Complete: {}", subtask.description)],
-        };
+        let goal = Self::subtask_goal(subtask, trust_mode);
 
         // Create a lightweight AGI core for this subtask
         let agi_config = AGIConfig {

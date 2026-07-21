@@ -155,6 +155,14 @@ impl BackgroundManager {
                         let id_clone = id.clone();
 
                         tokio::spawn(async move {
+                            // TRUST BOUNDARY (desktop-trust-boundary-01):
+                            // `bg_llm_submit` (sys/commands/background_llm.rs)
+                            // requires an explicit `provider` string and has
+                            // no active-session trust context; it is also not
+                            // currently invoked from the frontend. Fails
+                            // closed to Local via `effective_trust_mode`'s
+                            // default until this command threads a real
+                            // trust_mode.
                             let prefs = crate::core::llm::llm_router::RouterPreferences {
                                 provider: Some(entry.provider),
                                 model: Some(entry.request.model.clone()),
@@ -373,7 +381,7 @@ mod tests {
     #[tokio::test]
     async fn test_submit_request_returns_queued() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
 
         let result = manager
             .submit_request(request, Provider::OpenAI, None, None)
@@ -425,7 +433,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_queued_request() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
 
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
@@ -451,7 +459,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_removes_pending_data() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
 
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
@@ -505,7 +513,7 @@ mod tests {
 
         // Submit 3 requests
         for _ in 0..3 {
-            let request = test_request("gpt-5.5");
+            let request = test_request("gpt-5.6-sol");
             manager
                 .submit_request(request, Provider::OpenAI, None, None)
                 .await
@@ -543,7 +551,7 @@ mod tests {
 
         // Submit 4 requests
         for _ in 0..4 {
-            let request = test_request("gpt-5.5");
+            let request = test_request("gpt-5.6-sol");
             manager
                 .submit_request(request, Provider::OpenAI, None, None)
                 .await
@@ -563,7 +571,7 @@ mod tests {
     async fn test_cleanup_removes_old_completed() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -594,7 +602,7 @@ mod tests {
     async fn test_cleanup_keeps_recent_completed() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -624,7 +632,7 @@ mod tests {
     async fn test_cleanup_keeps_queued_requests() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
         manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -646,7 +654,7 @@ mod tests {
     async fn test_cleanup_removes_orphaned_pending() {
         let manager = BackgroundManager::new(2);
 
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -690,7 +698,7 @@ mod tests {
         let notify = manager.notify.clone();
 
         // Submit triggers notify_one() internally
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
         manager
             .submit_request(request, Provider::OpenAI, None, None)
             .await
@@ -716,7 +724,7 @@ mod tests {
 
         let mut ids = Vec::new();
         for _ in 0..10 {
-            let request = test_request("gpt-5.5");
+            let request = test_request("gpt-5.6-sol");
             let result = manager
                 .submit_request(request, Provider::OpenAI, None, None)
                 .await
@@ -736,7 +744,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_idempotent_on_cancelled() {
         let manager = BackgroundManager::new(2);
-        let request = test_request("gpt-5.5");
+        let request = test_request("gpt-5.6-sol");
 
         let submit_result = manager
             .submit_request(request, Provider::OpenAI, None, None)

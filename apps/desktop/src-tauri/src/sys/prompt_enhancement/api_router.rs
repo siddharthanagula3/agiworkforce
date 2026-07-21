@@ -194,7 +194,7 @@ impl APIRouter {
             ),
             (UseCase::VideoGen, APIProvider::Veo3) => (
                 "Veo3 is Google's advanced video generation model with high-quality output.".to_string(),
-                gen_model_api_id("veo-3"),
+                gen_model_api_id("veo-3.1"),
             ),
             (UseCase::GeneralQA, APIProvider::GPT) => (
                 "GPT provides versatile, accurate responses for general questions.".to_string(),

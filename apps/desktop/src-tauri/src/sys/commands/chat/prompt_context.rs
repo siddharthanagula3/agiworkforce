@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn model_likely_supports_vision_matches_expected_families() {
-        assert!(model_likely_supports_vision("gpt-5.5"));
+        assert!(model_likely_supports_vision("gpt-5.6-sol"));
         assert!(model_likely_supports_vision("claude-3-7-sonnet"));
         assert!(model_likely_supports_vision("gemini-2.5-pro"));
         assert!(!model_likely_supports_vision("text-embedding-3-large"));

@@ -482,6 +482,7 @@ Do not repeat the error message."#,
             deadline: None,
             constraints: Vec::new(),
             success_criteria: vec![task.goal.clone()],
+            trust_mode: None,
         };
 
         let goal_id = agi
@@ -523,6 +524,7 @@ Do not repeat the error message."#,
             deadline: None,
             constraints: Vec::new(),
             success_criteria: vec![task.goal.clone()],
+            trust_mode: None,
         };
 
         let goal_id = agi.submit_goal(goal).await?;

@@ -422,7 +422,13 @@ fn spawn_streaming_agent(
         let result = {
             let orchestrator = orchestrator_arc.lock().await;
             orchestrator
-                .process_instruction(&agent_instruction, request.attachments.clone())
+                .process_instruction(
+                    &agent_instruction,
+                    request.attachments.clone(),
+                    request
+                        .execution_mode
+                        .map(crate::sys::commands::chat::types::ChatExecutionMode::trust_mode),
+                )
                 .await
         };
 
@@ -1432,7 +1438,13 @@ async fn run_nonstreaming_agent(
     let orchestrator_result = {
         let orchestrator = orchestrator_arc.lock().await;
         orchestrator
-            .process_instruction(&agent_instruction, request.attachments.clone())
+            .process_instruction(
+                &agent_instruction,
+                request.attachments.clone(),
+                request
+                    .execution_mode
+                    .map(crate::sys::commands::chat::types::ChatExecutionMode::trust_mode),
+            )
             .await
             .map_err(|error| format!("Agent execution failed: {}", error))?
     };

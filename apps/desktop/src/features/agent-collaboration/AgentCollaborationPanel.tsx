@@ -35,6 +35,13 @@ import {
   Download,
 } from 'lucide-react';
 import { invoke, listen, isTauri } from '../../lib/tauri-mock';
+import { useAppModeStore, selectPrivacyMode } from '../../stores/appModeStore';
+
+// TRUST BOUNDARY (desktop-trust-boundary-01): every swarm goal submission
+// carries the workspace's execution boundary; mirrors agentTaskStore's
+// activeTrustMode mapping ('local' | 'managed'). Omitting it fails closed
+// to Local in the Rust router.
+const activeTrustMode = () => selectPrivacyMode(useAppModeStore.getState());
 
 // ─── Types ───
 
@@ -221,6 +228,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
         request: {
           goal: goal.trim(),
           priority: null,
+          trustMode: activeTrustMode(),
         },
       });
       setExecuting(false);
@@ -269,6 +277,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
       request: {
         goal: `[Agent: ${agent.name}] ${delegateTask.trim()}`,
         priority: 'medium',
+        trustMode: activeTrustMode(),
       },
     })
       .then(() => {

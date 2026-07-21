@@ -2,8 +2,34 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { toast } from 'sonner';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { useAppModeStore, selectPrivacyMode } from './appModeStore';
+
+/** Wire values of the Rust `ChatExecutionMode` enum (sys/commands/chat/types.rs,
+ *  `#[serde(rename_all = "snake_case")]`). */
+type OpaExecutionMode = 'local_only' | 'byok' | 'cloud_managed';
+
+// On-device providers (mirrors the classification in App.tsx model filtering);
+// picking one is not a boundary cross out of the Local workspace.
+const LOCAL_PROVIDERS = new Set(['ollama', 'local', 'lmstudio', 'llamacpp', 'vllm']);
+
+const isLocalProvider = (provider: string | null): boolean =>
+  provider !== null && LOCAL_PROVIDERS.has(provider.toLowerCase());
+
+/**
+ * TRUST BOUNDARY (desktop-trust-boundary-01): every OPA task submission
+ * carries the execution boundary so the Rust vision router stays fail-closed.
+ * The workspace privacy mode is the OUTER gate: a persisted or per-task
+ * provider pick must never widen the boundary — a Local workspace with a
+ * stale localStorage provider must not egress OPA screenshots, and a Managed
+ * workspace must stay 'cloud_managed'. There is deliberately no 'byok'
+ * branch here: task-time BYOK consent (fork/preview/consent flow) is future
+ * work, and until it exists a provider string alone is not consent.
+ */
+const opaExecutionMode = (): OpaExecutionMode =>
+  selectPrivacyMode(useAppModeStore.getState()) === 'managed' ? 'cloud_managed' : 'local_only';
 
 export interface ScreenCapture {
   image_data: string;
@@ -130,7 +156,7 @@ interface ComputerUseState {
       targetApplication?: string;
       successIndicators?: string[];
       /** Stream 2: explicit catalog model id (e.g. `claude-opus-4.8`,
-       *  `gpt-5.5`, `gemini-3.1-pro-preview`, `grok-4.3-vision`). */
+       *  `gpt-5.6-sol`, `gemini-3.1-pro-preview`, `grok-4.5`). */
       model?: string;
       /** Stream 2: explicit provider name override (`anthropic`, `openai`,
        *  `google`, `xai`). Resolved from `model` if omitted. */
@@ -510,6 +536,21 @@ export const useComputerUseStore = create<ComputerUseState>()(
           typeof window !== 'undefined'
             ? window.localStorage.getItem(STORAGE_KEYS.COMPUTER_USE_PROVIDER)
             : null;
+        const resolvedProvider = options?.provider ?? persistedProvider ?? null;
+        const resolvedModel = options?.model ?? persistedModel ?? null;
+        const executionMode = opaExecutionMode();
+        // A non-local provider pick cannot ride along inside the Local
+        // boundary: strip it so the Rust router picks a local vision model
+        // instead of dead-ending on an impossible provider/boundary pair.
+        const providerCrossesLocalBoundary =
+          executionMode === 'local_only' &&
+          resolvedProvider !== null &&
+          !isLocalProvider(resolvedProvider);
+        if (providerCrossesLocalBoundary) {
+          toast.info(
+            'Cloud vision model requires a BYOK continuation — using local models in Local mode',
+          );
+        }
         try {
           const result = await invoke<OpaTaskResult>('computer_use_execute_opa_task', {
             description,
@@ -517,8 +558,9 @@ export const useComputerUseStore = create<ComputerUseState>()(
             maxActions: options?.maxActions,
             targetApplication: options?.targetApplication,
             successIndicators: options?.successIndicators,
-            model: options?.model ?? persistedModel ?? null,
-            provider: options?.provider ?? persistedProvider ?? null,
+            model: providerCrossesLocalBoundary ? null : resolvedModel,
+            provider: providerCrossesLocalBoundary ? null : resolvedProvider,
+            executionMode,
           });
           set(
             (state) => {

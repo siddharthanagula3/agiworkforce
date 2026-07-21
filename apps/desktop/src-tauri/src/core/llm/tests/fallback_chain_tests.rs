@@ -40,7 +40,7 @@ mod tests {
         // All models for this provider should be rate limited
         assert!(tracker.is_rate_limited(Provider::OpenAI, None));
         assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5")));
-        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5.4-mini")));
+        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5.6-luna")));
 
         // Other providers not affected
         assert!(!tracker.is_rate_limited(Provider::Anthropic, None));
@@ -63,7 +63,7 @@ mod tests {
 
         // Only that model should be rate limited
         assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5")));
-        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5.4-mini")));
+        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5.6-luna")));
         assert!(!tracker.is_rate_limited(Provider::OpenAI, None));
     }
 
@@ -219,8 +219,8 @@ mod tests {
     #[test]
     fn test_candidate_builder() {
         let candidates = CandidateBuilder::new()
-            .add(Provider::Anthropic, "claude-sonnet-4-6")
-            .add_with_priority(Provider::OpenAI, "gpt-5.5", 1)
+            .add(Provider::Anthropic, "claude-sonnet-5")
+            .add_with_priority(Provider::OpenAI, "gpt-5.6-sol", 1)
             .add_with_reason(
                 Provider::Google,
                 "gemini-3-pro-preview",
@@ -231,11 +231,11 @@ mod tests {
         assert_eq!(candidates.len(), 3);
 
         assert_eq!(candidates[0].provider, Provider::Anthropic);
-        assert_eq!(candidates[0].model, "claude-sonnet-4-6");
+        assert_eq!(candidates[0].model, "claude-sonnet-5");
         assert_eq!(candidates[0].priority, 0);
 
         assert_eq!(candidates[1].provider, Provider::OpenAI);
-        assert_eq!(candidates[1].model, "gpt-5.5");
+        assert_eq!(candidates[1].model, "gpt-5.6-sol");
         assert_eq!(candidates[1].priority, 1);
 
         assert_eq!(candidates[2].provider, Provider::Google);

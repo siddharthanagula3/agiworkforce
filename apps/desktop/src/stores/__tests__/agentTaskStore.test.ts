@@ -16,6 +16,7 @@ import {
   applyAgentTaskStateChanged,
   useAgentTaskStore,
 } from '../agentTaskStore';
+import { useAppModeStore } from '../appModeStore';
 import { invoke } from '../../lib/tauri-mock';
 import { toast } from 'sonner';
 
@@ -28,6 +29,10 @@ describe('agentTaskStore', () => {
       tasks: [],
       loading: false,
     });
+    // TRUST BOUNDARY (desktop-trust-boundary-01): pin the workspace mode so
+    // the trustMode each submission sends is deterministic, not an accident
+    // of the non-Tauri test environment's default.
+    useAppModeStore.setState({ mode: 'local' });
   });
 
   describe('canonical lifecycle ownership', () => {
@@ -95,7 +100,7 @@ describe('agentTaskStore', () => {
       const taskId = await submitGoal('Write a report');
 
       expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal', {
-        request: { description: 'Write a report', priority: 'medium' },
+        request: { description: 'Write a report', priority: 'medium', trustMode: 'local' },
       });
       expect(taskId).toBe('goal-123');
 
@@ -104,6 +109,18 @@ describe('agentTaskStore', () => {
       expect(tasks[0]!.goal).toBe('Write a report');
       expect(tasks[0]!.status).toBe('queued');
       expect(tasks[0]!.id).toBe('goal-123');
+    });
+
+    it('sends the managed trust boundary when the workspace is in cloud mode', async () => {
+      useAppModeStore.setState({ mode: 'cloud' });
+      mockInvoke.mockResolvedValueOnce({ goalId: 'goal-cloud-1' });
+
+      const { submitGoal } = useAgentTaskStore.getState();
+      await submitGoal('Summarize cloud docs');
+
+      expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal', {
+        request: { description: 'Summarize cloud docs', priority: 'medium', trustMode: 'managed' },
+      });
     });
 
     it('uses the engine goal id and actual result for parallel execution', async () => {
@@ -119,7 +136,12 @@ describe('agentTaskStore', () => {
       const taskId = await submitGoal('Parallel task', { parallel: true, maxIterations: 3 });
 
       expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal_parallel', {
-        request: { description: 'Parallel task', priority: 'medium', numAgents: 3 },
+        request: {
+          description: 'Parallel task',
+          priority: 'medium',
+          numAgents: 3,
+          trustMode: 'local',
+        },
       });
       expect(taskId).toBe('goal-parallel-123');
 
@@ -177,6 +199,67 @@ describe('agentTaskStore', () => {
       expect(tasks[0]).toEqual(
         expect.objectContaining({ id: 'goal-parallel-existing', status: 'running' }),
       );
+    });
+  });
+
+  describe('submitGoalSwarm', () => {
+    it('sends the local trust boundary on the swarm payload', async () => {
+      mockInvoke.mockResolvedValueOnce({
+        goalId: 'goal-swarm-1',
+        summary: 'Swarm finished',
+        succeeded: 2,
+        failed: 0,
+        wallTimeMs: 1200,
+        speedupRatio: 1.8,
+        criticalPathLength: 3,
+        maxParallelism: 2,
+      });
+
+      const taskId = await useAgentTaskStore.getState().submitGoalSwarm('Swarm the audit');
+
+      expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal_swarm', {
+        request: {
+          description: 'Swarm the audit',
+          priority: 'medium',
+          deadline: undefined,
+          successCriteria: undefined,
+          trustMode: 'local',
+        },
+      });
+      expect(taskId).toBe('goal-swarm-1');
+    });
+  });
+
+  describe('submitGoalAuto', () => {
+    it('sends the local trust boundary on the auto payload', async () => {
+      mockInvoke.mockResolvedValueOnce({ goalId: 'goal-auto-1' });
+
+      const taskId = await useAgentTaskStore.getState().submitGoalAuto('Pick the best strategy');
+
+      expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal_auto', {
+        request: {
+          description: 'Pick the best strategy',
+          priority: 'medium',
+          deadline: undefined,
+          successCriteria: undefined,
+          trustMode: 'local',
+        },
+      });
+      expect(taskId).toBe('goal-auto-1');
+    });
+
+    it('sends the managed trust boundary when the workspace is in cloud mode', async () => {
+      useAppModeStore.setState({ mode: 'cloud' });
+      mockInvoke.mockResolvedValueOnce({ goalId: 'goal-auto-cloud-1' });
+
+      await useAgentTaskStore.getState().submitGoalAuto('Summarize cloud usage');
+
+      expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal_auto', {
+        request: expect.objectContaining({
+          description: 'Summarize cloud usage',
+          trustMode: 'managed',
+        }),
+      });
     });
   });
 

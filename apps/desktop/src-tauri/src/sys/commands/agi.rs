@@ -17,6 +17,47 @@ use tauri::{Emitter, Manager, State};
 use tokio::sync::Mutex as TokioMutex;
 use tokio::time::{sleep, Duration};
 
+/// Wire representation of the active session's trust boundary. Deliberately
+/// narrower than `agiworkforce_model_registry::TrustMode`'s own serde repr
+/// (which also exposes `on_device`) — callers of these commands only ever
+/// mean "this device's local models", "my own API key", or "AGI Workforce's
+/// managed cloud", so the wire contract is exactly `local` | `byok` |
+/// `managed` (desktop-trust-boundary-01).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TrustModeWire {
+    Local,
+    Byok,
+    Managed,
+}
+
+impl From<TrustModeWire> for agiworkforce_model_registry::TrustMode {
+    fn from(wire: TrustModeWire) -> Self {
+        match wire {
+            TrustModeWire::Local => Self::Local,
+            TrustModeWire::Byok => Self::Byok,
+            TrustModeWire::Managed => Self::ManagedCloud,
+        }
+    }
+}
+
+/// Deserializes the `trustMode` wire field (`"local" | "byok" | "managed"`,
+/// or absent) into `Option<TrustMode>`. Absent stays `None`, which
+/// `llm_router::effective_trust_mode` resolves to `TrustMode::Local`
+/// (fail-closed) — this function does not itself apply that default so the
+/// two layers don't silently drift. `pub(crate)` so sibling IPC entry points
+/// that also accept a session boundary (e.g. `swarm.rs`) share one wire
+/// contract instead of drifting copies.
+pub(crate) fn deserialize_trust_mode<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<agiworkforce_model_registry::TrustMode>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let wire = Option::<TrustModeWire>::deserialize(deserializer)?;
+    Ok(wire.map(agiworkforce_model_registry::TrustMode::from))
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmitGoalRequest {
@@ -24,6 +65,12 @@ pub struct SubmitGoalRequest {
     pub priority: Option<String>,
     pub deadline: Option<u64>,
     pub success_criteria: Option<Vec<String>>,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
+    /// execution boundary, threaded into the submitted `Goal` and from there
+    /// into every LLM call made while planning/executing it. Absent (or
+    /// `None`) fails closed to Local.
+    #[serde(default, deserialize_with = "deserialize_trust_mode")]
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,6 +95,9 @@ pub struct SubmitParallelGoalRequest {
     pub deadline: Option<u64>,
     pub success_criteria: Option<Vec<String>>,
     pub num_agents: Option<usize>,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): see `SubmitGoalRequest`.
+    #[serde(default, deserialize_with = "deserialize_trust_mode")]
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -176,6 +226,7 @@ pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalRes
         deadline: request.deadline,
         constraints: vec![],
         success_criteria: request.success_criteria.unwrap_or_default(),
+        trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
@@ -216,6 +267,7 @@ pub async fn agi_submit_goal_parallel(
         deadline: request.deadline,
         constraints: vec![],
         success_criteria: request.success_criteria.unwrap_or_default(),
+        trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
@@ -433,6 +485,7 @@ pub async fn orchestrator_spawn_agent(
             })
             .unwrap_or_default(),
         success_criteria: request.success_criteria.unwrap_or_default(),
+        trust_mode: None,
     };
 
     let orchestrator = orchestrator_arc.lock().await;
@@ -484,6 +537,7 @@ pub async fn orchestrator_spawn_parallel(
                 })
                 .unwrap_or_default(),
             success_criteria: req.success_criteria.unwrap_or_default(),
+            trust_mode: None,
         };
         goals.push(goal);
     }
@@ -992,6 +1046,14 @@ pub async fn start_agent_task(
 
     // 4. Call API
     let router_guard = router.read().await;
+    // TRUST BOUNDARY (desktop-trust-boundary-01): `start_agent_task` takes a
+    // `_mode: String` param that is unused, and its only frontend caller
+    // (apps/desktop/src/api/agent.ts `startAgentTask`) has no callers of its
+    // own — this command is currently unreachable from the UI. Fails closed
+    // to Local via `effective_trust_mode`'s default; `provider` is tier-
+    // selected (may be Anthropic/OpenAI/ManagedCloud), so this would need a
+    // real trust_mode threaded from `_mode` (with `_mode`'s semantics
+    // defined) before it could go live safely.
     let preferences = crate::core::llm::llm_router::RouterPreferences {
         provider: Some(provider),
         model: Some(model.to_string()),
@@ -1483,6 +1545,7 @@ pub async fn agi_submit_goal_swarm(
         deadline: request.deadline,
         constraints: vec![],
         success_criteria: request.success_criteria.unwrap_or_default(),
+        trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
@@ -1541,6 +1604,7 @@ pub async fn agi_submit_goal_auto(
         deadline: request.deadline,
         constraints: vec![],
         success_criteria: request.success_criteria.unwrap_or_default(),
+        trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
@@ -1574,8 +1638,53 @@ pub async fn agi_should_use_swarm(description: String) -> Result<bool, String> {
         deadline: None,
         constraints: vec![],
         success_criteria: vec![],
+        trust_mode: None,
     };
 
     let agi = agi_arc.lock().await;
     Ok(agi.should_use_swarm(&goal))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agiworkforce_model_registry::TrustMode;
+
+    fn parse(json: &str) -> Result<SubmitGoalRequest, serde_json::Error> {
+        serde_json::from_str(json)
+    }
+
+    #[test]
+    fn trust_mode_wire_maps_all_three_boundaries() {
+        for (wire, expected) in [
+            ("local", TrustMode::Local),
+            ("byok", TrustMode::Byok),
+            ("managed", TrustMode::ManagedCloud),
+        ] {
+            let request = parse(&format!(r#"{{"description":"d","trustMode":"{wire}"}}"#))
+                .expect("valid wire value must deserialize");
+            assert_eq!(request.trust_mode, Some(expected), "wire value {wire:?}");
+        }
+    }
+
+    #[test]
+    fn trust_mode_absent_or_null_stays_none_for_fail_closed_default() {
+        let absent = parse(r#"{"description":"d"}"#).expect("absent trustMode is valid");
+        assert_eq!(absent.trust_mode, None);
+
+        let null =
+            parse(r#"{"description":"d","trustMode":null}"#).expect("null trustMode is valid");
+        assert_eq!(null.trust_mode, None);
+    }
+
+    #[test]
+    fn trust_mode_rejects_unknown_and_registry_repr_values() {
+        // The wire contract is exactly `local` | `byok` | `managed`. The
+        // registry's own serde names (`managed_cloud`, `on_device`) and
+        // arbitrary strings must be rejected, not silently defaulted.
+        for invalid in ["managed_cloud", "on_device", "cloud", "Local", ""] {
+            let result = parse(&format!(r#"{{"description":"d","trustMode":"{invalid}"}}"#));
+            assert!(result.is_err(), "wire value {invalid:?} must be rejected");
+        }
+    }
 }

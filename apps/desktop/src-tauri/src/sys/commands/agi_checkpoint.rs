@@ -100,6 +100,7 @@ pub async fn agi_checkpoint_save(
         deadline: None,
         constraints: vec![],
         success_criteria: vec![],
+        trust_mode: None,
     };
 
     // Parse current state if provided

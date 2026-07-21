@@ -1,4 +1,5 @@
 import { invoke } from '../../lib/tauri-mock';
+import { useAppModeStore, selectPrivacyMode } from '../../stores/appModeStore';
 import type { EnhancedMessage, InlinePanel } from '../../stores/chat/types';
 
 const RECENT_CONVERSATION_SNAPSHOT_LIMIT = 40;
@@ -95,7 +96,17 @@ export async function executeSwarmCommand(goal: string): Promise<InlinePanel> {
   };
 
   try {
-    const response = await invoke<Record<string, unknown>>('swarm_execute_goal', { goal });
+    // TRUST BOUNDARY (desktop-trust-boundary-01): swarm goals carry the
+    // workspace's execution boundary; omitting it fails closed to Local.
+    // The bare `{ goal }` payload this used to send did not even match the
+    // command's `request: SwarmGoalRequest` argument.
+    const response = await invoke<Record<string, unknown>>('swarm_execute_goal', {
+      request: {
+        goal,
+        priority: null,
+        trustMode: selectPrivacyMode(useAppModeStore.getState()),
+      },
+    });
 
     panel.content.data = { goal, ...response };
     panel.metadata = { status: 'success' };

@@ -27,10 +27,17 @@ impl SwarmState {
     }
 }
 
+// AgentCollaborationPanel.tsx sends camelCase field names; without these
+// aliases every `swarm_init` from the UI failed IPC deserialization
+// ("missing field `max_agents`"). Same per-field alias pattern as
+// `sys/commands/chat/types.rs`.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SwarmInitRequest {
+    #[serde(alias = "maxAgents")]
     pub max_agents: usize,
+    #[serde(alias = "autoSpawn")]
     pub auto_spawn: bool,
+    #[serde(alias = "optimizeCriticalPath")]
     pub optimize_critical_path: bool,
 }
 
@@ -38,6 +45,16 @@ pub struct SwarmInitRequest {
 pub struct SwarmGoalRequest {
     pub goal: String,
     pub priority: Option<String>,
+    /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
+    /// execution boundary, threaded into the `Goal` and from there into
+    /// every LLM call the swarm makes. Absent (or `null`) fails closed to
+    /// Local via `llm_router::effective_trust_mode`.
+    #[serde(
+        default,
+        alias = "trustMode",
+        deserialize_with = "crate::sys::commands::agi::deserialize_trust_mode"
+    )]
+    pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
 }
 
 #[tauri::command]
@@ -98,6 +115,7 @@ pub async fn swarm_execute_goal(
         constraints: vec![],
         success_criteria: vec![],
         deadline: None,
+        trust_mode: request.trust_mode,
     };
 
     let result = orchestrator

@@ -581,6 +581,7 @@ impl CodeExecutor {
         &self,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     ) -> Result<Value> {
         let code = parameters
             .get("code")
@@ -656,7 +657,7 @@ impl CodeExecutor {
 
         // Try to use LLM for more detailed analysis if available
         if let Some(llm_analysis) = self
-            .llm_analyze(code, effective_language, analysis_type, context)
+            .llm_analyze(code, effective_language, analysis_type, context, trust_mode)
             .await
         {
             analysis.llm_analysis = Some(llm_analysis);
@@ -785,6 +786,7 @@ impl CodeExecutor {
         language: &str,
         analysis_type: &str,
         context: &ExecutorContext,
+        trust_mode: Option<agiworkforce_model_registry::TrustMode>,
     ) -> Option<String> {
         use crate::core::llm::{ChatMessage, LLMRequest, RouterPreferences, RoutingStrategy};
 
@@ -821,7 +823,12 @@ impl CodeExecutor {
             prefer_cloud_credits: false,
             local_only: false,
             managed_cloud_only: false,
-            trust_mode: None,
+            // TRUST BOUNDARY (desktop-trust-boundary-01): threaded from the
+            // executing goal (`ExecutionContext.goal.trust_mode`); absent,
+            // `llm_router::effective_trust_mode` fails closed to Local, and
+            // the explicit `Provider::Anthropic` above is rejected outside a
+            // BYOK boundary.
+            trust_mode,
         };
 
         let request = LLMRequest {
@@ -886,11 +893,14 @@ impl ToolExecutor for CodeExecutor {
         tool_name: &str,
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
-        _execution_context: &ExecutionContext,
+        execution_context: &ExecutionContext,
     ) -> Result<Value> {
         match tool_name {
             "code_execute" => self.execute_code(parameters, context).await,
-            "code_analyze" => self.execute_analyze(parameters, context).await,
+            "code_analyze" => {
+                self.execute_analyze(parameters, context, execution_context.goal.trust_mode)
+                    .await
+            }
             _ => Err(anyhow!("Unknown code tool: {}", tool_name)),
         }
     }
@@ -975,6 +985,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
+                trust_mode: None,
             },
             current_state: HashMap::new(),
             available_resources: crate::core::agi::ResourceState {

@@ -17,6 +17,7 @@ mod tests {
                 deadline: None,
                 constraints: Vec::new(),
                 success_criteria: vec!["All tests pass".to_string()],
+                trust_mode: None,
             },
             current_state: HashMap::new(),
             available_resources: ResourceState {

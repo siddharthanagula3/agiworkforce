@@ -794,6 +794,10 @@ impl PrCreationWorkflow {
             ..Default::default()
         };
 
+        // TRUST BOUNDARY (desktop-trust-boundary-01): this path is reached
+        // only via the git IPC commands (sys/commands/git.rs), which carry
+        // no Goal/ExecutionContext to thread a boundary from; default
+        // preferences fail closed to Local.
         let preferences = RouterPreferences::default();
 
         let router_guard = router.read().await;
@@ -2370,6 +2374,7 @@ mod tests {
                 deadline: None,
                 constraints: vec![],
                 success_criteria: vec![],
+                trust_mode: None,
             },
             current_state: HashMap::new(),
             available_resources: crate::core::agi::ResourceState {

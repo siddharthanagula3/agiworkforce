@@ -2012,13 +2012,7 @@ mod tests {
         };
 
         let remembered_id = manager
-            .remember(
-                MemoryCategory::Preference,
-                "editor",
-                "zed",
-                Some(8),
-                None,
-            )
+            .remember(MemoryCategory::Preference, "editor", "zed", Some(8), None)
             .unwrap();
 
         assert_eq!(remembered_id, legacy_id);
