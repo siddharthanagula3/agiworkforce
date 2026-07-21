@@ -691,7 +691,24 @@ export async function checkRateLimit(
   const rateLimiter = getRateLimiter(key);
 
   try {
-    const { success, limit, remaining, reset } = await rateLimiter.limit(id);
+    // Cap the Upstash REST round-trip: this call gates EVERY request, so a slow
+    // or degraded Upstash must not stall the whole site (the chat-home load fans
+    // ~7 of these out concurrently). On timeout we throw into the catch below,
+    // which fails OPEN for normal routes and CLOSED for security-sensitive ones —
+    // the same graceful degradation as a genuine Upstash error.
+    const UPSTASH_TIMEOUT_MS = 800;
+    let limitTimer: ReturnType<typeof setTimeout> | undefined;
+    const { success, limit, remaining, reset } = await Promise.race([
+      rateLimiter.limit(id).finally(() => {
+        if (limitTimer) clearTimeout(limitTimer);
+      }),
+      new Promise<never>((_, reject) => {
+        limitTimer = setTimeout(
+          () => reject(new Error('rate-limit upstash timeout')),
+          UPSTASH_TIMEOUT_MS,
+        );
+      }),
+    ]);
 
     const headers: Record<string, string> = {
       'X-RateLimit-Limit': limit.toString(),

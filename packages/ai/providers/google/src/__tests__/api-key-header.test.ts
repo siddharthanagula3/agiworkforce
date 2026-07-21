@@ -80,8 +80,15 @@ describe('Google adapter API key transport', () => {
     // Header MUST carry the key.
     const headers = new Headers(call.init?.headers);
     expect(headers.get('x-goog-api-key')).toBe(FAKE_KEY);
-    // signal must propagate so cancellation works through the wire.
-    expect(call.init?.signal).toBe(ac.signal);
+    // A signal must propagate so cancellation works through the wire. It is now a
+    // COMBINED signal (caller signal + a headers timeout that bounds a hung
+    // upstream), so assert the linkage — aborting the caller aborts the signal the
+    // fetch received — rather than object identity.
+    const passedSignal = call.init?.signal;
+    expect(passedSignal).toBeInstanceOf(AbortSignal);
+    expect(passedSignal?.aborted).toBe(false);
+    ac.abort();
+    expect(passedSignal?.aborted).toBe(true);
     // Body shape sanity: POST with a JSON content-type.
     expect(call.init?.method).toBe('POST');
     expect(headers.get('content-type')).toBe('application/json');

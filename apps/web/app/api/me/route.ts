@@ -51,7 +51,19 @@ async function handleGetMe(request: NextRequest) {
     try {
       const { clerkClient } = await import('@clerk/nextjs/server');
       const client = await clerkClient();
-      const clerkUser = await client.users.getUser(userId);
+      // Cap the Clerk profile lookup: it is a network round-trip and the header
+      // greeting is gated on the resolved name, so a slow Clerk must never stall
+      // /api/me (the reported "name did not load until reload"). On timeout we
+      // fall back to the email prefix and the real name resolves on a later load.
+      let nameTimer: ReturnType<typeof setTimeout> | undefined;
+      const clerkUser = await Promise.race([
+        client.users.getUser(userId).finally(() => {
+          if (nameTimer) clearTimeout(nameTimer);
+        }),
+        new Promise<never>((_, reject) => {
+          nameTimer = setTimeout(() => reject(new Error('clerk getUser timeout')), 1500);
+        }),
+      ]);
       clerkName =
         clerkUser.fullName?.trim() ||
         [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim() ||
