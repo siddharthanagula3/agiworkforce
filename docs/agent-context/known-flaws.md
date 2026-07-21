@@ -104,6 +104,34 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   honored, OR remove the selectors and let the portal own the choice. Deferred to
   the founder Stripe track (billing is founder-managed, test-mode restricted keys);
   not gating desktop #1's non-billing surfaces.
+- OPEN DESKTOP-SETTINGS-PERSISTED-BUT-UNREAD (2026-07-21, desktop chat+settings
+  audit): a cluster of settings that persist (localStorage + Rust
+  ExecutionPreferences) but are NEVER read/applied — dead-interface controls. The
+  HIGH sibling (Personalization "Response Style") is FIXED (`16a4de4d9`, wired into
+  TauriRuntime customInstructions). Remaining:
+  • [MED] Execution-preference cluster — AgentsSettings.tsx sends
+  max_timeout_minutes (:183), enable_checkpointing/checkpoint_interval (:209/:224),
+  auto_resume_on_restart (:247), enable_timeout_warnings (:266) to Rust
+  (settings.rs ExecutionPreferences), but NO executor reads them: timeout_manager.rs
+  uses a fixed MAX_TIMEOUT_SECS; continuous_executor.rs reads task.config.\* with
+  hardcoded TaskConfig defaults (DEFAULT_CHECKPOINT_INTERVAL=5, auto_resume default
+  true); backgroundTaskStore shows timeout-warning toasts unconditionally. FIX =
+  a Rust slice: load persisted execution_preferences into TaskConfig at task
+  creation + gate the warning toast on enable_timeout_warnings. Deferred as a
+  dedicated Rust-engine slice (trust/safety-sensitive executor code; src-tauri has
+  pending uncommitted Rust — don't rush at depth). CONTRAST: terminal_sandbox IS
+  wired (terminal_executor.rs:571 + terminal.rs:265 read it) — proves the pattern
+  is fixable.
+  • [MED] Prompt Completion toggle (ModelsKeys/index.tsx:488) → hooks/
+  useApiPromptCompletion.ts has zero callers and the LIVE composer is the shared
+  @agiworkforce/unified-chat package, which never reads promptCompletionEnabled.
+  FIX = either build ghost-text into the shared composer (feature work) or remove
+  the toggle. Deferred (shared-package feature decision).
+  • [MED] Voice Persona — FIXED 2026-07-21: extracted the persona→params mapping
+  (was an inline switch in VoicePersonaSelector's preview) to shared
+  features/settings/voicePersonaParams.ts, wired useTTS to read the persisted
+  persona (previously hardcoded rate/pitch/volume), and deduped the preview +
+  storage-key constant onto it. Unit-tested.
 - NOTE DESKTOP-DOM-E2E-MODE-DEPENDENCY (2026-07-21, harness — NOT a product bug):
   the desktop Playwright DOM e2e (`test:e2e:dom`, specs in apps/desktop/e2e) has
   NO webServer config — you must start vite yourself on :5175, and the suites

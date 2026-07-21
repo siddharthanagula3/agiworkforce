@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { Briefcase, Smile, Cloud, Zap, BookOpen, Code, Play, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { getVoicePersonaParams } from './voicePersonaParams';
 
 // ---------------------------------------------------------------------------
 // Persona definitions
@@ -116,39 +117,11 @@ export function VoicePersonaSelector({ selectedPersona, onSelect }: VoicePersona
 
       const utterance = new SpeechSynthesisUtterance(persona.samplePhrase);
 
-      // Apply persona-specific speech parameters
-      switch (persona.id) {
-        case 'professional':
-          utterance.rate = 0.95;
-          utterance.pitch = 1.0;
-          utterance.volume = 1.0;
-          break;
-        case 'friendly':
-          utterance.rate = 1.05;
-          utterance.pitch = 1.15;
-          utterance.volume = 1.0;
-          break;
-        case 'calm':
-          utterance.rate = 0.85;
-          utterance.pitch = 0.95;
-          utterance.volume = 0.9;
-          break;
-        case 'energetic':
-          utterance.rate = 1.2;
-          utterance.pitch = 1.2;
-          utterance.volume = 1.0;
-          break;
-        case 'storyteller':
-          utterance.rate = 0.9;
-          utterance.pitch = 1.05;
-          utterance.volume = 0.95;
-          break;
-        case 'technical':
-          utterance.rate = 1.0;
-          utterance.pitch = 0.9;
-          utterance.volume = 1.0;
-          break;
-      }
+      // Apply persona-specific speech parameters (shared with real TTS in useTTS).
+      const params = getVoicePersonaParams(persona.id);
+      utterance.rate = params.rate;
+      utterance.pitch = params.pitch;
+      utterance.volume = params.volume;
 
       utterance.onend = () => {
         utteranceRef.current = null;
