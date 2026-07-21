@@ -13,6 +13,7 @@ const stripeMocks = vi.hoisted(() => ({
   upgradeToMaxPlan: vi.fn(),
   upgradeToMax15xPlan: vi.fn(),
   upgradePlanMidCycle: vi.fn(),
+  previewUpgrade: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -160,14 +161,22 @@ describe('PricingPage', () => {
     expect(screen.queryByRole('button', { name: /INR/i })).not.toBeInTheDocument();
   });
 
-  it('uses the payment-safe replacement-cycle route for an active paid subscriber', async () => {
+  it('confirms the prorated amount before charging an active paid subscriber mid-cycle', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'pro', status: 'active' };
+    stripeMocks.previewUpgrade.mockResolvedValueOnce({ amountDueNowCents: 4200, currency: 'usd' });
     stripeMocks.upgradePlanMidCycle.mockResolvedValueOnce({ activation: 'webhook_pending' });
 
     render(<PricingPage />);
     fireEvent.click(screen.getByRole('button', { name: 'maxCta' }));
 
+    // The upgrade must NOT charge silently: it opens the confirm dialog, which
+    // previews the exact prorated amount first, and only charges on confirm.
+    const confirmBtn = await screen.findByRole('button', { name: /confirm/i });
+    await waitFor(() => expect(confirmBtn).toBeEnabled());
+    expect(stripeMocks.upgradePlanMidCycle).not.toHaveBeenCalled();
+
+    fireEvent.click(confirmBtn);
     await waitFor(() =>
       expect(stripeMocks.upgradePlanMidCycle).toHaveBeenCalledWith({
         plan: 'max',
