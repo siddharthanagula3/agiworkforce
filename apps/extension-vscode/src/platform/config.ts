@@ -38,7 +38,9 @@ const DEFAULTS = {
   model: 'auto-economy',
   streamingEnabled: true,
   contextLines: 50,
-  fallbackToVscodeLm: true,
+  // Reserved: the VS Code Language Model API fallback is not built yet, so this
+  // defaults off (was true, which falsely promised a fallback that never ran).
+  fallbackToVscodeLm: false,
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
   useProviderStream: false,

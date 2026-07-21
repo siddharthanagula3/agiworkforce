@@ -661,8 +661,8 @@
         },
         "agiWorkforce.fallbackToVscodeLm": {
           "type": "boolean",
-          "default": true,
-          "description": "Fall back to VS Code built-in Language Model API if AGI Workforce API is unavailable"
+          "default": false,
+          "description": "Reserved for a future VS Code Language Model API fallback. Not yet available — currently has no effect."
         },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
