@@ -212,20 +212,18 @@ describe('DrawerContent', () => {
     expect(queryByText(/byok/i)).toBeNull();
   });
 
-  it('shows AGI Agent only while the drawer is in Cloud mode', () => {
+  it('shows cloud-only drawer items (Tasks, Schedules, Projects) while in Cloud mode', () => {
     const local = renderDrawer();
-    expect(local.queryByText('AGI Agent')).toBeNull();
     expect(local.queryByText('Schedules')).toBeNull();
     local.unmount();
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const cloud = renderDrawer();
 
-    // Cloud mode now shows AGI Agent AND Projects (cloud projects are synced).
-    expect(cloud.getByText('AGI Agent')).toBeTruthy();
+    // Cloud mode shows the durable Tasks + Schedules rows and (synced) Projects.
     expect(cloud.getByLabelText('Tasks. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
-    // Projects nav row is now visible in cloud mode (task: unblock cloud projects).
+    // Projects nav row is visible in cloud mode (task: unblock cloud projects).
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
     // The local project "Launch demo" should NOT appear in cloud mode
     // (cloud mode reads from cloudProjectStore, not local store).
@@ -305,79 +303,6 @@ describe('DrawerContent', () => {
     expect(getByText('Cloud Chat')).toBeTruthy();
     expect(queryByText('First Chat')).toBeNull();
     expect(queryByText('Second Chat')).toBeNull();
-  });
-
-  it('routes to sign-in from AGI Agent while Cloud is locked (public alpha, no invite/waitlist gate)', () => {
-    useChatAppModeStore.setState({ appMode: 'cloud' });
-    const { getByLabelText } = renderDrawer();
-
-    fireEvent.press(getByLabelText('AGI Agent. Cloud'));
-
-    expect(mockCloseDrawer).not.toHaveBeenCalled();
-    expect(mockNavigate).not.toHaveBeenCalledWith('/(app)/agents');
-    expect(mockPush).toHaveBeenCalledWith('/(auth)/login');
-  });
-
-  it('shows consent modal then navigates when AGI Agent is pressed with cloud unlocked', () => {
-    // SILENT-SWITCH-FIX: AGI Agent no longer silently sets appMode('cloud').
-    // It shows ModeSwitchModal first; navigation only happens after user confirms.
-    useWaitlistStore.setState({ cloudUnlocked: true });
-    useChatAppModeStore.setState({ appMode: 'cloud' });
-    const { getByLabelText, getByTestId, queryByTestId } = renderDrawer();
-
-    // Must not route to sign-in (cloud is already unlocked).
-    expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
-    // Mode-switch consent modal must not be visible yet.
-    expect(queryByTestId('mode-switch-modal')).toBeNull();
-
-    // Press AGI Agent — should show consent modal, NOT navigate immediately.
-    fireEvent.press(getByLabelText('AGI Agent. Cloud'));
-
-    expect(getByTestId('mode-switch-modal')).toBeTruthy();
-    expect(mockCloseDrawer).not.toHaveBeenCalled();
-    expect(mockNavigate).not.toHaveBeenCalled();
-
-    // Confirm the modal — navigation should now happen.
-    fireEvent.press(getByTestId('mode-switch-confirm'));
-
-    expect(queryByTestId('mode-switch-modal')).toBeNull();
-    expect(mockCloseDrawer).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/chat');
-    if (DEFAULT_CLOUD_MODEL_ID) {
-      // Tier-aware default (regression: this used to be the raw
-      // DEFAULT_CLOUD_MODEL_ID probe model unconditionally — see
-      // model-picker-cloud-labels.test.ts for why that's wrong for the
-      // free/unresolved tier this test runs under).
-      const expectedDefault = getDefaultCloudModelIdForTier(useTierStore.getState().tier);
-      expect(useModelStore.getState().selectedModel).toBe(expectedDefault);
-      expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
-      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
-    }
-  });
-
-  it('cancelling the consent modal keeps current mode unchanged', () => {
-    useWaitlistStore.setState({ cloudUnlocked: true });
-    useChatAppModeStore.setState({ appMode: 'local' });
-    const localDrawer = renderDrawer();
-
-    // In local mode, AGI Agent is not visible — switch to cloud mode in the store first.
-    expect(localDrawer.queryByText('AGI Agent')).toBeNull();
-    localDrawer.unmount();
-    useChatAppModeStore.setState({ appMode: 'cloud' });
-    const {
-      getByLabelText: getByLabelText2,
-      getByTestId: getByTestId2,
-      queryByTestId: queryByTestId2,
-    } = renderDrawer();
-
-    fireEvent.press(getByLabelText2('AGI Agent. Cloud'));
-    expect(getByTestId2('mode-switch-modal')).toBeTruthy();
-
-    fireEvent.press(getByTestId2('mode-switch-cancel'));
-
-    expect(queryByTestId2('mode-switch-modal')).toBeNull();
-    expect(mockCloseDrawer).not.toHaveBeenCalled();
-    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('highlights active projects and settings rows', () => {
