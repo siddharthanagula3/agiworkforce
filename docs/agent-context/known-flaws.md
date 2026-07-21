@@ -162,6 +162,35 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   features/settings/voicePersonaParams.ts, wired useTTS to read the persisted
   persona (previously hardcoded rate/pitch/volume), and deduped the preview +
   storage-key constant onto it. Unit-tested.
+- MOBILE (app #3) audit 2026-07-21 — primary surfaces (chat/composer/drawer-nav/
+  auth/onboarding/model-picker + most settings) all WIRED; 4 findings (0H/1M/3L):
+  • [MED] Notification Preferences screen inert → FIXED (`60a54d66c`): the category
+  toggles + quiet hours persisted to useNotificationPrefsStore but no live path
+  read it. Both firing paths (backgroundFetch agent-approval push +
+  notifications.ts foreground handler) now consult a shared notificationAllowed()
+  gate (services/notificationGate.ts, lazy-require + fail-open). Regression test.
+  • [LOW] OPEN MOBILE-VOICE-CLOUD-TTS-DISABLED: voice/index.tsx:258 Cloud TTS
+  provider is hardcoded `disabled` + handleProviderSelect('cloud') early-returns,
+  while labeled "Requires AGI Cloud access" — misleading (cloud users still can't
+  pick it). Cloud TTS is not built on mobile (backendExists: NO). Fix = relabel to
+  an honest "not available yet" or remove the option (small).
+  • [LOW] OPEN MOBILE-MODELS-FAVORITES-INERT: app/(app)/models.tsx:183/207 Favorites
+  & Recent rows are plain non-interactive Views (no onPress) that read as tappable.
+  Fix = make them select the model via useModelStore, but selection is lock/tier-
+  gated (ModelPickerSheet enforces availability:'locked' + cloudUnlocked), so a
+  correct wire must route through the same gating — a small model-picker change.
+  • [LOW] OPEN MOBILE-CONNECTORS-501: cloud-connectors/index.tsx:684 — ~19/21
+  catalog providers' "Connect" shows an honest "coming soon" alert (server POST
+  /api/connectors returns 501; only GitHub + custom-MCP work). Backend-truthful,
+  not fake UI; the real gap is per-provider server-side OAuth registration (backend).
+  • NOTE dead code (not a visible control): src/features/sidebar/\*\* (Sidebar/
+  ConversationList/etc.) is not mounted anywhere (live nav uses DrawerContent) —
+  a delete/cleanup concern, not a dead interface.
+  • NOTE MOBILE-TEST-INFRA-SECURESTORE (PRE-EXISTING, not a product bug): jest.setup.js
+  mocks reanimated/worklets/expo-notifications/webview but NOT expo-secure-store, so
+  any suite whose module graph loads a SecureStore-backed store fails to run
+  (src/lib/time.test.ts fails on this independently of any change). Fix = add an
+  expo-secure-store mock to jest.setup.js (systemic, re-run all 200 suites to verify).
 - NOTE DESKTOP-DOM-E2E-MODE-DEPENDENCY (2026-07-21, harness — NOT a product bug):
   the desktop Playwright DOM e2e (`test:e2e:dom`, specs in apps/desktop/e2e) has
   NO webServer config — you must start vite yourself on :5175, and the suites
