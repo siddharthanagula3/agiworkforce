@@ -136,4 +136,20 @@ describe('attachFiles webview→host schema', () => {
     });
     expect(result).toBeUndefined();
   });
+
+  it('passes removePendingAttachment through the gate (was dropped, keeping the file attached)', () => {
+    // Regression: the schema omitted this message, so parseWebviewMessage returned
+    // undefined and the host never removed the file — the chip vanished client-side
+    // but the attachment was still sent on the next turn.
+    const result = parseWebviewMessage({
+      type: 'removePendingAttachment',
+      payload: { id: 'att-123' },
+    });
+    expect(result).toEqual({ type: 'removePendingAttachment', payload: { id: 'att-123' } });
+  });
+
+  it('rejects removePendingAttachment with a missing id', () => {
+    const result = parseWebviewMessage({ type: 'removePendingAttachment', payload: {} });
+    expect(result).toBeUndefined();
+  });
 });
