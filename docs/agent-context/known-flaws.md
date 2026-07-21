@@ -110,7 +110,7 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   HIGH sibling (Personalization "Response Style") is FIXED (`16a4de4d9`, wired into
   TauriRuntime customInstructions). Remaining:
   • Execution-preference cluster — PARTIALLY FIXED 2026-07-21:
-  – max\*timeout_minutes + enable_timeout_warnings → FIXED. The LIVE global
+  – max\*timeout*minutes + enable_timeout_warnings → FIXED. The LIVE global
   TimeoutConfig (timeout_set_config, read by the executor per tasks/types.rs:116
   "overrides the global TIMEOUT_CONFIG.max_duration_secs") is now synced from
   settingsStore.saveSettings + loadSettings via syncExecutionTimeoutToBackend
@@ -128,15 +128,27 @@ hardening, plus a fix wave. Findings from the fix wave tracked here:
   any live command (`bg_submit_task` uses a different path; grep finds it only in
   its own module + tests). The LIVE checkpoint system is instead
   `core/agi/checkpoint.rs` (CheckpointConfig.checkpoint_interval_steps, default 5,
-  read by checkpoint_manager.rs:171) — which ALSO ignores the setting. So:
-  – checkpoint-interval FIX = configure the LIVE agi checkpoint_manager's
-  checkpoint_interval_steps from execution_preferences.checkpoint_interval
-  (find where CheckpointConfig is built + add a setter/command + frontend push,
-  like the timeout fix). A focused Rust slice, NOT the dormant executor.
-  – auto_resume_on_restart exists ONLY on the dormant executor → NO live consumer.
-  Honest fix = wire the continuous-executor feature live (big) OR remove the
-  setting (FOUNDER/product decision: is continuous autonomous execution a
-  shipping feature?). Do NOT rush at depth.
+  read by checkpoint_manager.rs:171). CORRECTION 2026-07-21 (supersedes the "wire
+  to the live agi checkpoint_manager" note above — that was WRONG): the
+  CheckpointManager is ALSO DORMANT — `CheckpointManager::new` is never called in
+  the live app (referenced only by checkpoint_manager.rs + the core/agi/mod.rs
+  re-export). The wired AGICheckpointState (agi_checkpoint*\* commands, lib.rs:1054)
+  uses CheckpointConfig::default() and reads ONLY max_checkpoints_per_task — never
+  checkpoint_interval_steps. So BOTH checkpoint subsystems are built-but-dormant:
+  checkpoint_interval_steps AND auto_resume_on_restart have ZERO live consumers.
+  DISPOSITION (genuine product-direction call, not a snap fix): the settings cannot
+  be "wired" without making entire dormant subsystems live. TWO honest options —
+  (A) COMPLETE = instantiate + run the continuous-executor/checkpoint-manager in the
+  live task pipeline so checkpoint_interval_steps/auto_resume take effect (a large
+  feature-integration slice; the code exists — continuous_executor.rs is 1580+ lines
+  with tests + a settings UI, which suggests it was INTENDED, not abandoned); or
+  (B) REMOVE the three dead controls (Enable Checkpointing switch :209, Checkpoint
+  Interval slider :224, Auto-resume toggle :247) from AgentsSettings.tsx + clean the
+  orphaned settingsStore fields/setters, if the feature is being dropped. Which one
+  depends on whether autonomous/continuous execution is a shipping feature — a
+  FOUNDER product decision given the substantial existing investment. Not resolved
+  this session (would be a snap call at extreme context). NOT a
+  critical/high blocker.
   CONTRAST: terminal_sandbox IS wired (terminal_executor.rs:571 + terminal.rs:265)
   and max-timeout/warnings ARE now wired (ff346b5e0) — the live-config-push pattern
   is proven; checkpoint-interval should follow it against the agi checkpoint system.
