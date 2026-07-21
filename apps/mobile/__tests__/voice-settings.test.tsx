@@ -81,4 +81,12 @@ describe('Voice settings', () => {
 
     expect(useSettingsStore.getState().ttsProvider).toBe('system');
   });
+
+  it('labels Cloud voice honestly (not built) rather than implying Cloud access unlocks it', () => {
+    const { getByText, queryByText } = render(<VoiceSettingsScreen />);
+    // Regression for MOBILE-VOICE-CLOUD-TTS-DISABLED: the old copy "Requires AGI
+    // Cloud access." misled cloud users into thinking they could pick it.
+    expect(getByText("Cloud voice isn't available on mobile yet.")).toBeTruthy();
+    expect(queryByText('Requires AGI Cloud access.')).toBeNull();
+  });
 });
