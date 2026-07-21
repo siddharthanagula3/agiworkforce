@@ -27,11 +27,9 @@ export * as capabilities from './capabilities';
 export * as customAgents from './customAgents';
 export * as customInstructions from './customInstructions';
 
-// ---- Wave 2: Chat, Database, MCP, Memory, Cache, File Ops ----
+// ---- Wave 2: Chat, Database, MCP, Cache, File Ops ----
 export * as chat from './chat';
 export * as mcp from './mcp';
-export * as memory from './memory';
-export * as memoryImport from './memoryImport';
 export * as knowledge from './knowledge';
 export * as embeddings from './embeddings';
 export * as fileOps from './fileOps';
