@@ -80,6 +80,34 @@ describe('settingsStore', () => {
     });
   });
 
+  it('syncs max-timeout and timeout-warnings into the live TimeoutConfig on save', async () => {
+    // settings_save only persists ExecutionPreferences to disk (unread by the
+    // executor); the live TimeoutConfig (timeout_set_config) is what governs task
+    // timeouts. saveSettings must bridge them, preserving enable_checkpoint_on_timeout.
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === 'timeout_get_config') {
+        return {
+          max_duration_secs: 3600,
+          enable_warnings: true,
+          enable_checkpoint_on_timeout: true,
+        };
+      }
+      return undefined;
+    });
+
+    useSettingsStore.getState().setMaxTimeoutMinutes(120);
+    useSettingsStore.getState().setEnableTimeoutWarnings(false);
+    await useSettingsStore.getState().saveSettings();
+
+    expect(invokeMock).toHaveBeenCalledWith('timeout_set_config', {
+      config: {
+        max_duration_secs: 120 * 60,
+        enable_warnings: false,
+        enable_checkpoint_on_timeout: true,
+      },
+    });
+  });
+
   it('should initialize with default settings', () => {
     const state = useSettingsStore.getState();
 
