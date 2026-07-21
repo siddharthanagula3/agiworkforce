@@ -112,6 +112,19 @@ export default function ProjectsPage() {
     [updateProject],
   );
 
+  // Persist a star toggle (ProjectCard flips the store optimistically first).
+  const persistStar = useCallback(
+    async (projectId: string, starred: boolean) => {
+      try {
+        await webManagedCloudProjects.updateProject(projectId, { starred });
+      } catch (error) {
+        updateProject(projectId, { starred: !starred }); // roll back the optimistic toggle
+        toast.error(error instanceof Error ? error.message : 'Failed to update star');
+      }
+    },
+    [updateProject],
+  );
+
   // The gallery removes optimistically; the custom sorted cards do not. A
   // failed Cloud delete restores an optimistic row instead of lying in the UI.
   const handleDeleteProjectServer = useCallback(
@@ -360,6 +373,7 @@ export default function ProjectsPage() {
                 onDeleteProject={(project) => {
                   void handleDeleteProjectServer(project, true);
                 }}
+                onStarProject={(id, starred) => void persistStar(id, starred)}
               />
             ) : (
               /* Custom sort: render sorted ProjectCard grid */
@@ -407,6 +421,7 @@ export default function ProjectsPage() {
                         onArchive={(p) => void handleArchiveProjectServer(p, false)}
                         onUnarchive={(p) => void handleUnarchiveProjectServer(p)}
                         onDelete={(p) => void handleDeleteProjectServer(p, false)}
+                        onStarChange={(id, starred) => void persistStar(id, starred)}
                       />
                     ))}
                   </div>

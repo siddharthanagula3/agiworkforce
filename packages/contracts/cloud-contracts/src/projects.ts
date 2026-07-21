@@ -70,6 +70,9 @@ export type ManagedCloudProjectCreateRequest = z.infer<
 export const ManagedCloudProjectUpdateRequestSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   isArchived: z.boolean().optional(),
+  // Starred/pinned. Persisted in the existing user_projects.metadata jsonb so no
+  // schema migration is required; the server merges it under metadata.starred.
+  starred: z.boolean().optional(),
   ...ManagedCloudProjectWriteFields,
 });
 export type ManagedCloudProjectUpdateRequest = z.infer<
