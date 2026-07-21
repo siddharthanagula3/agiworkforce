@@ -2946,7 +2946,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/background" | "/bg" => {
-            SlashResult::SystemMessage("Current task moved to background context. Use /tasks to view active tasks.".into())
+            SlashResult::SystemMessage("Moving the current turn to the background isn't available yet — it keeps running in the foreground. Use /tasks to view active background tasks.".into())
         }
 
         "/advisor" => {
