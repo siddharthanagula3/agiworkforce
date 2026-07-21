@@ -59,6 +59,8 @@ pub enum ViewAction {
 pub enum OverlayResult {
     /// Statusline field-visibility config chosen in `StatusLineSetupView`.
     StatusLine(crate::tui::widgets::statusline_setup::StatusLineConfig),
+    /// Terminal-title field config chosen in `TerminalTitleSetupView`.
+    TerminalTitle(crate::tui::widgets::terminal_title_setup::TerminalTitleConfig),
 }
 
 /// Core trait. A view renders itself, reacts to keys, and signals
