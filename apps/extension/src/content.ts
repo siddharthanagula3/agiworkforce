@@ -34,6 +34,7 @@ import {
   resolveProfileValue,
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
+import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
 import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
 import { detectNLWeb } from './nlweb';
 import { setupInPagePanel } from './inPagePanel/setup';
@@ -1336,11 +1337,17 @@ async function handleRunAutofill(): Promise<ExtensionResponse> {
       }),
     );
 
+    // Ashby marks its async typeahead + file-picker fields skipped with a
+    // reason the engine's file_upload trigger doesn't match; without passing the
+    // platform's always-escalate keys the run reports "no escalation needed" and
+    // the resume is never attached. Feed them so those fields trigger escalation.
+    const alwaysEscalate = platform === 'ashby' ? ASHBY_ALWAYS_ESCALATE_KEYS : undefined;
     const escalation = makeEscalationDecision(
       autofillResult.filled,
       fields,
       profileValues,
       platform,
+      alwaysEscalate,
     );
 
     return {
