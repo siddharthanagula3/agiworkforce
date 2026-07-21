@@ -544,6 +544,32 @@ impl TuiApp {
                     );
                 }
             }
+            OverlayResult::DiffApproved(paths) => {
+                // Stage the approved files (reversible via `git reset`). Rejected /
+                // skipped files are deliberately left untouched — never auto-discard
+                // the user's working-tree changes.
+                let staged = paths
+                    .iter()
+                    .filter(|path| {
+                        std::process::Command::new("git")
+                            .arg("add")
+                            .arg("--")
+                            .arg(path)
+                            .status()
+                            .map(|s| s.success())
+                            .unwrap_or(false)
+                    })
+                    .count();
+                if staged > 0 {
+                    self.chat_messages.push(ChatMessage {
+                        role: ChatRole::System,
+                        text: format!(
+                            "Staged {staged} approved file{} (git add). Rejected/skipped files were left unchanged.",
+                            if staged == 1 { "" } else { "s" }
+                        ),
+                    });
+                }
+            }
         }
     }
 

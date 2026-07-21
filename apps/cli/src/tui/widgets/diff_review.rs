@@ -290,6 +290,18 @@ impl InteractiveView for DiffReviewView {
         }
     }
 
+    fn take_result(&mut self) -> Option<super::interactive::OverlayResult> {
+        // Only invoked on Submit (Enter). Hand back the approved paths for the host
+        // to stage; rejected/skipped files are intentionally left untouched.
+        let approved: Vec<std::path::PathBuf> = self
+            .decisions
+            .iter()
+            .filter(|(_, decision)| **decision == ReviewDecision::Approve)
+            .map(|(path, _)| path.clone())
+            .collect();
+        Some(super::interactive::OverlayResult::DiffApproved(approved))
+    }
+
     fn is_done(&self) -> bool {
         self.done
     }
@@ -302,6 +314,27 @@ impl InteractiveView for DiffReviewView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn take_result_returns_only_approved_paths() {
+        let files = vec![
+            FileDiff::new("a.rs", vec![], 1, 0),
+            FileDiff::new("b.rs", vec![], 1, 0),
+            FileDiff::new("c.rs", vec![], 1, 0),
+        ];
+        let mut view = DiffReviewView::new(files);
+        view.handle_key(KeyAction::Char('y')); // approve a (cursor 0)
+        view.handle_key(KeyAction::Down);
+        view.handle_key(KeyAction::Char('n')); // reject b
+        view.handle_key(KeyAction::Down);
+        view.handle_key(KeyAction::Char('s')); // skip c
+        match view.take_result() {
+            Some(crate::tui::widgets::interactive::OverlayResult::DiffApproved(paths)) => {
+                assert_eq!(paths, vec![std::path::PathBuf::from("a.rs")]);
+            }
+            other => panic!("expected DiffApproved with only the approved path, got {other:?}"),
+        }
+    }
 
     fn make_view() -> DiffReviewView {
         DiffReviewView::new(vec![
