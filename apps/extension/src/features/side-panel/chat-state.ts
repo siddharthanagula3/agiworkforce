@@ -148,3 +148,19 @@ export function shouldRebuildMessageDom(input: {
 }): boolean {
   return input.forceRebuild || input.renderedCount > input.messageCount;
 }
+
+/**
+ * Whether an assistant message should render a text bubble element.
+ *
+ * A bubble is needed when there is text to show and — critically — while the
+ * message is still streaming even if its text is momentarily empty. An agentic
+ * (tool-using) run creates the assistant message from a tool/agent event with
+ * empty content (see {@link applyCanonicalAgentEvent}, `streaming: true`) and
+ * only later streams the answer in. Without the streaming case the bubble is
+ * never built, so the in-place streaming updater has no `sp-bubble-<id>` target
+ * and the streamed reply silently fails to paint — the user sees the activity
+ * timeline but no answer.
+ */
+export function shouldRenderTextBubble(input: { text: string; streaming: boolean }): boolean {
+  return input.text.trim().length > 0 || input.streaming === true;
+}

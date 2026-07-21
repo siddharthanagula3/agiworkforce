@@ -27,6 +27,7 @@ import {
   handleSaveShortcut,
   handleListShortcuts,
   handleDeleteShortcut,
+  planShortcutReplay,
 } from './features/background/shortcuts';
 import {
   loadScheduledTasks,
@@ -39,6 +40,7 @@ import {
   recordScheduledTaskRun,
   restoreScheduledTaskAlarms,
   TASK_ALARM_PREFIX,
+  TASK_PROMPT_MAX_CHARS,
 } from './features/background/tasks';
 import { getPlatformPrompt } from './platform-prompts';
 // Wires `@agiworkforce/browser-tool`'s canonical action shapes onto the
@@ -831,6 +833,38 @@ async function handleReplayShortcut(
     return {
       success: false,
       error: 'Shortcut origin is no longer on your allowlist; the shortcut was removed.',
+    } as ExtensionResponse;
+  }
+  const plan = planShortcutReplay(shortcut);
+  if (plan.kind === 'empty') {
+    return {
+      success: false,
+      error: 'This shortcut has no recorded actions or prompt to run.',
+    } as ExtensionResponse;
+  }
+  if (plan.kind === 'prompt') {
+    // A prompt shortcut carries no recorded page actions — run its saved prompt
+    // through the chat path (the same route the scheduler uses for prompt-only
+    // tasks) instead of dispatching an empty RUN_PAGE_ACTIONS batch, which
+    // no-ops on the page yet previously still reported "completed" (fake
+    // success).
+    const safePrompt = plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS);
+    const chatMsg: import('./types').ChatMessageMessage = {
+      type: 'CHAT_MESSAGE',
+      clientInstanceId: 'shortcut-replay',
+      id: `shortcut_${shortcut.id}_${crypto.randomUUID()}`,
+      text: safePrompt,
+      timestamp: Date.now(),
+      modelSelection: 'auto',
+    };
+    const chatResult = await handleChatMessage(chatMsg, { id: chrome.runtime.id });
+    if (chatResult.status === 'success') {
+      showNotification('Shortcut Replayed', `"${shortcut.name}" started`);
+      return { success: true } as ExtensionResponse;
+    }
+    return {
+      success: false,
+      error: chatResult.message || 'Shortcut prompt failed to run.',
     } as ExtensionResponse;
   }
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
