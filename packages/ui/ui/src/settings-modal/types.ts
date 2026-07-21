@@ -92,8 +92,6 @@ export interface CustomConnectorInput {
   name: string;
   /** Remote MCP server URL. */
   url: string;
-  oauthClientId?: string;
-  oauthClientSecret?: string;
 }
 
 // ─── Data adapter interface (injected per surface) ────────────────────────────

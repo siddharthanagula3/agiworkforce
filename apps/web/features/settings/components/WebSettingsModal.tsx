@@ -445,22 +445,11 @@ export function WebSettingsModal({
 
   // Custom remote-MCP connectors: persisted via POST /api/connectors/custom
   // (live connect-and-list + encrypted-at-rest bearer token — see
-  // lib/user-connector-tools.ts). The shared form's "Advanced settings" only
-  // collects OAuth client id/secret, which this endpoint does not support yet
-  // (bearer-token auth only, entered via Connectors > Inspect MCP server) —
-  // reject early with an honest message rather than silently dropping them.
+  // lib/user-connector-tools.ts). Bearer-token auth only; OAuth
+  // client-credentials aren't supported yet, so the form no longer collects
+  // them (the dead Advanced-settings OAuth fields were removed).
   const addCustomConnector = useCallback(
-    async (input: {
-      name: string;
-      url: string;
-      oauthClientId?: string;
-      oauthClientSecret?: string;
-    }) => {
-      if (input.oauthClientId || input.oauthClientSecret) {
-        throw new Error(
-          'OAuth client credentials are not supported yet for custom connectors. Leave those fields blank, or add a bearer-token-secured connector from Connectors → Inspect MCP server.',
-        );
-      }
+    async (input: { name: string; url: string }) => {
       const csrfToken = await getCsrfToken();
       const res = await fetch('/api/connectors/custom', {
         method: 'POST',

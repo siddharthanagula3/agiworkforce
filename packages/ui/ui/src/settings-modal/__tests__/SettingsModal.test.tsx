@@ -295,11 +295,6 @@ describe('Connectors pane (table)', () => {
     expect(screen.getByText('Beta')).toBeTruthy();
     expect(screen.getByText(/Only use connectors from developers you trust/)).toBeTruthy();
 
-    // Advanced settings collapse holds the optional OAuth fields.
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced settings' }));
-    expect(screen.getByText('OAuth Client ID (optional)')).toBeTruthy();
-    expect(screen.getByText('OAuth Client Secret (optional)')).toBeTruthy();
-
     // Add stays disabled until name + a valid https URL are supplied.
     const addBtn = screen.getByRole('button', { name: 'Add' });
     expect(addBtn).toHaveProperty('disabled', true);
