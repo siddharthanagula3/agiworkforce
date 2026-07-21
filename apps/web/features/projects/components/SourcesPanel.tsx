@@ -17,10 +17,12 @@
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { ALLOWED_ATTACHMENT_ACCEPT, type ProjectKnowledgeFile } from '@agiworkforce/types';
-import { HardDrive, MessageSquare, Upload } from 'lucide-react';
+import { HardDrive, MessageSquare, Upload, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { FilePreviewModal } from './FilePreviewModal';
 import { AddSourcesModal } from './AddSourcesModal';
 import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -90,6 +92,22 @@ export function SourcesPanel({ projectId }: Props) {
   // ---------------------------------------------------------------------------
   // Upload
   // ---------------------------------------------------------------------------
+
+  async function handleDelete(file: ProjectKnowledgeFile) {
+    const previous = files;
+    setFiles((current) => current.filter((f) => f.id !== file.id));
+    try {
+      const csrfToken = await getCsrfToken();
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
+        { method: 'DELETE', headers: { 'x-csrf-token': csrfToken }, credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+    } catch {
+      setFiles(previous);
+      toast.error(`Couldn't remove ${file.fileName}. Try again.`);
+    }
+  }
 
   async function handleUpload(file: File) {
     setUploadState({ status: 'uploading', fileName: file.name, progress: 0 });
@@ -467,6 +485,28 @@ export function SourcesPanel({ projectId }: Props) {
                   <span style={{ fontSize: 11, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                     {(file.byteCount / 1024).toFixed(1)} KB
                   </span>
+                  <button
+                    type="button"
+                    data-testid="sources-delete"
+                    aria-label={`Remove ${file.fileName}`}
+                    title="Remove source"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDelete(file);
+                    }}
+                    style={{
+                      flexShrink: 0,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--agi-ink-2)',
+                      padding: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Trash2 size={14} aria-hidden />
+                  </button>
                 </li>
               ))}
             </ul>
