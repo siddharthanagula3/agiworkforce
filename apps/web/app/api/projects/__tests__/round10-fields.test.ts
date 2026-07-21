@@ -183,6 +183,23 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     expect(json.project['accentColor']).toBe('sky');
   });
 
+  it('persists starred into the existing metadata jsonb (no schema migration)', async () => {
+    const dbRow = { ...BASE_DB_ROW, metadata: { starred: true } };
+    setupUpdateChain({ data: dbRow, error: null });
+
+    const req = makePutRequest('proj-1', { starred: true });
+    const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
+
+    expect(res.status).toBe(200);
+    // The handler merges starred under metadata rather than a dedicated column.
+    const sqlCalls = mockNeonQuery.mock.calls.map((c) => String(c[0]));
+    expect(
+      sqlCalls.some((sql) => /metadata = coalesce\(metadata/.test(sql) && /starred/.test(sql)),
+    ).toBe(true);
+    const json = (await res.json()) as { project: { metadata?: Record<string, unknown> } };
+    expect(json.project.metadata?.['starred']).toBe(true);
+  });
+
   it('round-trips defaultPrivacyMode, defaultProviderMode, allowedSurfaces, defaultModelId, importedFrom', async () => {
     const dbRow = {
       ...BASE_DB_ROW,

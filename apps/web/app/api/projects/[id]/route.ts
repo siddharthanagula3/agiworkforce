@@ -81,6 +81,14 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.instructions !== undefined) addBase('instructions', body.instructions?.trim() ?? null);
   if (body.color !== undefined) addBase('color', body.color.trim());
   if (body.isArchived !== undefined) addBase('is_archived', body.isArchived);
+  // Starred/pinned lives in the existing metadata jsonb (no migration): merge it
+  // in so other metadata keys are preserved.
+  if (body.starred !== undefined) {
+    baseParams.push(body.starred);
+    baseSetClauses.push(
+      `metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object('starred', $${baseParams.length}::boolean)`,
+    );
+  }
 
   // Round-10 fields · isolated so we can retry without them if migration not applied
   const round10SetClauses: string[] = [];

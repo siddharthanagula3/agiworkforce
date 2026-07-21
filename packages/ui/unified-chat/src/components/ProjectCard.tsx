@@ -31,6 +31,9 @@ export interface ProjectCardProps {
   onUnarchive?: (project: Project) => void;
   /** Called when the user confirms "Delete" from the context menu. */
   onDelete?: (project: Project) => void;
+  /** Called after the star is toggled, with the new starred value, so the host
+   * can persist it (the store toggle alone is in-memory). */
+  onStarChange?: (projectId: string, starred: boolean) => void;
   /** Override the default time formatter — useful for i18n. */
   formatRelativeDate?: (iso: string) => string;
   className?: string;
@@ -57,6 +60,7 @@ export function ProjectCard({
   onEdit,
   onArchive,
   onUnarchive,
+  onStarChange,
   onDelete,
   formatRelativeDate = defaultFormatRelativeDate,
   className,
@@ -70,8 +74,9 @@ export function ProjectCard({
     (event: MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation();
       toggleStar(project.id);
+      onStarChange?.(project.id, !project.starred);
     },
-    [toggleStar, project.id],
+    [toggleStar, project.id, project.starred, onStarChange],
   );
 
   // Close menu on outside click
@@ -183,6 +188,7 @@ export function ProjectCard({
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleStar(project.id);
+                      onStarChange?.(project.id, !project.starred);
                       setMenuOpen(false);
                     }}
                   >

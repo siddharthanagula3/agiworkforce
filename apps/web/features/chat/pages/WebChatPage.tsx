@@ -1495,7 +1495,12 @@ export default function WebChatPage() {
     (projectId: string) => {
       const project = storeProjects.find((p) => p.id === projectId);
       if (!project) return;
-      updateProjectInStore(projectId, { starred: !project.starred });
+      const next = !project.starred;
+      updateProjectInStore(projectId, { starred: next }); // optimistic
+      void webManagedCloudProjects.updateProject(projectId, { starred: next }).catch((error) => {
+        updateProjectInStore(projectId, { starred: project.starred ?? false }); // rollback
+        toast.error(error instanceof Error ? error.message : 'Failed to update pin');
+      });
     },
     [storeProjects, updateProjectInStore],
   );
