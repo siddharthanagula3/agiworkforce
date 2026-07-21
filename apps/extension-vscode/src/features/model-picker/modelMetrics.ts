@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import { MODEL_COST_BLENDED, DEFAULT_BLENDED_RATE } from './modelConstants';
+import { escapeHtml } from '../sidebar-webview/webviewContent';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -247,8 +248,4 @@ function getNonce(): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { randomBytes } = require('crypto') as typeof import('crypto');
   return randomBytes(24).toString('base64url');
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
