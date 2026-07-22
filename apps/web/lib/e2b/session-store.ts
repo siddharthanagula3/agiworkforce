@@ -17,11 +17,10 @@ import 'server-only';
 import { Redis } from '@upstash/redis';
 import { logger } from '@/lib/logger';
 
-// Accept the native Upstash names or Vercel's KV-integration names (the Vercel
-// Marketplace Upstash integration injects the KV_* set by default).
-// `||` (not `??`) so an empty/blank legacy UPSTASH_* value falls through to KV_*.
-const redisRestUrl = process.env['UPSTASH_REDIS_REST_URL'] || process.env['KV_REST_API_URL'];
-const redisRestToken = process.env['UPSTASH_REDIS_REST_TOKEN'] || process.env['KV_REST_API_TOKEN'];
+// Prefer Vercel's managed KV-integration names, falling back to native UPSTASH_*
+// (matches lib/rate-limit.ts). `||` so an empty KV_* still falls through.
+const redisRestUrl = process.env['KV_REST_API_URL'] || process.env['UPSTASH_REDIS_REST_URL'];
+const redisRestToken = process.env['KV_REST_API_TOKEN'] || process.env['UPSTASH_REDIS_REST_TOKEN'];
 const hasRedisEnv = !!redisRestUrl && !!redisRestToken;
 
 const redis = hasRedisEnv ? new Redis({ url: redisRestUrl!, token: redisRestToken! }) : null;
