@@ -122,7 +122,7 @@ function finalAnswerStream(text: string): ReadableStream<Uint8Array> {
   ]);
 }
 
-function makeProcessed(tools: unknown[]): ProcessedRequest {
+function makeProcessed(tools: unknown[], options: { freeTrial?: boolean } = {}): ProcessedRequest {
   return {
     provider: 'xai',
     requestedModel: 'test-model',
@@ -133,6 +133,7 @@ function makeProcessed(tools: unknown[]): ProcessedRequest {
       stream: true,
       tools,
     },
+    ...(options.freeTrial ? { freeTrial: { reservationId: 'free-search-test' } } : {}),
   } as unknown as ProcessedRequest;
 }
 
@@ -245,6 +246,37 @@ describe('tool-loop web_search integration', () => {
       const toolMsg = secondRequest.messages.find((m) => m.role === 'tool');
       expect(toolMsg?.tool_call_id).toBe('call_web_search_1');
       expect(toolMsg?.content).toContain('Today in the news');
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('caps a Free-tier fallback search at five results', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(
+        toolCallStream('web_search', { query: 'today news' }, 'call_web_search_free'),
+      )
+      .mockResolvedValueOnce(finalAnswerStream('Here are the most relevant sources.'));
+
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      perplexitySearchResponse(),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      await collect(
+        runToolLoop(makeProcessed([webSearchToolDef()], { freeTrial: true }), {
+          approvalMode: 'auto',
+        }),
+      );
+
+      const [, init] = fetchMock.mock.calls[0]!;
+      expect(JSON.parse(init!.body as string)).toEqual({
+        query: 'today news',
+        max_results: 5,
+      });
     } finally {
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();

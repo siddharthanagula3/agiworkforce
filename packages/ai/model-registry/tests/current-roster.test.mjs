@@ -170,8 +170,12 @@ test('selects only the founder-approved current-generation roster', () => {
   const basicRoster = new Set(compatibility.tierAllowedModels.economy);
   assert.equal(basicRoster.has('gpt-5.6-luna'), true);
   assert.equal(basicRoster.has('gpt-5.6-terra'), false);
-  assert.equal(basicRoster.has('claude-haiku-4.5'), false);
-  assert.equal(compatibility.tierAllowedModels.pro_additions.includes('claude-haiku-4.5'), true);
+  assert.equal(basicRoster.has('claude-haiku-4.5'), true);
+  assert.equal(basicRoster.has('sonar'), false);
+  assert.equal(
+    compatibility.tierAllowedModels.pro_additions.includes('sonar-deep-research'),
+    false,
+  );
   assert.equal(selectableRoster.has('sonar-pro'), false);
 
   const openAIRoutes = Object.values(compatibility.providers.openai.taskRouting);

@@ -45,21 +45,34 @@ beforeEach(() => {
     return {
       ok: true,
       json: async () => ({
-        plan_tier: 'pro',
+        plan_tier: 'free',
         usage_percentage: 50,
-        usage_reset_at: null,
-        period_end: null,
+        usage_reset_at: '2026-08-10T08:30:00.000Z',
+        has_usage_remaining: true,
+        period_start: '2026-07-10T08:30:00.000Z',
+        period_end: '2026-08-10T08:30:00.000Z',
         subscription_status: 'active',
+        session_usage_percentage: 60,
+        session_reset_at: '2026-07-22T18:15:00.000Z',
+        weekly_usage_percentage: 40,
+        weekly_reset_at: '2026-07-25T12:00:00.000Z',
+        flagship_weekly_usage_percentage: 0,
+        flagship_weekly_reset_at: null,
       }),
     } as Response;
   }) as unknown as typeof fetch;
 });
 
 describe('UsageSection', () => {
-  it('shows the server usage percentage and reset state', async () => {
+  it('shows the rolling 5-hour, rolling 7-day, and account-month usage windows', async () => {
     render(React.createElement(UsageSection));
     expect(await screen.findByText('50% used')).toBeTruthy();
-    expect(screen.getByText(/no reset scheduled/i)).toBeTruthy();
+    expect(screen.getByText('Rolling 5 hours')).toBeTruthy();
+    expect(screen.getByText('60% used')).toBeTruthy();
+    expect(screen.getByText('Rolling 7 days')).toBeTruthy();
+    expect(screen.getByText('40% used')).toBeTruthy();
+    expect(screen.getByText('Account month')).toBeTruthy();
+    expect(screen.getAllByText(/capacity refreshes|resets/i)).toHaveLength(3);
   });
 
   it('never renders internal credit, dollar, or token balances', async () => {

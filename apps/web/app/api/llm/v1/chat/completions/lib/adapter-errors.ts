@@ -2,6 +2,33 @@ import 'server-only';
 
 import type { StreamChunk } from '@agiworkforce/types';
 
+function providerUpstreamError(
+  label: string,
+  chunk: Extract<StreamChunk, { type: 'error' }>,
+): Error {
+  const status = chunk.code ? Number(chunk.code) : undefined;
+  let message: string;
+  switch (status) {
+    case 401:
+      message = `${label} authentication error (401): ${chunk.message}`;
+      break;
+    case 402:
+      message = `${label} insufficient credits (402): ${chunk.message}`;
+      break;
+    case 429:
+      message = `${label} rate limit exceeded (429): ${chunk.message}`;
+      break;
+    case 404:
+      message = `${label} not found (404): ${chunk.message}`;
+      break;
+    default:
+      message = `${label} API error (${status ?? 'unknown'}): ${chunk.message}`;
+  }
+  const error = new Error(message) as Error & { status?: number };
+  if (Number.isFinite(status)) error.status = status;
+  return error;
+}
+
 /**
  * Bridges an adapter's `{type:'error'}` `StreamChunk` back into a thrown
  * `Error`, reproducing `apps/web/lib/llm-providers/anthropic.ts`'s
@@ -35,19 +62,7 @@ import type { StreamChunk } from '@agiworkforce/types';
  * switched on too.
  */
 export function toUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>): Error {
-  const status = chunk.code ? Number(chunk.code) : undefined;
-  switch (status) {
-    case 401:
-      return new Error(`Anthropic authentication error (401): ${chunk.message}`);
-    case 402:
-      return new Error(`Anthropic insufficient credits (402): ${chunk.message}`);
-    case 429:
-      return new Error(`Anthropic rate limit exceeded (429): ${chunk.message}`);
-    case 404:
-      return new Error(`Anthropic not found (404): ${chunk.message}`);
-    default:
-      return new Error(`Anthropic API error (${status ?? 'unknown'}): ${chunk.message}`);
-  }
+  return providerUpstreamError('Anthropic', chunk);
 }
 
 /**
@@ -80,19 +95,7 @@ export function toUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>):
  * thrown `TypeError` from `fetch` never carried an HTTP status either).
  */
 export function toGoogleUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>): Error {
-  const status = chunk.code ? Number(chunk.code) : undefined;
-  switch (status) {
-    case 401:
-      return new Error(`Google API authentication error (401): ${chunk.message}`);
-    case 402:
-      return new Error(`Google API insufficient credits (402): ${chunk.message}`);
-    case 429:
-      return new Error(`Google API rate limit exceeded (429): ${chunk.message}`);
-    case 404:
-      return new Error(`Google API not found (404): ${chunk.message}`);
-    default:
-      return new Error(`Google API error (${status ?? 'unknown'}): ${chunk.message}`);
-  }
+  return providerUpstreamError('Google API', chunk);
 }
 
 /**
@@ -105,19 +108,7 @@ export function toGoogleUpstreamError(chunk: Extract<StreamChunk, { type: 'error
  * matches exactly.
  */
 export function toOpenAIUpstreamError(chunk: Extract<StreamChunk, { type: 'error' }>): Error {
-  const status = chunk.code ? Number(chunk.code) : undefined;
-  switch (status) {
-    case 401:
-      return new Error(`OpenAI authentication error (401): ${chunk.message}`);
-    case 402:
-      return new Error(`OpenAI insufficient credits (402): ${chunk.message}`);
-    case 429:
-      return new Error(`OpenAI rate limit exceeded (429): ${chunk.message}`);
-    case 404:
-      return new Error(`OpenAI not found (404): ${chunk.message}`);
-    default:
-      return new Error(`OpenAI API error (${status ?? 'unknown'}): ${chunk.message}`);
-  }
+  return providerUpstreamError('OpenAI', chunk);
 }
 
 /**
@@ -135,21 +126,7 @@ export function toOpenAIUpstreamError(chunk: Extract<StreamChunk, { type: 'error
 function makeUpstreamErrorMapper(
   label: string,
 ): (chunk: Extract<StreamChunk, { type: 'error' }>) => Error {
-  return (chunk) => {
-    const status = chunk.code ? Number(chunk.code) : undefined;
-    switch (status) {
-      case 401:
-        return new Error(`${label} authentication error (401): ${chunk.message}`);
-      case 402:
-        return new Error(`${label} insufficient credits (402): ${chunk.message}`);
-      case 429:
-        return new Error(`${label} rate limit exceeded (429): ${chunk.message}`);
-      case 404:
-        return new Error(`${label} not found (404): ${chunk.message}`);
-      default:
-        return new Error(`${label} API error (${status ?? 'unknown'}): ${chunk.message}`);
-    }
-  };
+  return (chunk) => providerUpstreamError(label, chunk);
 }
 
 // Labels use each provider's canonical self-label (not assumed uniform with

@@ -148,6 +148,7 @@ describe('model catalog helpers', () => {
     expect(basicModels.map((model) => model.id)).not.toContain('qwen-3.7-plus');
     expect(basicModels.map((model) => model.id)).not.toContain('qwen-3.5-flash');
     expect(basicModels.map((model) => model.id)).not.toContain('glm-5.2');
+    expect(basicModels.map((model) => model.id)).not.toContain('sonar');
     expect(proModels.map((model) => model.id)).toContain('claude-haiku-4.5');
     expect(getAllowedModelsForTier('pro_additions')).toEqual(
       expect.arrayContaining(['deepseek-v4-flash', 'qwen-3.7-plus', 'qwen-3.5-flash', 'glm-5.2']),
@@ -332,8 +333,8 @@ describe('model catalog helpers', () => {
     expect(getRoutingSlotModel('general_balanced')).toBe('gpt-5.6-terra');
     expect(getRoutingSlotModel('coding_fast')).toBe('deepseek-v4-flash');
     expect(getModelMetadataById(getRoutingSlotModel('coding_premium'))).not.toBeNull();
-    expect(getRoutingSlotModel('search_fast')).toBe('sonar');
-    expect(getRoutingSlotModel('search_premium')).toBe('sonar-deep-research');
+    expect(getRoutingSlotModel('search_fast')).toBe('gemini-3.1-flash-lite');
+    expect(getRoutingSlotModel('search_premium')).toBe('gemini-3.6-flash');
     expect(getRoutingSlotModel('computer_use')).toBe('claude-sonnet-5');
 
     expect(canAccessManualModelSelection('free')).toBe(false);

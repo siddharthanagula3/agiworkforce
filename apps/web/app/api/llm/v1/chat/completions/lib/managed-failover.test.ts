@@ -2,7 +2,7 @@
  * Managed-failover plan semantics (AUTO-ROUTER-MIGRATION-01 web twin).
  * Mirrors the gateway's pinned semantics (services/api-gateway
  * __tests__/routes/llm-managed-failover.test.ts): rotation only on the five
- * availability categories, never on credential/rate-limit/abort classes,
+ * availability categories and direct-provider rate limits, never on credential/abort classes,
  * per-attempt tier re-admission, structural rotation-freedom for explicit
  * selections (empty plan), and a derived attempt view that keeps ONE
  * reservation while attributing the serving model.
@@ -109,6 +109,7 @@ describe('rotation eligibility (gateway parity)', () => {
     ['server_error (503)', httpError(503)],
     ['server_error (500)', httpError(500)],
     ['server_overload (529)', httpError(529, '{"type":"overloaded_error"}')],
+    ['rate limit (429)', httpError(429, 'rate limit exceeded')],
     ['api_timeout', Object.assign(new Error('request timeout'), {})],
   ])('rotates on %s', (_label, error) => {
     const attempt = makePlan(makeProcessed()).next(error);
@@ -119,7 +120,6 @@ describe('rotation eligibility (gateway parity)', () => {
   it.each([
     ['credential failure (401)', httpError(401, 'authentication error (401)')],
     ['forbidden (403)', httpError(403, 'permission denied')],
-    ['rate limit (429)', httpError(429, 'rate limit exceeded')],
     ['client error (400)', httpError(400, 'bad request')],
     ['context overflow', new Error('prompt is too long: 250000 tokens')],
     ['invalid model', new Error('model not found: nope')],
@@ -137,10 +137,23 @@ describe('rotation eligibility (gateway parity)', () => {
     expect(makePlan(processed).next(httpError(503))).toBeNull();
   });
 
-  it('never rotates a request that carries tools (provider-native tool shapes do not transfer)', () => {
+  it('does not rotate a tool-bearing request across providers', () => {
     const processed = makeProcessed();
     (processed.llmRequest as { tools?: unknown[] }).tools = [{ name: 'web_search' }];
     expect(makePlan(processed).next(httpError(503))).toBeNull();
+  });
+
+  it('rotates a tool-bearing request to a same-provider fallback', () => {
+    mockResolveProviderFromModel.mockImplementation((model: string) =>
+      model === 'candidate-a' ? 'openai' : 'anthropic',
+    );
+    const processed = makeProcessed();
+    (processed.llmRequest as { tools?: unknown[] }).tools = [{ name: 'web_search' }];
+
+    const attempt = makePlan(processed).next(httpError(429, 'rate limit exceeded'));
+
+    expect(attempt?.model).toBe('candidate-b');
+    expect(attempt?.provider).toBe('anthropic');
   });
 });
 

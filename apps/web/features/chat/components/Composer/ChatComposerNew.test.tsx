@@ -407,6 +407,9 @@ describe('ChatComposerNew', () => {
     expect(screen.getByText('Free usage limit reached. Upgrade to continue.')).toBeInTheDocument();
     expect(screen.queryByText(/\d[\d,.]*\s*(tokens?|prompts?)/i)).not.toBeInTheDocument();
 
+    const usageAlert = screen.getByRole('alert');
+    expect(usageAlert).toHaveClass('border-amber-300', 'bg-amber-50', 'text-amber-950');
+
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
 

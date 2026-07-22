@@ -18,11 +18,25 @@
 import { describe, it, expect } from 'vitest';
 import type { StreamChunk } from '@agiworkforce/types';
 import { drainToLlmResponse } from './adapter-response';
-import { toUpstreamError } from './adapter-errors';
+import { toGoogleUpstreamError, toUpstreamError } from './adapter-errors';
 
 async function* chunksOf(chunks: StreamChunk[]): AsyncIterable<StreamChunk> {
   for (const chunk of chunks) yield chunk;
 }
+
+describe('provider error classification bridge', () => {
+  it('preserves Google 429 as a structured status for managed Auto failover', () => {
+    const error = toGoogleUpstreamError({
+      type: 'error',
+      code: '429',
+      message: 'RESOURCE_EXHAUSTED',
+      retryable: true,
+    });
+
+    expect(error).toMatchObject({ status: 429 });
+    expect(error.message).toContain('Google API rate limit exceeded (429)');
+  });
+});
 
 describe('drainToLlmResponse · content and finish reason', () => {
   it('joins text-delta chunks and maps end_turn -> stop', async () => {

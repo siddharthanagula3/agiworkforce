@@ -661,12 +661,18 @@ export function appendWebSearchTool(
   providerLower: string,
   tools: unknown[] | undefined,
   caps: { search?: boolean } | undefined,
+  options: { researchMode?: boolean } = {},
 ): unknown[] | undefined {
   if (!(caps?.search ?? true)) return tools;
   if (providerLower === 'anthropic') {
     return [
       ...(tools ?? []),
-      { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'] },
+      {
+        type: 'web_search_20260209',
+        name: 'web_search',
+        allowed_callers: ['direct'],
+        max_uses: options.researchMode ? 20 : 3,
+      },
     ];
   }
   if (providerLower === 'google') {
@@ -1919,7 +1925,9 @@ export async function processRequest(
   // default to allowed so a missing catalog entry never silently drops the tool).
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
   if (chatRequest.web_search) {
-    resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps);
+    resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps, {
+      researchMode,
+    });
 
     // WP4 generic fallback: platform-executed `web_search` function tool for every
     // provider with no working native search path on this route (xai/deepseek/

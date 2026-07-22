@@ -20,7 +20,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import type { CloudWorkMode, Effort } from '@agiworkforce/types';
+import { getModelMetadataById, type CloudWorkMode, type Effort } from '@agiworkforce/types';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudChatClient,
@@ -1727,7 +1727,13 @@ export function useChatStream(): UseChatStreamReturn {
           }),
         });
         const thinkingState = useThinkingStore.getState();
-        const thinkingEnabled = options.thinkingEnabled ?? thinkingState.enabled;
+        const requestedThinking = options.thinkingEnabled ?? thinkingState.enabled;
+        const selectedModelMetadata = getModelMetadataById(model);
+        // Unknown/BYOK models preserve the caller's explicit request. Known catalog
+        // models are capability-clamped so a stale persisted preference can never
+        // make an otherwise valid chat fail before provider execution.
+        const thinkingEnabled =
+          requestedThinking && (selectedModelMetadata?.capabilities.thinking ?? true);
         const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
         const response = await fetch('/api/llm/v1/chat/completions', {
           method: 'POST',

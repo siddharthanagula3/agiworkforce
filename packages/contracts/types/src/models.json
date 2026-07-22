@@ -1910,7 +1910,7 @@
     }
   },
   "tierAllowedModels": {
-    "economy": ["gpt-5.6-luna", "gemini-3.1-flash-lite", "claude-haiku-4.5", "sonar"],
+    "economy": ["gpt-5.6-luna", "gemini-3.1-flash-lite", "claude-haiku-4.5"],
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",
@@ -1921,7 +1921,6 @@
       "qwen-3.7-plus",
       "qwen-3.5-flash",
       "glm-5.2",
-      "sonar-deep-research",
       "kimi-k3"
     ],
     "flagship_additions": ["gpt-5.6-sol", "claude-fable-5", "claude-opus-4.8", "grok-4.5"]
