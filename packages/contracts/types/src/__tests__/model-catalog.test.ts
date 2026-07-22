@@ -442,14 +442,14 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
   });
 
-  describe('Free tier task-aware routing fallback (all tasks → workhorse_general)', () => {
+  describe('Free tier task-aware routing', () => {
     it('coding → workhorse_general (escalation_coding not in free allowedSlots)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
       expect(result).toBe('gemini-3.1-flash-lite');
     });
-    it('reasoning → workhorse_general (reasoning_premium not in free allowedSlots)', () => {
+    it('reasoning → economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe('gemini-3.1-flash-lite');
+      expect(result).toBe('deepseek-v4-flash');
     });
     it('multimodal → workhorse_general (Flash-Lite handles vision)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'multimodal');
@@ -457,14 +457,14 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
   });
 
-  describe('Free tier task-aware routing (allowedSlots restricted to workhorse_general)', () => {
+  describe('Free tier task-aware fallback behavior', () => {
     it('coding → falls back to workhorse_general (escalation_coding not allowed)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'coding');
       expect(result).toBe('gemini-3.1-flash-lite');
     });
-    it('reasoning → falls back to workhorse_general', () => {
+    it('reasoning → uses the allowed economy reasoning slot', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning');
-      expect(result).toBe('gemini-3.1-flash-lite');
+      expect(result).toBe('deepseek-v4-flash');
     });
     it('image_generation → falls back to workhorse_general (no media on free)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'image_generation');
@@ -526,7 +526,7 @@ describe('resolveAutoModeModel — task-aware routing', () => {
 
     it('Free tier reasoning with usOnly=true is ignored (toggle not available)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'free', 'reasoning', { usOnly: true });
-      expect(result).toBe('gemini-3.1-flash-lite');
+      expect(result).toBe('deepseek-v4-flash');
     });
 
     it('Max balanced coding with usOnly=true stays on the balanced Anthropic slot', () => {

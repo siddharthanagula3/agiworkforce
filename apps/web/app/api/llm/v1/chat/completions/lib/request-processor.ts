@@ -38,6 +38,7 @@ import {
   getModelMetadataById,
   getMinimumRequiredTier,
   getModelReasoning,
+  isAutoModeModelId,
   type Effort,
   getSlotForModel,
   normalizeModelId,
@@ -1358,7 +1359,11 @@ export async function processRequest(
   }
 
   // Model tier access check
-  if (!freeTrialEnabled && !checkModelTierAccess(chatRequest.model, subscription.plan_tier)) {
+  if (
+    !freeTrialEnabled &&
+    !isAutoModeModelId(requestedModel) &&
+    !checkModelTierAccess(chatRequest.model, subscription.plan_tier)
+  ) {
     // Lowercase key (e.g. 'pro') for clients to pattern-match on, alongside the
     // uppercased word used in the human-readable message below. Clients (mobile,
     // desktop, web) key their upgrade-prompt UI off this field the same way they

@@ -229,6 +229,11 @@ export const rateLimitConfigs = {
     failClosed: false,
   },
   // LLM completion endpoints - critical for cost control and abuse prevention
+  'llm-completion-ip': {
+    limit: 1500,
+    window: '1 m', // Broad pre-auth abuse ceiling; shared networks must not share the user quota
+    failClosed: true,
+  },
   'llm-completion': {
     limit: 30,
     window: '1 m', // 30 LLM requests per minute per user

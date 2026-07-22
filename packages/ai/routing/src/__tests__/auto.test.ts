@@ -241,6 +241,33 @@ describe('resolveAutoRoute', () => {
     expect(asBasic).not.toEqual(asFree);
   });
 
+  it('admits Max 15x exactly like Max for Auto routing', () => {
+    const args = {
+      selection: 'auto',
+      taskType: 'coding',
+      trustMode: 'managed_cloud',
+    } as const;
+
+    expect(resolveAutoRoute({ ...args, subscriptionTier: 'max_15x' })).toEqual(
+      resolveAutoRoute({ ...args, subscriptionTier: 'max' }),
+    );
+  });
+
+  it('routes free-tier reasoning to an eligible economy reasoning model', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'reasoning',
+      subscriptionTier: 'free',
+      trustMode: 'managed_cloud',
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: 'deepseek-v4-flash',
+      effectiveProfile: 'economy',
+    });
+  });
+
   it('never resolves a flagship model for pro or basic (flagship is max/enterprise only)', () => {
     const flagship = new Set(
       getAllowedModelsForTier('flagship_additions').map((id) => id.toLowerCase()),

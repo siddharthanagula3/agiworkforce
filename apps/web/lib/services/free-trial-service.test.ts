@@ -371,7 +371,7 @@ describe('free trial service', () => {
       expect.stringMatching(
         /daily_reserved_microusd = case[\s\S]*usage\.daily_started_at = reservation\.window_started_at[\s\S]*from public\.free_daily_usage_reservations as reservation/i,
       ),
-      ['user-1', 'request-3', expect.any(Number), 100],
+      ['user-1', 'request-3', FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd, 100],
     );
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringMatching(
@@ -380,7 +380,7 @@ describe('free trial service', () => {
       [
         'user-1',
         'request-3',
-        expect.any(Number),
+        FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd,
         'completed',
         expect.stringContaining('"requestId":"request-3"'),
       ],

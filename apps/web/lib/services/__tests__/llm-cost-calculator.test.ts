@@ -100,14 +100,25 @@ describe('LLMCostCalculator — Sonnet 5 standard pricing', () => {
     expect(after).toEqual(before);
   });
 
-  it('preserves sub-cent precision for private free-plan settlement', () => {
+  it('charges at least one ledger cent for non-empty paid usage while preserving free precision', () => {
     const usage = { promptTokens: 100, completionTokens: 0, totalTokens: 100 };
 
     expect(LLMCostCalculator.calculateCost('anthropic', PROMO_MODEL, usage, WELL_PAST_CUTOFF)).toBe(
-      0,
+      1,
     );
     expect(
       LLMCostCalculator.calculateCostMicrousd('anthropic', PROMO_MODEL, usage, WELL_PAST_CUTOFF),
     ).toBe(300);
+  });
+
+  it('does not charge a paid request with no observed usage', () => {
+    expect(
+      LLMCostCalculator.calculateCost(
+        'anthropic',
+        PROMO_MODEL,
+        { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        WELL_PAST_CUTOFF,
+      ),
+    ).toBe(0);
   });
 });
