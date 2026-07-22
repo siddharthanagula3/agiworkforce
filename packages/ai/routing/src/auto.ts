@@ -4,6 +4,7 @@ import {
   type CapabilityRequirement,
   type EffectiveCapabilityDocument,
 } from '@agiworkforce/types';
+import { effectiveInputPrice, effectiveOutputPrice } from './pricing';
 import type { RoutingTaskType } from './types';
 
 export type RoutingTrustMode = 'local' | 'on_device' | 'byok' | 'managed_cloud';
@@ -137,6 +138,21 @@ export interface AutoRoutingRequest {
    * trust-mode, runtime-profile, tier, lifecycle, or harness admission.
    */
   fallbackToAutoForCapabilityMismatch?: boolean;
+  /**
+   * Remaining managed-usage budget in cents (web managed-cloud only). When
+   * set, Auto skips preferred slots whose estimated request cost exceeds it and
+   * prefers the best model the budget can still cover — an affordability BIAS,
+   * never a gate: the durable usage reservation stays the sole hard limit, and
+   * the workhorse fallback slot is never budget-filtered (so a nearly-exhausted
+   * user still routes there and the reservation, not the router, blocks). Absent
+   * on Local/BYOK/CLI, which have no managed usage, so those surfaces are
+   * unaffected.
+   */
+  budgetRemainingCents?: number;
+  /** Estimated prompt (input) tokens for the affordability cost estimate. */
+  estimatedInputTokens?: number;
+  /** Estimated completion (output) tokens; a default is applied when omitted. */
+  estimatedOutputTokens?: number;
 }
 
 export interface AutoFallbackRoute {
@@ -486,6 +502,35 @@ function buildProviderFallbacks(
   return fallbacks;
 }
 
+/** Assumed completion length when the caller supplies no output estimate. */
+const DEFAULT_AFFORDABILITY_OUTPUT_TOKENS = 1000;
+
+/**
+ * Estimated cents this request would cost on `modelKey`, from catalog $/1M
+ * pricing. A routing bias input, not billing truth — the durable reservation
+ * owns the real charge.
+ */
+function estimatedRequestCents(modelKey: string, request: AutoRoutingRequest): number {
+  const inputTokens = request.estimatedInputTokens ?? 0;
+  const outputTokens = request.estimatedOutputTokens ?? DEFAULT_AFFORDABILITY_OUTPUT_TOKENS;
+  const usd =
+    (inputTokens * effectiveInputPrice(modelKey) + outputTokens * effectiveOutputPrice(modelKey)) /
+    1_000_000;
+  return usd * 100;
+}
+
+/**
+ * A candidate is affordable when no budget signal was supplied (filtering is a
+ * no-op — the default on every non-web surface) or its estimated request cost
+ * fits the remaining budget. Callers must never budget-filter the workhorse
+ * fallback slot; that stays reachable so the reservation, not the router, is
+ * the hard cutoff.
+ */
+function isAffordable(modelKey: string, request: AutoRoutingRequest): boolean {
+  if (request.budgetRemainingCents === undefined) return true;
+  return estimatedRequestCents(modelKey, request) <= request.budgetRemainingCents;
+}
+
 export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision {
   const policy = registry.policies.auto;
   const requestedSelection = (request.selection ?? policy.defaultAlias).toLowerCase();
@@ -589,7 +634,9 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         )))
   ) {
     const eligibility = evaluateEligibility(request.currentModelKey, task, request);
-    if (eligibility.route) {
+    // Don't pin to a model the remaining budget can no longer cover — fall
+    // through to the slot walk, which picks the best still-affordable one.
+    if (eligibility.route && isAffordable(request.currentModelKey, request)) {
       const fallbacks = buildProviderFallbacks(
         request,
         task,
@@ -625,6 +672,14 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     }
     const eligibility = evaluateEligibility(modelKey, task, request);
     if (eligibility.route) {
+      // Affordability bias: skip an eligible-but-too-expensive slot so the walk
+      // falls to the next (cheaper) preferred slot. The workhorse fallback slot
+      // is exempt — it must stay reachable for a nearly-exhausted user, with the
+      // reservation as the hard cutoff.
+      if (slotId !== policy.fallbackSlot && !isAffordable(modelKey, request)) {
+        reasons.push(`model ${modelKey} exceeds the remaining usage budget`);
+        continue;
+      }
       const fallbacks = buildProviderFallbacks(
         request,
         task,
