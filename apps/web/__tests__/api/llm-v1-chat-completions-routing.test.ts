@@ -439,7 +439,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
     expect(mockGetSubscription).toHaveBeenCalledOnce();
   });
 
-  it('allows Basic Auto to use the balanced route selected by canonical admission', async () => {
+  it('allows Basic Auto to use the shared Free/Basic economy route', async () => {
     mockGetSubscription.mockResolvedValue({
       ...makeProSubscription(),
       id: 'sub_basic_123',

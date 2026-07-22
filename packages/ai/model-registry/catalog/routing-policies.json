@@ -296,7 +296,7 @@
         "modelKey": "deepseek-v4-flash"
       },
       "reasoning_economy": {
-        "modelKey": "deepseek-v4-flash"
+        "modelKey": "claude-haiku-4.5"
       },
       "reasoning_balanced": {
         "modelKey": "qwen-3.7-plus"

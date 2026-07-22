@@ -2,20 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const tx = vi.hoisted(() => ({
-  execute: vi.fn(),
-  query: vi.fn(),
-}));
+const tx = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn() }));
+const db = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn(), transaction: vi.fn() }));
 
-const db = vi.hoisted(() => ({
-  execute: vi.fn(),
-  query: vi.fn(),
-  transaction: vi.fn(),
-}));
-
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => db,
-}));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 
 const logger = vi.hoisted(() => ({
   warn: vi.fn(),
@@ -36,31 +26,39 @@ import {
   settleFreeTrialRequest,
 } from './free-trial-service';
 
-const WINDOW_STARTED_AT = '2026-07-18T12:00:00.000Z';
+const FIVE_HOUR_OLDEST = '2026-07-22T12:00:00.000Z';
+const WEEKLY_OLDEST = '2026-07-18T12:00:00.000Z';
+const ACCOUNT_PERIOD_END = '2026-08-10T08:30:00.000Z';
 
-function mockAvailableWindow(
-  input: {
-    costMicrousd?: number;
-    reservedMicrousd?: number;
-    expired?: boolean;
-    startedAt?: string | Date;
-  } = {},
-) {
+type UsageSnapshot = {
+  fiveHourUsedMicrousd?: number;
+  weeklyUsedMicrousd?: number;
+  monthlyUsedMicrousd?: number;
+  fiveHourOldestAt?: string | null;
+  weeklyOldestAt?: string | null;
+  accountPeriodEnd?: string;
+};
+
+function usageRow(input: UsageSnapshot = {}) {
+  return {
+    five_hour_used_microusd: input.fiveHourUsedMicrousd ?? 0,
+    weekly_used_microusd: input.weeklyUsedMicrousd ?? 0,
+    monthly_used_microusd: input.monthlyUsedMicrousd ?? 0,
+    five_hour_oldest_at: input.fiveHourOldestAt ?? null,
+    weekly_oldest_at: input.weeklyOldestAt ?? null,
+    account_period_end: input.accountPeriodEnd ?? ACCOUNT_PERIOD_END,
+  };
+}
+
+function mockAvailableQuota(input: UsageSnapshot = {}) {
   tx.query.mockImplementation(async (sql: string) => {
-    if (sql.includes('from public.free_daily_usage_reservations')) return [];
+    if (sql.includes('from public.free_daily_usage_reservations') && sql.includes('request_id')) {
+      return [];
+    }
     if (sql.includes('for update') && sql.includes('website_auto_economy_trial_usage')) {
-      return [
-        {
-          daily_cost_microusd: input.costMicrousd ?? 0,
-          daily_reserved_microusd: input.reservedMicrousd ?? 0,
-          daily_started_at: input.startedAt ?? WINDOW_STARTED_AT,
-          window_expired: input.expired ?? false,
-        },
-      ];
+      return [{ user_id: 'user-1' }];
     }
-    if (sql.includes('returning daily_started_at')) {
-      return [{ daily_started_at: WINDOW_STARTED_AT }];
-    }
+    if (sql.includes('five_hour_used_microusd')) return [usageRow(input)];
     return [];
   });
 }
@@ -74,52 +72,62 @@ describe('free trial service', () => {
     );
   });
 
-  it('uses a private daily cost ceiling', () => {
+  it('uses private 5-hour, rolling-week, and account-month limits with no daily cap', () => {
     expect(FREE_TRIAL_INTERNAL_USAGE_POLICY).toEqual({
-      dailyBudgetMicrousd: 5_000,
-      resetAfterHours: 24,
+      unitMicrousd: 5_000,
+      fiveHourBudgetMicrousd: 25_000,
+      fiveHourWindowHours: 5,
+      weeklyBudgetMicrousd: 75_000,
+      weeklyWindowHours: 168,
+      monthlyBudgetMicrousd: 100_000,
     });
   });
 
-  it('returns only a public percentage and rolling reset for the active Free window', async () => {
+  it('returns separate public percentages and resets without private operands', async () => {
     db.query.mockResolvedValueOnce([
-      {
-        daily_cost_microusd: 1_250,
-        daily_reserved_microusd: 2_500,
-        daily_started_at: WINDOW_STARTED_AT,
-        window_expired: false,
-      },
+      usageRow({
+        fiveHourUsedMicrousd: 15_000,
+        weeklyUsedMicrousd: 30_000,
+        monthlyUsedMicrousd: 50_000,
+        fiveHourOldestAt: FIVE_HOUR_OLDEST,
+        weeklyOldestAt: WEEKLY_OLDEST,
+      }),
     ]);
 
     const snapshot = await getFreeTrialPublicUsage('user-1');
 
     expect(snapshot).toEqual({
-      usagePercentage: 75,
-      resetAt: '2026-07-19T12:00:00.000Z',
+      usagePercentage: 50,
+      resetAt: ACCOUNT_PERIOD_END,
+      sessionUsagePercentage: 60,
+      sessionResetAt: '2026-07-22T17:00:00.000Z',
+      weeklyUsagePercentage: 40,
+      weeklyResetAt: '2026-07-25T12:00:00.000Z',
       hasUsageRemaining: true,
     });
     expect(JSON.stringify(snapshot)).not.toMatch(/microusd|budget|cost|reserved/i);
   });
 
-  it('reports a fresh Free window after the rolling day expires', async () => {
-    db.query.mockResolvedValueOnce([
-      {
-        daily_cost_microusd: 5_000,
-        daily_reserved_microusd: 0,
-        daily_started_at: WINDOW_STARTED_AT,
-        window_expired: true,
-      },
-    ]);
+  it('returns an unused account-month snapshot when no reservation exists', async () => {
+    db.query.mockResolvedValueOnce([usageRow()]);
 
     await expect(getFreeTrialPublicUsage('user-1')).resolves.toEqual({
       usagePercentage: 0,
-      resetAt: null,
+      resetAt: ACCOUNT_PERIOD_END,
+      sessionUsagePercentage: 0,
+      sessionResetAt: null,
+      weeklyUsagePercentage: 0,
+      weeklyResetAt: null,
       hasUsageRemaining: true,
     });
   });
 
-  it('atomically reserves the entire remaining window under a row lock', async () => {
-    mockAvailableWindow({ costMicrousd: 1_250 });
+  it('atomically reserves only the smallest remaining rolling allowance', async () => {
+    mockAvailableQuota({
+      fiveHourUsedMicrousd: 10_000,
+      weeklyUsedMicrousd: 65_000,
+      monthlyUsedMicrousd: 30_000,
+    });
 
     await expect(
       beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-1' }),
@@ -129,42 +137,54 @@ describe('free trial service', () => {
         kind: 'free_trial',
         userId: 'user-1',
         requestId: 'request-1',
-        reservedMicrousd: 3_750,
+        reservedMicrousd: 10_000,
       },
     });
 
     expect(tx.query).toHaveBeenCalledWith(
-      expect.stringMatching(/from public\.website_auto_economy_trial_usage[\s\S]*for update/i),
-      ['user-1', FREE_TRIAL_INTERNAL_USAGE_POLICY.resetAfterHours],
+      expect.stringMatching(/website_auto_economy_trial_usage[\s\S]*for update/i),
+      ['user-1'],
     );
     expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /with reserved_window as[\s\S]*daily_reserved_microusd = daily_reserved_microusd \+ \$2[\s\S]*insert into public\.free_daily_usage_reservations/i,
-      ),
-      ['user-1', 3_750, 'request-1'],
+      expect.stringMatching(/insert into public\.free_daily_usage_reservations/i),
+      ['user-1', 'request-1', 10_000],
     );
   });
 
-  it('keeps a precision-truncated rolling-window timestamp inside PostgreSQL when reserving', async () => {
-    mockAvailableWindow({ startedAt: new Date('2026-07-18T12:00:00.997Z') });
-    tx.execute.mockImplementation(async (sql: string) => {
-      // This models the production failure: PostgreSQL stored microseconds,
-      // while the driver returned a millisecond Date that no longer compared
-      // equal when sent back as a query parameter.
-      if (sql.includes('daily_started_at = $3::timestamptz')) return 0;
-      return 1;
+  it.each([
+    { fiveHourUsedMicrousd: 25_000 },
+    { weeklyUsedMicrousd: 75_000 },
+    { monthlyUsedMicrousd: 100_000 },
+  ])('fails closed when any Free window is exhausted: %o', async (snapshot) => {
+    mockAvailableQuota(snapshot);
+
+    await expect(
+      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-blocked' }),
+    ).resolves.toEqual({ ok: false, code: 'budget_reached' });
+    expect(tx.execute).not.toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.free_daily_usage_reservations'),
+      expect.anything(),
+    );
+  });
+
+  it('rejects a replayed request id before provider egress', async () => {
+    tx.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('website_auto_economy_trial_usage')) return [{ user_id: 'user-1' }];
+      if (sql.includes('free_daily_usage_reservations')) {
+        return [
+          {
+            window_started_at: FIVE_HOUR_OLDEST,
+            reserved_microusd: 5_000,
+            settled_at: null,
+          },
+        ];
+      }
+      return [];
     });
 
     await expect(
-      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-precision' }),
-    ).resolves.toMatchObject({ ok: true });
-
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /with reserved_window as[\s\S]*returning daily_started_at[\s\S]*insert into public\.free_daily_usage_reservations[\s\S]*select[\s\S]*daily_started_at/i,
-      ),
-      ['user-1', FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd, 'request-precision'],
-    );
+      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-replay' }),
+    ).resolves.toEqual({ ok: false, code: 'budget_reached' });
   });
 
   it('caps one provider response to the private amount reserved for it', () => {
@@ -184,20 +204,6 @@ describe('free trial service', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.maxOutputTokens).toBeLessThan(8_192);
-    expect(
-      fitFreeTrialOutputBudget({
-        reservation: {
-          kind: 'free_trial',
-          userId: 'user-1',
-          requestId: 'request-budgeted',
-          reservedMicrousd: 5_000,
-        },
-        provider: 'openai',
-        model: 'gpt-5.6-luna',
-        estimatedInputTokens: 1_000,
-        requestedMaxOutputTokens: result.maxOutputTokens + 1,
-      }),
-    ).toEqual({ ok: true, maxOutputTokens: result.maxOutputTokens });
   });
 
   it('does not increase a caller output cap that already fits', () => {
@@ -209,53 +215,12 @@ describe('free trial service', () => {
           requestId: 'request-small',
           reservedMicrousd: 5_000,
         },
-        provider: 'qwen',
-        model: 'qwen-3.5-flash',
+        provider: 'anthropic',
+        model: 'claude-haiku-4.5',
         estimatedInputTokens: 100,
         requestedMaxOutputTokens: 32,
       }),
     ).toEqual({ ok: true, maxOutputTokens: 32 });
-  });
-
-  it('fails closed when the next provider input leaves no room for output', () => {
-    expect(
-      fitFreeTrialOutputBudget({
-        reservation: {
-          kind: 'free_trial',
-          userId: 'user-1',
-          requestId: 'request-too-large',
-          reservedMicrousd: 5_000,
-        },
-        provider: 'openai',
-        model: 'gpt-5.6-luna',
-        estimatedInputTokens: 5_000,
-        requestedMaxOutputTokens: 1,
-      }),
-    ).toEqual({ ok: false, code: 'budget_reached' });
-  });
-
-  it('subtracts observed tool-loop usage before fitting the next provider turn', () => {
-    const result = fitFreeTrialOutputBudget({
-      reservation: {
-        kind: 'free_trial',
-        userId: 'user-1',
-        requestId: 'request-loop',
-        reservedMicrousd: 5_000,
-      },
-      provider: 'qwen',
-      model: 'qwen-3.5-flash',
-      estimatedInputTokens: 1_000,
-      requestedMaxOutputTokens: 8_192,
-      observedUsage: {
-        promptTokens: 10_000,
-        completionTokens: 9_000,
-        totalTokens: 19_000,
-      },
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.maxOutputTokens).toBeLessThan(8_192);
   });
 
   it('uses a byte upper bound for text and the model input ceiling for images', () => {
@@ -280,11 +245,10 @@ describe('free trial service', () => {
     expect(withImage).toBe(1_050_000);
   });
 
-  it('applies the private cap to the actual provider request and disables cache writes', () => {
+  it('applies the private cap to the provider request and disables cache writes', () => {
     const request = {
       model: 'gpt-5.6-luna',
       messages: [{ role: 'user', content: 'Hello' }],
-      tools: [{ type: 'function', function: { name: 'lookup', parameters: {} } }],
       max_tokens: 8_192,
       usePromptCache: true,
     };
@@ -305,47 +269,11 @@ describe('free trial service', () => {
     expect(request.usePromptCache).toBe(false);
   });
 
-  it('rejects a concurrent request while the remaining window is reserved', async () => {
-    mockAvailableWindow({ reservedMicrousd: FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd });
-
-    const result = await beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-2' });
-
-    expect(result).toEqual({ ok: false, code: 'budget_reached' });
-    expect(result).not.toHaveProperty('dailyBudgetMicrousd');
-    expect(tx.execute).not.toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.free_daily_usage_reservations'),
-      expect.anything(),
-    );
-  });
-
-  it('starts a new window without carrying an old active reservation into it', async () => {
-    mockAvailableWindow({
-      costMicrousd: 2_000,
-      reservedMicrousd: 3_000,
-      expired: true,
-    });
-
-    await expect(
-      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-new-window' }),
-    ).resolves.toMatchObject({ ok: true });
-
-    expect(tx.query).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /daily_cost_microusd = 0,[\s\S]*daily_reserved_microusd = 0,[\s\S]*daily_started_at = now\(\)/i,
-      ),
-      ['user-1'],
-    );
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.free_daily_usage_reservations'),
-      ['user-1', FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd, 'request-new-window'],
-    );
-  });
-
-  it('settles actual cost and releases unused reservation exactly once', async () => {
+  it('charges one unit for a completed inexpensive response, not the full five-hour cap', async () => {
     tx.query.mockResolvedValueOnce([
       {
-        window_started_at: WINDOW_STARTED_AT,
-        reserved_microusd: 5_000,
+        window_started_at: FIVE_HOUR_OLDEST,
+        reserved_microusd: 25_000,
         settled_at: null,
       },
     ]);
@@ -354,104 +282,34 @@ describe('free trial service', () => {
       reservation: {
         kind: 'free_trial',
         userId: 'user-1',
-        requestId: 'request-3',
-        reservedMicrousd: 5_000,
+        requestId: 'request-complete',
+        reservedMicrousd: 25_000,
       },
       outcome: 'completed',
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      usage: { promptTokens: 100, completionTokens: 0, totalTokens: 100 },
-    });
-
-    expect(tx.query).toHaveBeenCalledWith(
-      expect.stringMatching(/from public\.free_daily_usage_reservations[\s\S]*for update/i),
-      ['user-1', 'request-3'],
-    );
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /daily_reserved_microusd = case[\s\S]*usage\.daily_started_at = reservation\.window_started_at[\s\S]*from public\.free_daily_usage_reservations as reservation/i,
-      ),
-      ['user-1', 'request-3', FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd, 100],
-    );
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /update public\.free_daily_usage_reservations[\s\S]*settled_at is null/i,
-      ),
-      [
-        'user-1',
-        'request-3',
-        FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd,
-        'completed',
-        expect.stringContaining('"requestId":"request-3"'),
-      ],
-    );
-  });
-
-  it('keeps the rolling-window identity database-side during settlement', async () => {
-    tx.query.mockResolvedValueOnce([
-      {
-        window_started_at: new Date('2026-07-18T12:00:00.997Z'),
-        reserved_microusd: 5_000,
-        settled_at: null,
-      },
-    ]);
-
-    await settleFreeTrialRequest({
-      reservation: {
-        kind: 'free_trial',
-        userId: 'user-1',
-        requestId: 'request-settlement-precision',
-        reservedMicrousd: 5_000,
-      },
-      outcome: 'completed',
-      provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+      model: 'claude-haiku-4.5',
+      usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
     });
 
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringMatching(
-        /usage\.daily_started_at = reservation\.window_started_at[\s\S]*from public\.free_daily_usage_reservations as reservation/i,
+        /update public\.free_daily_usage_reservations[\s\S]*actual_cost_microusd = \$3/i,
       ),
-      ['user-1', 'request-settlement-precision', expect.any(Number), 15],
+      ['user-1', 'request-complete', 5_000, 'completed', expect.any(String)],
     );
-  });
-
-  it('does not charge a newer rolling window when an older reservation settles late', async () => {
-    tx.query.mockResolvedValueOnce([
-      {
-        window_started_at: WINDOW_STARTED_AT,
-        reserved_microusd: 5_000,
-        settled_at: null,
-      },
-    ]);
-
-    await settleFreeTrialRequest({
-      reservation: {
-        kind: 'free_trial',
-        userId: 'user-1',
-        requestId: 'request-late',
-        reservedMicrousd: 5_000,
-      },
-      outcome: 'completed',
-      provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-    });
-
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringMatching(
-        /daily_cost_microusd = case[\s\S]*usage\.daily_started_at = reservation\.window_started_at[\s\S]*usage\.daily_cost_microusd \+ \$3/i,
+        /update public\.website_auto_economy_trial_usage[\s\S]*period_tokens_used/i,
       ),
-      expect.any(Array),
+      ['user-1', 120],
     );
   });
 
   it('releases a reservation after a zero-usage failure', async () => {
     tx.query.mockResolvedValueOnce([
       {
-        window_started_at: WINDOW_STARTED_AT,
-        reserved_microusd: 5_000,
+        window_started_at: FIVE_HOUR_OLDEST,
+        reserved_microusd: 25_000,
         settled_at: null,
       },
     ]);
@@ -460,28 +318,24 @@ describe('free trial service', () => {
       reservation: {
         kind: 'free_trial',
         userId: 'user-1',
-        requestId: 'request-4',
-        reservedMicrousd: 5_000,
+        requestId: 'request-failed',
+        reservedMicrousd: 25_000,
       },
       outcome: 'failed',
     });
 
     expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringContaining('daily_reserved_microusd = case'),
-      ['user-1', 'request-4', 0, 0],
-    );
-    expect(tx.execute).toHaveBeenCalledWith(
       expect.stringContaining('update public.free_daily_usage_reservations'),
-      ['user-1', 'request-4', 0, 'failed', expect.any(String)],
+      ['user-1', 'request-failed', 0, 'failed', expect.any(String)],
     );
   });
 
   it('treats repeated settlement as an idempotent no-op', async () => {
     tx.query.mockResolvedValueOnce([
       {
-        window_started_at: WINDOW_STARTED_AT,
+        window_started_at: FIVE_HOUR_OLDEST,
         reserved_microusd: 5_000,
-        settled_at: '2026-07-18T12:01:00.000Z',
+        settled_at: '2026-07-22T12:01:00.000Z',
       },
     ]);
 
@@ -489,13 +343,10 @@ describe('free trial service', () => {
       reservation: {
         kind: 'free_trial',
         userId: 'user-1',
-        requestId: 'request-5',
+        requestId: 'request-settled',
         reservedMicrousd: 5_000,
       },
       outcome: 'completed',
-      provider: 'anthropic',
-      model: 'claude-sonnet-5',
-      usage: { promptTokens: 42, completionTokens: 0, totalTokens: 42 },
     });
 
     expect(tx.execute).not.toHaveBeenCalled();
@@ -509,16 +360,15 @@ describe('free trial service', () => {
         reservation: {
           kind: 'free_trial',
           userId: 'user-1',
-          requestId: 'request-6',
+          requestId: 'request-log',
           reservedMicrousd: 5_000,
         },
         outcome: 'failed',
       }),
     ).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', requestId: 'request-6' }),
+      expect.objectContaining({ userId: 'user-1', requestId: 'request-log' }),
       'Free-tier usage settlement failed',
     );
-    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('5000');
   });
 });

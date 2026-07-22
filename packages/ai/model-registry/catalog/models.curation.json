@@ -1030,7 +1030,7 @@
         }
       },
       "tierPolicy": {
-        "minTier": "pro"
+        "minTier": "free"
       },
       "costOverride": {
         "inputCost": 1,
@@ -1203,7 +1203,7 @@
         }
       },
       "tierPolicy": {
-        "minTier": "free"
+        "minTier": "pro"
       }
     },
     "deepseek-v4-pro": {
@@ -1265,7 +1265,7 @@
         }
       },
       "tierPolicy": {
-        "minTier": "free"
+        "minTier": "pro"
       },
       "costOverride": {
         "inputCost": 0.029,
@@ -1619,7 +1619,7 @@
         }
       },
       "tierPolicy": {
-        "minTier": "free"
+        "minTier": "pro"
       }
     },
     "qwen-3.7-plus": {
@@ -1652,7 +1652,7 @@
         }
       },
       "tierPolicy": {
-        "minTier": "free"
+        "minTier": "pro"
       },
       "costOverride": {
         "inputCost": 0.4,
@@ -1913,22 +1913,17 @@
     }
   },
   "tierAllowedModels": {
-    "economy": [
-      "gpt-5.6-luna",
-      "gemini-3.1-flash-lite",
-      "deepseek-v4-flash",
-      "qwen-3.7-plus",
-      "qwen-3.5-flash",
-      "glm-5.2",
-      "sonar"
-    ],
+    "economy": ["gpt-5.6-luna", "gemini-3.1-flash-lite", "claude-haiku-4.5", "sonar"],
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",
-      "claude-haiku-4.5",
       "gemini-3.6-flash",
       "gemini-3.1-pro-preview",
+      "deepseek-v4-flash",
       "deepseek-v4-pro",
+      "qwen-3.7-plus",
+      "qwen-3.5-flash",
+      "glm-5.2",
       "sonar-deep-research",
       "kimi-k3"
     ],
