@@ -14,6 +14,7 @@ function makeContext(overrides: Partial<ProjectContext> = {}): ProjectContext {
     description: null,
     instructions: null,
     knowledgeFiles: [],
+    siblingChats: [],
     ...overrides,
   };
 }
@@ -36,9 +37,13 @@ describe('loadProjectContext', () => {
           summary: 'Tier table',
           extracted_text: 'Pro costs $20 per month.',
         },
-      ]);
+      ])
+      .mockResolvedValueOnce([{ title: 'Pricing chat', preview: 'How much is Pro?' }]);
 
-    const context = await loadProjectContext({ query }, { projectId: 'proj-1', userId: 'user-1' });
+    const context = await loadProjectContext(
+      { query },
+      { projectId: 'proj-1', userId: 'user-1', currentConversationId: 'conv-current' },
+    );
 
     expect(context).toMatchObject({
       projectId: 'proj-1',
@@ -58,6 +63,11 @@ describe('loadProjectContext', () => {
     expect(query.mock.calls[1]?.[0]).toContain(
       "to_jsonb(project_knowledge_files)->>'extracted_text'",
     );
+    expect(context?.siblingChats).toEqual([{ title: 'Pricing chat', preview: 'How much is Pro?' }]);
+    // Sibling query is owner-scoped (user_id) and excludes the current conversation.
+    expect(query.mock.calls[2]?.[0]).toContain('from web_conversations');
+    expect(query.mock.calls[2]?.[0]).toContain('c.id <> $3');
+    expect(query.mock.calls[2]?.[1]).toEqual(['proj-1', 'user-1', 'conv-current']);
   });
 
   it('returns null for a project the user does not own (empty row set)', async () => {
@@ -130,6 +140,21 @@ describe('formatProjectSystemPrompt', () => {
     expect(prompt).not.toBeNull();
     expect(prompt!.length).toBeLessThan(10_000);
     expect(prompt).toContain('…');
+  });
+
+  it('renders sibling chats for cross-reference as untrusted data', () => {
+    const prompt = formatProjectSystemPrompt(
+      makeContext({
+        siblingChats: [
+          { title: 'Pricing model', preview: 'How should we price the Pro tier?' },
+          { title: 'Launch checklist', preview: null },
+        ],
+      }),
+    );
+    expect(prompt).toContain('Other chats in this project');
+    expect(prompt).toContain('- "Pricing model" — How should we price the Pro tier?');
+    expect(prompt).toContain('- "Launch checklist"');
+    expect(prompt).toContain('untrusted reference data');
   });
 });
 

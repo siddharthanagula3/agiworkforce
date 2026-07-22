@@ -934,6 +934,7 @@ export async function processRequest(
           const projectContext = await loadProjectContext(userScopedDb.db, {
             projectId: ownedRows[0].project_id,
             userId,
+            currentConversationId: ownedRows[0].id,
           });
           const projectPrompt = projectContext ? formatProjectSystemPrompt(projectContext) : null;
           if (projectPrompt) {
