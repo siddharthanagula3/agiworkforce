@@ -1,23 +1,13 @@
 /**
- * Honest interim copy for desktop managed cloud (PA-3 / DESK-CLOUD-COPY-01).
+ * Desktop managed-cloud availability copy.
  *
- * Managed cloud is PUBLIC ALPHA on Web & Mobile. Desktop managed-cloud
- * persistence is NOT implemented yet: the Rust cloud commands in
- * `src-tauri/src/sys/commands/chat/cloud.rs` fail closed with
- * `ERR_CLOUD_NOT_IMPLEMENTED`, and the shared-backend wiring lands in a
- * fast-follow (runbook DCL-1..4). Until then:
- *
- *   - The desktop runtime must NEVER enter Cloud mode (otherwise
- *     `chatStore.isCloudMode()` routes chat persistence into the unimplemented
- *     command).
- *   - All desktop managed-cloud copy must be the honest interim below — never
- *     "available on desktop", and never invite / waitlist / private-beta
- *     framing (the product is public alpha, not invite-gated).
- *
- * Local + BYOK both live in Local mode on desktop and are unaffected.
+ * AGI Cloud is a public alpha and is OPEN on desktop (DCL-4): any signed-in
+ * account can turn on Cloud mode — no tier gate, no invite, no waitlist. Local +
+ * BYOK remain the default and never leave the device. Keep this copy honest:
+ * "available" / "sign in to turn it on", never "coming soon".
  */
-export const DESKTOP_CLOUD_COMING_SOON =
-  'AGI Cloud is available on Web & Mobile — desktop support is coming soon.';
+export const DESKTOP_CLOUD_TAGLINE =
+  'AGI Cloud adds managed models and chats synced across your devices — sign in to turn it on.';
 
-/** Short label for compact UI (toggle pill titles, badges, buttons). */
-export const DESKTOP_CLOUD_COMING_SOON_SHORT = 'Cloud coming soon to desktop';
+/** Short label for compact UI (pills, badges, buttons). */
+export const DESKTOP_CLOUD_TAGLINE_SHORT = 'AGI Cloud — sign in to sync';

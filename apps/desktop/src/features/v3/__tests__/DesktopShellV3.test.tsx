@@ -315,30 +315,25 @@ describe('DesktopShellV3 duplication ownership', () => {
 
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
-    // Desktop (supportsLocalAppMode: true) cannot enter Cloud yet, so the collapsed
-    // toggle is an honest disabled "coming soon" control, never a "Switch to Cloud"
-    // affordance that only toasts on click.
-    const cloudHint = screen.getByRole('button', { name: 'Cloud coming soon to desktop' });
-    expect(cloudHint).toBeInTheDocument();
-    expect(cloudHint).toBeDisabled();
+    // Desktop cloud is open (DCL-4): the collapsed toggle is a live "Switch to
+    // Cloud" affordance, not a disabled "coming soon" control.
+    const cloudToggle = screen.getByRole('button', { name: 'Switch to Cloud' });
+    expect(cloudToggle).toBeInTheDocument();
+    expect(cloudToggle).not.toBeDisabled();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
-  it('shows the expanded Cloud mode as an honest disabled "Soon" tab on desktop', () => {
+  it('shows the expanded Cloud mode as a live, selectable tab on desktop', () => {
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
 
-    // Local tab is the live, selected mode; Cloud is a visibly-disabled Soon tab
-    // (desktop managed cloud is not implemented — no fake-selectable affordance).
+    // Local tab is the default selected mode; Cloud is now a normal selectable
+    // tab (DCL-4 opened desktop cloud) — no disabled "Soon" affordance.
     const localTab = screen.getByRole('tab', { name: 'Local' });
     expect(localTab).toHaveAttribute('aria-selected', 'true');
 
     const cloudTab = screen.getByRole('tab', { name: /Cloud/ });
-    expect(cloudTab).toHaveAttribute('aria-disabled', 'true');
-    expect(cloudTab).toHaveTextContent('Soon');
-
-    // Clicking the disabled Cloud tab must not flip the selected mode.
-    fireEvent.click(cloudTab);
-    expect(screen.getByRole('tab', { name: 'Local' })).toHaveAttribute('aria-selected', 'true');
+    expect(cloudTab).not.toHaveAttribute('aria-disabled', 'true');
+    expect(cloudTab).not.toHaveTextContent('Soon');
   });
 
   it('treats a local storage owner as signed out in the sidebar', () => {

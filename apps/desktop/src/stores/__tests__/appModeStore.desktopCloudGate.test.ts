@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Simulate the real desktop (Tauri) runtime so the PA-3 cloud gate is exercised.
+// Simulate the real desktop (Tauri) runtime so the DCL-4 cloud path is exercised
+// (supportsLocalAppMode = true is the runtime that used to be gated "coming soon").
 vi.mock('../../lib/runtimeEnvironment', () => ({
   isTauri: true,
   isTestEnvironment: true,
@@ -20,13 +21,15 @@ vi.mock('sonner', () => ({
 import { useAppModeStore } from '../appModeStore';
 import { useAuthStore } from '../auth';
 import {
-  DESKTOP_CLOUD_COMING_SOON,
-  DESKTOP_CLOUD_COMING_SOON_SHORT,
+  DESKTOP_CLOUD_TAGLINE,
+  DESKTOP_CLOUD_TAGLINE_SHORT,
 } from '../../constants/cloudAvailability';
 
-const BANNED = /invite|waitlist|private[\s-]?beta/i;
+// Nothing user-facing may frame cloud as gated: no coming-soon, invite, waitlist,
+// or private-beta language anywhere in the availability copy or the mode toasts.
+const BANNED = /coming soon|invite|waitlist|private[\s-]?beta/i;
 
-describe('PA-3 / DESK-CLOUD-COPY-01: desktop managed-cloud copy is honest interim', () => {
+describe('DCL-4: desktop managed cloud is open (public alpha)', () => {
   beforeEach(() => {
     toastInfo.mockClear();
     toastError.mockClear();
@@ -36,45 +39,35 @@ describe('PA-3 / DESK-CLOUD-COPY-01: desktop managed-cloud copy is honest interi
       hasSelectedMode: false,
       isOnline: true,
     });
-    // Even a fully signed-in, cloud-entitled account must not enter Cloud mode
-    // on desktop — the runtime cannot serve it yet.
-    useAuthStore.setState({
-      isAuthenticated: true,
-      accessToken: 'token',
-      plan: 'pro',
-    });
+    // Default: signed OUT. Individual tests opt into a session.
+    useAuthStore.setState({ isAuthenticated: false, accessToken: null, plan: 'free' });
   });
 
-  it('copy says cloud is on Web & Mobile, desktop coming soon — never "available on desktop"', () => {
-    expect(DESKTOP_CLOUD_COMING_SOON).toBe(
-      'AGI Cloud is available on Web & Mobile — desktop support is coming soon.',
-    );
-    expect(DESKTOP_CLOUD_COMING_SOON).toMatch(/coming soon/i);
-    // No invite / waitlist / private-beta framing — the product is public alpha.
-    expect(DESKTOP_CLOUD_COMING_SOON).not.toMatch(BANNED);
-    expect(DESKTOP_CLOUD_COMING_SOON_SHORT).not.toMatch(BANNED);
-    // Must never claim managed cloud is available ON desktop.
-    expect(DESKTOP_CLOUD_COMING_SOON.toLowerCase()).not.toContain('available on desktop');
+  it('availability copy is honest — no coming-soon / invite / waitlist framing', () => {
+    expect(DESKTOP_CLOUD_TAGLINE).not.toMatch(BANNED);
+    expect(DESKTOP_CLOUD_TAGLINE_SHORT).not.toMatch(BANNED);
   });
 
-  it('refuses to enter Cloud mode on desktop and surfaces the honest interim message', () => {
+  it('a signed-in account of ANY tier (including free) can enter Cloud mode', () => {
+    useAuthStore.setState({ isAuthenticated: true, accessToken: 'token', plan: 'free' });
     useAppModeStore.getState().setMode('cloud');
-
-    // The desktop runtime stays in Local mode, so chatStore.isCloudMode() never
-    // becomes true and no cloud-send can reach ERR_CLOUD_NOT_IMPLEMENTED.
-    expect(useAppModeStore.getState().mode).toBe('local');
-    expect(toastInfo).toHaveBeenCalledWith(DESKTOP_CLOUD_COMING_SOON);
-    // No invite/waitlist refusal copy.
+    expect(useAppModeStore.getState().mode).toBe('cloud');
+    // No tier-gate refusal fired.
     for (const call of toastError.mock.calls) {
-      expect(String(call[0])).not.toMatch(BANNED);
+      expect(String(call[0])).not.toMatch(/tier|basic|pro|max|enterprise/i);
     }
-    for (const call of toastInfo.mock.calls) {
+  });
+
+  it('refuses Cloud when signed out and prompts sign-in (the mechanism, not a gate)', () => {
+    useAppModeStore.getState().setMode('cloud');
+    expect(useAppModeStore.getState().mode).toBe('local');
+    expect(toastError).toHaveBeenCalledWith('Sign in to use AGI Cloud.');
+    for (const call of [...toastError.mock.calls, ...toastInfo.mock.calls]) {
       expect(String(call[0])).not.toMatch(BANNED);
     }
   });
 
-  it('keeps Local mode working (BYOK lives in Local mode on desktop)', () => {
-    useAppModeStore.getState().setMode('cloud'); // refused → stays local
+  it('keeps Local mode working (Local + BYOK live in Local mode on desktop)', () => {
     useAppModeStore.getState().setMode('local');
     expect(useAppModeStore.getState().mode).toBe('local');
   });

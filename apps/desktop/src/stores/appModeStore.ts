@@ -17,12 +17,10 @@ import { storageFallback } from '../lib/storageFallback';
 // is read (in the zustand initializer below) before the barrel finishes
 // initializing → "Cannot access 'supportsLocalAppMode' before initialization".
 import { supportsLocalAppMode } from '../lib/runtimeEnvironment';
-import { DESKTOP_CLOUD_COMING_SOON } from '../constants/cloudAvailability';
 import { useAuthStore } from './auth';
 import { isChatStoreStreaming } from './chat/chatStoreRef';
 
 export type AppMode = 'local' | 'cloud';
-import type { PlanTier } from '../lib/cloudAccountTypes';
 
 interface AppModeState {
   mode: AppMode;
@@ -36,27 +34,22 @@ interface AppModeState {
   setOnline: (online: boolean) => void;
 }
 
-// v2 (PA-3): force the desktop runtime out of any stale persisted Cloud mode.
-// Desktop managed cloud is not implemented yet, so a Cloud mode persisted by an
-// earlier build must not survive a reload (it would route chat persistence into
-// the unimplemented Rust command). See migrate() below.
+// DCL-4: desktop managed cloud is enabled. An explicit persisted Cloud choice
+// now survives reload (App.tsx re-validates the cloud session and prompts
+// sign-in if needed). Web builds still normalize to Cloud (no Local runtime).
 const APP_MODE_STORE_VERSION = 3;
-const CLOUD_MANAGED_TIERS: ReadonlySet<PlanTier> = new Set(['basic', 'pro', 'max', 'enterprise']);
 
-type PersistedAppModeState = Pick<
-  AppModeState,
-  'mode' | 'hasOnboarded' | 'hasSelectedMode'
->;
+type PersistedAppModeState = Pick<AppModeState, 'mode' | 'hasOnboarded' | 'hasSelectedMode'>;
 
 function sanitizePersistedAppModeState(value: unknown): PersistedAppModeState {
   const raw =
     value && typeof value === 'object' ? (value as Record<string, unknown>) : Object.create(null);
   let mode: AppMode = raw['mode'] === 'cloud' ? 'cloud' : 'local';
 
-  // Production web builds always use Managed Cloud. Desktop builds remain
-  // Local until the signed CloudRuntime gate is proven and deliberately lifted.
+  // Production web builds always use Managed Cloud (no Local runtime there).
+  // Desktop defaults to Local but may persist an explicit Cloud choice (DCL-4);
+  // App.tsx re-checks the cloud session on load and prompts sign-in if needed.
   if (!supportsLocalAppMode && mode === 'local') mode = 'cloud';
-  if (supportsLocalAppMode && mode === 'cloud') mode = 'local';
 
   return {
     mode,
@@ -87,30 +80,22 @@ export const useAppModeStore = create<AppModeState>()(
             return;
           }
           if (mode === 'cloud') {
-            // PA-3 / DESK-CLOUD-COPY-01: desktop managed cloud is NOT implemented
-            // yet. The Rust cloud persistence commands fail closed with
-            // ERR_CLOUD_NOT_IMPLEMENTED; the shared-backend wiring is a
-            // fast-follow (DCL-1..4). On the desktop/local runtime we refuse to
-            // enter Cloud mode at all — otherwise chatStore.isCloudMode() would
-            // route chat persistence into the unimplemented command. Surface the
-            // honest interim message instead. Local + BYOK both live in Local
-            // mode on desktop and are unaffected. Managed cloud itself is PUBLIC
-            // ALPHA on Web & Mobile (not invite/waitlist-gated).
-            if (supportsLocalAppMode) {
-              toast.info(DESKTOP_CLOUD_COMING_SOON);
-              return;
-            }
-            // Non-desktop (web-preview) runtime: managed cloud is served
-            // elsewhere; keep the auth + entitlement gate.
+            // DCL-4: desktop managed cloud is enabled (public alpha). Cloud chat
+            // persistence routes through the shared web API boundary via
+            // CloudRuntime → getDesktopCloudChatPersistenceClient() (guardedFetch,
+            // managed-only), never the fail-closed Rust cloud_* commands. Local +
+            // BYOK stay in Local mode and can NEVER reach the cloud client (egress
+            // guard + the client's managed-only precondition).
+            //
+            // Public alpha: Cloud is open to EVERY signed-in account (all tiers,
+            // including free, Team, and Enterprise) so users can try it and give
+            // feedback. Sign-in is required because cloud persistence is keyed to
+            // an account — it is the mechanism, not an access gate. Usage is
+            // metered server-side; access is not tier-gated during the alpha.
             const authState = useAuthStore.getState();
             const hasCloudSession = authState.isAuthenticated && !!authState.accessToken;
             if (!hasCloudSession) {
               toast.error('Sign in to use AGI Cloud.');
-              return;
-            }
-            const accountPlan = useAuthStore.getState().plan ?? 'free';
-            if (!CLOUD_MANAGED_TIERS.has(accountPlan)) {
-              toast.error('Managed Cloud is available to Basic, Pro, Max, and Enterprise tiers.');
               return;
             }
             set({ mode }, undefined, 'appMode/setMode');

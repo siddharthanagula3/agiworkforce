@@ -58,9 +58,6 @@ export interface PricingPlan {
     tokenCredits: number;
   };
   popular?: boolean;
-  /** When true, the tier is gated behind a waitlist UI ("Join Waitlist"
-   *  CTA instead of "Subscribe") until the post-audit launch. */
-  waitlist?: boolean;
 }
 
 export const PRICING_PLANS: PricingPlan[] = [
@@ -146,7 +143,8 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    description: 'Released after security audit clears.',
+    description:
+      'Managed cloud, balanced models — full computer use, image generation, and web search.',
     monthlyPrice: getPlanPriceUsd('pro', 'monthly'),
     yearlyPrice: getPlanPriceUsd('pro', 'yearly'),
     stripePriceId: {
@@ -168,12 +166,11 @@ export const PRICING_PLANS: PricingPlan[] = [
       teamMembers: 1,
       tokenCredits: 0, // inert — server-authoritative (see basic plan note)
     },
-    waitlist: true,
   },
   {
     id: 'max',
     name: 'Max',
-    description: 'Released after security audit clears.',
+    description: 'Managed cloud, maximum capability — deep reasoning, agentic coding, and video.',
     monthlyPrice: getPlanPriceUsd('max', 'monthly'),
     yearlyPrice: getPlanPriceUsd('max', 'yearly'),
     stripePriceId: {
@@ -194,7 +191,6 @@ export const PRICING_PLANS: PricingPlan[] = [
       teamMembers: 1,
       tokenCredits: 0, // inert — server-authoritative (see basic plan note)
     },
-    waitlist: true,
   },
   {
     id: 'enterprise',
