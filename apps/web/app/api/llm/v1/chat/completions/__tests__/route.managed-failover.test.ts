@@ -134,8 +134,7 @@ function inertCompatAdapter(providerId: string) {
     })),
   };
 }
-vi.mock('@agiworkforce/providers-groq', () => inertCompatAdapter('Groq'));
-vi.mock('@agiworkforce/providers-mistral', () => inertCompatAdapter('Mistral'));
+vi.mock('@agiworkforce/providers-minimax', () => inertCompatAdapter('Minimax'));
 vi.mock('@agiworkforce/providers-moonshot', () => inertCompatAdapter('Moonshot'));
 vi.mock('@agiworkforce/providers-zhipu', () => inertCompatAdapter('Zhipu'));
 vi.mock('@agiworkforce/providers-qwen', () => inertCompatAdapter('Qwen'));

@@ -88,14 +88,14 @@ beforeEach(() => {
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-google-wire',
-    requestedModel: 'gemini-3.5-flash',
+    requestedModel: 'gemini-3.6-flash',
     provider: 'google',
     estimatedCostCents: 2,
     quotaFeature: 'chat',
     isFlagshipRequest: false,
-    chatRequest: { model: 'gemini-3.5-flash' },
+    chatRequest: { model: 'gemini-3.6-flash' },
     llmRequest: {
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: 'research the topic' }],
       max_tokens: 2048,
       tools: [{ google_search: {} }],

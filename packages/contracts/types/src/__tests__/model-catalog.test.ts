@@ -407,8 +407,8 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     it('reasoning task → reasoning_premium_pro slot (Qwen 3.7 Plus)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe('qwen-3.7-plus');
     });
-    it('multimodal task → multimodal_pro slot (Gemini 3.5 Flash)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe('gemini-3.5-flash');
+    it('multimodal task → multimodal_pro slot (Gemini 3.6 Flash)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe('gemini-3.6-flash');
     });
     it('long_context task → long_context_pro slot (Gemini 3.1 Pro)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'long_context')).toBe(
@@ -627,56 +627,55 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
 });
 
 // ---------------------------------------------------------------------------
-// R25-V2: Mistral / Groq / OpenRouter model-id drift verification
+// R26: groq + mistral provider removal — retired IDs redirect via canonicalization
 // ---------------------------------------------------------------------------
-describe('R25-V2 model-id drift — known-good IDs resolve; removed IDs return null', () => {
-  it('groq llama-3.3-70b resolves with correct provider and apiModelId', () => {
+describe('R26 provider removal — retired groq/mistral/open_router IDs redirect to fallback models', () => {
+  it('groq-llama-3.3-70b (groq provider removed) canonicalizes to the Gemini fallback', () => {
     const meta = getModelMetadataById('groq-llama-3.3-70b');
     expect(meta).not.toBeNull();
-    expect(meta?.provider).toBe('groq');
-    expect(meta?.apiModelId).toBe('llama-3.3-70b-versatile');
+    expect(meta?.id).toBe('gemini-3.1-flash-lite');
+    expect(meta?.provider).toBe('google');
   });
 
-  it('groq llama-3.1-8b resolves with correct apiModelId', () => {
+  it('groq-llama-3.1-8b canonicalizes to the same Gemini fallback', () => {
     const meta = getModelMetadataById('groq-llama-3.1-8b');
     expect(meta).not.toBeNull();
-    expect(meta?.apiModelId).toBe('llama-3.1-8b-instant');
+    expect(meta?.id).toBe('gemini-3.1-flash-lite');
   });
 
-  it('mistral-large-3 resolves with correct apiModelId mistral-large-2512', () => {
+  it('mistral-large-3 (mistral provider removed) canonicalizes to the Claude Sonnet 5 fallback', () => {
     const meta = getModelMetadataById('mistral-large-3');
     expect(meta).not.toBeNull();
-    expect(meta?.apiModelId).toBe('mistral-large-2512');
+    expect(meta?.id).toBe('claude-sonnet-5');
   });
 
-  it('mistral-small-4 apiModelId is mistral-small-2603 (Small 4, not deprecated 2506)', () => {
+  it('mistral-small-4 canonicalizes to the Claude Sonnet 5 fallback', () => {
     const meta = getModelMetadataById('mistral-small-4');
     expect(meta).not.toBeNull();
-    expect(meta?.apiModelId).toBe('mistral-small-2603');
-    expect(meta?.apiModelId).not.toBe('mistral-small-2506');
+    expect(meta?.id).toBe('claude-sonnet-5');
   });
 
-  it('codestral-2508 apiModelId is codestral-2508, not the invalid bare "codestral-2"', () => {
+  it('codestral-2508 canonicalizes to the Claude Sonnet 5 fallback; the bare pre-rename id stays gone', () => {
     const meta = getModelMetadataById('codestral-2508');
     expect(meta).not.toBeNull();
-    expect(meta?.apiModelId).toBe('codestral-2508');
-    // The bare pre-rename id is fully removed, not aliased.
+    expect(meta?.id).toBe('claude-sonnet-5');
+    // The bare pre-rename id has no canonicalization entry and was never aliased.
     expect(getModelMetadataById('codestral-2')).toBeNull();
   });
 
-  it('openrouter nvidia free model is the live-verified Nemotron 3 Super 120B (2026-07-20)', () => {
-    // The 49B Llama-Nemotron free slug was retired in the same catalog wave.
+  it('the retired OpenRouter free Nemotron 120B slug canonicalizes to the Gemini fallback', () => {
+    // The older 49B Llama-Nemotron free slug was retired with no redirect and stays null.
     const correct = getModelMetadataById('nvidia/nemotron-3-super-120b-a12b:free');
     const retired = getModelMetadataById('nvidia/llama-3.3-nemotron-super-49b-v1:free');
     expect(correct).not.toBeNull();
-    expect(correct?.provider).toBe('open_router');
+    expect(correct?.id).toBe('gemini-3.1-flash-lite');
     expect(retired).toBeNull();
   });
 
-  it('google openrouter free model (gemma-4) has 131K context', () => {
+  it('the retired OpenRouter free Gemma-4 slug canonicalizes to the Gemini fallback', () => {
     const meta = getModelMetadataById('google/gemma-4-26b-a4b-it:free');
     expect(meta).not.toBeNull();
-    expect(meta?.contextWindow).toBe(131072);
+    expect(meta?.id).toBe('gemini-3.1-flash-lite');
   });
 
   it('unknown model ID returns null gracefully (no throw)', () => {

@@ -72,10 +72,9 @@ mod tests {
             (Provider::DeepSeek, "deepseek"),
             (Provider::Qwen, "qwen"),
             (Provider::Moonshot, "moonshot"),
+            (Provider::Minimax, "minimax"),
             (Provider::Zhipu, "zhipu"),
             (Provider::ManagedCloud, "managed_cloud"),
-            (Provider::Mistral, "mistral"),
-            (Provider::Groq, "groq"),
             (Provider::Together, "together"),
             (Provider::Fireworks, "fireworks"),
             (Provider::Cerebras, "cerebras"),
@@ -484,7 +483,7 @@ mod tests {
     fn test_provider_default_model_spot_checks() {
         assert_eq!(Provider::OpenAI.default_model(), "gpt-5.6-sol");
         assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-5");
-        assert_eq!(Provider::Google.default_model(), "gemini-3.5-flash");
+        assert_eq!(Provider::Google.default_model(), "gemini-3.6-flash");
         assert_eq!(Provider::DeepSeek.default_model(), "deepseek-v4-flash");
         assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
     }
@@ -759,7 +758,7 @@ mod tests {
             "basic",
             Some("multimodal"),
             Some("chat"),
-            Some("gemini-3.5-flash"),
+            Some("gemini-3.6-flash"),
         );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
@@ -877,7 +876,7 @@ mod tests {
             Provider::Google
         );
         assert_eq!(
-            router.infer_provider_from_model("gemini-3.5-flash"),
+            router.infer_provider_from_model("gemini-3.6-flash"),
             Provider::Google
         );
         assert_eq!(
@@ -923,7 +922,10 @@ mod tests {
     #[test]
     fn test_infer_provider_qwen_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("qwen-max"), Provider::Qwen);
+        assert_eq!(
+            router.infer_provider_from_model("qwen-3.7-plus"),
+            Provider::Qwen
+        );
         assert_eq!(
             router.infer_provider_from_model("qwen3-coder"),
             Provider::Qwen
@@ -1217,11 +1219,11 @@ mod tests {
             "basic",
             Some("multimodal"),
             Some("chat"),
-            Some("gemini-3.5-flash"),
+            Some("gemini-3.6-flash"),
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.5-flash");
+        assert_eq!(suggestion.model, "gemini-3.6-flash");
     }
 
     #[test]

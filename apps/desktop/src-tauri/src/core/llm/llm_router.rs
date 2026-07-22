@@ -748,7 +748,6 @@ impl LLMRouter {
             Provider::OpenAI,
             Provider::Google,
             Provider::DeepSeek,
-            Provider::Groq,
             Provider::Together,
             Provider::Fireworks,
             Provider::Cerebras,
@@ -760,8 +759,8 @@ impl LLMRouter {
             Provider::Bedrock,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Minimax,
             Provider::Zhipu,
-            Provider::Mistral,
             Provider::XAI,
         ];
 
@@ -854,6 +853,10 @@ impl LLMRouter {
         self.set_provider(Provider::Moonshot, provider);
     }
 
+    pub fn set_minimax(&mut self, provider: Box<dyn LLMProvider>) {
+        self.set_provider(Provider::Minimax, provider);
+    }
+
     pub fn set_zhipu(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::Zhipu, provider);
     }
@@ -862,16 +865,8 @@ impl LLMRouter {
         self.set_provider(Provider::Perplexity, provider);
     }
 
-    pub fn set_mistral(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Mistral, provider);
-    }
-
     pub fn set_managed_cloud(&mut self, provider: Box<dyn LLMProvider>) {
         self.set_provider(Provider::ManagedCloud, provider);
-    }
-
-    pub fn set_groq(&mut self, provider: Box<dyn LLMProvider>) {
-        self.set_provider(Provider::Groq, provider);
     }
 
     pub fn set_together(&mut self, provider: Box<dyn LLMProvider>) {
@@ -1096,7 +1091,6 @@ impl LLMRouter {
             Provider::Google,
             Provider::XAI,
             Provider::DeepSeek,
-            Provider::Groq,
             Provider::Together,
             Provider::Fireworks,
             Provider::Cerebras,
@@ -1108,6 +1102,7 @@ impl LLMRouter {
             Provider::Bedrock,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Minimax,
             Provider::Perplexity,
             Provider::Ollama,
             Provider::LmStudio,

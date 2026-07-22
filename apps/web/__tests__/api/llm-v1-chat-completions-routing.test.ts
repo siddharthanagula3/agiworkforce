@@ -573,7 +573,7 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
   // of really reaching the Google branch.
   // -------------------------------------------------------------------------
   it('routes an explicit gemini model through the Google adapter path', async () => {
-    const request = makeRequestForModel('gemini-3.5-flash', 'hello');
+    const request = makeRequestForModel('gemini-3.6-flash', 'hello');
     const response = await POST(request);
 
     expect(response.status).toBe(200);

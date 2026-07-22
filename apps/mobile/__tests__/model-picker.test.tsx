@@ -574,7 +574,7 @@ describe('ModelPickerSheet', () => {
     // Gemini 3.5 Flash's supportedEfforts has no 'max' — selecting it must clamp
     // the conversation's effort to the new model's own defaultEffort instead
     // of silently keeping a value the new model doesn't support.
-    fireEvent.press(getByTestId('model-row-gemini-3.5-flash'));
+    fireEvent.press(getByTestId('model-row-gemini-3.6-flash'));
 
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('medium');
     expect(getByLabelText('Reasoning effort Medium').props.accessibilityState.selected).toBe(true);

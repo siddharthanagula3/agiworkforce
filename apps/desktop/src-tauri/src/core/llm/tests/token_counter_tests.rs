@@ -1,7 +1,7 @@
 // H20 — TokenCounter tests.
 //
 // All functions on `TokenCounter` are pure (no network, no DB) so every test
-// can run in CI without being `#[ignore]`.  We call the production functions
+// runs in CI without any ignore attribute.  We call the production functions
 // directly instead of reimplementing the arithmetic locally.
 #[cfg(test)]
 mod tests {
@@ -372,10 +372,9 @@ mod tests {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Minimax,
             Provider::Zhipu,
             Provider::ManagedCloud,
-            Provider::Mistral,
-            Provider::Groq,
             Provider::Together,
             Provider::Fireworks,
             Provider::Cerebras,

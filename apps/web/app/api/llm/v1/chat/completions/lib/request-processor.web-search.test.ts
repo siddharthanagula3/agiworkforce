@@ -344,7 +344,7 @@ describe('shouldOfferGenericWebSearchTool', () => {
     expect(shouldOfferGenericWebSearchTool(baseArgs)).toBe(false);
   });
 
-  it.each(['xai', 'deepseek', 'qwen', 'moonshot', 'zhipu', 'mistral', 'groq'])(
+  it.each(['xai', 'deepseek', 'qwen', 'moonshot', 'zhipu', 'minimax'])(
     'is true for %s (no native path) with every other condition satisfied',
     (providerLower) => {
       expect(shouldOfferGenericWebSearchTool({ ...baseArgs, providerLower })).toBe(true);

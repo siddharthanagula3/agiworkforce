@@ -329,7 +329,7 @@ describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
   it('sends thinkingConfig.thinkingLevel (NOT thinkingBudget) for a Gemini 3.x model', () => {
     const processed = makeProcessed(
       {
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.6-flash',
         messages: [{ role: 'user', content: 'hi' }],
         effort: 'high',
       },

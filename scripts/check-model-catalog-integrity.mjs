@@ -65,6 +65,26 @@ const REMOVED_SELECTABLE_MODEL_IDS = new Set([
   'sora-2-2025-10-06',
   'sora-2-2025-12-08',
   'sora-2-pro-2025-10-06',
+  // 2026-07-22 curation: retired Qwen/Mistral/Groq/NVIDIA-NIM/OpenRouter roster
+  // and renamed gemini-3.5-flash -> gemini-3.6-flash. These IDs may still appear
+  // as canonicalization aliases (keys) but must not be selectable anywhere.
+  'qwen-turbo',
+  'qwen-max',
+  'qwen-coder-flash',
+  'qwen-coder-plus',
+  'mistral-large-3',
+  'mistral-medium-3.5',
+  'mistral-small-4',
+  'codestral-2508',
+  'groq-llama-3.1-8b',
+  'groq-llama-3.3-70b',
+  'nvidia/llama-3.3-70b-instruct',
+  'nvidia/nemotron-3-nano-30b-a3b',
+  'nvidia/nemotron-3-super-120b-a12b',
+  'nvidia/nemotron-3-ultra-550b-a55b',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'gemini-3.5-flash',
 ]);
 
 // Confirmed-removed SELECTABLE model IDs that must not appear in live TS code as

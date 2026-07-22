@@ -4,8 +4,7 @@ import {
   buildAnthropicAdapter,
   buildGoogleAdapter,
   buildOpenAIAdapter,
-  buildGroqAdapter,
-  buildMistralAdapter,
+  buildMinimaxAdapter,
   buildMoonshotAdapter,
   buildZhipuAdapter,
   buildQwenAdapter,
@@ -24,8 +23,7 @@ import {
   toUpstreamError,
   toGoogleUpstreamError,
   toOpenAIUpstreamError,
-  toGroqUpstreamError,
-  toMistralUpstreamError,
+  toMinimaxUpstreamError,
   toMoonshotUpstreamError,
   toZhipuUpstreamError,
   toQwenUpstreamError,
@@ -62,13 +60,13 @@ import type { ProcessedRequest } from './request-processor';
  * such reshaping (near-verbatim real upstream SSE passthrough, confirmed via
  * stream-transform.openai-byte-parity.test.ts), so it needs the DIFFERENT
  * `'openai-passthrough'` mode (team-lead RULING: Option B, preserve
- * fidelity). The 9 openai-compat providers join OpenAI on the same
+ * fidelity). The 8 openai-compat providers join OpenAI on the same
  * `'openai-passthrough'` mode: each `packages/ai/providers/{provider}` package
  * is a thin config wrapper around the SAME `@agiworkforce/providers-openai`
  * translate/stream layer (see adapter-factory.ts's `buildCompatAdapter`
  * docstring), and none of their legacy files reshape their vendor's own
  * near-OpenAI-shaped wire any more than `openai.ts` does (confirmed by
- * reading each legacy provider file directly). None of the 9 need a
+ * reading each legacy provider file directly). None of the 8 need a
  * `buildChatRequest` wrapper either -- none set `effort`/`reasoning_effort`
  * or `thinking` in any form (grepped every legacy compat file), so the base
  * `toCanonicalChatRequest` (no thinking/effort folded in) already reproduces
@@ -101,16 +99,10 @@ export const ADAPTER_PROVIDERS: Record<
     mapError: toOpenAIUpstreamError,
     wireMode: 'openai-passthrough',
   },
-  groq: {
-    buildAdapter: buildGroqAdapter,
+  minimax: {
+    buildAdapter: buildMinimaxAdapter,
     buildChatRequest: toCanonicalChatRequest,
-    mapError: toGroqUpstreamError,
-    wireMode: 'openai-passthrough',
-  },
-  mistral: {
-    buildAdapter: buildMistralAdapter,
-    buildChatRequest: toCanonicalChatRequest,
-    mapError: toMistralUpstreamError,
+    mapError: toMinimaxUpstreamError,
     wireMode: 'openai-passthrough',
   },
   moonshot: {

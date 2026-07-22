@@ -141,7 +141,7 @@ function crossProviderFallback(
     'qwen',
     'moonshot',
     'zhipu',
-    'mistral',
+    'minimax',
     'managed_cloud',
     'ollama',
     'lmstudio',

@@ -23,7 +23,7 @@ const FUNCTION_TOOL = {
 describe('toolConfig.includeServerSideToolInvocations', () => {
   it('is set when built-in tools and functionDeclarations are combined', () => {
     const req: ChatRequest = {
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: 'read https://example.com' }],
       tools: [FUNCTION_TOOL],
       rawVendorTools: [{ google_search: {} }],
@@ -34,7 +34,7 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('merges with a functionCallingConfig from toolChoice', () => {
     const req: ChatRequest = {
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: 'x' }],
       tools: [FUNCTION_TOOL],
       rawVendorTools: [{ google_search: {} }],
@@ -49,7 +49,7 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('is absent for functionDeclarations-only requests (byte-stable)', () => {
     const out = translateChatRequest({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: 'x' }],
       tools: [FUNCTION_TOOL],
     });
@@ -59,7 +59,7 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('is absent for built-in-only requests (byte-stable)', () => {
     const out = translateChatRequest({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: 'x' }],
       rawVendorTools: [{ google_search: {} }],
     });
@@ -72,7 +72,7 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
     // signature; the OpenAI-compat wire cannot carry the real one, so the
     // translate layer attaches the documented skip value for injected calls.
     const out = translateChatRequest({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [
         { role: 'user', content: 'read the page' },
         {
@@ -104,13 +104,13 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
 
   it('is absent for tool-free requests and keeps toolChoice-only configs unchanged', () => {
     const bare = translateChatRequest({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: 'x' }],
     });
     expect(bare.toolConfig).toBeUndefined();
 
     const choiceOnly = translateChatRequest({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-3.6-flash',
       messages: [{ role: 'user', content: 'x' }],
       tools: [FUNCTION_TOOL],
       toolChoice: 'required',

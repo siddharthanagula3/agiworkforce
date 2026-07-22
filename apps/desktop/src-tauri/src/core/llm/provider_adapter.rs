@@ -274,11 +274,10 @@ impl ProviderAdapterFactory {
             Provider::DeepSeek => Box::new(DeepSeekAdapter),
             Provider::Qwen => Box::new(OpenAIAdapter), // Qwen uses OpenAI-compatible format
             Provider::Moonshot => Box::new(MoonshotAdapter),
+            Provider::Minimax => Box::new(OpenAIAdapter), // MiniMax uses OpenAI-compatible format
             Provider::Zhipu => Box::new(ZhipuAdapter),
-            Provider::Mistral => Box::new(OpenAIAdapter), // Mistral uses OpenAI-compatible format
             Provider::ManagedCloud => Box::new(OpenAIAdapter), // ManagedCloud proxies OpenAI format
             // New OpenAI-compatible providers
-            Provider::Groq => Box::new(OpenAIAdapter),
             Provider::Together => Box::new(OpenAIAdapter),
             Provider::Fireworks => Box::new(OpenAIAdapter),
             Provider::Cerebras => Box::new(OpenAIAdapter),
@@ -1170,8 +1169,8 @@ impl OpenAIAdapter {
         &self,
         request: &LLMRequest,
     ) -> Result<Value, Box<dyn Error + Send + Sync>> {
-        // Resolve the wire API model ID: catalog keys like "mistral-medium-3.5" must be
-        // translated to the actual API string ("mistral-medium-3-5") before being sent
+        // Resolve the wire API model ID: catalog keys like "minimax-m3" must be
+        // translated to the actual API string ("MiniMax-M3") before being sent
         // to the provider.  get_api_model_id returns the apiModelId from models.json when
         // set, otherwise returns the model string unchanged.
         let wire_model = super::models_config::get_api_model_id(&request.model);
