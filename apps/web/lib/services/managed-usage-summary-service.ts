@@ -83,10 +83,15 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
     period_start: toIsoTimestamp(periodStart),
     period_end: toIsoTimestamp(periodEnd),
     subscription_status: subscription?.status ?? 'none',
-    session_usage_percentage: toPublicUsagePercentage(session.usedCents, sessionCapCents),
-    session_reset_at: getRollingResetAt(session.oldestAt, SESSION_WINDOW_HOURS),
-    weekly_usage_percentage: toPublicUsagePercentage(weekly.usedCents, weeklyCapCents),
-    weekly_reset_at: getRollingResetAt(weekly.oldestAt, WEEKLY_WINDOW_HOURS),
+    session_usage_percentage:
+      freeUsage?.sessionUsagePercentage ??
+      toPublicUsagePercentage(session.usedCents, sessionCapCents),
+    session_reset_at:
+      freeUsage?.sessionResetAt ?? getRollingResetAt(session.oldestAt, SESSION_WINDOW_HOURS),
+    weekly_usage_percentage:
+      freeUsage?.weeklyUsagePercentage ?? toPublicUsagePercentage(weekly.usedCents, weeklyCapCents),
+    weekly_reset_at:
+      freeUsage?.weeklyResetAt ?? getRollingResetAt(weekly.oldestAt, WEEKLY_WINDOW_HOURS),
     flagship_weekly_usage_percentage: toPublicUsagePercentage(
       flagshipWeekly.usedCents,
       flagshipWeeklyCapCents,

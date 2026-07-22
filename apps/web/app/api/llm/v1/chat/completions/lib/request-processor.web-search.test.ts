@@ -1,5 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/services/free-trial-service')>();
+  return {
+    ...actual,
+    beginFreeTrialRequest: vi.fn(async ({ userId, requestId }) => ({
+      ok: true,
+      reservation: {
+        kind: 'free_trial',
+        userId,
+        requestId,
+        reservedMicrousd: 25_000,
+      },
+    })),
+    applyFreeTrialProviderBudget: vi.fn(() => ({ ok: true, maxOutputTokens: 1_024 })),
+    settleFreeTrialRequest: vi.fn(async () => undefined),
+  };
+});
 import {
   applyWorkMode,
   getWorkModeEntitlementError,
@@ -164,12 +182,9 @@ describe('getWorkModeEntitlementError', () => {
 });
 
 describe('free-trial capability gate — model-agnostic web search', () => {
-  // deepseek-v4-flash / qwen / glm are free-trial-eligible (economy tier) with
-  // tools:true, search:false. The shared composer lights the Web-search toggle on
-  // `tools`, so a free-trial user CAN enable it — and gets the generic Perplexity
-  // fallback tool. The free-trial capability gate must therefore NOT hard-reject
-  // these as "doesn't support web search" (the pre-fix bug), or the toggle lit a
-  // checkmark that the server 400'd.
+  // The current Free/Basic roster uses provider-native search-capable models.
+  // The free-trial capability gate must admit their web-search toggle while
+  // continuing to reject genuinely unsupported add-ons.
   const freeSubscription = {
     id: 'sub-free',
     user_id: 'user-free',
@@ -192,13 +207,11 @@ describe('free-trial capability gate — model-agnostic web search', () => {
       body: JSON.stringify(body),
     });
 
-  it('does not reject a generic-fallback model on the web-search toggle it lit', async () => {
-    // stream:false falls through to the honest web_search_stream_required (422),
-    // exactly like a paid user — NOT the old free_trial_model_capability 400.
+  it('admits provider-native web search on a Free/Basic model', async () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'deepseek-v4-flash',
+          model: 'claude-haiku-4.5',
           messages: [{ role: 'user', content: 'What is the latest news today?' }],
           web_search: true,
           stream: false,
@@ -208,22 +221,16 @@ describe('free-trial capability gate — model-agnostic web search', () => {
       { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
     );
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.response.status).toBe(422);
-      await expect(result.response.json()).resolves.toMatchObject({
-        error: { code: 'web_search_stream_required' },
-      });
-    }
+    expect(result.ok).toBe(true);
   });
 
   it('still rejects a genuine capability mismatch (code execution on a no-code model)', async () => {
-    // Proves the fix is scoped to web search: deepseek-v4-flash has codeExecution:false,
+    // Proves the fix is scoped to web search: Haiku has codeExecution:false,
     // so the free-trial capability gate still fails closed here.
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'deepseek-v4-flash',
+          model: 'claude-haiku-4.5',
           messages: [{ role: 'user', content: 'Run some code.' }],
           code_execution: true,
           stream: true,
