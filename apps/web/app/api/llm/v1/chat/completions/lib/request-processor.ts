@@ -1212,6 +1212,14 @@ export async function processRequest(
 
   const resolvedTaskType: RoutingTaskType = classifierResult.type;
 
+  // Fresh/current-information intent must activate the search capability at
+  // the shared Managed Cloud boundary. Web, Desktop Cloud, and Mobile all use
+  // this route, so clients do not need to duplicate classifier policy. Preserve
+  // an explicit false: users can still opt out of browsing for a given turn.
+  if (chatRequest.web_search === undefined && resolvedTaskType === 'research') {
+    chatRequest.web_search = true;
+  }
+
   const indicResult = detectIndicScript(lastUserText);
   if (indicResult.isIndic && indicResult.dominantScript) {
     logger.info(
