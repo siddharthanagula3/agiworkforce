@@ -208,6 +208,81 @@ export type ManagedSkillSelectionResult =
 
 type QuotaFeature = 'chat' | 'image' | 'video' | 'computer_use';
 
+/** Explicit execution verbs paired with an executable subject. */
+const RE_CODE_EXECUTION_ACTION = /\b(run|execute|test|benchmark)\b/i;
+const RE_CODE_EXECUTION_SUBJECT =
+  /\b(code|script|program|python|javascript|typescript|sql|notebook|command)\b|```/i;
+
+/** Data-analysis requests that require an interpreter rather than prose-only reasoning. */
+const RE_DATA_EXECUTION_ACTION = /\b(analyze|calculate|compute|process|plot|chart)\b/i;
+const RE_DATA_EXECUTION_SUBJECT = /\b(data|dataset|csv|spreadsheet|table|statistics?)\b/i;
+
+/** Editable Office deliverables supported by the canonical managed Office tool. */
+const RE_OFFICE_CREATION_ACTION = /\b(create|generate|make|prepare|produce|export|build)\b/i;
+const RE_OFFICE_CREATION_ARTIFACT =
+  /\.(docx|pptx)\b|\b(word document|powerpoint|slide deck|presentation|office file)\b/i;
+
+/** A supplied URL is fetched only when the user explicitly asks us to inspect it. */
+const RE_HTTP_URL = /https?:\/\/[^\s<>"']+/i;
+const RE_URL_FETCH_ACTION = /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
+
+export type ImplicitManagedToolIntentContext = {
+  prompt: string;
+  taskType: RoutingTaskType;
+  planTier: string | null | undefined;
+};
+
+/**
+ * Infer safe, reversible tool availability from explicit user intent.
+ *
+ * This is server-owned product policy because Web, Desktop Cloud, and Mobile
+ * Cloud share this request boundary. The model still decides whether to call
+ * an offered tool; this function never executes a tool by itself. Expensive
+ * code execution remains Pro+ and explicit AGI Work remains user-selected.
+ */
+export function applyImplicitManagedToolIntent(
+  request: ChatCompletionRequest,
+  context: ImplicitManagedToolIntentContext,
+): void {
+  if (request.web_search === undefined && context.taskType === 'research') {
+    request.web_search = true;
+  }
+
+  // The platform-executed tool loop is a streaming contract. Do not turn a
+  // valid non-streaming API request into a downstream 422 implicitly.
+  if (!request.stream) return;
+
+  if (
+    request.web_fetch === undefined &&
+    RE_HTTP_URL.test(context.prompt) &&
+    RE_URL_FETCH_ACTION.test(context.prompt)
+  ) {
+    request.web_fetch = true;
+  }
+
+  if (
+    request.office_creation === undefined &&
+    RE_OFFICE_CREATION_ACTION.test(context.prompt) &&
+    RE_OFFICE_CREATION_ARTIFACT.test(context.prompt)
+  ) {
+    request.office_creation = true;
+  }
+
+  const hasExplicitCodeExecutionIntent =
+    (RE_CODE_EXECUTION_ACTION.test(context.prompt) &&
+      RE_CODE_EXECUTION_SUBJECT.test(context.prompt)) ||
+    (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
+      RE_DATA_EXECUTION_SUBJECT.test(context.prompt));
+
+  if (
+    request.code_execution === undefined &&
+    hasExplicitCodeExecutionIntent &&
+    canUseBillingPlanCapability(context.planTier, 'agi_work')
+  ) {
+    request.code_execution = true;
+  }
+}
+
 /**
  * Add only path-free Skill metadata and the canonical server-owned definition.
  * The selected body remains withheld until the model makes a real load call.
@@ -1212,13 +1287,11 @@ export async function processRequest(
 
   const resolvedTaskType: RoutingTaskType = classifierResult.type;
 
-  // Fresh/current-information intent must activate the search capability at
-  // the shared Managed Cloud boundary. Web, Desktop Cloud, and Mobile all use
-  // this route, so clients do not need to duplicate classifier policy. Preserve
-  // an explicit false: users can still opt out of browsing for a given turn.
-  if (chatRequest.web_search === undefined && resolvedTaskType === 'research') {
-    chatRequest.web_search = true;
-  }
+  applyImplicitManagedToolIntent(chatRequest, {
+    prompt: lastUserText,
+    taskType: resolvedTaskType,
+    planTier: subscription.plan_tier,
+  });
 
   const indicResult = detectIndicScript(lastUserText);
   if (indicResult.isIndic && indicResult.dominantScript) {
