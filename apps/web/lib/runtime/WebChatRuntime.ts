@@ -20,7 +20,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { buildMemorySystemContent, withMemorySystemMessage } from './memory-context';
 import { isMemoryCapabilityEnabled } from './memory-capability';
 
-const DEFAULT_WEB_CHAT_MODEL = 'auto-economy';
+const DEFAULT_WEB_CHAT_MODEL = 'auto';
 
 async function getAuthToken(): Promise<string> {
   const token = await getClerkToken();

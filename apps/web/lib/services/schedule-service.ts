@@ -253,7 +253,7 @@ function validDate(value: unknown, label: string): Date | null {
 }
 
 function normalizeModel(model: string | null | undefined): string {
-  const selection = model?.trim() || 'auto-balanced';
+  const selection = model?.trim() || 'auto';
   if (isAutoModeModelId(selection)) return selection;
   const metadata = getModelMetadataById(selection);
   if (!metadata) throw new ScheduleValidationError('Model is not present in the canonical catalog');

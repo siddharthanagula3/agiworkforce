@@ -32,7 +32,7 @@ interface ModelState {
 export const selectLastRoutingDecision = (s: ModelState) => s.lastRoutingDecision;
 
 const AUTO_ROUTING_PROFILES = getAutoRoutingProfiles();
-const DEFAULT_MODEL_ID = AUTO_ROUTING_PROFILES[0]?.id ?? 'auto-economy';
+const DEFAULT_MODEL_ID = AUTO_ROUTING_PROFILES[0]?.id ?? 'auto';
 
 function toModelTier(provider: Provider | string, modelId: string): ModelInfo['tier'] {
   if (modelId === getTaskModelForProvider(provider, 'fast_completion')) {

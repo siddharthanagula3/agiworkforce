@@ -63,7 +63,7 @@ export async function executeScheduledAgent(
 
   const taskType = classifyTaskLocally(prompt, []).type;
   const route = resolveAutoRoute({
-    selection: task.model ?? 'auto-balanced',
+    selection: task.model ?? 'auto',
     taskType,
     subscriptionTier,
     trustMode: 'managed_cloud',

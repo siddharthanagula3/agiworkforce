@@ -1288,7 +1288,7 @@ export const useVoiceInputStore = create<VoiceInputState>()(
                 { role: 'system', content: systemContent },
                 { role: 'user', content: raw },
               ],
-              model: selectedModel ?? 'auto-economy',
+              model: selectedModel ?? 'auto',
               provider: selectedProvider ?? 'anthropic',
               max_tokens: 500,
               prefer_cloud_credits: false,

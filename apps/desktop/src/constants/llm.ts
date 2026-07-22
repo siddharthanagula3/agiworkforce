@@ -295,22 +295,18 @@ export function normalizeSubscriptionTier(
 }
 
 export function getAllowedAutoModesForTier(
-  tier: SubscriptionTier | string | null | undefined,
+  _tier: SubscriptionTier | string | null | undefined,
 ): string[] {
-  const normalizedTier = normalizeSubscriptionTier(tier);
-
-  if (normalizedTier === 'max' || normalizedTier === 'enterprise') {
-    return ['auto-economy', 'auto-balanced', 'auto-premium'];
-  }
-  if (normalizedTier === 'pro') {
-    return ['auto-economy', 'auto-balanced'];
-  }
-  return ['auto-economy'];
+  // One self-routing "Auto" for every tier. Tier no longer picks an Auto
+  // *profile* — the resolver derives the profile per task and clamps it to the
+  // plan's reachable slots, so every user sees a single "Auto" option.
+  return ['auto'];
 }
 
-export function getBestAutoModeForTier(tier: SubscriptionTier | string | null | undefined): string {
-  const allowedAutoModes = getAllowedAutoModesForTier(tier);
-  return allowedAutoModes[allowedAutoModes.length - 1] ?? 'auto-economy';
+export function getBestAutoModeForTier(
+  _tier: SubscriptionTier | string | null | undefined,
+): string {
+  return 'auto';
 }
 
 export function canAccessManualModelSelection(

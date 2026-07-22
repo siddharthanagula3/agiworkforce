@@ -288,7 +288,7 @@ export const useModelStore = create<ModelState>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
-        selectedModel: 'auto-economy',
+        selectedModel: 'auto',
         selectedProvider: 'managed_cloud',
         favorites: [],
         recentModels: [],
@@ -379,14 +379,14 @@ export const useModelStore = create<ModelState>()(
                   console.warn(
                     `[ModelStore] Blocking disallowed auto-mode for ${normalizedTier} tier: ${modelId}. Falling back to auto-economy.`,
                   );
-                  nextModelId = 'auto-economy';
+                  nextModelId = 'auto';
                   nextProvider = 'managed_cloud';
                 }
               } else if (!isModelAllowedForTier(modelId, normalizedTier)) {
                 console.warn(
                   `[ModelStore] Blocking disallowed model selection for ${normalizedTier} tier: ${modelId}. Falling back to auto-economy.`,
                 );
-                nextModelId = 'auto-economy';
+                nextModelId = 'auto';
                 nextProvider = 'managed_cloud';
               }
             }
@@ -752,7 +752,7 @@ export const useModelStore = create<ModelState>()(
         reset: () => {
           set(
             {
-              selectedModel: 'auto-economy',
+              selectedModel: 'auto',
               selectedProvider: 'managed_cloud',
               favorites: [],
               recentModels: [],
@@ -956,15 +956,15 @@ export const initializeModelStoreFromSettings = async () => {
 
     if (defaultProvider && defaultModel) {
       // If default is auto/managed_cloud, ensure we set the provider correctly in the store
-      // Use 'auto-economy' as the default auto mode (lowest common denominator for all tiers)
+      // Use 'auto' as the default auto mode (lowest common denominator for all tiers)
       if (defaultProvider === 'managed_cloud' || defaultModel === 'auto') {
-        await modelStore.selectModel('auto-economy', 'managed_cloud');
+        await modelStore.selectModel('auto', 'managed_cloud');
       } else if (
         defaultProvider !== 'ollama' &&
         currentPlan &&
         !isModelAllowedForTier(defaultModel, normalizeSubscriptionTier(currentPlan))
       ) {
-        await modelStore.selectModel('auto-economy', 'managed_cloud');
+        await modelStore.selectModel('auto', 'managed_cloud');
       } else {
         await modelStore.selectModel(defaultModel, defaultProvider);
       }
@@ -991,8 +991,8 @@ export const getBestAutoModeForTier = (tier: string): string => {
  * - In Advanced Mode: Only downgrades if using an auto mode above their tier
  *
  * Tier restrictions:
- * - basic/free/none: Only 'auto-economy' allowed
- * - pro: 'auto-economy' or 'auto-balanced' allowed
+ * - basic/free/none: Only 'auto' allowed
+ * - pro: 'auto' or 'auto-balanced' allowed
  * - max/enterprise: All auto modes allowed
  */
 // [C1 fix] Re-entrancy guard: prevents concurrent plan-change events from corrupting tier state
@@ -1028,21 +1028,21 @@ export const enforceModelTierRestriction = (planTier: string | null): void => {
       } else {
         // In Advanced Mode: Only downgrade if using an auto mode they shouldn't have
         if (isAutoSelection && selectedModel && !allowed.includes(selectedModel)) {
-          await selectModel('auto-economy', 'managed_cloud');
+          await selectModel('auto', 'managed_cloud');
         } else if (
           selectedModel &&
           !isAutoSelection &&
           !isOllamaSelection &&
           !isModelAllowedForTier(selectedModel, normalizedTier)
         ) {
-          await selectModel('auto-economy', 'managed_cloud');
+          await selectModel('auto', 'managed_cloud');
         }
       }
     })
     .catch(async (err) => {
       console.error('[ModelStore] enforceModelTierRestriction failed:', err);
       // [C1 fix] Fail-safe: on error, fall back to the lowest tier model
-      await selectModel('auto-economy', 'managed_cloud');
+      await selectModel('auto', 'managed_cloud');
     })
     .finally(() => {
       // [C1 fix] Always release the lock so future plan changes are processed

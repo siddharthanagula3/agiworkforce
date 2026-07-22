@@ -24,6 +24,69 @@ describe('resolveAutoRoute', () => {
     });
   });
 
+  it('single Auto routes a trivial chat to the economy band even on a premium tier', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'simple_chat',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: 'gemini-3.1-flash-lite',
+      requestedProfile: 'economy',
+      effectiveProfile: 'economy',
+    });
+  });
+
+  it('single Auto routes a hard coding task to the premium band on a max tier', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: 'claude-opus-4.8',
+      requestedProfile: 'premium',
+      effectiveProfile: 'premium',
+    });
+  });
+
+  it('single Auto clamps its computed premium band to the free tier maximum', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'coding',
+      subscriptionTier: 'free',
+      trustMode: 'managed_cloud',
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: 'gemini-3.1-flash-lite',
+      requestedProfile: 'premium',
+      effectiveProfile: 'economy',
+    });
+  });
+
+  it('single Auto falls back to the static balanced band for an unmapped task', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'general',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      requestedProfile: 'balanced',
+      effectiveProfile: 'balanced',
+    });
+  });
+
   it('clamps premium Auto to the tier maximum profile', () => {
     const result = resolveAutoRoute({
       selection: 'auto-premium',

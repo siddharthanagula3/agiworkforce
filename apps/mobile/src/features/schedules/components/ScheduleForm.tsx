@@ -52,7 +52,7 @@ export function ScheduleForm({
   // Form state
   const [name, setName] = useState(initialData?.name ?? '');
   const [prompt, setPrompt] = useState(initialData?.prompt ?? '');
-  const [model, setModel] = useState(initialData?.model ?? 'auto-balanced');
+  const [model, setModel] = useState(initialData?.model ?? 'auto');
   const modelPickerRef = useRef<BottomSheet>(null);
   const [recurrence, setRecurrence] = useState<RecurrenceType>(initialData?.recurrence ?? 'daily');
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initialData?.daysOfWeek ?? []);

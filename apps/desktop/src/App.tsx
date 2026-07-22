@@ -700,7 +700,7 @@ const DesktopShell = () => {
         // to the default auto-routing model.
         {
           const ms = useChatModelStore.getState();
-          const nextId = currentMode === 'local' ? (ms.models[0]?.id ?? '') : 'auto-economy';
+          const nextId = currentMode === 'local' ? (ms.models[0]?.id ?? '') : 'auto';
           if (
             !ms.models.some((m) => m.id === ms.selectedModelId) &&
             nextId !== ms.selectedModelId

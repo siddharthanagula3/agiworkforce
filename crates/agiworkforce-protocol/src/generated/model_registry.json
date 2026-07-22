@@ -2245,9 +2245,16 @@
   "policies": {
     "auto": {
       "kind": "routing_policy",
-      "defaultAlias": "auto-balanced",
+      "defaultAlias": "auto",
       "fallbackSlot": "workhorse_general",
       "profileOrder": ["economy", "balanced", "premium"],
+      "autoProfileByTask": {
+        "simple_chat": "economy",
+        "coding": "premium",
+        "reasoning": "premium",
+        "agentic": "premium",
+        "computer-use": "premium"
+      },
       "tierMaximumProfiles": {
         "free": "economy",
         "pro": "balanced",
@@ -2340,26 +2347,27 @@
         "auto": {
           "profile": "balanced",
           "label": "Auto",
-          "description": "Automatically select an eligible route for the task",
-          "selectable": false
+          "description": "Automatically routes each message to the best model for the task, your plan, and cost",
+          "selectable": true,
+          "computeProfile": true
         },
         "auto-economy": {
           "profile": "economy",
           "label": "Economy",
           "description": "Lowest-cost eligible route for the task",
-          "selectable": true
+          "selectable": false
         },
         "auto-balanced": {
           "profile": "balanced",
           "label": "Balanced",
           "description": "Best balance of capability, latency, and cost",
-          "selectable": true
+          "selectable": false
         },
         "auto-premium": {
           "profile": "premium",
           "label": "Best",
           "description": "Most capable eligible route for the task",
-          "selectable": true
+          "selectable": false
         }
       },
       "continuity": {

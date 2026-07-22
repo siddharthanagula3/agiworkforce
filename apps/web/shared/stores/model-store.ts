@@ -174,7 +174,7 @@ export const AVAILABLE_MODELS: AIModel[] = buildAvailableModels();
 const DEFAULT_MODEL_ID =
   AVAILABLE_MODELS.find((model) => model.id === getAutoRoutingProfiles()[0]?.id)?.id ??
   AVAILABLE_MODELS[0]?.id ??
-  'auto-economy';
+  'auto';
 
 function resolveProvider(modelId: string, explicitProvider?: string | null): string | null {
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;

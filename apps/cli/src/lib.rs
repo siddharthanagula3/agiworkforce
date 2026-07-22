@@ -2407,7 +2407,7 @@ pub async fn run_main() -> Result<()> {
         };
         let launch_task = routing::classify::classify_turn_task(launch_text, false);
         let route = model_catalog::resolve_auto_model(
-            "auto-economy",
+            "auto",
             launch_task,
             tier,
             agiworkforce_model_registry::TrustMode::ManagedCloud,
@@ -2707,7 +2707,7 @@ pub async fn run_main() -> Result<()> {
             .as_ref()
             .map(|(route, tier, task)| routing::classify::AutoRouteSeed {
                 state: crate::runtime::session::ManagedSessionAutoRouting {
-                    selection: "auto-economy".to_string(),
+                    selection: "auto".to_string(),
                     model_key: route.model_key.clone(),
                     task_type: routing::classify::developer_task_type(*task),
                     trust_mode: agiworkforce_model_registry::TrustMode::ManagedCloud,

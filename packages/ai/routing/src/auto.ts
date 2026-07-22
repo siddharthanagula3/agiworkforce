@@ -70,7 +70,15 @@ interface AutoPolicy {
   providerPolicies: {
     usOnly: { allowedTiers: string[]; excludedProviders: string[] };
   };
-  aliases: Record<string, { profile: RoutingProfile }>;
+  /**
+   * Complexity band per classified task for the single self-routing `auto`
+   * alias (`computeProfile: true`). Unlisted tasks fall back to the alias's
+   * static `profile`. The tier clamp still applies on top of the chosen band —
+   * this only sets the *requested* profile a "hi" (economy) vs. a hard coding
+   * task (premium) asks for before tier admission narrows it.
+   */
+  autoProfileByTask?: Partial<Record<RoutingTaskType, RoutingProfile>>;
+  aliases: Record<string, { profile: RoutingProfile; computeProfile?: boolean }>;
   continuity: {
     preserveExplicitSelection: boolean;
     preferCurrentModelWhenEligible: boolean;
@@ -558,7 +566,14 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
 
   const tier = normalizeTier(request.subscriptionTier);
   const maximumProfile = policy.tierMaximumProfiles[tier] ?? 'economy';
-  const effectiveProfile = clampProfile(alias.profile, maximumProfile, policy.profileOrder);
+  // Single self-routing `auto`: derive the requested complexity band from the
+  // classified task ("hi" → economy, hard coding → premium); every other alias
+  // keeps its static profile. The tier clamp below still narrows the band to
+  // what the plan can reach, so a free user never escapes their allowed slots.
+  const requestedProfile: RoutingProfile = alias.computeProfile
+    ? (policy.autoProfileByTask?.[request.taskType] ?? alias.profile)
+    : alias.profile;
+  const effectiveProfile = clampProfile(requestedProfile, maximumProfile, policy.profileOrder);
   const allowedSlots = new Set(policy.tierAllowedSlots[tier] ?? [policy.fallbackSlot]);
   const preferredSlots = task.preferredSlots[effectiveProfile] ?? [];
 
@@ -587,7 +602,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       return selectedDecision(
         request,
         requestedSelection,
-        alias.profile,
+        requestedProfile,
         effectiveProfile,
         request.currentModelKey,
         eligibility,
@@ -622,7 +637,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       return selectedDecision(
         request,
         requestedSelection,
-        alias.profile,
+        requestedProfile,
         effectiveProfile,
         modelKey,
         eligibility,
@@ -650,7 +665,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         return selectedDecision(
           request,
           requestedSelection,
-          alias.profile,
+          requestedProfile,
           effectiveProfile,
           fallbackModelKey,
           eligibility,
@@ -666,7 +681,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     status: 'unavailable',
     code: 'no_eligible_route',
     requestedSelection,
-    requestedProfile: alias.profile,
+    requestedProfile,
     effectiveProfile,
     taskType: request.taskType,
     reasons: [...new Set(reasons)],

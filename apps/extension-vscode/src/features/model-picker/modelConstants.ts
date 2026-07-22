@@ -146,28 +146,13 @@ export function buildGroupedQuickPickItems(tier?: string): GroupedQuickPickItem[
 
   const items: GroupedQuickPickItem[] = [
     {
-      label: '$(sparkle) Best (auto)',
+      label: '$(sparkle) Auto',
       description: withLockHint(
-        'Auto-balanced — picks the right model per request',
-        autoReachable('auto-balanced'),
+        'Routes each message to the best model for the task and your plan',
+        autoReachable('auto'),
       ),
       detail: 'Recommended',
-      modelId: 'auto-balanced',
-    },
-    {
-      label: '$(zap) Auto (Economy)',
-      description: withLockHint(
-        'Smart routing — fastest and cheapest',
-        autoReachable('auto-economy'),
-      ),
-      detail: 'Best for quick questions and simple tasks',
-      modelId: 'auto-economy',
-    },
-    {
-      label: '$(star-full) Auto (Premium)',
-      description: withLockHint('Smart routing — highest quality', autoReachable('auto-premium')),
-      detail: 'Best for complex reasoning and long contexts',
-      modelId: 'auto-premium',
+      modelId: 'auto',
     },
     { label: '', kind: vscode.QuickPickItemKind.Separator },
   ];
@@ -290,13 +275,10 @@ export function getModelProviderInfo(modelId: string): ModelProviderInfo {
 
 const DEFAULT_CONTEXT_LIMIT = 128_000;
 
-const AUTO_MODEL_DEFAULTS: Record<
-  'auto-balanced' | 'auto-economy' | 'auto-premium',
-  string | null
-> = {
-  'auto-balanced': resolveAutoModeModel('auto-balanced', 'pro'),
-  'auto-economy': resolveAutoModeModel('auto-economy', 'basic'),
-  'auto-premium': resolveAutoModeModel('auto-premium', 'max'),
+const AUTO_MODEL_DEFAULTS: Record<'auto', string | null> = {
+  // Representative model for context/cost DISPLAY only; the single Auto
+  // self-routes per task/tier at request time.
+  auto: resolveAutoModeModel('auto', 'pro'),
 } as const;
 
 const MANUAL_MODEL_OPTIONS = getCoreManualModelOptions();
@@ -317,24 +299,10 @@ function getAutoCostRate(modelId: string | null): { input: number; output: numbe
 
 export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
   {
-    id: 'auto-balanced',
-    label: 'Auto (Balanced)',
+    id: 'auto',
+    label: 'Auto',
     description: 'Smart routing — best model per task',
     detail: 'Recommended: AGI Workforce picks the optimal model automatically',
-    availability: 'live',
-  },
-  {
-    id: 'auto-economy',
-    label: 'Auto (Economy)',
-    description: 'Smart routing — fastest and cheapest',
-    detail: 'Best for quick questions and simple tasks',
-    availability: 'live',
-  },
-  {
-    id: 'auto-premium',
-    label: 'Auto (Premium)',
-    description: 'Smart routing — highest quality',
-    detail: 'Best for complex reasoning and long contexts',
     availability: 'live',
   },
   ...MANUAL_MODEL_OPTIONS.map((option) => ({
@@ -377,15 +345,13 @@ const SELECTABLE_MODEL_PICKER_OPTION_IDS = new Set(
 );
 
 export function normalizeConfiguredModelId(modelId: string | null | undefined): string {
-  const normalized = normalizeModelId(modelId) ?? modelId ?? 'auto-economy';
-  return SELECTABLE_MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto-economy';
+  const normalized = normalizeModelId(modelId) ?? modelId ?? 'auto';
+  return SELECTABLE_MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto';
 }
 
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {
   ...manualContextLimits,
-  'auto-balanced': getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto-balanced']),
-  'auto-economy': getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto-economy']),
-  'auto-premium': getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto-premium']),
+  auto: getAutoContextLimit(AUTO_MODEL_DEFAULTS['auto']),
 };
 
 export const MODEL_COST_RATES: Record<string, { input: number; output: number }> = {
@@ -395,9 +361,7 @@ export const MODEL_COST_RATES: Record<string, { input: number; output: number }>
       { input: rates.input, output: rates.output },
     ]),
   ),
-  'auto-balanced': getAutoCostRate(AUTO_MODEL_DEFAULTS['auto-balanced']),
-  'auto-economy': getAutoCostRate(AUTO_MODEL_DEFAULTS['auto-economy']),
-  'auto-premium': getAutoCostRate(AUTO_MODEL_DEFAULTS['auto-premium']),
+  auto: getAutoCostRate(AUTO_MODEL_DEFAULTS['auto']),
 };
 
 /** Chars-per-token heuristic used for estimation when exact counts are unavailable. */
