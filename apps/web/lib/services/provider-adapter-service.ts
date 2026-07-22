@@ -45,6 +45,10 @@ const SERVER_PROVIDER_CONFIG: Readonly<
 
 const PROVIDER_API_KEY_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
   google: ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'],
+  // Qwen-direct = Alibaba DashScope; accept DASHSCOPE_API_KEY as an alias for the
+  // primary key (matches the api-gateway) so a DashScope-primary deploy needs no
+  // rename. QWEN_API_KEY still wins when both are set.
+  qwen: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
 };
 
 export interface ServerProviderAdapterOptions {
@@ -185,6 +189,36 @@ export function buildServerProviderAdapter(
   const baseConfig = { apiKey, ...(baseUrl ? { baseUrl } : {}) };
   if (providerId === 'anthropic' && options.anthropicCache) {
     return createProviderAdapter('anthropic', { ...baseConfig, ...options.anthropicCache });
+  }
+  if (providerId === 'qwen') {
+    // Qwen resilience: DashScope (primary, above) → MuleRouter (fallback) on a
+    // pre-first-byte availability error. The fallback endpoint carries its own
+    // key (DashScope and MuleRouter keys differ) — QWEN_FALLBACK_API_KEY when set,
+    // else the primary key — and is SSRF-validated like the primary base URL.
+    const fallbackRaw = getOptionalEnv('QWEN_FALLBACK_BASE_URL');
+    if (fallbackRaw) {
+      const validatedFallback = validateBaseUrl(fallbackRaw, {
+        allowedHosts: ALLOWED_MANAGED_PROVIDER_HOSTS,
+      });
+      if (validatedFallback.ok) {
+        const fallbackKey = getOptionalEnv('QWEN_FALLBACK_API_KEY');
+        return createProviderAdapter('qwen', {
+          ...baseConfig,
+          fallbackEndpoints: [
+            { baseUrl: validatedFallback.url, ...(fallbackKey ? { apiKey: fallbackKey } : {}) },
+          ],
+        });
+      }
+      logger.warn(
+        {
+          providerId,
+          envKey: 'QWEN_FALLBACK_BASE_URL',
+          reason: validatedFallback.reason,
+          host: validatedFallback.hostname,
+        },
+        'Refusing QWEN_FALLBACK_BASE_URL override pointing to a non-allowlisted host (potential SSRF)',
+      );
+    }
   }
   return createProviderAdapter(adapterId, baseConfig);
 }
