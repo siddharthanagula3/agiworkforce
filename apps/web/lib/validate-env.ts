@@ -185,6 +185,66 @@ export function validatePriceIdConsistency(): ValidationResult {
 }
 
 /**
+ * Detect development/test provider keys running in a PRODUCTION deployment.
+ *
+ * This is the guard that was missing during the 2026-07-21 incident: production
+ * ran Clerk `pk_test_`/`sk_test_` keys, which pass the "is the var set?" check in
+ * validateRequiredEnvVars but cause a client-side session-handshake redirect loop
+ * on a real domain (dev instances sync sessions via third-party cookies, which
+ * Chrome now blocks) — every authenticated page reload-loops. Stripe test keys in
+ * production silently accept no real payments.
+ *
+ * These are warnings, not hard errors: a misconfigured deploy still serves the
+ * marketing site, and an emergency hotfix deploy is never blocked. But the
+ * misconfiguration is now impossible to miss in build/startup logs.
+ */
+export function validateProductionKeyTypes(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // VERCEL_ENV === 'production' is the real prod deployment (not preview or
+  // local `next dev`, where test keys are correct). Mirrors rate-limit.ts.
+  if (process.env['VERCEL_ENV'] !== 'production') {
+    return { valid: true, errors, warnings };
+  }
+
+  const testKeyChecks: Array<{ env: string; prefix: string; impact: string }> = [
+    {
+      env: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      prefix: 'pk_test_',
+      impact:
+        'a Clerk DEVELOPMENT instance in production causes auth redirect/handshake loops ' +
+        '(dev instances rely on third-party cookies Chrome blocks). Switch to a pk_live_ key.',
+    },
+    {
+      env: 'CLERK_SECRET_KEY',
+      prefix: 'sk_test_',
+      impact: 'a Clerk development secret key in production. Switch to an sk_live_ key.',
+    },
+    {
+      env: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+      prefix: 'pk_test_',
+      impact: 'Stripe TEST mode in production accepts no real payments. Switch to a pk_live_ key.',
+    },
+    {
+      env: 'STRIPE_SECRET_KEY',
+      prefix: 'sk_test_',
+      impact:
+        'a Stripe test secret key in production accepts no real payments. Use an sk_live_ key.',
+    },
+  ];
+
+  for (const { env, prefix, impact } of testKeyChecks) {
+    const value = process.env[env];
+    if (value && value.startsWith(prefix)) {
+      warnings.push(`${env} is a ${prefix}… development/test key in production — ${impact}`);
+    }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/**
  * Validate APP_URL format
  */
 export function validateAppUrl(): ValidationResult {
@@ -223,7 +283,12 @@ export function validateAppUrl(): ValidationResult {
  * Run all validations and return combined results
  */
 export function validateEnvironment(): ValidationResult {
-  const results = [validateRequiredEnvVars(), validatePriceIdConsistency(), validateAppUrl()];
+  const results = [
+    validateRequiredEnvVars(),
+    validatePriceIdConsistency(),
+    validateAppUrl(),
+    validateProductionKeyTypes(),
+  ];
 
   const allErrors = results.flatMap((r) => r.errors);
   const allWarnings = results.flatMap((r) => r.warnings);
