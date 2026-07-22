@@ -303,11 +303,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Cloud Mode</p>
-                <p className="text-xs text-blue-400 font-medium">Coming soon to desktop</p>
+                <p className="text-xs text-blue-400 font-medium">Public alpha — available now</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  AGI Cloud (subscriptions, hosted storage, synced chats) is in public alpha on Web
-                  &amp; Mobile today. Desktop cloud support is coming soon — continue with Local or
-                  BYOK for now.
+                  AGI Cloud (subscriptions, hosted storage, synced chats) is in public alpha. Sign
+                  in to sync your chats across desktop, web, and mobile — or continue with Local or
+                  BYOK, which stay on your device.
                 </p>
               </div>
               <button

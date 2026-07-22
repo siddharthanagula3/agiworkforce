@@ -75,8 +75,8 @@ import { useBillingUsageStore, selectBudgetPercentage } from '../../stores/billi
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import { useAppModeStore, selectMode } from '../../stores/appModeStore';
 import {
-  DESKTOP_CLOUD_COMING_SOON,
-  DESKTOP_CLOUD_COMING_SOON_SHORT,
+  DESKTOP_CLOUD_TAGLINE,
+  DESKTOP_CLOUD_TAGLINE_SHORT,
 } from '../../constants/cloudAvailability';
 
 interface SidebarProps {
@@ -765,7 +765,7 @@ export function Sidebar({
       // interim message instead of opening the dialog. (On desktop the runtime
       // is always Local mode, so this is the only reachable transfer direction.)
       if (isTauri && mode === 'local') {
-        toast.info(DESKTOP_CLOUD_COMING_SOON);
+        toast.info(DESKTOP_CLOUD_TAGLINE);
         return;
       }
       setTransferTarget({ id, title, localDbId: uuidToDbId(id) });
@@ -1419,7 +1419,7 @@ export function Sidebar({
                 }}
                 title={
                   mode === 'local'
-                    ? DESKTOP_CLOUD_COMING_SOON_SHORT
+                    ? DESKTOP_CLOUD_TAGLINE_SHORT
                     : `Switch to ${formatChatExecutionModeLabel('local_only')}`
                 }
                 className={cn(

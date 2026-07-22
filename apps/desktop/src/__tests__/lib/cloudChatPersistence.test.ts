@@ -130,14 +130,23 @@ describe('DCL-2 Local + BYOK never instantiate the cloud client', () => {
   });
 });
 
-describe('DCL-2 PA-3 coming-soon gate still protects users', () => {
-  it('setMode(cloud) is refused on the desktop runtime, so the seam stays unreachable', () => {
-    // Real user-facing path: the desktop runtime refuses Cloud mode.
+describe('DCL-4 desktop cloud is open — sign-in is the only gate', () => {
+  it('setMode(cloud) succeeds for a signed-in account and the seam activates', () => {
+    // Signed-in (beforeEach): the desktop runtime now enters Cloud mode.
+    useAppModeStore.getState().setMode('cloud');
+
+    expect(useAppModeStore.getState().mode).toBe('cloud');
+    // privacyMode is now 'managed', so the shared cloud client is reachable.
+    expect(isManagedCloudPersistenceActive()).toBe(true);
+    expect(() => getDesktopCloudChatPersistenceClient()).not.toThrow();
+  });
+
+  it('refuses Cloud when signed out, keeping the seam unreachable (mechanism, not a gate)', () => {
+    useAuthStore.setState({ accessToken: null, isAuthenticated: false });
     useAppModeStore.getState().setMode('cloud');
 
     expect(useAppModeStore.getState().mode).toBe('local');
-    expect(toastInfo).toHaveBeenCalled();
-    // The seam is therefore never reachable for a user today.
+    expect(toastError).toHaveBeenCalledWith('Sign in to use AGI Cloud.');
     expect(isManagedCloudPersistenceActive()).toBe(false);
     expect(() => getDesktopCloudChatPersistenceClient()).toThrow(
       /managed-cloud persistence is unavailable/i,

@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Loader2, Shield } from 'lucide-react';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
-import { DESKTOP_CLOUD_COMING_SOON } from '../../../../constants/cloudAvailability';
+import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
 
 const LazyAccountSettings = lazy(() =>
   import('../../AccountSettings').then((m) => ({ default: m.AccountSettings })),
@@ -31,7 +31,7 @@ export function AccountTab() {
         <div>
           <h3 className="text-lg font-semibold mb-1">Cloud account</h3>
           <p className="text-sm text-muted-foreground">
-            Local Mode keeps chats and settings on this device. {DESKTOP_CLOUD_COMING_SOON}
+            Local Mode keeps chats and settings on this device. {DESKTOP_CLOUD_TAGLINE}
           </p>
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
@@ -43,8 +43,8 @@ export function AccountTab() {
               <div className="text-sm font-semibold text-foreground">You are in Local Mode</div>
               <p className="mt-1 text-sm text-muted-foreground">
                 There is no cloud account session, so account, billing, team, and logout controls
-                are hidden. AGI Cloud is available on Web &amp; Mobile — desktop support is coming
-                soon.
+                are hidden. Switch to Cloud mode and sign in to turn on managed models and chats
+                synced across your devices.
               </p>
             </div>
           </div>
