@@ -17,15 +17,14 @@ import 'server-only';
 import { Redis } from '@upstash/redis';
 import { logger } from '@/lib/logger';
 
-const hasRedisEnv =
-  !!process.env['UPSTASH_REDIS_REST_URL'] && !!process.env['UPSTASH_REDIS_REST_TOKEN'];
+// Accept the native Upstash names or Vercel's KV-integration names (the Vercel
+// Marketplace Upstash integration injects the KV_* set by default).
+// `||` (not `??`) so an empty/blank legacy UPSTASH_* value falls through to KV_*.
+const redisRestUrl = process.env['UPSTASH_REDIS_REST_URL'] || process.env['KV_REST_API_URL'];
+const redisRestToken = process.env['UPSTASH_REDIS_REST_TOKEN'] || process.env['KV_REST_API_TOKEN'];
+const hasRedisEnv = !!redisRestUrl && !!redisRestToken;
 
-const redis = hasRedisEnv
-  ? new Redis({
-      url: process.env['UPSTASH_REDIS_REST_URL']!,
-      token: process.env['UPSTASH_REDIS_REST_TOKEN']!,
-    })
-  : null;
+const redis = hasRedisEnv ? new Redis({ url: redisRestUrl!, token: redisRestToken! }) : null;
 
 /** A previously created E2B code context, cached so it can be reused across calls/turns. */
 export interface StoredContext {
@@ -88,10 +87,7 @@ export async function getE2BSession(scope: E2BSessionScope): Promise<E2BSession 
   }
 }
 
-export async function saveE2BSession(
-  scope: E2BSessionScope,
-  session: E2BSession,
-): Promise<void> {
+export async function saveE2BSession(scope: E2BSessionScope, session: E2BSession): Promise<void> {
   if (!redis) return;
   try {
     await redis.set(sessionKey(scope), session, { ex: SESSION_TTL_SECONDS });
