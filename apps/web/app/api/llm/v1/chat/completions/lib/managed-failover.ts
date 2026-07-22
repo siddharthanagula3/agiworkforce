@@ -8,7 +8,7 @@ import 'server-only';
  * fallback plan"): rotate to the resolver's next candidate ONLY
  *   - on availability-class failures (connection / server_error /
  *     server_overload / capacity_off_switch / api_timeout) — never on
- *     credential failures, rate limits, aborts, safety stops, context or
+ *     credential failures, aborts, safety stops, context or
  *     invalid-model errors, or billing errors;
  *   - before the first byte reaches the client — route.ts's rotation point
  *     is `startProviderStream`'s first-chunk peek, so a rotated attempt has
@@ -22,9 +22,8 @@ import 'server-only';
  *
  * Deliberately NARROWER than the gateway in one dimension: requests carrying
  * tools (provider-native tool definitions ride `llmRequest.tools` in the
- * provider's own wire shape) do not rotate — a fallback on a different
- * provider could not consume them. The gateway's fallback traffic never
- * carries such tools; on web this guard makes that assumption explicit.
+ * provider's own wire shape) may rotate only within the same provider. A
+ * different provider could not consume those definitions safely.
  *
  * Billing: rotation happens INSIDE one managed-usage lifecycle — the single
  * reservation taken by the request processor spans all attempts, and
@@ -43,13 +42,16 @@ import { buildThinkingConfig, resolveRequestEffort } from './request-processor';
 
 /** Same five availability classes the gateway rotates on — see
  *  services/api-gateway/src/lib/providerStreamSafety.ts's
- *  FAILOVER_ELIGIBLE_CATEGORIES. */
+ *  FAILOVER_ELIGIBLE_CATEGORIES, plus direct-provider rate limits. A managed
+ *  Auto request should not fail because one upstream project exhausted quota;
+ *  explicit selections remain rotation-free by construction. */
 const FAILOVER_ELIGIBLE_CATEGORIES: ReadonlySet<string> = new Set([
   'connection',
   'server_error',
   'server_overload',
   'capacity_off_switch',
   'api_timeout',
+  'rate_limit',
 ]);
 
 export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): boolean {
@@ -109,8 +111,8 @@ export function buildFailoverAttemptView(
 /**
  * Create the bounded rotation state for one request. `next(error)` returns
  * the next admissible attempt view, or null when rotation is not permitted
- * (ineligible failure class, aborted, tools present, plan exhausted, or no
- * candidate passes the per-attempt admission re-check).
+ * (ineligible failure class, aborted, plan exhausted, or no candidate passes
+ * the per-attempt admission and tool-compatibility re-checks).
  */
 export function createFailoverPlan(
   processed: ProcessedRequest,
@@ -122,6 +124,7 @@ export function createFailoverPlan(
 ): { next: (error: unknown) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
+  const mustStayOnProvider = requestCarriesTools(processed);
 
   const nextAdmissibleCandidate = (): FailoverAttempt | null => {
     while (remaining.length > 0) {
@@ -133,6 +136,13 @@ export function createFailoverPlan(
         logger.warn(
           { requestId: processed.requestId, model: candidate },
           'Managed failover candidate skipped: provider resolution failed',
+        );
+        continue;
+      }
+      if (mustStayOnProvider && provider !== processed.provider) {
+        logger.warn(
+          { requestId: processed.requestId, model: candidate, provider },
+          'Managed failover candidate skipped: provider-native tools cannot transfer providers',
         );
         continue;
       }
@@ -165,7 +175,6 @@ export function createFailoverPlan(
   return {
     next: (error: unknown): FailoverAttempt | null => {
       if (remaining.length === 0) return null;
-      if (requestCarriesTools(processed)) return null;
       if (!isFailoverEligibleError(error, options.signal)) return null;
       const attempt = nextAdmissibleCandidate();
       if (attempt) {

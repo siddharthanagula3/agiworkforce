@@ -480,6 +480,20 @@ const ChatComposerNewComponent = ({
     }
   }, [thinkingEnabled, setThinkingEffort, thinkingCycle]);
 
+  // Thinking is persisted across model switches. Clear that preference when the
+  // newly selected explicit model cannot reason, otherwise the next request is
+  // rejected before the model gets a chance to answer. Auto remains eligible
+  // because its final model is chosen server-side for each task.
+  useEffect(() => {
+    if (
+      thinkingEnabled &&
+      !isAutoModeModelId(composerSelectedModelId) &&
+      !modelSupportsThinkingCap
+    ) {
+      setThinkingEnabled(false);
+    }
+  }, [composerSelectedModelId, modelSupportsThinkingCap, setThinkingEnabled, thinkingEnabled]);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
@@ -872,7 +886,9 @@ const ChatComposerNewComponent = ({
         workMode: isFreeTrial ? 'chat' : workMode,
         projectId: pickerActiveProjectId,
         webSearchEnabled,
-        thinkingEnabled,
+        thinkingEnabled:
+          thinkingEnabled &&
+          (isAutoModeModelId(composerSelectedModelId) || modelSupportsThinkingCap),
         codeExecutionEnabled,
         officeCreationEnabled,
         researchEnabled,
@@ -925,6 +941,8 @@ const ChatComposerNewComponent = ({
     responseStyle,
     activeCustomStyleId,
     thinkingEnabled,
+    composerSelectedModelId,
+    modelSupportsThinkingCap,
     codeExecutionEnabled,
     officeCreationEnabled,
     onSend,
@@ -1011,7 +1029,7 @@ const ChatComposerNewComponent = ({
       {localNotice && (
         <div
           role="alert"
-          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+          className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-100"
         >
           {localNotice}
         </div>
@@ -1040,13 +1058,13 @@ const ChatComposerNewComponent = ({
       {trialExhausted && (
         <div
           role="alert"
-          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100"
+          className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-100"
         >
           <span>Free usage limit reached. Upgrade to continue.</span>
           <button
             type="button"
             onClick={onUpgradeRequest}
-            className="shrink-0 font-semibold text-amber-200 underline underline-offset-2"
+            className="shrink-0 rounded-sm font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 dark:text-amber-200 dark:hover:text-amber-50"
           >
             Upgrade
           </button>

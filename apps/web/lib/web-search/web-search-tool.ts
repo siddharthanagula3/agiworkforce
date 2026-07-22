@@ -43,6 +43,9 @@ export const WEB_SEARCH_TIMEOUT_MS = 15_000;
 /** Results requested from Perplexity and returned to the model — capped well
  * under Perplexity's max of 20 to bound tool-result token cost. */
 export const WEB_SEARCH_MAX_RESULTS = 8;
+/** Free-plan result cap. Keeps one useful lookup affordable while still giving
+ * the model enough independent sources to compare claims. */
+export const WEB_SEARCH_FREE_MAX_RESULTS = 5;
 /** Maximum accepted query length. */
 const MAX_QUERY_LENGTH = 400;
 /** Per-result snippet cap (chars) before it is fed back to the model — bounds
