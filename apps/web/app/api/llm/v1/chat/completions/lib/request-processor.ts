@@ -658,6 +658,13 @@ export function resolveWebCloudModelRoute(
   model: string,
   subscriptionTier: string | undefined,
   taskType: RoutingTaskType,
+  usage?: {
+    /** Remaining managed-usage budget in cents; when set, Auto prefers the
+     *  best model this budget can still cover (bias, not a gate). */
+    budgetRemainingCents?: number;
+    estimatedInputTokens?: number;
+    estimatedOutputTokens?: number;
+  },
 ) {
   return resolveAutoRoute({
     selection: model,
@@ -665,6 +672,15 @@ export function resolveWebCloudModelRoute(
     subscriptionTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
+    ...(usage?.budgetRemainingCents !== undefined
+      ? { budgetRemainingCents: usage.budgetRemainingCents }
+      : {}),
+    ...(usage?.estimatedInputTokens !== undefined
+      ? { estimatedInputTokens: usage.estimatedInputTokens }
+      : {}),
+    ...(usage?.estimatedOutputTokens !== undefined
+      ? { estimatedOutputTokens: usage.estimatedOutputTokens }
+      : {}),
   });
 }
 
@@ -1208,6 +1224,30 @@ export async function processRequest(
     );
   }
 
+  // Usage-aware Auto: read the cheap single-row credit balance for paid users
+  // so Auto prefers the best model the remaining budget still covers. Bias only,
+  // and fail-open — a balance-read error just drops the signal (the durable
+  // usage reservation below stays the hard limit). Free-trial users carry no
+  // cents budget (they run on the free-trial token budget), so skip the read.
+  let routeBudgetRemainingCents: number | undefined;
+  if (!freeTrialEnabled) {
+    try {
+      const budgetBalance = await CreditService.getBalance(userId);
+      if ((budgetBalance?.credits_allocated_cents ?? 0) > 0) {
+        routeBudgetRemainingCents = budgetBalance?.credits_remaining_cents;
+      }
+    } catch (error) {
+      logger.warn(
+        { error, userId, requestId },
+        'Usage-aware routing: balance read failed; routing without the affordability bias',
+      );
+    }
+  }
+  const routeEstimatedInputTokens = routingHistory.reduce(
+    (sum, message) => sum + estimateTokens(message.content),
+    estimateTokens(lastUserText),
+  );
+
   // Canonical registry admission for both Auto aliases and explicit selections.
   // This is the same policy seam used by unified-chat/Desktop. It validates the
   // Web managed-cloud runtime profile, exact provider route, model lifecycle,
@@ -1216,6 +1256,12 @@ export async function processRequest(
     chatRequest.model,
     subscription.plan_tier,
     resolvedTaskType,
+    {
+      ...(routeBudgetRemainingCents !== undefined
+        ? { budgetRemainingCents: routeBudgetRemainingCents }
+        : {}),
+      estimatedInputTokens: routeEstimatedInputTokens,
+    },
   );
   if (routeDecision.status === 'unavailable') {
     logger.warn(
