@@ -26,9 +26,8 @@
       "@agiworkforce/providers-deepseek",
       "@agiworkforce/providers-factory",
       "@agiworkforce/providers-google",
-      "@agiworkforce/providers-groq",
       "@agiworkforce/providers-lmstudio",
-      "@agiworkforce/providers-mistral",
+      "@agiworkforce/providers-minimax",
       "@agiworkforce/providers-moonshot",
       "@agiworkforce/providers-ollama",
       "@agiworkforce/providers-openai",
@@ -338,15 +337,11 @@
       },
       {
         "from": "@agiworkforce/providers-factory",
-        "to": "@agiworkforce/providers-groq"
-      },
-      {
-        "from": "@agiworkforce/providers-factory",
         "to": "@agiworkforce/providers-lmstudio"
       },
       {
         "from": "@agiworkforce/providers-factory",
-        "to": "@agiworkforce/providers-mistral"
+        "to": "@agiworkforce/providers-minimax"
       },
       {
         "from": "@agiworkforce/providers-factory",
@@ -397,22 +392,6 @@
         "to": "@agiworkforce/types"
       },
       {
-        "from": "@agiworkforce/providers-groq",
-        "to": "@agiworkforce/provider-protocol"
-      },
-      {
-        "from": "@agiworkforce/providers-groq",
-        "to": "@agiworkforce/provider-runtime"
-      },
-      {
-        "from": "@agiworkforce/providers-groq",
-        "to": "@agiworkforce/providers-openai"
-      },
-      {
-        "from": "@agiworkforce/providers-groq",
-        "to": "@agiworkforce/types"
-      },
-      {
         "from": "@agiworkforce/providers-lmstudio",
         "to": "@agiworkforce/provider-protocol"
       },
@@ -429,19 +408,19 @@
         "to": "@agiworkforce/types"
       },
       {
-        "from": "@agiworkforce/providers-mistral",
+        "from": "@agiworkforce/providers-minimax",
         "to": "@agiworkforce/provider-protocol"
       },
       {
-        "from": "@agiworkforce/providers-mistral",
+        "from": "@agiworkforce/providers-minimax",
         "to": "@agiworkforce/provider-runtime"
       },
       {
-        "from": "@agiworkforce/providers-mistral",
+        "from": "@agiworkforce/providers-minimax",
         "to": "@agiworkforce/providers-openai"
       },
       {
-        "from": "@agiworkforce/providers-mistral",
+        "from": "@agiworkforce/providers-minimax",
         "to": "@agiworkforce/types"
       },
       {
