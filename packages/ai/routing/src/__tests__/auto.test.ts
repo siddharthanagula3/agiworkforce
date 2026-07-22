@@ -87,6 +87,65 @@ describe('resolveAutoRoute', () => {
     });
   });
 
+  it('affordability: skips the flagship the budget cannot cover and picks the best affordable slot', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      budgetRemainingCents: 2.0, // opus ~3.0c unaffordable; sonnet ~1.8c fits
+      estimatedInputTokens: 1000,
+      estimatedOutputTokens: 1000,
+    });
+
+    expect(result).toMatchObject({
+      status: 'selected',
+      modelKey: 'claude-sonnet-5',
+      effectiveProfile: 'premium',
+    });
+  });
+
+  it('affordability: keeps falling to a cheaper slot as the budget tightens', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      budgetRemainingCents: 1.0, // opus ~3.0c and sonnet ~1.8c unaffordable; glm ~0.58c fits
+      estimatedInputTokens: 1000,
+      estimatedOutputTokens: 1000,
+    });
+
+    expect(result).toMatchObject({ status: 'selected', modelKey: 'glm-5.2' });
+  });
+
+  it('affordability: a nearly-exhausted budget still reaches the workhorse fallback (reservation is the hard gate)', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      budgetRemainingCents: 0.1, // nothing in the premium coding band fits
+      estimatedInputTokens: 1000,
+      estimatedOutputTokens: 1000,
+    });
+
+    expect(result).toMatchObject({ status: 'selected', modelKey: 'gemini-3.1-flash-lite' });
+  });
+
+  it('affordability: no budget signal leaves routing unchanged (bias is a no-op off web)', () => {
+    const result = resolveAutoRoute({
+      selection: 'auto',
+      taskType: 'coding',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      estimatedInputTokens: 1000,
+      estimatedOutputTokens: 1000,
+    });
+
+    expect(result).toMatchObject({ status: 'selected', modelKey: 'claude-opus-4.8' });
+  });
+
   it('clamps premium Auto to the tier maximum profile', () => {
     const result = resolveAutoRoute({
       selection: 'auto-premium',
