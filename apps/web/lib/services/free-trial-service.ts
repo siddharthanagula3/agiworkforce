@@ -312,23 +312,21 @@ export async function beginFreeTrialRequest(params: {
     );
     if (remainingMicrousd === 0) return { ok: false, code: 'budget_reached' };
 
-    const windowStartedAt = toTimestampParameter(window.daily_started_at);
     const reserved = await tx.execute(
-      `update public.website_auto_economy_trial_usage
-       set daily_reserved_microusd = daily_reserved_microusd + $2,
-           last_prompt_at = now()
-       where user_id = $1
-         and daily_started_at = $3::timestamptz`,
-      [params.userId, remainingMicrousd, windowStartedAt],
+      `with reserved_window as (
+         update public.website_auto_economy_trial_usage
+         set daily_reserved_microusd = daily_reserved_microusd + $2,
+             last_prompt_at = now()
+         where user_id = $1
+         returning daily_started_at
+       )
+       insert into public.free_daily_usage_reservations
+         (user_id, request_id, window_started_at, reserved_microusd)
+       select $1, $3, daily_started_at, $2
+       from reserved_window`,
+      [params.userId, remainingMicrousd, params.requestId],
     );
     if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
-
-    await tx.execute(
-      `insert into public.free_daily_usage_reservations
-         (user_id, request_id, window_started_at, reserved_microusd)
-       values ($1, $2, $3::timestamptz, $4)`,
-      [params.userId, params.requestId, windowStartedAt, remainingMicrousd],
-    );
 
     return {
       ok: true,
@@ -374,23 +372,25 @@ export async function settleFreeTrialRequest(params: {
       );
       if (!reservation || reservation.settled_at) return;
 
-      const windowStartedAt = toTimestampParameter(reservation.window_started_at);
-      const reservedMicrousd = toNonNegativeInteger(reservation.reserved_microusd);
-
       await tx.execute(
-        `update public.website_auto_economy_trial_usage
+        `update public.website_auto_economy_trial_usage as usage
          set daily_reserved_microusd = case
-               when daily_started_at = $2::timestamptz
-                 then greatest(0, daily_reserved_microusd - $3)
-               else daily_reserved_microusd end,
+               when usage.daily_started_at = reservation.window_started_at
+                 then greatest(0, usage.daily_reserved_microusd - reservation.reserved_microusd)
+               else usage.daily_reserved_microusd end,
              daily_cost_microusd = case
-               when daily_started_at = $2::timestamptz then daily_cost_microusd + $4
-               else daily_cost_microusd end,
-             period_tokens_used = period_tokens_used + $5,
-             prompt_count = prompt_count + 1,
+               when usage.daily_started_at = reservation.window_started_at
+                 then usage.daily_cost_microusd + $3
+               else usage.daily_cost_microusd end,
+             period_tokens_used = usage.period_tokens_used + $4,
+             prompt_count = usage.prompt_count + 1,
              last_prompt_at = now()
-         where user_id = $1`,
-        [params.reservation.userId, windowStartedAt, reservedMicrousd, costMicrousd, tokens],
+         from public.free_daily_usage_reservations as reservation
+         where usage.user_id = $1
+           and reservation.user_id = usage.user_id
+           and reservation.request_id = $2
+           and reservation.settled_at is null`,
+        [params.reservation.userId, params.reservation.requestId, costMicrousd, tokens],
       );
 
       const metadata = JSON.stringify({

@@ -19,4 +19,9 @@ describe('free trial config', () => {
     // the default selection must live inside the selectable Hobby set
     expect(FREE_TRIAL_MODELS).toContain(FREE_TRIAL_MODEL);
   });
+
+  it('keeps Gemini 3.1 Flash Lite available as the default Free chat model', () => {
+    expect(FREE_TRIAL_MODEL).toBe('gemini-3.1-flash-lite');
+    expect(FREE_TRIAL_MODELS).toContain('gemini-3.1-flash-lite');
+  });
 });
