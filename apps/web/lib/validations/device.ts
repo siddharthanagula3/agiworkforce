@@ -27,7 +27,19 @@ export const DeviceNameSchema = z
   )
   .optional();
 
-export const DeviceTypeSchema = z.enum(['desktop', 'mobile', 'web']);
+// Editor/CLI device types (vscode, cursor, windsurf, antigravity, cli) use the
+// same RFC-8628-style device-code flow as desktop; they must be accepted here or
+// POST /api/device/link 400s and the extension sign-in never completes.
+export const DeviceTypeSchema = z.enum([
+  'desktop',
+  'mobile',
+  'web',
+  'vscode',
+  'cursor',
+  'windsurf',
+  'antigravity',
+  'cli',
+]);
 
 export const DeviceFingerprintSchema = z
   .string()
