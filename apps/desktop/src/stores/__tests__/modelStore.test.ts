@@ -209,7 +209,7 @@ describe('modelStore', () => {
       useModelStore.getState().reset();
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('auto-economy');
+      expect(state.selectedModel).toBe('auto');
       expect(state.selectedProvider).toBe('managed_cloud');
       expect(state.favorites).toEqual([]);
       expect(state.recentModels).toEqual([]);

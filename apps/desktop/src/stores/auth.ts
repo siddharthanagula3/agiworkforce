@@ -1361,7 +1361,7 @@ export function getPlanDescription(plan: PlanTier): string {
   const descriptions: Record<PlanTier, string> = {
     'local-only':
       'Run everything on your own machine with Ollama / LMStudio. No managed cloud, no sync.',
-    byok: 'Bring your own API keys while the desktop app stays local. Managed cloud sync is coming soon to desktop (public alpha on Web & Mobile today).',
+    byok: 'Bring your own API keys while the desktop app stays local. Managed cloud is also available as an explicit signed-in Cloud mode.',
     basic: 'Perfect for getting started; managed cloud entry tier on the $8/mo Basic plan.',
     free: 'Limited automations; Community support',
     pro: 'Unlimited automations; 1,050 credits per billing cycle; Priority support',
