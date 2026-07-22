@@ -22,6 +22,7 @@ import type {
   ScheduledTask,
 } from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { timingSafeEqual } from '@agiworkforce/utils/crypto';
 import {
   loadShortcuts,
   handleSaveShortcut,
@@ -669,7 +670,7 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         delete body['timestamp'];
         delete body['session_secret'];
         void computeEnvelopeMac(message.id, respTs, body).then((expected) => {
-          if (expected !== respMac) {
+          if (expected === null || !timingSafeEqual(expected, respMac)) {
             logger.warn(
               '[native-mac] Response MAC mismatch — rejecting (potential shuffle attack)',
               { id: message.id },

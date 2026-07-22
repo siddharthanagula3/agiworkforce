@@ -29,6 +29,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
 // AUDIT-FIX: vscode-reorg
+import { resolveContained } from '@agiworkforce/utils';
 import { getExtensionVersion } from '../../platform/version';
 import { parseBridgeInbound } from '../../protocol/bridgeMessages';
 
@@ -824,16 +825,13 @@ function registerBridgeHandlersTracked(
           // A compromised WS connection must not be able to read arbitrary files.
           const workspaceFolders = vscode.workspace.workspaceFolders;
           if (!workspaceFolders) break;
-          // Resolve filePath relative to each workspace folder (not CWD) and
-          // require a path separator after the folder prefix to prevent
-          // adjacent-directory bypass (e.g. "myproject-evil" matching "myproject").
+          // Resolve filePath relative to each workspace folder (not CWD) via the
+          // shared containment helper (rejects adjacent-directory bypass + traversal).
           let resolvedPath: string | undefined;
           const isInWorkspace = workspaceFolders.some((folder) => {
-            const candidate = path.resolve(folder.uri.fsPath, filePath);
-            const match =
-              candidate.startsWith(folder.uri.fsPath + path.sep) || candidate === folder.uri.fsPath;
-            if (match) resolvedPath = candidate;
-            return match;
+            const result = resolveContained(folder.uri.fsPath, filePath, { allowAbsolute: true });
+            if (result.ok) resolvedPath = result.resolved;
+            return result.ok;
           });
           if (!isInWorkspace || resolvedPath === undefined) {
             console.warn('[AGI Workforce Bridge] blocked file open outside workspace:', filePath);
