@@ -7,6 +7,7 @@
  */
 
 import * as vscode from 'vscode';
+import { isContainedIn } from '@agiworkforce/utils';
 
 /**
  * Returns the workspace folder containing the active editor's document.
@@ -79,16 +80,7 @@ export function getWorkspaceFolderForUri(uri: vscode.Uri): vscode.WorkspaceFolde
  */
 export function isPathInWorkspace(absolutePath: string): boolean {
   const folders = vscode.workspace.workspaceFolders ?? [];
-  return folders.some((f) => {
-    const root = f.uri.fsPath;
-    // Use a separator-aware prefix check to avoid false positives where
-    // /home/user/project would match /home/user/project-other.
-    return (
-      absolutePath === root ||
-      absolutePath.startsWith(root + '/') ||
-      absolutePath.startsWith(root + '\\')
-    );
-  });
+  return folders.some((f) => isContainedIn(f.uri.fsPath, absolutePath));
 }
 
 /**
