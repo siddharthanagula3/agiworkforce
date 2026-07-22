@@ -6,6 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./async": "./src/async.ts",
+    "./crypto": "./src/crypto.ts",
+    "./fence": "./src/fence.ts",
     "./format": "./src/format.ts",
     "./logger": "./src/logger.ts",
     "./managed-chat-idempotency": "./src/managedChatIdempotency.ts",

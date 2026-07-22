@@ -102,6 +102,13 @@ const REDACTION_PATTERNS: readonly SecretRedactionPattern[] = [
     pattern: /xai-[a-zA-Z0-9]{20,}/g,
     replacement: '[REDACTED_XAI_KEY]',
   },
+  {
+    id: 'slack-token',
+    label: 'Slack token',
+    severity: 'critical',
+    pattern: /xox[baprs]-[A-Za-z0-9-]{10,}/g,
+    replacement: '[REDACTED_SLACK_TOKEN]',
+  },
   // JWT (header.payload.signature) — ported from extension recorder (C-05).
   {
     id: 'jwt',

@@ -23,6 +23,7 @@ import type {
   AutoFillJobApplicationMessage,
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
+import { redactSecrets } from '@agiworkforce/utils/logger';
 import { runPlatformJobAutofill } from './jobAutofill';
 import { detectJobApplication } from './features/content/autofill/detector';
 import {
@@ -1666,22 +1667,7 @@ const _userRecordedActions: UserRecordedAction[] = [];
 
 // ─── C-05 recorded-value sanitization ─────────────────────────────────────────
 //
-// Local secret-pattern list. Mirrors the shared `redactSecrets` in
-// `packages/platform/utils/src/logger.ts` so the recorder doesn't need a workspace dep
-// until Phase C2 lands. The patterns intentionally overlap with that helper —
-// when C2 ships, this can switch to `import { redactSecrets } from '@agiworkforce/utils'`
-// and the locally-defined REC_REDACTION_PATTERNS can be deleted.
-const REC_REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
-  { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/g, replacement: '[REDACTED_ANTHROPIC_KEY]' },
-  { pattern: /sk-[a-zA-Z0-9_-]{20,}/g, replacement: '[REDACTED_API_KEY]' },
-  { pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g, replacement: '[REDACTED_GOOGLE_KEY]' },
-  { pattern: /AKIA[A-Z0-9]{16}/g, replacement: '[REDACTED_AWS_KEY]' },
-  { pattern: /gh[ps]_[a-zA-Z0-9]{36,}/g, replacement: '[REDACTED_GITHUB_TOKEN]' },
-  {
-    pattern: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
-    replacement: '[REDACTED_JWT]',
-  },
-];
+// Uses the shared `redactSecrets` SSOT (packages/platform/utils/src/logger.ts).
 
 /**
  * Returns null for fields that should not be recorded at all (passwords),
@@ -1703,11 +1689,7 @@ function sanitizeRecordedValue(
   ) {
     return '[REDACTED]';
   }
-  let value = target.value ?? '';
-  for (const { pattern, replacement } of REC_REDACTION_PATTERNS) {
-    value = value.replace(pattern, replacement);
-  }
-  return value;
+  return redactSecrets(target.value ?? '');
 }
 
 let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
