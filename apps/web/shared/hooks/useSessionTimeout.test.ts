@@ -2,7 +2,21 @@
  * Tests for useSessionTimeout hook
  */
 
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import React from 'react';
+import { render, cleanup } from '@testing-library/react';
+
+// Stable authenticated state so the hook's effects arm (they early-return when
+// signed out). Both are the hook's real dependency imports.
+vi.mock('@shared/stores/authentication-store', () => ({
+  useAuthStore: () => ({ user: { id: 'u1' }, logout: vi.fn(), isAuthenticated: true }),
+}));
+vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+  useUserSettings: () => ({ data: { session_timeout: 60 } }),
+}));
+
+import { useSessionTimeout } from './useSessionTimeout';
 
 // Constants for testing
 const ACTIVITY_STORAGE_KEY = 'agi_last_activity';
@@ -220,5 +234,43 @@ describe('Activity events', () => {
     expect(ACTIVITY_EVENTS).toContain('scroll');
     expect(ACTIVITY_EVENTS).toContain('click');
     expect(ACTIVITY_EVENTS.length).toBe(7);
+  });
+});
+
+describe('useSessionTimeout render-loop regression', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  // Regression for the intermittent /chat freeze: SessionTimeoutGuard passes
+  // fresh inline onWarning/onSessionExtended/onTimeout callbacks on every
+  // render, so checkTimeout's identity changed every render and its effect
+  // re-ran, re-invoking checkTimeout via queueMicrotask. When checkTimeout
+  // returned a NEW state object unconditionally, that forced another render →
+  // a self-sustaining loop that pegged a CPU core (no "max update depth"
+  // because it hopped through a microtask). The fix makes idle checks bail
+  // (return the same state reference), so renders settle.
+  it('settles (does not re-render unboundedly) with fresh inline callbacks each render', async () => {
+    let renders = 0;
+    function Guard() {
+      renders += 1;
+      useSessionTimeout({
+        onWarning: () => {},
+        onSessionExtended: () => {},
+        onTimeout: () => {},
+      });
+      return null;
+    }
+
+    render(React.createElement(Guard));
+    // Let effects + any queued microtask-driven re-renders flush. A loop would
+    // keep incrementing `renders` across these ticks; a settled hook will not.
+    await new Promise((r) => setTimeout(r, 250));
+
+    // A healthy mount is a small, bounded number of renders (mount + a couple
+    // of effect-driven settles). The pre-fix loop produced hundreds/thousands.
+    expect(renders).toBeLessThan(15);
   });
 });
