@@ -61,9 +61,30 @@ const QWEN_AUTH_METHODS: readonly AuthMethod[] = [
   },
 ];
 
+/** An alternate Qwen-compatible endpoint tried on primary-endpoint failure. */
+export interface QwenFallbackEndpoint {
+  /** OpenAI-compatible base URL (e.g. MuleRouter). SSRF-validated like the primary. */
+  baseUrl: string;
+  /**
+   * API key for this endpoint; falls back to the adapter's primary `apiKey`
+   * when omitted. DashScope and MuleRouter use different keys, so this is
+   * usually set.
+   */
+  apiKey?: string;
+}
+
 export interface QwenAdapterConfig extends ProviderAdapterConfig {
   /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
+  /**
+   * Ordered alternate endpoints, tried in order ONLY when the primary endpoint
+   * fails with a transient/availability error BEFORE any content is streamed
+   * (pre-first-byte). Enables DashScope (primary) → MuleRouter (fallback)
+   * without risking duplicated output. This same primitive lifts to a shared
+   * helper the moment a second OpenAI-compatible provider needs it (YAGNI:
+   * only Qwen has two endpoints today).
+   */
+  fallbackEndpoints?: readonly QwenFallbackEndpoint[];
   /**
    * Extra hostnames a `baseUrl` override may resolve to, beyond
    * `dashscope.aliyuncs.com` / `dashscope-intl.aliyuncs.com` /
@@ -86,6 +107,27 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
     baseURL: baseUrl,
     ...(config.fetch ? { fetch: config.fetch } : {}),
   });
+
+  // Pre-build the ordered fallback SDK clients once (reused across stream calls).
+  // Each base URL is SSRF-validated against the same host allowlist as the
+  // primary; a fallback that resolves to the primary base URL is dropped (no
+  // point retrying the identical host).
+  const fallbackSdks = (config.fallbackEndpoints ?? [])
+    .map((endpoint) => {
+      const { url } = resolveValidatedBaseUrl(endpoint.baseUrl, QWEN_DEFAULT_BASE_URL, {
+        allowedHosts: [...QWEN_ALLOWED_BASE_HOSTS, ...(config.additionalAllowedBaseUrlHosts ?? [])],
+      });
+      return { url: applyQwenBaseUrlQuirks(url), apiKey: endpoint.apiKey ?? config.apiKey };
+    })
+    .filter((endpoint) => endpoint.url !== baseUrl)
+    .map(
+      (endpoint) =>
+        new OpenAI({
+          ...(endpoint.apiKey ? { apiKey: endpoint.apiKey } : {}),
+          baseURL: endpoint.url,
+          ...(config.fetch ? { fetch: config.fetch } : {}),
+        }),
+    );
 
   return {
     id: 'qwen',
@@ -129,29 +171,47 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
         provider: 'qwen',
       });
 
-      try {
-        const sdkStream = await sdk.chat.completions.create(
-          params as unknown as Parameters<typeof sdk.chat.completions.create>[0],
-          { signal },
-        );
-        const watched = withStreamIdleWatchdog(
-          translateOpenAIStream(sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>),
-        );
-        for await (const chunk of watched) {
-          yield chunk;
+      // Ordered endpoint chain: primary first, then any validated fallbacks.
+      // Fail-over is PRE-FIRST-BYTE ONLY — once a chunk has been yielded we
+      // never re-issue the request, so a mid-stream failure can neither
+      // duplicate content nor re-run tool side effects.
+      const endpoints = [sdk, ...fallbackSdks];
+      let yielded = false;
+
+      for (let attempt = 0; attempt < endpoints.length; attempt++) {
+        const client = endpoints[attempt]!;
+        try {
+          const sdkStream = await client.chat.completions.create(
+            params as unknown as Parameters<typeof client.chat.completions.create>[0],
+            { signal },
+          );
+          const watched = withStreamIdleWatchdog(
+            translateOpenAIStream(sdkStream as unknown as AsyncIterable<OpenAIChatCompletionChunk>),
+          );
+          for await (const chunk of watched) {
+            yielded = true;
+            yield chunk;
+          }
+          return;
+        } catch (err) {
+          const classified = classifyError(err);
+          // Rotate to the next endpoint only if nothing was streamed yet, the
+          // error is transient/availability-class, and an endpoint remains.
+          if (!yielded && classified.retryable && attempt < endpoints.length - 1) {
+            continue;
+          }
+          yield {
+            type: 'error',
+            message: classified.message,
+            ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+            retryable: classified.retryable,
+            ...(classified.retryAfterSeconds !== undefined
+              ? { retryAfterSeconds: classified.retryAfterSeconds }
+              : {}),
+          };
+          yield { type: 'stop', reason: 'error' };
+          return;
         }
-      } catch (err) {
-        const classified = classifyError(err);
-        yield {
-          type: 'error',
-          message: classified.message,
-          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
-          retryable: classified.retryable,
-          ...(classified.retryAfterSeconds !== undefined
-            ? { retryAfterSeconds: classified.retryAfterSeconds }
-            : {}),
-        };
-        yield { type: 'stop', reason: 'error' };
       }
     },
   };
