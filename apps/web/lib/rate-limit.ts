@@ -22,16 +22,15 @@ import { logRateLimitExceeded } from './security-audit';
 // local builds set the build phase too, so they skip the throw without
 // needing Vercel-specific knowledge; production cold-starts on ANY runtime
 // (Vercel or self-hosted) hit the throw if Redis isn't wired up.
-// Accept either the native Upstash names or Vercel's KV-integration names. The
-// Vercel Marketplace "Upstash for Redis" integration injects the KV_* set by
-// default (KV_REST_API_URL/KV_REST_API_TOKEN), so the guard must key off the
-// REST credentials, not one specific naming, or a correctly-provisioned Upstash
-// still trips SEV-WEB-13.
-// `||` (not `??`) so an EMPTY/blank legacy UPSTASH_* value — the real cause of
-// the recurring SEV-WEB-13 (names present, values never set) — falls through to
-// the KV_* pair instead of being treated as configured.
-const redisRestUrl = process.env['UPSTASH_REDIS_REST_URL'] || process.env['KV_REST_API_URL'];
-const redisRestToken = process.env['UPSTASH_REDIS_REST_TOKEN'] || process.env['KV_REST_API_TOKEN'];
+// Accept either name pair, PREFERRING Vercel's KV-integration names. The Vercel
+// Marketplace "Upstash for Redis" integration injects KV_REST_API_URL /
+// KV_REST_API_TOKEN and keeps them in sync with the live database, whereas the
+// native UPSTASH_* names here were added manually and went stale (pointing at a
+// deleted DB) — the recurring SEV-WEB-13 root cause. Preferring the managed KV_*
+// means a stale manual UPSTASH_* can't shadow the live database, and `||` (not
+// `??`) still lets an empty KV_* fall through to a real UPSTASH_* value.
+const redisRestUrl = process.env['KV_REST_API_URL'] || process.env['UPSTASH_REDIS_REST_URL'];
+const redisRestToken = process.env['KV_REST_API_TOKEN'] || process.env['UPSTASH_REDIS_REST_TOKEN'];
 const hasRedisEnv = !!redisRestUrl && !!redisRestToken;
 const vercelEnv = process.env['VERCEL_ENV']; // 'production' | 'preview' | 'development' | undefined
 const isNextBuildPhase = process.env['NEXT_PHASE'] === 'phase-production-build';
