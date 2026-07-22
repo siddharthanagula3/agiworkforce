@@ -50,9 +50,8 @@ export function validateRequiredEnvVars(): ValidationResult {
     // Required for desktop auto-updates (Tauri updater hits /api/releases/*)
     'DESKTOP_GITHUB_OWNER',
     'DESKTOP_GITHUB_REPO',
-    // Required for rate limiting (Upstash Redis)
-    'UPSTASH_REDIS_REST_URL',
-    'UPSTASH_REDIS_REST_TOKEN',
+    // Redis REST creds (rate limiting) are checked below under EITHER the native
+    // Upstash names or Vercel's KV-integration names.
     // Required for encrypting device tokens (push notifications)
     'DEVICE_TOKEN_ENCRYPTION_KEY',
     // Required for TOTP secret encryption (2FA / authenticator app flows)
@@ -87,6 +86,22 @@ export function validateRequiredEnvVars(): ValidationResult {
         `Missing important environment variable: ${varName} (some features may not work)`,
       );
     }
+  }
+
+  // Rate limiting needs Redis REST creds under EITHER the native Upstash names
+  // or Vercel's KV-integration names (KV_REST_API_*). Warn only if neither pair
+  // is present, so a KV_*-only Vercel setup doesn't emit a false warning.
+  const hasRedisRestUrl = !!(
+    process.env['UPSTASH_REDIS_REST_URL'] || process.env['KV_REST_API_URL']
+  );
+  const hasRedisRestToken = !!(
+    process.env['UPSTASH_REDIS_REST_TOKEN'] || process.env['KV_REST_API_TOKEN']
+  );
+  if (!hasRedisRestUrl || !hasRedisRestToken) {
+    warnings.push(
+      'Missing Redis REST credentials for rate limiting: set UPSTASH_REDIS_REST_URL/_TOKEN ' +
+        'or KV_REST_API_URL/_TOKEN (rate limiting falls back to per-instance in-memory)',
+    );
   }
 
   // Check price ID variables
