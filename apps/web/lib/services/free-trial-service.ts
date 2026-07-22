@@ -341,7 +341,9 @@ export async function beginFreeTrialRequest(params: {
 }
 
 /**
- * Reconcile a free-tier reservation with precise observed provider cost.
+ * Reconcile a free-tier reservation with observed provider cost. A completed
+ * response consumes at least the configured daily unit, so a one-unit Free
+ * allowance means one completed response rather than unlimited tiny calls.
  * Repeated settlement is a no-op, and zero-usage failures still release their
  * reservation. Best-effort persistence preserves an already-produced provider
  * response if the accounting database is temporarily unavailable.
@@ -355,10 +357,16 @@ export async function settleFreeTrialRequest(params: {
 }): Promise<void> {
   const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   const tokens = Math.max(0, Math.floor(usage.totalTokens));
-  const costMicrousd =
+  const measuredCostMicrousd =
     params.provider && params.model
       ? LLMCostCalculator.calculateCostMicrousd(params.provider, params.model, usage)
       : 0;
+  const minimumCompletedChargeMicrousd =
+    params.outcome === 'completed' ? FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd : 0;
+  const costMicrousd = Math.min(
+    params.reservation.reservedMicrousd,
+    Math.max(measuredCostMicrousd, minimumCompletedChargeMicrousd),
+  );
   const db = getNeonDb();
 
   try {

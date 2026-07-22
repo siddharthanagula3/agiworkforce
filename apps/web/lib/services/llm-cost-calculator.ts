@@ -100,7 +100,8 @@ function normalizeProviderId(provider: string | null | undefined): string | null
 
 export class LLMCostCalculator {
   /**
-   * Calculate cost in cents for token usage
+   * Calculate paid managed usage in whole ledger cents. Non-empty provider
+   * work consumes at least one cent so sub-cent calls cannot bypass paid caps.
    * @throws Never - returns 0 on error for safety
    */
   static calculateCost(
@@ -109,7 +110,8 @@ export class LLMCostCalculator {
     usage: TokenUsage,
     now: Date = new Date(),
   ): number {
-    return Math.round(this.calculateCostDollars(provider, model, usage, now) * 100);
+    const costCents = this.calculateCostDollars(provider, model, usage, now) * 100;
+    return costCents > 0 ? Math.max(1, Math.round(costCents)) : 0;
   }
 
   /**

@@ -112,11 +112,18 @@ fn clamps_premium_to_free_tier_maximum() {
 }
 
 #[test]
-fn treats_basic_as_economy_and_max_plus_as_max() {
+fn treats_basic_as_pro_and_max_aliases_as_max() {
     let basic = resolve_auto_route(&request(
         "auto-premium",
         RoutingTaskType::Coding,
         "basic",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+    let pro = resolve_auto_route(&request(
+        "auto-premium",
+        RoutingTaskType::Coding,
+        "pro",
         TrustMode::ManagedCloud,
     ))
     .expect("generated registry should load");
@@ -129,14 +136,62 @@ fn treats_basic_as_economy_and_max_plus_as_max() {
     .expect("generated registry should load");
 
     let AutoRouteDecision::Selected(basic) = basic else {
-        panic!("expected Basic to select its economy route");
+        panic!("expected Basic to select its Pro-class route");
+    };
+    let AutoRouteDecision::Selected(pro) = pro else {
+        panic!("expected Pro to select its route");
     };
     let AutoRouteDecision::Selected(max_plus) = max_plus else {
         panic!("expected Max+ to select its Max route");
     };
-    assert_eq!(basic.effective_profile, Some(RoutingProfile::Economy));
+    assert_eq!(basic.model_key, pro.model_key);
+    assert_eq!(basic.effective_profile, Some(RoutingProfile::Balanced));
     assert_eq!(max_plus.effective_profile, Some(RoutingProfile::Premium));
     assert_eq!(max_plus.model_key, "claude-opus-4.8");
+}
+
+#[test]
+fn treats_max_15x_as_max_for_auto_routing() {
+    let max_15x = resolve_auto_route(&request(
+        "auto",
+        RoutingTaskType::Coding,
+        "max_15x",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+    let max = resolve_auto_route(&request(
+        "auto",
+        RoutingTaskType::Coding,
+        "max",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+
+    let AutoRouteDecision::Selected(max_15x) = max_15x else {
+        panic!("expected Max 15x to select its Max-class route");
+    };
+    let AutoRouteDecision::Selected(max) = max else {
+        panic!("expected Max to select its route");
+    };
+    assert_eq!(max_15x.model_key, max.model_key);
+    assert_eq!(max_15x.effective_profile, Some(RoutingProfile::Premium));
+}
+
+#[test]
+fn routes_free_reasoning_to_an_economy_reasoning_model() {
+    let decision = resolve_auto_route(&request(
+        "auto",
+        RoutingTaskType::Reasoning,
+        "free",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+
+    let AutoRouteDecision::Selected(selected) = decision else {
+        panic!("expected a free reasoning route");
+    };
+    assert_eq!(selected.model_key, "deepseek-v4-flash");
+    assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
 }
 
 #[test]

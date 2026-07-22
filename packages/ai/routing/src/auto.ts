@@ -339,6 +339,12 @@ function normalizeTier(
     case 'hobby':
       return 'pro';
     case 'max':
+    case 'max_15x':
+    case 'max-15x':
+    case 'max15x':
+    case 'max+':
+    case 'max_plus':
+    case 'max-plus':
       return 'max';
     case 'enterprise':
       return 'enterprise';
