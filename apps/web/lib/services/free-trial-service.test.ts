@@ -43,6 +43,7 @@ function mockAvailableWindow(
     costMicrousd?: number;
     reservedMicrousd?: number;
     expired?: boolean;
+    startedAt?: string | Date;
   } = {},
 ) {
   tx.query.mockImplementation(async (sql: string) => {
@@ -52,7 +53,7 @@ function mockAvailableWindow(
         {
           daily_cost_microusd: input.costMicrousd ?? 0,
           daily_reserved_microusd: input.reservedMicrousd ?? 0,
-          daily_started_at: WINDOW_STARTED_AT,
+          daily_started_at: input.startedAt ?? WINDOW_STARTED_AT,
           window_expired: input.expired ?? false,
         },
       ];
@@ -137,12 +138,32 @@ describe('free trial service', () => {
       ['user-1', FREE_TRIAL_INTERNAL_USAGE_POLICY.resetAfterHours],
     );
     expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(/daily_reserved_microusd = daily_reserved_microusd \+ \$2/i),
-      ['user-1', 3_750, WINDOW_STARTED_AT],
+      expect.stringMatching(
+        /with reserved_window as[\s\S]*daily_reserved_microusd = daily_reserved_microusd \+ \$2[\s\S]*insert into public\.free_daily_usage_reservations/i,
+      ),
+      ['user-1', 3_750, 'request-1'],
     );
+  });
+
+  it('keeps a precision-truncated rolling-window timestamp inside PostgreSQL when reserving', async () => {
+    mockAvailableWindow({ startedAt: new Date('2026-07-18T12:00:00.997Z') });
+    tx.execute.mockImplementation(async (sql: string) => {
+      // This models the production failure: PostgreSQL stored microseconds,
+      // while the driver returned a millisecond Date that no longer compared
+      // equal when sent back as a query parameter.
+      if (sql.includes('daily_started_at = $3::timestamptz')) return 0;
+      return 1;
+    });
+
+    await expect(
+      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-precision' }),
+    ).resolves.toMatchObject({ ok: true });
+
     expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.free_daily_usage_reservations'),
-      ['user-1', 'request-1', WINDOW_STARTED_AT, 3_750],
+      expect.stringMatching(
+        /with reserved_window as[\s\S]*returning daily_started_at[\s\S]*insert into public\.free_daily_usage_reservations[\s\S]*select[\s\S]*daily_started_at/i,
+      ),
+      ['user-1', FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd, 'request-precision'],
     );
   });
 
@@ -316,12 +337,7 @@ describe('free trial service', () => {
     );
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringContaining('insert into public.free_daily_usage_reservations'),
-      [
-        'user-1',
-        'request-new-window',
-        expect.any(String),
-        FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd,
-      ],
+      ['user-1', FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd, 'request-new-window'],
     );
   });
 
@@ -353,9 +369,9 @@ describe('free trial service', () => {
     );
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringMatching(
-        /daily_reserved_microusd = case[\s\S]*daily_started_at = \$2::timestamptz[\s\S]*daily_cost_microusd = case[\s\S]*daily_cost_microusd \+ \$4/i,
+        /daily_reserved_microusd = case[\s\S]*usage\.daily_started_at = reservation\.window_started_at[\s\S]*from public\.free_daily_usage_reservations as reservation/i,
       ),
-      ['user-1', WINDOW_STARTED_AT, 5_000, expect.any(Number), 100],
+      ['user-1', 'request-3', expect.any(Number), 100],
     );
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringMatching(
@@ -368,6 +384,36 @@ describe('free trial service', () => {
         'completed',
         expect.stringContaining('"requestId":"request-3"'),
       ],
+    );
+  });
+
+  it('keeps the rolling-window identity database-side during settlement', async () => {
+    tx.query.mockResolvedValueOnce([
+      {
+        window_started_at: new Date('2026-07-18T12:00:00.997Z'),
+        reserved_microusd: 5_000,
+        settled_at: null,
+      },
+    ]);
+
+    await settleFreeTrialRequest({
+      reservation: {
+        kind: 'free_trial',
+        userId: 'user-1',
+        requestId: 'request-settlement-precision',
+        reservedMicrousd: 5_000,
+      },
+      outcome: 'completed',
+      provider: 'anthropic',
+      model: 'claude-sonnet-5',
+      usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+    });
+
+    expect(tx.execute).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /usage\.daily_started_at = reservation\.window_started_at[\s\S]*from public\.free_daily_usage_reservations as reservation/i,
+      ),
+      ['user-1', 'request-settlement-precision', expect.any(Number), 15],
     );
   });
 
@@ -395,7 +441,7 @@ describe('free trial service', () => {
 
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringMatching(
-        /daily_cost_microusd = case\s+when daily_started_at = \$2::timestamptz then daily_cost_microusd \+ \$4\s+else daily_cost_microusd end/i,
+        /daily_cost_microusd = case[\s\S]*usage\.daily_started_at = reservation\.window_started_at[\s\S]*usage\.daily_cost_microusd \+ \$3/i,
       ),
       expect.any(Array),
     );
@@ -422,7 +468,7 @@ describe('free trial service', () => {
 
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringContaining('daily_reserved_microusd = case'),
-      ['user-1', WINDOW_STARTED_AT, 5_000, 0, 0],
+      ['user-1', 'request-4', 0, 0],
     );
     expect(tx.execute).toHaveBeenCalledWith(
       expect.stringContaining('update public.free_daily_usage_reservations'),
