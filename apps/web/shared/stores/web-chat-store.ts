@@ -276,25 +276,14 @@ export interface SelectedModel {
   tier: ModelTier;
 }
 
-// Auto mode options with tier-based routing
+// Single self-routing Auto. Profile/tier are chosen per message by the
+// resolver, not by the user picking economy/balanced/premium.
 export const AUTO_MODELS = {
-  'auto-economy': {
-    id: 'auto-economy',
-    name: 'Auto (Economy)',
-    description: 'Fastest, most cost-effective',
-    tier: 'economy' as ModelTier,
-  },
-  'auto-balanced': {
-    id: 'auto-balanced',
-    name: 'Auto (Balanced)',
-    description: 'Good balance of speed and quality',
+  auto: {
+    id: 'auto',
+    name: 'Auto',
+    description: 'Routes each message to the best model for the task and your plan',
     tier: 'balanced' as ModelTier,
-  },
-  'auto-premium': {
-    id: 'auto-premium',
-    name: 'Auto (Premium)',
-    description: 'Best quality, reasoning models',
-    tier: 'premium' as ModelTier,
   },
 } as const;
 
@@ -410,7 +399,7 @@ const initialState = {
   streamingConversationIds: [] as string[],
   isLoading: false,
   error: null,
-  selectedModel: 'auto-balanced',
+  selectedModel: 'auto',
   selectedModelTier: 'balanced' as ModelTier,
   draftContent: '',
   sidebarCollapsed: false,

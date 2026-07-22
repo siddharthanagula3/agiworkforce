@@ -185,23 +185,18 @@ export function normalizeSubscriptionTier(tier: string | null | undefined): stri
   return normalizeSubscriptionAccessTier(tier ?? 'free');
 }
 
-export function getAllowedAutoModesForTier(tier: string | null | undefined): string[] {
-  const normalizedTier = normalizeSubscriptionTier(tier);
-  if (normalizedTier === 'max' || normalizedTier === 'enterprise') {
-    return ['auto-economy', 'auto-balanced', 'auto-premium'];
-  }
-  if (normalizedTier === 'pro') {
-    return ['auto-economy', 'auto-balanced'];
-  }
-  return ['auto-economy'];
+export function getAllowedAutoModesForTier(_tier: string | null | undefined): string[] {
+  // One self-routing "Auto" for every tier. Tier no longer picks an Auto
+  // *profile* — the resolver derives the profile per task and clamps it to the
+  // plan's reachable slots, so every user sees a single "Auto" option.
+  return ['auto'];
 }
 
 export function getBestAutoModeForTier(tier: string | null | undefined): string {
   // Free users chat on the direct Gemini 3.1 Flash Lite model (not the managed
-  // auto-economy preset). Keeping the default + reset on the same id avoids a flip.
+  // Auto preset). Keeping the default + reset on the same id avoids a flip.
   if (normalizeSubscriptionTier(tier) === 'free') return FREE_TRIAL_MODEL;
-  const allowedAutoModes = getAllowedAutoModesForTier(tier);
-  return allowedAutoModes[allowedAutoModes.length - 1] ?? 'auto-economy';
+  return 'auto';
 }
 
 export function canAccessManualModelSelection(tier: string | null | undefined): boolean {

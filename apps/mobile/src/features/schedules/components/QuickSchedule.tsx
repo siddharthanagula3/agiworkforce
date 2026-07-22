@@ -235,7 +235,7 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
       const scheduleInput: CreateScheduleInput = {
         name: input.length > 40 ? input.slice(0, 40) + '...' : input,
         prompt: prompt.trim(),
-        model: 'auto-balanced',
+        model: 'auto',
         recurrence: parsed.recurrence,
         timeOfDay: parsed.timeOfDay,
         daysOfWeek: parsed.daysOfWeek,

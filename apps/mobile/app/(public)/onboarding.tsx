@@ -125,7 +125,7 @@ function pickModelForPickerSelection(
   modelId: string,
   fallbackTier: LocalRuntimeTier,
 ): RecommendedModel | null {
-  if (modelId === 'auto-balanced') return pickRecommendedModel(fallbackTier);
+  if (modelId === 'auto' || modelId === 'auto-balanced') return pickRecommendedModel(fallbackTier);
 
   const localModels = getShippableModels();
   if (modelId === 'auto-economy') {

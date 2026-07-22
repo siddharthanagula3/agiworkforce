@@ -307,6 +307,10 @@ struct AutoPolicy {
     default_alias: String,
     fallback_slot: String,
     profile_order: Vec<RoutingProfile>,
+    /// Complexity band per classified task for the self-routing `auto` alias.
+    /// Unlisted tasks fall back to the alias's static profile.
+    #[serde(default)]
+    auto_profile_by_task: HashMap<String, RoutingProfile>,
     tier_maximum_profiles: HashMap<String, RoutingProfile>,
     tier_allowed_slots: HashMap<String, Vec<String>>,
     provider_policies: ProviderPolicies,
@@ -330,8 +334,13 @@ struct ProviderExclusionPolicy {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AutoAlias {
     profile: RoutingProfile,
+    /// Single self-routing `auto`: derive the requested profile from the
+    /// classified task instead of using `profile`. Absent → false (static).
+    #[serde(default)]
+    compute_profile: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -810,7 +819,19 @@ pub fn resolve_auto_route(
         .get(tier)
         .copied()
         .unwrap_or(RoutingProfile::Economy);
-    let effective_profile = clamp_profile(alias.profile, maximum_profile, &policy.profile_order);
+    // Single self-routing `auto`: derive the requested band from the classified
+    // task ("hi" → economy, hard coding → premium); other aliases keep their
+    // static profile. The tier clamp below still narrows it to reachable slots.
+    let requested_profile = if alias.compute_profile {
+        policy
+            .auto_profile_by_task
+            .get(request.task_type.as_key())
+            .copied()
+            .unwrap_or(alias.profile)
+    } else {
+        alias.profile
+    };
+    let effective_profile = clamp_profile(requested_profile, maximum_profile, &policy.profile_order);
     let allowed_slots = policy
         .tier_allowed_slots
         .get(tier)
@@ -855,7 +876,7 @@ pub fn resolve_auto_route(
             return Ok(selected_decision(
                 request,
                 &requested_selection,
-                Some(alias.profile),
+                Some(requested_profile),
                 Some(effective_profile),
                 SelectedRoute {
                     model_key: current_model_key,
@@ -900,7 +921,7 @@ pub fn resolve_auto_route(
             return Ok(selected_decision(
                 request,
                 &requested_selection,
-                Some(alias.profile),
+                Some(requested_profile),
                 Some(effective_profile),
                 SelectedRoute {
                     model_key,
@@ -937,7 +958,7 @@ pub fn resolve_auto_route(
             return Ok(selected_decision(
                 request,
                 &requested_selection,
-                Some(alias.profile),
+                Some(requested_profile),
                 Some(effective_profile),
                 SelectedRoute {
                     model_key,
@@ -955,7 +976,7 @@ pub fn resolve_auto_route(
     Ok(AutoRouteDecision::Unavailable(UnavailableAutoRoute {
         code: UnavailableCode::NoEligibleRoute,
         requested_selection,
-        requested_profile: Some(alias.profile),
+        requested_profile: Some(requested_profile),
         effective_profile: Some(effective_profile),
         task_type: request.task_type,
         reasons,

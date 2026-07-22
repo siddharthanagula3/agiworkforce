@@ -152,15 +152,13 @@ describe('model catalog helpers', () => {
     expect(canAccessModelForSubscriptionTier('claude-opus-4.8', 'max_plus')).toBe(true);
   });
 
-  it('derives selectable Auto profiles and presentation from routing policy', () => {
+  it('derives the single selectable Auto from routing policy', () => {
     const profiles = getAutoRoutingProfiles();
 
-    expect(profiles.map((profile) => profile.id)).toEqual([
-      'auto-economy',
-      'auto-balanced',
-      'auto-premium',
-    ]);
-    expect(profiles.map((profile) => profile.profile)).toEqual(['economy', 'balanced', 'premium']);
+    // Collapsed to ONE self-routing "Auto"; the resolver picks the profile per
+    // task/tier at request time (economy/balanced/premium are non-selectable).
+    expect(profiles.map((profile) => profile.id)).toEqual(['auto']);
+    expect(profiles.map((profile) => profile.profile)).toEqual(['balanced']);
     expect(profiles.every((profile) => profile.label.trim().length > 0)).toBe(true);
     expect(profiles.every((profile) => profile.description.trim().length > 0)).toBe(true);
   });

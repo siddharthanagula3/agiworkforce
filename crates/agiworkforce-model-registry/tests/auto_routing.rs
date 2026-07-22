@@ -59,6 +59,42 @@ fn honors_economy_profile_when_tier_allows_premium() {
 }
 
 #[test]
+fn single_auto_computes_economy_for_a_trivial_chat_on_a_max_tier() {
+    let decision = resolve_auto_route(&request(
+        "auto",
+        RoutingTaskType::SimpleChat,
+        "max",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+
+    let AutoRouteDecision::Selected(selected) = decision else {
+        panic!("expected selected route");
+    };
+    assert_eq!(selected.model_key, "gemini-3.1-flash-lite");
+    assert_eq!(selected.requested_profile, Some(RoutingProfile::Economy));
+    assert_eq!(selected.effective_profile, Some(RoutingProfile::Economy));
+}
+
+#[test]
+fn single_auto_computes_premium_for_a_hard_coding_task_on_a_max_tier() {
+    let decision = resolve_auto_route(&request(
+        "auto",
+        RoutingTaskType::Coding,
+        "max",
+        TrustMode::ManagedCloud,
+    ))
+    .expect("generated registry should load");
+
+    let AutoRouteDecision::Selected(selected) = decision else {
+        panic!("expected selected route");
+    };
+    assert_eq!(selected.model_key, "claude-opus-4.8");
+    assert_eq!(selected.requested_profile, Some(RoutingProfile::Premium));
+    assert_eq!(selected.effective_profile, Some(RoutingProfile::Premium));
+}
+
+#[test]
 fn clamps_premium_to_free_tier_maximum() {
     let decision = resolve_auto_route(&request(
         "auto-premium",
