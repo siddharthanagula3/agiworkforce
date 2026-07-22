@@ -82,8 +82,8 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     return { ok: false, response: preflightResponse };
   }
 
-  const rateLimitResponse = await withRateLimit(request, 'llm-completion');
-  if (rateLimitResponse) return { ok: false, response: rateLimitResponse };
+  const ipRateLimitResponse = await withRateLimit(request, 'llm-completion-ip');
+  if (ipRateLimitResponse) return { ok: false, response: ipRateLimitResponse };
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return { ok: false, response: csrfError };
@@ -129,6 +129,9 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
       ),
     };
   }
+
+  const userRateLimitResponse = await withRateLimit(request, 'llm-completion', `user:${userId}`);
+  if (userRateLimitResponse) return { ok: false, response: userRateLimitResponse };
 
   const subscription = await SubscriptionService.getSubscription(userId);
 

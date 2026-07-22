@@ -27,12 +27,6 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
-// Bypass model-tier gating — fixtures use auto-mode IDs that resolve to internal
-// model IDs; tier gating is tested separately.
-vi.mock('@/lib/model-tiers', () => ({
-  canAccessModel: () => true,
-}));
-
 vi.mock('@/lib/logger', () => ({
   logger: {
     info: vi.fn(),
@@ -445,6 +439,21 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
     expect(mockGetSubscription).toHaveBeenCalledOnce();
   });
 
+  it('allows Basic Auto to use the balanced route selected by canonical admission', async () => {
+    mockGetSubscription.mockResolvedValue({
+      ...makeProSubscription(),
+      id: 'sub_basic_123',
+      plan_tier: 'basic',
+      stripe_price_id: 'price_basic',
+    });
+
+    const response = await POST(
+      makeRequest('Write a function to parse JSON safely and include unit tests.'),
+    );
+
+    expect(response.status, await response.clone().text()).toBe(200);
+  });
+
   // -------------------------------------------------------------------------
   // Test 6: 402 when credits are exhausted
   // -------------------------------------------------------------------------
@@ -598,6 +607,12 @@ describe('POST /api/llm/v1/chat/completions — canonical Pro-tier routing', () 
   // Google's mocked streams or the legacy LLMProviderFactory fallback.
   // -------------------------------------------------------------------------
   it('routes an explicit gpt model through the OpenAI adapter path', async () => {
+    mockGetSubscription.mockResolvedValue({
+      ...makeProSubscription(),
+      id: 'sub_max_123',
+      plan_tier: 'max',
+      stripe_price_id: 'price_max',
+    });
     const request = makeRequestForModel('gpt-5.6-sol', 'hello');
     const response = await POST(request);
 

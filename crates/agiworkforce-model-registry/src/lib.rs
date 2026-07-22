@@ -429,8 +429,8 @@ struct Eligibility<'a> {
 
 fn normalize_tier(tier: Option<&str>) -> &'static str {
     match tier.unwrap_or_default().to_ascii_lowercase().as_str() {
-        "pro" | "team" => "pro",
-        "max" | "max+" | "max_plus" | "max-plus" => "max",
+        "basic" | "hobby" | "pro" | "team" => "pro",
+        "max" | "max_15x" | "max-15x" | "max15x" | "max+" | "max_plus" | "max-plus" => "max",
         "enterprise" => "enterprise",
         "byok" => "byok",
         _ => "free",
@@ -831,7 +831,8 @@ pub fn resolve_auto_route(
     } else {
         alias.profile
     };
-    let effective_profile = clamp_profile(requested_profile, maximum_profile, &policy.profile_order);
+    let effective_profile =
+        clamp_profile(requested_profile, maximum_profile, &policy.profile_order);
     let allowed_slots = policy
         .tier_allowed_slots
         .get(tier)

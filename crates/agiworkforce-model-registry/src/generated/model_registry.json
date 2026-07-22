@@ -2263,7 +2263,7 @@
         "byok": "premium"
       },
       "tierAllowedSlots": {
-        "free": ["workhorse_general"],
+        "free": ["workhorse_general", "reasoning_economy"],
         "pro": [
           "workhorse_general",
           "general_balanced",

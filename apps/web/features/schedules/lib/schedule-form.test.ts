@@ -86,7 +86,7 @@ describe('schedule form contract', () => {
         name: 'Morning brief',
         description: 'A useful weekday summary',
         prompt: 'Summarize the three most important priorities for today.',
-        model: 'auto-balanced',
+        model: 'auto',
         recurrence: 'weekly',
         cronExpression: null,
         scheduledAt: null,
