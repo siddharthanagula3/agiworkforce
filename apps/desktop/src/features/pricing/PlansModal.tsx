@@ -126,8 +126,8 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
 
           {/* Footer note */}
           <p className="mt-6 text-center text-[11px] text-muted-foreground">
-            AGI Cloud is in public alpha on Web &amp; Mobile — no invite needed. Desktop cloud
-            support is coming soon; Local and BYOK work on desktop today. Upgrading opens the web
+            AGI Cloud is in public alpha — no invite needed, available on desktop, web, and mobile.
+            Local and BYOK also work on desktop and stay on your device. Upgrading opens the web
             pricing page in your browser.{' '}
             <button
               type="button"

@@ -17,7 +17,7 @@ import { useAuthStore } from '../../../../stores/auth';
 import { useSimpleModeStore } from '../../../../stores/ui';
 import { SUPPORTED_LANGUAGES } from '../../../../i18n';
 import { cn } from '@/lib/utils';
-import { DESKTOP_CLOUD_COMING_SOON } from '../../../../constants/cloudAvailability';
+import { DESKTOP_CLOUD_TAGLINE } from '../../../../constants/cloudAvailability';
 import type { Language, GlobalHotkeyPreferences } from '../../../../stores/settingsStore';
 
 const LazyResourceMonitor = lazy(() =>
@@ -55,7 +55,7 @@ function AppModeSection() {
     <div>
       <h3 className="text-lg font-semibold mb-1">Mode</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Run models locally or with your own provider keys (BYOK). {DESKTOP_CLOUD_COMING_SOON}
+        Run models locally or with your own provider keys (BYOK). {DESKTOP_CLOUD_TAGLINE}
       </p>
       <div className="flex gap-2 mb-4">
         <button
@@ -96,7 +96,7 @@ function AppModeSection() {
       {isCloud && sessionValidated && !isAuthenticated && (
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
-          <p className="text-sm text-blue-400 flex-1">{DESKTOP_CLOUD_COMING_SOON}</p>
+          <p className="text-sm text-blue-400 flex-1">{DESKTOP_CLOUD_TAGLINE}</p>
           <button
             type="button"
             onClick={() =>

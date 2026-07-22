@@ -36,8 +36,9 @@ const trustPoints = [
   },
   {
     icon: Sparkles,
-    label: 'Cloud on Web & Mobile',
-    description: 'AGI Cloud is in public alpha on Web & Mobile. Desktop support is coming soon.',
+    label: 'Cloud on every surface',
+    description:
+      'AGI Cloud is in public alpha — sign in to sync your chats across desktop, web, and mobile.',
   },
 ];
 
