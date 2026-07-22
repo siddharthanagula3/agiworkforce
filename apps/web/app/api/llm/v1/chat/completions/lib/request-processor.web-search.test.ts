@@ -224,6 +224,74 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('automatically enables web search for a current-information request when the client omits the toggle', async () => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: 'claude-haiku-4.5',
+          messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
+          stream: false,
+        },
+        'free-ws-auto-1',
+      ),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.resolvedTaskType).toBe('research');
+      expect(result.chatRequest.web_search).toBe(true);
+      expect(result.llmRequest.tools).toContainEqual({
+        type: 'web_search_20260209',
+        name: 'web_search',
+        allowed_callers: ['direct'],
+      });
+    }
+  });
+
+  it('preserves an explicit web-search opt-out on a current-information request', async () => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: 'claude-haiku-4.5',
+          messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
+          web_search: false,
+          stream: false,
+        },
+        'free-ws-auto-opt-out-1',
+      ),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.resolvedTaskType).toBe('research');
+      expect(result.chatRequest.web_search).toBe(false);
+      expect(result.llmRequest.tools).toBeUndefined();
+    }
+  });
+
+  it('does not attach search tools to an ordinary chat request', async () => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: 'claude-haiku-4.5',
+          messages: [{ role: 'user', content: 'Explain how a binary search works.' }],
+          stream: false,
+        },
+        'free-ws-auto-chat-1',
+      ),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.resolvedTaskType).not.toBe('research');
+      expect(result.chatRequest.web_search).toBeUndefined();
+      expect(result.llmRequest.tools).toBeUndefined();
+    }
+  });
+
   it('still rejects a genuine capability mismatch (code execution on a no-code model)', async () => {
     // Proves the fix is scoped to web search: Haiku has codeExecution:false,
     // so the free-trial capability gate still fails closed here.
