@@ -397,7 +397,7 @@ fn runtime_profiles_are_generated_once_for_cli_and_desktop_byok() {
 }
 
 #[test]
-fn unavailable_runtime_profile_fails_closed_before_model_selection() {
+fn desktop_managed_cloud_profile_routes_after_dcl4_cutover() {
     let mut routing_request = request(
         "auto-balanced",
         RoutingTaskType::General,
@@ -407,10 +407,11 @@ fn unavailable_runtime_profile_fails_closed_before_model_selection() {
     routing_request.runtime_profile_id = Some("desktop/cloud-chat");
 
     let decision = resolve_auto_route(&routing_request).expect("generated registry should load");
-    let AutoRouteDecision::Unavailable(unavailable) = decision else {
-        panic!("expected unavailable route");
+    let AutoRouteDecision::Selected(selected) = decision else {
+        panic!("expected selected route");
     };
-    assert_eq!(unavailable.code, UnavailableCode::RuntimeProfileUnavailable);
+    assert_eq!(selected.model_key, "gpt-5.6-terra");
+    assert_eq!(selected.harness_id, "openai/responses");
 }
 
 #[test]

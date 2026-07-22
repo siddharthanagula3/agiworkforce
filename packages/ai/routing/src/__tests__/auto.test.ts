@@ -481,7 +481,7 @@ describe('resolveAutoRoute', () => {
     });
   });
 
-  it('fails closed when a surface runtime profile is not implemented', () => {
+  it('admits Desktop managed Cloud after the DCL-4 runtime cutover', () => {
     const result = resolveAutoRoute({
       selection: 'auto-balanced',
       taskType: 'general',
@@ -491,8 +491,9 @@ describe('resolveAutoRoute', () => {
     });
 
     expect(result).toMatchObject({
-      status: 'unavailable',
-      code: 'runtime_profile_unavailable',
+      status: 'selected',
+      modelKey: 'gpt-5.6-terra',
+      harnessId: 'openai/responses',
     });
   });
 

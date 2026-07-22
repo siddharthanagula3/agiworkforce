@@ -130,10 +130,13 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.equal(registry.harnesses['ollama/chat'].adapter, '@agiworkforce/providers-ollama');
 
   assert.equal(registry.models.auto, undefined, 'Auto must be a policy, never a model');
-  assert.equal(registry.policies.auto.defaultAlias, 'auto-balanced');
+  assert.equal(registry.policies.auto.defaultAlias, 'auto');
   assert.equal(registry.policies.auto.aliases.auto.profile, 'balanced');
   assert.equal(registry.policies.auto.aliases['auto-economy'].profile, 'economy');
-  assert.deepEqual(registry.policies.auto.tierAllowedSlots.free, ['workhorse_general']);
+  assert.deepEqual(registry.policies.auto.tierAllowedSlots.free, [
+    'workhorse_general',
+    'reasoning_economy',
+  ]);
   assert.ok(registry.policies.auto.providerPolicies.usOnly.excludedProviders.includes('moonshot'));
   assert.deepEqual(registry.policies.auto.providerPolicies.usOnly.allowedTiers, [
     'max',
@@ -164,7 +167,16 @@ test('emits separated registry records and cross-language artifacts', () => {
     'CLI and Desktop BYOK chat must consume one generated developer-harness admission set',
   );
   assert.equal(registry.runtimeProfiles['cli/byok-chat'].status, 'implemented');
-  assert.equal(registry.runtimeProfiles['desktop/cloud-chat'].status, 'unwired');
+  assert.equal(registry.runtimeProfiles['desktop/cloud-chat'].status, 'implemented');
+  assert.equal(
+    registry.runtimeProfiles['desktop/cloud-chat'].features.webSearch.implementation,
+    'implemented',
+    'Desktop Cloud forwards managed search through the shared cloud endpoint',
+  );
+  assert.ok(
+    registry.runtimeProfiles['desktop/cloud-chat'].allowedHarnessIds.includes('openai/media'),
+    'Desktop Cloud consumes generated media/files from the shared cloud endpoint',
+  );
   assert.equal(registry.runtimeProfiles['mobile/local-chat'].trustMode, 'on_device');
   assert.equal(
     registry.runtimeProfiles['mobile/cloud-chat'].features.imageGeneration.implementation,
@@ -236,8 +248,8 @@ test('keeps Auto routing profiles out of the compatibility model identity map', 
     Object.entries(registry.policies.auto.aliases)
       .filter(([, profile]) => profile.selectable)
       .map(([profileId]) => profileId),
-    ['auto-economy', 'auto-balanced', 'auto-premium'],
-    'managed-cloud picker profiles come from routing policy independently of model metadata',
+    ['auto'],
+    'the managed-cloud picker exposes one self-routing Auto policy independently of model metadata',
   );
 });
 

@@ -26,6 +26,7 @@ const entry: GeneratedFileEntry = {
   byteCount: 2048,
   kind: 'pdf',
   checksumSha256: 'a'.repeat(64),
+  previewable: true,
 };
 
 const message = { generatedFiles: [entry], createdAt: '2026-07-10T00:00:00.000Z' };
@@ -96,6 +97,68 @@ describe('MessageGeneratedFiles', () => {
     expect(screen.getByTestId('message-generated-files')).toBeDefined();
     expect(screen.getByText('report.pdf')).toBeDefined();
     expect(screen.getByRole('button', { name: /download generated file/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /preview/i })).toBeDefined();
+  });
+
+  it('previews an authenticated PDF inline through the host bridge', async () => {
+    const fetchCloudFile = vi
+      .fn()
+      .mockResolvedValue(new Blob(['%PDF-1.7'], { type: 'application/pdf' }));
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: vi.fn(() => 'blob:preview'),
+      revokeObjectURL: vi.fn(),
+    });
+
+    renderWithBridge(bridgeWith(fetchCloudFile));
+    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+
+    await waitFor(() => expect(fetchCloudFile).toHaveBeenCalledWith(entry.uri));
+    expect((await screen.findByTitle('Preview report.pdf')).getAttribute('src')).toBe(
+      'blob:preview',
+    );
+  });
+
+  it('shows an honest unavailable state with Download for unsupported Office previews', () => {
+    const fetchCloudFile = vi.fn();
+    const docx: GeneratedFileEntry = {
+      ...entry,
+      id: 'gf-docx',
+      fileName: 'report.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      kind: 'docx',
+    };
+
+    renderWithBridge(bridgeWith(fetchCloudFile), {
+      ...message,
+      generatedFiles: [docx],
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+
+    expect(screen.getByText('Preview unavailable')).toBeDefined();
+    expect(screen.getByRole('button', { name: /download report\.docx/i })).toBeDefined();
+    expect(fetchCloudFile).not.toHaveBeenCalled();
+  });
+
+  it('does not offer Preview when the server marks a file non-previewable', () => {
+    renderWithBridge(null, {
+      ...message,
+      generatedFiles: [{ ...entry, previewable: false }],
+    });
+
+    expect(screen.queryByRole('button', { name: /^preview$/i })).toBeNull();
+  });
+
+  it('surfaces preview fetch failures with a Retry action', async () => {
+    const fetchCloudFile = vi.fn().mockRejectedValue(new Error('HTTP 401'));
+
+    renderWithBridge(bridgeWith(fetchCloudFile));
+    fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
+
+    expect(await screen.findByText(/preview couldn.t load/i)).toBeDefined();
+    expect(screen.getByText(/HTTP 401/)).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: /retry preview/i }));
+    await waitFor(() => expect(fetchCloudFile).toHaveBeenCalledTimes(2));
   });
 
   it('renders nothing when the message has no generated files', () => {

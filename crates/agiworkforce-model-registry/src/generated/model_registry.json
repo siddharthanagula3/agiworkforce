@@ -1080,8 +1080,14 @@
       "surface": "desktop",
       "executionMode": "cloud",
       "trustMode": "managed_cloud",
-      "status": "unwired",
-      "features": {},
+      "status": "implemented",
+      "features": {
+        "webSearch": { "implementation": "implemented" },
+        "toolDiscovery": { "implementation": "partial" },
+        "memory": { "implementation": "partial" },
+        "codeExecution": { "implementation": "partial" },
+        "imageGeneration": { "implementation": "implemented" }
+      },
       "allowedHarnessIds": [
         "openai/responses",
         "openai/chat-completions",
@@ -1095,7 +1101,11 @@
         "zhipu/chat-completions",
         "perplexity/chat-completions",
         "groq/chat-completions",
-        "minimax/chat-completions"
+        "minimax/chat-completions",
+        "managed-cloud/gateway",
+        "openai/media",
+        "google/media",
+        "runway/media"
       ]
     },
     "desktop/byok-chat": {

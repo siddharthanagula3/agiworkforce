@@ -30,14 +30,12 @@
  *     `./cloudToolApproval.ts` and `resolveToolApproval` below — the
  *     completed turn is persisted only once the resume finishes.
  *
- * CODE-WIRED, USER-GATED: `App.tsx` delegates to the single composition root
- * in `desktopChatRuntime.ts`, which selects this runtime only for a Tauri host
- * whose already-gated app mode is exactly `cloud`. PA-3 still prevents a
- * signed Desktop build from entering that mode, so users cannot reach this
- * runtime until the signed-build + live-Clerk DCL-4 proof succeeds and that
- * separate gate is deliberately lifted. Local and BYOK continue to select
- * `TauriRuntime`; unreadable mode state fails closed there as well. See
- * `docs/strategy/PUBLIC-ALPHA-CUTOVER.md` and
+ * LIVE PUBLIC ALPHA: `App.tsx` delegates to the single composition root in
+ * `desktopChatRuntime.ts`, which selects this runtime only for a signed-in
+ * Tauri host whose app mode is exactly `cloud`. Local and BYOK continue to
+ * select `TauriRuntime`; unreadable mode state fails closed there as well.
+ * DCL-4 removed the former coming-soon gate while preserving this explicit
+ * trust-boundary selection. See `docs/strategy/PUBLIC-ALPHA-CUTOVER.md` and
  * `DESKTOP-CLOUD-MODE-SPEC-VS-REALITY-01`.
  *
  * @module CloudRuntime
