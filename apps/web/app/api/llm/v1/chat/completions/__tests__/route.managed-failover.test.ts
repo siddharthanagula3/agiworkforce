@@ -343,12 +343,12 @@ describe('managed failover — non-streaming', () => {
     expect(managedUsageMocks.finalize.mock.calls[0]![0]).toMatchObject({ outcome: 'failed' });
   });
 
-  it('never-on-rate-limit: a 429 primary fails the request without rotation', async () => {
+  it('rotates Auto on a direct-provider 429 before any response bytes are sent', async () => {
     anthropicFailsWith('429', 'rate limit exceeded');
 
     const response = await POST(makeRequest('auto', false));
-    expect(response.status).toBeGreaterThanOrEqual(400);
-    expect(providerControl.openaiCalls).toBe(0);
+    expect(response.status).toBe(200);
+    expect(providerControl.openaiCalls).toBe(1);
   });
 
   it('explicit-never-rotates: an explicit selection with a 503 fails without rotation (the plan is structurally empty)', async () => {

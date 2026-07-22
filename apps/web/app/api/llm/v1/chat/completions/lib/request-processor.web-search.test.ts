@@ -245,6 +245,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
         type: 'web_search_20260209',
         name: 'web_search',
         allowed_callers: ['direct'],
+        max_uses: 3,
       });
     }
   });
@@ -348,7 +349,23 @@ describe('appendWebSearchTool', () => {
   it('injects the current Anthropic web_search server tool with direct callers', () => {
     const tools = appendWebSearchTool('anthropic', undefined, caps);
     expect(tools).toEqual([
-      { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'] },
+      {
+        type: 'web_search_20260209',
+        name: 'web_search',
+        allowed_callers: ['direct'],
+        max_uses: 3,
+      },
+    ]);
+  });
+
+  it('allows a larger Anthropic search budget only for Deep Research', () => {
+    expect(appendWebSearchTool('anthropic', undefined, caps, { researchMode: true })).toEqual([
+      {
+        type: 'web_search_20260209',
+        name: 'web_search',
+        allowed_callers: ['direct'],
+        max_uses: 20,
+      },
     ]);
   });
 

@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { useChatStream, saveMessageToDb } from './useChatStream';
 
@@ -100,6 +101,7 @@ function mockSseStream(events: unknown[]) {
 describe('useChatStream', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
+    useThinkingStore.getState().setEnabled(false);
     useFreeTrialStore.getState().clearLimitReached();
     useChatStore.setState({
       activeConversationId: TEMP_CONVERSATION.id,
@@ -1464,5 +1466,27 @@ describe('useChatStream', () => {
     const body = JSON.parse(String(llmCall?.[1]?.body)) as Record<string, unknown>;
     expect(body['work_mode']).toBe('agiwork');
     expect(body['agent_mode']).toBeUndefined();
+  });
+
+  it('does not send stale thinking options to a model that cannot reason', async () => {
+    useThinkingStore.getState().setEffort('high');
+    mockSseStream([{ choices: [{ delta: { content: 'searched' }, finish_reason: 'stop' }] }]);
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('latest news', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: 'sonar',
+        thinkingEnabled: true,
+        thinkingEffort: 'high',
+      });
+    });
+
+    const llmCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+    const body = JSON.parse(String(llmCall?.[1]?.body)) as Record<string, unknown>;
+    expect(body['thinking_mode']).toBeUndefined();
+    expect(body['effort']).toBeUndefined();
   });
 });

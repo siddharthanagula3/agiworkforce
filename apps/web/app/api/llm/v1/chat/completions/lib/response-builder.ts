@@ -269,6 +269,7 @@ export function buildUpstreamErrorResponse(
 
   let statusCode = 500;
   let errorType = 'server_error';
+  let publicMessage = errorMessage;
 
   if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
     statusCode = 401;
@@ -276,6 +277,8 @@ export function buildUpstreamErrorResponse(
   } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
     statusCode = 429;
     errorType = 'rate_limit_error';
+    const providerLabel = provider === 'google' ? 'Google' : provider;
+    publicMessage = `${providerLabel} is temporarily at capacity. Try again shortly, or choose Auto to use another available model.`;
   } else if (errorMessage.includes('insufficient credits') || errorMessage.includes('402')) {
     statusCode = 402;
     errorType = 'insufficient_credits';
@@ -285,7 +288,7 @@ export function buildUpstreamErrorResponse(
   }
 
   return NextResponse.json(
-    { error: { message: errorMessage, type: errorType } },
+    { error: { message: publicMessage, type: errorType } },
     { status: statusCode },
   );
 }

@@ -326,10 +326,10 @@
         "modelKey": "gemini-3.1-pro-preview"
       },
       "search_fast": {
-        "modelKey": "sonar"
+        "modelKey": "gemini-3.1-flash-lite"
       },
       "search_premium": {
-        "modelKey": "sonar-deep-research"
+        "modelKey": "gemini-3.6-flash"
       },
       "browser_dom": {
         "modelKey": "claude-sonnet-5"

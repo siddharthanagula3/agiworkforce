@@ -12,13 +12,16 @@ import { useBillingStore } from '@shared/stores/web-auth-store';
 
 type UsageResponse = ManagedUsageSummaryResponse;
 
-function formatReset(value: string | null): string {
-  if (!value) return 'No reset scheduled';
-  return `Resets ${new Date(value).toLocaleDateString('en-US', {
+function formatReset(value: string | null, kind: 'rolling' | 'period'): string {
+  if (!value) return kind === 'rolling' ? 'No usage in this window' : 'No reset scheduled';
+  const formatted = new Date(value).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
-  })}`;
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return kind === 'rolling' ? `Next capacity refreshes ${formatted}` : `Resets ${formatted}`;
 }
 
 function UsageBar({
@@ -88,6 +91,8 @@ export function UsageSection() {
   const rawTier = usage?.plan_tier ?? billingTier ?? 'free';
   const planName = getBillingPlanPricing(rawTier).label;
   const usedPercent = normalizeUsagePercentage(usage?.usage_percentage);
+  const sessionUsedPercent = normalizeUsagePercentage(usage?.session_usage_percentage);
+  const weeklyUsedPercent = normalizeUsagePercentage(usage?.weekly_usage_percentage);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -162,10 +167,22 @@ export function UsageSection() {
 
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
           <UsageBar
-            label="Current period"
+            label="Rolling 5 hours"
+            percent={sessionUsedPercent}
+            value={`${sessionUsedPercent}% used`}
+            detail={`${100 - sessionUsedPercent}% remaining · ${formatReset(usage?.session_reset_at ?? null, 'rolling')}`}
+          />
+          <UsageBar
+            label="Rolling 7 days"
+            percent={weeklyUsedPercent}
+            value={`${weeklyUsedPercent}% used`}
+            detail={`${100 - weeklyUsedPercent}% remaining · ${formatReset(usage?.weekly_reset_at ?? null, 'rolling')}`}
+          />
+          <UsageBar
+            label="Account month"
             percent={usedPercent}
             value={`${usedPercent}% used`}
-            detail={`${100 - usedPercent}% remaining · ${formatReset(usage?.usage_reset_at ?? null)}`}
+            detail={`${100 - usedPercent}% remaining · ${formatReset(usage?.usage_reset_at ?? null, 'period')}`}
           />
         </div>
 

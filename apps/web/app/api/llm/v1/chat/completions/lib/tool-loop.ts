@@ -78,6 +78,7 @@ import {
   isWebSearchTool,
   executeWebSearch,
   formatWebSearchResultForModel,
+  WEB_SEARCH_FREE_MAX_RESULTS,
   webSearchResultsToFetchedSources,
 } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
@@ -1037,7 +1038,7 @@ async function runMcpTool(
   e2bExecutor: () => Promise<E2BExecutor | null>,
   availableTools: ReadonlySet<string>,
   connectorExecutor?: ConnectorToolExecutor,
-  officeContext?: { userId?: string; model: string },
+  executionContext?: { userId?: string; model: string; webSearchMaxResults?: number },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
     if (!availableTools.has(SKILL_TOOL_NAME)) {
@@ -1051,7 +1052,7 @@ async function runMcpTool(
     if (!availableTools.has(MANAGED_OFFICE_FILE_TOOL_NAME)) {
       return { content: `Unknown tool: ${MANAGED_OFFICE_FILE_TOOL_NAME}`, isError: true };
     }
-    if (!officeContext?.userId) {
+    if (!executionContext?.userId) {
       return { content: 'An authenticated file owner is required.', isError: true };
     }
     const generated = await generateManagedOfficeFile(toolCall.args);
@@ -1059,13 +1060,13 @@ async function runMcpTool(
       return { content: generated.message, isError: true };
     }
     const persisted = await persistGeneratedFileBytes({
-      userId: officeContext.userId,
+      userId: executionContext.userId,
       data: generated.data,
       mimeType: generated.mimeType,
       filename: generated.filename,
       provider: 'agi-managed-office',
       origin: 'managed-office-tool',
-      model: officeContext.model,
+      model: executionContext.model,
       extraMetadata: { format: toolCall.args['format'] },
     });
     if (!persisted.ok) {
@@ -1113,7 +1114,9 @@ async function runMcpTool(
   // url_fetch or E2B call does). Successful searches return `sources` (plural —
   // a search returns many results per call, unlike url_fetch's one page).
   if (isWebSearchTool(toolCall.qualifiedName)) {
-    const outcome = await executeWebSearch(toolCall.args);
+    const outcome = await executeWebSearch(toolCall.args, {
+      maxResults: executionContext?.webSearchMaxResults,
+    });
     return {
       content: formatWebSearchResultForModel(outcome),
       isError: !outcome.ok,
@@ -1553,6 +1556,7 @@ export async function* runToolLoop(
         runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
           userId: options.userId,
           model: responseModel,
+          webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
         });
       const run = options.toolExecutor
         ? options.toolExecutor({

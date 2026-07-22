@@ -113,7 +113,12 @@ describe('toCanonicalChatRequest', () => {
             parameters: { type: 'object' },
           },
         },
-        { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'] },
+        {
+          type: 'web_search_20260209',
+          name: 'web_search',
+          allowed_callers: ['direct'],
+          max_uses: 3,
+        },
       ],
     });
 
@@ -122,7 +127,12 @@ describe('toCanonicalChatRequest', () => {
     expect(chatRequest.tools).toHaveLength(1);
     expect(chatRequest.tools?.[0]?.name).toBe('lookup');
     expect(chatRequest.rawVendorTools).toEqual([
-      { type: 'web_search_20260209', name: 'web_search', allowed_callers: ['direct'] },
+      {
+        type: 'web_search_20260209',
+        name: 'web_search',
+        allowed_callers: ['direct'],
+        max_uses: 3,
+      },
     ]);
   });
 
