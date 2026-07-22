@@ -27,6 +27,7 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import {
+  Menu,
   Share2,
   Bell,
   X as XIcon,
@@ -330,6 +331,9 @@ export default function WebChatPage() {
     return () => mql.removeEventListener('change', update);
   }, []);
   const effectiveSidebarCollapsed = sidebarCollapsed || isNarrowViewport;
+  // Compact viewports render the sidebar as an off-canvas drawer instead of an
+  // in-flow rail; this tracks whether that drawer is open.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Hydrate server-persisted connector per-tool permission verdicts once when
   // signed in, so a "block/allow this tool" choice follows the user across
@@ -2206,39 +2210,65 @@ export default function WebChatPage() {
         shortcuts={sidebarShortcuts}
       />
 
-      {/* Sidebar — @agiworkforce/ui shared component */}
-      <Sidebar
-        sessions={sidebarSessions}
-        projects={sidebarProjects}
-        activeSessionId={displayedConversationId ?? undefined}
-        collapsed={effectiveSidebarCollapsed}
-        isMobile={isNarrowViewport}
-        isLoading={isLoading && conversations.length === 0}
-        error={conversations.length === 0 ? chatError : null}
-        mode="cloud"
-        headerSlot={<SidebarWordmark />}
-        onNewChat={handleNewChat}
-        onToggleCollapse={handleToggleSidebar}
-        onOpenSearch={handleOpenSearch}
-        navItems={sidebarNavItems}
-        footerSlot={sidebarFooterSlot}
-        onSelect={handleSelectSession}
-        onDelete={(id) => void handleDeleteSession(id)}
-        onRename={handleRenameSession}
-        onTogglePin={handlePinSession}
-        onStar={handleStarSession}
-        onArchive={handleArchiveSession}
-        onShare={handleShareSession}
-        onMoveToProject={handleMoveToProjectSession}
-        onProjectOpen={handleProjectOpen}
-        onProjectNewChat={handleProjectNewChat}
-        onProjectRename={handleProjectRename}
-        onProjectSettings={handleProjectSettings}
-        onProjectPin={handleProjectPin}
-        onProjectDelete={handleProjectDelete}
-        onProjectCreate={handleProjectCreate}
-        className="bg-[var(--chat-sidebar-bg)] border-[var(--chat-border-strong)]"
-      />
+      {/* Sidebar — @agiworkforce/ui shared component. Compact viewports render
+          it as an off-canvas drawer (fixed overlay + backdrop) instead of an
+          in-flow rail so the conversation column gets the full width. */}
+      {isNarrowViewport && mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <div
+        className={
+          isNarrowViewport
+            ? cn(
+                'chat-mobile-drawer fixed inset-y-0 left-0 z-50 flex w-[280px] max-w-[85vw] shadow-xl transition-transform duration-200 ease-out',
+                mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
+              )
+            : 'contents'
+        }
+      >
+        <Sidebar
+          sessions={sidebarSessions}
+          projects={sidebarProjects}
+          activeSessionId={displayedConversationId ?? undefined}
+          collapsed={isNarrowViewport ? false : effectiveSidebarCollapsed}
+          isMobile={isNarrowViewport}
+          isLoading={isLoading && conversations.length === 0}
+          error={conversations.length === 0 ? chatError : null}
+          mode="cloud"
+          headerSlot={<SidebarWordmark />}
+          onNewChat={() => {
+            setMobileNavOpen(false);
+            handleNewChat();
+          }}
+          onToggleCollapse={handleToggleSidebar}
+          onOpenSearch={handleOpenSearch}
+          navItems={sidebarNavItems}
+          footerSlot={sidebarFooterSlot}
+          onSelect={(id) => {
+            setMobileNavOpen(false);
+            handleSelectSession(id);
+          }}
+          onDelete={(id) => void handleDeleteSession(id)}
+          onRename={handleRenameSession}
+          onTogglePin={handlePinSession}
+          onStar={handleStarSession}
+          onArchive={handleArchiveSession}
+          onShare={handleShareSession}
+          onMoveToProject={handleMoveToProjectSession}
+          onProjectOpen={handleProjectOpen}
+          onProjectNewChat={handleProjectNewChat}
+          onProjectRename={handleProjectRename}
+          onProjectSettings={handleProjectSettings}
+          onProjectPin={handleProjectPin}
+          onProjectDelete={handleProjectDelete}
+          onProjectCreate={handleProjectCreate}
+          className="bg-[var(--chat-sidebar-bg)] border-[var(--chat-border-strong)]"
+        />
+      </div>
 
       {/* Main area + artifact workbench */}
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -2252,6 +2282,17 @@ export default function WebChatPage() {
             )}
           >
             <div className="flex items-center gap-1">
+              {isNarrowViewport && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMobileNavOpen(true)}
+                  aria-label="Open navigation"
+                  className="-ml-1 h-8 w-8 p-0"
+                >
+                  <Menu className="h-5 w-5" aria-hidden="true" />
+                </Button>
+              )}
               {hasMessages && (
                 <Button
                   variant="ghost"
