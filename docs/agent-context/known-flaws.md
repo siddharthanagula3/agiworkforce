@@ -316,17 +316,12 @@ writing): desktop AGI trust_mode threaded end-to-end (IPC wire enum → Goal →
 planner/executors/swarm → router), router fail-closed to Local, redaction
 hardening, plus a fix wave. Findings from the fix wave tracked here:
 
-- FIXED DESKTOP-CLOUD-GATE-SILENT-REFLIP (HIGH, this slice, uncommitted): commit
-  551e4ab22 (2026-07-18 registry generator refactor) silently flipped the runtime
-  profile for desktop/cloud-chat in packages/ai/model-registry/catalog/harnesses.json
-  from "unwired" to "implemented" AND inverted the 3 guarding assertions
-  (registry-contract.test.mjs + model-catalog.test.ts) — so the desktop router was
-  free to offer ManagedCloud while the product still refuses desktop cloud mode
-  (DCL-1..4 unfinished; the "coming soon" gate is a founder decision, see the
-  2026-07-19 cross-surface audit entry below). Reverted to unwired, the 3 generated
-  registry JSONs regenerated, and the assertions restored to pin unwired. The
-  legitimate re-flip to "implemented" belongs to DCL-4 (desktop cloud launch), not
-  to any generator refactor — if a regen flips it again, treat it as this bug.
+- RESOLVED DESKTOP-CLOUD-GATE-SILENT-REFLIP (HIGH): the premature 2026-07-18
+  registry flip was correctly reverted while DCL-4 was unfinished. DCL-4 later
+  opened explicit signed-in Desktop Cloud mode and selected the shared
+  `CloudRuntime`; on 2026-07-22 the canonical `desktop/cloud-chat` profile was
+  deliberately marked `implemented`, with managed text/media harnesses and
+  contract tests. Local and BYOK remain separate trust boundaries.
 - FIXED DESKTOP-MEMORY-INJECTION-EMPTY (this slice, uncommitted): format_memories
   (memory_integration.rs) matched PascalCase category keys ("Preference", "Fact",
   …) but commit 53d596b22 lowercased MemoryCategory::as_str, so EVERY category

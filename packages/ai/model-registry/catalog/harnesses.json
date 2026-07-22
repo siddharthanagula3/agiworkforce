@@ -281,8 +281,25 @@
       "surface": "desktop",
       "executionMode": "cloud",
       "trustMode": "managed_cloud",
-      "status": "unwired",
-      "allowedHarnessGroups": ["managed-text"]
+      "status": "implemented",
+      "allowedHarnessGroups": ["managed-text", "managed-media"],
+      "features": {
+        "webSearch": {
+          "implementation": "implemented"
+        },
+        "toolDiscovery": {
+          "implementation": "partial"
+        },
+        "memory": {
+          "implementation": "partial"
+        },
+        "codeExecution": {
+          "implementation": "partial"
+        },
+        "imageGeneration": {
+          "implementation": "implemented"
+        }
+      }
     },
     "desktop/byok-chat": {
       "family": "consumer",

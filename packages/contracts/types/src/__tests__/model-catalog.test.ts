@@ -125,8 +125,13 @@ describe('model catalog helpers', () => {
     expect(new Set(models.map((model) => model.provider)).size).toBeGreaterThan(3);
   });
 
-  it('returns no selectable rows for an unavailable runtime profile', () => {
-    expect(getPickerModelsForRuntimeProfile('desktop/cloud-chat')).toEqual([]);
+  it('derives Desktop Cloud picker rows after the DCL-4 runtime cutover', () => {
+    const models = getPickerModelsForRuntimeProfile('desktop/cloud-chat');
+    expect(models.length).toBeGreaterThan(0);
+    expect(models.map((model) => model.id)).toContain('gpt-5.6-luna');
+  });
+
+  it('returns no selectable rows for an unknown runtime profile', () => {
     expect(getPickerModelsForRuntimeProfile('not-a-runtime-profile')).toEqual([]);
   });
 
@@ -148,7 +153,9 @@ describe('model catalog helpers', () => {
       expect.arrayContaining(['deepseek-v4-flash', 'qwen-3.7-plus', 'qwen-3.5-flash', 'glm-5.2']),
     );
     expect(maxPlusModels).toEqual(maxModels);
-    expect(getModelsForTierAndSurface('basic', 'desktop/cloud-chat')).toEqual([]);
+    expect(
+      getModelsForTierAndSurface('basic', 'desktop/cloud-chat').map((model) => model.id),
+    ).toEqual(expect.arrayContaining(['gpt-5.6-luna', 'claude-haiku-4.5']));
     expect(getModelsForTierAndSurface('basic', 'not-a-runtime-profile')).toEqual([]);
   });
 
