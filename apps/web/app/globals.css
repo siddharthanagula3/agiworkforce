@@ -1135,6 +1135,18 @@
     }
   }
 
+  /* The compact chat drawer (WebChatPage) owns off-canvas positioning via its
+     own translate-x wrapper. Opt its shared Sidebar panel out of the broad
+     legacy [class*='sidebar'] rule above — that selector also matches the
+     bg-[var(--chat-sidebar-bg)] utility on the panel and would pin it at
+     left:-100%. */
+  @media (max-width: 767px) {
+    .chat-mobile-drawer > [class*='sidebar'] {
+      position: relative;
+      left: 0;
+    }
+  }
+
   /* Composer responsive layout */
   @media (max-width: 640px) {
     [class*='composer'] {
