@@ -381,7 +381,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_qwen_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Qwen response"},"finish_reason":null}],"model":"qwen-max"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"Qwen response"},"finish_reason":null}],"model":"qwen-3.7-plus"}"#;
 
         let chunk = parse_sse_event(event, Provider::Qwen).unwrap();
 

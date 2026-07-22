@@ -1,19 +1,11 @@
 /**
- * @agiworkforce/providers-mistral
+ * @agiworkforce/providers-minimax
  *
- * Mistral AI provider adapter implementing `ProviderAdapter` from
- * `@agiworkforce/types`. Mistral ships an OpenAI-compatible Chat Completions
- * endpoint at `https://api.mistral.ai/v1`. The compat layer registers this as
- * `endpointClass: 'mistral-public'` / `knownProviderFamily: 'mistral'` (see
- * provider-attribution.ts + openai-completions-compat.ts), which:
- *   - keeps `max_tokens` as the field name (not `max_completion_tokens`)
- *   - does not send `store` (Mistral's API doesn't support server-side storage)
- *   - does not send `reasoning_effort` (no OpenAI-style reasoning-effort knob)
- *
- * All three fall out of `detectOpenAICompletionsCompat({ provider: 'mistral' })`
- * automatically — no adapter-local overrides needed. No other response-shape
- * quirks found in `apps/web/lib/llm-providers/mistral.ts` (source of truth for
- * this port): messages, tools, and usage all use the plain OpenAI shape.
+ * MiniMax provider adapter implementing `ProviderAdapter` from
+ * `@agiworkforce/types`. MiniMax ships an OpenAI-compatible Chat Completions
+ * endpoint at `https://api.minimax.io/v1` (see `./base-url.ts`), so this is a
+ * thin config wrapper around the shared `@agiworkforce/providers-openai`
+ * translate/stream layer — the same pattern as deepseek/xai/moonshot.
  *
  * @packageDocumentation
  */
@@ -41,28 +33,27 @@ import {
   type OpenAIChatCompletionChunk,
 } from '@agiworkforce/providers-openai';
 
-import { MISTRAL_MODEL_CATALOG } from './catalog';
-
-const MISTRAL_DEFAULT_BASE_URL = 'https://api.mistral.ai/v1';
+import { MINIMAX_MODEL_CATALOG } from './catalog';
+import { MINIMAX_DEFAULT_BASE_URL } from './base-url';
 
 /** Hosts a `baseUrl` override is allowed to resolve to (SSRF allowlist). */
-const MISTRAL_ALLOWED_BASE_HOSTS: readonly string[] = ['api.mistral.ai', 'localhost', '127.0.0.1'];
+const MINIMAX_ALLOWED_BASE_HOSTS: readonly string[] = ['api.minimax.io', 'localhost', '127.0.0.1'];
 
-const MISTRAL_AUTH_METHODS: readonly AuthMethod[] = [
+const MINIMAX_AUTH_METHODS: readonly AuthMethod[] = [
   {
     kind: 'api-key',
-    envVar: 'MISTRAL_API_KEY',
+    envVar: 'MINIMAX_API_KEY',
     required: true,
-    label: 'Mistral API Key',
+    label: 'MiniMax API Key',
   },
 ];
 
-export interface MistralAdapterConfig extends ProviderAdapterConfig {
+export interface MinimaxAdapterConfig extends ProviderAdapterConfig {
   /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
   /**
    * Extra hostnames a `baseUrl` override may resolve to, beyond
-   * `api.mistral.ai` / `localhost` / `127.0.0.1`. A `baseUrl` whose host
+   * `api.minimax.io` / `localhost` / `127.0.0.1`. A `baseUrl` whose host
    * isn't allowlisted falls back to the default base URL rather than being
    * trusted unconditionally (SSRF guard implemented by
    * `@agiworkforce/provider-runtime`).
@@ -70,9 +61,9 @@ export interface MistralAdapterConfig extends ProviderAdapterConfig {
   additionalAllowedBaseUrlHosts?: readonly string[];
 }
 
-export function createMistralAdapter(config: MistralAdapterConfig = {}): ProviderAdapter {
-  const { url: baseUrl } = resolveValidatedBaseUrl(config.baseUrl, MISTRAL_DEFAULT_BASE_URL, {
-    allowedHosts: [...MISTRAL_ALLOWED_BASE_HOSTS, ...(config.additionalAllowedBaseUrlHosts ?? [])],
+export function createMinimaxAdapter(config: MinimaxAdapterConfig = {}): ProviderAdapter {
+  const { url: baseUrl } = resolveValidatedBaseUrl(config.baseUrl, MINIMAX_DEFAULT_BASE_URL, {
+    allowedHosts: [...MINIMAX_ALLOWED_BASE_HOSTS, ...(config.additionalAllowedBaseUrlHosts ?? [])],
   });
 
   const sdk = new OpenAI({
@@ -82,14 +73,14 @@ export function createMistralAdapter(config: MistralAdapterConfig = {}): Provide
   });
 
   return {
-    id: 'mistral',
-    label: 'Mistral AI',
-    auth: MISTRAL_AUTH_METHODS,
+    id: 'minimax',
+    label: 'MiniMax',
+    auth: MINIMAX_AUTH_METHODS,
     config,
 
     async catalog(ctx?: ProviderCatalogContext): Promise<ModelInfo[]> {
       if (config.skipDiscovery) {
-        return [...MISTRAL_MODEL_CATALOG];
+        return [...MINIMAX_MODEL_CATALOG];
       }
       try {
         const list = await sdk.models.list({ ...(ctx?.signal ? { signal: ctx.signal } : {}) });
@@ -97,30 +88,30 @@ export function createMistralAdapter(config: MistralAdapterConfig = {}): Provide
         for (const entry of list.data ?? []) {
           if (typeof entry.id === 'string') ids.add(entry.id);
         }
-        const out: ModelInfo[] = MISTRAL_MODEL_CATALOG.filter(
+        const out: ModelInfo[] = MINIMAX_MODEL_CATALOG.filter(
           (m) => ids.size === 0 || ids.has(m.id),
         ).map((m) => ({ ...m }));
         for (const id of ids) {
           if (!out.some((m) => m.id === id)) {
-            out.push({ id, provider: 'mistral' });
+            out.push({ id, provider: 'minimax' });
           }
         }
         return out;
       } catch {
-        return [...MISTRAL_MODEL_CATALOG];
+        return [...MINIMAX_MODEL_CATALOG];
       }
     },
 
     async *stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk> {
       const detected = detectOpenAICompletionsCompat({
-        provider: 'mistral',
+        provider: 'minimax',
         baseUrl,
         id: req.model,
       });
 
       const params = translateChatRequest(req, {
         compat: detected.defaults,
-        provider: 'mistral',
+        provider: 'minimax',
       });
 
       try {
@@ -151,7 +142,8 @@ export function createMistralAdapter(config: MistralAdapterConfig = {}): Provide
   };
 }
 
-export const mistralAdapterFactory: ProviderAdapterFactory = (config) =>
-  createMistralAdapter(config as MistralAdapterConfig);
+export const minimaxAdapterFactory: ProviderAdapterFactory = (config) =>
+  createMinimaxAdapter(config as MinimaxAdapterConfig);
 
-export { MISTRAL_MODEL_CATALOG } from './catalog';
+export { MINIMAX_MODEL_CATALOG } from './catalog';
+export { MINIMAX_DEFAULT_BASE_URL } from './base-url';

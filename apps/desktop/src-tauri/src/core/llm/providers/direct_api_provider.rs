@@ -2,7 +2,7 @@
 //!
 //! Sends requests directly to provider APIs using the user's own API key,
 //! bypassing the ManagedCloud proxy. Supports 22+ providers including OpenAI,
-//! Anthropic, Google, DeepSeek, xAI, Mistral, Perplexity, Groq, Together,
+//! Anthropic, Google, DeepSeek, xAI, Minimax, Perplexity, Together,
 //! Fireworks, Cerebras, DeepInfra, Cohere, AI21, Sambanova, and Azure.
 
 use super::http_client_factory::{create_http_client, HttpClientConfig};
@@ -391,12 +391,11 @@ fn default_base_url(provider: Provider) -> Option<&'static str> {
         Provider::Google => Some("https://generativelanguage.googleapis.com/v1beta"),
         Provider::DeepSeek => Some("https://api.deepseek.com/v1"),
         Provider::XAI => Some("https://api.x.ai/v1"),
-        Provider::Mistral => Some("https://api.mistral.ai/v1"),
         Provider::Perplexity => Some("https://api.perplexity.ai"),
         Provider::Qwen => Some("https://dashscope.aliyuncs.com/compatible-mode/v1"),
         Provider::Moonshot => Some("https://api.moonshot.cn/v1"),
+        Provider::Minimax => Some("https://api.minimax.io/v1"),
         Provider::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4"),
-        Provider::Groq => Some("https://api.groq.com/openai/v1"),
         Provider::Together => Some("https://api.together.xyz/v1"),
         Provider::Fireworks => Some("https://api.fireworks.ai/inference/v1"),
         Provider::Cerebras => Some("https://api.cerebras.ai/v1"),
@@ -579,14 +578,13 @@ impl LLMProvider for DirectApiProvider {
             Provider::Google => "DirectGoogle",
             Provider::DeepSeek => "DirectDeepSeek",
             Provider::XAI => "DirectXAI",
-            Provider::Mistral => "DirectMistral",
             Provider::Perplexity => "DirectPerplexity",
             Provider::Qwen => "DirectQwen",
             Provider::Moonshot => "DirectMoonshot",
+            Provider::Minimax => "DirectMinimax",
             Provider::Zhipu => "DirectZhipu",
             Provider::Ollama => "DirectOllama",
             Provider::ManagedCloud => "DirectManagedCloud",
-            Provider::Groq => "DirectGroq",
             Provider::Together => "DirectTogether",
             Provider::Fireworks => "DirectFireworks",
             Provider::Cerebras => "DirectCerebras",
@@ -612,8 +610,6 @@ impl LLMProvider for DirectApiProvider {
                 | Provider::Anthropic
                 | Provider::Google
                 | Provider::XAI
-                | Provider::Mistral
-                | Provider::Groq
                 | Provider::Together
                 | Provider::Fireworks
                 | Provider::DeepInfra
@@ -638,9 +634,8 @@ mod tests {
             Provider::Google,
             Provider::DeepSeek,
             Provider::XAI,
-            Provider::Mistral,
+            Provider::Minimax,
             Provider::Perplexity,
-            Provider::Groq,
             Provider::Together,
             Provider::Fireworks,
             Provider::Cerebras,

@@ -43,7 +43,7 @@ pub enum OllamaMode {
 /// `Google` (Gemini), and `Ollama` (newline-delimited JSON, local or cloud).
 ///
 /// Everything else — OpenAI itself, xAI, DeepSeek, Perplexity, Qwen, Moonshot,
-/// Zhipu, LM Studio, Mistral, plus any user-defined `[providers.*]` block — flows
+/// Zhipu, LM Studio, MiniMax, plus any user-defined `[providers.*]` block — flows
 /// through the `OpenAICompatible` variant. The variant carries the canonical
 /// base URL and the env var name for the API key (or `None` for unauthenticated
 /// local endpoints like LM Studio).
@@ -161,12 +161,12 @@ pub fn lmstudio_provider() -> Provider {
     }
 }
 
-/// Mistral AI — OpenAI-compatible endpoint.
-pub fn mistral_provider() -> Provider {
+/// MiniMax — OpenAI-compatible endpoint.
+pub fn minimax_provider() -> Provider {
     Provider::OpenAICompatible {
-        name: "mistral",
-        base_url: "https://api.mistral.ai/v1/chat/completions",
-        api_key_env: Some("MISTRAL_API_KEY"),
+        name: "minimax",
+        base_url: "https://api.minimax.io/v1/chat/completions",
+        api_key_env: Some("MINIMAX_API_KEY"),
     }
 }
 

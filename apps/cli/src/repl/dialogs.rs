@@ -9,7 +9,7 @@ pub(super) fn handle_setup(config: &mut CliConfig) {
         "anthropic",
         "openai",
         "google",
-        "mistral",
+        "minimax",
         "xai",
         "deepseek",
         "perplexity",

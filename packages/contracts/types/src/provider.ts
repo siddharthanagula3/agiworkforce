@@ -30,8 +30,6 @@
  *     Perplexity,
  *     Zhipu,
  *     ManagedCloud,
- *     Mistral,
- *     Groq,
  *     NvidiaNim,
  *     OpenRouter,
  *     Bedrock,
@@ -78,8 +76,6 @@ export type Provider =
   | 'perplexity'
   | 'zhipu'
   | 'managed_cloud'
-  | 'mistral'
-  | 'groq'
   | 'nvidia_nim'
   | 'open_router'
   | 'bedrock'

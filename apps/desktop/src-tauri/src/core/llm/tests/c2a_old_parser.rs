@@ -239,11 +239,10 @@ pub(crate) fn parse_sse_event(
         crate::core::llm::Provider::DeepSeek => parse_openai_sse(event),
         crate::core::llm::Provider::Qwen => parse_openai_sse(event),
         crate::core::llm::Provider::Moonshot => parse_openai_sse(event),
+        crate::core::llm::Provider::Minimax => parse_openai_sse(event), // MiniMax uses OpenAI-compatible format
         crate::core::llm::Provider::Zhipu => parse_openai_sse(event), // ZhipuAI uses OpenAI-compatible format
-        crate::core::llm::Provider::Mistral => parse_openai_sse(event), // Mistral uses OpenAI-compatible format
         crate::core::llm::Provider::ManagedCloud => parse_openai_sse(event), // ManagedCloud uses OpenAI-compatible format
         // New OpenAI-compatible providers
-        crate::core::llm::Provider::Groq => parse_openai_sse(event),
         crate::core::llm::Provider::Together => parse_openai_sse(event),
         crate::core::llm::Provider::Fireworks => parse_openai_sse(event),
         crate::core::llm::Provider::Cerebras => parse_openai_sse(event),

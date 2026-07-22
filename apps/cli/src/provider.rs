@@ -476,13 +476,13 @@ mod tests {
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(ids.contains(&"gpt-5.6-sol"));
         assert!(ids.contains(&"gpt-5.6-luna"));
-        assert!(ids.contains(&"gemini-3.5-flash"));
+        assert!(ids.contains(&"gemini-3.6-flash"));
         assert!(ids.contains(&"gemini-3.1-pro-preview"));
         assert!(ids.contains(&"gemini-3.1-flash-lite"));
         // xAI flagship is sourced from models.json.
         assert!(ids.contains(&"grok-4.5"));
-        assert!(ids.contains(&"mistral-large-2512"));
-        assert!(ids.contains(&"mistral-medium-3-5"));
+        assert!(ids.contains(&"MiniMax-M3"));
+        assert!(ids.contains(&"kimi-k3"));
         assert!(ids.contains(&"deepseek-v4-flash"));
         assert!(ids.contains(&"deepseek-v4-pro"));
         assert!(ids.contains(&"glm-5.2"));
@@ -706,12 +706,12 @@ mod tests {
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(find_model("gpt-5.6-sol").is_some());
         assert!(find_model("gpt-5.6-luna").is_some());
-        assert!(find_model("gemini-3.5-flash").is_some());
+        assert!(find_model("gemini-3.6-flash").is_some());
         assert!(find_model("gemini-3.1-pro-preview").is_some());
         assert!(find_model("gemini-3.1-flash-lite").is_some());
         // xAI flagship is sourced from models.json.
         assert!(find_model("grok-4.5").is_some());
-        assert!(find_model("mistral-large-2512").is_some());
+        assert!(find_model("minimax-m3").is_some());
         assert!(find_model("glm-5.2").is_some());
     }
 
@@ -770,10 +770,10 @@ mod tests {
     }
 
     #[test]
-    fn test_provider_for_model_catalog_mistral() {
-        let model = first_model_id_for("mistral");
-        assert_eq!(provider_for_model(&model), Some("mistral"));
-        assert_eq!(provider_for_model("mistral-future"), None);
+    fn test_provider_for_model_catalog_minimax() {
+        let model = first_model_id_for("minimax");
+        assert_eq!(provider_for_model(&model), Some("minimax"));
+        assert_eq!(provider_for_model("minimax-future"), None);
     }
 
     #[test]
@@ -917,7 +917,7 @@ mod tests {
         assert!(!is_deprecated("gpt-5.6-sol"));
         assert!(!is_deprecated("gemini-3.1-pro-preview"));
         assert!(!is_deprecated("grok-4.5"));
-        assert!(!is_deprecated("mistral-large-2512"));
+        assert!(!is_deprecated("minimax-m3"));
     }
 
     #[test]
@@ -1005,12 +1005,12 @@ mod tests {
         // OpenAI flagship + fast (luna) entries are both sourced from models.json.
         assert!(list.contains("gpt-5.6-sol"));
         assert!(list.contains("gpt-5.6-luna"));
-        assert!(list.contains("gemini-3.5-flash"));
+        assert!(list.contains("gemini-3.6-flash"));
         assert!(list.contains("gemini-3.1-pro-preview"));
         assert!(list.contains("gemini-3.1-flash-lite"));
         // xAI flagship is sourced from models.json.
         assert!(list.contains("grok-4.5"));
-        assert!(list.contains("mistral-large-2512"));
+        assert!(list.contains("MiniMax-M3"));
         assert!(list.contains("glm-5.2"));
     }
 

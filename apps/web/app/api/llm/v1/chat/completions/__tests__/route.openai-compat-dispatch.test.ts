@@ -76,8 +76,7 @@ function compatAdapterMock(providerId: string, content: string) {
   };
 }
 
-vi.mock('@agiworkforce/providers-groq', () => compatAdapterMock('Groq', 'Groq says hi.'));
-vi.mock('@agiworkforce/providers-mistral', () => compatAdapterMock('Mistral', 'Mistral says hi.'));
+vi.mock('@agiworkforce/providers-minimax', () => compatAdapterMock('Minimax', 'MiniMax says hi.'));
 vi.mock('@agiworkforce/providers-moonshot', () =>
   compatAdapterMock('Moonshot', 'Moonshot says hi.'),
 );
@@ -297,9 +296,9 @@ function makeSubscription() {
 }
 
 const COMPAT_CASES: Array<{ provider: string; model: string; content: string }> = [
-  { provider: 'mistral', model: 'mistral-large-3', content: 'Mistral says hi.' },
+  { provider: 'minimax', model: 'minimax-m3', content: 'MiniMax says hi.' },
   { provider: 'zhipu', model: 'glm-5.2', content: 'Zhipu says hi.' },
-  { provider: 'qwen', model: 'qwen-max', content: 'Qwen says hi.' },
+  { provider: 'qwen', model: 'qwen-3.7-plus', content: 'Qwen says hi.' },
   { provider: 'deepseek', model: 'deepseek-v4-flash', content: 'DeepSeek says hi.' },
   { provider: 'xai', model: 'grok-4.5', content: 'XAI says hi.' },
   { provider: 'perplexity', model: 'sonar', content: 'Perplexity says hi.' },
@@ -371,11 +370,9 @@ describe('Managed Web conversation ownership', () => {
     mockGetSubscription.mockResolvedValue(makeSubscription());
     const query = vi.fn().mockResolvedValue([]);
     rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'attacker-user' });
-    mockGetProviderFromModel.mockReturnValue('mistral');
+    mockGetProviderFromModel.mockReturnValue('minimax');
 
-    const response = await POST(
-      makeRequest('mistral-large-3', '0190a000-0000-7000-8000-0000000000cc'),
-    );
+    const response = await POST(makeRequest('minimax-m3', '0190a000-0000-7000-8000-0000000000cc'));
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({
@@ -411,7 +408,7 @@ describe('Managed Web durable AGI Work dispatch', () => {
       leaseToken: 'lease-test',
       estimatedCostCents: input.estimatedCostCents,
     }));
-    mockGetProviderFromModel.mockReturnValue('mistral');
+    mockGetProviderFromModel.mockReturnValue('minimax');
     workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
     workflowRouteMocks.loadConnectorTools.mockResolvedValue([]);
     workflowRouteMocks.createRun.mockResolvedValue({
@@ -421,8 +418,8 @@ describe('Managed Web durable AGI Work dispatch', () => {
       state: 'queued',
       originSurface: 'web',
       workMode: 'agiwork',
-      provider: 'mistral',
-      model: 'mistral-large-3',
+      provider: 'minimax',
+      model: 'minimax-m3',
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
@@ -436,7 +433,7 @@ describe('Managed Web durable AGI Work dispatch', () => {
       }),
     });
 
-    const response = await POST(makeAgiWorkRequest('mistral-large-3'));
+    const response = await POST(makeAgiWorkRequest('minimax-m3'));
 
     expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('workflow');
@@ -481,7 +478,7 @@ describe('Managed Web conversation run concurrency guard', () => {
       leaseToken: 'lease-test',
       estimatedCostCents: input.estimatedCostCents,
     }));
-    mockGetProviderFromModel.mockReturnValue('mistral');
+    mockGetProviderFromModel.mockReturnValue('minimax');
     workflowRouteMocks.loadMcpTools.mockResolvedValue([]);
     workflowRouteMocks.loadConnectorTools.mockResolvedValue([]);
     workflowRouteMocks.findActive.mockResolvedValue({
@@ -491,13 +488,13 @@ describe('Managed Web conversation run concurrency guard', () => {
       state: 'running',
       originSurface: 'web',
       workMode: 'agiwork',
-      provider: 'mistral',
-      model: 'mistral-large-3',
+      provider: 'minimax',
+      model: 'minimax-m3',
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
 
-    const response = await POST(makeAgiWorkRequest('mistral-large-3', conversationId));
+    const response = await POST(makeAgiWorkRequest('minimax-m3', conversationId));
 
     expect(response.status, await response.clone().text()).toBe(409);
     await expect(response.json()).resolves.toMatchObject({

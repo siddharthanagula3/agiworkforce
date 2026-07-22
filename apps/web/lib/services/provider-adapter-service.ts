@@ -32,8 +32,7 @@ const SERVER_PROVIDER_CONFIG: Readonly<
   anthropic: { envPrefix: 'ANTHROPIC', adapterId: 'anthropic' },
   google: { envPrefix: 'GOOGLE', adapterId: 'google' },
   openai: { envPrefix: 'OPENAI', adapterId: 'openai' },
-  groq: { envPrefix: 'GROQ', adapterId: 'groq' },
-  mistral: { envPrefix: 'MISTRAL', adapterId: 'mistral' },
+  minimax: { envPrefix: 'MINIMAX', adapterId: 'minimax' },
   moonshot: { envPrefix: 'MOONSHOT', adapterId: 'moonshot' },
   zhipu: { envPrefix: 'ZHIPU', adapterId: 'zhipu' },
   qwen: { envPrefix: 'QWEN', adapterId: 'qwen' },
@@ -93,15 +92,7 @@ export function resolveProviderFromModel(model: string): string {
   if (modelLower.includes('deepseek')) return 'deepseek';
   if (modelLower.includes('sonar')) return 'perplexity';
   if (modelLower.includes('glm-')) return 'zhipu';
-  if (
-    modelLower.includes('mistral') ||
-    modelLower.includes('codestral') ||
-    modelLower.includes('pixtral')
-  ) {
-    return 'mistral';
-  }
-  // Bare llama model IDs (no slash prefix) route to groq by convention.
-  if (modelLower.startsWith('llama-')) return 'groq';
+  if (modelLower.includes('minimax')) return 'minimax';
 
   // Default to OpenAI.
   return 'openai';

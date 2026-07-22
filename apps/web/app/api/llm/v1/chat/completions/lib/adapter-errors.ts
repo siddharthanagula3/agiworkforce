@@ -121,15 +121,13 @@ export function toOpenAIUpstreamError(chunk: Extract<StreamChunk, { type: 'error
 }
 
 /**
- * Factory for the 9 openai-compat providers' upstream error mappers (task
- * #34's compat batch). Each legacy provider file (apps/web/lib/llm-providers/
- * {groq,mistral,moonshot,zhipu,qwen,openrouter,deepseek,xai,perplexity}.ts)
- * has the IDENTICAL status-code switch and message shape as `toOpenAIUpstreamError`
- * above, differing only in the provider label string (`'Groq authentication
- * error (401)...'`, `'Mistral authentication error (401)...'`, etc.) --
- * confirmed by reading each legacy file's error-handling block, not assumed
- * from the pattern alone. A factory instead of 9 hand-copied switch
- * statements; `ADAPTER_PROVIDERS` still references 9 distinct NAMED exports
+ * Factory for the 8 openai-compat providers' upstream error mappers (task
+ * #34's compat batch). Each provider's mapper has the IDENTICAL status-code
+ * switch and message shape as `toOpenAIUpstreamError` above, differing only in
+ * the provider label string (`'MiniMax authentication error (401)...'`,
+ * `'Moonshot authentication error (401)...'`, etc.). A factory instead of 8
+ * hand-copied switch statements; `ADAPTER_PROVIDERS` still references 8
+ * distinct NAMED exports
  * below (not the factory directly) so each provider's `mapError` reads as an
  * explicit, greppable function reference, matching `toUpstreamError`/
  * `toGoogleUpstreamError`/`toOpenAIUpstreamError`'s existing convention.
@@ -154,19 +152,14 @@ function makeUpstreamErrorMapper(
   };
 }
 
-// Labels match each legacy provider file's own self-label exactly (verified,
-// not assumed uniform): apps/web/lib/llm-providers/zhipu.ts calls itself
-// "ZhipuAI", xai.ts calls itself "XAI" -- both differ from the provider id.
-// The wording AROUND the label (legacy's actual phrasing is NOT this
-// factory's "{label} authentication error (401): ..." shape for 7 of these
-// 9 -- most use "{label} API authentication failed. Please check your API
-// key." with no parenthetical status code) is a disclosed, functionally-safe
-// divergence, same bucket as toGoogleUpstreamError's: buildUpstreamError
-// Response derives status from substrings ('401'/'authentication'/'429'/
-// 'rate limit'/etc.), which this factory's shape satisfies regardless of
-// exact wording, and nothing parses error.message structurally beyond that.
-export const toGroqUpstreamError = makeUpstreamErrorMapper('Groq');
-export const toMistralUpstreamError = makeUpstreamErrorMapper('Mistral');
+// Labels use each provider's canonical self-label (not assumed uniform with
+// the provider id): Zhipu labels itself "ZhipuAI", xai "XAI". The label wording
+// is a disclosed, functionally-safe divergence, same bucket as
+// toGoogleUpstreamError's: buildUpstreamErrorResponse derives status from
+// substrings ('401'/'authentication'/'429'/'rate limit'/etc.), which this
+// factory's shape satisfies regardless of exact wording, and nothing parses
+// error.message structurally beyond that.
+export const toMinimaxUpstreamError = makeUpstreamErrorMapper('MiniMax');
 export const toMoonshotUpstreamError = makeUpstreamErrorMapper('Moonshot');
 export const toZhipuUpstreamError = makeUpstreamErrorMapper('ZhipuAI');
 export const toQwenUpstreamError = makeUpstreamErrorMapper('Qwen');

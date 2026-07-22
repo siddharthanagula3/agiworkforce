@@ -5,7 +5,7 @@ use crate::config::CliConfig;
 use crate::errors::CliError;
 
 use super::{
-    deepseek_provider, lmstudio_provider, mistral_provider, moonshot_provider, nvidia_provider,
+    deepseek_provider, lmstudio_provider, minimax_provider, moonshot_provider, nvidia_provider,
     openai_provider, openrouter_provider, perplexity_provider, qwen_provider, xai_provider,
     zhipu_provider, OllamaMode, Provider,
 };
@@ -40,9 +40,9 @@ pub fn provider_from_name(name: &str) -> Option<Provider> {
         "perplexity" => Some(perplexity_provider()),
         "qwen" | "dashscope" => Some(qwen_provider()),
         "moonshot" | "kimi" => Some(moonshot_provider()),
+        "minimax" | "minimax-ai" | "minimaxai" => Some(minimax_provider()),
         "zhipu" | "glm" => Some(zhipu_provider()),
         "lmstudio" | "lm-studio" | "lm_studio" => Some(lmstudio_provider()),
-        "mistral" | "mistral-ai" | "mistralai" => Some(mistral_provider()),
         "openrouter" | "open-router" | "open_router" => Some(openrouter_provider()),
         "nvidia" | "nvidia-nim" | "nvidia_nim" | "nim" => Some(nvidia_provider()),
         _ => lookup_custom_provider(&lower),
@@ -389,8 +389,8 @@ pub(crate) fn auth_store_keys(provider_name: &str) -> Vec<&'static str> {
         "perplexity" => vec!["perplexity"],
         "qwen" | "dashscope" => vec!["qwen", "dashscope"],
         "moonshot" | "kimi" => vec!["moonshot", "kimi"],
+        "minimax" | "minimax-ai" | "minimaxai" => vec!["minimax", "minimax-ai", "minimaxai"],
         "zhipu" | "glm" => vec!["zhipu", "glm"],
-        "mistral" | "mistral-ai" | "mistralai" => vec!["mistral", "mistral-ai", "mistralai"],
         _ => Vec::new(),
     }
 }
@@ -428,7 +428,7 @@ static CUSTOM_PROVIDERS: once_cell::sync::Lazy<std::sync::RwLock<HashMap<String,
 ///
 /// Skips entries whose name collides with a pre-registered provider (Anthropic,
 /// OpenAI, Google, Ollama, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu,
-/// LM Studio, Mistral) so users cannot accidentally hijack a native handler.
+/// LM Studio, MiniMax) so users cannot accidentally hijack a native handler.
 ///
 /// Each entry needs a `base_url`; `api_key_env` is optional (omit for keyless
 /// local endpoints). Base URLs without `/chat/completions` get the path
@@ -460,9 +460,9 @@ pub fn register_custom_providers(config: &CliConfig) {
         "lmstudio",
         "lm-studio",
         "lm_studio",
-        "mistral",
-        "mistral-ai",
-        "mistralai",
+        "minimax",
+        "minimax-ai",
+        "minimaxai",
         "openrouter",
         "open-router",
         "open_router",
@@ -711,8 +711,8 @@ mod tests {
             Provider::Ollama(OllamaMode::Local)
         );
         assert_eq!(
-            provider_name(&detect_provider(&sample_model_for("mistral"))),
-            "mistral"
+            provider_name(&detect_provider(&sample_model_for("minimax"))),
+            "minimax"
         );
         assert_eq!(
             provider_name(&detect_provider(&sample_model_for("xai"))),
@@ -882,25 +882,25 @@ mod tests {
     }
 
     #[test]
-    fn mistral_provider_resolved_from_name() {
+    fn minimax_provider_resolved_from_name() {
         assert_eq!(
-            provider_name(&provider_from_name("mistral").unwrap()),
-            "mistral"
+            provider_name(&provider_from_name("minimax").unwrap()),
+            "minimax"
         );
         assert_eq!(
-            provider_name(&provider_from_name("mistral-ai").unwrap()),
-            "mistral"
+            provider_name(&provider_from_name("minimax-ai").unwrap()),
+            "minimax"
         );
         assert_eq!(
-            provider_name(&provider_from_name("mistralai").unwrap()),
-            "mistral"
+            provider_name(&provider_from_name("minimaxai").unwrap()),
+            "minimax"
         );
-        // Verify MISTRAL_API_KEY is wired
-        let p = provider_from_name("mistral").unwrap();
+        // Verify MINIMAX_API_KEY is wired
+        let p = provider_from_name("minimax").unwrap();
         let Provider::OpenAICompatible { api_key_env, .. } = &p else {
             panic!("Expected OpenAICompatible");
         };
-        assert_eq!(*api_key_env, Some("MISTRAL_API_KEY"));
+        assert_eq!(*api_key_env, Some("MINIMAX_API_KEY"));
     }
 
     #[test]

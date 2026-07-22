@@ -81,7 +81,7 @@ describe('createQwenAdapter fallbackEndpoints (DashScope → MuleRouter fail-ove
   async function drain(adapter: ReturnType<typeof createQwenAdapter>) {
     const chunks: Array<{ type: string; reason?: string }> = [];
     for await (const chunk of adapter.stream(
-      { model: 'qwen-max', messages: [{ role: 'user', content: 'hi' }] } as never,
+      { model: 'qwen-3.7-plus', messages: [{ role: 'user', content: 'hi' }] } as never,
       new AbortController().signal,
     )) {
       chunks.push(chunk as { type: string; reason?: string });

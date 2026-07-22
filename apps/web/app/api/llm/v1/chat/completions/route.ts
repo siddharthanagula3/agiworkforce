@@ -65,8 +65,8 @@ export const maxDuration = 300;
  * emitting x_tool_approval_request events.
  *
  * Provider dispatch, for the standard (non-agentic) paths below (restructure
- * Wave 2, task #34): Anthropic, Google, OpenAI, and the 9 openai-compat
- * providers (groq, mistral, moonshot, zhipu, qwen, openrouter, deepseek,
+ * Wave 2, task #34): Anthropic, Google, OpenAI, and the 8 openai-compat
+ * providers (minimax, moonshot, zhipu, qwen, openrouter, deepseek,
  * xai, perplexity) go through `packages/ai/providers/*` adapters
  * (`ADAPTER_PROVIDERS`, ./lib/adapter-providers.ts) -- that is every provider
  * `processed.provider` (request-processor.ts's catalog lookup + heuristic

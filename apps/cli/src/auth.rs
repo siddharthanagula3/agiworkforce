@@ -961,9 +961,9 @@ const API_KEY_PROVIDERS: &[ApiKeyProvider] = &[
         env_var: "DEEPSEEK_API_KEY",
     },
     ApiKeyProvider {
-        id: "mistral",
-        label: "Mistral",
-        env_var: "MISTRAL_API_KEY",
+        id: "minimax",
+        label: "MiniMax",
+        env_var: "MINIMAX_API_KEY",
     },
     ApiKeyProvider {
         id: "perplexity",
@@ -1009,7 +1009,7 @@ fn normalize_api_key_provider_id(provider: &str) -> Option<&'static str> {
         "google" => Some("google"),
         "xai" | "grok" => Some("xai"),
         "deepseek" => Some("deepseek"),
-        "mistral" | "mistral-ai" | "mistralai" => Some("mistral"),
+        "minimax" | "minimax-ai" | "minimaxai" => Some("minimax"),
         "perplexity" => Some("perplexity"),
         "qwen" | "dashscope" => Some("qwen"),
         "moonshot" | "kimi" => Some("moonshot"),
@@ -1086,7 +1086,7 @@ pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()
                 interactive_api_key_login_for_provider(pid).await
             } else {
                 bail!(
-                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, mistral, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot, chatgpt",
+                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot, chatgpt",
                     pid
                 )
             }

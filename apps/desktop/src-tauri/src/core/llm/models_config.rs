@@ -265,8 +265,8 @@ pub fn get_token_multiplier(provider: &Provider) -> f64 {
 
 /// Resolve the wire API model ID for a given catalog model ID.
 ///
-/// If the catalog entry has an `apiModelId` field set (e.g. `"mistral-medium-3-5"` for
-/// the internal key `"mistral-medium-3.5"`), that wire string is returned so it can be sent
+/// If the catalog entry has an `apiModelId` field set (e.g. `"MiniMax-M3"` for
+/// the internal key `"minimax-m3"`), that wire string is returned so it can be sent
 /// directly in the HTTP request body.  Falls back to the input unchanged when no entry or
 /// no `apiModelId` is found.
 pub fn get_api_model_id(model_id: &str) -> String {
@@ -451,10 +451,9 @@ mod tests {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Minimax,
             Provider::Zhipu,
             Provider::ManagedCloud,
-            Provider::Mistral,
-            Provider::Groq,
             Provider::Together,
             Provider::Fireworks,
             Provider::Cerebras,
@@ -486,10 +485,9 @@ mod tests {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Minimax,
             Provider::Zhipu,
             Provider::ManagedCloud,
-            Provider::Mistral,
-            Provider::Groq,
             Provider::Together,
             Provider::Fireworks,
             Provider::Cerebras,
