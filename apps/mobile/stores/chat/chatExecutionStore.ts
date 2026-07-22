@@ -2673,7 +2673,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const backoffMs = nextAttempt > 1 ? 1000 * Math.pow(2, nextAttempt - 2) : 0;
     const userContent = userMsg.content;
-    const userModel = userMsg.model ?? assistantMsg?.model ?? 'auto-balanced';
+    const userModel = userMsg.model ?? assistantMsg?.model ?? 'auto';
 
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
@@ -2750,7 +2750,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const targetMsg = msgs[msgIndex];
     if (!targetMsg || targetMsg.role !== 'user') return;
 
-    const userModel = targetMsg.model ?? 'auto-balanced';
+    const userModel = targetMsg.model ?? 'auto';
 
     set({ isEditing: true });
 

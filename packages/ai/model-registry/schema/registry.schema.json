@@ -328,6 +328,10 @@
         "kind": { "const": "routing_policy" },
         "defaultAlias": { "$ref": "#/definitions/nonEmptyString" },
         "fallbackSlot": { "$ref": "#/definitions/nonEmptyString" },
+        "autoProfileByTask": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/routingProfile" }
+        },
         "profileOrder": {
           "type": "array",
           "minItems": 3,
@@ -386,7 +390,8 @@
               "profile": { "$ref": "#/definitions/routingProfile" },
               "label": { "$ref": "#/definitions/nonEmptyString" },
               "description": { "$ref": "#/definitions/nonEmptyString" },
-              "selectable": { "type": "boolean" }
+              "selectable": { "type": "boolean" },
+              "computeProfile": { "type": "boolean" }
             }
           }
         },

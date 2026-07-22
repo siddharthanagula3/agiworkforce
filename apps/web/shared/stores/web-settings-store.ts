@@ -71,7 +71,7 @@ export const useSettingsStore = create<SettingsState>()(
       chatFont: 'default',
       showTokenCount: false,
       streamingEnabled: true,
-      defaultModel: 'auto-balanced',
+      defaultModel: 'auto',
       defaultModelTier: 'balanced',
       responseStyle: 'balanced',
       advancedMode: false,

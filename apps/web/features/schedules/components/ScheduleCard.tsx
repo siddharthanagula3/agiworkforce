@@ -146,7 +146,7 @@ export function ScheduleCard({
               <div className="min-w-0">
                 <dt className="font-medium text-foreground/70">Model</dt>
                 <dd className="break-words font-mono" translate="no">
-                  {schedule.model ?? 'auto-balanced'}
+                  {schedule.model ?? 'auto'}
                 </dd>
               </div>
             </dl>

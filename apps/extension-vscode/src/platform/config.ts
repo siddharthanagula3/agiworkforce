@@ -34,7 +34,7 @@ const DEFAULTS = {
   inlineCompletionsDebounceMs: 300,
   inlineCompletionsMaxLength: 500,
   mcpEnabled: false,
-  model: 'auto-economy',
+  model: 'auto',
   streamingEnabled: true,
   contextLines: 50,
   telemetryEnabled: false,
