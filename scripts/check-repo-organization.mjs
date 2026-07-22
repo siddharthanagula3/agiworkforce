@@ -78,6 +78,9 @@ const knownRootDebt = new Set([
   'PUBLIC_PAGES_AUDIT.md',
   'REFERENCE_ANALYSIS.md',
   'SKILL_SESSION.md',
+  // Agent<>founder handoff ledger (keys / docs / decisions the founder still owes).
+  // Transient — relocate under docs/ once the production push settles.
+  'founder_work.md',
   'libnull.rlib',
 ]);
 
