@@ -502,10 +502,10 @@ mod llm_test_cases {
     }
 
     #[test]
-    fn test_mistral_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Mistral answer"}}]}"#;
-        let chunk = parse_sse_event(event, Provider::Mistral).expect("parse failed");
-        assert_eq!(chunk.content, "Mistral answer");
+    fn test_minimax_uses_openai_format() {
+        let event = r#"data: {"choices":[{"delta":{"content":"MiniMax answer"}}]}"#;
+        let chunk = parse_sse_event(event, Provider::Minimax).expect("parse failed");
+        assert_eq!(chunk.content, "MiniMax answer");
     }
 
     #[test]

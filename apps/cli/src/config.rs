@@ -172,9 +172,9 @@ impl Default for CliConfig {
             },
         );
         providers.insert(
-            "mistral".to_string(),
+            "minimax".to_string(),
             ProviderConfig {
-                api_key_env: Some("MISTRAL_API_KEY".to_string()),
+                api_key_env: Some("MINIMAX_API_KEY".to_string()),
                 base_url: None,
             },
         );
@@ -945,7 +945,7 @@ mod tests {
         assert!(config.providers.contains_key("openai"));
         assert!(config.providers.contains_key("google"));
         assert!(config.providers.contains_key("ollama"));
-        assert!(config.providers.contains_key("mistral"));
+        assert!(config.providers.contains_key("minimax"));
         assert!(config.providers.contains_key("xai"));
         assert!(config.providers.contains_key("deepseek"));
         assert!(config.providers.contains_key("perplexity"));
@@ -1156,7 +1156,7 @@ mod tests {
             "openai",
             "google",
             "ollama",
-            "mistral",
+            "minimax",
             "xai",
             "deepseek",
         ] {

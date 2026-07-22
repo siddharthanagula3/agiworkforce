@@ -130,6 +130,13 @@
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
+    "minimax/chat-completions": {
+      "provider": "minimax",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-minimax",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
     "qwen/chat-completions": {
       "provider": "qwen",
       "apiFamily": "chat_completions",
@@ -221,7 +228,8 @@
       "mistral/chat-completions",
       "zhipu/chat-completions",
       "perplexity/chat-completions",
-      "groq/chat-completions"
+      "groq/chat-completions",
+      "minimax/chat-completions"
     ],
     "byok-text": [
       "openai/responses",
@@ -237,7 +245,8 @@
       "perplexity/chat-completions",
       "groq/chat-completions",
       "open-router/chat-completions",
-      "nvidia-nim/chat-completions"
+      "nvidia-nim/chat-completions",
+      "minimax/chat-completions"
     ],
     "managed-media": ["managed-cloud/gateway", "openai/media", "google/media", "runway/media"]
   },
@@ -250,11 +259,21 @@
       "status": "implemented",
       "allowedHarnessGroups": ["managed-text", "managed-media"],
       "features": {
-        "webSearch": { "implementation": "implemented" },
-        "toolDiscovery": { "implementation": "partial" },
-        "memory": { "implementation": "partial" },
-        "codeExecution": { "implementation": "partial" },
-        "imageGeneration": { "implementation": "implemented" }
+        "webSearch": {
+          "implementation": "implemented"
+        },
+        "toolDiscovery": {
+          "implementation": "partial"
+        },
+        "memory": {
+          "implementation": "partial"
+        },
+        "codeExecution": {
+          "implementation": "partial"
+        },
+        "imageGeneration": {
+          "implementation": "implemented"
+        }
       }
     },
     "desktop/cloud-chat": {
@@ -289,10 +308,18 @@
       "status": "implemented",
       "allowedHarnessGroups": ["managed-text", "managed-media"],
       "features": {
-        "webSearch": { "implementation": "implemented" },
-        "toolDiscovery": { "implementation": "unwired" },
-        "memory": { "implementation": "partial" },
-        "imageGeneration": { "implementation": "implemented" }
+        "webSearch": {
+          "implementation": "implemented"
+        },
+        "toolDiscovery": {
+          "implementation": "unwired"
+        },
+        "memory": {
+          "implementation": "partial"
+        },
+        "imageGeneration": {
+          "implementation": "implemented"
+        }
       }
     },
     "mobile/local-chat": {
@@ -359,7 +386,9 @@
       "status": "implemented",
       "allowedHarnessGroups": ["managed-text"],
       "features": {
-        "webSearch": { "implementation": "implemented" }
+        "webSearch": {
+          "implementation": "implemented"
+        }
       }
     },
     "chrome/browser-task": {

@@ -23,7 +23,7 @@
  *     ALLOWED_MANAGED_PROVIDER_HOSTS })` on every `*_BASE_URL` env override
  *     before constructing an adapter, and omit the override entirely
  *     (falling back to the adapter's own default) on rejection.
- *   - Adapter-level `config.baseUrl` handling varies. `groq`, `mistral`,
+ *   - Adapter-level `config.baseUrl` handling varies. `minimax`,
  *     `moonshot`, `openrouter`, `qwen`, and `zhipu` additionally call
  *     `resolveValidatedBaseUrl` internally, but against a NARROW,
  *     single-provider allowlist (not `ALLOWED_MANAGED_PROVIDER_HOSTS`) —
@@ -67,8 +67,7 @@ export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
   'api.deepseek.com',
   'api.perplexity.ai',
   'open.bigmodel.cn',
-  'api.groq.com',
-  'api.mistral.ai',
+  'api.minimax.io',
   'openrouter.ai',
   'gateway.ai.cloudflare.com',
   'localhost',

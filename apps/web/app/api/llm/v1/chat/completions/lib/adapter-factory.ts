@@ -46,12 +46,8 @@ export function buildOpenAIAdapter(): ProviderAdapter {
   return buildServerProviderAdapter('openai');
 }
 
-export function buildGroqAdapter(): ProviderAdapter {
-  return buildServerProviderAdapter('groq');
-}
-
-export function buildMistralAdapter(): ProviderAdapter {
-  return buildServerProviderAdapter('mistral');
+export function buildMinimaxAdapter(): ProviderAdapter {
+  return buildServerProviderAdapter('minimax');
 }
 
 export function buildMoonshotAdapter(): ProviderAdapter {

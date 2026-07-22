@@ -47,7 +47,7 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
         .await
         .expect("send initialize");
     let initialized = next_json(&mut websocket).await;
-    assert_eq!(initialized["result"]["protocolVersion"], 3);
+    assert_eq!(initialized["result"]["protocolVersion"], 5);
     assert_eq!(initialized["result"]["capabilities"]["tools"], true);
     assert_eq!(initialized["result"]["capabilities"]["approvals"], true);
 

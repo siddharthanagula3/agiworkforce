@@ -16,12 +16,11 @@ import {
   type DeepSeekAdapterConfig,
 } from '@agiworkforce/providers-deepseek';
 import { createGoogleAdapter, type GoogleAdapterConfig } from '@agiworkforce/providers-google';
-import { createGroqAdapter, type GroqAdapterConfig } from '@agiworkforce/providers-groq';
 import {
   createLMStudioAdapter,
   type LMStudioAdapterConfig,
 } from '@agiworkforce/providers-lmstudio';
-import { createMistralAdapter, type MistralAdapterConfig } from '@agiworkforce/providers-mistral';
+import { createMinimaxAdapter, type MinimaxAdapterConfig } from '@agiworkforce/providers-minimax';
 import {
   createMoonshotAdapter,
   type MoonshotAdapterConfig,
@@ -45,9 +44,8 @@ export interface ProviderAdapterConfigMap {
   anthropic: AnthropicAdapterConfig;
   deepseek: DeepSeekAdapterConfig;
   google: GoogleAdapterConfig;
-  groq: GroqAdapterConfig;
   lmstudio: LMStudioAdapterConfig;
-  mistral: MistralAdapterConfig;
+  minimax: MinimaxAdapterConfig;
   moonshot: MoonshotAdapterConfig;
   ollama: OllamaAdapterConfig;
   openai: OpenAIAdapterConfig;
@@ -64,9 +62,8 @@ export const PROVIDER_ADAPTER_IDS = [
   'anthropic',
   'deepseek',
   'google',
-  'groq',
   'lmstudio',
-  'mistral',
+  'minimax',
   'moonshot',
   'ollama',
   'openai',
@@ -87,9 +84,8 @@ const PROVIDER_ADAPTER_FACTORIES: ProviderAdapterFactories = {
   anthropic: createAnthropicAdapter,
   deepseek: createDeepSeekAdapter,
   google: createGoogleAdapter,
-  groq: createGroqAdapter,
   lmstudio: createLMStudioAdapter,
-  mistral: createMistralAdapter,
+  minimax: createMinimaxAdapter,
   moonshot: createMoonshotAdapter,
   ollama: createOllamaAdapter,
   openai: createOpenAIAdapter,

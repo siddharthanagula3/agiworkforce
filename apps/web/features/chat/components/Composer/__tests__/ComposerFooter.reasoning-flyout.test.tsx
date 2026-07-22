@@ -56,8 +56,8 @@ const MODELS = vi.hoisted(() => [
     description: 'Fast',
   },
   {
-    id: 'gemini-3.5-flash',
-    name: 'Gemini 3.5 Flash',
+    id: 'gemini-3.6-flash',
+    name: 'Gemini 3.6 Flash',
     provider: 'Google',
     providerKey: 'google',
     description: 'Fast',
@@ -210,8 +210,8 @@ describe('ComposerFooter · reasoning/effort flyout (real component + real catal
     expect(effortChipLabels()).toEqual(['Low', 'Medium', 'High', 'xHigh', 'Max']);
   });
 
-  it('(a2) Gemini 3.5 Flash folds `minimal` into `low` — no duplicate store-effort chip', () => {
-    sel.id = 'gemini-3.5-flash';
+  it('(a2) Gemini 3.6 Flash folds `minimal` into `low` — no duplicate store-effort chip', () => {
+    sel.id = 'gemini-3.6-flash';
     thinking.effort = 'low';
     render(<ComposerFooter />);
     const chips = effortChipLabels();

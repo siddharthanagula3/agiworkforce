@@ -230,23 +230,6 @@
       },
       "evidenceRefs": []
     },
-    "qwen-max": {
-      "identity": {
-        "key": "qwen-max",
-        "displayName": "Qwen Max",
-        "provider": "qwen",
-        "providerModelId": "qwen3-max",
-        "kind": "reasoning"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "January 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
     "qwen-3.5-flash": {
       "identity": {
         "key": "qwen-3.5-flash",
@@ -259,74 +242,6 @@
         "status": "active",
         "availability": "live",
         "released": "February 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "qwen-turbo": {
-      "identity": {
-        "key": "qwen-turbo",
-        "displayName": "Qwen Turbo",
-        "provider": "qwen",
-        "providerModelId": "qwen-turbo",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "January 2026",
-        "deprecationDate": "2026-06-20",
-        "deprecated": true
-      },
-      "evidenceRefs": []
-    },
-    "qwen-coder-flash": {
-      "identity": {
-        "key": "qwen-coder-flash",
-        "displayName": "Qwen Coder Flash",
-        "provider": "qwen",
-        "providerModelId": "qwen3-coder-flash",
-        "kind": "code"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "January 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "qwen-coder-plus": {
-      "identity": {
-        "key": "qwen-coder-plus",
-        "displayName": "Qwen Coder Plus",
-        "provider": "qwen",
-        "providerModelId": "qwen3-coder-plus",
-        "kind": "code"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "January 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "mistral-large-3": {
-      "identity": {
-        "key": "mistral-large-3",
-        "displayName": "Mistral Large 3",
-        "provider": "mistral",
-        "providerModelId": "mistral-large-2512",
-        "kind": "reasoning"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "December 2025",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -485,63 +400,12 @@
       },
       "evidenceRefs": []
     },
-    "nvidia/llama-3.3-70b-instruct": {
+    "gemini-3.6-flash": {
       "identity": {
-        "key": "nvidia/llama-3.3-70b-instruct",
-        "displayName": "Llama 3.3 70B Instruct",
-        "provider": "nvidia_nim",
-        "providerModelId": "nvidia/llama-3.3-70b-instruct",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "2024",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "groq-llama-3.3-70b": {
-      "identity": {
-        "key": "groq-llama-3.3-70b",
-        "displayName": "Llama 3.3 70B (Groq)",
-        "provider": "groq",
-        "providerModelId": "llama-3.3-70b-versatile",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "2024",
-        "deprecationDate": "2026-08-16",
-        "deprecated": true
-      },
-      "evidenceRefs": []
-    },
-    "groq-llama-3.1-8b": {
-      "identity": {
-        "key": "groq-llama-3.1-8b",
-        "displayName": "Llama 3.1 8B Instant (Groq)",
-        "provider": "groq",
-        "providerModelId": "llama-3.1-8b-instant",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "deprecated",
-        "availability": "live",
-        "released": "2024",
-        "deprecationDate": "2026-08-16",
-        "deprecated": true
-      },
-      "evidenceRefs": []
-    },
-    "gemini-3.5-flash": {
-      "identity": {
-        "key": "gemini-3.5-flash",
+        "key": "gemini-3.6-flash",
         "displayName": "Gemini 3.5 Flash",
         "provider": "google",
-        "providerModelId": "gemini-3.5-flash",
+        "providerModelId": "gemini-3.6-flash",
         "kind": "multimodal",
         "familyPartner": "gemini-3.1-pro-preview"
       },
@@ -588,57 +452,6 @@
       },
       "evidenceRefs": []
     },
-    "nvidia/nemotron-3-ultra-550b-a55b": {
-      "identity": {
-        "key": "nvidia/nemotron-3-ultra-550b-a55b",
-        "displayName": "NVIDIA Nemotron 3 Ultra 550B",
-        "provider": "nvidia_nim",
-        "providerModelId": "nvidia/nemotron-3-ultra-550b-a55b",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "June 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "nvidia/nemotron-3-super-120b-a12b": {
-      "identity": {
-        "key": "nvidia/nemotron-3-super-120b-a12b",
-        "displayName": "NVIDIA Nemotron 3 Super 120B",
-        "provider": "nvidia_nim",
-        "providerModelId": "nvidia/nemotron-3-super-120b-a12b",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "June 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "nvidia/nemotron-3-nano-30b-a3b": {
-      "identity": {
-        "key": "nvidia/nemotron-3-nano-30b-a3b",
-        "displayName": "NVIDIA Nemotron 3 Nano 30B",
-        "provider": "nvidia_nim",
-        "providerModelId": "nvidia/nemotron-3-nano-30b-a3b",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "June 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
     "kimi-k3": {
       "identity": {
         "key": "kimi-k3",
@@ -668,57 +481,6 @@
         "status": "active",
         "availability": "live",
         "released": "July 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "mistral-medium-3.5": {
-      "identity": {
-        "key": "mistral-medium-3.5",
-        "displayName": "Mistral Medium 3.5",
-        "provider": "mistral",
-        "providerModelId": "mistral-medium-3-5",
-        "kind": "multimodal"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "April 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "mistral-small-4": {
-      "identity": {
-        "key": "mistral-small-4",
-        "displayName": "Mistral Small 4",
-        "provider": "mistral",
-        "providerModelId": "mistral-small-2603",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "March 2026",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "codestral-2508": {
-      "identity": {
-        "key": "codestral-2508",
-        "displayName": "Codestral 25.08",
-        "provider": "mistral",
-        "providerModelId": "codestral-2508",
-        "kind": "code"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "January 2026",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -775,35 +537,18 @@
       },
       "evidenceRefs": []
     },
-    "nvidia/nemotron-3-super-120b-a12b:free": {
+    "minimax-m3": {
       "identity": {
-        "key": "nvidia/nemotron-3-super-120b-a12b:free",
-        "displayName": "Nemotron 3 Super 120B (Free)",
-        "provider": "open_router",
-        "providerModelId": "nvidia/nemotron-3-super-120b-a12b:free",
-        "kind": "chat"
+        "key": "minimax-m3",
+        "displayName": "MiniMax M3",
+        "provider": "minimax",
+        "providerModelId": "MiniMax-M3",
+        "kind": "reasoning"
       },
       "lifecycle": {
         "status": "active",
         "availability": "live",
-        "released": "2025",
-        "deprecationDate": null,
-        "deprecated": false
-      },
-      "evidenceRefs": []
-    },
-    "google/gemma-4-26b-a4b-it:free": {
-      "identity": {
-        "key": "google/gemma-4-26b-a4b-it:free",
-        "displayName": "Gemma 4 26B (Free)",
-        "provider": "open_router",
-        "providerModelId": "google/gemma-4-26b-a4b-it:free",
-        "kind": "chat"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "2025",
+        "released": "June 2026",
         "deprecationDate": null,
         "deprecated": false
       },
@@ -827,33 +572,18 @@
       "gemini-3.1-pro-preview",
       "gemini-3.1-flash-lite",
       "gemini-3.1-flash-image",
-      "gemini-3.5-flash",
+      "gemini-3.6-flash",
       "veo-3.1"
     ],
     "deepseek": ["deepseek-v4-flash", "deepseek-v4-pro"],
-    "qwen": [
-      "qwen-max",
-      "qwen-3.5-flash",
-      "qwen-turbo",
-      "qwen-coder-flash",
-      "qwen-coder-plus",
-      "qwen-3.7-plus"
-    ],
-    "mistral": ["mistral-large-3", "mistral-medium-3.5", "mistral-small-4", "codestral-2508"],
+    "qwen": ["qwen-3.5-flash", "qwen-3.7-plus"],
     "perplexity": ["sonar", "sonar-reasoning-pro", "sonar-pro", "sonar-deep-research"],
     "runway": ["runway-gen-4"],
     "managed_cloud": ["stable-image-core"],
-    "nvidia_nim": [
-      "nvidia/llama-3.3-70b-instruct",
-      "nvidia/nemotron-3-ultra-550b-a55b",
-      "nvidia/nemotron-3-super-120b-a12b",
-      "nvidia/nemotron-3-nano-30b-a3b"
-    ],
-    "groq": ["groq-llama-3.3-70b", "groq-llama-3.1-8b"],
     "zhipu": ["glm-5.2"],
     "moonshot": ["kimi-k3"],
     "xai": ["grok-4.5"],
-    "open_router": ["nvidia/nemotron-3-super-120b-a12b:free", "google/gemma-4-26b-a4b-it:free"]
+    "minimax": ["minimax-m3"]
   },
   "routes": {
     "openai/gpt-5.6-sol": {
@@ -973,56 +703,11 @@
       "availability": "live",
       "selectable": true
     },
-    "qwen/qwen-max": {
-      "modelKey": "qwen-max",
-      "provider": "qwen",
-      "providerModelId": "qwen3-max",
-      "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
     "qwen/qwen-3.5-flash": {
       "modelKey": "qwen-3.5-flash",
       "provider": "qwen",
       "providerModelId": "qwen3.5-flash",
       "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "qwen/qwen-turbo": {
-      "modelKey": "qwen-turbo",
-      "provider": "qwen",
-      "providerModelId": "qwen-turbo",
-      "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false
-    },
-    "qwen/qwen-coder-flash": {
-      "modelKey": "qwen-coder-flash",
-      "provider": "qwen",
-      "providerModelId": "qwen3-coder-flash",
-      "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "qwen/qwen-coder-plus": {
-      "modelKey": "qwen-coder-plus",
-      "provider": "qwen",
-      "providerModelId": "qwen3-coder-plus",
-      "harnessId": "qwen/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "mistral/mistral-large-3": {
-      "modelKey": "mistral-large-3",
-      "provider": "mistral",
-      "providerModelId": "mistral-large-2512",
-      "harnessId": "mistral/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true
@@ -1108,37 +793,10 @@
       "availability": "live",
       "selectable": true
     },
-    "nvidia_nim/nvidia/llama-3.3-70b-instruct": {
-      "modelKey": "nvidia/llama-3.3-70b-instruct",
-      "provider": "nvidia_nim",
-      "providerModelId": "nvidia/llama-3.3-70b-instruct",
-      "harnessId": "nvidia-nim/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "groq/groq-llama-3.3-70b": {
-      "modelKey": "groq-llama-3.3-70b",
-      "provider": "groq",
-      "providerModelId": "llama-3.3-70b-versatile",
-      "harnessId": "groq/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false
-    },
-    "groq/groq-llama-3.1-8b": {
-      "modelKey": "groq-llama-3.1-8b",
-      "provider": "groq",
-      "providerModelId": "llama-3.1-8b-instant",
-      "harnessId": "groq/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": false
-    },
-    "google/gemini-3.5-flash": {
-      "modelKey": "gemini-3.5-flash",
+    "google/gemini-3.6-flash": {
+      "modelKey": "gemini-3.6-flash",
       "provider": "google",
-      "providerModelId": "gemini-3.5-flash",
+      "providerModelId": "gemini-3.6-flash",
       "harnessId": "google/generate-content",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -1162,33 +820,6 @@
       "availability": "live",
       "selectable": true
     },
-    "nvidia_nim/nvidia/nemotron-3-ultra-550b-a55b": {
-      "modelKey": "nvidia/nemotron-3-ultra-550b-a55b",
-      "provider": "nvidia_nim",
-      "providerModelId": "nvidia/nemotron-3-ultra-550b-a55b",
-      "harnessId": "nvidia-nim/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "nvidia_nim/nvidia/nemotron-3-super-120b-a12b": {
-      "modelKey": "nvidia/nemotron-3-super-120b-a12b",
-      "provider": "nvidia_nim",
-      "providerModelId": "nvidia/nemotron-3-super-120b-a12b",
-      "harnessId": "nvidia-nim/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "nvidia_nim/nvidia/nemotron-3-nano-30b-a3b": {
-      "modelKey": "nvidia/nemotron-3-nano-30b-a3b",
-      "provider": "nvidia_nim",
-      "providerModelId": "nvidia/nemotron-3-nano-30b-a3b",
-      "harnessId": "nvidia-nim/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true
-    },
     "moonshot/kimi-k3": {
       "modelKey": "kimi-k3",
       "provider": "moonshot",
@@ -1203,33 +834,6 @@
       "provider": "xai",
       "providerModelId": "grok-4.5",
       "harnessId": "xai/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "mistral/mistral-medium-3.5": {
-      "modelKey": "mistral-medium-3.5",
-      "provider": "mistral",
-      "providerModelId": "mistral-medium-3-5",
-      "harnessId": "mistral/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "mistral/mistral-small-4": {
-      "modelKey": "mistral-small-4",
-      "provider": "mistral",
-      "providerModelId": "mistral-small-2603",
-      "harnessId": "mistral/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "mistral/codestral-2508": {
-      "modelKey": "codestral-2508",
-      "provider": "mistral",
-      "providerModelId": "codestral-2508",
-      "harnessId": "mistral/chat-completions",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true
@@ -1261,21 +865,12 @@
       "availability": "live",
       "selectable": true
     },
-    "open_router/nvidia/nemotron-3-super-120b-a12b:free": {
-      "modelKey": "nvidia/nemotron-3-super-120b-a12b:free",
-      "provider": "open_router",
-      "providerModelId": "nvidia/nemotron-3-super-120b-a12b:free",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
-      "availability": "live",
-      "selectable": true
-    },
-    "open_router/google/gemma-4-26b-a4b-it:free": {
-      "modelKey": "google/gemma-4-26b-a4b-it:free",
-      "provider": "open_router",
-      "providerModelId": "google/gemma-4-26b-a4b-it:free",
-      "harnessId": "open-router/chat-completions",
-      "trustModes": ["byok"],
+    "minimax/minimax-m3": {
+      "modelKey": "minimax-m3",
+      "provider": "minimax",
+      "providerModelId": "MiniMax-M3",
+      "harnessId": "minimax/chat-completions",
+      "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
       "selectable": true
     }
@@ -1369,6 +964,13 @@
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
+      "trustModes": ["managed_cloud", "byok"],
+      "features": {}
+    },
+    "minimax/chat-completions": {
+      "provider": "minimax",
+      "apiFamily": "chat_completions",
+      "adapter": "@agiworkforce/providers-minimax",
       "trustModes": ["managed_cloud", "byok"],
       "features": {}
     },
@@ -1466,6 +1068,7 @@
         "zhipu/chat-completions",
         "perplexity/chat-completions",
         "groq/chat-completions",
+        "minimax/chat-completions",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -1491,7 +1094,8 @@
         "mistral/chat-completions",
         "zhipu/chat-completions",
         "perplexity/chat-completions",
-        "groq/chat-completions"
+        "groq/chat-completions",
+        "minimax/chat-completions"
       ]
     },
     "desktop/byok-chat": {
@@ -1515,7 +1119,8 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "open-router/chat-completions",
-        "nvidia-nim/chat-completions"
+        "nvidia-nim/chat-completions",
+        "minimax/chat-completions"
       ]
     },
     "desktop/local-chat": {
@@ -1552,6 +1157,7 @@
         "zhipu/chat-completions",
         "perplexity/chat-completions",
         "groq/chat-completions",
+        "minimax/chat-completions",
         "managed-cloud/gateway",
         "openai/media",
         "google/media",
@@ -1588,7 +1194,8 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "open-router/chat-completions",
-        "nvidia-nim/chat-completions"
+        "nvidia-nim/chat-completions",
+        "minimax/chat-completions"
       ]
     },
     "cli/managed-chat": {
@@ -1610,7 +1217,8 @@
         "mistral/chat-completions",
         "zhipu/chat-completions",
         "perplexity/chat-completions",
-        "groq/chat-completions"
+        "groq/chat-completions",
+        "minimax/chat-completions"
       ]
     },
     "cli/local-chat": {
@@ -1643,7 +1251,8 @@
         "perplexity/chat-completions",
         "groq/chat-completions",
         "open-router/chat-completions",
-        "nvidia-nim/chat-completions"
+        "nvidia-nim/chat-completions",
+        "minimax/chat-completions"
       ]
     },
     "vscode/managed-chat": {
@@ -1665,7 +1274,8 @@
         "mistral/chat-completions",
         "zhipu/chat-completions",
         "perplexity/chat-completions",
-        "groq/chat-completions"
+        "groq/chat-completions",
+        "minimax/chat-completions"
       ]
     },
     "vscode/local-chat": {
@@ -1696,7 +1306,8 @@
         "mistral/chat-completions",
         "zhipu/chat-completions",
         "perplexity/chat-completions",
-        "groq/chat-completions"
+        "groq/chat-completions",
+        "minimax/chat-completions"
       ]
     },
     "chrome/browser-task": {
@@ -1892,81 +1503,11 @@
       "functionCalling": true,
       "reasoning": true
     },
-    "qwen-max": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
     "qwen-3.5-flash": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
       "videoInput": true,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
-    "qwen-turbo": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "qwen-coder-flash": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "qwen-coder-plus": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
-    "mistral-large-3": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
       "textOutput": true,
       "imageOutput": false,
       "audioOutput": false,
@@ -2102,49 +1643,7 @@
       "functionCalling": false,
       "reasoning": false
     },
-    "nvidia/llama-3.3-70b-instruct": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "groq-llama-3.3-70b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "groq-llama-3.1-8b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "gemini-3.5-flash": {
+    "gemini-3.6-flash": {
       "textInput": true,
       "imageInput": true,
       "audioInput": false,
@@ -2186,48 +1685,6 @@
       "functionCalling": true,
       "reasoning": true
     },
-    "nvidia/nemotron-3-ultra-550b-a55b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "nvidia/nemotron-3-super-120b-a12b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "nvidia/nemotron-3-nano-30b-a3b": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
     "kimi-k3": {
       "textInput": true,
       "imageInput": true,
@@ -2255,48 +1712,6 @@
       "structuredOutput": true,
       "functionCalling": true,
       "reasoning": true
-    },
-    "mistral-medium-3.5": {
-      "textInput": true,
-      "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "mistral-small-4": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": false
-    },
-    "codestral-2508": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": false,
-      "reasoning": false
     },
     "veo-3.1": {
       "textInput": true,
@@ -2340,21 +1755,7 @@
       "functionCalling": false,
       "reasoning": false
     },
-    "nvidia/nemotron-3-super-120b-a12b:free": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": true,
-      "structuredOutput": true,
-      "functionCalling": true,
-      "reasoning": true
-    },
-    "google/gemma-4-26b-a4b-it:free": {
+    "minimax-m3": {
       "textInput": true,
       "imageInput": false,
       "audioInput": false,
@@ -2470,12 +1871,6 @@
       "outputPerMillion": 0.87,
       "cacheReadPerMillion": 0.003625
     },
-    "qwen-max": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 1.2,
-      "outputPerMillion": 6
-    },
     "qwen-3.5-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -2483,30 +1878,6 @@
       "outputPerMillion": 0.287,
       "cacheReadPerMillion": 0.0058,
       "cacheWritePerMillion": 0.03625
-    },
-    "qwen-turbo": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.05,
-      "outputPerMillion": 0.2
-    },
-    "qwen-coder-flash": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.05,
-      "outputPerMillion": 0.3
-    },
-    "qwen-coder-plus": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.5,
-      "outputPerMillion": 2
-    },
-    "mistral-large-3": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.5,
-      "outputPerMillion": 1.5
     },
     "sonar": {
       "currency": "USD",
@@ -2566,25 +1937,7 @@
       "inputPerMillion": 30,
       "outputPerMillion": 0
     },
-    "nvidia/llama-3.3-70b-instruct": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 0
-    },
-    "groq-llama-3.3-70b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.59,
-      "outputPerMillion": 0.79
-    },
-    "groq-llama-3.1-8b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.05,
-      "outputPerMillion": 0.08
-    },
-    "gemini-3.5-flash": {
+    "gemini-3.6-flash": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 1.5,
@@ -2606,24 +1959,6 @@
       "cacheReadPerMillion": 0.08,
       "cacheWritePerMillion": 0.5
     },
-    "nvidia/nemotron-3-ultra-550b-a55b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 0
-    },
-    "nvidia/nemotron-3-super-120b-a12b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 0
-    },
-    "nvidia/nemotron-3-nano-30b-a3b": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 0
-    },
     "kimi-k3": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -2636,24 +1971,6 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 2,
       "outputPerMillion": 6
-    },
-    "mistral-medium-3.5": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 1.5,
-      "outputPerMillion": 7.5
-    },
-    "mistral-small-4": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.15,
-      "outputPerMillion": 0.6
-    },
-    "codestral-2508": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0.3,
-      "outputPerMillion": 0.9
     },
     "veo-3.1": {
       "currency": "USD",
@@ -2675,17 +1992,11 @@
       "inputPerMillion": 0.006,
       "outputPerMillion": 0
     },
-    "nvidia/nemotron-3-super-120b-a12b:free": {
+    "minimax-m3": {
       "currency": "USD",
       "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 0
-    },
-    "google/gemma-4-26b-a4b-it:free": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 0,
-      "outputPerMillion": 0
+      "inputPerMillion": 0.3,
+      "outputPerMillion": 1.2
     }
   },
   "limits": {
@@ -2737,12 +2048,7 @@
     "gemini-3.1-flash-image": { "contextTokens": 1000000 },
     "deepseek-v4-flash": { "contextTokens": 1000000 },
     "deepseek-v4-pro": { "contextTokens": 1000000 },
-    "qwen-max": { "contextTokens": 1000000 },
     "qwen-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
-    "qwen-turbo": { "contextTokens": 1000000 },
-    "qwen-coder-flash": { "contextTokens": 1000000 },
-    "qwen-coder-plus": { "contextTokens": 1000000 },
-    "mistral-large-3": { "contextTokens": 262000 },
     "sonar": { "contextTokens": 128000 },
     "sonar-reasoning-pro": { "contextTokens": 128000 },
     "sonar-pro": { "contextTokens": 200000 },
@@ -2752,25 +2058,15 @@
     "gpt-image-2": { "contextTokens": 4000 },
     "tts-1": { "contextTokens": 4096 },
     "tts-1-hd": { "contextTokens": 4096 },
-    "nvidia/llama-3.3-70b-instruct": { "contextTokens": 131072 },
-    "groq-llama-3.3-70b": { "contextTokens": 131072 },
-    "groq-llama-3.1-8b": { "contextTokens": 131072 },
-    "gemini-3.5-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
+    "gemini-3.6-flash": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "glm-5.2": { "contextTokens": 1000000 },
     "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
-    "nvidia/nemotron-3-ultra-550b-a55b": { "contextTokens": 1000000 },
-    "nvidia/nemotron-3-super-120b-a12b": { "contextTokens": 131072 },
-    "nvidia/nemotron-3-nano-30b-a3b": { "contextTokens": 1000000 },
     "kimi-k3": { "contextTokens": 1048576 },
     "grok-4.5": { "contextTokens": 500000 },
-    "mistral-medium-3.5": { "contextTokens": 256000 },
-    "mistral-small-4": { "contextTokens": 256000 },
-    "codestral-2508": { "contextTokens": 256000 },
     "veo-3.1": { "contextTokens": 4000 },
     "gpt-4o-transcribe": {},
     "gpt-4o-mini-transcribe": {},
-    "nvidia/nemotron-3-super-120b-a12b:free": { "contextTokens": 131072 },
-    "google/gemma-4-26b-a4b-it:free": { "contextTokens": 131072 }
+    "minimax-m3": { "contextTokens": 1000000 }
   },
   "benchmarks": {
     "gpt-5.6-sol": {},
@@ -2798,12 +2094,7 @@
     "gemini-3.1-flash-image": {},
     "deepseek-v4-flash": { "swebench": 75, "humaneval": 95, "mmlu": 87, "gpqa": 75, "aime": 85 },
     "deepseek-v4-pro": { "swebench": 81, "humaneval": 96, "mmlu": 92, "gpqa": 87, "aime": 95 },
-    "qwen-max": { "swebench": 58, "humaneval": 93, "mmlu": 88, "gpqa": 65, "aime": 60 },
     "qwen-3.5-flash": {},
-    "qwen-turbo": { "swebench": 28, "humaneval": 72, "mmlu": 76, "gpqa": 38, "aime": 28 },
-    "qwen-coder-flash": { "swebench": 40, "humaneval": 82, "mmlu": 70, "gpqa": 35, "aime": 25 },
-    "qwen-coder-plus": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
-    "mistral-large-3": { "swebench": 55, "humaneval": 92, "mmlu": 88, "gpqa": 68, "aime": 62 },
     "sonar": { "mmlu": 75 },
     "sonar-reasoning-pro": { "mmlu": 85, "gpqa": 62 },
     "sonar-pro": { "mmlu": 88 },
@@ -2813,25 +2104,15 @@
     "gpt-image-2": {},
     "tts-1": {},
     "tts-1-hd": {},
-    "nvidia/llama-3.3-70b-instruct": {},
-    "groq-llama-3.3-70b": {},
-    "groq-llama-3.1-8b": {},
-    "gemini-3.5-flash": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
+    "gemini-3.6-flash": { "sweBenchPro": 55.1, "terminalBench2": 76.2, "osWorldVerified": 78.4 },
     "glm-5.2": { "swebench": 79, "humaneval": 92, "mmlu": 90, "gpqa": 84, "aime": 92 },
     "qwen-3.7-plus": {},
-    "nvidia/nemotron-3-ultra-550b-a55b": {},
-    "nvidia/nemotron-3-super-120b-a12b": {},
-    "nvidia/nemotron-3-nano-30b-a3b": {},
     "kimi-k3": {},
     "grok-4.5": { "swebench": 68, "humaneval": 96.5, "mmlu": 91.5, "gpqa": 80, "aime": 82 },
-    "mistral-medium-3.5": { "swebench": 42, "humaneval": 85, "mmlu": 84, "gpqa": 55, "aime": 45 },
-    "mistral-small-4": {},
-    "codestral-2508": { "swebench": 48, "humaneval": 90, "mmlu": 72 },
     "veo-3.1": {},
     "gpt-4o-transcribe": {},
     "gpt-4o-mini-transcribe": {},
-    "nvidia/nemotron-3-super-120b-a12b:free": {},
-    "google/gemma-4-26b-a4b-it:free": {}
+    "minimax-m3": {}
   },
   "evidence": [
     {
@@ -3217,7 +2498,7 @@
           "description": "Shared general balanced route. Model and provider are selected by the canonical registry."
         },
         "general_premium": {
-          "modelKey": "gemini-3.5-flash",
+          "modelKey": "gemini-3.6-flash",
           "label": "General Premium",
           "description": "Shared general premium route. Model and provider are selected by the canonical registry."
         },
@@ -3292,12 +2573,12 @@
           "description": "Shared vision fast route. Model and provider are selected by the canonical registry."
         },
         "vision_premium": {
-          "modelKey": "gemini-3.5-flash",
+          "modelKey": "gemini-3.6-flash",
           "label": "Vision Premium",
           "description": "Shared vision premium route. Model and provider are selected by the canonical registry."
         },
         "multimodal_balanced": {
-          "modelKey": "gemini-3.5-flash",
+          "modelKey": "gemini-3.6-flash",
           "label": "Multimodal Balanced",
           "description": "Shared multimodal balanced route. Model and provider are selected by the canonical registry."
         },
@@ -3377,7 +2658,7 @@
           "description": "Shared reasoning premium pro route. Model and provider are selected by the canonical registry."
         },
         "multimodal_pro": {
-          "modelKey": "gemini-3.5-flash",
+          "modelKey": "gemini-3.6-flash",
           "label": "Multimodal Pro",
           "description": "Shared multimodal pro route. Model and provider are selected by the canonical registry."
         },
@@ -3417,10 +2698,9 @@
         "gpt-5.6-terra",
         "claude-sonnet-5",
         "claude-haiku-4.5",
-        "gemini-3.5-flash",
+        "gemini-3.6-flash",
         "gemini-3.1-pro-preview",
         "deepseek-v4-pro",
-        "qwen-max",
         "sonar-deep-research",
         "kimi-k3"
       ],

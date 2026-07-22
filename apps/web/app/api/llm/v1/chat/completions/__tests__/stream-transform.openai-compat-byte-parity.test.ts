@@ -1,14 +1,13 @@
 /**
- * Byte-parity for the 9 openai-compat providers (task #34's compat batch),
+ * Byte-parity for the 8 openai-compat providers (task #34's compat batch),
  * riding on the SAME `wireMode: 'openai-passthrough'` machinery proven for
  * OpenAI itself in stream-transform.openai-byte-parity.test.ts.
  *
- * Confirmed before writing this file, not assumed: every one of the 9
- * legacy provider files (apps/web/lib/llm-providers/{groq,mistral,moonshot,
- * zhipu,qwen,openrouter,deepseek,xai,perplexity}.ts) does `return
- * response.body` in `streamRequest()` with ZERO internal reshaping --
- * identical to `openai.ts`'s own pattern, which is what makes
- * `wireMode: 'openai-passthrough'` the correct mode for all 10 (not just
+ * Each `packages/ai/providers/{minimax,moonshot,zhipu,qwen,openrouter,
+ * deepseek,xai,perplexity}` package is a thin config wrapper around
+ * `@agiworkforce/providers-openai`'s translate/stream layer with ZERO internal
+ * reshaping -- identical to `openai.ts`'s own pattern, which is what makes
+ * `wireMode: 'openai-passthrough'` the correct mode for all of them (not just
  * OpenAI). Each `packages/ai/providers/{provider}` package is a thin config
  * wrapper around `@agiworkforce/providers-openai`'s translate/stream layer
  * (see adapter-factory.ts's `buildCompatAdapter` docstring), so this suite
@@ -162,8 +161,7 @@ function fixtureFor(model: string): OpenAIChatCompletionChunk[] {
 }
 
 const COMPAT_PROVIDERS: Array<{ provider: string; model: string }> = [
-  { provider: 'groq', model: 'groq-llama-3.3-70b' },
-  { provider: 'mistral', model: 'mistral-large' },
+  { provider: 'minimax', model: 'minimax-m3' },
   { provider: 'moonshot', model: 'moonshot-v1-8k' },
   { provider: 'zhipu', model: 'glm-4.6' },
   { provider: 'qwen', model: 'qwen-max' },

@@ -214,11 +214,11 @@ function eventModels(events: unknown[]): string[] {
 
 // Catalog anchors (see llm.test.ts tier-ladder pins): claude-opus-4.8 and
 // gpt-5.6-sol are flagship (Max/Enterprise only); claude-sonnet-5 and
-// gemini-3.5-flash are pro_additions on distinct providers.
+// gemini-3.6-flash are pro_additions on distinct providers.
 const PRIMARY_FLAGSHIP = 'claude-opus-4.8'; // anthropic
 const FALLBACK_FLAGSHIP = 'gpt-5.6-sol'; // openai
 const PRIMARY_PRO = 'claude-sonnet-5'; // anthropic
-const FALLBACK_PRO = 'gemini-3.5-flash'; // google
+const FALLBACK_PRO = 'gemini-3.6-flash'; // google
 
 describe('Managed gateway failover — resolver fallback plan consumption', () => {
   beforeEach(() => {

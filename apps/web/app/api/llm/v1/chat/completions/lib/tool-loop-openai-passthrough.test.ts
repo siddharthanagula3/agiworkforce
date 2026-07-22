@@ -1,10 +1,10 @@
 /**
  * Proof that runToolLoop's dispatch for an `openai-passthrough` wireMode
  * provider (task #34's tool-loop generalization: buildToolLoopStream is now
- * table-driven off ADAPTER_PROVIDERS, covering all 12 providers, not just
+ * table-driven off ADAPTER_PROVIDERS, covering all 11 providers, not just
  * Anthropic) actually works end-to-end through the REAL adapter ->
  * `OpenAIWireAssembler` (wireMode: 'openai-passthrough') -> collectProviderStream
- * pipeline. Uses OpenAI itself as the representative -- 8 of the 9 compat
+ * pipeline. Uses OpenAI itself as the representative -- 7 of the 8 compat
  * providers share the exact same wireMode/translate layer (see
  * adapter-providers.ts's docstring), so this is not an OpenAI-specific
  * concern; it is the FIRST proof any openai-passthrough provider's tool

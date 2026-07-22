@@ -39,7 +39,7 @@ const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "anthropic",
     "openai",
     "google",
-    "mistral",
+    "minimax",
     "xai",
     "deepseek",
     "perplexity",
@@ -1481,19 +1481,20 @@ mod tests {
 
     #[test]
     fn all_providers_represented() {
+        // nvidia_nim and open_router are supported provider slots but the
+        // 2026-07 catalog restructure zeroed out their model lists (dead
+        // free-tier entries retired) — no bundled models to assert on.
         let cat = Catalog::bundled();
         for p in [
             "anthropic",
             "openai",
             "google",
-            "mistral",
+            "minimax",
             "xai",
             "deepseek",
             "perplexity",
             "qwen",
             "zhipu",
-            "openrouter",
-            "nvidia",
             "moonshot",
         ] {
             assert!(!cat.models_for(p).is_empty(), "Missing: {}", p);
@@ -1558,17 +1559,10 @@ mod tests {
 
     #[test]
     fn provider_detection() {
+        // nvidia and openrouter carry no bundled models post-restructure —
+        // see all_providers_represented above.
         let cat = Catalog::bundled();
-        for provider in [
-            "anthropic",
-            "openai",
-            "google",
-            "xai",
-            "deepseek",
-            "qwen",
-            "nvidia",
-            "openrouter",
-        ] {
+        for provider in ["anthropic", "openai", "google", "xai", "deepseek", "qwen"] {
             let model = cat
                 .models_for(provider)
                 .into_iter()

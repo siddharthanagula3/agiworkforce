@@ -12,7 +12,7 @@ describe('QWEN_DEFAULT_BASE_URL', () => {
     const detected = detectOpenAICompletionsCompat({
       provider: 'qwen',
       baseUrl: QWEN_DEFAULT_BASE_URL,
-      id: 'qwen-max',
+      id: 'qwen-3.7-plus',
     });
     expect(detected.capabilities.endpointClass).toBe('modelstudio-native');
     // modelstudio-native gets native streaming-usage compat.

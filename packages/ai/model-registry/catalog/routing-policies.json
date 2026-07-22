@@ -264,7 +264,7 @@
         "modelKey": "gpt-5.6-terra"
       },
       "general_premium": {
-        "modelKey": "gemini-3.5-flash"
+        "modelKey": "gemini-3.6-flash"
       },
       "flagship_general": {
         "modelKey": "gpt-5.6-sol"
@@ -309,10 +309,10 @@
         "modelKey": "gemini-3.1-flash-lite"
       },
       "vision_premium": {
-        "modelKey": "gemini-3.5-flash"
+        "modelKey": "gemini-3.6-flash"
       },
       "multimodal_balanced": {
-        "modelKey": "gemini-3.5-flash"
+        "modelKey": "gemini-3.6-flash"
       },
       "long_context_balanced": {
         "modelKey": "gemini-3.1-pro-preview"
@@ -360,7 +360,7 @@
         "modelKey": "qwen-3.7-plus"
       },
       "multimodal_pro": {
-        "modelKey": "gemini-3.5-flash"
+        "modelKey": "gemini-3.6-flash"
       },
       "long_context_pro": {
         "modelKey": "gemini-3.1-pro-preview"

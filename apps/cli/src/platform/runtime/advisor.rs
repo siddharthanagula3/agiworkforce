@@ -55,7 +55,7 @@ fn keyed_provider_preference() -> &'static [&'static str] {
         "xai",
         "deepseek",
         "qwen",
-        "mistral",
+        "minimax",
         "openrouter",
         "nvidia",
     ]
@@ -72,7 +72,7 @@ fn provider_has_key(provider_name: &str) -> bool {
         "xai" => std::env::var("XAI_API_KEY").is_ok_and(|k| !k.is_empty()),
         "deepseek" => std::env::var("DEEPSEEK_API_KEY").is_ok_and(|k| !k.is_empty()),
         "qwen" => std::env::var("DASHSCOPE_API_KEY").is_ok_and(|k| !k.is_empty()),
-        "mistral" => std::env::var("MISTRAL_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "minimax" => std::env::var("MINIMAX_API_KEY").is_ok_and(|k| !k.is_empty()),
         "openrouter" => std::env::var("OPENROUTER_API_KEY").is_ok_and(|k| !k.is_empty()),
         "nvidia" => std::env::var("NVIDIA_API_KEY").is_ok_and(|k| !k.is_empty()),
         _ => false,

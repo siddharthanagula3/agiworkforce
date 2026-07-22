@@ -13,12 +13,12 @@
  * per-user BYOK key. There is no user-supplied-key provider construction
  * path in apps/web to keep separate from the server-key path.
  *
- * `pendingAdapter` no longer applies to any entry: Mistral/Groq/OpenRouter
- * adapters (`packages/ai/providers/{mistral,groq,openrouter}`) all shipped and
- * are wired into every server-key adapter table (v1 chat-completions route's
- * `ADAPTER_PROVIDERS`, `apps/web/lib/services/provider-adapter-service.ts`).
- * Field kept on the type in case a future provider genuinely lands here
- * before its adapter package does.
+ * `pendingAdapter` no longer applies to any entry: every listed provider's
+ * adapter (`packages/ai/providers/*`) has shipped and is wired into every
+ * server-key adapter table (v1 chat-completions route's `ADAPTER_PROVIDERS`,
+ * `apps/web/lib/services/provider-adapter-service.ts`). Field kept on the type
+ * in case a future provider genuinely lands here before its adapter package
+ * does.
  */
 
 export interface ByokProvider {
@@ -44,7 +44,5 @@ export const BYOK_PROVIDERS: ReadonlyArray<ByokProvider> = [
   { id: 'qwen', label: 'Qwen', envVar: 'QWEN_API_KEY', iconText: 'QW' },
   { id: 'moonshot', label: 'Moonshot', envVar: 'MOONSHOT_API_KEY', iconText: 'MS' },
   { id: 'zhipu', label: 'Zhipu', envVar: 'ZHIPU_API_KEY', iconText: 'ZH' },
-  { id: 'mistral', label: 'Mistral', envVar: 'MISTRAL_API_KEY', iconText: 'MI' },
-  { id: 'groq', label: 'Groq', envVar: 'GROQ_API_KEY', iconText: 'GR' },
   { id: 'openrouter', label: 'OpenRouter', envVar: 'OPENROUTER_API_KEY', iconText: 'OR' },
 ];

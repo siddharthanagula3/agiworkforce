@@ -578,7 +578,7 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("gemini-3.5-flash"),
+            executor.infer_provider_from_model("gemini-3.6-flash"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -590,7 +590,7 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("qwen-max"),
+            executor.infer_provider_from_model("qwen-3.7-plus"),
             Provider::ManagedCloud
         );
         assert_eq!(

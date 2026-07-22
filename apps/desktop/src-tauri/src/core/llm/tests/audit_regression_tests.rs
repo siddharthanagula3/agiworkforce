@@ -8,7 +8,9 @@
 //
 // Previously Google/ComplexReasoning returned "gemini-3-deep-think" (a model
 // that never existed) and Qwen/CodeGeneration returned bare "qwen-coder"
-// instead of the correct "qwen-coder-plus".  These tests pin the correct values.
+// instead of a real catalog model.  These tests pin the correct values.
+// "qwen-coder-plus" was retired in the 2026-07 catalog restructure (latest-
+// family-only); code_generation now routes to "qwen-3.7-plus".
 // ---------------------------------------------------------------------------
 mod r1_phantom_models {
     use crate::core::llm::{Provider, TaskType};
@@ -29,7 +31,7 @@ mod r1_phantom_models {
     }
 
     #[test]
-    fn qwen_code_generation_returns_qwen_coder_plus_not_bare_qwen_coder() {
+    fn qwen_code_generation_returns_qwen_3_7_plus_not_bare_qwen_coder() {
         let model = Provider::Qwen.get_model_for_task(TaskType::CodeGeneration);
         assert_ne!(
             model, "qwen-coder",
@@ -37,8 +39,8 @@ mod r1_phantom_models {
             model
         );
         assert_eq!(
-            model, "qwen-coder-plus",
-            "Qwen/CodeGeneration should return 'qwen-coder-plus', got: {}",
+            model, "qwen-3.7-plus",
+            "Qwen/CodeGeneration should return 'qwen-3.7-plus', got: {}",
             model
         );
     }
@@ -59,10 +61,9 @@ mod r1_phantom_models {
             Provider::DeepSeek,
             Provider::Qwen,
             Provider::Moonshot,
+            Provider::Minimax,
             Provider::Zhipu,
             Provider::ManagedCloud,
-            Provider::Mistral,
-            Provider::Groq,
             Provider::Together,
             Provider::Fireworks,
             Provider::Cerebras,
