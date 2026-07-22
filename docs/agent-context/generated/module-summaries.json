@@ -128,10 +128,10 @@
       "purpose": "Google/Gemini provider adapter for AGI-owned model/provider contracts."
     },
     {
-      "name": "@agiworkforce/providers-groq",
+      "name": "groq",
       "path": "packages/ai/providers/groq",
       "kind": "package",
-      "purpose": "Groq provider adapter using AGI-owned provider contracts. Groq serves an OpenAI-compatible Chat Completions API on custom LPU hardware for very high token throughput (~280-560 tokens/sec)."
+      "purpose": "unknown"
     },
     {
       "name": "@agiworkforce/providers-lmstudio",
@@ -140,10 +140,10 @@
       "purpose": "LM Studio local/OpenAI-compatible provider adapter for AGI-owned model/provider contracts."
     },
     {
-      "name": "@agiworkforce/providers-mistral",
+      "name": "mistral",
       "path": "packages/ai/providers/mistral",
       "kind": "package",
-      "purpose": "Mistral AI provider adapter using AGI-owned provider contracts. Mistral serves an OpenAI-compatible Chat Completions API; the shared compat layer classifies it as `knownProviderFamily: 'mistral'`, which drives the `max_tokens` (not `max_..."
+      "purpose": "unknown"
     },
     {
       "name": "@agiworkforce/providers-moonshot",
