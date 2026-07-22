@@ -329,15 +329,16 @@ function evaluateSessionCapabilityAdmission(
 function normalizeTier(
   tier: string | null | undefined,
 ): 'free' | 'pro' | 'max' | 'enterprise' | 'byok' {
-  // Basic shares Pro's routing admission (budget-differentiated tier);
-  // previously it fell through to 'free', collapsing a paying Basic
-  // subscriber's auto-routing to the free workhorse slot.
+  // Free and Basic share the economy model pool. Basic is differentiated by
+  // its larger managed-usage allowance; Pro unlocks the next model band and
+  // developer surfaces.
   switch ((tier ?? '').toLowerCase()) {
     case 'pro':
     case 'team':
+      return 'pro';
     case 'basic':
     case 'hobby':
-      return 'pro';
+      return 'free';
     case 'max':
     case 'max_15x':
     case 'max-15x':

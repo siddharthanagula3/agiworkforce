@@ -4,11 +4,14 @@ vi.mock('server-only', () => ({}));
 
 import {
   getPlanDailyUsageUnits,
-  getPlanDailyUsageBudgetMicrousd,
+  getPlanFiveHourUsageBudgetMicrousd,
+  getPlanFiveHourUsageUnits,
   getPlanFlagshipWeeklyUsageBudgetCents,
+  getPlanMonthlyUsageBudgetMicrousd,
   getPlanMonthlyUsageUnits,
   getPlanSessionUsageBudgetCents,
   getPlanUsageBudgetCents,
+  getPlanWeeklyUsageBudgetMicrousd,
   getPlanWeeklyUsageBudgetCents,
   getPlanWeeklyUsageUnits,
   toPublicUsagePercentage,
@@ -29,9 +32,14 @@ describe('managed usage policy', () => {
     expect(getPlanWeeklyUsageUnits('team')).toBe(500);
   });
 
-  it('uses one exact private unit per day for Free without rounding it to a whole cent', () => {
-    expect(getPlanDailyUsageUnits('free')).toBe(1);
-    expect(getPlanDailyUsageBudgetMicrousd('free')).toBe(5_000);
+  it('uses founder-set Free rolling limits without a daily cap', () => {
+    expect(getPlanMonthlyUsageUnits('free')).toBe(20);
+    expect(getPlanWeeklyUsageUnits('free')).toBe(15);
+    expect(getPlanFiveHourUsageUnits('free')).toBe(5);
+    expect(getPlanMonthlyUsageBudgetMicrousd('free')).toBe(100_000);
+    expect(getPlanWeeklyUsageBudgetMicrousd('free')).toBe(75_000);
+    expect(getPlanFiveHourUsageBudgetMicrousd('free')).toBe(25_000);
+    expect(getPlanDailyUsageUnits('free')).toBe(0);
     expect(getPlanDailyUsageUnits('pro')).toBe(0);
   });
 
@@ -42,6 +50,7 @@ describe('managed usage policy', () => {
     expect(getPlanUsageBudgetCents('max_15x')).toBe(15_000);
     expect(getPlanUsageBudgetCents('team')).toBe(1_000);
     expect(getPlanUsageBudgetCents('enterprise')).toBe(0);
+    expect(getPlanUsageBudgetCents('free')).toBe(0);
   });
 
   it('keeps the rolling five-hour and flagship sub-limits tied to the weekly window', () => {

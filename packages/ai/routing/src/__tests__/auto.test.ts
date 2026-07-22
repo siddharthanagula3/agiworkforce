@@ -227,18 +227,16 @@ describe('resolveAutoRoute', () => {
     });
   });
 
-  it('admits basic exactly like pro (budget-differentiated tier, not a free downgrade)', () => {
+  it('keeps basic on the shared Free/Basic model pool', () => {
     const args = {
       selection: 'auto-balanced',
       taskType: 'reasoning',
       trustMode: 'managed_cloud',
     } as const;
     const asBasic = resolveAutoRoute({ ...args, subscriptionTier: 'basic' });
-    const asPro = resolveAutoRoute({ ...args, subscriptionTier: 'pro' });
     const asFree = resolveAutoRoute({ ...args, subscriptionTier: 'free' });
 
-    expect(asBasic).toEqual(asPro);
-    expect(asBasic).not.toEqual(asFree);
+    expect(asBasic).toEqual(asFree);
   });
 
   it('admits Max 15x exactly like Max for Auto routing', () => {
@@ -263,7 +261,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'deepseek-v4-flash',
+      modelKey: 'claude-haiku-4.5',
       effectiveProfile: 'economy',
     });
   });

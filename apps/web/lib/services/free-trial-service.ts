@@ -7,7 +7,10 @@ import { getModelMetadataById } from '@agiworkforce/types';
 export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
-  getPlanDailyUsageBudgetMicrousd,
+  getInternalUsageUnitMicrousd,
+  getPlanFiveHourUsageBudgetMicrousd,
+  getPlanMonthlyUsageBudgetMicrousd,
+  getPlanWeeklyUsageBudgetMicrousd,
   toPublicUsagePercentage,
 } from '@/lib/server/managed-usage-policy';
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
@@ -19,8 +22,12 @@ import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calc
  * changing the client contract.
  */
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
-  dailyBudgetMicrousd: getPlanDailyUsageBudgetMicrousd('free'),
-  resetAfterHours: 24,
+  unitMicrousd: getInternalUsageUnitMicrousd(),
+  fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
+  fiveHourWindowHours: 5,
+  weeklyBudgetMicrousd: getPlanWeeklyUsageBudgetMicrousd('free'),
+  weeklyWindowHours: 7 * 24,
+  monthlyBudgetMicrousd: getPlanMonthlyUsageBudgetMicrousd('free'),
 });
 
 export type FreeTrialReservation = {
@@ -33,11 +40,13 @@ export type FreeTrialReservation = {
 
 type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
 
-type FreeTrialUsageWindowRow = {
-  daily_cost_microusd: number | string;
-  daily_reserved_microusd: number | string;
-  daily_started_at: string | Date;
-  window_expired: boolean;
+type FreeTrialUsageSnapshotRow = {
+  five_hour_used_microusd: number | string;
+  weekly_used_microusd: number | string;
+  monthly_used_microusd: number | string;
+  five_hour_oldest_at: string | Date | null;
+  weekly_oldest_at: string | Date | null;
+  account_period_end: string | Date;
 };
 
 type FreeTrialReservationRow = {
@@ -53,8 +62,77 @@ type ReserveResult =
 export type FreeTrialPublicUsage = {
   usagePercentage: number;
   resetAt: string | null;
+  sessionUsagePercentage: number;
+  sessionResetAt: string | null;
+  weeklyUsagePercentage: number;
+  weeklyResetAt: string | null;
   hasUsageRemaining: boolean;
 };
+
+/**
+ * One reservation row is the authoritative Free ledger entry. Unsettled work
+ * counts at its full reservation; settlement replaces that estimate with the
+ * actual charge. The account month is anchored to profiles.created_at, with
+ * month-end anniversaries naturally clamped by PostgreSQL interval arithmetic.
+ */
+const FREE_USAGE_SNAPSHOT_SQL = `
+  with account_anchor as (
+    select created_at,
+           greatest(
+             0,
+             (extract(year from now())::integer - extract(year from created_at)::integer) * 12
+               + extract(month from now())::integer
+               - extract(month from created_at)::integer
+           ) as month_guess
+    from public.profiles
+    where id = $1
+  ),
+  account_month as (
+    select created_at,
+           greatest(
+             0,
+             month_guess - case
+               when created_at + make_interval(months => month_guess) > now() then 1
+               else 0
+             end
+           ) as elapsed_months
+    from account_anchor
+  ),
+  account_period as (
+    select created_at + make_interval(months => elapsed_months) as period_start,
+           created_at + make_interval(months => elapsed_months + 1) as period_end
+    from account_month
+  ),
+  relevant_usage as (
+    select reservation.created_at,
+           coalesce(reservation.actual_cost_microusd, reservation.reserved_microusd) as used_microusd
+    from public.free_daily_usage_reservations as reservation
+    cross join account_period
+    where reservation.user_id = $1
+      and reservation.created_at >= least(
+        now() - $3 * interval '1 hour',
+        account_period.period_start
+      )
+  )
+  select coalesce(sum(used_microusd) filter (
+           where created_at >= now() - $2 * interval '1 hour'
+         ), 0)::bigint as five_hour_used_microusd,
+         coalesce(sum(used_microusd) filter (
+           where created_at >= now() - $3 * interval '1 hour'
+         ), 0)::bigint as weekly_used_microusd,
+         coalesce(sum(used_microusd) filter (
+           where created_at >= account_period.period_start
+         ), 0)::bigint as monthly_used_microusd,
+         min(created_at) filter (
+           where created_at >= now() - $2 * interval '1 hour' and used_microusd > 0
+         ) as five_hour_oldest_at,
+         min(created_at) filter (
+           where created_at >= now() - $3 * interval '1 hour' and used_microusd > 0
+         ) as weekly_oldest_at,
+         account_period.period_end as account_period_end
+  from account_period
+  left join relevant_usage on true
+  group by account_period.period_start, account_period.period_end`;
 
 type FreeTrialBudgetResult =
   | { ok: true; maxOutputTokens: number }
@@ -192,75 +270,72 @@ export function isFreeTrialRequest(params: {
   );
 }
 
-/**
- * Read the active Free rolling-day window and discard its private operands at
- * the server boundary. Active reservations count as usage so concurrent work
- * cannot make the public meter look more available than admission control.
- */
+/** Read all three Free windows and discard their private operands. */
 export async function getFreeTrialPublicUsage(userId: string): Promise<FreeTrialPublicUsage> {
-  const { dailyBudgetMicrousd, resetAfterHours } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
-  const [window] = await getNeonDb().query<FreeTrialUsageWindowRow>(
-    `select daily_cost_microusd,
-            daily_reserved_microusd,
-            daily_started_at,
-            now() - daily_started_at >= $2 * interval '1 hour' as window_expired
-     from public.website_auto_economy_trial_usage
-     where user_id = $1`,
-    [userId, resetAfterHours],
-  );
+  const {
+    fiveHourBudgetMicrousd,
+    fiveHourWindowHours,
+    weeklyBudgetMicrousd,
+    weeklyWindowHours,
+    monthlyBudgetMicrousd,
+  } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const [snapshot] = await getNeonDb().query<FreeTrialUsageSnapshotRow>(FREE_USAGE_SNAPSHOT_SQL, [
+    userId,
+    fiveHourWindowHours,
+    weeklyWindowHours,
+  ]);
 
-  if (!window || window.window_expired) {
-    return { usagePercentage: 0, resetAt: null, hasUsageRemaining: true };
+  if (!snapshot) {
+    return {
+      usagePercentage: 0,
+      resetAt: null,
+      sessionUsagePercentage: 0,
+      sessionResetAt: null,
+      weeklyUsagePercentage: 0,
+      weeklyResetAt: null,
+      hasUsageRemaining: true,
+    };
   }
 
-  const used =
-    toNonNegativeInteger(window.daily_cost_microusd) +
-    toNonNegativeInteger(window.daily_reserved_microusd);
-  const startedAt = new Date(toTimestampParameter(window.daily_started_at));
-  const resetAt = Number.isNaN(startedAt.getTime())
-    ? null
-    : new Date(startedAt.getTime() + resetAfterHours * 60 * 60 * 1000).toISOString();
+  const fiveHourUsed = toNonNegativeInteger(snapshot.five_hour_used_microusd);
+  const weeklyUsed = toNonNegativeInteger(snapshot.weekly_used_microusd);
+  const monthlyUsed = toNonNegativeInteger(snapshot.monthly_used_microusd);
 
   return {
-    usagePercentage: toPublicUsagePercentage(used, dailyBudgetMicrousd),
-    resetAt,
-    hasUsageRemaining: used < dailyBudgetMicrousd,
+    usagePercentage: toPublicUsagePercentage(monthlyUsed, monthlyBudgetMicrousd),
+    resetAt: toIsoTimestamp(snapshot.account_period_end),
+    sessionUsagePercentage: toPublicUsagePercentage(fiveHourUsed, fiveHourBudgetMicrousd),
+    sessionResetAt: getRollingResetAt(snapshot.five_hour_oldest_at, fiveHourWindowHours),
+    weeklyUsagePercentage: toPublicUsagePercentage(weeklyUsed, weeklyBudgetMicrousd),
+    weeklyResetAt: getRollingResetAt(snapshot.weekly_oldest_at, weeklyWindowHours),
+    hasUsageRemaining:
+      fiveHourUsed < fiveHourBudgetMicrousd &&
+      weeklyUsed < weeklyBudgetMicrousd &&
+      monthlyUsed < monthlyBudgetMicrousd,
   };
 }
 
 /**
- * Atomically reserve the entire remaining private daily budget before provider
- * egress. The usage row is locked for the duration of the transaction, so a
- * concurrent request observes the reservation and fails closed.
- *
- * The durable reservation also records its rolling-window identity. Settlement
- * can therefore release unused capacity only from that original window and can
- * never charge a newer window when a slow request completes after rollover.
+ * Atomically reserve the smallest allowance remaining across the rolling
+ * five-hour, rolling seven-day, and account-anniversary month windows.
  */
 export async function beginFreeTrialRequest(params: {
   userId: string;
   requestId: string;
 }): Promise<ReserveResult> {
   const db = getNeonDb();
-  const { dailyBudgetMicrousd, resetAfterHours } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const {
+    fiveHourBudgetMicrousd,
+    fiveHourWindowHours,
+    weeklyBudgetMicrousd,
+    weeklyWindowHours,
+    monthlyBudgetMicrousd,
+  } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
 
   return db.transaction(async (tx) => {
     await tx.execute('insert into public.profiles (id) values ($1) on conflict (id) do nothing', [
       params.userId,
     ]);
-
-    const [existingReservation] = await tx.query<FreeTrialReservationRow>(
-      `select window_started_at, reserved_microusd, settled_at
-       from public.free_daily_usage_reservations
-       where user_id = $1 and request_id = $2
-       for update`,
-      [params.userId, params.requestId],
-    );
-    if (existingReservation) {
-      // A request id owns at most one provider attempt. Replays must not share
-      // its reservation or execute provider work a second time.
-      return { ok: false, code: 'budget_reached' };
-    }
 
     await tx.execute(
       `insert into public.website_auto_economy_trial_usage
@@ -272,59 +347,48 @@ export async function beginFreeTrialRequest(params: {
       [params.userId],
     );
 
-    let [window] = await tx.query<FreeTrialUsageWindowRow>(
-      `select daily_cost_microusd,
-              daily_reserved_microusd,
-              daily_started_at,
-              now() - daily_started_at >= $2 * interval '1 hour' as window_expired
+    // This row is the per-user transaction mutex. Every admission decision is
+    // serialized before reading or inserting reservation-ledger rows.
+    const [lockedUsage] = await tx.query<{ user_id: string }>(
+      `select user_id
        from public.website_auto_economy_trial_usage
        where user_id = $1
        for update`,
-      [params.userId, resetAfterHours],
+      [params.userId],
     );
-    if (!window) throw new Error('Free-tier usage window unavailable');
+    if (!lockedUsage) throw new Error('Free-tier usage ledger unavailable');
 
-    if (window.window_expired) {
-      const [resetWindow] = await tx.query<{ daily_started_at: string | Date }>(
-        `update public.website_auto_economy_trial_usage
-         set daily_cost_microusd = 0,
-             daily_reserved_microusd = 0,
-             daily_started_at = now(),
-             last_prompt_at = now()
-         where user_id = $1
-         returning daily_started_at`,
-        [params.userId],
-      );
-      if (!resetWindow) throw new Error('Free-tier usage window reset failed');
-      window = {
-        daily_cost_microusd: 0,
-        daily_reserved_microusd: 0,
-        daily_started_at: resetWindow.daily_started_at,
-        window_expired: false,
-      };
-    }
+    const [existingReservation] = await tx.query<FreeTrialReservationRow>(
+      `select window_started_at, reserved_microusd, settled_at
+       from public.free_daily_usage_reservations
+       where user_id = $1 and request_id = $2
+       for update`,
+      [params.userId, params.requestId],
+    );
+    if (existingReservation) return { ok: false, code: 'budget_reached' };
 
-    const dailyCostMicrousd = toNonNegativeInteger(window.daily_cost_microusd);
-    const dailyReservedMicrousd = toNonNegativeInteger(window.daily_reserved_microusd);
+    const [snapshot] = await tx.query<FreeTrialUsageSnapshotRow>(FREE_USAGE_SNAPSHOT_SQL, [
+      params.userId,
+      fiveHourWindowHours,
+      weeklyWindowHours,
+    ]);
+    if (!snapshot) throw new Error('Free-tier usage snapshot unavailable');
+
     const remainingMicrousd = Math.max(
       0,
-      dailyBudgetMicrousd - dailyCostMicrousd - dailyReservedMicrousd,
+      Math.min(
+        fiveHourBudgetMicrousd - toNonNegativeInteger(snapshot.five_hour_used_microusd),
+        weeklyBudgetMicrousd - toNonNegativeInteger(snapshot.weekly_used_microusd),
+        monthlyBudgetMicrousd - toNonNegativeInteger(snapshot.monthly_used_microusd),
+      ),
     );
     if (remainingMicrousd === 0) return { ok: false, code: 'budget_reached' };
 
     const reserved = await tx.execute(
-      `with reserved_window as (
-         update public.website_auto_economy_trial_usage
-         set daily_reserved_microusd = daily_reserved_microusd + $2,
-             last_prompt_at = now()
-         where user_id = $1
-         returning daily_started_at
-       )
-       insert into public.free_daily_usage_reservations
+      `insert into public.free_daily_usage_reservations
          (user_id, request_id, window_started_at, reserved_microusd)
-       select $1, $3, daily_started_at, $2
-       from reserved_window`,
-      [params.userId, remainingMicrousd, params.requestId],
+       values ($1, $2, now(), $3)`,
+      [params.userId, params.requestId, remainingMicrousd],
     );
     if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
 
@@ -341,9 +405,10 @@ export async function beginFreeTrialRequest(params: {
 }
 
 /**
- * Reconcile a free-tier reservation with observed provider cost. A completed
- * response consumes at least the configured daily unit, so a one-unit Free
- * allowance means one completed response rather than unlimited tiny calls.
+ * Reconcile a Free reservation with observed provider cost. A completed
+ * response consumes at least one internal unit, so the rolling limits remain
+ * meaningful even for tiny greetings while more expensive work can consume
+ * multiple units.
  * Repeated settlement is a no-op, and zero-usage failures still release their
  * reservation. Best-effort persistence preserves an already-produced provider
  * response if the accounting database is temporarily unavailable.
@@ -362,11 +427,7 @@ export async function settleFreeTrialRequest(params: {
       ? LLMCostCalculator.calculateCostMicrousd(params.provider, params.model, usage)
       : 0;
   const minimumCompletedChargeMicrousd =
-    params.outcome === 'completed' ? FREE_TRIAL_INTERNAL_USAGE_POLICY.dailyBudgetMicrousd : 0;
-  const costMicrousd = Math.min(
-    params.reservation.reservedMicrousd,
-    Math.max(measuredCostMicrousd, minimumCompletedChargeMicrousd),
-  );
+    params.outcome === 'completed' ? FREE_TRIAL_INTERNAL_USAGE_POLICY.unitMicrousd : 0;
   const db = getNeonDb();
 
   try {
@@ -380,25 +441,18 @@ export async function settleFreeTrialRequest(params: {
       );
       if (!reservation || reservation.settled_at) return;
 
+      const costMicrousd = Math.min(
+        toNonNegativeInteger(reservation.reserved_microusd),
+        Math.max(measuredCostMicrousd, minimumCompletedChargeMicrousd),
+      );
+
       await tx.execute(
-        `update public.website_auto_economy_trial_usage as usage
-         set daily_reserved_microusd = case
-               when usage.daily_started_at = reservation.window_started_at
-                 then greatest(0, usage.daily_reserved_microusd - reservation.reserved_microusd)
-               else usage.daily_reserved_microusd end,
-             daily_cost_microusd = case
-               when usage.daily_started_at = reservation.window_started_at
-                 then usage.daily_cost_microusd + $3
-               else usage.daily_cost_microusd end,
-             period_tokens_used = usage.period_tokens_used + $4,
-             prompt_count = usage.prompt_count + 1,
+        `update public.website_auto_economy_trial_usage
+         set period_tokens_used = period_tokens_used + $2,
+             prompt_count = prompt_count + 1,
              last_prompt_at = now()
-         from public.free_daily_usage_reservations as reservation
-         where usage.user_id = $1
-           and reservation.user_id = usage.user_id
-           and reservation.request_id = $2
-           and reservation.settled_at is null`,
-        [params.reservation.userId, params.reservation.requestId, costMicrousd, tokens],
+         where user_id = $1`,
+        [params.reservation.userId, tokens],
       );
 
       const metadata = JSON.stringify({
@@ -442,14 +496,25 @@ export async function settleFreeTrialRequest(params: {
   }
 }
 
+function toIsoTimestamp(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getRollingResetAt(
+  oldestAt: string | Date | null | undefined,
+  windowHours: number,
+): string | null {
+  const oldestTimestamp = toIsoTimestamp(oldestAt);
+  if (!oldestTimestamp) return null;
+  return new Date(Date.parse(oldestTimestamp) + windowHours * 60 * 60 * 1_000).toISOString();
+}
+
 function toNonNegativeInteger(value: number | string): number {
   const parsed = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(parsed)) return 0;
   return Math.max(0, Math.floor(parsed));
-}
-
-function toTimestampParameter(value: string | Date): string {
-  return value instanceof Date ? value.toISOString() : value;
 }
 
 function containsImageInput(value: unknown): boolean {

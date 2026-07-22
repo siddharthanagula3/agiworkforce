@@ -878,7 +878,7 @@
           "budgetPath": "thinking.budget_tokens"
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "free" }
     },
     "gemini-embedding-2": {
       "id": "gemini-embedding-2",
@@ -1077,7 +1077,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "pro" }
     },
     "deepseek-v4-pro": {
       "id": "deepseek-v4-pro",
@@ -1180,7 +1180,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": { "minTier": "pro" },
       "longContext": {
         "inputCost": 0.172,
         "cached_input": 0.0344,
@@ -1619,7 +1619,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" }
+      "tierPolicy": { "minTier": "pro" }
     },
     "qwen-3.7-plus": {
       "id": "qwen-3.7-plus",
@@ -1673,7 +1673,7 @@
           "budgetPath": null
         }
       },
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": { "minTier": "pro" },
       "longContext": {
         "inputCost": 1.2,
         "cached_input": 0.24,
@@ -1910,22 +1910,17 @@
     }
   },
   "tierAllowedModels": {
-    "economy": [
-      "gpt-5.6-luna",
-      "gemini-3.1-flash-lite",
-      "deepseek-v4-flash",
-      "qwen-3.7-plus",
-      "qwen-3.5-flash",
-      "glm-5.2",
-      "sonar"
-    ],
+    "economy": ["gpt-5.6-luna", "gemini-3.1-flash-lite", "claude-haiku-4.5", "sonar"],
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",
-      "claude-haiku-4.5",
       "gemini-3.6-flash",
       "gemini-3.1-pro-preview",
+      "deepseek-v4-flash",
       "deepseek-v4-pro",
+      "qwen-3.7-plus",
+      "qwen-3.5-flash",
+      "glm-5.2",
       "sonar-deep-research",
       "kimi-k3"
     ],

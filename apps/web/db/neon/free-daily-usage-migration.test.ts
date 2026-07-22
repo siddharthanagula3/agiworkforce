@@ -18,4 +18,15 @@ describe('free daily usage migration', () => {
     expect(sql).toMatch(/settled_at timestamptz/i);
     expect(sql).toMatch(/check \(outcome is null or outcome = any/i);
   });
+
+  it('indexes the reservation ledger for rolling Free usage windows', async () => {
+    const sql = await readFile(
+      join(process.cwd(), 'db/neon/0067_free_rolling_usage_windows.sql'),
+      'utf8',
+    );
+
+    expect(sql).toMatch(/create index if not exists idx_free_usage_reservations_user_created/i);
+    expect(sql).toMatch(/on public\.free_daily_usage_reservations \(user_id, created_at desc\)/i);
+    expect(sql).toMatch(/include \(actual_cost_microusd, reserved_microusd, settled_at\)/i);
+  });
 });
