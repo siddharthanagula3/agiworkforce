@@ -245,24 +245,38 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     const shouldShowWarning = timeRemaining <= WARNING_TIME_BEFORE_TIMEOUT_MS;
     const secondsRemaining = Math.ceil(timeRemaining / 1000);
 
+    // Warning-edge bookkeeping runs regardless of whether state changes.
+    if (shouldShowWarning && !wasWarningActiveRef.current) {
+      wasWarningActiveRef.current = true;
+      onWarning?.(secondsRemaining);
+    } else if (!shouldShowWarning) {
+      wasWarningActiveRef.current = false;
+    }
+
     setState((prev) => {
-      const newState = {
+      const timeoutMinutes = settings?.session_timeout ?? DEFAULT_SESSION_TIMEOUT_MINUTES;
+      const nextSeconds = shouldShowWarning ? secondsRemaining : 0;
+      // Bail out (return the SAME reference) when nothing changed. Without this,
+      // every check returns a fresh object and forces a re-render; when this
+      // hook's option callbacks are unstable (inline props from the consumer),
+      // its effects re-run each render and re-invoke checkTimeout, producing a
+      // self-sustaining render loop that pegs a CPU core (no "max update depth"
+      // because it hops through queueMicrotask). Idle checks now no-op.
+      if (
+        prev.lastActivity === lastActivity &&
+        prev.timeoutMinutes === timeoutMinutes &&
+        prev.isWarningActive === shouldShowWarning &&
+        prev.secondsUntilTimeout === nextSeconds
+      ) {
+        return prev;
+      }
+      return {
         ...prev,
         lastActivity,
-        timeoutMinutes: settings?.session_timeout ?? DEFAULT_SESSION_TIMEOUT_MINUTES,
+        timeoutMinutes,
         isWarningActive: shouldShowWarning,
-        secondsUntilTimeout: shouldShowWarning ? secondsRemaining : 0,
+        secondsUntilTimeout: nextSeconds,
       };
-
-      // Trigger warning callback when entering warning state
-      if (shouldShowWarning && !wasWarningActiveRef.current) {
-        wasWarningActiveRef.current = true;
-        onWarning?.(secondsRemaining);
-      } else if (!shouldShowWarning) {
-        wasWarningActiveRef.current = false;
-      }
-
-      return newState;
     });
   }, [isAuthenticated, user, timeoutMs, settings?.session_timeout, forceLogout, onWarning]);
 
