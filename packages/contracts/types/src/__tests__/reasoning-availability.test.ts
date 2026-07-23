@@ -25,6 +25,12 @@ describe('per-model reasoning capability', () => {
     expect(r.canDisableThinking).toBe(false);
   });
 
+  it('exposes only the provider-supported Gemini 3.1 Pro effort levels', () => {
+    const r = getModelReasoning('gemini-3.1-pro-preview');
+    expect(r.supportedEfforts).toEqual(['low', 'medium', 'high']);
+    expect(r.supportedEfforts).not.toContain('minimal');
+  });
+
   it('hides effort for a non-reasoning model', () => {
     const r = getModelReasoning('sonar');
     expect(r.capable).toBe(false);

@@ -124,6 +124,8 @@ pub struct ModelEntry {
     pub output_cost: f64,
     pub capabilities: ModelCapabilities,
     #[serde(default)]
+    pub reasoning: Option<ModelReasoning>,
+    #[serde(default)]
     pub benchmarks: Option<HashMap<String, f64>>,
     pub speed: String,
     pub quality: String,
@@ -133,6 +135,23 @@ pub struct ModelEntry {
     pub released: Option<String>,
     #[serde(default)]
     pub deprecated: Option<bool>,
+}
+
+/// Provider request metadata for model-scoped reasoning controls.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelReasoning {
+    #[serde(default)]
+    pub supported_efforts: Vec<String>,
+    #[serde(default)]
+    pub request: Option<ModelReasoningRequest>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelReasoningRequest {
+    #[serde(default)]
+    pub effort_path: Option<String>,
 }
 
 /// Boolean capability flags for a model.  JSON uses camelCase.
@@ -300,6 +319,29 @@ pub fn get_canonicalized_id(model_id: &str) -> String {
     }
 
     model_id.to_string()
+}
+
+/// Whether an exact catalog model supports an exact provider-native effort.
+/// Unknown models and models without a declared request path fail closed.
+pub fn model_supports_effort(model_id: &str, effort: &str) -> bool {
+    let canonical_model_id = get_canonicalized_id(model_id);
+    CONFIG
+        .models
+        .get(&canonical_model_id)
+        .and_then(|entry| entry.reasoning.as_ref())
+        .filter(|reasoning| {
+            reasoning
+                .request
+                .as_ref()
+                .and_then(|request| request.effort_path.as_deref())
+                .is_some_and(|path| !path.is_empty())
+        })
+        .is_some_and(|reasoning| {
+            reasoning
+                .supported_efforts
+                .iter()
+                .any(|item| item == effort)
+        })
 }
 
 /// Infer the Rust `Provider` enum from a model ID string using prefix matching.
@@ -665,6 +707,15 @@ mod tests {
         assert!(model_supports_gemini_thinking("gemini-3.1-pro-preview"));
         assert!(!model_supports_gemini_thinking("gemini-3-flash"));
         assert!(!model_supports_gemini_thinking("claude-opus-4.8"));
+    }
+
+    #[test]
+    fn model_effort_support_comes_from_exact_catalog_request_metadata() {
+        assert!(model_supports_effort("claude-opus-4.8", "high"));
+        assert!(model_supports_effort("claude-opus-4-8", "max"));
+        assert!(!model_supports_effort("claude-haiku-4.5", "low"));
+        assert!(!model_supports_effort("unknown-anthropic-model", "high"));
+        assert!(!model_supports_effort("claude-opus-4.8", "minimal"));
     }
 
     #[test]

@@ -47,6 +47,13 @@ const fableModel: ModelInfo = {
   provider: 'anthropic',
 };
 
+const haikuModel: ModelInfo = {
+  ...byokModel,
+  id: 'claude-haiku-4.5',
+  name: 'Claude Haiku 4.5',
+  provider: 'anthropic',
+};
+
 const solModel: ModelInfo = {
   ...byokModel,
   id: 'gpt-5.6-sol',
@@ -242,6 +249,18 @@ describe('ModelSelector execution-boundary admission', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Enable thinking mode' }));
 
     expect(onEffortChange).toHaveBeenCalledWith('high');
+  });
+
+  it('does not expose an effort-backed thinking control for Haiku 4.5', () => {
+    const onEffortChange = vi.fn();
+    seedConversation('byok', haikuModel.id);
+    useModelStore.setState({ models: [haikuModel], selectedModelId: haikuModel.id });
+    render(<ModelSelector effort={null} onEffortChange={onEffortChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    expect(screen.queryByRole('button', { name: /thinking mode/i })).toBeNull();
+    expect(onEffortChange).not.toHaveBeenCalled();
   });
 
   it('represents Fable mandatory reasoning without an off toggle', async () => {

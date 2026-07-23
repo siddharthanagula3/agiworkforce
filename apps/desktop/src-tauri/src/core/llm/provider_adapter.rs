@@ -2070,6 +2070,16 @@ pub(crate) fn to_crate_tool_definitions(
 pub(crate) struct AnthropicAdapter;
 
 impl AnthropicAdapter {
+    /// Resolve effort at the privileged provider boundary. The frontend also
+    /// filters controls by model, but native callers are untrusted and may send
+    /// stale or forged IPC payloads, so unknown/unsupported values fail closed.
+    fn resolved_effort(request: &LLMRequest) -> Option<&str> {
+        request
+            .effort
+            .as_deref()
+            .filter(|effort| super::models_config::model_supports_effort(&request.model, effort))
+    }
+
     /// c3 switch predicate: can the shared crate serializer express this
     /// request byte-faithfully? Anything outside this shape falls back to the
     /// legacy adapter arm below (no silent field drops):
@@ -2280,7 +2290,7 @@ impl AnthropicAdapter {
             tool_choice: request.tool_choice.as_ref().map(Self::map_tool_choice),
             thinking_budget: None,
             anthropic_thinking: Self::map_thinking(request.thinking.as_ref()),
-            effort: request.effort.as_deref(),
+            effort: Self::resolved_effort(request),
             top_p: request.top_p,
             top_k: request.top_k,
             metadata: request.metadata.as_ref(),
@@ -2693,11 +2703,6 @@ impl AnthropicAdapter {
             }
         }
 
-        // ── Effort parameter (Claude Opus 4.6+, GA) ─────────────────
-        if let Some(effort) = &request.effort {
-            anthropic_request["effort"] = serde_json::json!(effort);
-        }
-
         // ── Structured outputs (Anthropic output_config) ──────────────
         // Anthropic does NOT support OpenAI's `response_format`.  Instead it uses
         // `output_config` with a `format` field that supports `json_schema` and `text`.
@@ -2735,6 +2740,12 @@ impl AnthropicAdapter {
                     });
                 }
             }
+        }
+
+        // ── Model-scoped effort (Anthropic output_config.effort) ─────
+        // Merge with structured output rather than replacing its `format`.
+        if let Some(effort) = Self::resolved_effort(request) {
+            anthropic_request["output_config"]["effort"] = serde_json::json!(effort);
         }
 
         // ── Metadata ─────────────────────────────────────────────────

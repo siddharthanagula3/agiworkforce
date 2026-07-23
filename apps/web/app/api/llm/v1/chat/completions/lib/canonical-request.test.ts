@@ -358,6 +358,27 @@ describe('buildGoogleChatRequest -> translateChatRequest wire', () => {
     expect(geminiBody.generationConfig?.thinkingConfig).not.toHaveProperty('thinkingBudget');
     expect(geminiBody.generationConfig?.thinkingConfig).not.toHaveProperty('includeThoughts');
   });
+
+  it('sends Gemini Flash-Lite minimal as the exact thinking level', () => {
+    const processed = makeProcessed(
+      {
+        model: 'gemini-3.5-flash-lite',
+        messages: [{ role: 'user', content: 'hi' }],
+        effort: 'minimal',
+      },
+      'google',
+    );
+
+    const chatRequest = buildGoogleChatRequest(processed);
+    expect(chatRequest.thinking).toEqual({
+      type: 'enabled',
+      thinkingLevel: 'minimal',
+      includeThoughts: false,
+    });
+    expect(translateChatRequest(chatRequest).generationConfig?.thinkingConfig).toEqual({
+      thinkingLevel: 'minimal',
+    });
+  });
 });
 
 describe('computeAnthropicCacheConfig', () => {

@@ -98,38 +98,14 @@ const EFFORT_CHIP_LABEL: Record<string, string> = {
   max: 'Max',
 };
 
-const EFFORT_CHIP_DESCRIPTION: Record<string, string> = {
-  none: 'No reasoning — fastest, lowest token use',
-  minimal: 'Minimal reasoning',
-  low: 'Fastest, lowest token use',
-  medium: 'Balanced default for daily work',
-  high: 'More thorough for complex work',
-  xhigh: 'Extra-high for long-horizon work',
-  max: 'Most capable, highest token use',
-};
-
 /**
- * The effort marks to render for a model. `effort_levels`/`always_on` use the
- * model's exact `supportedEfforts`; `thinking_budget` maps low/medium/high marks
- * to budget presets when no explicit set is declared. `thinking_toggle` without a
- * set renders no marks (the on/off switch is the whole control).
+ * The effort marks to render for a model. Only catalog-declared
+ * `supportedEfforts` become user-selectable provider effort values. Manual
+ * `thinking_budget` models such as Haiku 4.5 keep their on/off switch while the
+ * server owns the token budget; they must not expose synthetic effort levels.
  */
 function effortChipsFor(r: ModelReasoning): string[] {
-  const base =
-    r.control === 'thinking_budget'
-      ? r.supportedEfforts && r.supportedEfforts.length > 0
-        ? r.supportedEfforts
-        : ['low', 'medium', 'high']
-      : (r.supportedEfforts ?? []);
-  // The UI store's Effort vocab (low|medium|high|xhigh|max) cannot represent
-  // `minimal`, so `minimal` maps to `low` (chipToStoreEffort). When a model's set
-  // has BOTH, drop `minimal` to avoid two marks resolving to the same store value
-  // (which would double-highlight and make clicking `minimal` light up `low`). The
-  // request path treats them equivalently (non-union effort values are dropped to
-  // the provider default). No catalog model has `minimal` without `low`.
-  return base.includes('minimal') && base.includes('low')
-    ? base.filter((e) => e !== 'minimal')
-    : base;
+  return r.supportedEfforts ?? [];
 }
 
 /** Whether the flyout should show a separate on/off switch (vs a `none` mark). */
@@ -140,17 +116,14 @@ function showsThinkingSwitch(r: ModelReasoning): boolean {
   return r.canDisableThinking ?? true;
 }
 
-/** Map a display chip to the thinking-store effort (or 'off'). */
-function chipToStoreEffort(chip: string): Effort | 'off' {
-  if (chip === 'none') return 'off';
-  if (chip === 'minimal') return 'low'; // closest representable; request path drops non-union values
+/** Map an exact catalog value to the shared thinking-store effort vocabulary. */
+function chipToStoreEffort(chip: string): Effort {
   return chip as Effort;
 }
 
 /** The model's default effort as a store value. */
 function defaultStoreEffort(r: ModelReasoning): Effort {
-  const mapped = r.defaultEffort ? chipToStoreEffort(r.defaultEffort) : 'medium';
-  return mapped === 'off' ? 'medium' : mapped;
+  return r.defaultEffort ?? 'medium';
 }
 
 function isModelSelectableForTier(model: AIModel, tier: string): boolean {
@@ -605,9 +578,10 @@ export function ComposerFooter({
   const effortChips = effortChipsFor(reasoning);
   const showThinkingSwitch = showsThinkingSwitch(reasoning);
   // Store efforts this model actually supports (for clamping the persisted pref).
-  const supportedStoreEfforts = new Set<Effort>(
-    effortChips.map(chipToStoreEffort).filter((e): e is Effort => e !== 'off'),
-  );
+  const supportedStoreEfforts = new Set<Effort>(effortChips.map(chipToStoreEffort));
+  const effectiveEffort = supportedStoreEfforts.has(thinkingEffort)
+    ? thinkingEffort
+    : defaultStoreEffort(reasoning);
 
   useEffect(() => {
     // modelLock covers tier, env AND availability gates — closing the selection-
@@ -626,15 +600,8 @@ export function ComposerFooter({
     if (isAlwaysOn && !thinkingEnabled) {
       setThinkingEnabled(true);
     }
-    if (
-      thinkingEnabled &&
-      supportedStoreEfforts.size > 0 &&
-      !supportedStoreEfforts.has(thinkingEffort)
-    ) {
-      setThinkingEffort(defaultStoreEffort(reasoning));
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModelId, isAlwaysOn, thinkingEnabled, thinkingEffort]);
+  }, [selectedModelId, isAlwaysOn, thinkingEnabled]);
 
   const handleThinkingEnabledChange = (checked: boolean) => {
     if (!checked) {
@@ -649,29 +616,21 @@ export function ComposerFooter({
     setThinkingEnabled(true);
   };
 
-  // Select an effort mark. `none` = off; other marks enable + set the level.
+  // Select an exact provider effort mark, including `none` and `minimal`.
   const handleEffortChip = (chip: string) => {
-    const store = chipToStoreEffort(chip);
-    if (store === 'off') {
-      setThinkingEnabled(false);
-      return;
-    }
-    setThinkingEffort(store); // setEffort also enables thinking
+    setThinkingEffort(chipToStoreEffort(chip));
   };
 
   // Whether an effort mark is the active selection.
   const isEffortChipActive = (chip: string): boolean => {
-    const store = chipToStoreEffort(chip);
-    if (store === 'off') return !thinkingEnabled;
-    return thinkingEnabled && thinkingEffort === store;
+    return effectiveEffort === chipToStoreEffort(chip);
   };
 
   // Whether the effort slider is visible. When there's a separate on/off
   // switch, it only shows while thinking is enabled. When the slider itself
   // carries the off state (a `none` mark) or the model is always-on, it is
   // always shown.
-  const effortChipsVisible =
-    supportsAdaptive && effortChips.length > 0 && (showThinkingSwitch ? thinkingEnabled : true);
+  const effortChipsVisible = supportsAdaptive && effortChips.length > 0;
   const selectedEffortIndex = effortChips.findIndex(isEffortChipActive);
   const defaultEffortIndex = effortChips.findIndex(
     (chip) => chipToStoreEffort(chip) === defaultStoreEffort(reasoning),
@@ -751,9 +710,9 @@ export function ComposerFooter({
                   <span className="min-w-[3.5rem] max-w-[140px] shrink truncate">
                     {selectedModel.name}
                   </span>
-                  {supportsAdaptive && thinkingEnabled && (
+                  {supportsAdaptive && effortChips.length > 0 && (
                     <span className="text-xs text-muted-foreground/70">
-                      {EFFORT_LABEL[thinkingEffort]}
+                      {EFFORT_LABEL[effectiveEffort]}
                     </span>
                   )}
                   <ChevronDown className="h-3 w-3 shrink-0" />
@@ -814,7 +773,7 @@ export function ComposerFooter({
 
                     {effortChipsVisible && (
                       <div
-                        className="mt-2.5 space-y-2"
+                        className="mt-3 rounded-full border border-border/50 bg-muted/35 px-3 py-3"
                         role="group"
                         aria-label="Reasoning effort level"
                       >
@@ -833,31 +792,9 @@ export function ComposerFooter({
                               EFFORT_CHIP_LABEL[effortChips[effortSliderIndex] ?? ''] ??
                               effortChips[effortSliderIndex]
                             }
-                            className="px-1"
+                            className="px-0.5"
                           />
                         )}
-                        <div className="flex items-start justify-between gap-1">
-                          {effortChips.map((chip) => {
-                            const isActive = isEffortChipActive(chip);
-                            return (
-                              <button
-                                key={chip}
-                                type="button"
-                                title={EFFORT_CHIP_DESCRIPTION[chip] ?? chip}
-                                aria-pressed={isActive}
-                                onClick={() => handleEffortChip(chip)}
-                                className={[
-                                  'min-w-0 flex-1 rounded px-0.5 py-1 text-center text-[10px] transition-colors',
-                                  isActive
-                                    ? 'bg-primary/10 font-medium text-primary'
-                                    : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
-                                ].join(' ')}
-                              >
-                                {EFFORT_CHIP_LABEL[chip] ?? chip}
-                              </button>
-                            );
-                          })}
-                        </div>
                       </div>
                     )}
                   </div>

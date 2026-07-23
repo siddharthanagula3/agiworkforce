@@ -1489,4 +1489,45 @@ describe('useChatStream', () => {
     expect(body['thinking_mode']).toBeUndefined();
     expect(body['effort']).toBeUndefined();
   });
+
+  it('enables Haiku 4.5 extended thinking without sending unsupported effort', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'thoughtful' }, finish_reason: 'stop' }] }]);
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('think about this', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: 'claude-haiku-4.5',
+        thinkingEnabled: true,
+        thinkingEffort: 'low',
+      });
+    });
+
+    const llmCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+    const body = JSON.parse(String(llmCall?.[1]?.body)) as Record<string, unknown>;
+    expect(body['thinking_mode']).toBe(true);
+    expect(body['effort']).toBeUndefined();
+  });
+
+  it('sends Gemini Flash-Lite minimal effort even when no separate thinking toggle is selected', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'fast' }, finish_reason: 'stop' }] }]);
+    const { result } = renderHook(() => useChatStream());
+
+    await act(async () => {
+      await result.current.sendMessage('classify this', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: 'gemini-3.5-flash-lite',
+        thinkingEnabled: false,
+        thinkingEffort: 'minimal' as never,
+      });
+    });
+
+    const llmCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/llm/v1/chat/completions'));
+    const body = JSON.parse(String(llmCall?.[1]?.body)) as Record<string, unknown>;
+    expect(body['effort']).toBe('minimal');
+  });
 });

@@ -95,4 +95,13 @@ describe('resolveRequestEffort (catalog-driven)', () => {
   it('does not attach reasoning effort to a catalog non-reasoning model', () => {
     expect(resolveRequestEffort('openai', 'gpt-image-2', 'high')).toBeUndefined();
   });
+
+  it('does not attach effort to Haiku 4.5 manual extended thinking', () => {
+    expect(resolveRequestEffort('anthropic', 'claude-haiku-4.5', 'low')).toBeUndefined();
+  });
+
+  it('preserves provider-supported none and minimal effort values', () => {
+    expect(resolveRequestEffort('openai', 'gpt-5.6-luna', 'none')).toBe('none');
+    expect(resolveRequestEffort('google', 'gemini-3.5-flash-lite', 'minimal')).toBe('minimal');
+  });
 });

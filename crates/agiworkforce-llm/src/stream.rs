@@ -89,7 +89,7 @@ pub struct ChatRequest<'a> {
     pub thinking_budget: Option<u32>,
     /// Anthropic thinking mode; supersedes `thinking_budget` when set.
     pub anthropic_thinking: Option<AnthropicThinking>,
-    /// Anthropic `effort` parameter (Claude Opus 4.6+): "low"/"medium"/"high".
+    /// Anthropic `output_config.effort` parameter for supported Claude models.
     pub effort: Option<&'a str>,
     /// Nucleus sampling; Anthropic dialect only (pending wider c3 wiring).
     pub top_p: Option<f32>,
@@ -334,7 +334,7 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
     }
 
     if let Some(effort) = req.effort {
-        body["effort"] = serde_json::json!(effort);
+        body["output_config"]["effort"] = serde_json::json!(effort);
     }
     if let Some(metadata) = req.metadata {
         body["metadata"] = metadata.clone();
@@ -2016,7 +2016,8 @@ mod anthropic_request_tests {
             body["tool_choice"],
             serde_json::json!({"type": "tool", "name": "read_file"})
         );
-        assert_eq!(body["effort"], "high");
+        assert!(body.get("effort").is_none());
+        assert_eq!(body["output_config"]["effort"], "high");
         assert!(body.get("top_p").is_some());
         assert_eq!(body["top_k"], 40);
         assert_eq!(body["metadata"], metadata);

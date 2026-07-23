@@ -1935,7 +1935,7 @@ export async function* runToolLoop(
         // of being forced into an endless tool loop. Explicit API tool_choice
         // values remain unchanged on every step.
         ...(step > 1 &&
-        processed.chatRequest.code_execution === true &&
+        processed.chatRequest?.code_execution === true &&
         processed.chatRequest.tool_choice === undefined &&
         llmRequest.tool_choice === 'required'
           ? { tool_choice: 'auto' as const }

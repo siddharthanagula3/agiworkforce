@@ -451,7 +451,15 @@ type ProcessFailure = { ok: false; response: NextResponse };
 type ProcessSuccess = { ok: true } & ProcessedRequest;
 export type ProcessResult = ProcessSuccess | ProcessFailure;
 
-const EFFORT_VALUES: ReadonlySet<string> = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+const EFFORT_VALUES: ReadonlySet<string> = new Set([
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
 
 function normalizeEffort(value: string | undefined): Effort | undefined {
   const normalized = value?.toLowerCase();
@@ -460,7 +468,10 @@ function normalizeEffort(value: string | undefined): Effort | undefined {
 
 function modelSupportsEffort(provider: string, model: string): boolean {
   const metadata = getModelMetadataById(model);
-  if (metadata) return metadata.capabilities.thinking;
+  if (metadata) {
+    const request = metadata.reasoning?.request;
+    return Boolean(request?.effortPath || request?.responsesEffortPath);
+  }
   return provider === 'anthropic' || provider === 'openai' || provider === 'google';
 }
 
@@ -574,7 +585,8 @@ export function buildThinkingConfig({
   // effort can't exceed what the model accepts (Haiku max 32768 < the 'max'
   // preset 65536). Matrix: Haiku budget min ~1024 / model-max.
   const budgetMax = getModelReasoning(model).thinkingBudget?.max;
-  const preset = ANTHROPIC_THINKING_BUDGET[effort ?? 'medium'];
+  const budgetEffort = effort === 'none' || effort === 'minimal' ? 'medium' : (effort ?? 'medium');
+  const preset = ANTHROPIC_THINKING_BUDGET[budgetEffort];
   return {
     type: 'enabled',
     budget_tokens: typeof budgetMax === 'number' ? Math.min(preset, budgetMax) : preset,
