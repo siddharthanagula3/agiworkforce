@@ -113,10 +113,10 @@ describe('getWebviewContent — structural smoke', () => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
     expect(doc.body.textContent).toContain('Local Runtime');
-    expect(doc.body.textContent).not.toContain('AGI Cloud');
     expect(doc.querySelector('#apiKeyBanner')).toBeNull();
     expect(doc.querySelector('#signInBtn')).toBeNull();
     expect(doc.querySelector('#cloudHistoryBtn')).toBeNull();
+    expect(doc.querySelector('#userInput')?.hasAttribute('disabled')).toBe(false);
   });
 
   it('contains the chat input and send button', () => {
@@ -124,6 +124,20 @@ describe('getWebviewContent — structural smoke', () => {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     expect(doc.querySelector('#userInput')).not.toBeNull();
     expect(doc.querySelector('#sendBtn')).not.toBeNull();
+  });
+
+  it('exposes a visible AGI Cloud account control with signed-in and reconnect states', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const scriptBody = Array.from(doc.querySelectorAll('script'))
+      .map((script) => script.textContent ?? '')
+      .join('\n');
+
+    expect(doc.querySelector('#accountBtn')?.getAttribute('aria-label')).toBe('AGI Cloud account');
+    expect(doc.querySelector('#accountStatusDot')).not.toBeNull();
+    expect(scriptBody).toContain("vscode.postMessage({ type: 'openAccount' })");
+    expect(scriptBody).toContain("msg.type === 'accountStatus'");
+    expect(scriptBody).toContain("'Reconnect to AGI Cloud'");
   });
 
   it('provides an inline first-run recovery path for an unavailable local runtime', () => {

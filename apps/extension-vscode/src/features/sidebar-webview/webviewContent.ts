@@ -217,6 +217,22 @@ export function getWebviewContent(
       gap: 4px;
     }
 
+    .account-status-dot {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      width: 6px;
+      height: 6px;
+      border: 1px solid var(--bg-elevated);
+      border-radius: 50%;
+      background: var(--text-secondary);
+    }
+    .account-status-dot.signed-in {
+      background: var(--vscode-testing-iconPassed, #3fb950);
+    }
+    .account-status-dot.expired { background: var(--vscode-editorWarning-foreground, #f59e0b); }
+    #accountBtn { position: relative; }
+
     .icon-btn {
       background: none;
       border: none;
@@ -1024,6 +1040,10 @@ export function getWebviewContent(
       </span>
     </div>
     <div class="header-actions">
+      <button class="icon-btn" id="accountBtn" title="AGI Cloud account" aria-label="AGI Cloud account">
+        <span class="codicon codicon-account" aria-hidden="true"></span>
+        <span class="account-status-dot" id="accountStatusDot" aria-hidden="true"></span>
+      </button>
       <button class="icon-btn" id="historyBtn" title="Developer session history" aria-label="Developer session history">
         <span class="codicon codicon-history" aria-hidden="true"></span>
       </button>
@@ -1137,6 +1157,8 @@ export function getWebviewContent(
     const plusBtn = document.getElementById('plusBtn');
     const plusMenu = document.getElementById('plusMenu');
     const actionsBtn = document.getElementById('actionsBtn');
+    const accountBtn = document.getElementById('accountBtn');
+    const accountStatusDot = document.getElementById('accountStatusDot');
     const historyBtn = document.getElementById('historyBtn');
     const newChatBtn = document.getElementById('newChatBtn');
     const mentionDropdown = document.getElementById('mentionDropdown');
@@ -1534,6 +1556,12 @@ export function getWebviewContent(
       vscode.postMessage({ type: 'openActionSheet' });
     });
 
+    if (accountBtn) {
+      accountBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'openAccount' });
+      });
+    }
+
     if (historyBtn) {
       historyBtn.addEventListener('click', () => {
         vscode.postMessage({ type: 'openHistory' });
@@ -1877,6 +1905,20 @@ export function getWebviewContent(
         } else {
           runtimeStatusMessageEl.textContent = msg.payload.message || 'The AGI CLI is unavailable.';
           runtimeStatusEl.style.display = 'flex';
+        }
+      }
+
+      else if (msg.type === 'accountStatus') {
+        if (!accountBtn || !accountStatusDot) return;
+        accountStatusDot.classList.remove('signed-in', 'expired');
+        if (msg.payload.status === 'signed-in') {
+          accountStatusDot.classList.add('signed-in');
+          accountBtn.title = 'AGI Cloud connected';
+        } else if (msg.payload.status === 'expired') {
+          accountStatusDot.classList.add('expired');
+          accountBtn.title = 'Reconnect to AGI Cloud';
+        } else {
+          accountBtn.title = 'Sign in to AGI Cloud';
         }
       }
 

@@ -6,15 +6,22 @@
  * Imports real source code via the vscode mock alias in vitest.config.ts.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   AgiWorkforceApiError,
   AgiWorkforcePaywallError,
+  getAccountAuthState,
+  getAccountToken,
   getApiKey,
+  setAccountToken,
   setApiKey,
   clearApiKey,
 } from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('AgiWorkforceApiError', () => {
   it('creates an error with message, statusCode, and code', () => {
@@ -72,6 +79,35 @@ describe('SecretStorage wrapper — getApiKey / setApiKey / clearApiKey', () => 
     await setApiKey(secrets, 'sk-new');
     const result = await getApiKey(secrets);
     expect(result).toBe('sk-new');
+  });
+});
+
+describe('AGI Cloud account session expiry', () => {
+  it('returns a signed-in state while the device credential is current', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    await setAccountToken(secrets, 'device-token', now + 60_000);
+
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({
+      status: 'signed-in',
+      expiresAt: now + 60_000,
+    });
+    await expect(getAccountToken(secrets)).resolves.toBe('device-token');
+  });
+
+  it('clears an expired device credential and reports reconnect required', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    await setAccountToken(secrets, 'expired-device-token', now - 1);
+
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
   });
 });
 

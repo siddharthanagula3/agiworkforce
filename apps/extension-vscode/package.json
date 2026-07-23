@@ -755,7 +755,7 @@
         "agiWorkforce.useProviderStream": {
           "type": "boolean",
           "default": false,
-          "description": "Route chat through the /api/v1/providers/:id/stream pipeline instead of the legacy AGI Workforce LLM proxy. Requires AGI account web auth, which is not wired in the VS Code extension yet."
+          "description": "Route chat through the /api/v1/providers/:id/stream pipeline instead of the legacy AGI Workforce LLM proxy. Requires browser-approved AGI Cloud device sign-in."
         },
         "agiWorkforce.gatewayUrl": {
           "type": "string",
