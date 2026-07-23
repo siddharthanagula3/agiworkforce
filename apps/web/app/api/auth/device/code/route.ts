@@ -71,7 +71,7 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
       device_code: deviceCode,
       user_code: userCode,
       verification_uri: verificationUri,
-      verification_uri_complete: `${verificationUri}?code=${encodeURIComponent(userCode)}`,
+      verification_uri_complete: `${verificationUri}?user_code=${encodeURIComponent(userCode)}`,
       interval: POLL_INTERVAL_SECONDS,
       expires_in: DEVICE_CODE_EXPIRES_SECONDS,
     },

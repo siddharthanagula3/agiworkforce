@@ -34,6 +34,7 @@ import { resolveTier } from '../../integrations/tierResolver';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn } from '../../integrations/routingTask';
+import { getAccountAuthState } from '../../utils/api';
 
 // ─── Message types (shared protocol) ─────────────────────────────────────────
 
@@ -60,6 +61,7 @@ export type WebviewToExtMessage =
   | { type: 'openFilePicker' }
   | { type: 'openHistory' }
   | { type: 'newChat' }
+  | { type: 'openAccount' }
   | {
       type: 'attachFiles';
       payload: {
@@ -140,7 +142,11 @@ export type ExtToWebviewMessage =
       };
     }
   | { type: 'attachmentsConsumed' }
-  | { type: 'rewindComplete' };
+  | { type: 'rewindComplete' }
+  | {
+      type: 'accountStatus';
+      payload: { status: 'signed-in' | 'signed-out' | 'expired' };
+    };
 
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
@@ -245,6 +251,7 @@ export class ChatStateManager {
         });
 
         await this.pushUsageMeter();
+        await this.pushAccountStatus();
         break;
       }
 
@@ -354,6 +361,11 @@ export class ChatStateManager {
         delete this._thread;
         this._pendingAttachments.splice(0);
         this._post({ type: 'conversationCleared' });
+        break;
+      }
+
+      case 'openAccount': {
+        await vscode.commands.executeCommand('agi-workforce.showAccountUsage');
         break;
       }
 
@@ -643,6 +655,11 @@ export class ChatStateManager {
         break;
       }
     }
+  }
+
+  public async pushAccountStatus(): Promise<void> {
+    const state = await getAccountAuthState(this._secrets);
+    this._post({ type: 'accountStatus', payload: { status: state.status } });
   }
 
   async pushUsageMeter(): Promise<void> {
