@@ -295,7 +295,7 @@ export async function getOrCreateAnonSession(
  * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) · Bearer-bypass invariant         │
  * │                                                                          │
  * │ The Bearer-bypass branch is only sound because cross-origin browsers     │
- * │ cannot forge a valid Clerk JWT or a valid AGI API key (same-origin       │
+ * │ cannot forge a valid Clerk JWT, developer JWT, or AGI API key            │
  * │ policy blocks reading another origin's localStorage / injecting          │
  * │ Authorization on third-party requests; a real API key requires an       │
  * │ Argon2id match against a specific stored hash). It is NOT a generic     │
@@ -303,7 +303,7 @@ export async function getOrCreateAnonSession(
  * │ RT-04 vulnerability, and WEB-APIKEY-CSRF-BLOCK-01's fix (the API-key    │
  * │ branch below) deliberately does NOT relax this: an sk_live_/sk_test_    │
  * │ token that fails ApiKeyService.verifyKey() falls through to the normal  │
- * │ CSRF token check exactly like an invalid Clerk JWT does.                │
+ * │ CSRF token check exactly like an invalid Clerk/developer JWT does.       │
  * │                                                                          │
  * │ DO NOT add new routes that check CSRF BEFORE auth and rely on this       │
  * │ helper to skip CSRF. If such a route ever passes `Authorization: Bearer  │
@@ -336,8 +336,8 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
 
   // AGI API keys (sk_live_/sk_test_), verified via ApiKeyService — mirrors
   // lib/api-auth.ts's getClerkAuthUser Path 2a. Checked by prefix first so a
-  // Clerk JWT never pays for a DB round-trip and an API key never pays for a
-  // Clerk verifyToken call; the two formats never overlap. verifyKey() does
+  // JWTs never pay for a DB round-trip and an API key never pays for a
+  // signature-verification call; the formats never overlap. verifyKey() does
   // its own parse-time rejection (VALID_KEY_PATTERN) before any DB work, so a
   // garbage sk_-shaped bearer costs at most one indexed lookup, never Argon2.
   if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) {
@@ -350,7 +350,16 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     }
   }
 
-  // Verify using Clerk token verification
+  // First-party developer tokens are HS256 credentials minted by the shared
+  // device authorization service. Signature/issuer/audience/surface validation
+  // is enough for the CSRF decision; route authentication remains responsible
+  // for the revocation and account-status checks.
+  const { verifyDeveloperTokenSignature } = await import('@/lib/server/developer-token');
+  if (verifyDeveloperTokenSignature(token)) {
+    return true;
+  }
+
+  // Verify using Clerk token verification.
   try {
     const { verifyToken } = await import('@clerk/backend');
     const secretKey = process.env['CLERK_SECRET_KEY'];
@@ -421,7 +430,7 @@ export async function requireCsrfToken(
   }
 
   // RT-04 fix: Only bypass CSRF when the Bearer credential is cryptographically
-  // valid (Clerk JWT or AGI API key). See isBearerTokenValid() for the threat
+  // valid (Clerk JWT, developer JWT, or AGI API key). See isBearerTokenValid() for the threat
   // model analysis.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {

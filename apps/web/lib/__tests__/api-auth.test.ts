@@ -25,6 +25,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
@@ -62,6 +63,8 @@ vi.mock('@clerk/backend', () => ({
 // test via makeFakeDb() so state never leaks between tests.
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
+const TEST_DEVELOPER_JWT_SECRET = 'test-developer-jwt-secret-at-least-32-bytes';
+process.env['JWT_SECRET'] = TEST_DEVELOPER_JWT_SECRET;
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
@@ -77,6 +80,7 @@ type FakeRow = Record<string, unknown>;
 
 function makeFakeDb() {
   const store = new Map<string, FakeRow>();
+  const revokedJtis = new Set<string>();
   let counter = 0;
 
   async function query(sql: string, params: unknown[] = []): Promise<FakeRow[]> {
@@ -85,6 +89,11 @@ function makeFakeDb() {
     // assertAccountActive — no suspended-user fixtures in this suite.
     if (s.includes('from profiles')) {
       return [];
+    }
+
+    if (s.includes('from revoked_jwts')) {
+      const jti = params[0] as string;
+      return revokedJtis.has(jti) ? [{ jti }] : [];
     }
 
     // POST route's per-user active-key count guard.
@@ -167,7 +176,7 @@ function makeFakeDb() {
 
   mockNeonQuery.mockImplementation(query);
   mockNeonExecute.mockImplementation(execute);
-  return { store };
+  return { store, revokedJtis };
 }
 
 // Imported AFTER the mocks above so the route handlers pick them up.
@@ -373,6 +382,54 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       expect(result).toEqual({ userId: 'clerk-jwt-user', email: 'user@example.com' });
       // Never routed through the api-keys table.
       expect(queriedApiKeysTable()).toBe(false);
+    });
+
+    it('authenticates a first-party developer device token and enforces its subject', async () => {
+      makeFakeDb();
+      const token = jwt.sign(
+        {
+          userId: 'device-user',
+          sub: 'device-user',
+          email: 'device@example.com',
+          surface: 'developer',
+        },
+        TEST_DEVELOPER_JWT_SECRET,
+        {
+          expiresIn: 3600,
+          issuer: 'agiworkforce-api-gateway',
+          audience: 'agiworkforce',
+          jwtid: 'device-jti-current',
+        },
+      );
+
+      await expect(getClerkAuthUser(makeBearerRequest(token))).resolves.toEqual({
+        userId: 'device-user',
+        email: 'device@example.com',
+      });
+      expect(mockAuth).not.toHaveBeenCalled();
+    });
+
+    it('rejects a cryptographically valid developer token after revocation', async () => {
+      const db = makeFakeDb();
+      db.revokedJtis.add('device-jti-revoked');
+      const token = jwt.sign(
+        {
+          userId: 'device-user',
+          sub: 'device-user',
+          surface: 'developer',
+        },
+        TEST_DEVELOPER_JWT_SECRET,
+        {
+          expiresIn: 3600,
+          issuer: 'agiworkforce-api-gateway',
+          audience: 'agiworkforce',
+          jwtid: 'device-jti-revoked',
+        },
+      );
+
+      await expect(getClerkAuthUser(makeBearerRequest(token))).rejects.toMatchObject({
+        statusCode: 401,
+      });
     });
 
     it('rejects a garbage Bearer token when there is no cookie session either', async () => {
