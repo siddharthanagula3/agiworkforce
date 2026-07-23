@@ -10,8 +10,7 @@
  */
 
 /** API gateway base URL (Express backend). */
-export const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL || 'https://www.agiworkforce.com';
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || 'https://agiworkforce.com';
 
 /** Public web app base URL (Next.js). */
 export const WEB_APP_URL: string =

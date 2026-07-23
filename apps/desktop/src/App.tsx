@@ -1194,9 +1194,10 @@ const DesktopShell = () => {
     setTimeoutWarning(null);
   }, []);
 
+  const runtimeAppMode = isTauri && appMode === 'cloud' && !hasCloudSession ? 'local' : appMode;
   const chatRuntime = useMemo(
-    () => createDesktopChatRuntimeWithLabeling({ isTauriHost: isTauri, appMode }),
-    [appMode],
+    () => createDesktopChatRuntimeWithLabeling({ isTauriHost: isTauri, appMode: runtimeAppMode }),
+    [runtimeAppMode],
   );
 
   // Keep the shared chat package's "is code execution actually available"

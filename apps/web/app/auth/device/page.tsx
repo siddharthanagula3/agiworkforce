@@ -83,7 +83,7 @@ function DeviceForm() {
         Connect a device.
       </h1>
       <p className="agi-device-auth-lede">
-        Confirm the code shown in VS Code, Chrome, or the AGI CLI.{' '}
+        Confirm the code shown in AGI Desktop, VS Code, Chrome, or the AGI CLI.{' '}
         <strong>
           Only approve a request you started. This device will be able to use your AGI account.
         </strong>

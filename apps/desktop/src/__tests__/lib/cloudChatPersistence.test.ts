@@ -99,11 +99,14 @@ describe('DCL-2 managed-cloud construction', () => {
     await expect(config.getAuthToken()).resolves.toBe('desktop-clerk-token');
   });
 
-  it('auth getter returns null when there is no session token', async () => {
-    useAuthStore.setState({ accessToken: null });
-    getDesktopCloudChatPersistenceClient();
-    const config = lastClientConfig();
-    await expect(config.getAuthToken()).resolves.toBeNull();
+  it('does not construct the shared client when the account token is absent', () => {
+    useAuthStore.setState({ accessToken: null, isAuthenticated: false });
+
+    expect(isManagedCloudPersistenceActive()).toBe(false);
+    expect(() => getDesktopCloudChatPersistenceClient()).toThrow(
+      /managed-cloud persistence is unavailable/i,
+    );
+    expect(createClientMock).not.toHaveBeenCalled();
   });
 });
 
@@ -141,12 +144,12 @@ describe('DCL-4 desktop cloud is open — sign-in is the only gate', () => {
     expect(() => getDesktopCloudChatPersistenceClient()).not.toThrow();
   });
 
-  it('refuses Cloud when signed out, keeping the seam unreachable (mechanism, not a gate)', () => {
+  it('opens the Cloud sign-in workspace while keeping persistence unreachable signed out', () => {
     useAuthStore.setState({ accessToken: null, isAuthenticated: false });
     useAppModeStore.getState().setMode('cloud');
 
-    expect(useAppModeStore.getState().mode).toBe('local');
-    expect(toastError).toHaveBeenCalledWith('Sign in to use AGI Cloud.');
+    expect(useAppModeStore.getState().mode).toBe('cloud');
+    expect(toastError).not.toHaveBeenCalled();
     expect(isManagedCloudPersistenceActive()).toBe(false);
     expect(() => getDesktopCloudChatPersistenceClient()).toThrow(
       /managed-cloud persistence is unavailable/i,

@@ -113,6 +113,7 @@ describe('/auth/device page', () => {
     render(<AuthDevicePage />);
 
     expect(screen.getByTestId('header')).toHaveAttribute('data-minimal', 'true');
+    expect(screen.getByText(/AGI Desktop, VS Code, Chrome, or the AGI CLI/)).toBeVisible();
   });
 
   it('directs the user back to the requesting app after approval', async () => {

@@ -25,7 +25,10 @@
  *
  * @module cloudChatPersistence
  */
-import { createManagedCloudChatClient, type ManagedCloudChatClient } from '@agiworkforce/cloud-contracts';
+import {
+  createManagedCloudChatClient,
+  type ManagedCloudChatClient,
+} from '@agiworkforce/cloud-contracts';
 import { WEB_APP_URL } from '../api/config';
 import { guardedFetch } from './egressGuard';
 import { selectPrivacyMode, useAppModeStore } from '../stores/appModeStore';
@@ -39,7 +42,12 @@ import { useAuthStore } from '../stores/auth';
  */
 export function isManagedCloudPersistenceActive(): boolean {
   try {
-    return selectPrivacyMode(useAppModeStore.getState()) === 'managed';
+    const authState = useAuthStore.getState();
+    return (
+      selectPrivacyMode(useAppModeStore.getState()) === 'managed' &&
+      authState.isAuthenticated &&
+      !!authState.accessToken
+    );
   } catch {
     // Fail-closed: an unreadable store is treated as a private boundary.
     return false;
