@@ -7,6 +7,7 @@ const createProviderAdapter = vi.fn((providerId: string, config: unknown) => ({
   config,
 }));
 const getOptionalEnv = vi.fn<(key: string) => string | undefined>();
+const loggerInfo = vi.fn();
 
 vi.mock('@agiworkforce/providers-factory', () => ({
   createProviderAdapter: (providerId: string, config: unknown) =>
@@ -18,7 +19,7 @@ vi.mock('@shared/utils/env', () => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
-  logger: { warn: vi.fn() },
+  logger: { info: (...args: unknown[]) => loggerInfo(...args), warn: vi.fn() },
 }));
 
 import { buildServerProviderAdapter } from './provider-adapter-service';
@@ -27,6 +28,7 @@ describe('buildServerProviderAdapter', () => {
   beforeEach(() => {
     createProviderAdapter.mockClear();
     getOptionalEnv.mockReset();
+    loggerInfo.mockClear();
   });
 
   it('adds request-specific cache policy without allowing the caller to replace managed credentials', () => {
@@ -72,6 +74,44 @@ describe('buildServerProviderAdapter', () => {
     expect(createProviderAdapter).toHaveBeenCalledOnce();
     expect(createProviderAdapter).toHaveBeenCalledWith('openai', {
       apiKey: 'managed-openai-key',
+      onResponsesDiagnostics: expect.any(Function),
     });
+
+    const config = createProviderAdapter.mock.calls[0]?.[1] as {
+      onResponsesDiagnostics?: (diagnostics: unknown) => void;
+    };
+    const diagnostics = {
+      requestId: 'req_123',
+      request: {
+        model: 'gpt-5.4-mini',
+        inputItemTypes: { message: 1 },
+        inputContentTypes: {},
+        toolTypes: { function: 2 },
+        toolChoice: 'required',
+        maxOutputTokens: 8192,
+        reasoningEffort: 'low',
+        reasoningSummary: 'auto',
+        store: false,
+      },
+      stream: {
+        eventTypes: { 'response.completed': 1 },
+        finalOutputItemTypes: { function_call: 1 },
+        finalContentTypes: {},
+        responseStatus: 'completed',
+        terminalEventType: 'response.completed',
+        emitted: {
+          text: false,
+          functionCall: true,
+          serverTool: false,
+          error: false,
+        },
+      },
+    };
+    config.onResponsesDiagnostics?.(diagnostics);
+
+    expect(loggerInfo).toHaveBeenCalledWith(
+      { providerId: 'openai', responses: diagnostics },
+      'OpenAI Responses request completed',
+    );
   });
 });

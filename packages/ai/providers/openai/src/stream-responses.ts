@@ -14,7 +14,7 @@
  *   response.refusal.delta                     → text-delta (visible refusal)
  *   response.output_item.done (function_call)  → tool-use-end
  *   response.output_text.annotation.added      → citation-delta
- *   response.completed                         → usage + stop(end_turn)
+ *   response.completed                         → final-output recovery + usage + stop
  *   response.incomplete                        → stop(max_tokens)
  *   response.failed / error / response.error   → error + stop(error)
  */
@@ -22,6 +22,9 @@
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type {
+  ResponseOutputFunctionCallItem,
+  ResponseOutputItem,
+  ResponseOutputMessageItem,
   ResponseWebSearchAction,
   ResponseWebSearchCallItem,
   ResponsesStreamEvent,
@@ -31,13 +34,59 @@ interface OpenItem {
   type: 'message' | 'function_call' | 'reasoning' | 'web_search_call';
   /** For function_call only — the call_id we expose to consumers. */
   callId?: string;
+  name?: string;
+  argumentsEmitted?: string;
   emittedStart?: boolean;
+  emittedEnd?: boolean;
 }
 
 interface WebSearchState {
   id: string;
   status?: ResponseWebSearchCallItem['status'];
   sources: Set<string>;
+}
+
+export interface OpenAIResponsesStreamDiagnostics {
+  eventTypes: Record<string, number>;
+  finalOutputItemTypes: Record<string, number>;
+  finalContentTypes: Record<string, number>;
+  responseStatus?: string;
+  terminalEventType: string;
+  emitted: {
+    text: boolean;
+    functionCall: boolean;
+    serverTool: boolean;
+    error: boolean;
+  };
+}
+
+export interface TranslateOpenAIResponsesStreamOptions {
+  /**
+   * Receives only structural metadata. Response text, function names, arguments,
+   * URLs, and other user/provider content are deliberately excluded.
+   */
+  onDiagnostics?: (diagnostics: OpenAIResponsesStreamDiagnostics) => void;
+}
+
+function isFunctionCallItem(item: ResponseOutputItem): item is ResponseOutputFunctionCallItem {
+  return (
+    item.type === 'function_call' &&
+    typeof item['call_id'] === 'string' &&
+    typeof item['name'] === 'string' &&
+    typeof item['arguments'] === 'string'
+  );
+}
+
+function isMessageItem(item: ResponseOutputItem): item is ResponseOutputMessageItem {
+  return item.type === 'message' && Array.isArray(item['content']);
+}
+
+function isWebSearchItem(item: ResponseOutputItem): item is ResponseWebSearchCallItem {
+  return item.type === 'web_search_call' && typeof item['id'] === 'string';
+}
+
+function incrementCount(counts: Record<string, number>, key: string): void {
+  counts[key] = (counts[key] ?? 0) + 1;
 }
 
 function actionSources(action: ResponseWebSearchAction | undefined): string[] {
@@ -68,13 +117,134 @@ function mapIncompleteReason(
 
 export async function* translateOpenAIResponsesStream(
   events: AsyncIterable<ResponsesStreamEvent>,
+  options: TranslateOpenAIResponsesStreamOptions = {},
 ): AsyncIterable<StreamChunk> {
   const items = new Map<number, OpenItem>();
   const webSearches = new Map<number, WebSearchState>();
   const citationTitles = new Map<string, string>();
-  const textDeltaKeys = new Set<string>();
+  const emittedText = new Map<string, string>();
+  const eventTypes: Record<string, number> = {};
+  const emitted = {
+    text: false,
+    functionCall: false,
+    serverTool: false,
+    error: false,
+  };
   let stopEmitted = false;
   let searchResultEmitted = false;
+  let diagnosticsEmitted = false;
+  let visibleText = '';
+
+  function emitDiagnostics(
+    terminalEventType: string,
+    response?: Extract<ResponsesStreamEvent, { type: 'response.completed' }>['response'],
+  ): void {
+    if (diagnosticsEmitted) return;
+    diagnosticsEmitted = true;
+    const finalOutputItemTypes: Record<string, number> = {};
+    const finalContentTypes: Record<string, number> = {};
+    for (const item of response?.output ?? []) {
+      incrementCount(finalOutputItemTypes, item.type);
+      if (isMessageItem(item)) {
+        for (const content of item.content ?? []) {
+          incrementCount(finalContentTypes, content.type);
+        }
+      }
+    }
+    try {
+      options.onDiagnostics?.({
+        eventTypes,
+        finalOutputItemTypes,
+        finalContentTypes,
+        ...(response?.status ? { responseStatus: response.status } : {}),
+        terminalEventType,
+        emitted: { ...emitted },
+      });
+    } catch {
+      // Diagnostics must never change provider behavior.
+    }
+  }
+
+  function recoverText(key: string, text: string): StreamChunk[] {
+    if (!text) return [];
+    const alreadyEmitted = emittedText.get(key) ?? '';
+    const missing = text.startsWith(alreadyEmitted) ? text.slice(alreadyEmitted.length) : '';
+    if (!missing) return [];
+    emittedText.set(key, text);
+    visibleText += missing;
+    emitted.text = true;
+    return [{ type: 'text-delta', delta: missing }];
+  }
+
+  function recoverAggregateText(text: string): StreamChunk[] {
+    if (!text || text === visibleText) return [];
+    const missing = text.startsWith(visibleText) ? text.slice(visibleText.length) : '';
+    if (!missing) return [];
+    visibleText += missing;
+    emitted.text = true;
+    return [{ type: 'text-delta', delta: missing }];
+  }
+
+  function recoverFunctionCall(
+    outputIndex: number,
+    item: ResponseOutputFunctionCallItem,
+    close: boolean,
+  ): StreamChunk[] {
+    const chunks: StreamChunk[] = [];
+    const state = items.get(outputIndex) ?? {
+      type: 'function_call' as const,
+      callId: item.call_id,
+      name: item.name,
+      argumentsEmitted: '',
+    };
+    state.callId = item.call_id;
+    state.name = item.name;
+    state.argumentsEmitted ??= '';
+    if (!state.emittedStart) {
+      chunks.push({
+        type: 'tool-use-start',
+        toolUseId: item.call_id,
+        name: item.name,
+      });
+      state.emittedStart = true;
+      emitted.functionCall = true;
+    }
+    const missingArguments = item.arguments.startsWith(state.argumentsEmitted)
+      ? item.arguments.slice(state.argumentsEmitted.length)
+      : '';
+    if (missingArguments) {
+      chunks.push({
+        type: 'tool-use-delta',
+        toolUseId: item.call_id,
+        deltaJson: missingArguments,
+      });
+      state.argumentsEmitted = item.arguments;
+    }
+    if (close && !state.emittedEnd) {
+      chunks.push({ type: 'tool-use-end', toolUseId: item.call_id });
+      state.emittedEnd = true;
+    }
+    items.set(outputIndex, state);
+    return chunks;
+  }
+
+  function recoverOutputItem(
+    outputIndex: number,
+    item: ResponseOutputItem,
+    closeFunctionCall: boolean,
+  ): StreamChunk[] {
+    if (isFunctionCallItem(item)) {
+      return recoverFunctionCall(outputIndex, item, closeFunctionCall);
+    }
+    if (isMessageItem(item)) {
+      return (item.content ?? []).flatMap((content, contentIndex) =>
+        content.type === 'output_text'
+          ? recoverText(`${outputIndex}:${contentIndex}`, content.text)
+          : recoverText(`${outputIndex}:${contentIndex}`, content.refusal),
+      );
+    }
+    return [];
+  }
 
   function updateWebSearch(outputIndex: number, item: ResponseWebSearchCallItem): WebSearchState {
     const state = webSearches.get(outputIndex) ?? { id: item.id, sources: new Set<string>() };
@@ -113,34 +283,21 @@ export async function* translateOpenAIResponsesStream(
   }
 
   for await (const event of events) {
+    incrementCount(eventTypes, event.type);
     switch (event.type) {
       case 'response.output_item.added': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_item.added' }>;
         const idx = ev.output_index;
-        if (ev.item.type === 'function_call') {
-          items.set(idx, { type: 'function_call', callId: ev.item.call_id });
-          yield {
-            type: 'tool-use-start',
-            toolUseId: ev.item.call_id,
-            name: ev.item.name,
-          };
-          const state = items.get(idx);
-          if (state) state.emittedStart = true;
-          // Some providers include initial arguments on `added`; emit them.
-          if (ev.item.arguments && ev.item.arguments.length > 0) {
-            yield {
-              type: 'tool-use-delta',
-              toolUseId: ev.item.call_id,
-              deltaJson: ev.item.arguments,
-            };
-          }
+        if (isFunctionCallItem(ev.item)) {
+          for (const chunk of recoverFunctionCall(idx, ev.item, false)) yield chunk;
         } else if (ev.item.type === 'message') {
           items.set(idx, { type: 'message' });
         } else if (ev.item.type === 'reasoning') {
           items.set(idx, { type: 'reasoning' });
-        } else if (ev.item.type === 'web_search_call') {
+        } else if (isWebSearchItem(ev.item)) {
           items.set(idx, { type: 'web_search_call', callId: ev.item.id, emittedStart: true });
           updateWebSearch(idx, ev.item);
+          emitted.serverTool = true;
           yield { type: 'server-tool-use', toolUseId: ev.item.id, name: 'web_search' };
         }
         break;
@@ -148,23 +305,30 @@ export async function* translateOpenAIResponsesStream(
       case 'response.output_text.delta': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_text.delta' }>;
         if (ev.delta) {
-          textDeltaKeys.add(`${ev.output_index}:${ev.content_index}`);
+          const key = `${ev.output_index}:${ev.content_index}`;
+          emittedText.set(key, `${emittedText.get(key) ?? ''}${ev.delta}`);
+          visibleText += ev.delta;
+          emitted.text = true;
           yield { type: 'text-delta', delta: ev.delta };
         }
         break;
       }
       case 'response.output_text.done': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_text.done' }>;
-        const key = `${ev.output_index}:${ev.content_index}`;
-        if (ev.text && !textDeltaKeys.has(key)) {
-          yield { type: 'text-delta', delta: ev.text };
-        }
+        for (const chunk of recoverText(`${ev.output_index}:${ev.content_index}`, ev.text))
+          yield chunk;
         break;
       }
       case 'response.refusal.delta': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.refusal.delta' }>;
         // Surface refusal text as visible content so the user sees it.
-        if (ev.delta) yield { type: 'text-delta', delta: ev.delta };
+        if (ev.delta) {
+          const key = `${ev.output_index}:${ev.content_index}`;
+          emittedText.set(key, `${emittedText.get(key) ?? ''}${ev.delta}`);
+          visibleText += ev.delta;
+          emitted.text = true;
+          yield { type: 'text-delta', delta: ev.delta };
+        }
         break;
       }
       case 'response.function_call_arguments.delta': {
@@ -174,11 +338,35 @@ export async function* translateOpenAIResponsesStream(
         >;
         const state = items.get(ev.output_index);
         if (state?.callId && ev.delta) {
+          state.argumentsEmitted = `${state.argumentsEmitted ?? ''}${ev.delta}`;
           yield {
             type: 'tool-use-delta',
             toolUseId: state.callId,
             deltaJson: ev.delta,
           };
+        }
+        break;
+      }
+      case 'response.function_call_arguments.done': {
+        const ev = event as Extract<
+          ResponsesStreamEvent,
+          { type: 'response.function_call_arguments.done' }
+        >;
+        const state = items.get(ev.output_index);
+        if (state?.type === 'function_call' && state.callId && state.name) {
+          for (const chunk of recoverFunctionCall(
+            ev.output_index,
+            {
+              type: 'function_call',
+              id: ev.item_id,
+              call_id: state.callId,
+              name: state.name,
+              arguments: ev.arguments,
+            },
+            false,
+          )) {
+            yield chunk;
+          }
         }
         break;
       }
@@ -220,22 +408,39 @@ export async function* translateOpenAIResponsesStream(
       case 'response.output_item.done': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_item.done' }>;
         const state = items.get(ev.output_index);
-        if (state?.type === 'function_call' && state.callId && state.emittedStart) {
-          yield { type: 'tool-use-end', toolUseId: state.callId };
-        }
-        if (ev.item.type === 'web_search_call') {
+        for (const chunk of recoverOutputItem(ev.output_index, ev.item, true)) yield chunk;
+        if (isWebSearchItem(ev.item)) {
           if (!state?.emittedStart) {
+            emitted.serverTool = true;
             yield { type: 'server-tool-use', toolUseId: ev.item.id, name: 'web_search' };
           }
           updateWebSearch(ev.output_index, ev.item);
         }
-        items.delete(ev.output_index);
         break;
       }
       case 'response.completed': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.completed' }>;
+        for (const [outputIndex, item] of (ev.response.output ?? []).entries()) {
+          for (const chunk of recoverOutputItem(outputIndex, item, true)) yield chunk;
+          if (isWebSearchItem(item)) {
+            const state = items.get(outputIndex);
+            if (!state?.emittedStart) {
+              emitted.serverTool = true;
+              yield { type: 'server-tool-use', toolUseId: item.id, name: 'web_search' };
+            }
+            updateWebSearch(outputIndex, item);
+          }
+        }
+        if (ev.response.output_text) {
+          for (const chunk of recoverAggregateText(ev.response.output_text)) {
+            yield chunk;
+          }
+        }
         const searchResult = buildWebSearchResult();
-        if (searchResult) yield searchResult;
+        if (searchResult) {
+          emitted.serverTool = true;
+          yield searchResult;
+        }
         const usage = ev.response.usage;
         if (usage) {
           const usageChunk: StreamChunk = {
@@ -251,26 +456,65 @@ export async function* translateOpenAIResponsesStream(
           };
           yield usageChunk;
         }
+        if (ev.response.error) {
+          emitted.error = true;
+          yield {
+            type: 'error',
+            message: ev.response.error.message ?? 'Response failed',
+            ...(ev.response.error.code ? { code: ev.response.error.code } : {}),
+          };
+          yield { type: 'stop', reason: 'error' };
+          stopEmitted = true;
+          emitDiagnostics(event.type, ev.response);
+          break;
+        }
+        if (emitted.functionCall) {
+          yield { type: 'stop', reason: 'tool_use' };
+          stopEmitted = true;
+          emitDiagnostics(event.type, ev.response);
+          break;
+        }
+        if (!emitted.text && !emitted.serverTool) {
+          emitted.error = true;
+          yield {
+            type: 'error',
+            code: 'empty_response',
+            message: 'OpenAI response completed without text or tool output.',
+          };
+          yield { type: 'stop', reason: 'error' };
+          stopEmitted = true;
+          emitDiagnostics(event.type, ev.response);
+          break;
+        }
         const reason = ev.response.incomplete_details?.reason;
         yield { type: 'stop', reason: mapIncompleteReason(reason) };
         stopEmitted = true;
+        emitDiagnostics(event.type, ev.response);
         break;
       }
       case 'response.incomplete': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.incomplete' }>;
         const searchResult = buildWebSearchResult();
-        if (searchResult) yield searchResult;
+        if (searchResult) {
+          emitted.serverTool = true;
+          yield searchResult;
+        }
         yield {
           type: 'stop',
           reason: mapIncompleteReason(ev.response.incomplete_details?.reason),
         };
         stopEmitted = true;
+        emitDiagnostics(event.type);
         break;
       }
       case 'response.failed': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.failed' }>;
         const searchResult = buildWebSearchResult();
-        if (searchResult) yield searchResult;
+        if (searchResult) {
+          emitted.serverTool = true;
+          yield searchResult;
+        }
+        emitted.error = true;
         yield {
           type: 'error',
           message: ev.response.error?.message ?? 'Response failed',
@@ -278,13 +522,18 @@ export async function* translateOpenAIResponsesStream(
         };
         yield { type: 'stop', reason: 'error' };
         stopEmitted = true;
+        emitDiagnostics(event.type);
         break;
       }
       case 'error':
       case 'response.error': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'error' | 'response.error' }>;
         const searchResult = buildWebSearchResult();
-        if (searchResult) yield searchResult;
+        if (searchResult) {
+          emitted.serverTool = true;
+          yield searchResult;
+        }
+        emitted.error = true;
         yield {
           type: 'error',
           message: ev.message ?? 'Response error',
@@ -292,6 +541,7 @@ export async function* translateOpenAIResponsesStream(
         };
         yield { type: 'stop', reason: 'error' };
         stopEmitted = true;
+        emitDiagnostics(event.type);
         break;
       }
       // Ignore other event variants (queued, in_progress, content_part.*, etc.).
@@ -300,7 +550,17 @@ export async function* translateOpenAIResponsesStream(
 
   if (!stopEmitted) {
     const searchResult = buildWebSearchResult();
-    if (searchResult) yield searchResult;
-    yield { type: 'stop', reason: 'end_turn' };
+    if (searchResult) {
+      emitted.serverTool = true;
+      yield searchResult;
+    }
+    emitted.error = true;
+    yield {
+      type: 'error',
+      code: 'incomplete_stream',
+      message: 'OpenAI response stream ended without a terminal event.',
+    };
+    yield { type: 'stop', reason: 'error' };
+    emitDiagnostics('stream.exhausted');
   }
 }

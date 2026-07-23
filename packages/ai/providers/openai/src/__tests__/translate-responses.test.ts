@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-protocol';
+import { summarizeOpenAIResponsesRequest } from '../index';
 import { translateChatRequest } from '../translate';
 import { translateChatRequestToResponses } from '../translate-responses';
 
@@ -154,6 +155,65 @@ describe('translateChatRequestToResponses', () => {
     );
 
     expect(params.reasoning?.effort).toBe('high');
+  });
+
+  it('sends the managed GPT-5.4 Mini tool step with required tools, low effort, and its output limit', () => {
+    const params = translateChatRequestToResponses(
+      {
+        model: 'gpt-5.4-mini',
+        messages: [{ role: 'user', content: 'Use the sandbox tools.' }],
+        tools: [
+          {
+            name: 'execute_code',
+            description: 'Run code.',
+            inputSchema: {
+              type: 'object',
+              properties: { code: { type: 'string' } },
+              required: ['code'],
+            },
+          },
+          {
+            name: 'write_file',
+            description: 'Write a file.',
+            inputSchema: {
+              type: 'object',
+              properties: { path: { type: 'string' } },
+              required: ['path'],
+            },
+          },
+        ],
+        toolChoice: 'required',
+        effort: 'low',
+        maxOutputTokens: 8192,
+      },
+      { compat, store: false },
+    );
+
+    expect(params).toMatchObject({
+      model: 'gpt-5.4-mini',
+      tool_choice: 'required',
+      max_output_tokens: 8192,
+      reasoning: { effort: 'low', summary: 'auto' },
+      store: false,
+      stream: true,
+    });
+    expect(params.tools).toHaveLength(2);
+
+    const diagnostics = summarizeOpenAIResponsesRequest(params);
+    expect(diagnostics).toEqual({
+      model: 'gpt-5.4-mini',
+      inputItemTypes: { message: 1 },
+      inputContentTypes: {},
+      toolTypes: { function: 2 },
+      toolChoice: 'required',
+      maxOutputTokens: 8192,
+      reasoningEffort: 'low',
+      reasoningSummary: 'auto',
+      store: false,
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain('Use the sandbox tools.');
+    expect(JSON.stringify(diagnostics)).not.toContain('execute_code');
+    expect(JSON.stringify(diagnostics)).not.toContain('write_file');
   });
 });
 

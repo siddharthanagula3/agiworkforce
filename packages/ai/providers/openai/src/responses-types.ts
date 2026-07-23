@@ -163,6 +163,47 @@ export interface ResponseWebSearchCallItem {
   action?: ResponseWebSearchAction;
 }
 
+export interface ResponseOutputTextContent {
+  type: 'output_text';
+  text: string;
+  annotations?: unknown[];
+}
+
+export interface ResponseOutputRefusalContent {
+  type: 'refusal';
+  refusal: string;
+}
+
+export interface ResponseOutputMessageItem {
+  type: 'message';
+  id: string;
+  role: string;
+  status?: string;
+  content?: Array<ResponseOutputTextContent | ResponseOutputRefusalContent>;
+}
+
+export interface ResponseOutputFunctionCallItem {
+  type: 'function_call';
+  id: string;
+  call_id: string;
+  name: string;
+  arguments: string;
+  status?: string;
+}
+
+export interface ResponseOutputReasoningItem {
+  type: 'reasoning';
+  id: string;
+  summary?: Array<{ type: string; text: string }>;
+}
+
+export type ResponseOutputItem =
+  | ResponseOutputMessageItem
+  | ResponseOutputFunctionCallItem
+  | ResponseOutputReasoningItem
+  | ResponseWebSearchCallItem
+  | { type: string; [key: string]: unknown };
+
 export interface ResponseCreatedEvent extends BaseEvent {
   type: 'response.created';
   response: { id: string; status: string; model: string };
@@ -176,28 +217,13 @@ export interface ResponseInProgressEvent extends BaseEvent {
 export interface ResponseOutputItemAddedEvent extends BaseEvent {
   type: 'response.output_item.added';
   output_index: number;
-  item:
-    | { type: 'message'; id: string; role: string; status?: string }
-    | { type: 'function_call'; id: string; call_id: string; name: string; arguments: string }
-    | { type: 'reasoning'; id: string; summary?: Array<{ type: string; text: string }> }
-    | ResponseWebSearchCallItem;
+  item: ResponseOutputItem;
 }
 
 export interface ResponseOutputItemDoneEvent extends BaseEvent {
   type: 'response.output_item.done';
   output_index: number;
-  item:
-    | { type: 'message'; id: string; role: string; status?: string }
-    | {
-        type: 'function_call';
-        id: string;
-        call_id: string;
-        name: string;
-        arguments: string;
-        status?: string;
-      }
-    | { type: 'reasoning'; id: string; summary?: Array<{ type: string; text: string }> }
-    | ResponseWebSearchCallItem;
+  item: ResponseOutputItem;
 }
 
 export interface ResponseOutputTextAnnotationAddedEvent extends BaseEvent {
@@ -285,6 +311,9 @@ export interface ResponseCompletedEvent extends BaseEvent {
   response: {
     id: string;
     status: string;
+    output?: ResponseOutputItem[];
+    output_text?: string;
+    error?: { code?: string; message?: string } | null;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
