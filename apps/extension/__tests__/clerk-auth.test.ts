@@ -85,6 +85,31 @@ describe('Clerk Chrome Extension auth', () => {
     expect(createClerkClient).not.toHaveBeenCalled();
   });
 
+  it('hides auth methods that Clerk does not support inside extension side panels', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
+    const openSignIn = vi.fn();
+    createClerkClient.mockReturnValue({
+      load: vi.fn().mockResolvedValue(undefined),
+      session: null,
+      addListener: vi.fn(),
+      openSignIn,
+      signOut: vi.fn(),
+    });
+
+    const auth = await importClerkAuth();
+    await auth.openClerkSignIn();
+
+    expect(openSignIn).toHaveBeenCalledWith({
+      appearance: {
+        elements: {
+          dividerRow: { display: 'none' },
+          socialButtonsRoot: { display: 'none' },
+        },
+      },
+    });
+  });
+
   it('uses the background service-worker client so tokens remain fresh', async () => {
     process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
     process.env['CLERK_SYNC_HOST'] = 'http://localhost';

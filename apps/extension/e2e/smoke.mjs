@@ -106,6 +106,52 @@ try {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1000);
 
+    const visibleSecondaryChrome = await page.evaluate(() =>
+      [
+        'sp-auth-bar',
+        'sp-toolbar',
+        'sp-prompt-chips',
+        'sp-empty-icon',
+        'sp-empty-headline',
+        'sp-empty-subtext',
+      ].filter((id) => {
+        const element = document.getElementById(id);
+        if (!element) return false;
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }),
+    );
+    if (visibleSecondaryChrome.length > 0) {
+      fail(
+        `chat surface: secondary controls should stay behind menus, but these are visible: ${visibleSecondaryChrome.join(', ')}`,
+      );
+    }
+
+    const signedOutGate = await page.evaluate(() => {
+      const gate = document.getElementById('sp-cloud-gate');
+      const input = document.getElementById('sp-input');
+      return {
+        gateVisible:
+          !!gate &&
+          getComputedStyle(gate).display !== 'none' &&
+          getComputedStyle(gate).visibility !== 'hidden',
+        inputDisabled: input instanceof HTMLTextAreaElement && input.disabled,
+      };
+    });
+    if (!signedOutGate.gateVisible || !signedOutGate.inputDisabled) {
+      fail(
+        `signed-out chat: expected an actionable sign-in gate and disabled composer, got ${JSON.stringify(signedOutGate)}`,
+      );
+    }
+
+    // Managed authenticated chat needs a live gateway and account, which this
+    // offline harness intentionally does not provide. Re-enable the textarea
+    // only to verify its local interaction behavior after the signed-out state
+    // above has been asserted.
+    await page.evaluate(() => {
+      const input = document.getElementById('sp-input');
+      if (input instanceof HTMLTextAreaElement) input.disabled = false;
+    });
     await page.fill('#sp-input', 'hello from the smoke');
     const typed = await page.inputValue('#sp-input');
     if (typed !== 'hello from the smoke')
@@ -127,11 +173,33 @@ try {
       return !!d && (d.classList.contains('open') || getComputedStyle(d).display !== 'none');
     });
     if (!modelOpen) fail('model picker: selector button did not open the model dropdown');
+    await page.click('#sp-model-selector-btn');
+
+    await page.click('#sp-action-mode-toggle');
+    const actionModeOpen = await page.evaluate(() => {
+      const menu = document.getElementById('sp-action-mode-menu');
+      return !!menu && menu.classList.contains('open') && getComputedStyle(menu).display !== 'none';
+    });
+    if (!actionModeOpen) {
+      fail('action mode: ask/act control did not open an explicit permission menu');
+    }
+    const actionModeChoices = await page
+      .locator('#sp-action-mode-menu [role="menuitemradio"]')
+      .allTextContents();
+    if (
+      !actionModeChoices.some((choice) => choice.includes('Ask before acting')) ||
+      !actionModeChoices.some((choice) => choice.includes('Act without asking'))
+    ) {
+      fail(`action mode: expected ask and act choices, got ${JSON.stringify(actionModeChoices)}`);
+    }
+    await page.click('#sp-action-mode-toggle');
 
     const pageExceptions = errors.filter((e) => e.startsWith('pageerror:'));
     if (pageExceptions.length)
       fail(`interactions: uncaught page exception(s): ${pageExceptions.join(' | ')}`);
-    console.log(`\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen}`);
+    console.log(
+      `\n[interactions] composer=ok drawer=${drawerOpen} modelPicker=${modelOpen} actionMode=${actionModeOpen}`,
+    );
     await page.close();
   }
 
