@@ -33,6 +33,16 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 describe('web proxy', () => {
+  it('keeps Workflow SDK callbacks outside the global proxy matcher', async () => {
+    const { config } = await import('../proxy');
+    const matchesProxy = (pathname: string) =>
+      config.matcher.some((pattern) => new RegExp(`^${pattern}$`, 'u').test(pathname));
+
+    expect(matchesProxy('/.well-known/workflow/v1/flow')).toBe(false);
+    expect(matchesProxy('/.well-known/workflow/v1/step')).toBe(false);
+    expect(matchesProxy('/chat')).toBe(true);
+  });
+
   it('keeps public marketing pages out of Clerk session middleware while preserving CSP', async () => {
     clerkState.clerkPaths = [];
     const { proxy } = await import('../proxy');
