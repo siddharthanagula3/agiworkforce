@@ -20,6 +20,7 @@ import {
 } from '../features/model-picker/modelConstants';
 import { getTokenCounter } from '../data/tokenCounter';
 import { TierInfoSchema } from '../protocol/apiResponses';
+import type { AccountAuthState } from '@agiworkforce/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,9 +129,11 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SECRET_KEY = 'agiWorkforce.apiKey';
-/** AGI Cloud account session token (Clerk JWT) obtained via device sign-in. */
+/** Revocable AGI developer token obtained through browser-approved device sign-in. */
 const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
+const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
+const DEFAULT_GATEWAY_ORIGIN = 'https://api.agiworkforce.com';
 
 // ─── Secret storage ───────────────────────────────────────────────────────────
 
@@ -159,20 +162,52 @@ export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> 
 
 // ─── Account session token (AGI Cloud sign-in) ────────────────────────────────
 //
-// The cloud-only surface authenticates via a Clerk session token obtained
-// through the device sign-in flow (features/account-auth/deviceAuth.ts), stored
-// in SecretStorage and sent as the Bearer for every cloud call.
+// The optional cloud path authenticates with a first-party developer token
+// obtained through the device sign-in flow (features/account-auth/deviceAuth.ts),
+// stored in SecretStorage and sent as the Bearer for every cloud call.
 
 export async function getAccountToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
+  const state = await getAccountAuthState(secrets);
+  if (state.status !== 'signed-in') return undefined;
   return secrets.get(ACCOUNT_TOKEN_KEY);
 }
 
-export async function setAccountToken(secrets: vscode.SecretStorage, token: string): Promise<void> {
+export async function setAccountToken(
+  secrets: vscode.SecretStorage,
+  token: string,
+  expiresAt?: number,
+): Promise<void> {
   await secrets.store(ACCOUNT_TOKEN_KEY, token);
+  if (expiresAt !== undefined) {
+    await secrets.store(ACCOUNT_TOKEN_EXPIRES_AT_KEY, String(expiresAt));
+  } else {
+    await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
+  }
 }
 
 export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
   await secrets.delete(ACCOUNT_TOKEN_KEY);
+  await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
+}
+
+export async function getAccountAuthState(
+  secrets: vscode.SecretStorage,
+): Promise<AccountAuthState> {
+  const token = await secrets.get(ACCOUNT_TOKEN_KEY);
+  if (token === undefined || token === '') return { status: 'signed-out' };
+
+  const rawExpiresAt = await secrets.get(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
+  if (rawExpiresAt === undefined || rawExpiresAt === '') {
+    // Backward compatibility for account tokens stored by older extension
+    // versions. The server remains authoritative; a 401 will clear it.
+    return { status: 'signed-in' };
+  }
+  const expiresAt = Number(rawExpiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    await clearAccountToken(secrets);
+    return { status: 'expired' };
+  }
+  return { status: 'signed-in', expiresAt };
 }
 
 /**
@@ -273,6 +308,13 @@ export function getCloudWebOrigin(): string {
   } catch {
     return new URL(DEFAULT_ENDPOINT).origin;
   }
+}
+
+/** Trusted gateway origin used for provider streaming and token revocation. */
+export function getCloudGatewayOrigin(): string {
+  const raw = getGlobalConfig<string>('agiWorkforce', 'gatewayUrl', DEFAULT_GATEWAY_ORIGIN);
+  const validated = validateEndpointUrl(raw) ?? DEFAULT_GATEWAY_ORIGIN;
+  return new URL(validated).origin;
 }
 
 function getModel(): string {
@@ -832,7 +874,7 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
 const PROVIDER_STREAM_SUPPORTED = new Set(['anthropic', 'openai', 'ollama', 'google']);
 
 function getGatewayUrl(): string {
-  return getGlobalConfig<string>('agiWorkforce', 'gatewayUrl', 'https://api.agiworkforce.com');
+  return getCloudGatewayOrigin();
 }
 
 /**

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -123,7 +124,12 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     throw createError.conflict('This device code has already been processed');
   }
 
-  logger.info({ deviceId: record.device_id, userId: authUser.userId }, 'Device code approved');
+  const deviceRef = crypto
+    .createHash('sha256')
+    .update(record.device_id + (process.env['LOG_SALT'] ?? ''))
+    .digest('hex')
+    .slice(0, 12);
+  logger.info({ deviceRef, userId: authUser.userId }, 'Device code approved');
 
   return NextResponse.json(
     { success: true, approved: true, status: 'approved' },

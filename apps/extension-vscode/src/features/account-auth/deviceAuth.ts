@@ -1,68 +1,63 @@
 /**
- * deviceAuth.ts — secretless AGI Cloud sign-in for the VS Code extension.
+ * Secretless AGI Cloud sign-in for VS Code-compatible editors.
  *
- * Public marketplace extensions cannot safely ship a decryption secret, so we
- * use an RFC-8628-style device flow that hands back a PLAINTEXT token only after
- * explicit in-browser approval — no client secret required, no custom URI
- * scheme (so it is identical in VS Code, Cursor, Windsurf and Antigravity):
+ * This reuses the RFC 8628-style device-code service owned by the web app and
+ * already consumed by the AGI CLI:
  *
- *   1. Derive a stable device_id + device_fingerprint from vscode.env.machineId
- *      plus a per-install salt (so the poll is bound to this device).
- *   2. Open the AGI web connect page in the browser. The signed-in user approves
- *      there; the web side creates + approves a device code bound to our
- *      device_id (see docs/web-vscode-signin-spec.md — owned by the web surface).
- *   3. Poll POST /api/device/poll {device_id, device_fingerprint} until it
- *      returns {status:'approved', access_token}; store that Clerk token as the
- *      account token used for every cloud call.
+ *   POST /api/auth/device/code  -> code + browser approval URL
+ *   POST /api/auth/device/token -> seven-day, revocable developer credential
+ *
+ * OAuth itself stays in the user's normal browser. No client secret or custom
+ * URI scheme ships in the marketplace extension, so the same flow works in VS
+ * Code, Cursor, Windsurf, and Antigravity.
  */
 
 import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
-import { createHash, randomBytes } from 'crypto';
 import { URL } from 'url';
-import { getCloudWebOrigin, setAccountToken } from '../../utils/api';
+import type { DeviceAuthorizationStartResponse, TokenResponse } from '@agiworkforce/types';
+import {
+  clearAccountToken,
+  getAccountToken,
+  getCloudGatewayOrigin,
+  getCloudWebOrigin,
+  setAccountToken,
+} from '../../utils/api';
 
-const SALT_KEY = 'agiWorkforce.deviceSalt';
-const POLL_INTERVAL_MS = 4000;
-const MAX_POLLS = 75; // ~5 minutes of polling
-const POLL_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 10_000;
+const MIN_POLL_INTERVAL_MS = 3_000;
+const MAX_POLL_INTERVAL_MS = 10_000;
+const MAX_AUTH_WINDOW_MS = 15 * 60 * 1000;
 
-function sha256(input: string): string {
-  return createHash('sha256').update(input).digest('hex');
+export type DeviceAuthPost = (
+  url: string,
+  payload: unknown,
+  headers?: Readonly<Record<string, string>>,
+) => Promise<{ status: number; body: string }>;
+
+export interface DeviceAuthorizationRequest {
+  deviceCode: string;
+  userCode: string;
+  verificationUrl: string;
+  pollIntervalMs: number;
+  expiresInMs: number;
 }
 
-function getSalt(globalState: vscode.Memento): string {
-  let salt = globalState.get<string>(SALT_KEY);
-  if (salt === undefined || salt === '') {
-    salt = randomBytes(16).toString('hex');
-    void globalState.update(SALT_KEY, salt);
-  }
-  return salt;
-}
+export type DeviceAuthorizationPollResult =
+  | { kind: 'approved'; token: string; expiresAt: number }
+  | { kind: 'pending' }
+  | { kind: 'denied' }
+  | { kind: 'expired' }
+  | { kind: 'rejected'; message: string };
 
-interface DeviceIdentity {
-  deviceId: string;
-  fingerprint: string;
-}
-
-/** Stable per-install identity. device_id matches the server's /^[a-zA-Z0-9-_]{1,128}$/. */
-function deviceIdentity(globalState: vscode.Memento): DeviceIdentity {
-  const salt = getSalt(globalState);
-  const machine = vscode.env.machineId || 'unknown-machine';
-  return {
-    deviceId: `vscode-${sha256(`${machine}:${salt}`).slice(0, 48)}`,
-    fingerprint: sha256(`${machine}:${salt}:fp`),
-  };
-}
-
-/** Minimal JSON POST over http/https (avoids a global-fetch type dependency). */
-function postJson(urlStr: string, payload: unknown): Promise<{ status: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const url = new URL(urlStr);
+/** Minimal bounded JSON POST over http/https for the extension host. */
+const postJson: DeviceAuthPost = (urlString, payload, headers) =>
+  new Promise((resolve, reject) => {
+    const url = new URL(urlString);
     const transport = url.protocol === 'http:' ? http : https;
     const data = JSON.stringify(payload);
-    const req = transport.request(
+    const request = transport.request(
       {
         method: 'POST',
         hostname: url.hostname,
@@ -71,78 +66,177 @@ function postJson(urlStr: string, payload: unknown): Promise<{ status: number; b
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(data),
+          'User-Agent': 'agi-workforce-vscode/0.3.0',
+          ...headers,
         },
-        timeout: POLL_TIMEOUT_MS,
+        timeout: REQUEST_TIMEOUT_MS,
       },
-      (res) => {
-        let buf = '';
-        res.on('data', (chunk) => (buf += chunk));
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, body: buf }));
+      (response) => {
+        let body = '';
+        response.on('data', (chunk) => {
+          body += String(chunk);
+        });
+        response.on('end', () => resolve({ status: response.statusCode ?? 0, body }));
       },
     );
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('poll request timed out')));
-    req.write(data);
-    req.end();
+    request.on('error', reject);
+    request.on('timeout', () =>
+      request.destroy(new Error('device authorization request timed out')),
+    );
+    request.write(data);
+    request.end();
   });
+
+function parseRecord(body: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
-type PollResult =
-  | { kind: 'approved'; token: string }
-  | { kind: 'pending' }
-  | { kind: 'denied' }
-  | { kind: 'rejected'; message: string };
+function requiredString(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`AGI Cloud returned an invalid ${key}.`);
+  }
+  return value;
+}
 
-async function pollOnce(origin: string, id: DeviceIdentity): Promise<PollResult> {
-  let res: { status: number; body: string };
+function requiredPositiveNumber(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`AGI Cloud returned an invalid ${key}.`);
+  }
+  return value;
+}
+
+export async function requestDeviceAuthorization(
+  origin: string,
+  post: DeviceAuthPost = postJson,
+): Promise<DeviceAuthorizationRequest> {
+  const trustedOrigin = new URL(origin).origin;
+  const response = await post(`${trustedOrigin}/api/auth/device/code`, {});
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error('Could not start AGI Cloud sign-in. Try again.');
+  }
+
+  const raw = parseRecord(response.body);
+  const contract: DeviceAuthorizationStartResponse = {
+    device_code: requiredString(raw, 'device_code'),
+    user_code: requiredString(raw, 'user_code'),
+    verification_uri: requiredString(raw, 'verification_uri'),
+    verification_uri_complete: requiredString(raw, 'verification_uri_complete'),
+    interval: requiredPositiveNumber(raw, 'interval'),
+    expires_in: requiredPositiveNumber(raw, 'expires_in'),
+  };
+
+  const verificationUrl = new URL(contract.verification_uri_complete);
+  if (verificationUrl.origin !== trustedOrigin) {
+    throw new Error('AGI Cloud returned an untrusted verification URL.');
+  }
+
+  return {
+    deviceCode: contract.device_code,
+    userCode: contract.user_code,
+    verificationUrl: verificationUrl.toString(),
+    pollIntervalMs: Math.min(
+      MAX_POLL_INTERVAL_MS,
+      Math.max(MIN_POLL_INTERVAL_MS, contract.interval * 1000),
+    ),
+    expiresInMs: Math.min(MAX_AUTH_WINDOW_MS, contract.expires_in * 1000),
+  };
+}
+
+export async function pollDeviceAuthorization(
+  origin: string,
+  deviceCode: string,
+  post: DeviceAuthPost = postJson,
+): Promise<DeviceAuthorizationPollResult> {
+  let response: { status: number; body: string };
   try {
-    res = await postJson(`${origin}/api/device/poll`, {
-      device_id: id.deviceId,
-      device_fingerprint: id.fingerprint,
+    response = await post(`${new URL(origin).origin}/api/auth/device/token`, {
+      device_code: deviceCode,
     });
   } catch {
-    // Transient network error — treat as pending so the loop keeps trying.
     return { kind: 'pending' };
   }
 
-  // 404 = the device code has not been created yet (user hasn't finished the
-  // browser step) OR it expired — either way keep waiting until the outer
-  // timeout. 403/410 = a hard device-verification rejection.
-  if (res.status === 404) return { kind: 'pending' };
-  if (res.status === 403 || res.status === 410) {
-    return { kind: 'rejected', message: 'Device verification was rejected. Please sign in again.' };
-  }
-
-  let body: { status?: string; access_token?: string };
-  try {
-    body = JSON.parse(res.body) as typeof body;
-  } catch {
+  const body = parseRecord(response.body);
+  const error = typeof body['error'] === 'string' ? body['error'] : undefined;
+  if (response.status === 403 && error === 'authorization_pending') {
     return { kind: 'pending' };
   }
-
-  if (body.status === 'approved' && typeof body.access_token === 'string' && body.access_token) {
-    return { kind: 'approved', token: body.access_token };
+  if (response.status === 400 && error === 'access_denied') {
+    return { kind: 'denied' };
   }
-  if (body.status === 'denied') return { kind: 'denied' };
-  return { kind: 'pending' };
+  if (response.status === 400 && (error === 'expired_token' || error === 'invalid_grant')) {
+    return { kind: 'expired' };
+  }
+  if (response.status < 200 || response.status >= 300) {
+    return {
+      kind: 'rejected',
+      message: 'AGI Cloud rejected the device sign-in request. Start again.',
+    };
+  }
+
+  const tokenResponse: TokenResponse = {
+    access_token: requiredString(body, 'access_token'),
+    token_type: requiredString(body, 'token_type'),
+    expires_in: requiredPositiveNumber(body, 'expires_in'),
+  };
+  if (tokenResponse.token_type.toLowerCase() !== 'bearer') {
+    return { kind: 'rejected', message: 'AGI Cloud returned an unsupported token type.' };
+  }
+  return {
+    kind: 'approved',
+    token: tokenResponse.access_token,
+    expiresAt: Date.now() + tokenResponse.expires_in * 1000,
+  };
 }
 
-/**
- * Run the full sign-in flow. Opens the browser, then polls until approved,
- * denied, cancelled, or timed out. On success the Clerk token is stored as the
- * account token and `true` is returned.
- */
-export async function signInToAgiCloud(
-  secrets: vscode.SecretStorage,
-  globalState: vscode.Memento,
+export async function revokeDeviceAuthorization(
+  gatewayOrigin: string,
+  token: string,
+  post: DeviceAuthPost = postJson,
 ): Promise<boolean> {
-  const origin = getCloudWebOrigin();
-  const id = deviceIdentity(globalState);
-  const connectUrl =
-    `${origin}/connect/vscode?device_id=${encodeURIComponent(id.deviceId)}` +
-    `&device_fingerprint=${encodeURIComponent(id.fingerprint)}&device_type=vscode`;
+  try {
+    const response = await post(
+      `${new URL(gatewayOrigin).origin}/api/auth/logout`,
+      {},
+      {
+        Authorization: `Bearer ${token}`,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    );
+    return response.status >= 200 && response.status < 300;
+  } catch {
+    return false;
+  }
+}
 
-  await vscode.env.openExternal(vscode.Uri.parse(connectUrl));
+export async function signInToAgiCloud(secrets: vscode.SecretStorage): Promise<boolean> {
+  const origin = getCloudWebOrigin();
+  let authorization: DeviceAuthorizationRequest;
+  try {
+    authorization = await requestDeviceAuthorization(origin);
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      error instanceof Error ? error.message : 'Could not start AGI Cloud sign-in.',
+    );
+    return false;
+  }
+
+  const opened = await vscode.env.openExternal(vscode.Uri.parse(authorization.verificationUrl));
+  if (!opened) {
+    vscode.window.showErrorMessage(
+      `Open ${authorization.verificationUrl} and enter ${authorization.userCode}.`,
+    );
+    return false;
+  }
 
   return vscode.window.withProgress<boolean>(
     {
@@ -151,16 +245,22 @@ export async function signInToAgiCloud(
       cancellable: true,
     },
     async (progress, cancelToken) => {
-      progress.report({ message: 'Approve in your browser, then return here.' });
+      progress.report({
+        message: `Approve code ${authorization.userCode} in your browser.`,
+      });
+      const maxPolls = Math.max(
+        1,
+        Math.ceil(authorization.expiresInMs / authorization.pollIntervalMs),
+      );
 
-      for (let i = 0; i < MAX_POLLS; i++) {
+      for (let attempt = 0; attempt < maxPolls; attempt++) {
         if (cancelToken.isCancellationRequested) return false;
-        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        await new Promise((resolve) => setTimeout(resolve, authorization.pollIntervalMs));
         if (cancelToken.isCancellationRequested) return false;
 
-        const result = await pollOnce(origin, id);
+        const result = await pollDeviceAuthorization(origin, authorization.deviceCode);
         if (result.kind === 'approved') {
-          await setAccountToken(secrets, result.token);
+          await setAccountToken(secrets, result.token, result.expiresAt);
           vscode.window.showInformationMessage('Signed in to AGI Cloud.');
           return true;
         }
@@ -168,15 +268,36 @@ export async function signInToAgiCloud(
           vscode.window.showWarningMessage('AGI Cloud sign-in was denied.');
           return false;
         }
-        if (result.kind === 'rejected') {
-          vscode.window.showErrorMessage(`AGI Cloud: ${result.message}`);
+        if (result.kind === 'expired') {
+          vscode.window.showWarningMessage('AGI Cloud sign-in expired. Start again.');
           return false;
         }
-        // pending → keep polling
+        if (result.kind === 'rejected') {
+          vscode.window.showErrorMessage(result.message);
+          return false;
+        }
       }
 
       vscode.window.showWarningMessage('AGI Cloud sign-in timed out. Please try again.');
       return false;
     },
   );
+}
+
+export async function signOutOfAgiCloud(secrets: vscode.SecretStorage): Promise<boolean> {
+  const token = await getAccountToken(secrets);
+  const revoked =
+    token === undefined ? true : await revokeDeviceAuthorization(getCloudGatewayOrigin(), token);
+
+  // Local sign-out must never be held hostage by a network or gateway failure.
+  await clearAccountToken(secrets);
+
+  if (revoked) {
+    vscode.window.showInformationMessage('Signed out of AGI Cloud.');
+  } else {
+    vscode.window.showWarningMessage(
+      'Signed out locally, but AGI Cloud could not confirm revocation. The session will expire automatically.',
+    );
+  }
+  return revoked;
 }

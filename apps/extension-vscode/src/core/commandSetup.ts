@@ -30,8 +30,8 @@ import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
-import { getApiKey, setApiKey, clearApiKey, clearAccountToken, fetchTierInfo } from '../utils/api';
-import { signInToAgiCloud } from '../features/account-auth/deviceAuth';
+import { getApiKey, getAccountToken, setApiKey, clearApiKey, fetchTierInfo } from '../utils/api';
+import { signInToAgiCloud, signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
 import {
@@ -319,17 +319,18 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     // ── API key / auth commands ─────────────────────────────────────────────────
     register('agi-workforce.signIn', async () => {
       // Cloud-only surface: secretless device sign-in. Opens the browser connect
-      // page, then polls for the approved token (deviceAuth). Requires the web
-      // /connect/vscode endpoint (docs/web-vscode-signin-spec.md) to be live.
-      const ok = await signInToAgiCloud(context.secrets, context.globalState);
+      // page, then polls for the approved token through the shared device-auth
+      // service used by the CLI.
+      const ok = await signInToAgiCloud(context.secrets);
       if (ok) {
+        sidebarProvider.pushAccountStatus();
         await vscode.commands.executeCommand('agi-workforce.chat');
       }
     }),
 
     register('agi-workforce.signOut', async () => {
-      await clearAccountToken(context.secrets);
-      vscode.window.showInformationMessage('Signed out of AGI Cloud.');
+      await signOutOfAgiCloud(context.secrets);
+      sidebarProvider.pushAccountStatus();
     }),
 
     register('agi-workforce.setApiKey', async () => {
@@ -1305,6 +1306,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const { fetchTierInfo } = await import('../utils/api');
 
       const counter = getTokenCounter();
+      const accountToken = await getAccountToken(context.secrets);
       const tierInfo = await fetchTierInfo(context.secrets);
       const tier =
         tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'local';
@@ -1345,13 +1347,20 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
 
       items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
-      // AGI Cloud is public alpha and open by default — only prompt to sign
-      // in when there's genuinely no cloud tier yet; a signed-in user has no
-      // "unlock" step left to take.
-      if (tier === 'local') {
+      if (accountToken) {
+        items.push({
+          label: '$(verified-filled) AGI Cloud connected',
+          description: 'Browser-approved device session',
+        });
+        items.push({
+          label: '$(sign-out) Sign out of AGI Cloud',
+          description: 'Remove this editor session',
+          detail: 'sign-out',
+        });
+      } else {
         items.push({
           label: '$(cloud) Sign in to AGI Cloud',
-          description: 'Connect your AGI Cloud account',
+          description: 'Approve this editor in your browser',
           detail: 'sign-in',
         });
       }
@@ -1368,6 +1377,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       if (pick?.detail === 'sign-in') {
         await vscode.commands.executeCommand('agi-workforce.signIn');
+      } else if (pick?.detail === 'sign-out') {
+        await vscode.commands.executeCommand('agi-workforce.signOut');
       } else if (pick?.detail === 'reset-counter') {
         counter.reset();
         vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');

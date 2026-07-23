@@ -73,6 +73,26 @@ export interface TokenResponse {
   scope?: string;
 }
 
+/**
+ * RFC 8628-style device authorization response shared by the CLI and IDE
+ * surfaces. The browser URL is user-facing; the device_code is a poll secret
+ * and must never be logged or placed in the URL.
+ */
+export interface DeviceAuthorizationStartResponse {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+  interval: number;
+  expires_in: number;
+}
+
+/** Device credentials are deliberately short-lived and reconnectable. */
+export type AccountAuthState =
+  | { status: 'signed-out' }
+  | { status: 'signed-in'; expiresAt?: number }
+  | { status: 'expired' };
+
 /** Subscription information */
 export interface SubscriptionInfo {
   plan_tier: string;

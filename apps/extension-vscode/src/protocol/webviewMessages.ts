@@ -49,6 +49,7 @@ const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const openHistory = z.object({ type: z.literal('openHistory') });
 const newChat = z.object({ type: z.literal('newChat') });
+const openAccount = z.object({ type: z.literal('openAccount') });
 
 /**
  * `attachFiles` carries dropped or pasted file payloads from the webview
@@ -151,6 +152,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openFilePicker,
   openHistory,
   newChat,
+  openAccount,
   attachFiles,
   removePendingAttachment,
 ]);

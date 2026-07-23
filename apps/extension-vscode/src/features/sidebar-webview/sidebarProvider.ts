@@ -124,6 +124,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     void this._stateManager.pushUsageMeter();
   }
 
+  /** Push the current browser/device-auth state into the visible account control. */
+  public pushAccountStatus(): void {
+    void this._stateManager.pushAccountStatus();
+  }
+
   /** Clear conversation history and notify the webview. */
   public resetConversation(): void {
     this._stateManager.resetConversation();
