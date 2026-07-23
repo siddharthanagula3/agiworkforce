@@ -22,7 +22,7 @@ Project memories are loaded, decision statements detected, and formatted into th
 
 ### Model Routing
 
-The router picks provider + model from the selected trust mode; catalog task-routing slots (e.g. anthropic complex-reasoning → `claude-opus-4.8`, chat → `claude-sonnet-4.6`; openai chat → `gpt-5.5`, fast → `gpt-5.4-mini`; managed-cloud default `gemini-3.1-flash-lite`) resolve exclusively from `models.json`. Managed Cloud is registered lazily for signed-in users after a billing `check_cloud_access()` gate. 🟡 Partial — `apps/desktop/src-tauri/src/core/llm/llm_router.rs`, `sys/commands/chat/provider_access.rs`; unified auto-routing across providers is not fully wired.
+The router picks provider + model from the selected trust mode; catalog task-routing slots (e.g. anthropic complex-reasoning → `claude-opus-4.8`, chat → `claude-sonnet-4.6`; openai chat → `gpt-5.5`, fast → `gpt-5.4-mini`; managed-cloud default `gemini-3.5-flash-lite`) resolve exclusively from `models.json`. Managed Cloud is registered lazily for signed-in users after a billing `check_cloud_access()` gate. 🟡 Partial — `apps/desktop/src-tauri/src/core/llm/llm_router.rs`, `sys/commands/chat/provider_access.rs`; unified auto-routing across providers is not fully wired.
 
 ### Tool Calling
 

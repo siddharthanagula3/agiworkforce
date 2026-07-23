@@ -410,7 +410,7 @@ export default [
           // `model.includes('claude-')` and tool-name strings like
           // `'claude-code'` are NOT flagged. Matches: `'gpt-5.5'`,
           // `"gpt-5.4-mini"`, `'claude-opus-4-8'`, `'claude-sonnet-4.6'`,
-          // `'gemini-3.1-flash-lite'`, `'grok-4.3'`, `'o1-mini'`.
+          // `'gemini-3.5-flash-lite'`, `'grok-4.3'`, `'o1-mini'`.
           // Misses: `'claude-'`, `'gpt-'`, `'claude-code'` (tool name),
           // `'claude-cookbook'` (doc reference).
           selector:

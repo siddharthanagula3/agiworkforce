@@ -250,6 +250,29 @@ function getMeta(msg: ChatMessage | undefined): WebChatMessageMetadata | undefin
   return msg?.metadata as WebChatMessageMetadata | undefined;
 }
 
+function messageBubbleAttachments(message: ChatMessage) {
+  return (message.attachments ?? []).flatMap((attachment) => {
+    if (!attachment.url) return [];
+    const persisted = attachment as typeof attachment & { mimeType?: string };
+    const mimeType =
+      persisted.mimeType ??
+      (attachment.type === 'image'
+        ? 'image/*'
+        : attachment.type === 'file'
+          ? 'application/octet-stream'
+          : attachment.type);
+    return [
+      {
+        id: attachment.id,
+        name: attachment.name,
+        type: mimeType,
+        size: attachment.size ?? 0,
+        url: attachment.url,
+      },
+    ];
+  });
+}
+
 const MessageRow = ({
   message,
   onRegenerate,
@@ -310,6 +333,7 @@ const MessageRow = ({
         content: message.content,
         timestamp: message.createdAt ? new Date(message.createdAt) : new Date(),
         isStreaming: message.isStreaming,
+        attachments: messageBubbleAttachments(message),
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
       onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}

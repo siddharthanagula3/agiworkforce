@@ -16,6 +16,30 @@ import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
 
 describe('Gemini tool_result name mapping', () => {
+  it('translates canonical file bytes to Gemini inlineData', () => {
+    const translated = translateChatRequest({
+      model: 'gemini-3.6-flash',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Read this file' },
+            {
+              type: 'file',
+              filename: 'notes.txt',
+              source: { type: 'base64', mediaType: 'text/plain', data: 'aGVsbG8=' },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(translated.contents[0]?.parts).toEqual([
+      { text: 'Read this file' },
+      { inlineData: { mimeType: 'text/plain', data: 'aGVsbG8=' } },
+    ]);
+  });
+
   it('uses the original function name from the preceding tool_use', () => {
     const req: ChatRequest = {
       model: 'gemini-3.1-pro-preview',

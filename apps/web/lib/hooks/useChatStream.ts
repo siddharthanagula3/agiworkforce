@@ -57,6 +57,10 @@ import {
 } from '@/features/chat/lib/continue-generation';
 import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
 import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
+import {
+  buildApiMessageContent,
+  durableAttachmentDescriptors,
+} from '@/features/chat/lib/persisted-attachments';
 
 interface SendMessageOptions {
   model?: string;
@@ -295,7 +299,7 @@ export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLAC
 
 // ─── Shared SSE-stream types + module-level approval registry ───────────────
 
-type MessageContent = string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+type MessageContent = ReturnType<typeof buildApiMessageContent>;
 type ApiMessage = {
   role: string;
   content: MessageContent;
@@ -1585,7 +1589,7 @@ export function useChatStream(): UseChatStreamReturn {
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
-      if (!content.trim()) return false;
+      if (!content.trim() && !options.attachments?.length) return false;
 
       const conversationId = options.conversationId || useChatStore.getState().activeConversationId;
       if (!conversationId) {
@@ -1608,6 +1612,14 @@ export function useChatStream(): UseChatStreamReturn {
         styleMode: options.styleMode,
         hasSkillInstruction: Boolean(options.skillName),
       });
+      const persistedAttachments = durableAttachmentDescriptors(options.attachments);
+      const userMetadata: MessageMetadata | undefined =
+        sendReplay || persistedAttachments
+          ? {
+              ...(sendReplay ? { sendReplay } : {}),
+              ...(persistedAttachments ? { attachments: persistedAttachments } : {}),
+            }
+          : undefined;
       // Provider (not a captured string): every save fetches a fresh token at
       // call time so a long stream cannot outlive it. See AuthTokenProvider.
       const getAuthToken: AuthTokenProvider = async () => {
@@ -1635,7 +1647,7 @@ export function useChatStream(): UseChatStreamReturn {
         content: content.trim(),
         createdAt: new Date().toISOString(),
         attachments: options.attachments,
-        metadata: sendReplay ? { sendReplay } : undefined,
+        metadata: userMetadata,
       };
       addMessage(userMessage);
 
@@ -1651,7 +1663,7 @@ export function useChatStream(): UseChatStreamReturn {
             id: userMessageId,
             role: 'user',
             content: content.trim(),
-            metadata: sendReplay ? { sendReplay } : undefined,
+            metadata: userMetadata,
           },
           getAuthToken,
         )
@@ -1685,7 +1697,7 @@ export function useChatStream(): UseChatStreamReturn {
             .filter((m) => m.id !== assistantMessageId)
             .map((m) => ({
               role: m.role,
-              content: m.content as MessageContent,
+              content: buildApiMessageContent(m),
             })),
         ];
 
@@ -1697,22 +1709,6 @@ export function useChatStream(): UseChatStreamReturn {
           const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
           if (styleInstruction) {
             apiMessages.unshift({ role: 'system', content: styleInstruction });
-          }
-        }
-
-        if (options.attachments?.some((a) => a.type === 'image')) {
-          const lastUserMsgIndex = apiMessages.length - 1;
-          if (lastUserMsgIndex >= 0 && apiMessages[lastUserMsgIndex]?.role === 'user') {
-            const formattedContent: MessageContent = [
-              { type: 'text', text: content.trim() },
-              ...options.attachments
-                .filter((a) => a.type === 'image' && a.content)
-                .map((a) => ({
-                  type: 'image_url' as const,
-                  image_url: { url: a.content! },
-                })),
-            ];
-            apiMessages[lastUserMsgIndex]!.content = formattedContent;
           }
         }
 

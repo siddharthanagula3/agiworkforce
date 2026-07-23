@@ -16,10 +16,17 @@ import {
  *  - the live/selectable split and non-live non-routability invariant.
  */
 describe('per-model reasoning capability', () => {
-  it('hides effort for non-reasoning models (gemini-3.1-flash-lite ⇒ none)', () => {
-    // Was gpt-4.1-nano; removed from the catalog 2026-07-11 (founder directive).
-    // gemini-3.1-flash-lite is a real, current non-reasoning model in its place.
-    const r = getModelReasoning('gemini-3.1-flash-lite');
+  it('exposes the current Flash-Lite effort set and minimal default', () => {
+    const r = getModelReasoning('gemini-3.5-flash-lite');
+    expect(r.capable).toBe(true);
+    expect(r.control).toBe('effort_levels');
+    expect(r.supportedEfforts).toEqual(['minimal', 'low', 'medium', 'high']);
+    expect(r.defaultEffort).toBe('minimal');
+    expect(r.canDisableThinking).toBe(false);
+  });
+
+  it('hides effort for a non-reasoning model', () => {
+    const r = getModelReasoning('sonar');
     expect(r.capable).toBe(false);
     expect(r.control).toBe('none');
   });

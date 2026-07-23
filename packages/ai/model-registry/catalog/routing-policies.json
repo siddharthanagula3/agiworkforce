@@ -263,10 +263,10 @@
     },
     "slots": {
       "general_fast": {
-        "modelKey": "gemini-3.1-flash-lite"
+        "modelKey": "gemini-3.5-flash-lite"
       },
       "workhorse_general": {
-        "modelKey": "gemini-3.1-flash-lite"
+        "modelKey": "gemini-3.5-flash-lite"
       },
       "general_balanced": {
         "modelKey": "gpt-5.6-terra"
@@ -314,7 +314,7 @@
         "modelKey": "claude-opus-4.8"
       },
       "vision_fast": {
-        "modelKey": "gemini-3.1-flash-lite"
+        "modelKey": "gemini-3.5-flash-lite"
       },
       "vision_premium": {
         "modelKey": "gemini-3.6-flash"
@@ -326,7 +326,7 @@
         "modelKey": "gemini-3.1-pro-preview"
       },
       "search_fast": {
-        "modelKey": "gemini-3.1-flash-lite"
+        "modelKey": "gemini-3.5-flash-lite"
       },
       "search_premium": {
         "modelKey": "gemini-3.6-flash"
@@ -356,7 +356,7 @@
         "modelKey": "gpt-4o-transcribe"
       },
       "voice_rewrite": {
-        "modelKey": "gemini-3.1-flash-lite"
+        "modelKey": "gemini-3.5-flash-lite"
       },
       "general_balanced_pro": {
         "modelKey": "gpt-5.6-terra"

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Check } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@agiworkforce/ui';
+import { Popover, PopoverTrigger, PopoverContent, Slider } from '@agiworkforce/ui';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
@@ -71,7 +71,7 @@ function providerBrandHex(providerKey: string): string {
 // Reasoning / effort capability (per-model, driven by models.json `reasoning`).
 //
 // The flyout is rendered off `model.reasoning.control` + `supportedEfforts` so
-// each model shows ONLY the effort chips it actually accepts — fixing the prior
+// each model shows ONLY the effort marks it actually accepts — fixing the prior
 // "xhigh/max shown (and disabled) for every model" behaviour. See
 // docs/research/reasoning-effort-capability-matrix-2026-07-10.md (UI adaptation).
 // ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ function modelSupportsThinking(model: AIModel): boolean {
   return r.capable && r.control !== 'none';
 }
 
-/** Effort chip labels — extended to cover the provider vocab (`none`, `minimal`). */
+/** Effort mark labels — extended to cover the provider vocab (`none`, `minimal`). */
 const EFFORT_CHIP_LABEL: Record<string, string> = {
   none: 'None',
   minimal: 'Minimal',
@@ -109,10 +109,10 @@ const EFFORT_CHIP_DESCRIPTION: Record<string, string> = {
 };
 
 /**
- * The effort chips to render for a model. `effort_levels`/`always_on` use the
- * model's exact `supportedEfforts`; `thinking_budget` maps low/medium/high chips
+ * The effort marks to render for a model. `effort_levels`/`always_on` use the
+ * model's exact `supportedEfforts`; `thinking_budget` maps low/medium/high marks
  * to budget presets when no explicit set is declared. `thinking_toggle` without a
- * set renders no chips (the on/off switch is the whole control).
+ * set renders no marks (the on/off switch is the whole control).
  */
 function effortChipsFor(r: ModelReasoning): string[] {
   const base =
@@ -123,7 +123,7 @@ function effortChipsFor(r: ModelReasoning): string[] {
       : (r.supportedEfforts ?? []);
   // The UI store's Effort vocab (low|medium|high|xhigh|max) cannot represent
   // `minimal`, so `minimal` maps to `low` (chipToStoreEffort). When a model's set
-  // has BOTH, drop `minimal` to avoid two chips resolving to the same store value
+  // has BOTH, drop `minimal` to avoid two marks resolving to the same store value
   // (which would double-highlight and make clicking `minimal` light up `low`). The
   // request path treats them equivalently (non-union effort values are dropped to
   // the provider default). No catalog model has `minimal` without `low`.
@@ -132,10 +132,10 @@ function effortChipsFor(r: ModelReasoning): string[] {
     : base;
 }
 
-/** Whether the flyout should show a separate on/off switch (vs a `none` chip). */
+/** Whether the flyout should show a separate on/off switch (vs a `none` mark). */
 function showsThinkingSwitch(r: ModelReasoning): boolean {
   if (r.control === 'none' || r.control === 'always_on') return false;
-  // effort_levels with a `none` chip encodes off in the chip row itself.
+  // effort_levels with a `none` mark encodes off in the slider itself.
   if (r.control === 'effort_levels' && (r.supportedEfforts ?? []).includes('none')) return false;
   return r.canDisableThinking ?? true;
 }
@@ -649,7 +649,7 @@ export function ComposerFooter({
     setThinkingEnabled(true);
   };
 
-  // Select an effort chip. `none` = off; other chips enable + set the level.
+  // Select an effort mark. `none` = off; other marks enable + set the level.
   const handleEffortChip = (chip: string) => {
     const store = chipToStoreEffort(chip);
     if (store === 'off') {
@@ -659,19 +659,25 @@ export function ComposerFooter({
     setThinkingEffort(store); // setEffort also enables thinking
   };
 
-  // Whether a chip is the active selection.
+  // Whether an effort mark is the active selection.
   const isEffortChipActive = (chip: string): boolean => {
     const store = chipToStoreEffort(chip);
     if (store === 'off') return !thinkingEnabled;
     return thinkingEnabled && thinkingEffort === store;
   };
 
-  // Whether the effort chip row is visible. When there's a separate on/off
-  // switch, chips only show while thinking is enabled. When the row itself
-  // carries the off state (a `none` chip) or the model is always-on, chips are
+  // Whether the effort slider is visible. When there's a separate on/off
+  // switch, it only shows while thinking is enabled. When the slider itself
+  // carries the off state (a `none` mark) or the model is always-on, it is
   // always shown.
   const effortChipsVisible =
     supportsAdaptive && effortChips.length > 0 && (showThinkingSwitch ? thinkingEnabled : true);
+  const selectedEffortIndex = effortChips.findIndex(isEffortChipActive);
+  const defaultEffortIndex = effortChips.findIndex(
+    (chip) => chipToStoreEffort(chip) === defaultStoreEffort(reasoning),
+  );
+  const effortSliderIndex =
+    selectedEffortIndex >= 0 ? selectedEffortIndex : Math.max(defaultEffortIndex, 0);
 
   return (
     <div
@@ -774,6 +780,89 @@ export function ComposerFooter({
                   </div>
                 )}
 
+                {/* Keep the selected model's reasoning control at the top of the
+                    popover, where it remains discoverable without scrolling through
+                    the model roster. Values come only from catalog-supportedEfforts. */}
+                {!isSearching && supportsAdaptive && (
+                  <div className="border-b border-border/40 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm text-foreground/85">
+                          {showThinkingSwitch ? 'Extended thinking' : 'Reasoning effort'}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {isAlwaysOn
+                            ? 'Always on for this model'
+                            : showThinkingSwitch
+                              ? 'Thinks for more complex tasks'
+                              : 'Choose how much reasoning to use'}
+                        </span>
+                      </span>
+                      {isAlwaysOn ? (
+                        <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Always on
+                        </span>
+                      ) : showThinkingSwitch ? (
+                        <Switch
+                          checked={thinkingEnabled}
+                          onCheckedChange={handleThinkingEnabledChange}
+                          aria-label="Toggle extended thinking"
+                          className="h-5 w-9"
+                        />
+                      ) : null}
+                    </div>
+
+                    {effortChipsVisible && (
+                      <div
+                        className="mt-2.5 space-y-2"
+                        role="group"
+                        aria-label="Reasoning effort level"
+                      >
+                        {effortChips.length > 1 && (
+                          <Slider
+                            min={0}
+                            max={effortChips.length - 1}
+                            step={1}
+                            value={[effortSliderIndex]}
+                            onValueChange={(value) => {
+                              const chip = effortChips[value[0] ?? -1];
+                              if (chip) handleEffortChip(chip);
+                            }}
+                            thumbAriaLabel="Reasoning effort"
+                            valueLabel={
+                              EFFORT_CHIP_LABEL[effortChips[effortSliderIndex] ?? ''] ??
+                              effortChips[effortSliderIndex]
+                            }
+                            className="px-1"
+                          />
+                        )}
+                        <div className="flex items-start justify-between gap-1">
+                          {effortChips.map((chip) => {
+                            const isActive = isEffortChipActive(chip);
+                            return (
+                              <button
+                                key={chip}
+                                type="button"
+                                title={EFFORT_CHIP_DESCRIPTION[chip] ?? chip}
+                                aria-pressed={isActive}
+                                onClick={() => handleEffortChip(chip)}
+                                className={[
+                                  'min-w-0 flex-1 rounded px-0.5 py-1 text-center text-[10px] transition-colors',
+                                  isActive
+                                    ? 'bg-primary/10 font-medium text-primary'
+                                    : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                                ].join(' ')}
+                              >
+                                {EFFORT_CHIP_LABEL[chip] ?? chip}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="max-h-[320px] overflow-y-auto py-1">
                   {/* Recommended section label */}
                   {!isSearching && (
@@ -796,89 +885,6 @@ export function ComposerFooter({
                       />
                     );
                   })}
-
-                  {/* Reasoning / effort control · rendered off the selected model's
-                      reasoning.control. Non-reasoning models render NOTHING here
-                      (no dead effort control). Effort chips are the model's exact
-                      supportedEfforts — never a global low/medium/high/xhigh/max. */}
-                  {!isSearching && supportsAdaptive && (
-                    <>
-                      <div className="my-1 border-t border-border/40" />
-                      {isAlwaysOn ? (
-                        // Reasoner-only: reasoning is always on, cannot be disabled.
-                        <div className="flex items-center gap-2 px-3 py-1.5">
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm text-foreground/80">Reasoning</span>
-                            <span className="block text-xs text-muted-foreground">
-                              Always on for this model
-                            </span>
-                          </span>
-                          <span className="shrink-0 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            Always on
-                          </span>
-                        </div>
-                      ) : showThinkingSwitch ? (
-                        // On/off switch (thinking_toggle / thinking_budget / effort_levels
-                        // whose supported set has no `none` chip).
-                        <div className="flex items-center gap-2 px-3 py-1.5">
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-sm text-foreground/80">
-                              Extended thinking
-                            </span>
-                            <span className="block text-xs text-muted-foreground">
-                              Thinks for more complex tasks
-                            </span>
-                          </span>
-                          <Switch
-                            checked={thinkingEnabled}
-                            onCheckedChange={handleThinkingEnabledChange}
-                            aria-label="Toggle extended thinking"
-                            className="h-5 w-9"
-                          />
-                        </div>
-                      ) : (
-                        // effort_levels with a `none` chip: the chip row itself carries
-                        // the off state — just a label above the chips.
-                        <div className="px-3 py-1.5">
-                          <span className="block text-sm text-foreground/80">Reasoning effort</span>
-                        </div>
-                      )}
-                      {effortChipsVisible && (
-                        <div className="px-2 pb-1" role="group" aria-label="Reasoning effort level">
-                          {effortChips.map((chip) => {
-                            const isActive = isEffortChipActive(chip);
-                            return (
-                              <button
-                                key={chip}
-                                type="button"
-                                title={EFFORT_CHIP_DESCRIPTION[chip] ?? chip}
-                                onClick={() => handleEffortChip(chip)}
-                                className={[
-                                  'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors',
-                                  isActive ? 'bg-muted/50' : 'hover:bg-muted/40',
-                                ].join(' ')}
-                              >
-                                <span className="min-w-0 flex-1">
-                                  <span className="block text-sm text-foreground/85">
-                                    {EFFORT_CHIP_LABEL[chip] ?? chip}
-                                  </span>
-                                  <span className="block text-xs text-muted-foreground">
-                                    {EFFORT_CHIP_DESCRIPTION[chip] ?? ''}
-                                  </span>
-                                </span>
-                                {isActive && (
-                                  <Check
-                                    className="h-3.5 w-3.5 shrink-0 text-primary"
-                                    aria-hidden="true"
-                                  />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  )}
 
                   {/* More models section · only shown when not searching */}
                   {!isSearching && more.length > 0 && (

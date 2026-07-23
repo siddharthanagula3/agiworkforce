@@ -603,8 +603,32 @@ describe('MessageBubble', () => {
       render(<MessageBubble message={makeMessage({ attachments: [pdf] })} />);
       const link = screen.getByRole('link', { name: /report\.pdf/i }) as HTMLAnchorElement;
       expect(link.getAttribute('href')).toBe(pdf.url);
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.hasAttribute('download')).toBe(false);
       // Not rendered as an image thumbnail.
       expect(screen.queryByRole('button', { name: /view report\.pdf full size/i })).toBeNull();
+    });
+
+    it('downloads non-previewable attachments intentionally', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            attachments: [
+              {
+                id: 'att-text-1',
+                name: 'notes.txt',
+                type: 'text/plain',
+                size: 120,
+                url: '/api/files/att-text-1',
+              },
+            ],
+          })}
+        />,
+      );
+
+      const link = screen.getByRole('link', { name: /notes\.txt/i }) as HTMLAnchorElement;
+      expect(link.getAttribute('download')).toBe('notes.txt');
+      expect(link.hasAttribute('target')).toBe(false);
     });
   });
 

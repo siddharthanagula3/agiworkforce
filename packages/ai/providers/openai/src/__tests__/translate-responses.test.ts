@@ -52,6 +52,43 @@ describe('translateChatRequestToResponses', () => {
     expect(params.include).toEqual(['web_search_call.action.sources']);
   });
 
+  it('maps canonical files to Responses input_file content', () => {
+    const params = translateChatRequestToResponses(
+      {
+        ...request,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Read this file' },
+              {
+                type: 'file',
+                filename: 'brief.pdf',
+                source: { type: 'base64', mediaType: 'application/pdf', data: 'JVBERg==' },
+              },
+            ],
+          },
+        ],
+      },
+      { compat },
+    );
+
+    expect(params.input).toEqual([
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Read this file' },
+          {
+            type: 'input_file',
+            filename: 'brief.pdf',
+            file_data: 'data:application/pdf;base64,JVBERg==',
+          },
+        ],
+      },
+    ]);
+  });
+
   it('maps high thinking budgets to OpenAI xhigh on supported Responses models', () => {
     const params = translateChatRequestToResponses(
       {
@@ -121,6 +158,29 @@ describe('translateChatRequestToResponses', () => {
 });
 
 describe('translateChatRequest', () => {
+  it('rejects generic file input on Chat Completions instead of silently dropping it', () => {
+    expect(() =>
+      translateChatRequest(
+        {
+          ...request,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'file',
+                  filename: 'brief.pdf',
+                  source: { type: 'base64', mediaType: 'application/pdf', data: 'JVBERg==' },
+                },
+              ],
+            },
+          ],
+        },
+        { compat, provider: 'openai' },
+      ),
+    ).toThrow('File inputs require an OpenAI Responses-capable model');
+  });
+
   it('maps high thinking budgets to OpenAI xhigh for Chat Completions when supported', () => {
     const params = translateChatRequest(
       {

@@ -917,6 +917,7 @@ const MessageBubbleComponent = function MessageBubble({
                   attachment.type === 'application/pdf' ||
                   attachment.type.includes('word') ||
                   attachment.type.includes('document');
+                const shouldPreview = attachment.type === 'application/pdf';
 
                 if (isImage) {
                   // Broken-image fallback: never leave a torn-image glyph — show
@@ -968,14 +969,15 @@ const MessageBubbleComponent = function MessageBubble({
                   <a
                     key={attachment.id}
                     href={attachment.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    target={shouldPreview ? '_blank' : undefined}
+                    rel={shouldPreview ? 'noopener noreferrer' : undefined}
+                    download={shouldPreview ? undefined : attachment.name}
                     className={cn(
                       'flex items-center gap-2 rounded-lg border border-border/50 overflow-hidden',
                       'bg-muted/40 hover:bg-muted/70 transition-colors text-left no-underline',
                       'px-2.5 py-1.5',
                     )}
-                    title={attachment.name}
+                    title={`${shouldPreview ? 'Preview' : 'Download'} ${attachment.name}`}
                   >
                     {isDoc ? (
                       <FileText

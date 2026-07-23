@@ -125,7 +125,7 @@ vi.mock('@shared/config/llm', () => ({
 
 vi.mock('@/lib/free-trial-config', () => ({
   FREE_TRIAL_MODELS: [],
-  FREE_TRIAL_MODEL: 'gemini-3.1-flash-lite',
+  FREE_TRIAL_MODEL: 'gemini-3.5-flash-lite',
 }));
 
 vi.mock('@/features/chat/components/Budget/BudgetTrackerDisplay', () => ({

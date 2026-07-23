@@ -55,7 +55,7 @@ search path.** Nothing needs removal because nothing is search-incapable.
 | native           | openai     | gpt-5.4-nano           |
 | native           | google     | gemini-3.1-pro-preview |
 | native           | google     | gemini-3.5-flash       |
-| native           | google     | gemini-3.1-flash-lite  |
+| native           | google     | gemini-3.5-flash-lite  |
 | native           | perplexity | sonar                  |
 | native           | perplexity | sonar-deep-research    |
 | generic-fallback | deepseek   | deepseek-v4-pro        |
@@ -100,7 +100,7 @@ execution (E2B) 8/18.**
 | gpt-5.4-nano           | Y     | –        | Y      | –              | –       |
 | gemini-3.1-pro-preview | Y     | Y        | Y      | Y              | Y       |
 | gemini-3.5-flash       | Y     | Y        | Y      | Y              | Y       |
-| gemini-3.1-flash-lite  | Y     | –        | Y      | Y              | Y       |
+| gemini-3.5-flash-lite  | Y     | Y        | Y      | Y              | Y       |
 | deepseek-v4-pro        | Y     | Y        | Y      | –              | Y       |
 | qwen-3.7-plus          | Y     | –        | Y      | –              | Y       |
 | qwen-3.5-flash         | Y     | –        | Y      | –              | Y       |

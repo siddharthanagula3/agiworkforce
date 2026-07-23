@@ -32,7 +32,7 @@ import { ComposerFooter } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
-import { useAttachments } from '@features/chat/hooks/use-attachments';
+import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useModelStore } from '@shared/stores/model-store';
@@ -583,40 +583,19 @@ const ChatComposerNewComponent = ({
     }
   }, [prefillText, prevPrefill, onPrefillConsumed]);
 
-  const addImageAttachments = useCallback(
+  const addChatAttachments = useCallback(
     (files: File[]) => {
-      const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-      if (imageFiles.length === 0) {
-        setLocalNotice(
-          'Web chat currently accepts images only. Other file types require Cloud file support.',
-        );
-        return;
-      }
-
-      setLocalNotice(
-        imageFiles.length === files.length
-          ? null
-          : 'Only images were attached. Other file types require Cloud file support.',
-      );
-      addFiles(imageFiles);
+      setLocalNotice(null);
+      addFiles(files);
     },
     [addFiles],
   );
 
   const handleFileDrop = useCallback(
     (files: File[]) => {
-      // Validate the file kind before model capability. A rejected executable,
-      // PDF, or other unsupported file must never be described as an image the
-      // selected model cannot read.
-      const hasImage = files.some((file) => file.type.startsWith('image/'));
-      if (!hasImage) {
-        addImageAttachments(files);
-        return;
-      }
-
-      addImageAttachments(files);
+      addChatAttachments(files);
     },
-    [addImageAttachments],
+    [addChatAttachments],
   );
 
   // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
@@ -1352,7 +1331,7 @@ const ChatComposerNewComponent = ({
                         </div>
                       )}
 
-                      {/* 1. Add photos */}
+                      {/* 1. Add photos and files */}
                       <button
                         type="button"
                         onClick={() => {
@@ -1362,7 +1341,7 @@ const ChatComposerNewComponent = ({
                         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                       >
                         <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <span className="flex-1 text-left">Add photos</span>
+                        <span className="flex-1 text-left">Add photos &amp; files</span>
                       </button>
 
                       {/* 2. Create image */}
@@ -1894,7 +1873,7 @@ const ChatComposerNewComponent = ({
           ref={fileInputRef}
           type="file"
           multiple
-          accept="image/*"
+          accept={getAcceptAttribute()}
           disabled={isLoading || composerDisabled}
           className="hidden"
           onChange={(e) => {
@@ -1902,7 +1881,7 @@ const ChatComposerNewComponent = ({
             handleFileDrop(files);
             e.target.value = '';
           }}
-          aria-label="Image upload"
+          aria-label="File upload"
         />
       </div>
 

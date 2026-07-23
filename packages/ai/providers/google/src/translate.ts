@@ -71,6 +71,10 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
         return { inlineData: { mimeType: block.source.mediaType, data: block.source.data } };
       }
       return null;
+    case 'file':
+      return {
+        inlineData: { mimeType: block.source.mediaType, data: block.source.data },
+      };
     case 'tool_use':
       // Gemini 3 strictly validates thought signatures on replayed functionCall
       // parts: omitting one 400s with INVALID_ARGUMENT ("Function call is

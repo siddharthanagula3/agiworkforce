@@ -626,7 +626,7 @@ mod tests {
             "claude-haiku-4-5-20251001",
             "gpt-5.6-luna",
             "gpt-5.6-sol",
-            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
             "gemini-3.1-pro-preview",
             "minimax-m3",
             "kimi-k3",
@@ -885,7 +885,7 @@ mod tests {
         let result = format_table(headers, &rows);
         let lines: Vec<&str> = result.lines().collect();
         assert_eq!(lines.len(), 3); // header + sep + 1 row
-                                    // Row should contain "1" and two blank-padded cells
+        // Row should contain "1" and two blank-padded cells
         assert!(lines[2].starts_with('1'));
     }
 }

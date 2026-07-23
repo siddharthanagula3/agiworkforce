@@ -150,7 +150,7 @@ Planned tiers (all locked in code, all priced in Stripe):
 
 ## §D. Hobby economics — does the $10 tier work? (1 min)
 
-Hobby = $10/mo, 2M tokens/mo, auto-routes to cheap pool: Gemini 3.1 Flash-Lite ($0.25/$1.50 per million in/out tokens), GLM-4.7 ($0.30/$1.20), DeepSeek V4-Flash ($0.14/$0.28), Imagen-4 Fast ($0.02/image), Whisper-1 ($0.006/min). **No manual model picker — auto-routing only.**
+Hobby = $10/mo, 2M tokens/mo, auto-routes to cheap pool: Gemini 3.5 Flash-Lite ($0.30/$2.50 per million in/out tokens), GLM-4.7 ($0.30/$1.20), DeepSeek V4-Flash ($0.14/$0.28), Imagen-4 Fast ($0.02/image), Whisper-1 ($0.006/min). **No manual model picker — auto-routing only.**
 
 **D1.** Is Hobby's "auto-routing only, no manual picker" a fair tradeoff for $10/mo, or a dealbreaker?
 

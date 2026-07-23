@@ -23,7 +23,7 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 
 use agiworkforce_model_registry::{
-    resolve_auto_route, AutoRouteDecision, AutoRoutingRequest, RoutingTaskType, TrustMode,
+    AutoRouteDecision, AutoRoutingRequest, RoutingTaskType, TrustMode, resolve_auto_route,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -282,6 +282,8 @@ struct SharedModelMetadata {
     provider: String,
     #[serde(rename = "modelType")]
     model_type: String,
+    #[serde(default, rename = "inputModalities")]
+    input_modalities: Vec<String>,
     #[serde(rename = "contextWindow")]
     context_window: usize,
     #[serde(default, rename = "maxOutputTokens")]
@@ -680,6 +682,12 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
                 .api_model_id
                 .clone()
                 .unwrap_or_else(|| model.id.clone());
+            let supports_input_modality = |modality: &str| {
+                model
+                    .input_modalities
+                    .iter()
+                    .any(|candidate| candidate.eq_ignore_ascii_case(modality))
+            };
             Model {
                 id: api_id.clone(),
                 provider: canonical_cli_provider(&model.provider).to_string(),
@@ -701,9 +709,9 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
                 supports_tools: model.capabilities.tools,
                 supports_vision: model.capabilities.vision,
                 supports_reasoning: model.capabilities.thinking,
-                supports_audio_input: false,
+                supports_audio_input: supports_input_modality("audio"),
                 supports_audio_output: false,
-                supports_pdf: false,
+                supports_pdf: supports_input_modality("pdf"),
                 release_date: normalize_release_date(model.released.as_deref()),
                 status: model.status.clone().unwrap_or_else(|| "active".to_string()),
                 cloud_eligible: cloud_eligible_ids.contains(&model.id)
@@ -1817,7 +1825,7 @@ mod tests {
             "\"gpt-5.4-mini\"",
             "\"gpt-5.5-pro\"",
             "\"gemini-3.1-pro-preview\"",
-            "\"gemini-3.1-flash-lite\"",
+            "\"gemini-3.5-flash-lite\"",
         ];
         for literal in formerly_hardcoded {
             assert!(

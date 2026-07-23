@@ -28,9 +28,9 @@ describe('free trial config', () => {
     expect(FREE_TRIAL_MODELS).toContain(FREE_TRIAL_MODEL);
   });
 
-  it('keeps Gemini 3.1 Flash Lite available as the default Free chat model', () => {
-    expect(FREE_TRIAL_MODEL).toBe('gemini-3.1-flash-lite');
-    expect(FREE_TRIAL_MODELS).toContain('gemini-3.1-flash-lite');
+  it('keeps Gemini 3.5 Flash-Lite available as the default Free chat model', () => {
+    expect(FREE_TRIAL_MODEL).toBe('gemini-3.5-flash-lite');
+    expect(FREE_TRIAL_MODELS).toContain('gemini-3.5-flash-lite');
   });
 
   it('offers GPT-5.4 Mini on Free while keeping GPT-5.6 Luna paid', () => {

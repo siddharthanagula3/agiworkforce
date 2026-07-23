@@ -42,7 +42,7 @@ vi.mock('@/lib/mcp-tool-executor', async () => {
   };
 });
 
-import { runToolLoop, type ConnectorToolExecutor } from './tool-loop';
+import { isToolOffered, runToolLoop, type ConnectorToolExecutor } from './tool-loop';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ProcessedRequest } from './request-processor';
 
@@ -73,6 +73,16 @@ const githubToolDef: WebMcpToolDef = {
   origin: 'connector',
   inputSchema: { type: 'object' },
 };
+
+describe('isToolOffered — resume authorization boundary', () => {
+  it.each(['execute_code', 'write_file', 'create_folder', 'url_fetch', 'web_search'])(
+    'requires %s to be present in the current request offerings',
+    (toolName) => {
+      expect(isToolOffered(toolName, [], new Set())).toBe(false);
+      expect(isToolOffered(toolName, [], new Set([toolName]))).toBe(true);
+    },
+  );
+});
 
 /** Build a fresh (pre-suspend) request whose provider will emit a tool_call. */
 function makeFreshProcessed(

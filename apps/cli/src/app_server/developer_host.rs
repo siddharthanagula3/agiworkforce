@@ -4,12 +4,12 @@ use agiworkforce_protocol::agent_events::{
     AgentEventToolExecutionEnd, AgentEventToolExecutionStart,
 };
 use agiworkforce_protocol::developer_session::{
-    agent_event_notification, task_state_notification, AppServerCapabilities, AppServerClientInfo,
-    AppServerNotification, ApprovalResponseParams, DeveloperAgentMode, DeveloperMessage,
-    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionSource, ThreadForkParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadStartParams,
-    ThreadStatus, ThreadSummary, TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams,
-    TurnSummary,
+    AppServerCapabilities, AppServerClientInfo, AppServerNotification, ApprovalResponseParams,
+    DeveloperAgentMode, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
+    DeveloperSessionSource, ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse,
+    ThreadReadResponse, ThreadStartParams, ThreadStatus, ThreadSummary, TurnInterruptParams,
+    TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary, agent_event_notification,
+    task_state_notification,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -19,7 +19,7 @@ use base64::Engine as _;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
-use tokio::sync::{broadcast, oneshot, Mutex};
+use tokio::sync::{Mutex, broadcast, oneshot};
 use uuid::Uuid;
 
 use crate::agent::{AgentSession, ToolApprovalSink, ToolEventSink};
@@ -1933,10 +1933,10 @@ mod tests {
             )
             .expect("coding route");
 
-        assert_eq!(resolved.provider_model_id, "gemini-3.1-flash-lite");
+        assert_eq!(resolved.provider_model_id, "gpt-5.4-mini");
         assert!(resolved.fallback_model_ids.is_empty());
         let state = resolved.auto_routing.expect("persisted Auto state");
-        assert_eq!(state.model_key, "gemini-3.1-flash-lite");
+        assert_eq!(state.model_key, "gpt-5.4-mini");
         assert_eq!(state.task_type, DeveloperRoutingTaskType::Coding);
         assert_eq!(
             state.trust_mode,
@@ -1945,7 +1945,7 @@ mod tests {
     }
 
     #[test]
-    fn developer_auto_routing_preserves_cache_route_and_installs_byok_fallbacks() {
+    fn developer_auto_routing_preserves_cache_route_without_ineligible_byok_fallbacks() {
         let workspace = tempdir().expect("workspace");
         let store_dir = tempdir().expect("store");
         let mut config = CliConfig::default();
@@ -1960,7 +1960,7 @@ mod tests {
         .expect("BYOK host");
         let previous = ManagedSessionAutoRouting {
             selection: "auto-economy".to_string(),
-            model_key: "gemini-3.1-flash-lite".to_string(),
+            model_key: "gemini-3.5-flash-lite".to_string(),
             task_type: DeveloperRoutingTaskType::SimpleChat,
             trust_mode: agiworkforce_model_registry::TrustMode::Byok,
         };
@@ -1973,15 +1973,12 @@ mod tests {
             )
             .expect("coding route");
 
-        assert_eq!(resolved.provider_model_id, "gemini-3.1-flash-lite");
+        assert_eq!(resolved.provider_model_id, "gemini-3.5-flash-lite");
         assert_eq!(
             resolved.fallback_model_ids.first(),
             Some(&resolved.provider_model_id)
         );
-        assert!(resolved
-            .fallback_model_ids
-            .iter()
-            .any(|model| model == "glm-5.2"));
+        assert_eq!(resolved.fallback_model_ids.len(), 1);
     }
 
     #[tokio::test]
@@ -2110,10 +2107,12 @@ mod tests {
             })
             .await
             .expect("persisted interrupted history");
-        assert!(history
-            .messages
-            .iter()
-            .any(|message| message.text.contains("partial assistant response")));
+        assert!(
+            history
+                .messages
+                .iter()
+                .any(|message| message.text.contains("partial assistant response"))
+        );
     }
 
     #[tokio::test]
@@ -2406,10 +2405,12 @@ mod tests {
             agent.attached_context_files,
             [
                 original_attachments,
-                vec![valid_context_file
-                    .path()
-                    .canonicalize()
-                    .expect("canonical valid context")],
+                vec![
+                    valid_context_file
+                        .path()
+                        .canonicalize()
+                        .expect("canonical valid context")
+                ],
             ]
             .concat()
         );

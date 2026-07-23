@@ -23,6 +23,7 @@
 import type {
   ChatRequest,
   ContentBlock,
+  FileBlock,
   ImageBlock,
   ProviderMessage,
   TextBlock,
@@ -53,6 +54,9 @@ function isTextBlock(b: ContentBlock): b is TextBlock {
 function isImageBlock(b: ContentBlock): b is ImageBlock {
   return b.type === 'image';
 }
+function isFileBlock(b: ContentBlock): b is FileBlock {
+  return b.type === 'file';
+}
 
 function blocksToInputContent(blocks: ContentBlock[]): ResponsesInputContent[] {
   const out: ResponsesInputContent[] = [];
@@ -65,6 +69,12 @@ function blocksToInputContent(blocks: ContentBlock[]): ResponsesInputContent[] {
           ? `data:${b.source.mediaType};base64,${b.source.data}`
           : b.source.url;
       out.push({ type: 'input_image', image_url });
+    } else if (isFileBlock(b)) {
+      out.push({
+        type: 'input_file',
+        filename: b.filename,
+        file_data: `data:${b.source.mediaType};base64,${b.source.data}`,
+      });
     }
     // tool_use / tool_result / thinking are NOT valid inside an input
     // message's content — caller routes them as their own input items
@@ -103,7 +113,7 @@ function translateMessage(msg: ProviderMessage): ResponsesInputItem[] {
   //   - text/image blocks → a single message input item
   // Order matters: function_call must come before its function_call_output
   // in the input array.
-  const textImage: ContentBlock[] = [];
+  const messageContent: ContentBlock[] = [];
   for (const b of msg.content) {
     if (b.type === 'tool_use') {
       items.push({
@@ -120,16 +130,16 @@ function translateMessage(msg: ProviderMessage): ResponsesInputItem[] {
         call_id: b.toolUseId,
         output,
       });
-    } else if (b.type === 'text' || b.type === 'image') {
-      textImage.push(b);
+    } else if (b.type === 'text' || b.type === 'image' || b.type === 'file') {
+      messageContent.push(b);
     }
     // thinking blocks: drop from history (reasoning is server-side per
     // previous_response_id; replaying it confuses the model).
   }
 
-  if (textImage.length > 0) {
-    const collapsed = collapseTextOnly(textImage);
-    const content = collapsed ?? blocksToInputContent(textImage);
+  if (messageContent.length > 0) {
+    const collapsed = collapseTextOnly(messageContent);
+    const content = collapsed ?? blocksToInputContent(messageContent);
     if (typeof content === 'string' ? content.length > 0 : content.length > 0) {
       items.push({ type: 'message', role: msg.role, content });
     }

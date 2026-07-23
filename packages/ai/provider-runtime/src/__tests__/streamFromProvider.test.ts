@@ -241,7 +241,7 @@ describe('streamFromProvider — paywall detection (opt-in)', () => {
   });
 
   it('falls back to a generic error when the paywall body has the wrong kind', async () => {
-    const body = JSON.stringify({ kind: 'downgrade', modelOverride: 'gemini-3.1-flash-lite' });
+    const body = JSON.stringify({ kind: 'downgrade', modelOverride: 'gemini-3.5-flash-lite' });
     const fetchImpl = fetchMockResolving(errorResponse(429, body));
 
     const chunks = await collect<Chunk>(

@@ -4,21 +4,27 @@
   "verificationLog": [
     {
       "date": "2026-07-22",
+      "verifiedBy": "founder-directive-and-official-google-model-thinking-pricing-docs",
+      "status": "CORRECTION",
+      "notes": "Replaced the previous Flash-Lite chat model with the GA Gemini 3.5 Flash-Lite across the catalog, routing slots, and product surfaces. Official Google documentation confirms the exact gemini-3.5-flash-lite API ID, 1,048,576-token input and 65,536-token output limits, $0.30/M standard input, $2.50/M output, $0.03/M cache-read pricing, multimodal/PDF input, function calling, code execution, search grounding, URL context, caching, and minimal/low/medium/high thinking levels with minimal as default. The same pricing page corrects Gemini 3.6 Flash output pricing to $7.50/M and its current model page confirms the same 1,048,576/65,536 token limits. Sources retrieved 2026-07-22: ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite, /docs/models/gemini-3.6-flash, /docs/latest-model, /docs/thinking, and /docs/pricing."
+    },
+    {
+      "date": "2026-07-22",
       "verifiedBy": "founder-tier-directive-and-official-openai-model-docs",
       "status": "CORRECTION",
-      "notes": "Founder override to the latest-family-only picker policy: restored GPT-5.4 Mini as the Free OpenAI tool-capable model and kept GPT-5.6 Luna at Basic+. Moved Gemini 3.6 Flash from Pro to Basic. GPT-5.4 Mini identity, 400K context, 128K max output, Aug 31 2025 cutoff, $0.75/$4.50 pricing with $0.075 cache reads, reasoning levels, and hosted/tool capabilities were reverified against developers.openai.com/api/docs/models/gpt-5.4-mini on 2026-07-22. Free Auto coding/agentic tasks now use GPT-5.4 Mini; ordinary Free chat remains Gemini 3.1 Flash Lite."
+      "notes": "Founder override to the latest-family-only picker policy: restored GPT-5.4 Mini as the Free OpenAI tool-capable model and kept GPT-5.6 Luna at Basic+. Moved Gemini 3.6 Flash from Pro to Basic. GPT-5.4 Mini identity, 400K context, 128K max output, Aug 31 2025 cutoff, $0.75/$4.50 pricing with $0.075 cache reads, reasoning levels, and hosted/tool capabilities were reverified against developers.openai.com/api/docs/models/gpt-5.4-mini on 2026-07-22. Free Auto coding/agentic tasks now use GPT-5.4 Mini; ordinary Free chat uses Gemini 3.5 Flash-Lite."
     },
     {
       "date": "2026-07-20",
       "verifiedBy": "live-provider-docs-sweep-2026-07-20",
       "status": "CORRECTION",
-      "notes": "Latest-family-only wave 3, every fact live-verified today against official provider docs (docs.x.ai, docs.mistral.ai, ai.google.dev, developers.openai.com, docs.perplexity.ai, openrouter.ai/api/v1/models). RENAMED+UPDATED: grok-4.3 to grok-4.5 ($2/$6, 500k ctx, reasoning_effort low-medium-high default high, cannot disable); mistral-medium-3 to mistral-medium-3.5 (mistral-medium-3-5, $1.5/$7.5, 256k, multimodal - designated upstream replacement for Pixtral/Devstral/Magistral); mistral-small-3 to mistral-small-4 (wire id mistral-small-2603 was ALREADY current but catalog pricing/ctx were stale-wrong: now $0.15/$0.60, 256k); codestral-2 to codestral-2508 (catalog id was invented, wire id was already correct; $0.30/$0.90, 128k, July 2025 - still latest Codestral); veo-3 to veo-3.1 (wire id was already veo-3.1-generate-preview). REMOVED (dead or deprecated upstream): pixtral-large (retired 5/30/26), sonar-reasoning (gone from Perplexity lineup; -pro remains), imagen-4/-fast/-ultra (deprecated by Google; gemini-3.1-flash-image is the successor line), whisper-1 (replaced by gpt-4o-transcribe $2.50/$10 and gpt-4o-mini-transcribe $1.25/$5), and all four OpenRouter :free entries (verified gone via live models API; replaced with verified nvidia/nemotron-3-super-120b-a12b:free 1M ctx and google/gemma-4-26b-a4b-it:free 262k ctx). KEPT with note: tts-1/tts-1-hd (successor gpt-4o-mini-tts pricing row not yet verifiable - follow-up), groq llama entries (host serves no newer llama), NIM llama-3.3 (llama-4 on NIM available but unpriced - follow-up), gemini-3.1 pro/flash-lite/flash-image (still latest of their lines; flash-lite now stable), stable-image-core (lineup unchanged). Qwen3.8-Max previewed 2026-07-19 but has NO official API id/pricing - deliberately NOT added. ADDENDUM: kimi-k3 added to tierAllowedModels.pro_additions (was registered but absent from every tier bucket = unselectable despite minTier pro — caught by sweep-web-packages). Auto-routing slots deliberately unchanged: no slot routed to kimi at HEAD either; giving kimi an auto slot is a product decision, picker-selectable + BYOK is the shipped state."
+      "notes": "Latest-family-only wave 3, every fact live-verified today against official provider docs (docs.x.ai, docs.mistral.ai, ai.google.dev, developers.openai.com, docs.perplexity.ai, openrouter.ai/api/v1/models). RENAMED+UPDATED: grok-4.3 to grok-4.5 ($2/$6, 500k ctx, reasoning_effort low-medium-high default high, cannot disable); mistral-medium-3 to mistral-medium-3.5 (mistral-medium-3-5, $1.5/$7.5, 256k, multimodal - designated upstream replacement for Pixtral/Devstral/Magistral); mistral-small-3 to mistral-small-4 (wire id mistral-small-2603 was ALREADY current but catalog pricing/ctx were stale-wrong: now $0.15/$0.60, 256k); codestral-2 to codestral-2508 (catalog id was invented, wire id was already correct; $0.30/$0.90, 128k, July 2025 - still latest Codestral); veo-3 to veo-3.1 (wire id was already veo-3.1-generate-preview). REMOVED (dead or deprecated upstream): pixtral-large (retired 5/30/26), sonar-reasoning (gone from Perplexity lineup; -pro remains), imagen-4/-fast/-ultra (deprecated by Google; gemini-3.1-flash-image is the successor line), whisper-1 (replaced by gpt-4o-transcribe $2.50/$10 and gpt-4o-mini-transcribe $1.25/$5), and all four OpenRouter :free entries (verified gone via live models API; replaced with verified nvidia/nemotron-3-super-120b-a12b:free 1M ctx and google/gemma-4-26b-a4b-it:free 262k ctx). KEPT with note: tts-1/tts-1-hd (successor gpt-4o-mini-tts pricing row not yet verifiable - follow-up), groq llama entries (host serves no newer llama), NIM llama-3.3 (llama-4 on NIM available but unpriced - follow-up), the then-current Google Pro/Flash-Lite/Flash Image lines, and stable-image-core (lineup unchanged). Qwen3.8-Max previewed 2026-07-19 but has NO official API id/pricing - deliberately NOT added. ADDENDUM: kimi-k3 added to tierAllowedModels.pro_additions (was registered but absent from every tier bucket = unselectable despite minTier pro — caught by sweep-web-packages). Auto-routing slots deliberately unchanged: no slot routed to kimi at HEAD either; giving kimi an auto slot is a product decision, picker-selectable + BYOK is the shipped state."
     },
     {
       "date": "2026-07-20",
       "verifiedBy": "founder-directive-latest-family-versions-only",
       "status": "CORRECTION",
-      "notes": "Founder policy: catalog carries ONLY the latest version of each model family. Removed gpt-5.4-mini, gpt-5.4-nano, gpt-4.1-nano (older GPT generations; the gpt-5.6 sol/terra/luna family covers flagship/chat/fast slots and provider taskRouting already targets it). tierAllowedModels economy list dropped gpt-5.4-nano (gpt-5.6-luna remains the economy OpenAI slot). Families needing LIVE lineup verification before further action (older entries retained pending verified replacements, tracked follow-up): gemini-3.1-pro-preview/flash-lite/flash-image vs any 3.5-generation pro/lite lines; mistral-large-3/medium-3/small-3/pixtral-large vs current Mistral lineup; groq + nvidia_nim + open_router Llama 3.x vintages vs Llama 4 availability; tts-1/tts-1-hd (2023) and whisper-1 (2022) vs current OpenAI audio models; managed_cloud stable-image-core (2024) vs current Stability lineup."
+      "notes": "Founder policy: catalog carries ONLY the latest version of each model family. Removed gpt-5.4-mini, gpt-5.4-nano, gpt-4.1-nano (older GPT generations; the gpt-5.6 sol/terra/luna family covers flagship/chat/fast slots and provider taskRouting already targets it). tierAllowedModels economy list dropped gpt-5.4-nano (gpt-5.6-luna remains the economy OpenAI slot). Families needing LIVE lineup verification before further action (older entries retained pending verified replacements, tracked follow-up): the then-current Google Pro/Flash-Lite/Flash Image lines vs newer generations; mistral-large-3/medium-3/small-3/pixtral-large vs current Mistral lineup; groq + nvidia_nim + open_router Llama 3.x vintages vs Llama 4 availability; tts-1/tts-1-hd (2023) and whisper-1 (2022) vs current OpenAI audio models; managed_cloud stable-image-core (2024) vs current Stability lineup."
     },
     {
       "date": "2026-07-20",
@@ -125,7 +131,7 @@
       "defaultPricing": { "inputPerMillion": 1, "outputPerMillion": 1 },
       "modelPrefixes": ["stable"],
       "aliases": ["managed_cloud", "managedcloud", "cloud"],
-      "defaultModel": "gemini-3.1-flash-lite",
+      "defaultModel": "gemini-3.5-flash-lite",
       "taskRouting": {},
       "canonicalization": {
         "qwen-turbo": "qwen-3.7-plus",
@@ -136,14 +142,14 @@
         "mistral-medium-3.5": "claude-sonnet-5",
         "mistral-small-4": "claude-sonnet-5",
         "codestral-2508": "claude-sonnet-5",
-        "groq-llama-3.1-8b": "gemini-3.1-flash-lite",
-        "groq-llama-3.3-70b": "gemini-3.1-flash-lite",
-        "nvidia/llama-3.3-70b-instruct": "gemini-3.1-flash-lite",
-        "nvidia/nemotron-3-nano-30b-a3b": "gemini-3.1-flash-lite",
-        "nvidia/nemotron-3-super-120b-a12b": "gemini-3.1-flash-lite",
-        "nvidia/nemotron-3-ultra-550b-a55b": "gemini-3.1-flash-lite",
-        "nvidia/nemotron-3-super-120b-a12b:free": "gemini-3.1-flash-lite",
-        "google/gemma-4-26b-a4b-it:free": "gemini-3.1-flash-lite",
+        "groq-llama-3.1-8b": "gemini-3.5-flash-lite",
+        "groq-llama-3.3-70b": "gemini-3.5-flash-lite",
+        "nvidia/llama-3.3-70b-instruct": "gemini-3.5-flash-lite",
+        "nvidia/nemotron-3-nano-30b-a3b": "gemini-3.5-flash-lite",
+        "nvidia/nemotron-3-super-120b-a12b": "gemini-3.5-flash-lite",
+        "nvidia/nemotron-3-ultra-550b-a55b": "gemini-3.5-flash-lite",
+        "nvidia/nemotron-3-super-120b-a12b:free": "gemini-3.5-flash-lite",
+        "google/gemma-4-26b-a4b-it:free": "gemini-3.5-flash-lite",
         "gemini-3.5-flash": "gemini-3.6-flash"
       }
     },
@@ -194,7 +200,7 @@
       "aliases": [],
       "defaultModel": "gemini-3.6-flash",
       "taskRouting": {
-        "fast_completion": "gemini-3.1-flash-lite",
+        "fast_completion": "gemini-3.5-flash-lite",
         "code_generation": "gemini-3.6-flash",
         "complex_reasoning": "gemini-3.1-pro-preview",
         "chat": "gemini-3.6-flash",
@@ -978,7 +984,7 @@
       "name": "Gemini 3.1 Pro",
       "provider": "google",
       "modelType": "reasoning",
-      "variantPartner": "gemini-3.1-flash-lite",
+      "variantPartner": "gemini-3.5-flash-lite",
       "contextWindow": 2000000,
       "inputCost": 2,
       "outputCost": 12,
@@ -1020,23 +1026,24 @@
       },
       "tierPolicy": { "minTier": "pro" }
     },
-    "gemini-3.1-flash-lite": {
-      "id": "gemini-3.1-flash-lite",
-      "apiModelId": "gemini-3.1-flash-lite",
-      "name": "Gemini 3.1 Flash Lite",
+    "gemini-3.5-flash-lite": {
+      "id": "gemini-3.5-flash-lite",
+      "apiModelId": "gemini-3.5-flash-lite",
+      "name": "Gemini 3.5 Flash-Lite",
       "provider": "google",
-      "modelType": "chat",
+      "modelType": "multimodal",
+      "inputModalities": ["text", "image", "audio", "video", "pdf"],
       "variantPartner": "gemini-3.1-pro-preview",
-      "contextWindow": 1000000,
-      "inputCost": 0.25,
-      "outputCost": 1.5,
-      "cached_input": 0.025,
+      "contextWindow": 1048576,
+      "inputCost": 0.3,
+      "outputCost": 2.5,
+      "cached_input": 0.03,
       "capabilities": {
         "streaming": true,
         "tools": true,
         "vision": true,
         "json": true,
-        "thinking": false,
+        "thinking": true,
         "computerUse": false,
         "agentic": true,
         "imageGen": false,
@@ -1046,14 +1053,26 @@
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 76.2, "humaneval": 91, "mmlu": 88.6, "gpqa": 60, "aime": 88 },
       "speed": "very-fast",
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Ultra-Fast Inference", "Speed", "Cost-Sensitive", "Long Context"],
-      "released": "March 2026",
+      "released": "July 2026",
       "deprecation_date": null,
-      "reasoning": { "capable": false, "control": "none" },
+      "maxOutputTokens": 65536,
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["minimal", "low", "medium", "high"],
+        "defaultEffort": "minimal",
+        "canDisableThinking": false,
+        "request": {
+          "api": "gen",
+          "effortPath": "thinkingConfig.thinkingLevel",
+          "togglePath": null,
+          "budgetPath": "thinkingConfig.thinkingBudget"
+        }
+      },
       "tierPolicy": { "minTier": "free" }
     },
     "gemini-3.1-flash-image": {
@@ -1579,10 +1598,11 @@
       "name": "Gemini 3.6 Flash",
       "provider": "google",
       "modelType": "multimodal",
+      "inputModalities": ["text", "image", "audio", "video", "pdf"],
       "variantPartner": "gemini-3.1-pro-preview",
-      "contextWindow": 1000000,
+      "contextWindow": 1048576,
       "inputCost": 1.5,
-      "outputCost": 9,
+      "outputCost": 7.5,
       "cached_input": 0.15,
       "capabilities": {
         "streaming": true,
@@ -1610,15 +1630,15 @@
         "Multimodal Reasoning",
         "Long Context"
       ],
-      "released": "May 2026",
+      "released": "July 2026",
       "deprecation_date": null,
-      "maxOutputTokens": 64000,
+      "maxOutputTokens": 65536,
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
         "supportedEfforts": ["minimal", "low", "medium", "high"],
         "defaultEffort": "medium",
-        "canDisableThinking": true,
+        "canDisableThinking": false,
         "request": {
           "api": "gen",
           "effortPath": "thinkingConfig.thinkingLevel",
@@ -1971,7 +1991,7 @@
     "economy": [
       "gpt-5.4-mini",
       "gpt-5.6-luna",
-      "gemini-3.1-flash-lite",
+      "gemini-3.5-flash-lite",
       "gemini-3.6-flash",
       "claude-haiku-4.5"
     ],

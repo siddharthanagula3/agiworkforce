@@ -287,28 +287,44 @@ describe('ChatComposerNew', () => {
     expect(screen.getByText('No matching skills.')).toBeInTheDocument();
   });
 
-  it('opens + menu and shows Add photos option', async () => {
+  it('opens + menu and shows Add photos and files option', async () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     const moreBtn = screen.getByRole('button', { name: /more options/i });
     fireEvent.click(moreBtn);
 
-    expect(screen.getByText('Add photos')).toBeInTheDocument();
+    expect(screen.getByText('Add photos & files')).toBeInTheDocument();
   });
 
-  it('rejects non-image attachments before send', () => {
-    const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+  it('offers the cross-provider file types and rejects executables before send', () => {
+    const onSend = vi.fn();
+    const { container } = render(<ChatComposerNew onSend={onSend} />);
     const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
     expect(input).not.toBeNull();
-    expect(input).toHaveAttribute('accept', 'image/*');
+    expect(input).toHaveAttribute('accept', expect.stringContaining('application/pdf'));
+    expect(input).toHaveAttribute('aria-label', 'File upload');
 
     const unsupportedFile = new File(['binary'], 'installer.exe', {
       type: 'application/x-msdownload',
     });
     fireEvent.change(input!, { target: { files: [unsupportedFile] } });
 
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'Web chat currently accepts images only. Other file types require Cloud file support.',
+    expect(screen.getByRole('alert')).toHaveTextContent('unsupported file type');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('attaches a PDF and sends it without an upgrade gate', async () => {
+    const onSend = vi.fn();
+    const { container } = render(<ChatComposerNew onSend={onSend} />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const pdf = new File(['%PDF'], 'brief.pdf', { type: 'application/pdf' });
+
+    fireEvent.change(input, { target: { files: [pdf] } });
+    await userEvent.type(screen.getByRole('textbox', { name: /message input/i }), 'Summarize it');
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith('Summarize it', [pdf], undefined, expect.any(Object)),
     );
   });
 

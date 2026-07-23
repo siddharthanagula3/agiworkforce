@@ -30,7 +30,7 @@ Pricing = USD /1M tokens (input/output), cache = cached-input /1M. tier = minimu
 
 | id                     | provider   | tier  | type       | key caps                                | ctx   | in/out $      | cache $ |
 | ---------------------- | ---------- | ----- | ---------- | --------------------------------------- | ----- | ------------- | ------- |
-| gemini-3.1-flash-lite  | google     | free  | chat       | tools,vision,search,codeExec            | 1M    | 0.25 / 1.5    | 0.025   |
+| gemini-3.5-flash-lite  | google     | free  | multimodal | tools,vision,search,codeExec,thinking   | 1M    | 0.30 / 2.50   | 0.03    |
 | qwen-3.5-flash         | qwen       | free  | multimodal | tools,vision,reason                     | 1M    | 0.029 / 0.287 | 0.0058  |
 | qwen-3.7-plus          | qwen       | free  | multimodal | tools,vision,reason                     | 1M    | 0.4 / 1.6     | 0.08    |
 | deepseek-v4-flash      | deepseek   | free  | code       | tools,vision,reason                     | 1M    | 0.14 / 0.28   | 0.0028  |

@@ -76,7 +76,7 @@ Representative routing models (full list in `packages/contracts/types/src/models
 
 | Model (route)                         | Input | Output | Cache read | Source                                                                                                |
 | ------------------------------------- | ----- | ------ | ---------- | ----------------------------------------------------------------------------------------------------- |
-| gemini-3.1-flash-lite (cheapest chat) | 0.25  | 1.50   | 0.025      | models.json; [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)   |
+| gemini-3.5-flash-lite (cheapest chat) | 0.30  | 2.50   | 0.03       | models.json; [ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)   |
 | gpt-5.4-nano                          | 0.20  | 1.25   | 0.02       | models.json; [developers.openai.com/api/docs/pricing](https://developers.openai.com/api/docs/pricing) |
 | claude-haiku-4.5                      | 1.00  | 5.00   | 0.10       | [platform.claude.com pricing](https://platform.claude.com/docs/en/about-claude/pricing)               |
 | deepseek-v4-flash                     | 0.14  | 0.28   | 0.0028     | models.json                                                                                           |

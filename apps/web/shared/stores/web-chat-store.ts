@@ -113,6 +113,8 @@ export interface MessageMetadata {
   searchResults?: WebSearchResults;
   /** Safe replay metadata used to regenerate a turn without storing raw skill bodies. */
   sendReplay?: SendReplayMetadata;
+  /** Durable owner-scoped attachment descriptors; raw bytes stay in object storage. */
+  attachments?: Attachment[];
   /** True while server-managed code execution is running */
   isExecutingCode?: boolean;
   /** Tool activity timeline rendered below assistant messages. */
@@ -233,6 +235,8 @@ export interface Message {
 
 export interface Attachment {
   id: string;
+  /** Owner-scoped media_assets id used by the server to hydrate provider input. */
+  assetId?: string;
   type: 'image' | 'file';
   name: string;
   size?: number;
