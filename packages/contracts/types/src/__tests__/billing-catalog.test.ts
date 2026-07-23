@@ -6,6 +6,7 @@ import {
   getPlanPriceInr,
   getBillingPlanProductLimits,
   canUseBillingPlanCapability,
+  isSelfServePaidPlanTier,
   isPlanSelectableOnSurface,
   PLAN_SURFACE_VISIBILITY,
   type BillingPlanTier,
@@ -15,6 +16,13 @@ describe('billing catalog', () => {
   it('keeps Team sales-assisted until organization-linked seat billing exists', () => {
     expect(SELF_SERVE_PAID_PLAN_TIERS).toEqual(['basic', 'pro', 'max', 'max_15x']);
     expect(SELF_SERVE_PAID_PLAN_TIERS).not.toContain('team');
+  });
+
+  it('recognizes only plans that may enter self-serve checkout', () => {
+    expect(isSelfServePaidPlanTier('max')).toBe(true);
+    expect(isSelfServePaidPlanTier('max_15x')).toBe(true);
+    expect(isSelfServePaidPlanTier('team')).toBe(false);
+    expect(isSelfServePaidPlanTier('local-only')).toBe(false);
   });
 
   it('keeps the public catalog limited to customer-facing prices', () => {

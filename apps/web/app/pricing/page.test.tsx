@@ -164,7 +164,11 @@ describe('PricingPage', () => {
   it('confirms the prorated amount before charging an active paid subscriber mid-cycle', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'pro', status: 'active' };
-    stripeMocks.previewUpgrade.mockResolvedValueOnce({ amountDueNowCents: 4200, currency: 'usd' });
+    stripeMocks.previewUpgrade.mockResolvedValueOnce({
+      amountDueNowCents: 4200,
+      currency: 'usd',
+      previewToken: 'signed-preview-token',
+    });
     stripeMocks.upgradePlanMidCycle.mockResolvedValueOnce({ activation: 'webhook_pending' });
 
     render(<PricingPage />);
@@ -181,6 +185,7 @@ describe('PricingPage', () => {
       expect(stripeMocks.upgradePlanMidCycle).toHaveBeenCalledWith({
         plan: 'max',
         billingInterval: 'monthly',
+        previewToken: 'signed-preview-token',
       }),
     );
     expect(stripeMocks.upgradeToMaxPlan).not.toHaveBeenCalled();

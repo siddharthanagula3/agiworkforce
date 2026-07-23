@@ -12,7 +12,6 @@ vi.mock('@stripe/stripe-js', () => ({
 }));
 
 import {
-  CheckoutRequiredError,
   previewUpgrade,
   startPlanCheckout,
   upgradePlanMidCycle,
@@ -66,6 +65,23 @@ describe('stripe payments', () => {
     });
   });
 
+  it('returns the server-signed preview token with the displayed prorated amount', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        amountDueNowCents: 10_042,
+        currency: 'usd',
+        previewToken: 'signed-preview-token',
+      }),
+    } as Response);
+
+    await expect(previewUpgrade({ plan: 'max_15x' })).resolves.toEqual({
+      amountDueNowCents: 10_042,
+      currency: 'usd',
+      previewToken: 'signed-preview-token',
+    });
+  });
+
   it('surfaces a typed checkout fallback when the stored subscription is stale', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: false,
@@ -75,10 +91,18 @@ describe('stripe payments', () => {
           code: 'checkout_required',
           message: 'Start a new checkout to continue.',
         },
+        checkout: {
+          amountDueNowCents: 20_000,
+          currency: 'usd',
+        },
       }),
     } as Response);
 
-    await expect(previewUpgrade({ plan: 'max_15x' })).rejects.toBeInstanceOf(CheckoutRequiredError);
+    await expect(previewUpgrade({ plan: 'max_15x' })).rejects.toMatchObject({
+      name: 'CheckoutRequiredError',
+      amountDueNowCents: 20_000,
+      currency: 'usd',
+    });
   });
 
   it('starts the requested checkout fallback without browser-supplied identity data', async () => {
@@ -97,7 +121,7 @@ describe('stripe payments', () => {
   });
 
   it('completes required card authentication before reporting an upgrade as pending activation', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue({
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: false,
       status: 402,
       json: async () => ({
@@ -106,8 +130,13 @@ describe('stripe payments', () => {
       }),
     } as Response);
 
-    await expect(upgradePlanMidCycle({ plan: 'max' })).resolves.toEqual({
+    await expect(
+      upgradePlanMidCycle({ plan: 'max', previewToken: 'signed-preview-token' }),
+    ).resolves.toEqual({
       activation: 'webhook_pending',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      previewToken: 'signed-preview-token',
     });
     expect(stripeJsMocks.loadStripe).toHaveBeenCalledWith('pk_test_example');
     expect(stripeJsMocks.confirmPayment).toHaveBeenCalledWith({

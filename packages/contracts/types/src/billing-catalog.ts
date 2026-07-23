@@ -24,6 +24,14 @@ export const SELF_SERVE_PAID_PLAN_TIERS = [
 ] as const satisfies readonly BillingPlanTier[];
 export type SelfServePaidPlanTier = (typeof SELF_SERVE_PAID_PLAN_TIERS)[number];
 
+export function isSelfServePaidPlanTier(
+  value: string | null | undefined,
+): value is SelfServePaidPlanTier {
+  return (
+    typeof value === 'string' && (SELF_SERVE_PAID_PLAN_TIERS as readonly string[]).includes(value)
+  );
+}
+
 export interface BillingPlanPricing {
   id: BillingPlanTier;
   label: string;
