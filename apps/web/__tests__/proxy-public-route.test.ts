@@ -60,8 +60,10 @@ describe('web proxy', () => {
 
   it('allows direct uploads only to the configured exact R2 account origin', async () => {
     const original = process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+    const originalBucket = process.env['CLOUDFLARE_R2_BUCKET_NAME'];
     try {
       process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = '0123456789abcdef0123456789abcdef';
+      process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'agiworkforce-media';
       const { proxy } = await import('../proxy');
 
       const response = await proxy(
@@ -72,18 +74,22 @@ describe('web proxy', () => {
       );
 
       expect(response?.headers.get('Content-Security-Policy')).toContain(
-        "connect-src 'self' https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com ",
+        "connect-src 'self' https://agiworkforce-media.0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com ",
       );
     } finally {
       if (original === undefined) delete process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
       else process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = original;
+      if (originalBucket === undefined) delete process.env['CLOUDFLARE_R2_BUCKET_NAME'];
+      else process.env['CLOUDFLARE_R2_BUCKET_NAME'] = originalBucket;
     }
   });
 
   it('does not trust a malformed R2 account id as a CSP origin', async () => {
     const original = process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+    const originalBucket = process.env['CLOUDFLARE_R2_BUCKET_NAME'];
     try {
       process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = 'evil.example.com';
+      process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'agiworkforce-media';
       const { proxy } = await import('../proxy');
 
       const response = await proxy(
@@ -99,6 +105,34 @@ describe('web proxy', () => {
     } finally {
       if (original === undefined) delete process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
       else process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = original;
+      if (originalBucket === undefined) delete process.env['CLOUDFLARE_R2_BUCKET_NAME'];
+      else process.env['CLOUDFLARE_R2_BUCKET_NAME'] = originalBucket;
+    }
+  });
+
+  it('does not trust a malformed R2 bucket name as a CSP origin', async () => {
+    const original = process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+    const originalBucket = process.env['CLOUDFLARE_R2_BUCKET_NAME'];
+    try {
+      process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = '0123456789abcdef0123456789abcdef';
+      process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'bucket.attacker.example';
+      const { proxy } = await import('../proxy');
+
+      const response = await proxy(
+        new NextRequest('http://localhost/chat', {
+          headers: { Cookie: '__session=test-session' },
+        }),
+        {} as never,
+      );
+
+      expect(response?.headers.get('Content-Security-Policy')).not.toContain(
+        '.r2.cloudflarestorage.com',
+      );
+    } finally {
+      if (original === undefined) delete process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
+      else process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = original;
+      if (originalBucket === undefined) delete process.env['CLOUDFLARE_R2_BUCKET_NAME'];
+      else process.env['CLOUDFLARE_R2_BUCKET_NAME'] = originalBucket;
     }
   });
 
