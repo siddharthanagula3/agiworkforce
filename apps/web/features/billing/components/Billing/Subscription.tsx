@@ -204,7 +204,13 @@ export const Subscription: React.FC<SubscriptionProps> = ({
             <div>
               <p className="text-sm text-muted-foreground">Billing Period</p>
               <p className="text-sm font-medium">
-                {billing?.plan === 'free' ? 'N/A' : 'Not available'}
+                {billing?.plan === 'free'
+                  ? 'N/A'
+                  : billing?.current_period_start && billing.current_period_end
+                    ? `${formatDate(billing.current_period_start)} – ${formatDate(
+                        billing.current_period_end,
+                      )}`
+                    : 'Not available'}
               </p>
             </div>
           </div>

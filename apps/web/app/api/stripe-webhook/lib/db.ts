@@ -16,6 +16,7 @@ import {
 import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constants';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
+import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 
 export async function ensureProfileExists(
   db: DatabaseAdapter,
@@ -990,6 +991,46 @@ export async function updateSubscriptionFromStripeSubscription(
       }
 
       if (resolvedUserId) {
+        let replacedUnlinkedEntitlement: { id: string; planTier: string } | null = null;
+        if (subscription.metadata?.['replace_unlinked_entitlement'] === 'true') {
+          const previousPlanTier = subscription.metadata?.['upgrade_from']?.toLowerCase();
+          const existingRows = await db.query<{
+            id: string;
+            plan_tier: string;
+            stripe_subscription_id: string | null;
+          }>(
+            'select id, plan_tier, stripe_subscription_id from subscriptions where user_id = $1 limit 1',
+            [resolvedUserId],
+          );
+          const existing = existingRows[0];
+          const previousBudget = getPlanUsageBudgetCents(previousPlanTier ?? '', 'monthly');
+          const nextBudget = getPlanUsageBudgetCents(planTier, 'monthly');
+          if (
+            existing &&
+            previousPlanTier &&
+            existing.plan_tier === previousPlanTier &&
+            !isStripeSubscriptionId(existing.stripe_subscription_id) &&
+            previousBudget > 0 &&
+            nextBudget >= previousBudget
+          ) {
+            replacedUnlinkedEntitlement = {
+              id: existing.id,
+              planTier: previousPlanTier,
+            };
+          } else {
+            logger.warn(
+              {
+                subscriptionId: stripeSubId,
+                resolvedUserId,
+                previousPlanTier,
+                storedPlanTier: existing?.plan_tier,
+                planTier,
+              },
+              'Ignoring invalid unlinked-entitlement replacement metadata on subscription',
+            );
+          }
+        }
+
         let customerEmailForProfile: string | null = null;
         if (stripeCustomerId) {
           try {
@@ -1081,21 +1122,39 @@ export async function updateSubscriptionFromStripeSubscription(
           const pStart = updateData.current_period_start;
           const pEnd = updateData.current_period_end;
           try {
-            await SubscriptionService.allocateCreditsForPeriod(
-              resolvedUserId,
-              upsertedRow.id,
-              planTier,
-              new Date(pStart),
-              new Date(pEnd),
-            );
+            if (replacedUnlinkedEntitlement && replacedUnlinkedEntitlement.id === upsertedRow.id) {
+              await SubscriptionService.carryCreditsForUpgradePeriod(
+                resolvedUserId,
+                upsertedRow.id,
+                replacedUnlinkedEntitlement.planTier,
+                planTier,
+                new Date(pStart),
+                new Date(pEnd),
+              );
+            } else {
+              await SubscriptionService.allocateCreditsForPeriod(
+                resolvedUserId,
+                upsertedRow.id,
+                planTier,
+                new Date(pStart),
+                new Date(pEnd),
+              );
+            }
             logger.info(
-              { userId: resolvedUserId, subscriptionId: upsertedRow.id, planTier },
-              'Credits allocated for new subscription',
+              {
+                userId: resolvedUserId,
+                subscriptionId: upsertedRow.id,
+                planTier,
+                carriedUsage: !!replacedUnlinkedEntitlement,
+              },
+              replacedUnlinkedEntitlement
+                ? 'Usage carried into paid replacement subscription'
+                : 'Credits allocated for new subscription',
             );
           } catch (creditError) {
             logger.error(
               { error: creditError, userId: resolvedUserId, subscriptionId: upsertedRow.id },
-              'Failed to allocate credits for new subscription',
+              'Failed to allocate or carry credits for new subscription',
             );
           }
         }

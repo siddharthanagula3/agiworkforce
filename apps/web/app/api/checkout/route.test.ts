@@ -123,6 +123,14 @@ describe('POST /api/checkout', () => {
           upgrade_from: 'max',
           replace_unlinked_entitlement: 'true',
         }),
+        subscription_data: {
+          metadata: expect.objectContaining({
+            user_id: 'user_123',
+            plan_tier: 'max_15x',
+            upgrade_from: 'max',
+            replace_unlinked_entitlement: 'true',
+          }),
+        },
       }),
     );
   });
