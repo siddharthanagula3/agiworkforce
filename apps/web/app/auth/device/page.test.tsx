@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type React from 'react';
 
 import AuthDevicePage from './page';
@@ -40,7 +42,11 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@shared/components/layout/Header', () => ({
-  Header: () => <header>Header</header>,
+  Header: ({ minimal }: { minimal?: boolean }) => (
+    <header data-testid="header" data-minimal={String(minimal ?? false)}>
+      Header
+    </header>
+  ),
 }));
 
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
@@ -82,6 +88,55 @@ describe('/auth/device page', () => {
     });
 
     expect(screen.getByLabelText('Device code')).toHaveValue('ABCD-1234');
+  });
+
+  it('isolates the approval card from the full-bleed marketing section layout', () => {
+    render(<AuthDevicePage />);
+
+    const card = screen.getByRole('heading', { name: 'Connect a device.' }).closest('section');
+
+    expect(card).toHaveClass('agi-device-auth-card');
+    expect(card).not.toHaveClass('agi-section');
+  });
+
+  it('keeps the approval card readable at desktop and narrow viewport widths', () => {
+    const css = readFileSync(resolve(process.cwd(), 'app/globals.css'), 'utf8');
+    const rule = css.match(/\[data-design='agi'\] \.agi-device-auth-card\s*\{([\s\S]*?)\}/);
+    const declarations = rule?.[1] ?? '';
+
+    expect(declarations).toContain('width: 100%');
+    expect(declarations).toContain('max-width: 30rem');
+    expect(declarations).toContain('padding: clamp(');
+  });
+
+  it('uses focused chrome so navigation does not compete with device approval', () => {
+    render(<AuthDevicePage />);
+
+    expect(screen.getByTestId('header')).toHaveAttribute('data-minimal', 'true');
+  });
+
+  it('directs the user back to the requesting app after approval', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ token: 'csrf-token' }),
+        } as Partial<Response>)
+        .mockResolvedValueOnce({
+          ok: true,
+        } as Partial<Response>),
+    );
+
+    render(<AuthDevicePage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Return to the app that opened this page; sign-in will finish automatically.',
+      );
+    });
   });
 
   it('renders structured approval errors without object text', async () => {

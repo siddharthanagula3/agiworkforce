@@ -7,19 +7,6 @@ import { useSearchParams } from 'next/navigation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
-const inputStyle: React.CSSProperties = {
-  background: 'var(--agi-bg-2)',
-  border: '1px solid var(--agi-rule)',
-  color: 'var(--agi-ink)',
-  padding: '12px 16px',
-  borderRadius: 6,
-  fontSize: 18,
-  fontFamily: 'var(--agi-font-mono)',
-  letterSpacing: 0,
-  textAlign: 'center',
-  width: '100%',
-};
-
 function formatUserCode(value: string): string {
   const clean = value
     .toUpperCase()
@@ -78,7 +65,10 @@ function DeviceForm() {
         const body = await res.json().catch(() => null);
         throw new Error(getErrorMessage(body));
       }
-      setMessage({ text: 'Device approved. You can close this tab.', type: 'info' });
+      setMessage({
+        text: 'Device approved. Return to the app that opened this page; sign-in will finish automatically.',
+        type: 'info',
+      });
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : 'Approval failed', type: 'error' });
     } finally {
@@ -87,43 +77,24 @@ function DeviceForm() {
   }
 
   return (
-    <section
-      className="agi-section"
-      style={{ borderBottom: 'none', maxWidth: 460, margin: '0 auto' }}
-    >
+    <section className="agi-device-auth-card" aria-labelledby="device-auth-title">
       <p className="agi-section-eyebrow">Authorize a device</p>
-      <h1 className="agi-page-h1" style={{ marginBottom: 16 }}>
+      <h1 id="device-auth-title" className="agi-device-auth-title">
         Connect a device.
       </h1>
-      <p className="agi-page-lede" style={{ marginBottom: 24 }}>
-        Enter the code shown on your CLI or other surface.{' '}
+      <p className="agi-device-auth-lede">
+        Confirm the code shown in VS Code, Chrome, or the AGI CLI.{' '}
         <strong>
-          You&rsquo;re authorizing that device to act as you. If you didn&rsquo;t initiate this,
-          close the tab.
+          Only approve a request you started. This device will be able to use your AGI account.
         </strong>
       </p>
       {isLoaded && !isSignedIn ? (
-        <div
-          role="alert"
-          style={{
-            border: '1px solid var(--agi-rule)',
-            borderRadius: 8,
-            color: 'var(--agi-error)',
-            padding: '12px 14px',
-            fontSize: 14,
-            marginBottom: 16,
-          }}
-        >
-          Sign in before approving this device request.{' '}
-          <Link href={signInHref} style={{ color: 'var(--agi-ink)' }}>
-            Sign in
-          </Link>
+        <div role="alert" className="agi-device-auth-alert agi-device-auth-alert--error">
+          Sign in before approving this device request. <Link href={signInHref}>Sign in</Link>
         </div>
       ) : null}
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <label htmlFor="device-code" style={{ fontSize: 13, color: 'var(--agi-ink-2)' }}>
-          Device code
-        </label>
+      <form onSubmit={onSubmit} className="agi-device-auth-form">
+        <label htmlFor="device-code">Device code</label>
         <input
           id="device-code"
           name="user_code"
@@ -136,32 +107,17 @@ function DeviceForm() {
           inputMode="text"
           pattern="[A-Z0-9]{4}-[A-Z0-9]{4}"
           maxLength={9}
-          style={inputStyle}
+          className="agi-device-auth-code"
         />
         {message && (
-          <p
-            role={message.type === 'error' ? 'alert' : 'status'}
-            style={{
-              color: message.type === 'error' ? 'var(--agi-error)' : 'var(--agi-success)',
-              fontSize: 13,
-              margin: 0,
-            }}
-          >
+          <p role={message.type === 'error' ? 'alert' : 'status'} data-message-type={message.type}>
             {message.text}
           </p>
         )}
         <button
           type="submit"
           disabled={loading || !code || !isLoaded || (isLoaded && !isSignedIn)}
-          className="agi-cta-primary"
-          style={{
-            border: 'none',
-            cursor:
-              loading || !code || !isLoaded || (isLoaded && !isSignedIn)
-                ? 'not-allowed'
-                : 'pointer',
-            textAlign: 'center',
-          }}
+          className="agi-cta-primary agi-device-auth-submit"
         >
           {!isLoaded
             ? 'Checking...'
@@ -172,27 +128,13 @@ function DeviceForm() {
               : 'Sign in required'}
         </button>
       </form>
-      <div
-        style={{
-          marginTop: 20,
-          border: '1px solid var(--agi-rule)',
-          borderRadius: 8,
-          padding: '14px 16px',
-          fontSize: 14,
-          color: 'var(--agi-ink-2)',
-        }}
-      >
-        <strong style={{ color: 'var(--agi-ink)' }}>Using AGI Cloud models?</strong> Approving here
-        signs your device in. AGI Cloud is open in public alpha with a small free Auto Economy cap;
-        paid plans add higher hosted capacity.{' '}
-        <Link href="/pricing" style={{ color: 'var(--agi-ink)', fontWeight: 600 }}>
-          Compare plans &rarr;
-        </Link>
+      <div className="agi-device-auth-note">
+        <strong>Using AGI Cloud models?</strong> Approval signs this device into your account. Local
+        Mode remains local and does not require account access.{' '}
+        <Link href="/pricing">Compare plans &rarr;</Link>
       </div>
-      <p style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
-        <Link href="/" style={{ color: 'var(--agi-ink)' }}>
-          Cancel
-        </Link>
+      <p className="agi-device-auth-cancel">
+        <Link href="/">Cancel</Link>
       </p>
     </section>
   );
@@ -202,10 +144,12 @@ export default function AuthDevicePage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
-        <Header />
-        <Suspense fallback={null}>
-          <DeviceForm />
-        </Suspense>
+        <Header minimal />
+        <div className="agi-device-auth-stage">
+          <Suspense fallback={null}>
+            <DeviceForm />
+          </Suspense>
+        </div>
         <MarketingFooter />
       </main>
     </div>
