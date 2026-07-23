@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MessageBubble, messageListVariants, messageBubbleVariants } from './MessageBubble';
+import { useArtifactsStore } from '../../stores/artifacts-store';
+import { useChatStore } from '@shared/stores/web-chat-store';
 
 // Inline stub for the dynamically-imported markdown renderer so tests don't
 // depend on next/dynamic async resolution. importOriginal preserves every
@@ -633,6 +635,11 @@ describe('MessageBubble', () => {
   });
 
   describe('generated files (x_generated_files metadata)', () => {
+    beforeEach(() => {
+      useArtifactsStore.getState().clearArtifacts();
+      useChatStore.getState().setActiveConversation('conv-generated-files');
+    });
+
     const genFile = (overrides: Record<string, unknown> = {}) => ({
       id: 'gf-1',
       fileName: 'chart.png',
@@ -718,6 +725,92 @@ describe('MessageBubble', () => {
           '/api/files/gf-csv',
           expect.objectContaining({ credentials: 'same-origin' }),
         );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('fetches generated HTML source and renders it in the artifact workbench', async () => {
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(new Response('<h1>Sandbox report</h1>', { status: 200 }));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        render(
+          <MessageBubble
+            message={makeMessage({
+              role: 'assistant',
+              content: 'Dashboard attached.',
+              metadata: {
+                generatedFiles: [
+                  genFile({
+                    id: 'gf-html',
+                    fileName: 'dashboard.html',
+                    mimeType: 'text/html',
+                    uri: '/api/files/gf-html',
+                    kind: 'html',
+                    surface: 'artifact',
+                    previewable: true,
+                  }),
+                ],
+              },
+            })}
+          />,
+        );
+        await waitFor(() =>
+          expect(
+            screen.getByRole('button', { name: /open artifact: dashboard\.html/i }),
+          ).toBeTruthy(),
+        );
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/files/gf-html',
+          expect.objectContaining({ credentials: 'same-origin' }),
+        );
+        expect(screen.queryByRole('link', { name: /dashboard\.html/i })).toBeNull();
+        await waitFor(() =>
+          expect(
+            useArtifactsStore
+              .getState()
+              .getConversationArtifacts('conv-generated-files')
+              .map((artifact) => artifact.title),
+          ).toContain('dashboard.html'),
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('places generated plain text in the artifact workbench instead of stranding it as a link', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(new Response('sandbox notes', { status: 200 })),
+      );
+      try {
+        render(
+          <MessageBubble
+            message={makeMessage({
+              role: 'assistant',
+              content: 'Notes attached.',
+              metadata: {
+                generatedFiles: [
+                  genFile({
+                    id: 'gf-text',
+                    fileName: 'notes.txt',
+                    mimeType: 'text/plain',
+                    uri: '/api/files/gf-text',
+                    kind: 'other',
+                    surface: 'artifact',
+                    previewable: true,
+                  }),
+                ],
+              },
+            })}
+          />,
+        );
+        await waitFor(() =>
+          expect(screen.getByRole('button', { name: /open artifact: notes\.txt/i })).toBeTruthy(),
+        );
+        expect(screen.queryByRole('link', { name: /notes\.txt/i })).toBeNull();
       } finally {
         vi.unstubAllGlobals();
       }
