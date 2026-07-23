@@ -432,9 +432,16 @@ export function AgentActivityTimeline({
   }));
 
   const isActive = activity.status === 'running' || activity.status === 'awaiting-approval';
+  const isLocalStartingActivity =
+    activity.lastSequence === -1 &&
+    activity.entries.length === 1 &&
+    activity.entries[0]?.kind === 'progress' &&
+    activity.entries[0].progressId === 'local-starting';
   // Effective open state: auto-open while active (unless the user closed it),
-  // else follow the manual `expanded` toggle.
-  const isOpen = userForcedClosed ? false : isActive || expanded;
+  // else follow the manual `expanded` toggle. The local pre-provider status
+  // stays compact because its only detail row repeats the same summary; real
+  // provider/tool events replace it and regain live auto-expansion.
+  const isOpen = userForcedClosed ? false : (isActive && !isLocalStartingActivity) || expanded;
 
   // When a run finishes, clear the manual-close and collapse to the summary so
   // the next run auto-opens and the completed trace reads as a single pill.
