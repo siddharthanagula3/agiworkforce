@@ -637,10 +637,15 @@ function injectStyles(): void {
       border: none;
       cursor: pointer;
       color: var(--agi-ext-text-muted);
-      border-radius: 5px;
-      padding: 4px 6px;
+      border-radius: 7px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
       font-size: 13px;
       line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       transition: color 0.15s, background 0.15s;
     }
     .sp-icon-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
@@ -1353,11 +1358,12 @@ function injectStyles(): void {
     #sp-composer-shell {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      border-radius: 16px;
-      padding: 6px 8px 4px;
+      border-radius: 18px;
+      min-height: 106px;
+      padding: 10px 10px 7px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 8px;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     #sp-composer-shell:focus-within {
@@ -1378,14 +1384,14 @@ function injectStyles(): void {
       background: transparent;
       border: none;
       color: var(--agi-ext-text);
-      font-size: 13px;
-      padding: 4px 4px;
+      font-size: 14px;
+      padding: 3px 4px;
       resize: none;
       outline: none;
       font-family: inherit;
       line-height: 1.5;
       max-height: 120px;
-      min-height: 28px;
+      min-height: 52px;
       overflow-y: auto;
     }
     #sp-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.78; }
@@ -1394,8 +1400,8 @@ function injectStyles(): void {
       color: var(--agi-ext-on-accent);
       border: none;
       border-radius: 50%;
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1412,8 +1418,8 @@ function injectStyles(): void {
     /* ── Attachment + button and menu ── */
     .sp-attach-wrapper { position: relative; flex-shrink: 0; }
     .sp-attach-btn {
-      width: 28px;
-      height: 28px;
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -4526,9 +4532,11 @@ function buildUI(): void {
         .map((option) => option.provider)
         .filter((provider): provider is string => Boolean(provider)),
     ).size;
-    pickerHeader.appendChild(
-      el('span', { class: 'provider-count-badge' }, `${providerCount} providers`),
-    );
+    const providerCountLabel =
+      providerCount === 0
+        ? 'Sign in for models'
+        : `${providerCount} ${providerCount === 1 ? 'provider' : 'providers'}`;
+    pickerHeader.appendChild(el('span', { class: 'provider-count-badge' }, providerCountLabel));
     modelDropdownEl.appendChild(pickerHeader);
 
     // 1. "Best (auto)" as the first option, visually distinct
@@ -4643,6 +4651,16 @@ function buildUI(): void {
 
   const headerRight = el('div', { id: 'sp-header-right' });
 
+  // ── Recent chats ──────────────────────────────────────────────────────────
+  const historyBtn = el('button', {
+    class: 'sp-icon-btn',
+    id: 'sp-history-btn',
+    title: 'Recent chats',
+    'aria-label': 'Recent chats',
+  });
+  historyBtn.appendChild(renderIcon(Clock, 16));
+  headerRight.appendChild(historyBtn);
+
   // ── ＋ new chat button ─────────────────────────────────────────────────────
   const newChatBtn = el('button', {
     class: 'sp-icon-btn',
@@ -4670,12 +4688,12 @@ function buildUI(): void {
   const quotaBadgeSlot = el('span', { id: 'sp-quota-badge-slot' });
   headerRight.appendChild(quotaBadgeSlot);
 
-  // ── ⋮ menu button (opens settings drawer) ─────────────────────────────────
+  // ── ⋮ menu button ─────────────────────────────────────────────────────────
   const menuBtn = el('button', {
     class: 'sp-icon-btn',
     id: 'sp-menu-btn',
-    title: 'Settings',
-    'aria-label': 'Open settings',
+    title: 'More',
+    'aria-label': 'Open AGI menu',
   });
   menuBtn.textContent = '⋮';
   headerRight.appendChild(menuBtn);
@@ -4743,7 +4761,7 @@ function buildUI(): void {
   }) as HTMLInputElement;
   document.body.appendChild(bridgeUrlInput);
 
-  // ── Phase 3: Settings Drawer (all popup controls now live here) ──────────────
+  // ── AGI menu drawer ────────────────────────────────────────────────────────
   // The popup has been retired. All pairing, allowlist, memory, cloud-unlock,
   // bridge-URL, tools, and chat-action controls live exclusively in this drawer.
 
@@ -4752,10 +4770,13 @@ function buildUI(): void {
     id: 'sp-drawer',
     role: 'dialog',
     'aria-modal': 'true',
-    'aria-label': 'Settings',
+    'aria-label': 'AGI menu',
   });
 
-  function openDrawer(): void {
+  let drawerReturnFocus: HTMLElement = menuBtn;
+
+  function openDrawer(trigger: HTMLElement = menuBtn): void {
+    drawerReturnFocus = trigger;
     drawerOverlay.classList.add('open');
     drawer.classList.add('open');
     // Refresh dynamic content when drawer opens
@@ -4769,7 +4790,7 @@ function buildUI(): void {
   function closeDrawer(): void {
     drawerOverlay.classList.remove('open');
     drawer.classList.remove('open');
-    menuBtn.focus();
+    drawerReturnFocus.focus();
   }
 
   menuBtn.addEventListener('click', (e) => {
@@ -4777,7 +4798,7 @@ function buildUI(): void {
     if (drawer.classList.contains('open')) {
       closeDrawer();
     } else {
-      openDrawer();
+      openDrawer(menuBtn);
     }
   });
   drawerOverlay.addEventListener('click', closeDrawer);
@@ -4790,15 +4811,15 @@ function buildUI(): void {
 
   // ── Drawer header ──────────────────────────────────────────────────────────
   const drawerHeader = el('div', { id: 'sp-drawer-header' });
-  drawerHeader.appendChild(el('div', { id: 'sp-drawer-title' }, 'Settings'));
-  const drawerClose = el('button', { id: 'sp-drawer-close', 'aria-label': 'Close settings' }, '✕');
+  drawerHeader.appendChild(el('div', { id: 'sp-drawer-title' }, 'AGI in Chrome'));
+  const drawerClose = el('button', { id: 'sp-drawer-close', 'aria-label': 'Close AGI menu' }, '✕');
   drawerClose.addEventListener('click', closeDrawer);
   drawerHeader.appendChild(drawerClose);
   drawer.appendChild(drawerHeader);
 
   const drawerBody = el('div', { id: 'sp-drawer-body' });
 
-  // ── Section 0: Chat actions (History / Summarize / Clear / Console / Open-in-Desktop) ──
+  // ── Section 0: Chat actions ────────────────────────────────────────────────
   const chatActionsSection = el('div', { class: 'sp-drawer-section' });
   chatActionsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Chat'));
   const chatActionsRow = el('div', { class: 'sp-drawer-tools-row' });
@@ -4871,6 +4892,15 @@ function buildUI(): void {
   });
   chatActionsRow.appendChild(drawerHistoryBtn);
 
+  historyBtn.addEventListener('click', () => {
+    openDrawer(historyBtn);
+    drawerHistoryList.removeAttribute('hidden');
+    listConversations()
+      .then((entries) => renderDrawerHistory(entries))
+      .catch((err) => console.warn('[SidePanel] history list failed:', err));
+    drawerHistoryBtn.focus();
+  });
+
   // Summarize button
   const drawerSummarizeBtn = el('button', {
     class: 'sp-drawer-tool-btn',
@@ -4900,47 +4930,13 @@ function buildUI(): void {
   });
   chatActionsRow.appendChild(drawerClearChatBtn);
 
-  // Console toggle button
-  const drawerConsoleBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-console-btn',
-    title: 'Toggle console logs',
-  });
-  drawerConsoleBtn.appendChild(renderIcon(Monitor, 13));
-  drawerConsoleBtn.appendChild(document.createTextNode(' Console'));
-  drawerConsoleBtn.addEventListener('click', () => {
-    closeDrawer();
-    const panel = document.getElementById('sp-console-panel');
-    if (panel) {
-      const isOpen = panel.classList.toggle('open');
-      if (isOpen) refreshConsoleLogs();
-    }
-  });
-  chatActionsRow.appendChild(drawerConsoleBtn);
-
-  // Open-in-desktop button
-  const drawerOpenDesktopBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-open-desktop-btn',
-    title: 'Open in desktop app',
-  });
-  drawerOpenDesktopBtn.appendChild(renderIcon(Monitor, 13));
-  drawerOpenDesktopBtn.appendChild(document.createTextNode(' Open Desktop'));
-  drawerOpenDesktopBtn.addEventListener('click', () => {
-    closeDrawer();
-    chrome.runtime
-      .sendMessage({ type: 'OPEN_IN_DESKTOP' })
-      .catch((err: unknown) => console.warn('[SidePanel] OPEN_IN_DESKTOP failed:', err));
-  });
-  chatActionsRow.appendChild(drawerOpenDesktopBtn);
-
   chatActionsSection.appendChild(chatActionsRow);
   chatActionsSection.appendChild(drawerHistoryList);
   drawerBody.appendChild(chatActionsSection);
 
-  // ── Section 1: Views (Workflows + Computer Use launchers) ──────────────────
+  // ── Section 1: Automation ──────────────────────────────────────────────────
   const viewsSection = el('div', { class: 'sp-drawer-section' });
-  viewsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Views'));
+  viewsSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'Automate'));
 
   const wfLaunchBtn = el('button', {
     class: 'sp-drawer-launcher-btn',
