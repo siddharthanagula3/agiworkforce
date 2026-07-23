@@ -34,7 +34,16 @@ vi.mock('@agiworkforce/ui', () => {
 });
 
 vi.mock('../services/stripe-payments', () => {
-  class CheckoutRequiredError extends Error {}
+  class CheckoutRequiredError extends Error {
+    amountDueNowCents: number;
+    currency: string;
+
+    constructor(message: string, amountDueNowCents = 0, currency = 'usd') {
+      super(message);
+      this.amountDueNowCents = amountDueNowCents;
+      this.currency = currency;
+    }
+  }
   return {
     CheckoutRequiredError,
     previewUpgrade: paymentMocks.previewUpgrade,
@@ -47,9 +56,9 @@ import { CheckoutRequiredError } from '../services/stripe-payments';
 import { UpgradeConfirmDialog } from './UpgradeConfirmDialog';
 
 describe('UpgradeConfirmDialog', () => {
-  it('offers secure checkout when the stored subscription is not live in Stripe', async () => {
+  it('discloses the full price when there is no paid Stripe charge to prorate', async () => {
     paymentMocks.previewUpgrade.mockRejectedValueOnce(
-      new CheckoutRequiredError('Continue through secure checkout.'),
+      new CheckoutRequiredError('Continue through secure checkout.', 20_000, 'usd'),
     );
     paymentMocks.startPlanCheckout.mockResolvedValueOnce(undefined);
 
@@ -61,8 +70,12 @@ describe('UpgradeConfirmDialog', () => {
       />,
     );
 
-    const continueButton = await screen.findByRole('button', { name: 'Continue to checkout' });
-    expect(screen.getByText(/secure checkout/i)).toBeTruthy();
+    const continueButton = await screen.findByRole('button', {
+      name: 'Start Max 15x · pay $200.00',
+    });
+    expect(screen.getByText(/no paid Stripe charge to credit/i)).toBeTruthy();
+    expect(screen.getByText(/\$200\.00 today/i)).toBeTruthy();
+    expect(screen.queryByText(/prorated for the rest/i)).toBeNull();
 
     fireEvent.click(continueButton);
 

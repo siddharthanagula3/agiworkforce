@@ -54,10 +54,17 @@ export function UpgradeConfirmDialog({
   onCancel,
   onConfirmed,
 }: UpgradeConfirmDialogProps) {
-  const [amountDue, setAmountDue] = useState<{ cents: number; currency: string } | null>(null);
+  const [amountDue, setAmountDue] = useState<{
+    cents: number;
+    currency: string;
+    previewToken: string;
+  } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [checkoutRequired, setCheckoutRequired] = useState(false);
+  const [checkoutRequired, setCheckoutRequired] = useState<{
+    cents: number;
+    currency: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -65,22 +72,32 @@ export function UpgradeConfirmDialog({
       setAmountDue(null);
       setError(null);
       setConfirming(false);
-      setCheckoutRequired(false);
+      setCheckoutRequired(null);
       return;
     }
     let cancelled = false;
     setPreviewing(true);
     setError(null);
     setAmountDue(null);
-    setCheckoutRequired(false);
+    setCheckoutRequired(null);
     previewUpgrade({ plan: request.plan, billingInterval: request.billingInterval })
       .then((r) => {
-        if (!cancelled) setAmountDue({ cents: r.amountDueNowCents, currency: r.currency });
+        if (!cancelled) {
+          setAmountDue({
+            cents: r.amountDueNowCents,
+            currency: r.currency,
+            previewToken: r.previewToken,
+          });
+        }
       })
       .catch((e) => {
         if (!cancelled) {
           if (e instanceof CheckoutRequiredError) {
-            setCheckoutRequired(true);
+            if (e.amountDueNowCents !== null && e.currency) {
+              setCheckoutRequired({ cents: e.amountDueNowCents, currency: e.currency });
+            } else {
+              setError('Could not verify the full checkout price. Please refresh and try again.');
+            }
           } else {
             setError(e instanceof Error ? e.message : 'Could not calculate the upgrade cost.');
           }
@@ -116,7 +133,12 @@ export function UpgradeConfirmDialog({
         });
         return;
       }
-      await upgradePlanMidCycle({ plan: request.plan, billingInterval: request.billingInterval });
+      if (!amountDue) throw new Error('Preview the upgrade price before confirming.');
+      await upgradePlanMidCycle({
+        plan: request.plan,
+        billingInterval: request.billingInterval,
+        previewToken: amountDue.previewToken,
+      });
       onConfirmed();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upgrade failed. Your current plan is unchanged.');
@@ -138,7 +160,7 @@ export function UpgradeConfirmDialog({
             {previewing
               ? 'Calculating your prorated cost…'
               : checkoutRequired
-                ? 'Your current plan is not attached to a live Stripe subscription. Continue through secure checkout to upgrade safely.'
+                ? `Your current plan has no paid Stripe charge to credit, so this is not a prorated upgrade. Starting ${planLabel} costs ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)} today. Your existing AGI usage will carry over after checkout completes.`
                 : amountDue
                   ? `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, prorated for the rest of your billing period. Your plan then renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
                   : 'Review your upgrade before it is charged to your saved card.'}
@@ -158,7 +180,7 @@ export function UpgradeConfirmDialog({
             {confirming
               ? 'Upgrading…'
               : checkoutRequired
-                ? 'Continue to checkout'
+                ? `Start ${planLabel} · pay ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)}`
                 : amountDue
                   ? `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
                   : 'Confirm'}

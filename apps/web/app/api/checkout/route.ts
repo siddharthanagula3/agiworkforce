@@ -16,6 +16,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { isSelfServePaidPlanTier, tierAtLeast } from '@agiworkforce/types';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -142,6 +143,21 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     existingSubscription.plan_tier !== 'free' &&
     activeStatuses.has(existingSubscription.status) &&
     isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
+  const replacesUnlinkedEntitlement =
+    !!existingSubscription &&
+    existingSubscription.plan_tier !== 'free' &&
+    activeStatuses.has(existingSubscription.status) &&
+    !isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
+
+  if (
+    replacesUnlinkedEntitlement &&
+    isSelfServePaidPlanTier(existingSubscription.plan_tier) &&
+    !tierAtLeast(plan, existingSubscription.plan_tier)
+  ) {
+    throw createError.conflict(
+      'Use billing management to downgrade. Checkout cannot replace an existing entitlement with a lower plan.',
+    );
+  }
 
   if (hasActiveSubscription) {
     throw createError.conflict(
@@ -215,7 +231,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
           quantity: 1,
         },
       ],
-      success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/chat`,
+      success_url: `${process.env['NEXT_PUBLIC_APP_URL']}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
       // Metadata duplicates user.id for fast webhook lookups: the webhook handler
@@ -226,6 +242,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       metadata: {
         user_id: user.id,
         plan_tier: plan,
+        ...(replacesUnlinkedEntitlement
+          ? {
+              upgrade_from: existingSubscription.plan_tier,
+              replace_unlinked_entitlement: 'true',
+            }
+          : {}),
       },
       allow_promotion_codes: true,
     });

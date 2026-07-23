@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const stripeMocks = vi.hoisted(() => ({
   retrieveSubscription: vi.fn(),
+  listSubscriptions: vi.fn(),
   updateSubscription: vi.fn(),
   retrieveCustomer: vi.fn(),
   updateCustomer: vi.fn(),
@@ -10,6 +11,10 @@ const stripeMocks = vi.hoisted(() => ({
 
 const pricingMocks = vi.hoisted(() => ({
   getPriceSelectionForCurrency: vi.fn(),
+}));
+
+const previewTokenMocks = vi.hoisted(() => ({
+  verify: vi.fn(),
 }));
 
 const dbMocks = vi.hoisted(() => ({
@@ -28,6 +33,14 @@ vi.mock('@/lib/server/localized-pricing-service', () => ({
   getPriceSelectionForCurrency: (...args: unknown[]) =>
     pricingMocks.getPriceSelectionForCurrency(...args),
 }));
+vi.mock('@/lib/price-tier-mapping', () => ({
+  resolvePlanTier: vi.fn((_metadata, priceId: string | null) =>
+    priceId === 'price_pro_monthly' ? 'pro' : null,
+  ),
+}));
+vi.mock('@/lib/server/stripe-upgrade-preview-token', () => ({
+  verifyUpgradePreviewToken: (...args: unknown[]) => previewTokenMocks.verify(...args),
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: dbMocks.query, execute: dbMocks.execute }),
 }));
@@ -39,6 +52,7 @@ vi.mock('stripe', () => ({
     };
     subscriptions = {
       retrieve: stripeMocks.retrieveSubscription,
+      list: stripeMocks.listSubscriptions,
       update: stripeMocks.updateSubscription,
     };
   },
@@ -59,7 +73,11 @@ function makeRequest(plan: 'max' | 'max_15x' | 'team' = 'max', country = 'US') {
   return new NextRequest('http://localhost/api/upgrade', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-vercel-ip-country': country },
-    body: JSON.stringify({ plan, billingInterval: 'monthly' }),
+    body: JSON.stringify({
+      plan,
+      billingInterval: 'monthly',
+      previewToken: 'signed-preview-token',
+    }),
   });
 }
 
@@ -102,6 +120,9 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
       priceId: 'price_max_monthly',
       currency: 'usd',
     });
+    previewTokenMocks.verify.mockReturnValue({
+      prorationDate: 1_700_000_000,
+    });
     stripeMocks.retrieveSubscription.mockResolvedValue(stripeSubscription());
     stripeMocks.updateSubscription.mockResolvedValue(
       stripeSubscription({
@@ -131,6 +152,7 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
         items: [{ id: 'si_1', price: 'price_max_monthly' }],
         billing_cycle_anchor: 'now',
         proration_behavior: 'always_invoice',
+        proration_date: 1_700_000_000,
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
       }),
@@ -180,6 +202,42 @@ describe('POST /api/upgrade — payment-safe idempotent upgrade', () => {
       expect.objectContaining({
         items: [{ id: 'si_1', price: 'price_max_monthly_inr' }],
       }),
+      expect.anything(),
+    );
+  });
+
+  it('recovers the owned live subscription before applying a prorated upgrade', async () => {
+    dbMocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [
+          {
+            ...SUB_ROW,
+            stripe_subscription_id: null,
+          },
+        ];
+      }
+      return [];
+    });
+    stripeMocks.listSubscriptions.mockResolvedValueOnce({
+      data: [stripeSubscription()],
+    });
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(200);
+    expect(stripeMocks.listSubscriptions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: 'cus_1',
+        status: 'all',
+      }),
+    );
+    expect(dbMocks.execute).toHaveBeenCalledWith(
+      expect.stringContaining('stripe_subscription_id'),
+      expect.arrayContaining(['sub_1', 'cus_1', 'user-123']),
+    );
+    expect(stripeMocks.updateSubscription).toHaveBeenCalledWith(
+      'sub_1',
+      expect.objectContaining({ proration_behavior: 'always_invoice' }),
       expect.anything(),
     );
   });
