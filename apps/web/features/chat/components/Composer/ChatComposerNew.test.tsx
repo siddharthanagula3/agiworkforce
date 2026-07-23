@@ -559,6 +559,18 @@ describe('ChatComposerNew', () => {
     expect(stopButton).toHaveAttribute('data-mode', 'stop');
   });
 
+  it('keeps Stop available for an active stream after the loading phase clears', () => {
+    const onStop = vi.fn();
+    render(<ChatComposerNew onSend={vi.fn()} onStop={onStop} isGenerating />);
+
+    const stopButton = screen.getByRole('button', { name: /send message/i });
+    expect(stopButton).toHaveAttribute('data-mode', 'stop');
+    expect(stopButton).not.toBeDisabled();
+
+    fireEvent.click(stopButton);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
   it('disables textarea when disabled prop is set', () => {
     render(<ChatComposerNew onSend={vi.fn()} disabled />);
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeDisabled();

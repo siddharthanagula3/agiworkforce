@@ -87,8 +87,8 @@ interface ChatComposerProps {
   isLoading?: boolean;
   /**
    * True while an SSE stream is actively generating output.
-   * When isGenerating=true and the user has typed a message, the SendButton
-   * shows the amber "queue" state instead of the terra-cotta "send" state.
+   * Combined with isLoading so Stop remains available for the entire turn and
+   * typed follow-ups queue until the stream finishes.
    */
   isGenerating?: boolean;
   placeholder?: string;
@@ -257,6 +257,7 @@ function MenuToggleRow({
 const ChatComposerNewComponent = ({
   onSend,
   isLoading = false,
+  isGenerating = false,
   placeholder = 'Ask anything. Type / for commands',
   disabled = false,
   prefillText,
@@ -273,6 +274,7 @@ const ChatComposerNewComponent = ({
   onGenerateImage,
   projectPicker,
 }: ChatComposerProps) => {
+  const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
   const [localNotice, setLocalNotice] = useState<string | null>(null);
   // Follow-up queue (claude.ai / ChatGPT parity): a message composed while the
@@ -467,7 +469,7 @@ const ChatComposerNewComponent = ({
     if (activeConversationId)
       updateConversation(activeConversationId, { isTemporary: !isIncognito });
   }, [activeConversationId, isIncognito, updateConversation]);
-  const canToggleIncognito = Boolean(activeConversationId) && !isLoading && !disabled;
+  const canToggleIncognito = Boolean(activeConversationId) && !isTurnActive && !disabled;
 
   // Thinking / effort store
   const responseStyle = useStyleStore((s) => s.style);
@@ -855,7 +857,7 @@ const ChatComposerNewComponent = ({
     // Image generation is not part of the streaming chat turn, so it is not
     // queued — it simply waits until the current turn is idle.
     if (imageMode) {
-      if (isLoading) return;
+      if (isTurnActive) return;
       const prompt = message.trim();
       if (!prompt) return;
       onGenerateImage?.(prompt, { aspectRatio: imageAspectRatio, modelId: imageModelId });
@@ -884,11 +886,11 @@ const ChatComposerNewComponent = ({
     ];
 
     // Follow-up while the current turn is still streaming: queue this message and
-    // flush it when the turn finishes (see the isLoading-transition effect below).
+    // flush it when the turn finishes (see the active-turn transition effect below).
     // Only the latest queued message is kept. This is the honest counterpart to the
     // server's per-conversation concurrency guard — the client never fires a second
     // concurrent turn; it waits for the first to settle.
-    if (isLoading) {
+    if (isTurnActive) {
       pendingQueueRef.current = sendArgs;
       setQueuedPreview(message.trim() || 'Attachment');
       clearComposerState();
@@ -903,7 +905,7 @@ const ChatComposerNewComponent = ({
     message,
     attachments,
     selectedSkill,
-    isLoading,
+    isTurnActive,
     disabled,
     hasAttachmentConflict,
     trialExhausted,
@@ -934,9 +936,9 @@ const ChatComposerNewComponent = ({
     clearComposerState,
   ]);
 
-  // Flush a queued follow-up when the streaming turn finishes (isLoading true→false).
+  // Flush a queued follow-up when the active turn finishes (true→false).
   useEffect(() => {
-    if (wasLoadingRef.current && !isLoading) {
+    if (wasLoadingRef.current && !isTurnActive) {
       const pending = pendingQueueRef.current;
       if (pending) {
         pendingQueueRef.current = null;
@@ -944,8 +946,8 @@ const ChatComposerNewComponent = ({
         onSend(...pending);
       }
     }
-    wasLoadingRef.current = isLoading;
-  }, [isLoading, onSend]);
+    wasLoadingRef.current = isTurnActive;
+  }, [isTurnActive, onSend]);
 
   const cancelQueuedMessage = useCallback(() => {
     pendingQueueRef.current = null;
@@ -996,7 +998,7 @@ const ChatComposerNewComponent = ({
    * (see handleSubmit + the flush effect above) — so the button never needs a
    * separate 'queue' state, which would have hidden Stop.
    */
-  const sendButtonMode = isLoading ? 'stop' : 'send';
+  const sendButtonMode = isTurnActive ? 'stop' : 'send';
 
   // + button indicator: amber tint when any feature is active
   const hasOverflowActive =
@@ -1250,7 +1252,7 @@ const ChatComposerNewComponent = ({
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={
-                isLoading && !imageMode
+                isTurnActive && !imageMode
                   ? 'Reply — sends when the current response finishes'
                   : imageMode
                     ? 'Describe or edit an image'
@@ -1259,7 +1261,7 @@ const ChatComposerNewComponent = ({
               // Type-ahead: the textarea stays enabled while a turn streams so the
               // user can compose a follow-up (queued + auto-sent on completion).
               // Image mode has no streaming turn to type ahead of, so it stays gated.
-              disabled={composerDisabled || (imageMode && isLoading)}
+              disabled={composerDisabled || (imageMode && isTurnActive)}
               className={cn(
                 'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
                 emptyState
@@ -1283,13 +1285,13 @@ const ChatComposerNewComponent = ({
                     setShowStyleSubmenu(false);
                   }
                 }}
-                disabled={isLoading || composerDisabled}
+                disabled={isTurnActive || composerDisabled}
                 className={cn(
                   'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                   hasOverflowActive
                     ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
+                  (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                 )}
                 aria-label="More options"
                 aria-expanded={showOverflowMenu}
@@ -1317,14 +1319,14 @@ const ChatComposerNewComponent = ({
                                   key={mode}
                                   type="button"
                                   onClick={() => handleWorkModeChange(mode)}
-                                  disabled={isLoading || composerDisabled}
+                                  disabled={isTurnActive || composerDisabled}
                                   aria-pressed={workMode === mode}
                                   className={cn(
                                     'flex h-7 items-center rounded-full px-3 transition-colors',
                                     workMode === mode
                                       ? 'bg-background text-foreground shadow-sm'
                                       : 'text-muted-foreground hover:text-foreground',
-                                    (isLoading || composerDisabled) &&
+                                    (isTurnActive || composerDisabled) &&
                                       'cursor-not-allowed opacity-50',
                                   )}
                                 >
@@ -1544,7 +1546,7 @@ const ChatComposerNewComponent = ({
                           handleWebSearchToggle();
                           closeMenu();
                         }}
-                        disabled={isLoading || disabled || !modelSupportsSearch}
+                        disabled={isTurnActive || disabled || !modelSupportsSearch}
                         title={
                           !modelSupportsSearch
                             ? "Web search isn't available for this model or Cloud deployment."
@@ -1561,7 +1563,7 @@ const ChatComposerNewComponent = ({
                           handleResearchToggle();
                           closeMenu();
                         }}
-                        disabled={isLoading || disabled || isFreeTrial || !modelSupportsResearch}
+                        disabled={isTurnActive || disabled || isFreeTrial || !modelSupportsResearch}
                         title={
                           isFreeTrial
                             ? 'Upgrade to use Deep Research'
@@ -1580,7 +1582,7 @@ const ChatComposerNewComponent = ({
                           handleCodeExecutionToggle();
                           closeMenu();
                         }}
-                        disabled={isLoading || disabled || !modelSupportsCodeExecution}
+                        disabled={isTurnActive || disabled || !modelSupportsCodeExecution}
                       />
 
                       {/* 8c. Managed Office creation — server-owned DOCX/PPTX bytes,
@@ -1593,7 +1595,7 @@ const ChatComposerNewComponent = ({
                           handleOfficeCreationToggle();
                           closeMenu();
                         }}
-                        disabled={isLoading || disabled || !modelSupportsOfficeCreation}
+                        disabled={isTurnActive || disabled || !modelSupportsOfficeCreation}
                         title={
                           !modelSupportsOfficeCreation
                             ? "Office file creation isn't available for this model."
@@ -1616,7 +1618,7 @@ const ChatComposerNewComponent = ({
                           handleThinkingClick();
                           closeMenu();
                         }}
-                        disabled={isLoading || disabled || !modelSupportsThinkingCap}
+                        disabled={isTurnActive || disabled || !modelSupportsThinkingCap}
                       />
 
                       {/* 8e. Incognito / temporary chat toggle */}
@@ -1709,14 +1711,14 @@ const ChatComposerNewComponent = ({
                     key={mode}
                     type="button"
                     onClick={() => handleWorkModeChange(mode)}
-                    disabled={isLoading || composerDisabled}
+                    disabled={isTurnActive || composerDisabled}
                     aria-pressed={workMode === mode}
                     className={cn(
                       'flex h-7 items-center rounded-full px-3 transition-colors',
                       workMode === mode
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground',
-                      (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
+                      (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                     )}
                   >
                     {mode === 'chat' ? 'Chat' : 'AGI Work'}
@@ -1859,7 +1861,7 @@ const ChatComposerNewComponent = ({
                   });
                   setTimeout(() => textareaRef.current?.focus(), 50);
                 }}
-                disabled={isLoading || composerDisabled}
+                disabled={isTurnActive || composerDisabled}
               />
             </div>
 
@@ -1880,7 +1882,7 @@ const ChatComposerNewComponent = ({
           type="file"
           multiple
           accept={getAcceptAttribute()}
-          disabled={isLoading || composerDisabled}
+          disabled={isTurnActive || composerDisabled}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -1910,11 +1912,11 @@ const ChatComposerNewComponent = ({
                 setShowProjectPicker((prev) => !prev);
                 setProjectQuery('');
               }}
-              disabled={isLoading || composerDisabled}
+              disabled={isTurnActive || composerDisabled}
               className={cn(
                 'flex h-full min-w-0 items-center gap-1.5 pl-2.5 text-xs font-medium',
                 pickerHasSelection ? 'pr-1' : 'pr-2.5',
-                (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
+                (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
               )}
               aria-label={isFreeTrial ? 'Project' : 'Project or folder'}
               aria-expanded={showProjectPicker}
