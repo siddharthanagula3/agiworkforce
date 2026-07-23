@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import jwt from 'jsonwebtoken';
 
 // Override the global @/lib/csrf mock from test/setup.ts so this file tests the
 // real implementation. setup.ts mocks `requireCsrfToken` to always return null
@@ -32,6 +33,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
 process.env['CSRF_SECRET'] = 'test-csrf-secret-32chars-minimum!!';
+process.env['JWT_SECRET'] = 'test-developer-jwt-secret-at-least-32-bytes';
 
 import { requireCsrfToken, validateCsrfFromRequest, isBearerTokenValid } from '@/lib/csrf';
 
@@ -45,6 +47,23 @@ function makeRequest(
   if (opts.cookie) headers['cookie'] = opts.cookie;
 
   return new Request('http://localhost/api/test', { method, headers });
+}
+
+function makeDeveloperToken(): string {
+  return jwt.sign(
+    {
+      userId: 'device-user',
+      sub: 'device-user',
+      surface: 'developer',
+    },
+    process.env['JWT_SECRET']!,
+    {
+      expiresIn: 3600,
+      issuer: 'agiworkforce-api-gateway',
+      audience: 'agiworkforce',
+      jwtid: 'csrf-device-jti',
+    },
+  );
 }
 
 describe('RT-04: CSRF Bearer bypass fix', () => {
@@ -80,6 +99,11 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
       expect(result).toBe(true);
     });
 
+    it('returns true for a valid first-party developer device token', async () => {
+      const result = await isBearerTokenValid(`Bearer ${makeDeveloperToken()}`);
+      expect(result).toBe(true);
+    });
+
     it('returns false for extremely short token', async () => {
       const result = await isBearerTokenValid('Bearer x');
       expect(result).toBe(false);
@@ -95,6 +119,13 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
       });
       const result = await requireCsrfToken(req);
       expect(result).toBeNull(); // CSRF passes (valid Bearer)
+    });
+
+    it('POST with a valid developer device token bypasses CSRF safely', async () => {
+      const result = await requireCsrfToken(
+        makeRequest('POST', { bearerToken: makeDeveloperToken() }),
+      );
+      expect(result).toBeNull();
     });
 
     it('POST with invalid Bearer + session cookie + no CSRF → 403 (was previously 200)', async () => {
