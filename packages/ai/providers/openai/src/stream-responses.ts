@@ -16,7 +16,7 @@
  *   response.output_text.annotation.added      → citation-delta
  *   response.completed                         → usage + stop(end_turn)
  *   response.incomplete                        → stop(max_tokens)
- *   response.failed / response.error           → error + stop(error)
+ *   response.failed / error / response.error   → error + stop(error)
  */
 
 import type { StreamChunk } from '@agiworkforce/types';
@@ -72,6 +72,7 @@ export async function* translateOpenAIResponsesStream(
   const items = new Map<number, OpenItem>();
   const webSearches = new Map<number, WebSearchState>();
   const citationTitles = new Map<string, string>();
+  const textDeltaKeys = new Set<string>();
   let stopEmitted = false;
   let searchResultEmitted = false;
 
@@ -146,7 +147,18 @@ export async function* translateOpenAIResponsesStream(
       }
       case 'response.output_text.delta': {
         const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_text.delta' }>;
-        if (ev.delta) yield { type: 'text-delta', delta: ev.delta };
+        if (ev.delta) {
+          textDeltaKeys.add(`${ev.output_index}:${ev.content_index}`);
+          yield { type: 'text-delta', delta: ev.delta };
+        }
+        break;
+      }
+      case 'response.output_text.done': {
+        const ev = event as Extract<ResponsesStreamEvent, { type: 'response.output_text.done' }>;
+        const key = `${ev.output_index}:${ev.content_index}`;
+        if (ev.text && !textDeltaKeys.has(key)) {
+          yield { type: 'text-delta', delta: ev.text };
+        }
         break;
       }
       case 'response.refusal.delta': {
@@ -268,8 +280,9 @@ export async function* translateOpenAIResponsesStream(
         stopEmitted = true;
         break;
       }
+      case 'error':
       case 'response.error': {
-        const ev = event as Extract<ResponsesStreamEvent, { type: 'response.error' }>;
+        const ev = event as Extract<ResponsesStreamEvent, { type: 'error' | 'response.error' }>;
         const searchResult = buildWebSearchResult();
         if (searchResult) yield searchResult;
         yield {

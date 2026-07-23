@@ -307,6 +307,14 @@ export interface ResponseIncompleteEvent extends BaseEvent {
 }
 
 export interface ResponseErrorEvent extends BaseEvent {
+  type: 'error';
+  code?: string;
+  message?: string;
+  param?: string;
+}
+
+/** Kept for OpenAI-compatible endpoints that still prefix the error event. */
+export interface ResponseLegacyErrorEvent extends BaseEvent {
   type: 'response.error';
   code?: string;
   message?: string;
@@ -331,4 +339,5 @@ export type ResponsesStreamEvent =
   | ResponseFailedEvent
   | ResponseIncompleteEvent
   | ResponseErrorEvent
+  | ResponseLegacyErrorEvent
   | { type: string; [k: string]: unknown };
