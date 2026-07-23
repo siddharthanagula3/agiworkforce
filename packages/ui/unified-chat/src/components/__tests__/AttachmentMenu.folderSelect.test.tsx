@@ -101,6 +101,34 @@ describe('AttachmentMenu — Select folder', () => {
   });
 });
 
+describe('AttachmentMenu — Record a skill host bridge', () => {
+  it('renders the action only when the host provides a real recorder', () => {
+    const onRecordSkill = vi.fn();
+    const onOpenChange = vi.fn();
+
+    const { rerender } = render(
+      <CapabilityProvider platform="desktop">
+        <AttachmentMenu {...baseProps} onOpenChange={onOpenChange}>
+          <button type="button">Plus</button>
+        </AttachmentMenu>
+      </CapabilityProvider>,
+    );
+    expect(screen.queryByText('Record a skill')).toBeNull();
+
+    rerender(
+      <CapabilityProvider platform="desktop">
+        <AttachmentMenu {...baseProps} onOpenChange={onOpenChange} onRecordSkill={onRecordSkill}>
+          <button type="button">Plus</button>
+        </AttachmentMenu>
+      </CapabilityProvider>,
+    );
+
+    screen.getByText('Record a skill').click();
+    expect(onRecordSkill).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
 describe('AttachmentMenu — Research capability honesty', () => {
   it('omits Research when the active runtime cannot transport research requests', () => {
     render(

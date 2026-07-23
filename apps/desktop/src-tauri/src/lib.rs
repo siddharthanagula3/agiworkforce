@@ -2010,6 +2010,7 @@ pub fn run() {
             crate::sys::commands::skill_get,
             crate::sys::commands::skill_invoke,
             crate::sys::commands::skill_reload,
+            crate::sys::commands::skill_create_from_recording,
 
             // Messaging (Discord, Telegram, Signal)
             crate::sys::commands::messaging::messaging_connect_discord,

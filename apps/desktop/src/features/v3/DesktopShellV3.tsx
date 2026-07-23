@@ -20,6 +20,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useFolderSelection } from '../../hooks/useFolderSelection';
 import { selectPrivacyMode, useAppModeStore } from '../../stores/appModeStore';
 import { invoke } from '../../lib/tauri-mock';
+import { ActionRecorder } from '@/features/automation/ActionRecorder';
 import {
   formatSelectedContextDraft,
   SelectedContextReview,
@@ -37,7 +38,7 @@ function useV3Mode() {
   return { mode };
 }
 
-type V3Panel = 'chat' | 'projects' | 'artifacts' | 'scheduled';
+type V3Panel = 'chat' | 'projects' | 'artifacts' | 'scheduled' | 'record-skill';
 
 // ─── shell props ───────────────────────────────────────────────────────────────
 
@@ -231,6 +232,7 @@ export function DesktopShellV3({
               onModelSelectorClick={onModelSelectorClick}
               onVoiceClick={onVoiceClick}
               onSelectFolder={folderSeamEnabled ? selectFolder : undefined}
+              onRecordSkill={() => setActivePanel('record-skill')}
               currentFolderLabel={folderSeamEnabled ? currentFolderLabel : null}
               onClearFolder={folderSeamEnabled ? clearFolder : undefined}
               projectPicker={composerProjectPicker}
@@ -239,6 +241,11 @@ export function DesktopShellV3({
               emptyStateSlot={<EmptyChat />}
               enableSearchOverlay={false}
               showProvenanceFooter={true}
+            />
+          ) : activePanel === 'record-skill' ? (
+            <ActionRecorder
+              onClose={() => setActivePanel('chat')}
+              onSkillCreated={() => setActivePanel('chat')}
             />
           ) : activePanel === 'projects' ? (
             <AgiWorkProjects />

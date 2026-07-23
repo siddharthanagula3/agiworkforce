@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ChevronDown,
   Check,
+  CircleDot,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCapability } from '../lib/capabilities';
@@ -37,6 +38,11 @@ export interface AttachmentMenuProps {
    * folder dialog + backend sync live in the host app, not in this package.
    */
   onSelectFolder?: () => void;
+  /**
+   * Host-owned workflow recorder. Omitted on surfaces that cannot capture
+   * desktop input; the shared menu never imports a native API directly.
+   */
+  onRecordSkill?: () => void;
   /** Display label for the currently scoped folder, if any (host-formatted). */
   currentFolderLabel?: string | null;
   /** Real host-owned project assignment flow. Omitted when unavailable. */
@@ -167,6 +173,7 @@ export function AttachmentMenu({
   onAddFiles,
   onScreenshot,
   onSelectFolder,
+  onRecordSkill,
   currentFolderLabel = null,
   onAddToProject,
   onAddFromGoogleDrive,
@@ -273,6 +280,16 @@ export function AttachmentMenu({
               onOpenChange(false);
             }}
           />
+          {onRecordSkill && (
+            <MenuItem
+              icon={<CircleDot size={15} />}
+              label="Record a skill"
+              onClick={() => {
+                onRecordSkill();
+                onOpenChange(false);
+              }}
+            />
+          )}
           {canTakeScreenshot && (
             <MenuItem
               icon={<Camera size={15} />}
