@@ -32,9 +32,13 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
   // 32-hex account-id shape prevents an env typo from widening connect-src to
   // an attacker-controlled host.
   const r2AccountId = process.env['CLOUDFLARE_R2_ACCOUNT_ID']?.trim();
+  const r2BucketName = process.env['CLOUDFLARE_R2_BUCKET_NAME']?.trim();
   const r2UploadOrigin =
-    r2AccountId && /^[a-f0-9]{32}$/iu.test(r2AccountId)
-      ? ` https://${r2AccountId}.r2.cloudflarestorage.com`
+    r2AccountId &&
+    /^[a-f0-9]{32}$/iu.test(r2AccountId) &&
+    r2BucketName &&
+    /^(?!-)[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/u.test(r2BucketName)
+      ? ` https://${r2BucketName}.${r2AccountId}.r2.cloudflarestorage.com`
       : '';
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
   return `
