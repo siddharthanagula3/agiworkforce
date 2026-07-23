@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-07-20",
+  "lastUpdated": "2026-07-22",
   "verificationLog": [
+    {
+      "date": "2026-07-22",
+      "verifiedBy": "founder-tier-directive-and-official-openai-model-docs",
+      "status": "CORRECTION",
+      "notes": "Founder override to the latest-family-only picker policy: restored GPT-5.4 Mini as the Free OpenAI tool-capable model and kept GPT-5.6 Luna at Basic+. Moved Gemini 3.6 Flash from Pro to Basic. GPT-5.4 Mini identity, 400K context, 128K max output, Aug 31 2025 cutoff, $0.75/$4.50 pricing with $0.075 cache reads, reasoning levels, and hosted/tool capabilities were reverified against developers.openai.com/api/docs/models/gpt-5.4-mini on 2026-07-22. Free Auto coding/agentic tasks now use GPT-5.4 Mini; ordinary Free chat remains Gemini 3.1 Flash Lite."
+    },
     {
       "date": "2026-07-20",
       "verifiedBy": "live-provider-docs-sweep-2026-07-20",
@@ -663,6 +669,58 @@
       },
       "reasoningDots": 3,
       "tierPolicy": { "minTier": "basic" }
+    },
+    "gpt-5.4-mini": {
+      "id": "gpt-5.4-mini",
+      "apiModelId": "gpt-5.4-mini",
+      "name": "GPT-5.4 Mini",
+      "provider": "openai",
+      "modelType": "reasoning",
+      "contextWindow": 400000,
+      "inputCost": 0.75,
+      "outputCost": 4.5,
+      "cached_input": 0.075,
+      "cached_write": 0.9375,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true,
+        "caching": true
+      },
+      "speed": "fast",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Coding", "Tool Use", "Agent Workflows", "High-Volume Tasks"],
+      "released": "March 17, 2026",
+      "deprecation_date": null,
+      "maxInputTokens": 272000,
+      "maxOutputTokens": 128000,
+      "knowledgeCutoff": "2025-08-31",
+      "reasoning": {
+        "capable": true,
+        "control": "effort_levels",
+        "supportedEfforts": ["none", "low", "medium", "high", "xhigh"],
+        "defaultEffort": "medium",
+        "canDisableThinking": true,
+        "request": {
+          "api": "responses",
+          "effortPath": "reasoning.effort",
+          "responsesEffortPath": "reasoning.effort",
+          "togglePath": null,
+          "budgetPath": null
+        }
+      },
+      "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
+      "tierPolicy": { "minTier": "free" }
     },
     "claude-fable-5": {
       "id": "claude-fable-5",
@@ -1518,7 +1576,7 @@
     "gemini-3.6-flash": {
       "id": "gemini-3.6-flash",
       "apiModelId": "gemini-3.6-flash",
-      "name": "Gemini 3.5 Flash",
+      "name": "Gemini 3.6 Flash",
       "provider": "google",
       "modelType": "multimodal",
       "variantPartner": "gemini-3.1-pro-preview",
@@ -1568,7 +1626,7 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "pro" }
+      "tierPolicy": { "minTier": "basic" }
     },
     "glm-5.2": {
       "id": "glm-5.2",
@@ -1910,11 +1968,16 @@
     }
   },
   "tierAllowedModels": {
-    "economy": ["gpt-5.6-luna", "gemini-3.1-flash-lite", "claude-haiku-4.5"],
+    "economy": [
+      "gpt-5.4-mini",
+      "gpt-5.6-luna",
+      "gemini-3.1-flash-lite",
+      "gemini-3.6-flash",
+      "claude-haiku-4.5"
+    ],
     "pro_additions": [
       "gpt-5.6-terra",
       "claude-sonnet-5",
-      "gemini-3.6-flash",
       "gemini-3.1-pro-preview",
       "deepseek-v4-flash",
       "deepseek-v4-pro",

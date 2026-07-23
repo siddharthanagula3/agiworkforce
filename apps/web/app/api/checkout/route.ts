@@ -15,6 +15,7 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
+import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -139,7 +140,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const hasActiveSubscription =
     !!existingSubscription &&
     existingSubscription.plan_tier !== 'free' &&
-    activeStatuses.has(existingSubscription.status);
+    activeStatuses.has(existingSubscription.status) &&
+    isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
 
   if (hasActiveSubscription) {
     throw createError.conflict(
@@ -155,13 +157,13 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     .catch(() => [] as Pick<ProfileRow, 'stripe_customer_id'>[]);
   const profile = profileRows[0] ?? null;
 
-  if (profile?.stripe_customer_id) {
+  if (isStripeCustomerId(profile?.stripe_customer_id)) {
     stripeCustomerId = profile.stripe_customer_id;
     logger.info(
       { userId: user.id, customerId: stripeCustomerId },
       'Using existing Stripe customer from profile',
     );
-  } else if (existingSubscription?.stripe_customer_id) {
+  } else if (isStripeCustomerId(existingSubscription?.stripe_customer_id)) {
     stripeCustomerId = existingSubscription.stripe_customer_id;
     logger.info(
       { userId: user.id, customerId: stripeCustomerId },

@@ -19,3 +19,8 @@ export function withIsoTimestamps<T>(rows: T[]): T[] {
     return out as T;
   });
 }
+
+/** Normalize one nullable PostgreSQL timestamp for a wire-schema boundary. */
+export function toIsoTimestamp(value: string | Date | null): string | null {
+  return value instanceof Date ? value.toISOString() : value;
+}

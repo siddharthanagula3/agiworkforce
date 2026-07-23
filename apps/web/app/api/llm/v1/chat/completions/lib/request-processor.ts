@@ -237,8 +237,9 @@ export type ImplicitManagedToolIntentContext = {
  *
  * This is server-owned product policy because Web, Desktop Cloud, and Mobile
  * Cloud share this request boundary. The model still decides whether to call
- * an offered tool; this function never executes a tool by itself. Expensive
- * code execution remains Pro+ and explicit AGI Work remains user-selected.
+ * an offered tool; this function never executes a tool by itself. Normal-chat
+ * execution remains metered by the plan's usage limits, while the separate
+ * long-running AGI Work mode remains Pro+ and explicitly user-selected.
  */
 export function applyImplicitManagedToolIntent(
   request: ChatCompletionRequest,
@@ -274,11 +275,7 @@ export function applyImplicitManagedToolIntent(
     (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
       RE_DATA_EXECUTION_SUBJECT.test(context.prompt));
 
-  if (
-    request.code_execution === undefined &&
-    hasExplicitCodeExecutionIntent &&
-    canUseBillingPlanCapability(context.planTier, 'agi_work')
-  ) {
+  if (request.code_execution === undefined && hasExplicitCodeExecutionIntent) {
     request.code_execution = true;
   }
 }

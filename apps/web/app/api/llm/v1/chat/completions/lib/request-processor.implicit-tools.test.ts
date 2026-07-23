@@ -59,16 +59,16 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.code_execution).toBeUndefined();
   });
 
-  it('keeps automatic code execution behind the Pro AGI Work entitlement', () => {
-    const chatRequest = request();
+  it('offers metered code execution to Free normal chat without unlocking AGI Work', () => {
+    const chatRequest = request({ model: 'gpt-5.4-mini' });
 
     applyImplicitManagedToolIntent()(chatRequest, {
       prompt: 'Execute this code and give me the result.',
       taskType: 'coding',
-      planTier: 'basic',
+      planTier: 'free',
     });
 
-    expect(chatRequest.code_execution).toBeUndefined();
+    expect(chatRequest.code_execution).toBe(true);
   });
 
   it('preserves an explicit code-execution opt-out', () => {

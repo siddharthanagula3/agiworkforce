@@ -11,7 +11,14 @@ vi.mock('@stripe/stripe-js', () => ({
   loadStripe: (...args: unknown[]) => stripeJsMocks.loadStripe(...args),
 }));
 
-import { upgradePlanMidCycle, upgradeToBasicPlan, upgradeToMax15xPlan } from './stripe-payments';
+import {
+  CheckoutRequiredError,
+  previewUpgrade,
+  startPlanCheckout,
+  upgradePlanMidCycle,
+  upgradeToBasicPlan,
+  upgradeToMax15xPlan,
+} from './stripe-payments';
 
 describe('stripe payments', () => {
   beforeEach(() => {
@@ -57,6 +64,36 @@ describe('stripe payments', () => {
       plan: 'basic',
       billingInterval: 'monthly',
     });
+  });
+
+  it('surfaces a typed checkout fallback when the stored subscription is stale', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        error: {
+          code: 'checkout_required',
+          message: 'Start a new checkout to continue.',
+        },
+      }),
+    } as Response);
+
+    await expect(previewUpgrade({ plan: 'max_15x' })).rejects.toBeInstanceOf(CheckoutRequiredError);
+  });
+
+  it('starts the requested checkout fallback without browser-supplied identity data', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://checkout.example/max-15x' }),
+    } as Response);
+
+    await startPlanCheckout({ plan: 'max_15x', billingInterval: 'monthly' });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      plan: 'max_15x',
+      billingInterval: 'monthly',
+    });
+    expect(window.location.href).toBe('https://checkout.example/max-15x');
   });
 
   it('completes required card authentication before reporting an upgrade as pending activation', async () => {

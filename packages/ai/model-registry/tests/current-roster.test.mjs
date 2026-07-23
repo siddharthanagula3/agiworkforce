@@ -109,6 +109,24 @@ test('publishes the GA GPT-5.6 API family with its implemented Responses search 
   }
 });
 
+test('publishes GPT-5.4 Mini as the Free tool-capable OpenAI model', () => {
+  const modelKey = 'gpt-5.4-mini';
+  assert.equal(registry.models[modelKey].identity.providerModelId, modelKey);
+  assert.equal(registry.models[modelKey].lifecycle.availability, 'live');
+  assert.equal(registry.limits[modelKey].contextTokens, 400_000);
+  assert.equal(registry.limits[modelKey].maxInputTokens, 272_000);
+  assert.equal(registry.limits[modelKey].maxOutputTokens, 128_000);
+  assert.equal(registry.limits[modelKey].knowledgeCutoff, '2025-08-31');
+  assert.equal(registry.pricing[modelKey].inputPerMillion, 0.75);
+  assert.equal(registry.pricing[modelKey].cacheReadPerMillion, 0.075);
+  assert.equal(registry.pricing[modelKey].outputPerMillion, 4.5);
+  assert.equal(registry.capabilities[modelKey].functionCalling, true);
+  assert.equal(compatibility.models[modelKey].capabilities.search, true);
+  assert.equal(compatibility.models[modelKey].capabilities.codeExecution, true);
+  assert.equal(compatibility.models[modelKey].tierPolicy.minTier, 'free');
+  assert.equal(registry.policies.auto.slots.coding_fast.modelKey, modelKey);
+});
+
 test('publishes the current Claude roster with exact API IDs, limits, and prompt-cache rates', () => {
   for (const [modelKey, expected] of Object.entries(currentAnthropic)) {
     assert.equal(registry.models[modelKey].identity.providerModelId, expected.providerModelId);
@@ -157,7 +175,7 @@ test('publishes exact multimodal Qwen replacement IDs and limits', () => {
   }
 });
 
-test('selects only the founder-approved current-generation roster', () => {
+test('selects the founder-approved roster and subscription bands', () => {
   assert.equal(compatibility.providers.openai.defaultModel, 'gpt-5.6-sol');
   assert.equal(compatibility.providers.anthropic.defaultModel, 'claude-sonnet-5');
   const selectableRoster = new Set(Object.values(compatibility.tierAllowedModels).flat());
@@ -169,6 +187,8 @@ test('selects only the founder-approved current-generation roster', () => {
   }
   const basicRoster = new Set(compatibility.tierAllowedModels.economy);
   assert.equal(basicRoster.has('gpt-5.6-luna'), true);
+  assert.equal(basicRoster.has('gpt-5.4-mini'), true);
+  assert.equal(basicRoster.has('gemini-3.6-flash'), true);
   assert.equal(basicRoster.has('gpt-5.6-terra'), false);
   assert.equal(basicRoster.has('claude-haiku-4.5'), true);
   assert.equal(basicRoster.has('sonar'), false);
@@ -191,7 +211,7 @@ test('selects only the founder-approved current-generation roster', () => {
 
   const slotModels = Object.values(registry.policies.auto.slots).map(({ modelKey }) => modelKey);
   assert.equal(slotModels.includes('gpt-5.5'), false);
-  assert.equal(slotModels.includes('gpt-5.4-mini'), false);
+  assert.equal(slotModels.includes('gpt-5.4-mini'), true);
   assert.equal(slotModels.includes('claude-sonnet-4.6'), false);
 
   assert.ok(

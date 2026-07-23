@@ -20,7 +20,7 @@
       "byok": "premium"
     },
     "tierAllowedSlots": {
-      "free": ["workhorse_general", "reasoning_economy"],
+      "free": ["workhorse_general", "reasoning_economy", "coding_fast"],
       "pro": [
         "workhorse_general",
         "general_balanced",
@@ -162,7 +162,7 @@
         "requiredCapabilities": ["textInput", "textOutput", "functionCalling"],
         "requiredHarnessFeatures": [],
         "preferredSlots": {
-          "economy": ["escalation_coding", "workhorse_general"],
+          "economy": ["coding_fast", "workhorse_general"],
           "balanced": ["coding_balanced", "escalation_coding", "workhorse_general"],
           "premium": ["flagship_coding", "coding_balanced", "escalation_coding"]
         },
@@ -229,7 +229,7 @@
         "requiredCapabilities": ["textInput", "textOutput", "functionCalling"],
         "requiredHarnessFeatures": ["toolDiscovery"],
         "preferredSlots": {
-          "economy": ["workhorse_general"],
+          "economy": ["coding_fast", "workhorse_general"],
           "balanced": ["general_balanced", "coding_balanced"],
           "premium": ["flagship_general", "flagship_coding"]
         },
@@ -278,7 +278,7 @@
         "modelKey": "gpt-5.6-sol"
       },
       "coding_fast": {
-        "modelKey": "deepseek-v4-flash"
+        "modelKey": "gpt-5.4-mini"
       },
       "coding_premium": {
         "modelKey": "gpt-5.6-sol"

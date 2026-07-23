@@ -93,6 +93,31 @@ describe('cloud agent execution service', () => {
     );
   });
 
+  it('normalizes PostgreSQL Date timestamps on acquired operations', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          ...RUNNING_ROW,
+          lease_expires_at: new Date(RUNNING_ROW.lease_expires_at),
+          created_at: new Date(RUNNING_ROW.created_at),
+          updated_at: new Date(RUNNING_ROW.updated_at),
+        },
+      ]);
+
+    const claim = await claimCloudAgentExecutionOperation(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      inputHash: INPUT_HASH,
+      retrySafety: 'unsafe',
+      leaseSeconds: 240,
+    });
+
+    expect(claim).toMatchObject({ disposition: 'acquired', leaseToken: LEASE_TOKEN });
+  });
+
   it('replays a completed receipt without reacquiring or repeating the side effect', async () => {
     vi.mocked(db.query).mockResolvedValueOnce([
       {

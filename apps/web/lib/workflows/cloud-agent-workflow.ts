@@ -60,6 +60,15 @@ const SourceSchema = z
   })
   .strict();
 
+const GeneratedFileRefSchema = z
+  .object({
+    provider: z.enum(['openai', 'anthropic', 'google']),
+    filename: z.string().optional(),
+    containerId: z.string().optional(),
+    fileId: z.string().optional(),
+  })
+  .strict();
+
 const ProviderStepResultSchema = z
   .object({
     lines: z.array(z.object({ line: z.string(), publicTextDelta: z.string().optional() }).strict()),
@@ -67,6 +76,7 @@ const ProviderStepResultSchema = z
     pendingToolCalls: z.array(PendingToolCallSchema),
     textContent: z.string(),
     publicTextTail: z.string(),
+    generatedFileRefs: z.array(GeneratedFileRefSchema),
     thinkingBlocks: z.array(
       z
         .object({
