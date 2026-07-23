@@ -87,6 +87,8 @@ export interface ChatInputProps {
    * item is capability-gated so this is only reachable on desktop.
    */
   onSelectFolder?: () => void;
+  /** Host-owned desktop workflow recorder; absent on unsupported surfaces. */
+  onRecordSkill?: () => void;
   /** Display label for the currently scoped project folder, if any. */
   currentFolderLabel?: string | null;
   /**
@@ -137,6 +139,7 @@ export function ChatInput({
   allowModelFallbackModels = true,
   onVoiceClick: _onVoiceClick,
   onSelectFolder,
+  onRecordSkill,
   currentFolderLabel = null,
   onClearFolder,
   projectPicker,
@@ -671,6 +674,7 @@ export function ChatInput({
                   onOpenChange={setAttachmentMenuOpen}
                   onAddFiles={() => fileInputRef.current?.click()}
                   onSelectFolder={onSelectFolder}
+                  onRecordSkill={onRecordSkill}
                   currentFolderLabel={currentFolderLabel}
                   webSearchEnabled={webSearchEnabled}
                   onWebSearchToggle={() => setWebSearchEnabled(!webSearchEnabled)}

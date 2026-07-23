@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+#[cfg(not(test))]
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
@@ -60,7 +62,6 @@ struct RecorderState {
     session: Option<RecordingSession>,
     start_instant: Option<Instant>,
     actions: VecDeque<RecordedAction>,
-    last_action_time: Option<Instant>,
     app_handle: Option<AppHandle>,
 }
 
@@ -81,7 +82,6 @@ impl RecorderService {
                 session: None,
                 start_instant: None,
                 actions: VecDeque::new(),
-                last_action_time: None,
                 app_handle: None,
             })),
         }
@@ -94,6 +94,9 @@ impl RecorderService {
     }
 
     pub fn start_recording(&self) -> Result<RecordingSession> {
+        #[cfg(not(test))]
+        ensure_global_input_listener()?;
+
         let mut state = self.state.lock().map_err(|_| anyhow!("Lock poisoned"))?;
 
         if state.session.is_some() {
@@ -114,7 +117,6 @@ impl RecorderService {
         state.session = Some(session.clone());
         state.start_instant = Some(Instant::now());
         state.actions.clear();
-        state.last_action_time = None;
 
         if let Some(ref app_handle) = state.app_handle {
             let _ = app_handle.emit("automation:recording_started", &session);
@@ -262,6 +264,26 @@ impl RecorderService {
         })
     }
 
+    pub fn record_scroll(&self, delta_x: i64, delta_y: i64, x: i32, y: i32) -> Result<()> {
+        self.record_action(RecordedAction {
+            id: Uuid::new_v4().to_string(),
+            action_type: ActionType::Scroll,
+            timestamp_ms: self.get_elapsed_ms()?,
+            target: Some(ElementTarget {
+                x,
+                y,
+                element_id: None,
+                element_name: None,
+                element_type: None,
+            }),
+            value: Some(format!("{delta_x},{delta_y}")),
+            metadata: Some(serde_json::json!({
+                "delta_x": delta_x,
+                "delta_y": delta_y,
+            })),
+        })
+    }
+
     pub fn is_recording(&self) -> bool {
         self.state
             .lock()
@@ -292,23 +314,13 @@ impl RecorderService {
             return Err(anyhow!("No recording in progress"));
         }
 
-        let should_record = if let Some(last_time) = state.last_action_time {
-            last_time.elapsed().as_millis() > 100
-        } else {
-            true
-        };
+        state.actions.push_back(action.clone());
 
-        if should_record {
-            state.actions.push_back(action.clone());
-            state.last_action_time = Some(Instant::now());
-
-            if let Some(ref app_handle) = state.app_handle {
-                let _ = app_handle.emit("automation:action_recorded", &action);
-            }
-
-            tracing::debug!("Recorded action: {:?}", action.action_type);
+        if let Some(ref app_handle) = state.app_handle {
+            let _ = app_handle.emit("automation:action_recorded", &action);
         }
 
+        tracing::debug!("Recorded action: {:?}", action.action_type);
         Ok(())
     }
 }
@@ -316,7 +328,133 @@ impl RecorderService {
 use once_cell::sync::Lazy;
 
 static RECORDER: Lazy<RecorderService> = Lazy::new(RecorderService::new);
+#[cfg(not(test))]
+static INPUT_LISTENER_STARTED: AtomicBool = AtomicBool::new(false);
+#[cfg(not(test))]
+static LAST_POINTER_POSITION: Lazy<Mutex<(i32, i32)>> = Lazy::new(|| Mutex::new((0, 0)));
 
 pub fn global_recorder() -> &'static RecorderService {
     &RECORDER
+}
+
+#[cfg(not(test))]
+fn ensure_global_input_listener() -> Result<()> {
+    if INPUT_LISTENER_STARTED.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
+
+    let spawn_result = std::thread::Builder::new()
+        .name("agi-skill-recorder".into())
+        .spawn(|| {
+            tracing::info!("[skill-recorder] global input listener started");
+            let result = rdev::listen(handle_global_input_event);
+            if let Err(error) = result {
+                tracing::error!("[skill-recorder] global input listener failed: {error:?}");
+            }
+            INPUT_LISTENER_STARTED.store(false, Ordering::SeqCst);
+            tracing::info!("[skill-recorder] global input listener exited");
+        });
+
+    if let Err(error) = spawn_result {
+        INPUT_LISTENER_STARTED.store(false, Ordering::SeqCst);
+        return Err(anyhow!(
+            "Failed to start the global input recorder: {error}"
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn handle_global_input_event(event: rdev::Event) {
+    use rdev::EventType;
+
+    match event.event_type {
+        EventType::MouseMove { x, y } => {
+            if let Ok(mut position) = LAST_POINTER_POSITION.lock() {
+                *position = (x.round() as i32, y.round() as i32);
+            }
+        }
+        EventType::ButtonPress(button) => {
+            if !global_recorder().is_recording() {
+                return;
+            }
+            let (x, y) = LAST_POINTER_POSITION
+                .lock()
+                .map(|position| *position)
+                .unwrap_or((0, 0));
+            let button = match button {
+                rdev::Button::Right => "right",
+                rdev::Button::Middle => "middle",
+                _ => "left",
+            };
+            if let Err(error) = global_recorder().record_click(x, y, button) {
+                tracing::warn!("[skill-recorder] failed to record click: {error}");
+            }
+        }
+        EventType::KeyPress(key) => {
+            if !global_recorder().is_recording() {
+                return;
+            }
+            let value = event.name.or_else(|| {
+                let special = match key {
+                    rdev::Key::Return => "Enter",
+                    rdev::Key::Tab => "Tab",
+                    rdev::Key::Escape => "Escape",
+                    rdev::Key::Backspace => "Backspace",
+                    rdev::Key::Delete => "Delete",
+                    rdev::Key::Space => " ",
+                    _ => return None,
+                };
+                Some(special.to_string())
+            });
+            if let Some(value) = value {
+                let (x, y) = LAST_POINTER_POSITION
+                    .lock()
+                    .map(|position| *position)
+                    .unwrap_or((0, 0));
+                if let Err(error) = global_recorder().record_type(&value, x, y) {
+                    tracing::warn!("[skill-recorder] failed to record typing: {error}");
+                }
+            }
+        }
+        EventType::Wheel { delta_x, delta_y } => {
+            if !global_recorder().is_recording() {
+                return;
+            }
+            let (x, y) = LAST_POINTER_POSITION
+                .lock()
+                .map(|position| *position)
+                .unwrap_or((0, 0));
+            if let Err(error) = global_recorder().record_scroll(delta_x, delta_y, x, y) {
+                tracing::warn!("[skill-recorder] failed to record scroll: {error}");
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn records_rapid_consecutive_actions_without_dropping_steps() {
+        let recorder = RecorderService::new();
+        recorder.start_recording().expect("start recording");
+        recorder.record_click(10, 20, "left").expect("first click");
+        recorder.record_click(11, 21, "left").expect("second click");
+
+        let recording = recorder.stop_recording().expect("stop recording");
+        assert_eq!(recording.actions.len(), 2);
+    }
+
+    #[test]
+    fn stopping_an_empty_recording_returns_zero_actions() {
+        let recorder = RecorderService::new();
+        recorder.start_recording().expect("start recording");
+
+        let recording = recorder.stop_recording().expect("stop recording");
+        assert!(recording.actions.is_empty());
+    }
 }

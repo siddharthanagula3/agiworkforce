@@ -257,6 +257,8 @@ export interface ChatInterfaceProps {
    * (desktop) — the native dialog + backend sync are the host's responsibility.
    */
   onSelectFolder?: () => void;
+  /** Opens a host-owned desktop workflow recorder when the surface supports it. */
+  onRecordSkill?: () => void;
   /** Display label for the currently scoped project folder, if any. */
   currentFolderLabel?: string | null;
   /** Clears the host's scoped local folder (project/folder mutual exclusion). */
@@ -315,6 +317,7 @@ export function ChatInterface({
   allowModelFallbackModels = true,
   onVoiceClick: onVoiceClickProp,
   onSelectFolder: onSelectFolderProp,
+  onRecordSkill,
   currentFolderLabel = null,
   onClearFolder,
   projectPicker,
@@ -656,6 +659,7 @@ export function ChatInterface({
                 allowModelFallbackModels={allowModelFallbackModels}
                 onVoiceClick={handleVoiceClick}
                 onSelectFolder={onSelectFolderProp ? handleSelectFolder : undefined}
+                onRecordSkill={onRecordSkill}
                 currentFolderLabel={currentFolderLabel}
                 onClearFolder={onClearFolder}
                 projectPicker={projectPicker}
