@@ -12,6 +12,8 @@ export type RegenerateReplayDecision =
 
 type RegenerateReplayMetadata = {
   sendReplay?: SendReplayMetadata;
+  agentActivity?: unknown;
+  cloudAgentRun?: unknown;
   searchResults?: unknown;
   codeExecutionResult?: unknown;
   thinkingContent?: unknown;
@@ -33,15 +35,26 @@ export function getRegenerateReplayDecision(params: {
   assistantMetadata?: RegenerateReplayMetadata;
 }): RegenerateReplayDecision {
   const replay = params.userMetadata?.sendReplay;
+  const inferredWorkMode =
+    params.assistantMetadata?.agentActivity || params.assistantMetadata?.cloudAgentRun
+      ? 'agiwork'
+      : undefined;
   if (replay?.hasSkillInstruction) {
     return { ok: false, message: SKILL_REGENERATE_MESSAGE };
   }
 
-  if (!replay && hasLegacyToolAssistedOutput(params.assistantMetadata)) {
+  if (!replay && !inferredWorkMode && hasLegacyToolAssistedOutput(params.assistantMetadata)) {
     return { ok: false, message: LEGACY_TOOL_REGENERATE_MESSAGE };
   }
 
-  return replay ? { ok: true, replay } : { ok: true };
+  const safeReplay =
+    replay || inferredWorkMode
+      ? {
+          ...replay,
+          workMode: replay?.workMode ?? inferredWorkMode,
+        }
+      : undefined;
+  return safeReplay ? { ok: true, replay: safeReplay } : { ok: true };
 }
 
 export function replayToSendOptions(replay: SendReplayMetadata | undefined): {
@@ -49,6 +62,7 @@ export function replayToSendOptions(replay: SendReplayMetadata | undefined): {
   thinkingEnabled?: boolean;
   codeExecution?: boolean;
   officeCreation?: boolean;
+  workMode?: SendReplayMetadata['workMode'];
   styleMode?: string;
 } {
   return {
@@ -56,6 +70,7 @@ export function replayToSendOptions(replay: SendReplayMetadata | undefined): {
     thinkingEnabled: replay?.thinkingEnabled,
     codeExecution: replay?.codeExecutionEnabled,
     officeCreation: replay?.officeCreationEnabled,
+    workMode: replay?.workMode,
     styleMode: replay?.styleMode,
   };
 }

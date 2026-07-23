@@ -9,6 +9,7 @@ describe('regenerate replay decisions', () => {
           webSearchEnabled: true,
           thinkingEnabled: false,
           officeCreationEnabled: true,
+          workMode: 'agiwork',
           styleMode: 'concise',
         },
       },
@@ -20,6 +21,7 @@ describe('regenerate replay decisions', () => {
         webSearchEnabled: true,
         thinkingEnabled: false,
         officeCreationEnabled: true,
+        workMode: 'agiwork',
         styleMode: 'concise',
       },
     });
@@ -28,7 +30,25 @@ describe('regenerate replay decisions', () => {
       thinkingEnabled: false,
       codeExecution: undefined,
       officeCreation: true,
+      workMode: 'agiwork',
       styleMode: 'concise',
+    });
+  });
+
+  it('restores AGI Work for legacy managed turns that predate work-mode replay metadata', () => {
+    const decision = getRegenerateReplayDecision({
+      assistantMetadata: {
+        agentActivity: { status: 'completed' },
+        cloudAgentRun: { runId: 'run-1' },
+      },
+    });
+
+    expect(decision).toEqual({
+      ok: true,
+      replay: { workMode: 'agiwork' },
+    });
+    expect(decision.ok && replayToSendOptions(decision.replay)).toMatchObject({
+      workMode: 'agiwork',
     });
   });
 

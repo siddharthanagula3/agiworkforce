@@ -42,6 +42,7 @@ describe('web chat search metadata helpers', () => {
         webSearchEnabled: true,
         thinkingEnabled: false,
         officeCreationEnabled: true,
+        workMode: 'agiwork',
         styleMode: 'formal',
         hasSkillInstruction: true,
       }),
@@ -49,6 +50,7 @@ describe('web chat search metadata helpers', () => {
       webSearchEnabled: true,
       thinkingEnabled: false,
       officeCreationEnabled: true,
+      workMode: 'agiwork',
       styleMode: 'formal',
       hasSkillInstruction: true,
     });
