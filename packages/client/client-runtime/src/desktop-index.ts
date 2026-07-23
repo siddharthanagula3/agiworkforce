@@ -93,3 +93,10 @@ export type {
   OfflineSyncQueueAdapter,
   SyncManagerState,
 } from './offline-sync';
+
+export { pollDeviceAuthorization, requestDeviceAuthorization } from './deviceAuthorization';
+export type {
+  DeviceAuthorizationPollResult,
+  DeviceAuthorizationPost,
+  DeviceAuthorizationRequest,
+} from './deviceAuthorization';

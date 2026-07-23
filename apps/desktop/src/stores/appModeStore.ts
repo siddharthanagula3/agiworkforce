@@ -17,7 +17,6 @@ import { storageFallback } from '../lib/storageFallback';
 // is read (in the zustand initializer below) before the barrel finishes
 // initializing → "Cannot access 'supportsLocalAppMode' before initialization".
 import { supportsLocalAppMode } from '../lib/runtimeEnvironment';
-import { useAuthStore } from './auth';
 import { isChatStoreStreaming } from './chat/chatStoreRef';
 
 export type AppMode = 'local' | 'cloud';
@@ -87,17 +86,12 @@ export const useAppModeStore = create<AppModeState>()(
             // BYOK stay in Local mode and can NEVER reach the cloud client (egress
             // guard + the client's managed-only precondition).
             //
-            // Public alpha: Cloud is open to EVERY signed-in account (all tiers,
-            // including free, Team, and Enterprise) so users can try it and give
-            // feedback. Sign-in is required because cloud persistence is keyed to
-            // an account — it is the mechanism, not an access gate. Usage is
-            // metered server-side; access is not tier-gated during the alpha.
-            const authState = useAuthStore.getState();
-            const hasCloudSession = authState.isAuthenticated && !!authState.accessToken;
-            if (!hasCloudSession) {
-              toast.error('Sign in to use AGI Cloud.');
-              return;
-            }
+            // Public alpha: entering the Cloud workspace is open to everyone.
+            // The shell owns the account boundary: without a live session it
+            // renders browser-approved device sign-in and does not instantiate
+            // CloudRuntime or issue chat/persistence requests. Keeping the mode
+            // transition live is essential — refusing it here strands signed-out
+            // users in Local mode with no route to authenticate.
             set({ mode }, undefined, 'appMode/setMode');
             return;
           }

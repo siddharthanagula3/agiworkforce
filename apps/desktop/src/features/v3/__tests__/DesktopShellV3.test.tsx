@@ -334,6 +334,10 @@ describe('DesktopShellV3 duplication ownership', () => {
     const cloudTab = screen.getByRole('tab', { name: /Cloud/ });
     expect(cloudTab).not.toHaveAttribute('aria-disabled', 'true');
     expect(cloudTab).not.toHaveTextContent('Soon');
+
+    fireEvent.click(cloudTab);
+
+    expect(useAppModeStore.getState().mode).toBe('cloud');
   });
 
   it('treats a local storage owner as signed out in the sidebar', () => {
