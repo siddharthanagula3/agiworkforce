@@ -29,6 +29,12 @@ interface ProjectState {
   setActiveProject: (id: string | null) => void;
   getActiveProject: () => Project | undefined;
   toggleStar: (id: string) => void;
+  /** Keep project counts coherent after a host successfully reassigns a conversation. */
+  reassignConversation: (
+    conversationId: string,
+    previousProjectId: string | null | undefined,
+    nextProjectId: string | null | undefined,
+  ) => void;
   /**
    * Create a project from a minimal input and return its id. Mirrors the
    * web `project-store.ts` createProject API so callers can be migrated
@@ -89,6 +95,38 @@ export const useProjectStore = create<ProjectState>()(
         const idx = state.projects.findIndex((p) => p.id === id);
         if (idx !== -1) {
           state.projects[idx]!.starred = !state.projects[idx]!.starred;
+        }
+      }),
+
+    reassignConversation: (conversationId, previousProjectId, nextProjectId) =>
+      set((state) => {
+        const nextProject = nextProjectId
+          ? state.projects.find((project) => project.id === nextProjectId)
+          : undefined;
+        if (nextProject?.conversationIds?.includes(conversationId)) return;
+
+        if (previousProjectId) {
+          const previousProject = state.projects.find(
+            (project) => project.id === previousProjectId,
+          );
+          if (previousProject) {
+            previousProject.conversationIds = (previousProject.conversationIds ?? []).filter(
+              (id) => id !== conversationId,
+            );
+            previousProject.conversationCount = Math.max(
+              0,
+              (previousProject.conversationCount ?? previousProject.conversationIds.length + 1) - 1,
+            );
+          }
+        }
+
+        if (nextProject) {
+          nextProject.conversationIds = [
+            ...(nextProject.conversationIds ?? []).filter((id) => id !== conversationId),
+            conversationId,
+          ];
+          nextProject.conversationCount =
+            (nextProject.conversationCount ?? nextProject.conversationIds.length - 1) + 1;
         }
       }),
 

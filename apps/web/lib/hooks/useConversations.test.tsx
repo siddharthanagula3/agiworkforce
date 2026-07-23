@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
 import { useConversations, useProjectConversations } from './useConversations';
 
@@ -66,6 +67,7 @@ function findPostBody(): Record<string, unknown> {
 describe('useConversations.createConversation', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
+    useChatProjectStore.setState({ projects: [], activeProjectId: null });
     authMocks.getToken.mockResolvedValue('session-token');
     vi.stubGlobal('fetch', mockFetchRoutes());
   });
@@ -96,6 +98,68 @@ describe('useConversations.createConversation', () => {
     });
 
     expect(findPostBody()).not.toHaveProperty('projectId');
+  });
+});
+
+describe('useConversations.updateConversation', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    useChatProjectStore.setState({
+      projects: [
+        {
+          id: 'proj-123',
+          name: 'Investor Demo Recall',
+          createdAt: '2026-07-16T00:00:00.000Z',
+          updatedAt: '2026-07-16T00:00:00.000Z',
+          conversationIds: [],
+        },
+      ],
+      activeProjectId: null,
+    });
+    authMocks.getToken.mockResolvedValue('session-token');
+  });
+
+  it('updates the shared project count after a conversation move succeeds', async () => {
+    useChatStore.getState().setConversations([
+      {
+        id: WIRE_CONVERSATION.id,
+        title: WIRE_CONVERSATION.title,
+        model: WIRE_CONVERSATION.model,
+        projectId: null,
+        isPinned: false,
+        isStarred: false,
+        isArchived: false,
+        createdAt: WIRE_CONVERSATION.created_at,
+        updatedAt: WIRE_CONVERSATION.updated_at,
+      },
+    ]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          return new Response(
+            JSON.stringify({
+              conversation: { ...WIRE_CONVERSATION, project_id: 'proj-123' },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ conversations: [], hasMore: false, nextOffset: 0 }), {
+          status: 200,
+        });
+      }),
+    );
+
+    const { result } = renderHook(() => useConversations());
+    await act(async () => {
+      await result.current.updateConversation(WIRE_CONVERSATION.id, {
+        projectId: 'proj-123',
+      });
+    });
+
+    expect(useChatProjectStore.getState().projects[0]?.conversationIds).toEqual([
+      WIRE_CONVERSATION.id,
+    ]);
   });
 });
 

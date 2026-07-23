@@ -40,6 +40,7 @@ describe('mapProjectRow', () => {
   it('maps a post-migration row with all round-10 fields', () => {
     const mapped = mapProjectRow({
       ...baseLegacyRow,
+      conversation_count: 2,
       organization_id: 'org-xyz',
       default_privacy_mode: 'managed',
       default_provider_mode: 'ManagedNative',
@@ -60,6 +61,7 @@ describe('mapProjectRow', () => {
     expect(mapped.iconEmoji).toBe('🚀');
     expect(mapped.accentColor).toBe('emerald');
     expect(mapped.importedFrom).toBe('claude');
+    expect(mapped.conversationCount).toBe(2);
   });
 
   it('rejects invalid enum values and falls back to safe defaults', () => {

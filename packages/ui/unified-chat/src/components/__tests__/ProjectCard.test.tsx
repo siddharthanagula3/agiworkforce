@@ -48,6 +48,14 @@ describe('ProjectCard — valid HTML nesting', () => {
 });
 
 describe('ProjectCard — independent click handlers', () => {
+  it('renders the canonical server conversation count when ids are not loaded', () => {
+    render(
+      <ProjectCard project={{ ...PROJECT, conversationIds: undefined, conversationCount: 2 }} />,
+    );
+
+    expect(screen.getByText('2 conversations')).toBeTruthy();
+  });
+
   it('opens the project when the card body is clicked', () => {
     const onSelect = vi.fn();
     render(<ProjectCard project={PROJECT} onSelect={onSelect} />);

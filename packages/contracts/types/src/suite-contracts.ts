@@ -548,6 +548,8 @@ export interface ProjectRecord {
   defaultModelId?: string | null;
   /** Denormalized count for header rendering (avoids fan-out reads). */
   knowledgeFileCount?: number | null;
+  /** Canonical count of live conversations currently assigned to the project. */
+  conversationCount?: number | null;
   /** Denormalized count for header rendering. */
   memberCount?: number | null;
   /** ISO-8601 timestamp of last activity, used for sort + "Last used" chip. */
