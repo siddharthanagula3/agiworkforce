@@ -126,4 +126,37 @@ describe('ArtifactsPanel · live artifact streaming', () => {
 
     expect(screen.getByText('Sync retrying')).toHaveAttribute('title', 'network unavailable');
   });
+
+  it('falls back to the first artifact in the active conversation when selection is stale', () => {
+    useArtifactsStore.getState().addArtifactForMessage(
+      'old-message',
+      {
+        id: 'old-artifact',
+        type: 'html',
+        language: 'html',
+        title: 'Old conversation artifact',
+        content: '<h1>Old</h1>',
+      },
+      'old-conversation',
+    );
+    useArtifactsStore.getState().selectArtifact('old-artifact');
+    useArtifactsStore.getState().addArtifactForMessage(
+      MESSAGE_ID,
+      {
+        id: 'current-artifact',
+        type: 'html',
+        language: 'html',
+        title: 'Current conversation artifact',
+        content: '<h1>Current</h1>',
+      },
+      CONVERSATION_ID,
+    );
+
+    render(<ArtifactsPanel />);
+
+    expect(screen.getByTestId('artifact-preview')).toHaveTextContent(
+      'Current conversation artifact',
+    );
+    expect(screen.queryByText('No artifacts yet')).not.toBeInTheDocument();
+  });
 });
