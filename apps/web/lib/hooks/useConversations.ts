@@ -285,7 +285,7 @@ export function useConversations(): UseConversationsReturn {
         setActiveConversationWithMessages(id, messages);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load conversation');
+        setError(err instanceof Error ? err.message : 'Failed to load conversation', id);
         return false;
       } finally {
         setLoading(false);
@@ -338,7 +338,7 @@ export function useConversations(): UseConversationsReturn {
         });
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to update conversation');
+        setError(err instanceof Error ? err.message : 'Failed to update conversation', id);
         return false;
       }
     },
@@ -365,7 +365,7 @@ export function useConversations(): UseConversationsReturn {
         deleteConversationFromStore(id);
         return true;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to delete conversation');
+        setError(err instanceof Error ? err.message : 'Failed to delete conversation', id);
         return false;
       }
     },

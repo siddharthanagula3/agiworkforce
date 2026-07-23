@@ -384,7 +384,12 @@ interface ChatState {
    * user-initiated Stop path) to write unconditionally.
    */
   setLoading: (loading: boolean, conversationId?: string) => void;
-  setError: (error: string | null) => void;
+  /**
+   * Set the visible banner error for one conversation. When `conversationId`
+   * is supplied, a late completion from a background conversation is ignored
+   * instead of leaking into the conversation currently on screen.
+   */
+  setError: (error: string | null, conversationId?: string) => void;
 
   // Actions - Model
   setSelectedModel: (modelId: string, tier: ModelTier) => void;
@@ -708,7 +713,13 @@ export const useChatStore = create<ChatState>()(
             'chat/setLoading',
           ),
 
-        setError: (error) => set({ error }, undefined, 'chat/setError'),
+        setError: (error, conversationId) =>
+          set(
+            (state) =>
+              conversationId && conversationId !== state.activeConversationId ? state : { error },
+            undefined,
+            'chat/setError',
+          ),
 
         // Model
         setSelectedModel: (modelId, tier) =>

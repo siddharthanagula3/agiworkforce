@@ -1467,6 +1467,40 @@ describe('useChatStream', () => {
     expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
+  it('does not surface a late failed request in the conversation opened afterward', async () => {
+    let finishRequest!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishRequest = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useChatStream());
+
+    let sendPromise!: Promise<boolean>;
+    act(() => {
+      sendPromise = result.current.sendMessage('slow request', {
+        conversationId: TEMP_CONVERSATION.id,
+      });
+    });
+    await vi.waitFor(() => expect(finishRequest).toBeTypeOf('function'));
+
+    act(() => {
+      useChatStore.getState().setActiveConversationWithMessages('conv-next', []);
+    });
+    finishRequest(
+      new Response(JSON.stringify({ error: { message: 'Request failed: 504' } }), {
+        status: 504,
+      }),
+    );
+    await act(async () => {
+      await sendPromise;
+    });
+
+    expect(useChatStore.getState().activeConversationId).toBe('conv-next');
+    expect(useChatStore.getState().error).toBeNull();
+  });
+
   it('marks the AGI Work action state failed when the provider request returns an error', async () => {
     mockLlmErrorResponse({ error: { message: 'Upstream timed out' } }, 504);
     const { result } = renderHook(() => useChatStream());
